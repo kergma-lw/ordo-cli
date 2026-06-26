@@ -9,10 +9,10 @@ inputs:
 guards:
   - uses: git.single_worktree
   - uses: git.clean_worktree
-  - uses: github.issue_project_membership
+  - uses: gh.issue_project_membership
     with:
       issue: ${inputs.issue}
-  - uses: github.issue_status_not_in
+  - uses: gh.issue_status_not_in
     with:
       issue: ${inputs.issue}
       statuses:
@@ -21,13 +21,13 @@ guards:
 
 steps:
   - name: move-issue-to-in-progress
-    uses: github.project_set_status
+    uses: gh.project_set_status
     with:
       issue: ${inputs.issue}
       status: In progress
 
   - name: set-current-iteration
-    uses: github.project_set_iteration
+    uses: gh.project_set_iteration
     with:
       issue: ${inputs.issue}
       value: ${inputs.iteration}

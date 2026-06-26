@@ -8,21 +8,21 @@ inputs:
 guards:
   - uses: git.clean_worktree
   - uses: git.branch_not_main
-  - uses: github.issue_status
+  - uses: gh.issue_status
     with:
       issue: ${inputs.issue}
       equals: In review
 
 steps:
   - name: verify
-    uses: run.profile
+    uses: shell.command
     with:
-      profile: backend-default
+      command: .venv/bin/python -m pytest
 
   - name: merge-main
     uses: git.merge_to_main_ff
 
   - name: close-issue
-    uses: github.close_issue
+    uses: gh.close_issue
     with:
       issue: ${inputs.issue}
