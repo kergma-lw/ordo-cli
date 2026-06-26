@@ -101,14 +101,8 @@ def execute_workflow(
 
 
 def _default_step_executor(resolved_step: ResolvedOperation, workflow: Workflow) -> OperationResult:
-    """Baseline executor until concrete operation implementations exist."""
+    """Default executor backed by canonical connector operations."""
 
-    return OperationResult(
-        status="ok",
-        summary="No concrete executor configured; step recorded as executed in baseline execute mode",
-        observations={
-            "reference": resolved_step.reference,
-            "workflow": workflow.workflow,
-            "execution": "baseline-success",
-        },
-    )
+    from ordo.connectors.operations import execute_action
+
+    return execute_action(resolved_step, workflow)

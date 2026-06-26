@@ -138,14 +138,8 @@ def check_workflow(
 
 
 def _default_guard_probe(resolved_guard: ResolvedOperation, workflow: Workflow) -> OperationResult:
-    """Default side-effect-free probe used until concrete operation implementations exist."""
+    """Default side-effect-free probe backed by canonical connector operations."""
 
-    return OperationResult(
-        status="ok",
-        summary="No concrete probe implementation configured; guard treated as non-blocking in baseline check mode",
-        observations={
-            "reference": resolved_guard.reference,
-            "workflow": workflow.workflow,
-            "evaluation": "baseline-non-blocking",
-        },
-    )
+    from ordo.connectors.operations import evaluate_probe
+
+    return evaluate_probe(resolved_guard, workflow)
