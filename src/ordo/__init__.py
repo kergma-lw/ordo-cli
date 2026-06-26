@@ -6,6 +6,7 @@ from .model.profile import Override, Profile
 from .model.runtime import ExecutionPlan, ExecutionResult, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from .model.workflow import Guard, OperationRef, Step, Workflow
 from .runtime import LoadError, load_profile_file, load_profile_text, load_workflow_file, load_workflow_text, load_yaml_document
+from .runtime import ValidationReport, validate_profile_document, validate_profile_text, validate_workflow_document, validate_workflow_text
 
 __all__ = [
     "Connector",
@@ -30,4 +31,9 @@ __all__ = [
     "load_workflow_file",
     "load_workflow_text",
     "load_yaml_document",
+    "ValidationReport",
+    "validate_profile_document",
+    "validate_profile_text",
+    "validate_workflow_document",
+    "validate_workflow_text",
 ]
