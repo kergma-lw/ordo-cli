@@ -18,6 +18,8 @@
 - Avoid generic catch-all glossary files.
 - Put terminology next to the domain it belongs to, for example in `meta/domain/connector.md`.
 - Keep connector concerns, workflow concerns, runtime concerns, and policy concerns separated.
+- Do not change `meta/` source truth merely to fit the current code shape without explicit user discussion and agreement.
+- If code and `meta/` disagree, treat it as a drift signal to investigate first rather than silently rewriting the meta docs.
 - Do not edit `meta/packs/**` by hand; regenerate them from source docs.
 - After changing `meta/` source docs, regenerate `meta/packs/**` in the same work so derived artifacts stay in sync.
 - Regenerate packs with `python3 tools/build_domain_packs.py meta/domain-packs.toml`.
