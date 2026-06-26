@@ -18,6 +18,7 @@ sources = [
   "domain/boundaries.md",
   "model/workflow/entities.md",
   "model/runtime/lifecycle.md",
+  "model/runtime/package-layout.md",
   "model/connector/contract.md",
   "model/connector/resolution-policy.md",
   "data/workflow/shape.md",
