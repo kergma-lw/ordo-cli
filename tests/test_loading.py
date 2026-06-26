@@ -31,6 +31,22 @@ class LoadingTest(unittest.TestCase):
         self.assertIsInstance(workflow, Workflow)
         self.assertEqual(workflow.to_contract()["steps"][0]["uses"], "gh.issue.view")
 
+    def test_loads_expr_guard_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - git.worktree.clean and git.branch != "main"
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(workflow.guards[0].expr, 'git.worktree.clean and git.branch != "main"')
+        self.assertEqual(workflow.to_contract()["guards"][0], 'git.worktree.clean and git.branch != "main"')
+
     def test_loads_profile_yaml_into_typed_model(self) -> None:
         profile = load_profile_text(
             textwrap.dedent(

@@ -122,8 +122,12 @@ def load_yaml_document(text: str, *, source: str = "<memory>") -> JSONValue:
 
 
 def _load_guard(payload: JSONValue, *, index: int, source: str) -> Guard:
-    data = _require_object(payload, path=("guards", str(index)), source=source)
-    return Guard(operation=_load_operation_ref(data, path=("guards", str(index)), source=source))
+    path = ("guards", str(index))
+    if isinstance(payload, str):
+        return Guard(expr=payload)
+
+    data = _require_object(payload, path=path, source=source)
+    return Guard(operation=_load_operation_ref(data, path=path, source=source))
 
 
 def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:

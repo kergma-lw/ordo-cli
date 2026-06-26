@@ -38,6 +38,20 @@ class ContractShapeTest(unittest.TestCase):
             },
         )
 
+    def test_workflow_contract_allows_expr_guard_shape(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch != "main"'),), steps=())
+
+        self.assertEqual(
+            workflow.to_contract(),
+            {
+                "version": 0,
+                "workflow": "open-task",
+                "inputs": {},
+                "guards": ['git.branch != "main"'],
+                "steps": [],
+            },
+        )
+
     def test_runtime_result_contract_is_json_serializable(self) -> None:
         result = RuntimeResult(
             mode=Mode.PLAN,

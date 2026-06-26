@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .json import JSONObject
+from .json import JSONObject, JSONValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,12 +24,27 @@ class OperationRef:
 class Guard:
     """Pre-execution check with no intended side effects."""
 
-    operation: OperationRef
+    operation: OperationRef | None = None
+    expr: str | None = None
 
-    def to_contract(self) -> JSONObject:
+    def __post_init__(self) -> None:
+        has_operation = self.operation is not None
+        has_expr = self.expr is not None
+        if has_operation == has_expr:
+            raise ValueError("Guard must define exactly one of operation or expr")
+
+    @property
+    def reference(self) -> str:
+        if self.operation is not None:
+            return self.operation.uses
+        return self.expr or "<unknown-guard>"
+
+    def to_contract(self) -> JSONValue:
         """Return the stable JSON-shaped contract form."""
 
-        return self.operation.to_contract()
+        if self.operation is not None:
+            return self.operation.to_contract()
+        return self.expr
 
 
 @dataclass(frozen=True, slots=True)

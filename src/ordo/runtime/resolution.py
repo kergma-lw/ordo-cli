@@ -61,6 +61,16 @@ def resolve_workflow_references(
     resolved_steps: list[ResolvedOperation] = []
 
     for index, guard in enumerate(workflow.guards):
+        if guard.operation is None:
+            diagnostics.append(
+                _diagnostic(
+                    code="resolution.guard_expr_not_implemented",
+                    message="String-form guard expression resolution is not implemented yet",
+                    path=("guards", str(index)),
+                    expr=guard.expr,
+                )
+            )
+            continue
         resolved = _resolve_reference(
             guard.operation.uses,
             path=("guards", str(index), "uses"),

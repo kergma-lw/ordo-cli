@@ -25,6 +25,30 @@
 - The system must help an agent distinguish at least validity, resolution, likely executability, and authoring-quality concerns.
 - Validation and explanation surfaces must be structured enough for an agent to iteratively repair an authored workflow without guessing from logs.
 
+<!-- source: requirements/authoring/guard-expressions.md -->
+
+# Authoring requirements for guard expressions
+
+## Compactness
+
+- Guard authoring must support compact declaration of execution conditions.
+- Routine policy should usually be readable in a short guard list without requiring a screen of repetitive structural boilerplate.
+- A compact guard surface is a core product quality because Ordo exists in part to replace difficult-to-review shell guard logic.
+
+## Discoverability
+
+- An author must be able to tell which parts of a guard expression are public probe invocations and which parts are comparisons over probe results.
+- A plain string item in `guards` should be the preferred compact authoring form for expression guards.
+- The object form with `uses` should remain available where an explicit operation call is clearer or needed for compatibility.
+- Zero-argument probe references should not require empty call syntax when no arguments are being passed.
+- Parameterized probe references should remain visually distinct enough that an author can tell inputs are being supplied.
+
+## Checkability
+
+- Guard expressions must remain machine-checkable and agent-checkable before execution.
+- Validation and diagnostics should point to the failing expression segment rather than only reporting a generic guard failure.
+- Expression syntax should remain small enough that an agent can learn it from contract docs and examples without treating the workflow format as a hidden programming language.
+
 <!-- source: requirements/connector/core.md -->
 
 # Connector requirements
@@ -131,6 +155,38 @@
 - Ordo should remain meaningfully distinct from a generic pipeline/task runner by preserving its analysis-first and explain-first behavior.
 - Ordo is not required to mimic existing pipeline tools when that would weaken guards, explainability, or structured results.
 - Policy evaluation must remain an explicit runtime concern and must not be recoverable only by reading connector implementation code or shell control flow.
+
+<!-- source: requirements/policy/guard-expressions.md -->
+
+# Policy requirements for guard expressions
+
+## Purpose
+
+- Guard policy should be expressible in workflow declarations without requiring a bespoke named probe for every common predicate.
+- Policy must remain visible in the workflow rather than being recoverable only from probe implementation details or probe naming conventions.
+
+## Expression scope
+
+- Guard expressions may evaluate only public `probe` operations.
+- Guard expressions may compare probe outputs and combine boolean conditions.
+- Guard expressions must not call `action` operations.
+- Guard expressions must not require a general-purpose expression language with arbitrary functions or user-defined evaluation semantics.
+
+## List semantics
+
+- Each item in `guards` is a separate boolean guard clause.
+- The `guards` list combines with implicit `and` semantics across items.
+- `or` semantics should be expressed inside one guard expression rather than by overloading list structure.
+
+## Minimum boolean support
+
+- The policy surface should support at least `and`, `or`, `not`, and parentheses for grouping within a single guard expression.
+- The policy surface should support at least equality and membership-style comparisons needed for common operational predicates.
+
+## Explainability
+
+- Runtime results for failed guard expressions must identify which subcondition evaluated to false or failed to evaluate.
+- When a probe inside a guard expression fails operationally, the runtime must preserve the distinction between "condition evaluated false" and "probe could not be evaluated safely".
 
 <!-- source: domain/authoring.md -->
 
@@ -371,6 +427,62 @@ not buried in shell control flow.
 
 This is stronger than logs, traces, or raw exception text.
 
+<!-- source: domain/policy-guard-expressions.md -->
+
+# Policy guard expressions
+
+## Role
+
+Guard expressions exist to keep execution conditions short, reviewable, and explicit.
+
+They are a policy surface, not a general programming surface.
+
+## Why they exist
+
+Without a compact expression surface, policy tends to drift into one of two bad shapes:
+
+- shell-heavy guard logic that is difficult to review or explain;
+- many narrow probe names that encode policy in operation naming rather than in the workflow declaration.
+
+Guard expressions are meant to preserve the original workflow promise:
+
+- state the conditions for execution briefly;
+- state the ordered actions that follow if conditions pass.
+
+## Boundary
+
+Guard expressions may:
+
+- invoke public probe operations;
+- read documented probe result fields;
+- compare values;
+- combine boolean conditions.
+
+Guard expressions must not:
+
+- execute effectful actions;
+- become a general scripting language;
+- hide complex operational semantics that should remain in public connector contracts.
+
+## Readability standard
+
+A good guard section should usually fit in a short top-to-bottom review window.
+
+If the conditions take a screen of repetitive structured boilerplate, the product is failing one of its core workflow goals even if the shape is technically machine-checkable.
+
+## Open pressure that guard expressions do not settle yet
+
+Guard expressions address compact policy declaration for execution preconditions.
+
+They do not by themselves settle later workflow control-flow questions such as:
+
+- step-level conditional execution;
+- registering step results for later use;
+- branching based on effectful step outcomes;
+- cross-step data flow semantics.
+
+These concerns should remain explicit future design work rather than being smuggled into guard expression semantics.
+
 <!-- source: domain/boundaries.md -->
 
 # Domain boundaries
@@ -501,6 +613,53 @@ Connector code may implement checks, but the workflow/runtime contract must pres
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.
+
+<!-- source: model/workflow/guard-expressions.md -->
+
+# Guard expression model
+
+## Concept
+
+A guard expression is a boolean predicate evaluated during the guard phase.
+
+It is modeled as policy over public probe results rather than as a general embedded program.
+
+## Allowed semantic elements
+
+- boolean literals and other JSON-shaped literals suitable for comparison;
+- references to workflow inputs;
+- zero-argument public probe references;
+- parameterized public probe references;
+- documented field access over probe outputs;
+- boolean composition;
+- comparison operators.
+
+## Probe reference semantics
+
+- A plain string item in `guards` denotes a compact guard expression.
+- A zero-argument probe reference may appear without empty call syntax.
+- A parameterized probe reference carries explicit arguments.
+- Within one guard expression, repeated identical probe references should be evaluated once and reused.
+- A probe reference inside an expression must resolve against the same public probe contract surface used by explicit operation-form guards.
+
+## Output access semantics
+
+- Field access after a probe reference means reading documented structured output from that probe result.
+- Field access is not a general object method system.
+- Public contract documentation must define which output fields are stable enough to reference from guard expressions.
+
+## Guard list semantics
+
+- A workflow may contain multiple guard items.
+- Each guard item yields a boolean pass/fail outcome or an evaluation failure.
+- Multiple guard items combine as an ordered conjunction over the guard list.
+
+## Failure semantics
+
+- A false comparison result means the guard blocks execution.
+- A probe evaluation failure inside an expression is not the same thing as a false comparison result.
+- Guard explanation should preserve both the boolean structure and the probe-level outcome details.
+- Guard evaluation must remain side-effect free.
 
 <!-- source: model/runtime/lifecycle.md -->
 
@@ -688,6 +847,52 @@ Unknown top-level and nested stable fields fail validation.
 - Workflow semantics are defined over the loaded data model, not over YAML-specific syntax.
 - Stable workflow data must be representable as a losslessly JSON-serializable structure after loading.
 - YAML-specific mechanisms such as anchors, aliases, tags, or merge behavior must not introduce distinct runtime semantics unless explicitly standardized.
+
+<!-- source: data/workflow/guard-expressions.md -->
+
+# Guard expression data shape
+
+## Stable guard forms
+
+Guards may be expressed either as explicit operation calls or as compact expressions.
+
+### Operation-call form
+
+```yaml
+- uses: namespace.name
+  with: {}
+```
+
+### Expression form
+
+```yaml
+- git.worktree.clean and git.branch != "main"
+```
+
+## Expression shape rules
+
+- A string guard item contains a compact boolean policy expression.
+- A string guard item is the preferred compact authoring form for expression guards.
+- Zero-argument probe references do not require `()`.
+- Parameterized probe references use argument syntax only when arguments are present.
+- Field access after a probe reference reads probe output fields.
+- Expression grammar remains intentionally small and dedicated to guard evaluation.
+
+## List semantics
+
+- Multiple string or object guard items may appear in one `guards` list.
+- The list structure itself implies conjunction across items.
+- Disjunction belongs inside a single expression item rather than in the list structure.
+
+## Coexistence rule
+
+- Both guard forms may coexist during migration if the product needs compatibility between explicit probe calls and compact expression guards.
+- The stable contract may allow both object-form guards and string-form guards during migration without requiring a tag field for expression guards.
+
+## Serialization rule
+
+- Guard expression meaning is defined over the loaded workflow model, not over incidental YAML formatting.
+- Any parsed guard expression must still map to a losslessly explainable runtime structure.
 
 <!-- source: data/runtime/result-envelope.md -->
 
@@ -905,6 +1110,38 @@ Desired experience:
 - agent asks "what can I safely do next?" and gets machine-readable status plus next actions;
 - explanation quality does not depend on scraping unstructured stderr.
 
+<!-- source: scenarios/workflow/guard-expressions.md -->
+
+# Guard expression scenarios
+
+## Short review scenario
+
+Reviewer opens a workflow and should be able to see, in a small vertical slice:
+
+- which conditions gate execution;
+- which conditions are simple facts versus comparisons;
+- which actions follow if those conditions pass.
+
+## Shell-replacement scenario
+
+A project has sprawling local shell helpers with many execution preconditions.
+
+Desired migration experience:
+
+- move operational integration details into public probes and actions;
+- keep workflow policy compact enough that the preconditions are easier to read than the original shell control flow;
+- avoid replacing shell sprawl with a long list of repetitive structured guard blocks.
+
+## Agent authoring scenario
+
+Agent composes a workflow from documented public probes and actions.
+
+Desired experience:
+
+- use compact expressions for ordinary policy;
+- avoid inventing a new named probe only to express a simple comparison such as equality, inequality, or membership;
+- receive diagnostics that identify the failing subcondition and observed value.
+
 <!-- source: adr/0001-scope.md -->
 
 # ADR 0001: scope
@@ -994,6 +1231,22 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - Schema, examples, and runtime diagnostics are sufficient for iterative repair of an authored workflow.
 - Routine project adaptation prefers composing workflows and profiles over introducing new connector semantics.
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
+
+<!-- source: verification/workflow/guard-expressions.md -->
+
+# Guard expression verification
+
+## Rule
+
+Guard expressions must improve policy readability without collapsing explainability or machine-checkability.
+
+## Checks
+
+- Common execution conditions can be written more compactly than equivalent shell guard logic.
+- Common execution conditions do not require creating a new bespoke public probe name for every simple predicate.
+- Zero-argument probe references remain readable without mandatory empty call syntax.
+- Boolean combinations inside one expression remain structured enough for validation and explanation.
+- Runtime diagnostics can identify at least the failing subcondition, the observed value when available, and whether failure came from boolean mismatch or probe evaluation failure.
 
 <!-- source: verification/runtime/invariants.md -->
 

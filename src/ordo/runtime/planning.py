@@ -92,7 +92,7 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
         guard_items.append(
             {
                 "reference": reference,
-                "kind": "probe",
+                "kind": "probe_or_expr",
                 "effect": "read_only",
                 "status": "blocked" if reference in check_result.outputs.get("blockers", []) else "unknown",
                 "operation_status": None,

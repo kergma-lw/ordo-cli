@@ -99,7 +99,12 @@ def _validate_guard_list(value: JSONValue | None, *, source: str) -> list[Diagno
         return diagnostics
 
     for index, item in enumerate(value):
-        diagnostics.extend(_validate_call(item, path=("guards", str(index)), source=source))
+        path = ("guards", str(index))
+        if isinstance(item, str):
+            if not item:
+                diagnostics.append(_diagnostic("validation.workflow.guard_expr.empty", "Guard expression must not be empty", path, source))
+            continue
+        diagnostics.extend(_validate_call(item, path=path, source=source))
     return diagnostics
 
 

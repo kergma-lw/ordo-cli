@@ -33,14 +33,50 @@ steps: []
 ## Guards
 
 Guards are preconditions without intended side effects.
-They reference public connector operations.
+They may reference public connector operations directly or use a compact boolean expression surface.
 
-Minimal shape:
+Operation-call form:
 
 ```yaml
 - uses: namespace.name
   with: {}
 ```
+
+Compact expression form:
+
+```yaml
+- git.worktree.clean and git.branch != "main"
+```
+
+Expression guards are intended for the compact statement of execution policy.
+They should answer, briefly and reviewably, whether execution is allowed now.
+
+Each guard item is a separate boolean clause.
+The `guards` list combines with implicit `and` semantics across items.
+Use `or` inside one expression when a single clause needs disjunction.
+
+Current draft direction for guard expressions:
+
+- zero-argument probes do not require `()`;
+- parameterized probes use arguments only when needed;
+- field access reads documented probe outputs;
+- boolean composition should support at least `and`, `or`, `not`, and parentheses;
+- expression guards evaluate only `probe`-level facts, never effectful actions.
+
+Illustrative examples:
+
+```yaml
+guards:
+  - git.worktree.clean
+  - git.branch != "main"
+  - gh.issue(${inputs.issue}).project.member
+  - gh.issue(${inputs.issue}).status not in ["Done", "In review"]
+```
+
+Draft implementation note:
+
+- the workflow contract and schema now admit plain-string expression guards;
+- runtime parsing and evaluation of guard expressions is not yet implemented in the current v0 foundation.
 
 Expected result:
 - pass

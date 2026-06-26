@@ -81,6 +81,15 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertTrue(result.outputs["execution_allowed"])
 
+    def test_plan_surfaces_expr_guard_before_runtime_support_exists(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch != "main"'),), steps=())
+
+        result = plan_workflow(workflow)
+
+        self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
+        self.assertEqual(result.outputs["guard_items"][0]["reference"], 'git.branch != "main"')
+        self.assertEqual(result.outputs["guard_items"][0]["kind"], "probe_or_expr")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -68,17 +68,17 @@ def check_workflow(
             status=RuntimeStatus.RESOLUTION_ERROR,
             diagnostics=resolution.diagnostics,
             plan=ExecutionPlan(
-                guard_checks=tuple(guard.operation.uses for guard in effective_workflow.guards),
+                guard_checks=tuple(guard.reference for guard in effective_workflow.guards),
                 step_names=tuple(step.name for step in effective_workflow.steps),
                 blockers=(),
             ),
             outputs={
-                "can_execute": False,
-                "blockers": [],
-                "checked_guards": [],
-                "active_profile": active_profile,
-                "active_overrides": [override.to_contract() for override in active_overrides],
-            },
+                    "can_execute": False,
+                    "blockers": [],
+                    "checked_guards": [guard.reference for guard in effective_workflow.guards],
+                    "active_profile": active_profile,
+                    "active_overrides": [override.to_contract() for override in active_overrides],
+                },
         )
 
     probe = guard_probe or _default_guard_probe
