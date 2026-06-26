@@ -1,0 +1,36 @@
+import unittest
+
+from ordo.connectors import get_public_connector_registry
+
+
+class ConnectorRegistryTest(unittest.TestCase):
+    def test_registry_exposes_fixed_v0_connector_families(self) -> None:
+        registry = get_public_connector_registry()
+
+        self.assertEqual(
+            tuple(connector.namespace for connector in registry.list_connectors()),
+            ("git", "gh", "shell"),
+        )
+
+    def test_registry_exposes_discoverable_operation_metadata(self) -> None:
+        registry = get_public_connector_registry()
+
+        operation = registry.get_operation("gh.issue.view")
+
+        self.assertIsNotNone(operation)
+        self.assertEqual(operation.kind, "probe")
+        self.assertEqual(operation.inputs["issue"], "string")
+        self.assertIn("issue_not_found", operation.failure_modes)
+
+    def test_registry_contract_is_public_json_shaped_surface(self) -> None:
+        registry = get_public_connector_registry()
+
+        contract = registry.to_contract()
+
+        self.assertEqual(contract["connectors"][0]["namespace"], "git")
+        self.assertEqual(contract["connectors"][1]["operations"][0]["name"], "issue.view")
+        self.assertEqual(contract["connectors"][2]["operations"][0]["kind"], "action")
+
+
+if __name__ == "__main__":
+    unittest.main()

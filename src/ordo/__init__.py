@@ -1,5 +1,6 @@
 """Ordo v0 package surface."""
 
+from .connectors import ConnectorRegistry, get_public_connector_registry
 from .model.connector import Connector, ConnectorBootstrap, OperationContract
 from .model.diagnostic import Diagnostic
 from .model.profile import Override, Profile
@@ -12,6 +13,7 @@ from .runtime import validate_profile_document, validate_profile_text, validate_
 
 __all__ = [
     "Connector",
+    "ConnectorRegistry",
     "ConnectorBootstrap",
     "Diagnostic",
     "ExecutionPlan",
@@ -30,6 +32,7 @@ __all__ = [
     "Step",
     "WorkflowProfileApplicationResult",
     "Workflow",
+    "get_public_connector_registry",
     "apply_profile_to_workflow",
     "compose_profiles",
     "load_profile_file",
