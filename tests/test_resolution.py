@@ -1,0 +1,74 @@
+import unittest
+
+from ordo.model.connector import Connector, OperationContract
+from ordo.model.runtime import RuntimeStatus
+from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.runtime import resolve_workflow_references
+
+
+class ResolutionTest(unittest.TestCase):
+    def test_known_public_operations_resolve(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(OperationRef("git.clean_worktree")),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
+        )
+
+        result = resolve_workflow_references(workflow)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.resolved_guards[0].source, "public")
+        self.assertEqual(result.resolved_steps[0].operation.kind, "probe")
+
+    def test_unknown_operation_fails_as_resolution_error(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue.missing")),),
+        )
+
+        result = resolve_workflow_references(workflow)
+
+        self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "resolution.unknown_operation")
+        self.assertEqual(result.diagnostics[0].path, ("steps", "0", "uses"))
+
+    def test_public_namespace_shadowing_is_rejected(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(), steps=())
+        local_connectors = (
+            Connector(
+                namespace="gh",
+                operations=(OperationContract(name="issue.view", kind="probe"),),
+            ),
+        )
+
+        result = resolve_workflow_references(workflow, local_connectors=local_connectors)
+
+        self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "resolution.namespace_shadowing")
+
+    def test_explicit_local_namespace_is_allowed(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="inspect", operation=OperationRef("local.issue.view")),),
+        )
+        local_connectors = (
+            Connector(
+                namespace="local",
+                operations=(OperationContract(name="issue.view", kind="probe"),),
+            ),
+        )
+
+        result = resolve_workflow_references(workflow, local_connectors=local_connectors)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.resolved_steps[0].source, "local")
+        self.assertEqual(result.resolved_steps[0].reference, "local.issue.view")
+
+
+if __name__ == "__main__":
+    unittest.main()
