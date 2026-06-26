@@ -1,0 +1,82 @@
+import json
+import unittest
+
+from ordo.model.diagnostic import Diagnostic
+from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
+from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+
+
+class ContractShapeTest(unittest.TestCase):
+    def test_workflow_contract_matches_stable_shape(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"issue": "repo#1"},
+            guards=(Guard(OperationRef("git.clean_worktree")),),
+            steps=(
+                Step(
+                    name="inspect-issue",
+                    operation=OperationRef("gh.issue.view", with_={"issue": "repo#1"}),
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            workflow.to_contract(),
+            {
+                "version": 0,
+                "workflow": "open-task",
+                "inputs": {"issue": "repo#1"},
+                "guards": [{"uses": "git.clean_worktree", "with": {}}],
+                "steps": [
+                    {
+                        "name": "inspect-issue",
+                        "uses": "gh.issue.view",
+                        "with": {"issue": "repo#1"},
+                    }
+                ],
+            },
+        )
+
+    def test_runtime_result_contract_is_json_serializable(self) -> None:
+        result = RuntimeResult(
+            mode=Mode.PLAN,
+            status=RuntimeStatus.GUARD_FAILED,
+            diagnostics=(
+                Diagnostic(
+                    code="guard.blocked",
+                    level="error",
+                    message="Worktree is dirty",
+                    path=("guards", "0"),
+                    details={"uses": "git.clean_worktree"},
+                ),
+            ),
+            plan=ExecutionPlan(
+                guard_checks=("git.clean_worktree",),
+                step_names=("inspect-issue",),
+                blockers=("git.clean_worktree",),
+            ),
+            outputs={"can_execute": False},
+            operation_results=(
+                OperationResult(
+                    status="guard_failed",
+                    summary="Dirty worktree",
+                    observations={"dirty": True},
+                ),
+            ),
+            failed_guard="git.clean_worktree",
+            failed_step=None,
+        )
+
+        contract = result.to_contract()
+
+        self.assertEqual(contract["mode"], "plan")
+        self.assertEqual(contract["status"], "guard_failed")
+        self.assertEqual(contract["failed_guard"], "git.clean_worktree")
+        self.assertIsNone(contract["failed_step"])
+        self.assertEqual(contract["plan"]["blockers"], ["git.clean_worktree"])
+        json.dumps(contract)
+
+
+if __name__ == "__main__":
+    unittest.main()

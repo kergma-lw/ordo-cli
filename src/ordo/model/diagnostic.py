@@ -19,3 +19,14 @@ class Diagnostic:
     message: str
     path: tuple[str, ...] = ()
     details: JSONObject = field(default_factory=dict)
+
+    def to_contract(self) -> JSONObject:
+        """Return the stable JSON-shaped diagnostic form."""
+
+        return {
+            "code": self.code,
+            "level": self.level,
+            "message": self.message,
+            "path": list(self.path),
+            "details": dict(self.details),
+        }

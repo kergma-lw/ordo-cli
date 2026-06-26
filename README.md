@@ -24,6 +24,7 @@ Target use cases:
 
 Notable docs:
 - `docs/format.md` — current format draft
+- `docs/contracts.md` — stable v0 workflow and runtime result contracts
 - `docs/pypyr-comparison.md` — honest positioning notes vs pypyr
 - `docs/gitx-open-task-rewrite.md` — example rewrite of a gitx ritual slice
 - `meta/notes/positioning-and-value.md` — longer internal notes on positioning and value

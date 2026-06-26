@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ordo.run/schema/runtime-result.schema.json",
+  "title": "Ordo runtime result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "status", "diagnostics", "outputs", "operation_results", "failed_guard", "failed_step"],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["check", "plan", "execute", "explain"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "validation_error", "resolution_error", "guard_failed", "execution_error"]
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    },
+    "plan": {
+      "anyOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/plan"}
+      ]
+    },
+    "outputs": {
+      "$ref": "#/$defs/jsonObject"
+    },
+    "operation_results": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/operationResult"
+      }
+    },
+    "failed_guard": {
+      "type": ["string", "null"]
+    },
+    "failed_step": {
+      "type": ["string", "null"]
+    }
+  },
+  "$defs": {
+    "jsonValue": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "number"},
+        {"type": "integer"},
+        {"type": "boolean"},
+        {"type": "null"},
+        {"$ref": "#/$defs/jsonObject"},
+        {"$ref": "#/$defs/jsonArray"}
+      ]
+    },
+    "jsonObject": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/jsonValue"
+      }
+    },
+    "jsonArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/jsonValue"
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "level", "message", "path", "details"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "level": {"type": "string", "enum": ["error", "warning", "info"]},
+        "message": {"type": "string", "minLength": 1},
+        "path": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "details": {"$ref": "#/$defs/jsonObject"}
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["guard_checks", "step_names", "blockers"],
+      "properties": {
+        "guard_checks": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "step_names": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "blockers": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "operationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary", "observations", "diagnostics", "raw"],
+      "properties": {
+        "status": {"type": "string", "minLength": 1},
+        "summary": {"type": ["string", "null"]},
+        "observations": {"$ref": "#/$defs/jsonObject"},
+        "diagnostics": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/diagnostic"}
+        },
+        "raw": {"$ref": "#/$defs/jsonObject"}
+      }
+    }
+  }
+}
