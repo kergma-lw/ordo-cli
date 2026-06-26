@@ -24,6 +24,7 @@ Target use cases:
 - `src/ordo/connectors/` — Python connector package namespace
 
 Notable docs:
+- `docs/ordo.1.md` — man-style overview of current capabilities and usage
 - `docs/format.md` — current format draft
 - `docs/contracts.md` — stable v0 workflow and runtime result contracts
 - `docs/pypyr-comparison.md` — honest positioning notes vs pypyr
@@ -42,7 +43,12 @@ Notable docs:
 
 ## Status
 
-This repository currently contains only the minimal format skeleton:
-- initial workflow schema
-- initial format notes
-- a couple of examples
+This repository now contains the v0 contract-first runtime foundation:
+- workflow and profile loading
+- strict validation and structured diagnostics
+- public connector registry and stable resolution
+- runtime modes: `check`, `plan`, `execute`, `explain`
+- initial canonical connector operations
+- examples, profiles, and golden outputs
+
+There is not yet a stable end-user CLI; the current surface is primarily a Python API.
