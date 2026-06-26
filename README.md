@@ -24,6 +24,7 @@ Target use cases:
 - `src/ordo/connectors/` — Python connector package namespace
 
 Notable docs:
+- `docs/quickstart.md` — fastest path to loading, checking, planning, explaining, and executing examples
 - `docs/ordo.1.md` — man-style overview of current capabilities and usage
 - `docs/format.md` — current format draft
 - `docs/contracts.md` — stable v0 workflow and runtime result contracts
