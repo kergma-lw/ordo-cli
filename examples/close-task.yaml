@@ -1,0 +1,28 @@
+version: 0
+workflow: close-task
+
+inputs:
+  issue: kergma-lw/checklist-backend#16
+  ship: true
+
+guards:
+  - uses: git.clean_worktree
+  - uses: git.branch_not_main
+  - uses: github.issue_status
+    with:
+      issue: ${inputs.issue}
+      equals: In review
+
+steps:
+  - name: verify
+    uses: run.profile
+    with:
+      profile: backend-default
+
+  - name: merge-main
+    uses: git.merge_to_main_ff
+
+  - name: close-issue
+    uses: github.close_issue
+    with:
+      issue: ${inputs.issue}

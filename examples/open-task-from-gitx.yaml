@@ -1,0 +1,42 @@
+version: 0
+workflow: open-task
+
+inputs:
+  issue: kergma-lw/checklist-backend#16
+  branch: keep
+  iteration: current
+
+guards:
+  - uses: git.single_worktree
+  - uses: git.clean_worktree
+  - uses: github.issue_project_membership
+    with:
+      issue: ${inputs.issue}
+  - uses: github.issue_status_not_in
+    with:
+      issue: ${inputs.issue}
+      statuses:
+        - Done
+        - In review
+
+steps:
+  - name: move-issue-to-in-progress
+    uses: github.project_set_status
+    with:
+      issue: ${inputs.issue}
+      status: In progress
+
+  - name: set-current-iteration
+    uses: github.project_set_iteration
+    with:
+      issue: ${inputs.issue}
+      value: ${inputs.iteration}
+
+  - name: sync-main
+    uses: git.sync_main_ff_only
+
+  - name: create-or-switch-task-branch
+    uses: git.branch_from_issue
+    with:
+      issue: ${inputs.issue}
+      branch: ${inputs.branch}

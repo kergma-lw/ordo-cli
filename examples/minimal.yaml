@@ -1,0 +1,11 @@
+version: 0
+workflow: open-task
+
+guards:
+  - uses: git.clean_worktree
+
+steps:
+  - name: inspect-issue
+    uses: github.issue_view
+    with:
+      issue: kergma-lw/checklist-backend#16

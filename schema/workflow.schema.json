@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ordo.run/schema/workflow.schema.json",
+  "title": "Ordo workflow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "workflow", "guards", "steps"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 0
+    },
+    "workflow": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inputs": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "object", "array", "null"]
+      }
+    },
+    "guards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/call"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    }
+  },
+  "$defs": {
+    "call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uses"],
+      "properties": {
+        "uses": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*$"
+        },
+        "with": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": true
+        }
+      }
+    },
+    "step": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/call"
+        },
+        {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

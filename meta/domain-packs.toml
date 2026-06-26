@@ -1,0 +1,35 @@
+version = 1
+
+[[packs]]
+name = "core"
+title = "Ordo core contract"
+output = "packs/core.md"
+sources = [
+  "requirements/authoring/core.md",
+  "requirements/connector/core.md",
+  "requirements/workflow/core.md",
+  "requirements/runtime/core.md",
+  "requirements/policy/core.md",
+  "domain/authoring.md",
+  "domain/connector.md",
+  "domain/workflow.md",
+  "domain/runtime.md",
+  "domain/policy.md",
+  "domain/boundaries.md",
+  "model/workflow/entities.md",
+  "model/runtime/lifecycle.md",
+  "model/connector/contract.md",
+  "model/connector/resolution-policy.md",
+  "data/workflow/shape.md",
+  "data/runtime/result-envelope.md",
+  "scenarios/core.md",
+  "scenarios/authoring.md",
+  "adr/0001-scope.md",
+  "adr/0002-connectors-are-public.md",
+  "adr/0003-packs-are-derived.md",
+  "verification/core/drift.md",
+  "verification/connector/invariants.md",
+  "verification/workflow/authoring.md",
+  "verification/runtime/invariants.md",
+  "verification/meta/packs.md"
+]
