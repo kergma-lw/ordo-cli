@@ -17,59 +17,63 @@ It evaluates whether a sufficiently capable agent can author and repair workflow
 
 ### Discoverability
 
-Partial pass.
+Pass with remaining limits.
 
 The public surface already makes several important facts discoverable:
 
 - the v0 connector families are `git`, `gh`, and `shell`;
 - workflows are built from `guards` and ordered `steps`;
 - authoring is intended to be composition-first rather than connector-first.
+- a public connector registry now exposes stable operation metadata including kind, inputs, outputs, and failure modes.
 
-However, discoverability is still incomplete because the repository does not yet publish a canonical operation inventory with per-operation input and result contracts.
+Discoverability is still intentionally small rather than comprehensive, but it is now strong enough for a capable agent to identify the baseline public operations without reading connector internals.
 
 ### Composition-first authoring
 
-Partial pass.
+Pass.
 
-The examples demonstrate that non-trivial workflows can be expressed by composing public operations.
+The repository now provides canonical examples and profiles that demonstrate composition-first authoring:
 
-During this verification pass, the examples were corrected to stay inside the published v0 connector boundary:
+- workflows in `examples/` compose public operations directly;
+- profiles in `profiles/` express presets, defaults, and explicit overrides;
+- blocked-before-execution behavior is demonstrated by example rather than hidden in implementation code.
 
-- `github.*` references were aligned to `gh.*`;
-- `run.profile` was removed from a v0 example because `run` is documented only as a possible future connector domain.
-
-This removes immediate drift between the examples and the documented contract surface, but it does not yet prove that the published operation set is sufficient for routine customization across real projects.
+Routine customization is now demonstrably possible through workflows and profiles without inventing new connector semantics.
 
 ### Iterative repair via structured feedback
 
-Fail for now.
+Pass for the v0 foundation scope.
 
-The meta contract requires machine-usable validation, resolution, planning, and explanation surfaces. The current repository snapshot still exposes only the schema, examples, and design docs. It does not yet expose implemented structured diagnostics for:
+The repository now exposes structured surfaces for:
 
 - validation failure;
 - resolution failure;
 - likely executability;
 - explanation and next safe action.
 
-An agent can infer intent from the docs, but cannot yet repair authored workflows through stable runtime feedback alone.
+An agent can now iteratively repair authored workflows using normalized diagnostics, `check`, `plan`, and `explain` outputs without log scraping.
 
 ### Profiles
 
-Not yet proven.
+Pass with bounded scope.
 
-The meta contract discusses profile composition and explicit overrides, but the current repository snapshot does not yet provide a concrete public profile contract and runtime verification path strong enough to demonstrate agent-usable profile repair.
+The current profile surface is intentionally small, but it is concrete and machine-checkable:
+
+- profiles load from YAML into JSON-shaped models;
+- validation detects malformed overrides and conflicts;
+- composition rejects silent input and override conflicts;
+- workflow application rejects silent replacement of explicit workflow inputs.
 
 ## Remaining gaps against meta truth
 
-Before issue #16 can be considered fully satisfied, the repository still needs at least:
+The v0 foundation now satisfies the core verification goal, but some bounded gaps remain:
 
-- a canonical public operation registry or equivalent contract index;
-- implemented structured outputs for `check`, `plan`, `execute`, and `explain`;
-- explicit public profile contract examples and validation behavior;
-- scenario-style verification that an authored workflow can be repaired from structured diagnostics without log scraping.
+- only a minimal canonical operation set has concrete implementations;
+- several public operations remain metadata-only and still return structured not-yet-implemented results if executed;
+- the verification surface proves v0 authorability, not broad production-grade connector coverage.
 
 ## Current conclusion
 
-The repository now better respects the documented v0 boundary at the example level, so it is less likely to drift silently from the meta packs.
+The repository now provides enough public contract surface, examples, profile composition behavior, and structured runtime feedback to verify the core v0 authoring promise.
 
-But issue #16 is still only partially satisfied in the current snapshot. The public authoring story is directionally coherent, yet the runtime and diagnostics needed for full agent-authorable verification are not implemented here yet.
+Issue #16 is satisfied for the contract-first v0 foundation, with the remaining gaps explicitly documented above rather than hidden.
