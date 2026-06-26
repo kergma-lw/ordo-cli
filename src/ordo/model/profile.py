@@ -15,6 +15,14 @@ class Override:
     with_: JSONObject = field(default_factory=dict, kw_only=True)
     reason: str | None = None
 
+    def to_contract(self) -> JSONObject:
+        """Return the stable JSON-shaped override form."""
+
+        contract: JSONObject = {"target": self.target, "with": dict(self.with_)}
+        if self.reason is not None:
+            contract["reason"] = self.reason
+        return contract
+
 
 @dataclass(frozen=True, slots=True)
 class Profile:
@@ -24,3 +32,13 @@ class Profile:
     inputs: JSONObject = field(default_factory=dict)
     checks: tuple[str, ...] = ()
     overrides: tuple[Override, ...] = ()
+
+    def to_contract(self) -> JSONObject:
+        """Return the stable JSON-shaped profile form."""
+
+        return {
+            "name": self.name,
+            "inputs": dict(self.inputs),
+            "checks": list(self.checks),
+            "overrides": [override.to_contract() for override in self.overrides],
+        }
