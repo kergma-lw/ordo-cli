@@ -1,0 +1,57 @@
+{
+  "diagnostics": [],
+  "failed_guard": null,
+  "failed_step": null,
+  "mode": "plan",
+  "operation_results": [
+    {
+      "diagnostics": [],
+      "observations": {
+        "clean": true,
+        "dirty_paths": []
+      },
+      "raw": {},
+      "status": "ok",
+      "summary": "clean"
+    }
+  ],
+  "outputs": {
+    "active_overrides": [],
+    "active_profile": null,
+    "blockers": [],
+    "can_execute": true,
+    "checked_guards": [
+      "git.clean_worktree"
+    ],
+    "execution_allowed": true,
+    "guard_items": [
+      {
+        "effect": "read_only",
+        "kind": "probe",
+        "operation_status": "ok",
+        "reference": "git.clean_worktree",
+        "status": "ok"
+      }
+    ],
+    "plan_ready": true,
+    "step_items": [
+      {
+        "effect": "read_only",
+        "eligibility": "eligible",
+        "kind": "probe",
+        "name": "inspect-issue",
+        "reference": "gh.issue.view"
+      }
+    ]
+  },
+  "plan": {
+    "blockers": [],
+    "guard_checks": [
+      "git.clean_worktree"
+    ],
+    "step_names": [
+      "inspect-issue"
+    ]
+  },
+  "status": "ok"
+}

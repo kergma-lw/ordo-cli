@@ -1,0 +1,38 @@
+{
+  "diagnostics": [],
+  "failed_guard": "git.branch_not_main",
+  "failed_step": null,
+  "mode": "check",
+  "operation_results": [
+    {
+      "diagnostics": [],
+      "observations": {},
+      "raw": {},
+      "status": "guard_failed",
+      "summary": "main branch"
+    }
+  ],
+  "outputs": {
+    "active_overrides": [],
+    "active_profile": null,
+    "blockers": [
+      "git.branch_not_main"
+    ],
+    "can_execute": false,
+    "checked_guards": [
+      "git.branch_not_main"
+    ]
+  },
+  "plan": {
+    "blockers": [
+      "git.branch_not_main"
+    ],
+    "guard_checks": [
+      "git.branch_not_main"
+    ],
+    "step_names": [
+      "verify-command"
+    ]
+  },
+  "status": "guard_failed"
+}

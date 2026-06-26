@@ -1,0 +1,48 @@
+{
+  "diagnostics": [],
+  "failed_guard": null,
+  "failed_step": null,
+  "mode": "execute",
+  "operation_results": [
+    {
+      "diagnostics": [],
+      "observations": {
+        "clean": true,
+        "dirty_paths": []
+      },
+      "raw": {},
+      "status": "ok",
+      "summary": "clean"
+    },
+    {
+      "diagnostics": [],
+      "observations": {
+        "issue": {
+          "number": 1
+        }
+      },
+      "raw": {},
+      "status": "ok",
+      "summary": "inspected"
+    }
+  ],
+  "outputs": {
+    "active_overrides": [],
+    "active_profile": null,
+    "can_execute": true,
+    "executed_steps": [
+      "inspect-issue"
+    ],
+    "skipped_steps": []
+  },
+  "plan": {
+    "blockers": [],
+    "guard_checks": [
+      "git.clean_worktree"
+    ],
+    "step_names": [
+      "inspect-issue"
+    ]
+  },
+  "status": "ok"
+}

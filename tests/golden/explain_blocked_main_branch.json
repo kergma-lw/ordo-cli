@@ -1,0 +1,73 @@
+{
+  "diagnostics": [],
+  "failed_guard": "git.branch_not_main",
+  "failed_step": null,
+  "mode": "explain",
+  "operation_results": [
+    {
+      "diagnostics": [],
+      "observations": {},
+      "raw": {},
+      "status": "guard_failed",
+      "summary": "main branch"
+    }
+  ],
+  "outputs": {
+    "active_overrides": [],
+    "active_profile": null,
+    "blockers": [
+      "git.branch_not_main"
+    ],
+    "can_execute": false,
+    "checked_guards": [
+      "git.branch_not_main"
+    ],
+    "execution_allowed": false,
+    "explanation": {
+      "allowed": false,
+      "blockers": [
+        "git.branch_not_main"
+      ],
+      "category": "guard",
+      "why": "One or more guards blocked execution before any business step could run"
+    },
+    "guard_items": [
+      {
+        "effect": "read_only",
+        "kind": "probe",
+        "operation_status": "guard_failed",
+        "reference": "git.branch_not_main",
+        "status": "blocked"
+      }
+    ],
+    "next_actions": [
+      {
+        "action": "resolve_blocking_guards",
+        "reason": "Address the blocking guard conditions before execution"
+      }
+    ],
+    "plan_ready": true,
+    "reason_category": "guard",
+    "step_items": [
+      {
+        "effect": "effectful",
+        "eligibility": "blocked",
+        "kind": "action",
+        "name": "verify-command",
+        "reference": "shell.command"
+      }
+    ]
+  },
+  "plan": {
+    "blockers": [
+      "git.branch_not_main"
+    ],
+    "guard_checks": [
+      "git.branch_not_main"
+    ],
+    "step_names": [
+      "verify-command"
+    ]
+  },
+  "status": "guard_failed"
+}
