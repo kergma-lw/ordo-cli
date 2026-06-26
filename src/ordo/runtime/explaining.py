@@ -1,0 +1,150 @@
+"""Explain mode for structured runtime reasoning."""
+
+from __future__ import annotations
+
+from ordo.model.profile import Profile
+from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
+from ordo.model.workflow import Workflow
+
+from .checking import GuardProbe
+from .executing import StepExecutor, execute_workflow
+from .planning import plan_workflow
+
+
+def explain_workflow(
+    workflow: Workflow,
+    *,
+    profile: Profile | None = None,
+    guard_probe: GuardProbe | None = None,
+) -> RuntimeResult:
+    """Explain why execution is blocked or allowed without executing business steps."""
+
+    plan_result = plan_workflow(workflow, profile=profile, guard_probe=guard_probe)
+    return explain_runtime_result(plan_result)
+
+
+def explain_runtime_result(result: RuntimeResult) -> RuntimeResult:
+    """Convert a runtime result into a stable structured explanation surface."""
+
+    outputs = dict(result.outputs)
+    explanation = _build_explanation(result)
+    next_actions = _infer_next_actions(result)
+
+    outputs.update(
+        {
+            "explanation": explanation,
+            "next_actions": next_actions,
+            "reason_category": explanation["category"],
+        }
+    )
+
+    return RuntimeResult(
+        mode=Mode.EXPLAIN,
+        status=result.status,
+        diagnostics=result.diagnostics,
+        plan=result.plan,
+        outputs=outputs,
+        operation_results=result.operation_results,
+        failed_guard=result.failed_guard,
+        failed_step=result.failed_step,
+    )
+
+
+def explain_execution_result(
+    workflow: Workflow,
+    *,
+    profile: Profile | None = None,
+    guard_probe: GuardProbe | None = None,
+    step_executor: StepExecutor | None = None,
+) -> RuntimeResult:
+    """Execute and then explain the resulting runtime decision surface."""
+
+    execution_result = execute_workflow(
+        workflow,
+        profile=profile,
+        guard_probe=guard_probe,
+        step_executor=step_executor,
+    )
+    return explain_runtime_result(execution_result)
+
+
+def _build_explanation(result: RuntimeResult) -> dict[str, object]:
+    if result.status is RuntimeStatus.VALIDATION_ERROR:
+        return {
+            "category": "validation",
+            "allowed": False,
+            "why": "Workflow is invalid and cannot proceed to resolution or execution",
+            "blockers": [diagnostic.code for diagnostic in result.diagnostics],
+        }
+
+    if result.status is RuntimeStatus.RESOLUTION_ERROR:
+        return {
+            "category": "resolution",
+            "allowed": False,
+            "why": "Workflow references could not be resolved against the public connector surface",
+            "blockers": [diagnostic.details.get("reference", diagnostic.code) for diagnostic in result.diagnostics],
+        }
+
+    if result.status is RuntimeStatus.GUARD_FAILED:
+        return {
+            "category": "guard",
+            "allowed": False,
+            "why": "One or more guards blocked execution before any business step could run",
+            "blockers": list(result.outputs.get("blockers", [])),
+        }
+
+    if result.status is RuntimeStatus.EXECUTION_ERROR:
+        return {
+            "category": "execution",
+            "allowed": False,
+            "why": "Execution started but a step failed",
+            "blockers": [result.failed_step] if result.failed_step is not None else [],
+        }
+
+    return {
+        "category": "ok",
+        "allowed": bool(result.outputs.get("can_execute", True)),
+        "why": "No known blocker prevents execution now",
+        "blockers": [],
+    }
+
+
+def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:
+    if result.status is RuntimeStatus.VALIDATION_ERROR:
+        return [
+            {
+                "action": "fix_validation_errors",
+                "reason": "Resolve the reported validation diagnostics before retrying",
+            }
+        ]
+
+    if result.status is RuntimeStatus.RESOLUTION_ERROR:
+        return [
+            {
+                "action": "fix_operation_references",
+                "reason": "Use known public operations or an explicit local namespace",
+            }
+        ]
+
+    if result.status is RuntimeStatus.GUARD_FAILED:
+        return [
+            {
+                "action": "resolve_blocking_guards",
+                "reason": "Address the blocking guard conditions before execution",
+            }
+        ]
+
+    if result.status is RuntimeStatus.EXECUTION_ERROR:
+        return [
+            {
+                "action": "repair_failed_step",
+                "reason": "Inspect the failed step result and correct the execution issue",
+            }
+        ]
+
+    return [
+        {
+            "action": "execute_workflow",
+            "reason": "Validation, resolution, and guards currently allow execution",
+        }
+    ]

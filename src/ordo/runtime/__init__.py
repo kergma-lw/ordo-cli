@@ -2,6 +2,7 @@
 
 from .checking import check_workflow
 from .executing import execute_workflow
+from .explaining import explain_execution_result, explain_runtime_result, explain_workflow
 from .loading import LoadError, load_profile_file, load_profile_text, load_workflow_file, load_workflow_text, load_yaml_document
 from .planning import plan_workflow
 from .profiles import ProfileCompositionResult, WorkflowProfileApplicationResult, apply_profile_to_workflow, compose_profiles
@@ -17,6 +18,9 @@ __all__ = [
     "WorkflowProfileApplicationResult",
     "check_workflow",
     "execute_workflow",
+    "explain_execution_result",
+    "explain_runtime_result",
+    "explain_workflow",
     "plan_workflow",
     "apply_profile_to_workflow",
     "compose_profiles",
