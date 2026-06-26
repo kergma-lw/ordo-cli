@@ -1,0 +1,13 @@
+name: read-only-review
+
+inputs:
+  issue: kergma-lw/ordo-cli#1
+
+checks:
+  - review
+
+overrides:
+  - target: gh.issue.view
+    with:
+      issue: kergma-lw/ordo-cli#1
+    reason: explicit issue default for review workflows

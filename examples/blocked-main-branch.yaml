@@ -1,0 +1,14 @@
+version: 0
+workflow: blocked-main-branch
+
+inputs:
+  command: echo ready-to-ship
+
+guards:
+  - uses: git.branch_not_main
+
+steps:
+  - name: verify-command
+    uses: shell.command
+    with:
+      command: ${inputs.command}

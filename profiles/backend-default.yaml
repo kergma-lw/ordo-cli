@@ -1,0 +1,15 @@
+name: backend-default
+
+inputs:
+  command: .venv/bin/python -m unittest discover -s tests
+  issue: kergma-lw/ordo-cli#1
+
+checks:
+  - unit
+  - contract
+
+overrides:
+  - target: shell.command
+    with:
+      command: .venv/bin/python -m unittest discover -s tests
+    reason: repo default verification command

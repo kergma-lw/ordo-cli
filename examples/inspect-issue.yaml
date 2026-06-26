@@ -1,0 +1,14 @@
+version: 0
+workflow: inspect-issue
+
+inputs:
+  issue: kergma-lw/ordo-cli#1
+
+guards:
+  - uses: git.clean_worktree
+
+steps:
+  - name: inspect-issue
+    uses: gh.issue.view
+    with:
+      issue: ${inputs.issue}

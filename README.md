@@ -18,6 +18,7 @@ Target use cases:
 - `schema/` — machine-readable format
 - `docs/` — human-readable spec
 - `examples/` — valid minimal examples
+- `profiles/` — reusable presets, defaults, and explicit overrides
 - `src/ordo/model/` — core workflow, profile, connector, diagnostic, and runtime models
 - `src/ordo/runtime/` — runtime mode orchestration surface
 - `src/ordo/connectors/` — Python connector package namespace
