@@ -78,6 +78,7 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
         for index, resolved_guard in enumerate(resolution.resolved_guards):
             operation_result = check_result.operation_results[index] if index < len(check_result.operation_results) else None
             if isinstance(resolved_guard, ResolvedGuardExpression):
+                detail = check_result.outputs.get("guard_details", [])[index] if index < len(check_result.outputs.get("guard_details", [])) else {}
                 guard_items.append(
                     {
                         "reference": resolved_guard.reference,
@@ -85,6 +86,8 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
                         "effect": "read_only",
                         "status": "blocked" if resolved_guard.reference in check_result.outputs.get("blockers", []) else "unknown",
                         "operation_status": None if operation_result is None else operation_result.status,
+                        "failed_subcondition": detail.get("failed_subcondition") if isinstance(detail, dict) else None,
+                        "failure_kind": detail.get("failure_kind") if isinstance(detail, dict) else None,
                     }
                 )
                 continue

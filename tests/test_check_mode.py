@@ -59,6 +59,7 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.failed_guard, "git.clean_worktree")
         self.assertEqual(result.outputs["blockers"], ["git.clean_worktree"])
+        self.assertEqual(result.outputs["guard_details"][0]["reference"], "git.clean_worktree")
         self.assertEqual(seen_references, ["git.clean_worktree"])
 
     def test_check_reports_success_and_active_profile_metadata(self) -> None:
@@ -93,6 +94,7 @@ class CheckModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["checked_guards"], ['git.branch.value != "main"'])
+        self.assertTrue(result.outputs["guard_details"][0]["trace"])
 
     def test_check_caches_repeated_expr_probe_reference(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr="git.worktree.clean and git.worktree.clean"),), steps=())
@@ -117,6 +119,7 @@ class CheckModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.operation_results[0].status, "probe_failed")
+        self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "probe_failed")
 
 
 if __name__ == "__main__":

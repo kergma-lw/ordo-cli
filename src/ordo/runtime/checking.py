@@ -88,6 +88,7 @@ def check_workflow(
     diagnostics: list[Diagnostic] = []
     operation_results: list[OperationResult] = []
     blockers: list[str] = []
+    guard_details: list[dict[str, object]] = []
     failed_guard: str | None = None
 
     for resolved_guard in resolution.resolved_guards:
@@ -97,6 +98,7 @@ def check_workflow(
             result = probe(resolved_guard, effective_workflow)
         operation_results.append(result)
         diagnostics.extend(result.diagnostics)
+        guard_details.append(_build_guard_detail(resolved_guard.reference, result))
         if result.status != "ok":
             blockers.append(resolved_guard.reference)
             if failed_guard is None:
@@ -116,6 +118,7 @@ def check_workflow(
                 "can_execute": False,
                 "blockers": blockers,
                 "checked_guards": [result.reference for result in resolution.resolved_guards],
+                "guard_details": guard_details,
                 "active_profile": active_profile,
                 "active_overrides": [override.to_contract() for override in active_overrides],
             },
@@ -136,6 +139,7 @@ def check_workflow(
             "can_execute": True,
             "blockers": [],
             "checked_guards": [result.reference for result in resolution.resolved_guards],
+            "guard_details": guard_details,
             "active_profile": active_profile,
             "active_overrides": [override.to_contract() for override in active_overrides],
         },
@@ -158,10 +162,13 @@ def _evaluate_guard_expression(
 ) -> OperationResult:
     cache: dict[str, tuple[str, JSONValue | None, OperationResult]] = {}
     diagnostics: list[Diagnostic] = []
+    trace: list[dict[str, object]] = []
 
     def evaluate(node: GuardExpressionNode) -> tuple[str, JSONValue | None]:
         if isinstance(node, LiteralNode):
-            return "ok", cast(JSONValue, node.value)
+            value = cast(JSONValue, node.value)
+            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "literal", "status": "ok", "value": value})
+            return "ok", value
         if isinstance(node, ListNode):
             values: list[JSONValue] = []
             for item in node.items:
@@ -169,41 +176,56 @@ def _evaluate_guard_expression(
                 if status != "ok":
                     return status, None
                 values.append(cast(JSONValue, value))
+            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "list", "status": "ok", "value": values})
             return "ok", values
         if isinstance(node, ReferenceNode):
             if node.parts[0] == "inputs":
-                return _resolve_input_reference(node.parts, workflow, diagnostics)
+                status, value = _resolve_input_reference(node.parts, workflow, diagnostics)
+                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "input", "status": status, "value": value})
+                return status, value
             probe_spec = _lookup_probe_spec(resolved_guard, resolved_guard.expr[node.start : node.end], tuple())
-            return _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
+            status, value = _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
+            trace.append({"expr": probe_spec.expression_text, "kind": "probe", "status": status, "value": value, "reference": probe_spec.reference})
+            return status, value
         if isinstance(node, CallNode):
             probe_spec = _lookup_probe_spec(resolved_guard, resolved_guard.expr[node.start : node.end], node.fields)
-            return _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
+            status, value = _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
+            trace.append({"expr": probe_spec.expression_text, "kind": "probe", "status": status, "value": value, "reference": probe_spec.reference})
+            return status, value
         if isinstance(node, UnaryNode):
             status, value = evaluate(node.operand)
             if status != "ok":
                 return status, None
-            return "ok", not bool(value)
+            result = not bool(value)
+            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "unary", "operator": node.operator, "status": "ok", "value": result})
+            return "ok", result
         if isinstance(node, BinaryNode):
             if node.operator == "and":
                 left_status, left_value = evaluate(node.left)
                 if left_status != "ok":
                     return left_status, None
                 if not bool(left_value):
+                    trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": False})
                     return "ok", False
                 right_status, right_value = evaluate(node.right)
                 if right_status != "ok":
                     return right_status, None
-                return "ok", bool(right_value)
+                result = bool(right_value)
+                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result})
+                return "ok", result
             if node.operator == "or":
                 left_status, left_value = evaluate(node.left)
                 if left_status != "ok":
                     return left_status, None
                 if bool(left_value):
+                    trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": True})
                     return "ok", True
                 right_status, right_value = evaluate(node.right)
                 if right_status != "ok":
                     return right_status, None
-                return "ok", bool(right_value)
+                result = bool(right_value)
+                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result})
+                return "ok", result
             left_status, left_value = evaluate(node.left)
             if left_status != "ok":
                 return left_status, None
@@ -211,31 +233,40 @@ def _evaluate_guard_expression(
             if right_status != "ok":
                 return right_status, None
             if node.operator == "==":
-                return "ok", left_value == right_value
+                result = left_value == right_value
+                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
+                return "ok", result
             if node.operator == "!=":
-                return "ok", left_value != right_value
+                result = left_value != right_value
+                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
+                return "ok", result
             if node.operator == "in":
-                return "ok", left_value in cast(object, right_value)
+                result = left_value in cast(object, right_value)
+                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
+                return "ok", result
             if node.operator == "not in":
-                return "ok", left_value not in cast(object, right_value)
+                result = left_value not in cast(object, right_value)
+                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
+                return "ok", result
         return "probe_failed", None
 
     status, value = evaluate(resolved_guard.parsed.root)
+    failed_trace = next((entry for entry in reversed(trace) if entry.get("status") == "probe_failed" or entry.get("value") is False), None)
     if status == "probe_failed":
         return OperationResult(
             status="probe_failed",
             summary="Guard expression could not be evaluated safely",
             diagnostics=tuple(diagnostics),
-            observations={"guard": resolved_guard.expr, "result": None},
-            raw={"cache_entries": len(cache)},
+            observations={"guard": resolved_guard.expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.get("expr")},
+            raw={"cache_entries": len(cache), "trace": trace, "failure_kind": "probe_failed"},
         )
     passed = bool(value)
     return OperationResult(
         status="ok" if passed else "guard_failed",
         summary="Guard expression evaluated successfully" if passed else "Guard expression evaluated false",
         diagnostics=tuple(diagnostics),
-        observations={"guard": resolved_guard.expr, "result": passed},
-        raw={"cache_entries": len(cache)},
+        observations={"guard": resolved_guard.expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.get("expr")},
+        raw={"cache_entries": len(cache), "trace": trace, "failure_kind": "guard_failed" if not passed else None},
     )
 
 
@@ -321,3 +352,14 @@ def _extract_probe_value(observations: dict[str, JSONValue], fields: tuple[str, 
             return _MISSING
         current = current[field]
     return current
+
+
+def _build_guard_detail(reference: str, result: OperationResult) -> dict[str, object]:
+    return {
+        "reference": reference,
+        "status": result.status,
+        "summary": result.summary,
+        "failed_subcondition": result.observations.get("failed_subcondition"),
+        "failure_kind": result.raw.get("failure_kind"),
+        "trace": result.raw.get("trace", []),
+    }

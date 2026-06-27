@@ -86,11 +86,13 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         }
 
     if result.status is RuntimeStatus.GUARD_FAILED:
+        guard_details = [detail for detail in result.outputs.get("guard_details", []) if isinstance(detail, dict)]
         return {
             "category": "guard",
             "allowed": False,
             "why": "One or more guards blocked execution before any business step could run",
             "blockers": list(result.outputs.get("blockers", [])),
+            "guard_details": guard_details,
         }
 
     if result.status is RuntimeStatus.EXECUTION_ERROR:

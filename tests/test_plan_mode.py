@@ -92,6 +92,7 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.outputs["guard_items"][0]["reference"], 'git.branch.value != "main"')
         self.assertEqual(result.outputs["guard_items"][0]["kind"], "expression")
+        self.assertEqual(result.outputs["guard_items"][0]["failed_subcondition"], 'git.branch.value != "main"')
 
 
 if __name__ == "__main__":

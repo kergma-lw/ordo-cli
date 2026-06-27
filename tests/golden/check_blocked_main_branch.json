@@ -21,6 +21,16 @@
     "can_execute": false,
     "checked_guards": [
       "git.branch_not_main"
+    ],
+    "guard_details": [
+      {
+        "failed_subcondition": null,
+        "failure_kind": null,
+        "reference": "git.branch_not_main",
+        "status": "guard_failed",
+        "summary": "main branch",
+        "trace": []
+      }
     ]
   },
   "plan": {

@@ -11,23 +11,21 @@ class ExplainModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(expr='git.branch.value != "main"'),),
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
         )
 
-        def probe(_resolved_guard, _workflow):
-            return OperationResult(
-                status="guard_failed",
-                diagnostics=(
-                    Diagnostic(code="guard.blocked", level="error", message="Dirty worktree", path=("guards", "0", "uses")),
-                ),
-            )
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "git.branch":
+                return OperationResult(status="ok", observations={"value": "main"})
+            return OperationResult(status="ok")
 
         result = explain_workflow(workflow, guard_probe=probe)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.outputs["reason_category"], "guard")
         self.assertEqual(result.outputs["next_actions"][0]["action"], "resolve_blocking_guards")
+        self.assertEqual(result.outputs["explanation"]["guard_details"][0]["failed_subcondition"], 'git.branch.value != "main"')
 
     def test_explain_reports_resolution_problem(self) -> None:
         workflow = Workflow(

@@ -29,8 +29,28 @@
         "git.branch_not_main"
       ],
       "category": "guard",
+      "guard_details": [
+        {
+          "failed_subcondition": null,
+          "failure_kind": null,
+          "reference": "git.branch_not_main",
+          "status": "guard_failed",
+          "summary": "main branch",
+          "trace": []
+        }
+      ],
       "why": "One or more guards blocked execution before any business step could run"
     },
+    "guard_details": [
+      {
+        "failed_subcondition": null,
+        "failure_kind": null,
+        "reference": "git.branch_not_main",
+        "status": "guard_failed",
+        "summary": "main branch",
+        "trace": []
+      }
+    ],
     "guard_items": [
       {
         "effect": "read_only",

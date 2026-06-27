@@ -24,6 +24,16 @@
       "git.clean_worktree"
     ],
     "execution_allowed": true,
+    "guard_details": [
+      {
+        "failed_subcondition": null,
+        "failure_kind": null,
+        "reference": "git.clean_worktree",
+        "status": "ok",
+        "summary": "clean",
+        "trace": []
+      }
+    ],
     "guard_items": [
       {
         "effect": "read_only",
