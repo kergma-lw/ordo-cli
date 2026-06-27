@@ -14,7 +14,7 @@ Guards may be expressed either as explicit operation calls or as compact express
 ### Expression form
 
 ```yaml
-- git.worktree.clean and git.branch != "main"
+- git.worktree.clean and git.branch.value != "main"
 ```
 
 ```yaml

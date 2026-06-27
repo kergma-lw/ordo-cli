@@ -31,6 +31,7 @@ It is modeled as policy over public probe results rather than as a general embed
 - Field access is not a general object method system.
 - Public contract documentation must define which output fields are stable enough to reference from guard expressions.
 - A boolean-valued field may be used directly as a condition.
+- Non-boolean probe outputs should be compared through explicit documented field access such as `git.branch.value`.
 
 ## Guard list semantics
 

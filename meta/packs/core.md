@@ -48,7 +48,8 @@
 
 ## Preferred authoring surface
 
-- A zero-argument probe reference should read like a compact fact, for example `git.worktree.clean` or `git.branch`.
+- A zero-argument boolean probe fact should read like a compact fact, for example `git.worktree.clean`.
+- A zero-argument non-boolean probe value should remain readable through explicit documented field access, for example `git.branch.value`.
 - A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(issue=inputs.issue).status`.
 - The authoring surface should prefer a minimal and orthogonal public probe vocabulary over many specialized policy-encoded probe names.
 
@@ -690,6 +691,7 @@ It is modeled as policy over public probe results rather than as a general embed
 - Field access is not a general object method system.
 - Public contract documentation must define which output fields are stable enough to reference from guard expressions.
 - A boolean-valued field may be used directly as a condition.
+- Non-boolean probe outputs should be compared through explicit documented field access such as `git.branch.value`.
 
 ## Guard list semantics
 
@@ -940,7 +942,7 @@ Guards may be expressed either as explicit operation calls or as compact express
 ### Expression form
 
 ```yaml
-- git.worktree.clean and git.branch != "main"
+- git.worktree.clean and git.branch.value != "main"
 ```
 
 ```yaml
