@@ -76,6 +76,23 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.empty")
 
+    def test_guard_expression_syntax_error_is_reported(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - gh.issue(inputs.issue).status not in ["Done"]
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.syntax")
+        self.assertEqual(report.diagnostics[0].path, ("guards", "0"))
+
     def test_unknown_workflow_field_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
