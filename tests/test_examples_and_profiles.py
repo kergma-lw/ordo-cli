@@ -28,7 +28,9 @@ class ExampleSurfaceTest(unittest.TestCase):
 
         result = explain_workflow(
             workflow,
-            guard_probe=lambda _resolved, _workflow: OperationResult(status="guard_failed", summary="main branch"),
+            guard_probe=lambda resolved, _workflow: OperationResult(status="ok", observations={"value": "main"})
+            if resolved.reference == "git.branch"
+            else OperationResult(status="guard_failed", summary="main branch"),
         )
 
         self.assertEqual(result.outputs["reason_category"], "guard")

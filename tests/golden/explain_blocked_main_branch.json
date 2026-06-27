@@ -1,62 +1,141 @@
 {
   "diagnostics": [],
-  "failed_guard": "git.branch_not_main",
+  "failed_guard": "git.branch.value != \"main\"",
   "failed_step": null,
   "mode": "explain",
   "operation_results": [
     {
       "diagnostics": [],
-      "observations": {},
-      "raw": {},
+      "observations": {
+        "failed_subcondition": "git.branch.value != \"main\"",
+        "guard": "git.branch.value != \"main\"",
+        "result": false
+      },
+      "raw": {
+        "cache_entries": 1,
+        "failure_kind": "guard_failed",
+        "trace": [
+          {
+            "expr": "git.branch.value",
+            "kind": "probe",
+            "reference": "git.branch",
+            "status": "ok",
+            "value": "main"
+          },
+          {
+            "expr": "\"main\"",
+            "kind": "literal",
+            "status": "ok",
+            "value": "main"
+          },
+          {
+            "expr": "git.branch.value != \"main\"",
+            "kind": "binary",
+            "left": "main",
+            "operator": "!=",
+            "right": "main",
+            "status": "ok",
+            "value": false
+          }
+        ]
+      },
       "status": "guard_failed",
-      "summary": "main branch"
+      "summary": "Guard expression evaluated false"
     }
   ],
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
     "blockers": [
-      "git.branch_not_main"
+      "git.branch.value != \"main\""
     ],
     "can_execute": false,
     "checked_guards": [
-      "git.branch_not_main"
+      "git.branch.value != \"main\""
     ],
     "execution_allowed": false,
     "explanation": {
       "allowed": false,
       "blockers": [
-        "git.branch_not_main"
+        "git.branch.value != \"main\""
       ],
       "category": "guard",
       "guard_details": [
         {
-          "failed_subcondition": null,
-          "failure_kind": null,
-          "reference": "git.branch_not_main",
+          "failed_subcondition": "git.branch.value != \"main\"",
+          "failure_kind": "guard_failed",
+          "reference": "git.branch.value != \"main\"",
           "status": "guard_failed",
-          "summary": "main branch",
-          "trace": []
+          "summary": "Guard expression evaluated false",
+          "trace": [
+            {
+              "expr": "git.branch.value",
+              "kind": "probe",
+              "reference": "git.branch",
+              "status": "ok",
+              "value": "main"
+            },
+            {
+              "expr": "\"main\"",
+              "kind": "literal",
+              "status": "ok",
+              "value": "main"
+            },
+            {
+              "expr": "git.branch.value != \"main\"",
+              "kind": "binary",
+              "left": "main",
+              "operator": "!=",
+              "right": "main",
+              "status": "ok",
+              "value": false
+            }
+          ]
         }
       ],
       "why": "One or more guards blocked execution before any business step could run"
     },
     "guard_details": [
       {
-        "failed_subcondition": null,
-        "failure_kind": null,
-        "reference": "git.branch_not_main",
+        "failed_subcondition": "git.branch.value != \"main\"",
+        "failure_kind": "guard_failed",
+        "reference": "git.branch.value != \"main\"",
         "status": "guard_failed",
-        "summary": "main branch",
-        "trace": []
+        "summary": "Guard expression evaluated false",
+        "trace": [
+          {
+            "expr": "git.branch.value",
+            "kind": "probe",
+            "reference": "git.branch",
+            "status": "ok",
+            "value": "main"
+          },
+          {
+            "expr": "\"main\"",
+            "kind": "literal",
+            "status": "ok",
+            "value": "main"
+          },
+          {
+            "expr": "git.branch.value != \"main\"",
+            "kind": "binary",
+            "left": "main",
+            "operator": "!=",
+            "right": "main",
+            "status": "ok",
+            "value": false
+          }
+        ]
       }
     ],
     "guard_items": [
       {
         "effect": "read_only",
-        "kind": "probe",
+        "failed_subcondition": "git.branch.value != \"main\"",
+        "failure_kind": "guard_failed",
+        "kind": "expression",
         "operation_status": "guard_failed",
-        "reference": "git.branch_not_main",
+        "reference": "git.branch.value != \"main\"",
         "status": "blocked"
       }
     ],
@@ -80,10 +159,10 @@
   },
   "plan": {
     "blockers": [
-      "git.branch_not_main"
+      "git.branch.value != \"main\""
     ],
     "guard_checks": [
-      "git.branch_not_main"
+      "git.branch.value != \"main\""
     ],
     "step_names": [
       "verify-command"

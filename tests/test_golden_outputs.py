@@ -6,7 +6,9 @@ from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.runtime import check_workflow, execute_workflow, explain_workflow, load_workflow_file, plan_workflow, resolve_workflow_references, validate_workflow_text
 
 
-def _blocked_probe(_resolved, _workflow):
+def _blocked_probe(resolved, _workflow):
+    if resolved.reference == "git.branch":
+        return OperationResult(status="ok", observations={"value": "main"})
     return OperationResult(status="guard_failed", summary="main branch")
 
 

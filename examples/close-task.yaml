@@ -6,12 +6,9 @@ inputs:
   ship: true
 
 guards:
-  - uses: git.clean_worktree
-  - uses: git.branch_not_main
-  - uses: gh.issue_status
-    with:
-      issue: ${inputs.issue}
-      equals: In review
+  - git.worktree.clean
+  - git.branch.value != "main"
+  - gh.issue(issue=inputs.issue).status == "OPEN"
 
 steps:
   - name: verify

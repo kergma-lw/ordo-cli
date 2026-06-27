@@ -120,9 +120,12 @@ contract = registry.to_contract()
 Real implementations currently exist for:
 
 - `shell.command`
-- `git.clean_worktree`
-- `git.branch_not_main`
+- `git.worktree`
+- `git.branch`
 - `gh.issue.view`
+- `gh.issue`
+
+Legacy compatibility probes for object-form guards still exist, including `git.clean_worktree` and `git.branch_not_main`.
 
 Other public operations may still be registry-visible but return structured not-yet-implemented results if executed.
 
@@ -171,6 +174,8 @@ Runtime results are JSON-shaped and include at least:
 - `operation_results`
 - `failed_guard`
 - `failed_step`
+
+Guard-related outputs may additionally include machine-readable `guard_details`, failing subconditions, and expression traces.
 
 Main statuses:
 

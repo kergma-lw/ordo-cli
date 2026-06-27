@@ -7,12 +7,25 @@
     {
       "diagnostics": [],
       "observations": {
-        "clean": true,
-        "dirty_paths": []
+        "failed_subcondition": null,
+        "guard": "git.worktree.clean",
+        "result": true
       },
-      "raw": {},
+      "raw": {
+        "cache_entries": 1,
+        "failure_kind": null,
+        "trace": [
+          {
+            "expr": "git.worktree.clean",
+            "kind": "probe",
+            "reference": "git.worktree",
+            "status": "ok",
+            "value": true
+          }
+        ]
+      },
       "status": "ok",
-      "summary": "clean"
+      "summary": "Guard expression evaluated successfully"
     }
   ],
   "outputs": {
@@ -21,26 +34,36 @@
     "blockers": [],
     "can_execute": true,
     "checked_guards": [
-      "git.clean_worktree"
+      "git.worktree.clean"
     ],
     "execution_allowed": true,
     "guard_details": [
       {
         "failed_subcondition": null,
         "failure_kind": null,
-        "reference": "git.clean_worktree",
+        "reference": "git.worktree.clean",
         "status": "ok",
-        "summary": "clean",
-        "trace": []
+        "summary": "Guard expression evaluated successfully",
+        "trace": [
+          {
+            "expr": "git.worktree.clean",
+            "kind": "probe",
+            "reference": "git.worktree",
+            "status": "ok",
+            "value": true
+          }
+        ]
       }
     ],
     "guard_items": [
       {
         "effect": "read_only",
-        "kind": "probe",
+        "failed_subcondition": null,
+        "failure_kind": null,
+        "kind": "expression",
         "operation_status": "ok",
-        "reference": "git.clean_worktree",
-        "status": "ok"
+        "reference": "git.worktree.clean",
+        "status": "unknown"
       }
     ],
     "plan_ready": true,
@@ -57,7 +80,7 @@
   "plan": {
     "blockers": [],
     "guard_checks": [
-      "git.clean_worktree"
+      "git.worktree.clean"
     ],
     "step_names": [
       "inspect-issue"

@@ -7,12 +7,25 @@
     {
       "diagnostics": [],
       "observations": {
-        "clean": true,
-        "dirty_paths": []
+        "failed_subcondition": null,
+        "guard": "git.worktree.clean",
+        "result": true
       },
-      "raw": {},
+      "raw": {
+        "cache_entries": 1,
+        "failure_kind": null,
+        "trace": [
+          {
+            "expr": "git.worktree.clean",
+            "kind": "probe",
+            "reference": "git.worktree",
+            "status": "ok",
+            "value": true
+          }
+        ]
+      },
       "status": "ok",
-      "summary": "clean"
+      "summary": "Guard expression evaluated successfully"
     },
     {
       "diagnostics": [],
@@ -38,7 +51,7 @@
   "plan": {
     "blockers": [],
     "guard_checks": [
-      "git.clean_worktree"
+      "git.worktree.clean"
     ],
     "step_names": [
       "inspect-issue"

@@ -5,7 +5,7 @@ inputs:
   issue: kergma-lw/ordo-cli#1
 
 guards:
-  - uses: git.clean_worktree
+  - git.worktree.clean
 
 steps:
   - name: inspect-issue

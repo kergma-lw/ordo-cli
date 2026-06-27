@@ -2,7 +2,7 @@ version: 0
 workflow: open-task
 
 guards:
-  - uses: git.clean_worktree
+  - git.worktree.clean
 
 steps:
   - name: inspect-issue

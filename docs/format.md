@@ -45,7 +45,7 @@ Operation-call form:
 Compact expression form:
 
 ```yaml
-- git.worktree.clean and git.branch != "main"
+- git.worktree.clean and git.branch.value != "main"
 ```
 
 Expression guards are intended for the compact statement of execution policy.
@@ -55,10 +55,10 @@ Each guard item is a separate boolean clause.
 The `guards` list combines with implicit `and` semantics across items.
 Use `or` inside one expression when a single clause needs disjunction.
 
-Current draft direction for guard expressions:
+Guard-expression rules:
 
 - zero-argument probes do not require `()`;
-- parameterized probes use arguments only when needed;
+- parameterized probes prefer named arguments when inputs are supplied;
 - field access reads documented probe outputs;
 - boolean composition should support at least `and`, `or`, `not`, and parentheses;
 - expression guards evaluate only `probe`-level facts, never effectful actions.
@@ -68,20 +68,21 @@ Illustrative examples:
 ```yaml
 guards:
   - git.worktree.clean
-  - git.branch != "main"
-  - gh.issue(${inputs.issue}).project.member
-  - gh.issue(${inputs.issue}).status not in ["Done", "In review"]
+  - git.branch.value != "main"
+  - gh.issue(issue=inputs.issue).project.member
+  - gh.issue(issue=inputs.issue).status not in ["OPEN", "CLOSED"]
 ```
 
-Draft implementation note:
+Current implementation note:
 
-- the workflow contract and schema now admit plain-string expression guards;
-- runtime parsing and evaluation of guard expressions is not yet implemented in the current v0 foundation.
+- the workflow contract and runtime support plain-string guard expressions;
+- expression guards resolve only public `probe` operations;
+- failed expression guards preserve structured guard details and evaluation traces.
 
-Expected result:
+Expected outcome classes:
 - pass
-- fail
-- error
+- guard_failed
+- probe_failed
 
 ## Steps
 

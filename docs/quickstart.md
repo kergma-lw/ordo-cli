@@ -24,7 +24,7 @@ inputs:
   issue: kergma-lw/ordo-cli#1
 
 guards:
-  - uses: git.clean_worktree
+  - git.worktree.clean
 
 steps:
   - name: inspect-issue
@@ -75,10 +75,16 @@ At the moment the public families are:
 
 Real canonical implementations currently exist for:
 
+- `git.worktree`
+- `git.branch`
+- `gh.issue.view`
+- `gh.issue`
+- `shell.command`
+
+Legacy compatibility probes still exist for object-form guards, including:
+
 - `git.clean_worktree`
 - `git.branch_not_main`
-- `gh.issue.view`
-- `shell.command`
 
 ## 5. Run `check`
 
@@ -137,12 +143,14 @@ from ordo.model.runtime import OperationResult
 
 workflow = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
 
+def probe(resolved_guard, _workflow):
+    if resolved_guard.reference == "git.branch":
+        return OperationResult(status="ok", observations={"value": "main"})
+    return OperationResult(status="ok")
+
 result = explain_workflow(
     workflow,
-    guard_probe=lambda _resolved, _workflow: OperationResult(
-        status="guard_failed",
-        summary="main branch",
-    ),
+    guard_probe=probe,
 )
 
 print(result.to_contract())
