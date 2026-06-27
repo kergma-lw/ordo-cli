@@ -93,6 +93,85 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.syntax")
         self.assertEqual(report.diagnostics[0].path, ("guards", "0"))
 
+    def test_guard_expression_requires_dotted_input_reference(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - inputs == "repo#1"
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.input_ref")
+
+    def test_guard_expression_rejects_calling_inputs_like_probe(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - inputs.issue(value="repo#1") == "repo#1"
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.inputs_call")
+
+    def test_guard_expression_rejects_non_value_argument_expression(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - gh.issue(issue=inputs.issue and inputs.other).status == "Open"
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.argument_value")
+
+    def test_guard_expression_rejects_duplicate_argument_names(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - gh.issue(issue=inputs.issue, issue="repo#2").status == "Open"
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.duplicate_argument")
+
+    def test_valid_guard_expression_with_named_argument_and_field_access_passes(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - gh.issue(issue=inputs.issue).status not in ["Done", "In review"]
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_unknown_workflow_field_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

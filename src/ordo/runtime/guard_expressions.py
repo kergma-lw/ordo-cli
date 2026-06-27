@@ -94,6 +94,31 @@ class GuardExpressionParseError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class GuardExpressionValidationError:
+    """Structured semantic validation error for a parsed guard expression."""
+
+    code: str
+    message: str
+    start: int
+    end: int
+
+    def to_diagnostic(self, *, path: tuple[str, ...], source: str, expression: str) -> Diagnostic:
+        return Diagnostic(
+            code=self.code,
+            level="error",
+            message=self.message,
+            path=path,
+            details={
+                "source": source,
+                "position": self.start,
+                "end": self.end,
+                "snippet": expression[self.start : self.end],
+                "expression": expression,
+            },
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class _Token:
     kind: str
     text: str
@@ -107,6 +132,13 @@ def parse_guard_expression(expression: str) -> ParsedGuardExpression:
     parser = _Parser(expression)
     root = parser.parse()
     return ParsedGuardExpression(source=expression, root=root)
+
+
+def validate_parsed_guard_expression(parsed: ParsedGuardExpression) -> tuple[GuardExpressionValidationError, ...]:
+    """Validate semantic rules over a parsed guard expression."""
+
+    validator = _SemanticValidator(parsed)
+    return tuple(validator.validate())
 
 
 class _Parser:
@@ -403,3 +435,101 @@ def _decode_string(text: str, start: int) -> str:
 
 def _decode_number(text: str) -> int | float:
     return float(text) if "." in text else int(text)
+
+
+class _SemanticValidator:
+    def __init__(self, parsed: ParsedGuardExpression) -> None:
+        self._parsed = parsed
+        self._errors: list[GuardExpressionValidationError] = []
+
+    def validate(self) -> list[GuardExpressionValidationError]:
+        self._visit(self._parsed.root)
+        return self._errors
+
+    def _visit(self, node: GuardExpressionNode) -> None:
+        if isinstance(node, ReferenceNode):
+            self._validate_reference(node)
+            return
+        if isinstance(node, CallNode):
+            self._validate_call(node)
+            return
+        if isinstance(node, CallArgumentNode):
+            self._validate_argument(node)
+            return
+        if isinstance(node, ListNode):
+            for item in node.items:
+                self._visit(item)
+            return
+        if isinstance(node, UnaryNode):
+            self._visit(node.operand)
+            return
+        if isinstance(node, BinaryNode):
+            self._visit(node.left)
+            self._visit(node.right)
+            return
+
+    def _validate_reference(self, node: ReferenceNode) -> None:
+        if node.parts[0] == "inputs":
+            if len(node.parts) < 2:
+                self._error(
+                    "validation.workflow.guard_expr.input_ref",
+                    "Workflow input references must use dotted form such as 'inputs.issue'",
+                    node,
+                )
+            return
+
+        if len(node.parts) < 2:
+            self._error(
+                "validation.workflow.guard_expr.reference_shape",
+                "Probe references must use dotted form such as 'git.branch' or 'git.worktree.clean'",
+                node,
+            )
+
+    def _validate_call(self, node: CallNode) -> None:
+        if node.target.parts[0] == "inputs":
+            self._error(
+                "validation.workflow.guard_expr.inputs_call",
+                "Workflow input references are values and must not be called like probes",
+                node.target,
+            )
+        elif len(node.target.parts) < 2:
+            self._error(
+                "validation.workflow.guard_expr.call_target",
+                "Probe calls must target a dotted public probe reference such as 'gh.issue'",
+                node.target,
+            )
+
+        seen_names: set[str] = set()
+        for argument in node.arguments:
+            if argument.name in seen_names:
+                self._error(
+                    "validation.workflow.guard_expr.duplicate_argument",
+                    f"Duplicate guard-expression argument '{argument.name}'",
+                    argument,
+                )
+            else:
+                seen_names.add(argument.name)
+            self._validate_argument(argument)
+
+    def _validate_argument(self, node: CallArgumentNode) -> None:
+        if _is_argument_value(node.value):
+            self._visit(node.value)
+            return
+        self._error(
+            "validation.workflow.guard_expr.argument_value",
+            "Probe-call arguments must be literals, input references, or lists of those values",
+            node.value,
+        )
+
+    def _error(self, code: str, message: str, node: GuardExpressionNode) -> None:
+        self._errors.append(GuardExpressionValidationError(code=code, message=message, start=node.start, end=node.end))
+
+
+def _is_argument_value(node: GuardExpressionNode) -> bool:
+    if isinstance(node, LiteralNode):
+        return True
+    if isinstance(node, ReferenceNode):
+        return node.parts[0] == "inputs" and len(node.parts) >= 2
+    if isinstance(node, ListNode):
+        return all(_is_argument_value(item) for item in node.items)
+    return False

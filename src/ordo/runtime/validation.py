@@ -9,7 +9,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.runtime import RuntimeStatus
 
-from .guard_expressions import GuardExpressionParseError, parse_guard_expression
+from .guard_expressions import GuardExpressionParseError, parse_guard_expression, validate_parsed_guard_expression
 from .loading import LoadError, load_yaml_document
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
@@ -106,9 +106,12 @@ def _validate_guard_list(value: JSONValue | None, *, source: str) -> list[Diagno
                 diagnostics.append(_diagnostic("validation.workflow.guard_expr.empty", "Guard expression must not be empty", path, source))
                 continue
             try:
-                parse_guard_expression(item)
+                parsed = parse_guard_expression(item)
             except GuardExpressionParseError as exc:
                 diagnostics.append(exc.to_diagnostic(path=path, source=source, expression=item))
+                continue
+            for validation_error in validate_parsed_guard_expression(parsed):
+                diagnostics.append(validation_error.to_diagnostic(path=path, source=source, expression=item))
             continue
         diagnostics.extend(_validate_call(item, path=path, source=source))
     return diagnostics
