@@ -121,6 +121,21 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.operation_results[0].status, "probe_failed")
         self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "probe_failed")
 
+    def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())
+        seen: list[str] = []
+
+        def probe(resolved_guard, _workflow):
+            seen.append(resolved_guard.reference)
+            if resolved_guard.reference == "git.worktree":
+                return OperationResult(status="ok", observations={"clean": False})
+            return OperationResult(status="ok", observations={"value": "main"})
+
+        result = check_workflow(workflow, guard_probe=probe)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen, ["git.worktree"])
+
 
 if __name__ == "__main__":
     unittest.main()

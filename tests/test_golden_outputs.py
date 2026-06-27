@@ -18,16 +18,33 @@ def _ok_executor(_resolved, _workflow):
     return OperationResult(status="ok", summary="inspected", observations={"issue": {"number": 1}})
 
 
+def _expr_blocked_probe(resolved, _workflow):
+    if resolved.reference == "gh.issue":
+        return OperationResult(
+            status="ok",
+            summary="issue fetched",
+            observations={
+                "status": "DONE",
+                "project": {"member": False, "items": []},
+                "issue": {"number": 1, "state": "DONE"},
+            },
+        )
+    return OperationResult(status="ok", summary="unused")
+
+
 class GoldenOutputTest(unittest.TestCase):
     def test_runtime_mode_outputs_match_goldens(self) -> None:
         blocked = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
+        expr_blocked = load_workflow_file(Path("examples/guard-expression-blocked.yaml"))
         inspect = load_workflow_file(Path("examples/inspect-issue.yaml"))
 
         cases = {
             "check_blocked_main_branch.json": check_workflow(blocked, guard_probe=_blocked_probe).to_contract(),
+            "check_guard_expression_blocked.json": check_workflow(expr_blocked, guard_probe=_expr_blocked_probe).to_contract(),
             "plan_inspect_issue.json": plan_workflow(inspect, guard_probe=_ok_probe).to_contract(),
             "execute_inspect_issue.json": execute_workflow(inspect, guard_probe=_ok_probe, step_executor=_ok_executor).to_contract(),
             "explain_blocked_main_branch.json": explain_workflow(blocked, guard_probe=_blocked_probe).to_contract(),
+            "explain_guard_expression_blocked.json": explain_workflow(expr_blocked, guard_probe=_expr_blocked_probe).to_contract(),
         }
 
         for filename, actual in cases.items():

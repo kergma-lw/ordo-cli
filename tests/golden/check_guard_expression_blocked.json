@@ -1,0 +1,138 @@
+{
+  "diagnostics": [],
+  "failed_guard": "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]",
+  "failed_step": null,
+  "mode": "check",
+  "operation_results": [
+    {
+      "diagnostics": [],
+      "observations": {
+        "failed_subcondition": "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]",
+        "guard": "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]",
+        "result": false
+      },
+      "raw": {
+        "cache_entries": 1,
+        "failure_kind": "guard_failed",
+        "trace": [
+          {
+            "expr": "gh.issue(issue=inputs.issue).status",
+            "kind": "probe",
+            "reference": "gh.issue",
+            "status": "ok",
+            "value": "DONE"
+          },
+          {
+            "expr": "\"DONE\"",
+            "kind": "literal",
+            "status": "ok",
+            "value": "DONE"
+          },
+          {
+            "expr": "\"CLOSED\"",
+            "kind": "literal",
+            "status": "ok",
+            "value": "CLOSED"
+          },
+          {
+            "expr": "[\"DONE\", \"CLOSED\"]",
+            "kind": "list",
+            "status": "ok",
+            "value": [
+              "DONE",
+              "CLOSED"
+            ]
+          },
+          {
+            "expr": "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]",
+            "kind": "binary",
+            "left": "DONE",
+            "operator": "not in",
+            "right": [
+              "DONE",
+              "CLOSED"
+            ],
+            "status": "ok",
+            "value": false
+          }
+        ]
+      },
+      "status": "guard_failed",
+      "summary": "Guard expression evaluated false"
+    }
+  ],
+  "outputs": {
+    "active_overrides": [],
+    "active_profile": null,
+    "blockers": [
+      "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]"
+    ],
+    "can_execute": false,
+    "checked_guards": [
+      "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]"
+    ],
+    "guard_details": [
+      {
+        "failed_subcondition": "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]",
+        "failure_kind": "guard_failed",
+        "reference": "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]",
+        "status": "guard_failed",
+        "summary": "Guard expression evaluated false",
+        "trace": [
+          {
+            "expr": "gh.issue(issue=inputs.issue).status",
+            "kind": "probe",
+            "reference": "gh.issue",
+            "status": "ok",
+            "value": "DONE"
+          },
+          {
+            "expr": "\"DONE\"",
+            "kind": "literal",
+            "status": "ok",
+            "value": "DONE"
+          },
+          {
+            "expr": "\"CLOSED\"",
+            "kind": "literal",
+            "status": "ok",
+            "value": "CLOSED"
+          },
+          {
+            "expr": "[\"DONE\", \"CLOSED\"]",
+            "kind": "list",
+            "status": "ok",
+            "value": [
+              "DONE",
+              "CLOSED"
+            ]
+          },
+          {
+            "expr": "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]",
+            "kind": "binary",
+            "left": "DONE",
+            "operator": "not in",
+            "right": [
+              "DONE",
+              "CLOSED"
+            ],
+            "status": "ok",
+            "value": false
+          }
+        ]
+      }
+    ]
+  },
+  "plan": {
+    "blockers": [
+      "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]"
+    ],
+    "guard_checks": [
+      "gh.issue(issue=inputs.issue).status not in [\"DONE\", \"CLOSED\"]"
+    ],
+    "step_names": [
+      "verify-command"
+    ]
+  },
+  "status": "guard_failed"
+}
