@@ -12,7 +12,7 @@ from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
 
-from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, UnaryNode, parse_guard_expression
+from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, UnaryNode, parse_guard_expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +33,9 @@ class ResolvedExpressionProbe:
     connector_namespace: str
     operation: OperationContract
     source: str
+    expression_text: str
     fields: tuple[str, ...] = ()
+    arguments: tuple[tuple[str, GuardExpressionNode], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +43,7 @@ class ResolvedGuardExpression:
     """Resolved string-form guard expression."""
 
     expr: str
+    parsed: ParsedGuardExpression
     probes: tuple[ResolvedExpressionProbe, ...] = ()
 
     @property
@@ -175,7 +178,7 @@ def _resolve_guard_expression(
         if isinstance(node, ReferenceNode):
             if node.parts[0] == "inputs":
                 return
-            resolved_reference, fields = _split_probe_reference(node.parts, public_registry=public_registry, local_registry=local_registry)
+            resolved_reference, fields = split_probe_reference(node.parts, public_registry=public_registry, local_registry=local_registry)
             resolved = _resolve_reference(
                 resolved_reference,
                 path=path,
@@ -205,6 +208,7 @@ def _resolve_guard_expression(
                     connector_namespace=resolved.connector_namespace,
                     operation=resolved.operation,
                     source=resolved.source,
+                    expression_text=expression[node.start : node.end],
                     fields=fields,
                 )
             )
@@ -239,7 +243,9 @@ def _resolve_guard_expression(
                     connector_namespace=resolved.connector_namespace,
                     operation=resolved.operation,
                     source=resolved.source,
+                    expression_text=expression[node.start : node.end],
                     fields=node.fields,
+                    arguments=tuple((argument.name, argument.value) for argument in node.arguments),
                 )
             )
             for argument in node.arguments:
@@ -262,18 +268,22 @@ def _resolve_guard_expression(
     visit(parsed.root)
     if diagnostics:
         return diagnostics[0]
-    return ResolvedGuardExpression(expr=expression, probes=tuple(probes))
+    return ResolvedGuardExpression(expr=expression, parsed=parsed, probes=tuple(probes))
 
 
-def _split_probe_reference(
+def split_probe_reference(
     parts: tuple[str, ...],
     *,
-    public_registry: ConnectorRegistry,
-    local_registry: ConnectorRegistry,
+    public_registry: ConnectorRegistry | None,
+    local_registry: ConnectorRegistry | None,
 ) -> tuple[str, tuple[str, ...]]:
     for end in range(len(parts), 1, -1):
         candidate = ".".join(parts[:end])
-        if public_registry.get_operation(candidate) is not None or local_registry.get_operation(candidate) is not None:
+        if public_registry is None and local_registry is None:
+            return candidate, parts[end:]
+        if (public_registry is not None and public_registry.get_operation(candidate) is not None) or (
+            local_registry is not None and local_registry.get_operation(candidate) is not None
+        ):
             fields = parts[end:]
             return candidate, fields
     return ".".join(parts), ()

@@ -81,14 +81,42 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertEqual(result.outputs["active_overrides"][0]["target"], "shell.command")
 
-    def test_check_reports_expr_guard_as_evaluation_gap_after_resolution(self) -> None:
-        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch != "main"'),), steps=())
+    def test_check_evaluates_expr_guard_with_custom_probe(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
 
-        result = check_workflow(workflow)
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "git.branch":
+                return OperationResult(status="ok", observations={"value": "feature/demo"})
+            return OperationResult(status="ok")
 
-        self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
-        self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr_evaluation_not_implemented")
-        self.assertEqual(result.outputs["checked_guards"], ['git.branch != "main"'])
+        result = check_workflow(workflow, guard_probe=probe)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["checked_guards"], ['git.branch.value != "main"'])
+
+    def test_check_caches_repeated_expr_probe_reference(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr="git.worktree.clean and git.worktree.clean"),), steps=())
+        seen: list[str] = []
+
+        def probe(resolved_guard, _workflow):
+            seen.append(resolved_guard.reference)
+            return OperationResult(status="ok", observations={"clean": True})
+
+        result = check_workflow(workflow, guard_probe=probe)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen, ["git.worktree"])
+
+    def test_check_preserves_probe_failed_vs_guard_false_for_expr(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
+
+        def probe(resolved_guard, _workflow):
+            return OperationResult(status="probe_failed", diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),))
+
+        result = check_workflow(workflow, guard_probe=probe)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.operation_results[0].status, "probe_failed")
 
 
 if __name__ == "__main__":

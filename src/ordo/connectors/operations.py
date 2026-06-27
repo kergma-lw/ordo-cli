@@ -8,11 +8,14 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 if TYPE_CHECKING:
-    from ordo.runtime.resolution import ResolvedOperation
+    from ordo.runtime.resolution import ResolvedExpressionProbe, ResolvedOperation
+
+from ordo.runtime.guard_expressions import GuardExpressionNode, ListNode, LiteralNode, ReferenceNode
 
 
 def execute_action(resolved_step: ResolvedOperation, workflow: Workflow) -> OperationResult:
@@ -28,14 +31,23 @@ def execute_action(resolved_step: ResolvedOperation, workflow: Workflow) -> Oper
     return _not_implemented(reference, kind="action")
 
 
-def evaluate_probe(resolved_guard: ResolvedOperation, workflow: Workflow) -> OperationResult:
+def evaluate_probe(resolved_guard: ResolvedOperation | ResolvedExpressionProbe, workflow: Workflow) -> OperationResult:
     """Evaluate a supported probe operation with structured observations."""
 
     reference = resolved_guard.reference
+    if reference == "git.worktree":
+        return _git_clean_worktree(reference)
+    if reference == "git.branch":
+        return _git_branch(reference)
     if reference == "git.clean_worktree":
         return _git_clean_worktree(reference)
     if reference == "git.branch_not_main":
         return _git_branch_not_main(reference)
+    if reference == "gh.issue":
+        issue = _require_expression_input(workflow, resolved_guard, "issue")
+        if isinstance(issue, OperationResult):
+            return issue
+        return _gh_issue(reference, issue)
     if reference == "gh.issue.view":
         issue = _require_input(workflow, resolved_guard, "issue")
         if isinstance(issue, OperationResult):
@@ -83,6 +95,20 @@ def _git_branch_not_main(reference: str) -> OperationResult:
     )
 
 
+def _git_branch(reference: str) -> OperationResult:
+    result = _run_command(["git", "branch", "--show-current"], reference=reference)
+    if result.status != "ok":
+        return result
+
+    branch = str(result.raw.get("stdout", "")).strip()
+    return OperationResult(
+        status="ok",
+        summary="Current branch inspected successfully",
+        observations={"value": branch},
+        raw=result.raw,
+    )
+
+
 def _gh_issue_view(reference: str, issue: str) -> OperationResult:
     result = _run_command(
         ["gh", "issue", "view", issue, "--json", "number,title,state,body,url"],
@@ -118,7 +144,46 @@ def _gh_issue_view(reference: str, issue: str) -> OperationResult:
     )
 
 
-def _require_input(workflow: Workflow, resolved: ResolvedOperation, key: str) -> str | OperationResult:
+def _gh_issue(reference: str, issue: str) -> OperationResult:
+    result = _run_command(
+        ["gh", "issue", "view", issue, "--json", "number,title,state,body,url"],
+        reference=reference,
+    )
+    if result.status != "ok":
+        return result
+
+    stdout = str(result.raw.get("stdout", ""))
+    try:
+        issue_data = json.loads(stdout) if stdout else {}
+    except json.JSONDecodeError as exc:
+        return OperationResult(
+            status="probe_failed",
+            summary="GitHub issue output was not valid JSON",
+            diagnostics=(
+                Diagnostic(
+                    code="probe.gh_issue.invalid_json",
+                    level="error",
+                    message="GitHub issue output was not valid JSON",
+                    path=(),
+                    details={"reference": reference, "error": str(exc)},
+                ),
+            ),
+            raw=result.raw,
+        )
+
+    return OperationResult(
+        status="ok",
+        summary="GitHub issue retrieved successfully",
+        observations={
+            "issue": issue_data,
+            "status": issue_data.get("state"),
+            "project": {"member": False, "items": []},
+        },
+        raw=result.raw,
+    )
+
+
+def _require_input(workflow: Workflow, resolved: ResolvedOperation | ResolvedExpressionProbe, key: str) -> str | OperationResult:
     value = resolved.operation.inputs.get(key)
     _ = value
     for guard in workflow.guards:
@@ -144,6 +209,70 @@ def _require_input(workflow: Workflow, resolved: ResolvedOperation, key: str) ->
             ),
         ),
     )
+
+
+def _require_expression_input(
+    workflow: Workflow,
+    resolved: ResolvedExpressionProbe,
+    key: str,
+) -> JSONValue | OperationResult:
+    for argument_name, argument_value in resolved.arguments:
+        if argument_name == key:
+            value = _evaluate_argument_value(argument_value, workflow)
+            if value is _MISSING:
+                return OperationResult(
+                    status="input_error",
+                    summary=f"Required input '{key}' is missing",
+                    diagnostics=(
+                        Diagnostic(
+                            code="operation.input_missing",
+                            level="error",
+                            message=f"Required input '{key}' is missing",
+                            path=(),
+                            details={"reference": resolved.reference, "input": key},
+                        ),
+                    ),
+                )
+            return value
+    return OperationResult(
+        status="input_error",
+        summary=f"Required input '{key}' is missing",
+        diagnostics=(
+            Diagnostic(
+                code="operation.input_missing",
+                level="error",
+                message=f"Required input '{key}' is missing",
+                path=(),
+                details={"reference": resolved.reference, "input": key},
+            ),
+        ),
+    )
+
+
+_MISSING = object()
+
+
+def _evaluate_argument_value(node: GuardExpressionNode, workflow: Workflow) -> JSONValue | object:
+    if isinstance(node, LiteralNode):
+        return node.value
+    if isinstance(node, ReferenceNode):
+        if not node.parts or node.parts[0] != "inputs":
+            return _MISSING
+        current: JSONValue = workflow.inputs
+        for part in node.parts[1:]:
+            if not isinstance(current, dict) or part not in current:
+                return _MISSING
+            current = current[part]
+        return current
+    if isinstance(node, ListNode):
+        values: list[JSONValue] = []
+        for item in node.items:
+            value = _evaluate_argument_value(item, workflow)
+            if value is _MISSING:
+                return _MISSING
+            values.append(value)  # type: ignore[arg-type]
+        return values
+    return _MISSING
 
 
 def _run_command(command: Sequence[str], *, reference: str) -> OperationResult:

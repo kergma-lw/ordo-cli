@@ -4,7 +4,8 @@ from unittest.mock import patch
 from ordo.connectors.operations import evaluate_probe, execute_action
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
-from ordo.runtime.resolution import ResolvedOperation
+from ordo.runtime.guard_expressions import LiteralNode, ReferenceNode
+from ordo.runtime.resolution import ResolvedExpressionProbe, ResolvedOperation
 from ordo.connectors.registry import get_public_connector_registry
 
 
@@ -91,6 +92,51 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "action_not_implemented")
         self.assertEqual(result.diagnostics[0].code, "operation.not_implemented")
+
+    def test_git_branch_probe_returns_branch_value_for_expression_surface(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
+        operation = get_public_connector_registry().get_operation("git.branch")
+        resolved = ResolvedExpressionProbe(
+            reference="git.branch",
+            connector_namespace="git",
+            operation=operation,  # type: ignore[arg-type]
+            source="public",
+            expression_text="git.branch.value",
+            fields=("value",),
+        )
+
+        with patch("subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = "feature/demo\n"
+            run.return_value.stderr = ""
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["value"], "feature/demo")
+
+    def test_gh_issue_probe_resolves_named_argument_from_workflow_inputs(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"issue": "owner/repo#1"}, guards=(), steps=())
+        operation = get_public_connector_registry().get_operation("gh.issue")
+        resolved = ResolvedExpressionProbe(
+            reference="gh.issue",
+            connector_namespace="gh",
+            operation=operation,  # type: ignore[arg-type]
+            source="public",
+            expression_text="gh.issue(issue=inputs.issue).status",
+            fields=("status",),
+            arguments=(("issue", ReferenceNode(start=0, end=12, parts=("inputs", "issue"))),),
+        )
+
+        with patch("subprocess.run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = '{"number":1,"title":"Demo","state":"OPEN","body":"x","url":"https://example.test"}'
+            run.return_value.stderr = ""
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["status"], "OPEN")
 
 
 if __name__ == "__main__":
