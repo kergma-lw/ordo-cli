@@ -93,6 +93,18 @@ def get_public_connector_registry() -> ConnectorRegistry:
                         outputs={"merged": "boolean", "base_branch": "string"},
                         failure_modes=("git_unavailable", "not_repository", "non_fast_forward", "action_failed"),
                     ),
+                    OperationContract(
+                        name="worktree",
+                        kind="probe",
+                        outputs={"clean": "boolean", "dirty_paths": ["string"]},
+                        failure_modes=("git_unavailable", "not_repository", "probe_failed"),
+                    ),
+                    OperationContract(
+                        name="branch",
+                        kind="probe",
+                        outputs={"value": "string"},
+                        failure_modes=("git_unavailable", "not_repository", "probe_failed"),
+                    ),
                 ),
             ),
             Connector(
@@ -153,6 +165,17 @@ def get_public_connector_registry() -> ConnectorRegistry:
                         effects=("close GitHub issue",),
                         outputs={"issue": "string", "closed": "boolean"},
                         failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "action_failed"),
+                    ),
+                    OperationContract(
+                        name="issue",
+                        kind="probe",
+                        inputs={"issue": "string"},
+                        outputs={
+                            "status": "string",
+                            "project": {"member": "boolean", "items": ["object"]},
+                            "issue": "object",
+                        },
+                        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "probe_failed"),
                     ),
                 ),
             ),

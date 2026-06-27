@@ -7,9 +7,12 @@ from dataclasses import dataclass
 from ordo.connectors import ConnectorRegistry, get_public_connector_registry
 from ordo.model.connector import Connector, OperationContract
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.json import JSONValue
 from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
+
+from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, UnaryNode, parse_guard_expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,12 +26,38 @@ class ResolvedOperation:
 
 
 @dataclass(frozen=True, slots=True)
+class ResolvedExpressionProbe:
+    """Resolved probe reference used inside a guard expression."""
+
+    reference: str
+    connector_namespace: str
+    operation: OperationContract
+    source: str
+    fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedGuardExpression:
+    """Resolved string-form guard expression."""
+
+    expr: str
+    probes: tuple[ResolvedExpressionProbe, ...] = ()
+
+    @property
+    def reference(self) -> str:
+        return self.expr
+
+
+ResolvedGuard = ResolvedOperation | ResolvedGuardExpression
+
+
+@dataclass(frozen=True, slots=True)
 class WorkflowResolution:
     """Structured workflow resolution result."""
 
     status: RuntimeStatus
     diagnostics: tuple[Diagnostic, ...] = ()
-    resolved_guards: tuple[ResolvedOperation, ...] = ()
+    resolved_guards: tuple[ResolvedGuard, ...] = ()
     resolved_steps: tuple[ResolvedOperation, ...] = ()
     active_overrides: tuple[Override, ...] = ()
 
@@ -57,19 +86,21 @@ def resolve_workflow_references(
             active_overrides=active_overrides,
         )
 
-    resolved_guards: list[ResolvedOperation] = []
+    resolved_guards: list[ResolvedGuard] = []
     resolved_steps: list[ResolvedOperation] = []
 
     for index, guard in enumerate(workflow.guards):
         if guard.operation is None:
-            diagnostics.append(
-                _diagnostic(
-                    code="resolution.guard_expr_not_implemented",
-                    message="String-form guard expression resolution is not implemented yet",
-                    path=("guards", str(index)),
-                    expr=guard.expr,
-                )
+            resolved = _resolve_guard_expression(
+                guard.expr or "",
+                path=("guards", str(index)),
+                public_registry=public_registry,
+                local_registry=local_registry,
             )
+            if isinstance(resolved, Diagnostic):
+                diagnostics.append(resolved)
+            else:
+                resolved_guards.append(resolved)
             continue
         resolved = _resolve_reference(
             guard.operation.uses,
@@ -129,6 +160,125 @@ def _validate_local_connectors(*, local_connectors: tuple[Connector, ...], publi
     return diagnostics
 
 
+def _resolve_guard_expression(
+    expression: str,
+    *,
+    path: tuple[str, ...],
+    public_registry: ConnectorRegistry,
+    local_registry: ConnectorRegistry,
+) -> ResolvedGuardExpression | Diagnostic:
+    parsed = parse_guard_expression(expression)
+    diagnostics: list[Diagnostic] = []
+    probes: list[ResolvedExpressionProbe] = []
+
+    def visit(node: GuardExpressionNode) -> None:
+        if isinstance(node, ReferenceNode):
+            if node.parts[0] == "inputs":
+                return
+            resolved_reference, fields = _split_probe_reference(node.parts, public_registry=public_registry, local_registry=local_registry)
+            resolved = _resolve_reference(
+                resolved_reference,
+                path=path,
+                public_registry=public_registry,
+                local_registry=local_registry,
+            )
+            if isinstance(resolved, Diagnostic):
+                diagnostics.append(resolved)
+                return
+            if resolved.operation.kind != "probe":
+                diagnostics.append(
+                    _diagnostic(
+                        code="resolution.guard_expr.action_forbidden",
+                        message=f"Guard expressions may reference only probe operations, not '{resolved.reference}'",
+                        path=path,
+                        reference=resolved.reference,
+                    )
+                )
+                return
+            field_diagnostic = _validate_field_path(resolved.operation.outputs, fields, path=path, reference=resolved.reference)
+            if field_diagnostic is not None:
+                diagnostics.append(field_diagnostic)
+                return
+            probes.append(
+                ResolvedExpressionProbe(
+                    reference=resolved.reference,
+                    connector_namespace=resolved.connector_namespace,
+                    operation=resolved.operation,
+                    source=resolved.source,
+                    fields=fields,
+                )
+            )
+            return
+        if isinstance(node, CallNode):
+            resolved = _resolve_reference(
+                ".".join(node.target.parts),
+                path=path,
+                public_registry=public_registry,
+                local_registry=local_registry,
+            )
+            if isinstance(resolved, Diagnostic):
+                diagnostics.append(resolved)
+                return
+            if resolved.operation.kind != "probe":
+                diagnostics.append(
+                    _diagnostic(
+                        code="resolution.guard_expr.action_forbidden",
+                        message=f"Guard expressions may reference only probe operations, not '{resolved.reference}'",
+                        path=path,
+                        reference=resolved.reference,
+                    )
+                )
+                return
+            field_diagnostic = _validate_field_path(resolved.operation.outputs, node.fields, path=path, reference=resolved.reference)
+            if field_diagnostic is not None:
+                diagnostics.append(field_diagnostic)
+                return
+            probes.append(
+                ResolvedExpressionProbe(
+                    reference=resolved.reference,
+                    connector_namespace=resolved.connector_namespace,
+                    operation=resolved.operation,
+                    source=resolved.source,
+                    fields=node.fields,
+                )
+            )
+            for argument in node.arguments:
+                visit(argument.value)
+            return
+        if isinstance(node, ListNode):
+            for item in node.items:
+                visit(item)
+            return
+        if isinstance(node, UnaryNode):
+            visit(node.operand)
+            return
+        if isinstance(node, BinaryNode):
+            visit(node.left)
+            visit(node.right)
+            return
+        if isinstance(node, LiteralNode):
+            return
+
+    visit(parsed.root)
+    if diagnostics:
+        return diagnostics[0]
+    return ResolvedGuardExpression(expr=expression, probes=tuple(probes))
+
+
+def _split_probe_reference(
+    parts: tuple[str, ...],
+    *,
+    public_registry: ConnectorRegistry,
+    local_registry: ConnectorRegistry,
+) -> tuple[str, tuple[str, ...]]:
+    for end in range(len(parts), 1, -1):
+        candidate = ".".join(parts[:end])
+        if public_registry.get_operation(candidate) is not None or local_registry.get_operation(candidate) is not None:
+            fields = parts[end:]
+            return candidate, fields
+    return ".".join(parts), ()
+
+
 def _resolve_reference(
     reference: str,
     *,
@@ -171,6 +321,30 @@ def _resolve_reference(
         path=path,
         reference=reference,
     )
+
+
+def _validate_field_path(
+    outputs: dict[str, JSONValue],
+    fields: tuple[str, ...],
+    *,
+    path: tuple[str, ...],
+    reference: str,
+) -> Diagnostic | None:
+    current: JSONValue = outputs
+    walked: list[str] = []
+    for field in fields:
+        if not isinstance(current, dict) or field not in current:
+            dotted_path = ".".join(walked + [field])
+            return _diagnostic(
+                code="resolution.guard_expr.field_unknown",
+                message=f"Guard expression field path '{dotted_path}' is not documented for '{reference}'",
+                path=path,
+                reference=reference,
+                field_path=dotted_path,
+            )
+        current = current[field]
+        walked.append(field)
+    return None
 
 
 def _diagnostic(code: str, message: str, path: tuple[str, ...], **details: object) -> Diagnostic:

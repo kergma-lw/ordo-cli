@@ -10,7 +10,7 @@ from ordo.model.workflow import Workflow
 
 from .checking import GuardProbe, check_workflow
 from .profiles import apply_profile_to_workflow
-from .resolution import WorkflowResolution, resolve_workflow_references
+from .resolution import ResolvedGuardExpression, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
 
 
@@ -77,6 +77,17 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
     if resolution is not None and resolution.resolved_guards:
         for index, resolved_guard in enumerate(resolution.resolved_guards):
             operation_result = check_result.operation_results[index] if index < len(check_result.operation_results) else None
+            if isinstance(resolved_guard, ResolvedGuardExpression):
+                guard_items.append(
+                    {
+                        "reference": resolved_guard.reference,
+                        "kind": "expression",
+                        "effect": "read_only",
+                        "status": "blocked" if resolved_guard.reference in check_result.outputs.get("blockers", []) else "unknown",
+                        "operation_status": None if operation_result is None else operation_result.status,
+                    }
+                )
+                continue
             guard_items.append(
                 {
                     "reference": resolved_guard.reference,

@@ -81,13 +81,13 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertEqual(result.outputs["active_overrides"][0]["target"], "shell.command")
 
-    def test_check_reports_expr_guard_as_not_yet_implemented_resolution_error(self) -> None:
+    def test_check_reports_expr_guard_as_evaluation_gap_after_resolution(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch != "main"'),), steps=())
 
         result = check_workflow(workflow)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
-        self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr_not_implemented")
+        self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr_evaluation_not_implemented")
         self.assertEqual(result.outputs["checked_guards"], ['git.branch != "main"'])
 
 

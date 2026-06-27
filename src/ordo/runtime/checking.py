@@ -10,10 +10,10 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResu
 from ordo.model.workflow import Workflow
 
 from .profiles import apply_profile_to_workflow
-from .resolution import ResolvedOperation, resolve_workflow_references
+from .resolution import ResolvedGuardExpression, ResolvedOperation, resolve_workflow_references
 from .validation import validate_workflow_document
 
-GuardProbe = Callable[[ResolvedOperation, Workflow], OperationResult]
+GuardProbe = Callable[[ResolvedOperation | ResolvedGuardExpression, Workflow], OperationResult]
 
 
 def check_workflow(
@@ -88,6 +88,33 @@ def check_workflow(
     failed_guard: str | None = None
 
     for resolved_guard in resolution.resolved_guards:
+        if isinstance(resolved_guard, ResolvedGuardExpression):
+            diagnostics.append(
+                Diagnostic(
+                    code="resolution.guard_expr_evaluation_not_implemented",
+                    level="error",
+                    message="Guard expression evaluation is not implemented yet",
+                    path=(),
+                    details={"expr": resolved_guard.expr},
+                )
+            )
+            return RuntimeResult(
+                mode=Mode.CHECK,
+                status=RuntimeStatus.RESOLUTION_ERROR,
+                diagnostics=tuple(diagnostics),
+                plan=ExecutionPlan(
+                    guard_checks=tuple(guard.reference for guard in resolution.resolved_guards),
+                    step_names=tuple(step.name for step in effective_workflow.steps),
+                    blockers=(),
+                ),
+                outputs={
+                    "can_execute": False,
+                    "blockers": [],
+                    "checked_guards": [guard.reference for guard in resolution.resolved_guards],
+                    "active_profile": active_profile,
+                    "active_overrides": [override.to_contract() for override in active_overrides],
+                },
+            )
         result = probe(resolved_guard, effective_workflow)
         operation_results.append(result)
         diagnostics.extend(result.diagnostics)

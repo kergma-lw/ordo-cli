@@ -88,7 +88,7 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.outputs["guard_items"][0]["reference"], 'git.branch != "main"')
-        self.assertEqual(result.outputs["guard_items"][0]["kind"], "probe_or_expr")
+        self.assertEqual(result.outputs["guard_items"][0]["kind"], "expression")
 
 
 if __name__ == "__main__":

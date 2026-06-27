@@ -69,6 +69,47 @@ class ResolutionTest(unittest.TestCase):
         self.assertEqual(result.resolved_steps[0].source, "local")
         self.assertEqual(result.resolved_steps[0].reference, "local.issue.view")
 
+    def test_expr_guard_resolves_probe_call_and_documented_field_path(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(expr='gh.issue(issue=inputs.issue).status not in ["Done"]'),),
+            steps=(),
+        )
+
+        result = resolve_workflow_references(workflow)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.resolved_guards[0].reference, 'gh.issue(issue=inputs.issue).status not in ["Done"]')
+        self.assertEqual(result.resolved_guards[0].probes[0].reference, "gh.issue")
+        self.assertEqual(result.resolved_guards[0].probes[0].fields, ("status",))
+
+    def test_expr_guard_rejects_action_reference(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(expr='gh.project_set_status(issue=inputs.issue).status == "Done"'),),
+            steps=(),
+        )
+
+        result = resolve_workflow_references(workflow)
+
+        self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr.action_forbidden")
+
+    def test_expr_guard_rejects_undocumented_field_path(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(expr='gh.issue(issue=inputs.issue).project.owner == "me"'),),
+            steps=(),
+        )
+
+        result = resolve_workflow_references(workflow)
+
+        self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr.field_unknown")
+
 
 if __name__ == "__main__":
     unittest.main()
