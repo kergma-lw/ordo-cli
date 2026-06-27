@@ -21,9 +21,11 @@
 ## Minimum boolean support
 
 - The policy surface should support at least `and`, `or`, `not`, and parentheses for grouping within a single guard expression.
-- The policy surface should support at least equality and membership-style comparisons needed for common operational predicates.
+- The policy surface should support at least `==`, `!=`, `in`, and `not in` comparisons needed for common operational predicates.
+- Boolean-valued probe facts may appear directly as conditions without an explicit equality comparison.
 
 ## Explainability
 
 - Runtime results for failed guard expressions must identify which subcondition evaluated to false or failed to evaluate.
 - When a probe inside a guard expression fails operationally, the runtime must preserve the distinction between "condition evaluated false" and "probe could not be evaluated safely".
+- Runtime results should preserve a machine-usable evaluation trace rather than only the final blocked guard identity.

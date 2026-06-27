@@ -19,9 +19,11 @@ sources = [
   "domain/policy.md",
   "domain/policy-guard-expressions.md",
   "domain/boundaries.md",
+  "adr/0004-guard-expressions-prefer-orthogonal-probes.md",
   "model/workflow/entities.md",
   "model/workflow/guard-expressions.md",
   "model/runtime/lifecycle.md",
+  "model/runtime/guard-evaluation.md",
   "model/runtime/package-layout.md",
   "model/connector/contract.md",
   "model/connector/resolution-policy.md",
@@ -38,6 +40,7 @@ sources = [
   "verification/connector/invariants.md",
   "verification/workflow/authoring.md",
   "verification/workflow/guard-expressions.md",
+  "verification/runtime/guard-evaluation.md",
   "verification/runtime/invariants.md",
   "verification/meta/packs.md"
 ]

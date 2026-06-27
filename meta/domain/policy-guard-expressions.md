@@ -13,6 +13,8 @@ Without a compact expression surface, policy tends to drift into one of two bad 
 - shell-heavy guard logic that is difficult to review or explain;
 - many narrow probe names that encode policy in operation naming rather than in the workflow declaration.
 
+In the long run, guard policy should prefer a minimal and orthogonal public probe surface over a growing catalog of specialized policy probes.
+
 Guard expressions are meant to preserve the original workflow promise:
 
 - state the conditions for execution briefly;
@@ -32,6 +34,8 @@ Guard expressions must not:
 - execute effectful actions;
 - become a general scripting language;
 - hide complex operational semantics that should remain in public connector contracts.
+
+Guard expressions also should not require a bespoke public probe name for every routine boolean policy question.
 
 ## Readability standard
 

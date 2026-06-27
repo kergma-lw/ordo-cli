@@ -42,6 +42,15 @@
 - The object form with `uses` should remain available where an explicit operation call is clearer or needed for compatibility.
 - Zero-argument probe references should not require empty call syntax when no arguments are being passed.
 - Parameterized probe references should remain visually distinct enough that an author can tell inputs are being supplied.
+- Workflow input references should be readable as `inputs.name` rather than requiring a template interpolation surface.
+- Named arguments should be the preferred authoring form for parameterized probe calls.
+- Boolean-valued probe fields should be usable directly as conditions without requiring redundant `== true` boilerplate.
+
+## Preferred authoring surface
+
+- A zero-argument probe reference should read like a compact fact, for example `git.worktree.clean` or `git.branch`.
+- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(issue=inputs.issue).status`.
+- The authoring surface should prefer a minimal and orthogonal public probe vocabulary over many specialized policy-encoded probe names.
 
 ## Checkability
 
@@ -181,12 +190,14 @@
 ## Minimum boolean support
 
 - The policy surface should support at least `and`, `or`, `not`, and parentheses for grouping within a single guard expression.
-- The policy surface should support at least equality and membership-style comparisons needed for common operational predicates.
+- The policy surface should support at least `==`, `!=`, `in`, and `not in` comparisons needed for common operational predicates.
+- Boolean-valued probe facts may appear directly as conditions without an explicit equality comparison.
 
 ## Explainability
 
 - Runtime results for failed guard expressions must identify which subcondition evaluated to false or failed to evaluate.
 - When a probe inside a guard expression fails operationally, the runtime must preserve the distinction between "condition evaluated false" and "probe could not be evaluated safely".
+- Runtime results should preserve a machine-usable evaluation trace rather than only the final blocked guard identity.
 
 <!-- source: domain/authoring.md -->
 
@@ -444,6 +455,8 @@ Without a compact expression surface, policy tends to drift into one of two bad 
 - shell-heavy guard logic that is difficult to review or explain;
 - many narrow probe names that encode policy in operation naming rather than in the workflow declaration.
 
+In the long run, guard policy should prefer a minimal and orthogonal public probe surface over a growing catalog of specialized policy probes.
+
 Guard expressions are meant to preserve the original workflow promise:
 
 - state the conditions for execution briefly;
@@ -463,6 +476,8 @@ Guard expressions must not:
 - execute effectful actions;
 - become a general scripting language;
 - hide complex operational semantics that should remain in public connector contracts.
+
+Guard expressions also should not require a bespoke public probe name for every routine boolean policy question.
 
 ## Readability standard
 
@@ -575,6 +590,32 @@ Connector code may implement checks, but the workflow/runtime contract must pres
 - runtime semantics: `domain/runtime.md`
 - policy semantics: `domain/policy.md`
 
+<!-- source: adr/0004-guard-expressions-prefer-orthogonal-probes.md -->
+
+# ADR 0004: guard expressions prefer orthogonal probes
+
+## Context
+
+Guard expressions exist so workflow policy can remain compact and visible in the declaration.
+
+The current connector surface can drift toward specialized probe names that encode policy directly, for example by exposing many narrow predicates whose only purpose is to avoid writing a simple comparison in the workflow.
+
+That drift weakens one of the main reasons guard expressions exist in the first place.
+
+## Decision
+
+Guard-expression design should prefer a minimal and orthogonal public probe surface.
+
+Policy composition should primarily live in the workflow declaration through guard expressions rather than in a growing catalog of bespoke policy-encoded probe names.
+
+Specialized probes may remain temporarily for migration or compatibility, but they are not the preferred long-term direction.
+
+## Consequences
+
+- Public probe contracts should expose stable output fields suitable for documented guard-expression field access.
+- New connector work should avoid adding specialized policy probes unless a strong public-contract reason exists.
+- Drift between meta examples and connector naming should be resolved by moving toward more orthogonal probe contracts rather than by normalizing policy sprawl into the connector layer.
+
 <!-- source: model/workflow/entities.md -->
 
 # Workflow entities
@@ -627,7 +668,7 @@ It is modeled as policy over public probe results rather than as a general embed
 ## Allowed semantic elements
 
 - boolean literals and other JSON-shaped literals suitable for comparison;
-- references to workflow inputs;
+- references to workflow inputs such as `inputs.issue`;
 - zero-argument public probe references;
 - parameterized public probe references;
 - documented field access over probe outputs;
@@ -638,15 +679,17 @@ It is modeled as policy over public probe results rather than as a general embed
 
 - A plain string item in `guards` denotes a compact guard expression.
 - A zero-argument probe reference may appear without empty call syntax.
-- A parameterized probe reference carries explicit arguments.
+- A parameterized probe reference carries explicit named arguments in the preferred authoring form.
 - Within one guard expression, repeated identical probe references should be evaluated once and reused.
 - A probe reference inside an expression must resolve against the same public probe contract surface used by explicit operation-form guards.
+- A public probe surface used by expressions should remain as orthogonal as practical rather than encoding many bespoke policy predicates in probe names.
 
 ## Output access semantics
 
 - Field access after a probe reference means reading documented structured output from that probe result.
 - Field access is not a general object method system.
 - Public contract documentation must define which output fields are stable enough to reference from guard expressions.
+- A boolean-valued field may be used directly as a condition.
 
 ## Guard list semantics
 
@@ -660,6 +703,7 @@ It is modeled as policy over public probe results rather than as a general embed
 - A probe evaluation failure inside an expression is not the same thing as a false comparison result.
 - Guard explanation should preserve both the boolean structure and the probe-level outcome details.
 - Guard evaluation must remain side-effect free.
+- A statically invalid field path should fail before runtime guard evaluation begins.
 
 <!-- source: model/runtime/lifecycle.md -->
 
@@ -681,6 +725,36 @@ It is modeled as policy over public probe results rather than as a general embed
 - resolution failed
 - guard failed
 - execution failed
+
+<!-- source: model/runtime/guard-evaluation.md -->
+
+# Guard evaluation runtime model
+
+## Role
+
+Guard evaluation is part of the runtime decision surface, not only a hidden implementation detail.
+
+## Minimum runtime structure
+
+- A failed guard result must identify the blocking guard item.
+- A failed guard result must identify the failing subcondition when available.
+- Runtime outputs should preserve observed values when they materially explain the outcome.
+- Runtime outputs should preserve a machine-usable evaluation trace rather than collapsing everything into a single boolean.
+
+## Outcome distinctions
+
+Runtime guard evaluation must preserve the distinction between:
+
+- validation failure before guard evaluation;
+- resolution failure before guard evaluation;
+- boolean guard failure where evaluation completed and the condition was false;
+- probe evaluation failure where the condition could not be safely evaluated.
+
+## Trace expectations
+
+- The trace should preserve boolean structure closely enough for explanation.
+- Probe-level observations should remain attributable to the probe reference that produced them.
+- A repeated identical probe reference within one expression should be reusable without requiring duplicate probe execution.
 
 <!-- source: model/runtime/package-layout.md -->
 
@@ -869,13 +943,21 @@ Guards may be expressed either as explicit operation calls or as compact express
 - git.worktree.clean and git.branch != "main"
 ```
 
+```yaml
+- gh.issue(issue=inputs.issue).project.member
+- gh.issue(issue=inputs.issue).status not in ["Done", "In review"]
+```
+
 ## Expression shape rules
 
 - A string guard item contains a compact boolean policy expression.
 - A string guard item is the preferred compact authoring form for expression guards.
 - Zero-argument probe references do not require `()`.
 - Parameterized probe references use argument syntax only when arguments are present.
+- `inputs.name` is the stable input-reference form inside expressions.
+- Named arguments are the preferred parameter syntax for probe calls.
 - Field access after a probe reference reads probe output fields.
+- Boolean-valued probe fields may appear directly as conditions.
 - Expression grammar remains intentionally small and dedicated to guard evaluation.
 
 ## List semantics
@@ -1247,6 +1329,25 @@ Guard expressions must improve policy readability without collapsing explainabil
 - Zero-argument probe references remain readable without mandatory empty call syntax.
 - Boolean combinations inside one expression remain structured enough for validation and explanation.
 - Runtime diagnostics can identify at least the failing subcondition, the observed value when available, and whether failure came from boolean mismatch or probe evaluation failure.
+- Validation rejects statically invalid field paths against documented probe outputs.
+- Guard resolution rejects effectful `action` operations inside expressions.
+- Repeated identical probe references inside one expression need not be evaluated redundantly.
+
+<!-- source: verification/runtime/guard-evaluation.md -->
+
+# Guard evaluation runtime verification
+
+## Rule
+
+Guard evaluation results must remain explainable as a machine-usable runtime surface.
+
+## Checks
+
+- A blocked result identifies the blocking guard item.
+- A blocked result identifies the failing subcondition when available.
+- Runtime output distinguishes boolean guard failure from probe evaluation failure.
+- Guard-evaluation traces remain structured enough for `check`, `plan`, and `explain` to report consistent blocker identity.
+- Reuse of repeated identical probe references inside one expression does not weaken explainability.
 
 <!-- source: verification/runtime/invariants.md -->
 
