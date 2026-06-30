@@ -17,6 +17,16 @@ Connector operation results must also preserve enough structure for the runtime 
 - structured failure diagnostics even when the underlying implementation raised an exception
 - optional raw stdout/stderr detail fields when an implementation produces them
 
+At minimum, a connector operation outcome should preserve:
+
+- operation-local `status`
+- short local `summary`
+- structured `outputs` carrying observations or effect summary
+- structured `diagnostics` when local problem detail matters
+- optional supplementary `raw` detail
+
+This operation outcome is the connector-local structured input to runtime adaptation, not the entire public runtime result envelope by itself.
+
 ## Serialization constraints
 
 - The public runtime result envelope is JSON-shaped.

@@ -26,6 +26,9 @@ Operation contract must define:
 - outputs
 - failure modes
 
+Here, `prerequisites` means operation-local prerequisites that are part of the public contract of that specific operation.
+Shared family prerequisites belong to connector bootstrap rather than to every operation contract entry.
+
 Operation contract may also expose lifecycle metadata when needed, for example whether an operation is deprecated and which canonical operations should replace it.
 
 ## Explainability and failure normalization
@@ -36,6 +39,22 @@ Every operation must:
 - normalize internal exceptions into a structured failure result rather than escaping as the only observable surface
 
 When an implementation produces raw stdout/stderr, those streams are secondary details inside the result contract, not the primary contract itself.
+
+## Minimal structured operation outcome surface
+
+To stay small and mode-agnostic while still supporting runtime `check`, `plan`, `explain`, and future next-safe-action behavior, an operation outcome should expose at least:
+
+- `status` — the operation-local normalized outcome
+- `summary` — a short human-readable local explanation
+- `outputs` — the structured observations or effect summary that carry the operation's machine-relevant meaning
+- `diagnostics` — structured local problems, warnings, or refusal detail when needed
+- `raw` — optional supplementary transport or implementation detail such as stdout, stderr, return code, or response fragments
+
+Implications:
+- probes should place their durable observed facts in `outputs` rather than in summary text alone
+- actions should place their durable effect summary in `outputs` rather than in summary text alone
+- `raw` is supplementary detail and must not be the only place where contract-relevant meaning exists
+- runtime mode semantics should be derived from this structured local surface rather than pushed down into operation-specific mode logic
 
 ## Contract split
 
@@ -56,6 +75,7 @@ Examples:
 - input shape
 - required target object
 - operation-specific flags
+- operation-local prerequisites not already guaranteed by connector bootstrap
 
 ## Rule
 

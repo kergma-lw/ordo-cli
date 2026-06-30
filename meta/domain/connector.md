@@ -35,19 +35,55 @@ Every connector operation must:
 - be able to explain its outcome locally within its narrow semantic domain;
 - preserve the result contract even under an internal exception.
 
+Connector operations should remain small, local, and readable authoring units.
+They should expose narrow integration semantics rather than absorb runtime orchestration behavior.
+
 Implications:
 - a `probe` must return not only an outcome but also meaningful observations and diagnostics;
 - an `action` must return not only an outcome but also an effect summary and diagnostics;
 - raw stdout/stderr, when produced by an operation, are supplementary detail fields rather than the basis of the contract.
 
+## Mode-agnostic operation authoring
+
+Connector operations should be authored as mode-agnostic integration units.
+They should not directly encode `check`, `plan`, `explain`, or `next` behavior.
+
+Instead, each operation should expose a structured local surface rich enough for runtime to derive those behaviors.
+
+Implications:
+- probes should return stable observations rather than policy-shaped orchestration decisions;
+- actions should return stable effect summaries rather than mode-specific execution narratives;
+- operation code should stay focused on local input handling, integration work, and structured outcome shaping;
+- mode semantics should remain a runtime responsibility even when an operation offers local summary text, diagnostics, or supplementary raw detail.
+
 ## Bootstrap
 
 A connector may have shared bootstrap or shared context for the whole family.
+
+Shared bootstrap is a distinct layer from operation-to-operation dependency and from workflow-level policy composition.
+
+Bootstrap owns family-wide prerequisites and capability checks that would otherwise make every operation's local failure surface broader and noisier than its narrow semantic job.
 
 Examples:
 - `gh` checks binary availability, auth, and required scopes at the family level;
 - `gh.issue.view` checks its own local contract;
 - `shell` defines supported interpreter policy, while `shell.command` executes a concrete command.
+
+## Dependency layers
+
+Connector design should distinguish at least three dependency layers:
+
+- shared family bootstrap and shared context;
+- operation-to-operation implementation dependency when one operation is explicitly derived from another;
+- workflow-level composition and policy over public operation results.
+
+These layers should not be collapsed into one another.
+
+Implications:
+- shared prerequisites should prefer bootstrap or shared family context rather than being modeled only as ordinary public probes;
+- operation-to-operation dependencies are allowed when they stay explicit, local, and reduce semantic duplication;
+- workflow-level policy should still compose public operation results rather than being hidden inside implementation dependency graphs;
+- canonical fact probes remain preferred over an explosion of narrow policy-shaped derived probes.
 
 ## Publicness
 
@@ -67,6 +103,8 @@ Implications:
 - runtime owns orchestration, resolution, mode behavior, and explanation flow;
 - connector families own integration semantics for their public namespaces;
 - runtime consumes connector contracts and results, but should not silently redefine the meaning of connector operations;
+- runtime should derive `check`, `plan`, `explain`, and `next` behavior from structured operation contracts and results rather than delegating those mode semantics into connector implementation code;
+- runtime should preserve the distinction between family bootstrap state, operation-local outcomes, and workflow-level policy composition when building explanations and plans;
 - runtime-facing wiring should flow through an explicit connector-provider surface rather than a hardcoded package location;
 - application composition may choose to install the standard built-in connector provider or omit it;
 - package placement should preserve this conceptual boundary even when Python packaging or repository layout introduces adapters.
@@ -88,6 +126,8 @@ Manual central registries that duplicate the package structure should be avoided
 If a public operation exists as a file in the family package tree, that file should be the primary source of truth for its contract and implementation rather than requiring a second hand-maintained registry entry elsewhere.
 
 Family-local autodiscovery or equivalent family-local assembly should be preferred so that each connector family assembles its public probe and action surface from its own package tree.
+
+Operation modules should expose a uniform publication hook so family-local assembly can discover the published operation definition explicitly rather than inferring it from unrelated globals.
 
 ## Fixed v0 connector domains
 

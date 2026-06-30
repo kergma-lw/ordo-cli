@@ -23,3 +23,5 @@ At minimum, the result must be able to express:
 
 If the runtime cannot explain a refusal in structured form,
 the result contract is still immature.
+
+For connector operations specifically, the explanation surface should come from structured local outcome fields such as status, summary, outputs, diagnostics, and optional raw detail, rather than from log scraping or mode-specific connector behavior.

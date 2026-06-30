@@ -70,6 +70,7 @@ The v0 foundation now satisfies the core verification goal, but some bounded gap
 
 - only a minimal canonical operation set has concrete implementations;
 - several public operations remain metadata-only and still return structured not-yet-implemented results if executed;
+- current connector implementations are still authored directly against runtime-shaped models rather than a dedicated mode-agnostic connector authoring surface;
 - the verification surface proves v0 authorability, not broad production-grade connector coverage.
 
 ## Current conclusion

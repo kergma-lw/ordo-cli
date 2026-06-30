@@ -26,6 +26,8 @@ sources = [
   "model/runtime/guard-evaluation.md",
   "model/runtime/package-layout.md",
   "model/connector/contract.md",
+  "model/connector/authoring-surface.md",
+  "model/connector/plugin-sdk.md",
   "model/connector/resolution-policy.md",
   "data/workflow/shape.md",
   "data/workflow/guard-expressions.md",

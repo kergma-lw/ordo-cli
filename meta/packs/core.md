@@ -322,19 +322,55 @@ Every connector operation must:
 - be able to explain its outcome locally within its narrow semantic domain;
 - preserve the result contract even under an internal exception.
 
+Connector operations should remain small, local, and readable authoring units.
+They should expose narrow integration semantics rather than absorb runtime orchestration behavior.
+
 Implications:
 - a `probe` must return not only an outcome but also meaningful observations and diagnostics;
 - an `action` must return not only an outcome but also an effect summary and diagnostics;
 - raw stdout/stderr, when produced by an operation, are supplementary detail fields rather than the basis of the contract.
 
+## Mode-agnostic operation authoring
+
+Connector operations should be authored as mode-agnostic integration units.
+They should not directly encode `check`, `plan`, `explain`, or `next` behavior.
+
+Instead, each operation should expose a structured local surface rich enough for runtime to derive those behaviors.
+
+Implications:
+- probes should return stable observations rather than policy-shaped orchestration decisions;
+- actions should return stable effect summaries rather than mode-specific execution narratives;
+- operation code should stay focused on local input handling, integration work, and structured outcome shaping;
+- mode semantics should remain a runtime responsibility even when an operation offers local summary text, diagnostics, or supplementary raw detail.
+
 ## Bootstrap
 
 A connector may have shared bootstrap or shared context for the whole family.
+
+Shared bootstrap is a distinct layer from operation-to-operation dependency and from workflow-level policy composition.
+
+Bootstrap owns family-wide prerequisites and capability checks that would otherwise make every operation's local failure surface broader and noisier than its narrow semantic job.
 
 Examples:
 - `gh` checks binary availability, auth, and required scopes at the family level;
 - `gh.issue.view` checks its own local contract;
 - `shell` defines supported interpreter policy, while `shell.command` executes a concrete command.
+
+## Dependency layers
+
+Connector design should distinguish at least three dependency layers:
+
+- shared family bootstrap and shared context;
+- operation-to-operation implementation dependency when one operation is explicitly derived from another;
+- workflow-level composition and policy over public operation results.
+
+These layers should not be collapsed into one another.
+
+Implications:
+- shared prerequisites should prefer bootstrap or shared family context rather than being modeled only as ordinary public probes;
+- operation-to-operation dependencies are allowed when they stay explicit, local, and reduce semantic duplication;
+- workflow-level policy should still compose public operation results rather than being hidden inside implementation dependency graphs;
+- canonical fact probes remain preferred over an explosion of narrow policy-shaped derived probes.
 
 ## Publicness
 
@@ -354,6 +390,8 @@ Implications:
 - runtime owns orchestration, resolution, mode behavior, and explanation flow;
 - connector families own integration semantics for their public namespaces;
 - runtime consumes connector contracts and results, but should not silently redefine the meaning of connector operations;
+- runtime should derive `check`, `plan`, `explain`, and `next` behavior from structured operation contracts and results rather than delegating those mode semantics into connector implementation code;
+- runtime should preserve the distinction between family bootstrap state, operation-local outcomes, and workflow-level policy composition when building explanations and plans;
 - runtime-facing wiring should flow through an explicit connector-provider surface rather than a hardcoded package location;
 - application composition may choose to install the standard built-in connector provider or omit it;
 - package placement should preserve this conceptual boundary even when Python packaging or repository layout introduces adapters.
@@ -375,6 +413,8 @@ Manual central registries that duplicate the package structure should be avoided
 If a public operation exists as a file in the family package tree, that file should be the primary source of truth for its contract and implementation rather than requiring a second hand-maintained registry entry elsewhere.
 
 Family-local autodiscovery or equivalent family-local assembly should be preferred so that each connector family assembles its public probe and action surface from its own package tree.
+
+Operation modules should expose a uniform publication hook so family-local assembly can discover the published operation definition explicitly rather than inferring it from unrelated globals.
 
 ## Fixed v0 connector domains
 
@@ -487,6 +527,18 @@ The runtime needs modes that:
 - reduce risk;
 - improve reviewability;
 - provide machine-readable reasoning.
+
+## Runtime ownership of mode semantics
+
+The runtime owns `check`, `plan`, `execute`, `explain`, and future next-safe-action semantics.
+Connector operations should not each reimplement those modes locally.
+
+Instead, runtime should derive higher-level execution meaning from structured operation contracts and structured operation outcomes.
+
+Implications:
+- connector operations may provide local observations, effect summaries, diagnostics, and supplementary raw detail;
+- runtime combines those local results with workflow structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
+- richer runtime modes should come from stronger structured operation surfaces rather than from pushing orchestration logic down into connector implementations.
 
 ## Connector dependency direction
 
@@ -975,6 +1027,9 @@ Operation contract must define:
 - outputs
 - failure modes
 
+Here, `prerequisites` means operation-local prerequisites that are part of the public contract of that specific operation.
+Shared family prerequisites belong to connector bootstrap rather than to every operation contract entry.
+
 Operation contract may also expose lifecycle metadata when needed, for example whether an operation is deprecated and which canonical operations should replace it.
 
 ## Explainability and failure normalization
@@ -985,6 +1040,22 @@ Every operation must:
 - normalize internal exceptions into a structured failure result rather than escaping as the only observable surface
 
 When an implementation produces raw stdout/stderr, those streams are secondary details inside the result contract, not the primary contract itself.
+
+## Minimal structured operation outcome surface
+
+To stay small and mode-agnostic while still supporting runtime `check`, `plan`, `explain`, and future next-safe-action behavior, an operation outcome should expose at least:
+
+- `status` — the operation-local normalized outcome
+- `summary` — a short human-readable local explanation
+- `outputs` — the structured observations or effect summary that carry the operation's machine-relevant meaning
+- `diagnostics` — structured local problems, warnings, or refusal detail when needed
+- `raw` — optional supplementary transport or implementation detail such as stdout, stderr, return code, or response fragments
+
+Implications:
+- probes should place their durable observed facts in `outputs` rather than in summary text alone
+- actions should place their durable effect summary in `outputs` rather than in summary text alone
+- `raw` is supplementary detail and must not be the only place where contract-relevant meaning exists
+- runtime mode semantics should be derived from this structured local surface rather than pushed down into operation-specific mode logic
 
 ## Contract split
 
@@ -1005,10 +1076,270 @@ Examples:
 - input shape
 - required target object
 - operation-specific flags
+- operation-local prerequisites not already guaranteed by connector bootstrap
 
 ## Rule
 
 Shared prerequisites should not be duplicated in every operation contract if they are already owned by connector bootstrap.
+
+<!-- source: model/connector/authoring-surface.md -->
+
+# Connector operation authoring surface
+
+## Purpose
+
+Connector operation authoring should stay small, local, and mode-agnostic while still exposing enough structure for runtime `check`, `plan`, `explain`, and future next-safe-action behavior.
+
+This authoring surface exists to keep connector code readable without pushing runtime orchestration semantics down into each probe or action.
+
+## Operation module responsibilities
+
+An operation module should be responsible for:
+
+- declaring its local operation contract;
+- exposing a uniform publication hook for that operation module;
+- accepting local inputs through a narrow authoring context;
+- performing local integration work;
+- returning a structured local outcome.
+
+An operation module may also depend on other operations when that dependency is explicit, local, and part of the narrow integration semantics of the derived operation.
+
+An operation module should not be responsible for:
+
+- reimplementing runtime modes;
+- knowing workflow-level orchestration policy;
+- constructing the public runtime result envelope directly;
+- embedding `check`, `plan`, `explain`, or `next` semantics in handler-local control flow.
+
+## Uniform publication hook
+
+Each operation module should expose a uniform publication hook such as `info()`.
+
+That hook should publish the operation as a whole rather than leaving metadata and execution behavior as unrelated module globals.
+
+Implications:
+
+- the publication hook is distinct from the execution handler;
+- the execution handler remains the operation's execution point rather than the module's publication point;
+- runtime or connector-family discovery should read the operation module through this uniform publication hook;
+- simple operation modules should not rely on ad hoc naming magic to bind contract metadata to execution behavior.
+
+## Minimal authoring context
+
+The authoring context should stay narrow.
+
+At minimum it should support:
+
+- access to operation-local inputs;
+- reusable helpers for local integration work such as command execution;
+- inline failure mapping for repetitive transport-level failures;
+- narrow local context needed for diagnostics or execution environment details.
+
+It should not require connector handlers to receive broad runtime-shaped objects such as full workflow state or resolution internals when the operation does not need them for its local job.
+
+## Minimal structured outcome surface
+
+At minimum an authored operation outcome should expose:
+
+- `status` — normalized local outcome;
+- `summary` — short local human-readable explanation;
+- `outputs` — structured observations or structured effect summary;
+- `diagnostics` — structured local problem detail when needed;
+- `raw` — optional supplementary transport or implementation detail.
+
+Implications:
+
+- probes should place durable observed facts in `outputs`;
+- actions should place durable effect facts in `outputs`;
+- summary text helps reviewability but must not be the only contract-relevant meaning;
+- raw detail is supplementary and must not be required to recover the main outcome semantics.
+
+## Failure mapping expectations
+
+Repeated transport-level failure handling should be supported by reusable authoring helpers rather than copied `if` ladders in every operation.
+
+Typical examples include:
+
+- command spawn failures;
+- non-zero command exit handling;
+- transport response normalization.
+
+Domain-specific negative outcomes should still remain visible in operation-local Python logic when they are part of the operation's narrow semantic job.
+
+## Dependency expectations
+
+The authoring surface should distinguish between:
+
+- shared bootstrap or family capability state;
+- explicit operation-to-operation dependency;
+- workflow-level composition over public results.
+
+Implications:
+
+- a small operation should not be forced to rediscover every shared family prerequisite by itself;
+- derived operations may reuse other operations explicitly when that keeps semantics clearer and avoids duplication;
+- operation-to-operation reuse should not become hidden runtime magic;
+- workflow and policy composition should remain visibly distinct from operation implementation dependency.
+
+## Runtime-owned semantics
+
+Runtime should derive higher-level mode behavior from operation contracts and structured outcomes.
+
+The authored operation outcome is a local authoring-facing outcome surface, not the full public runtime result envelope.
+
+Runtime owns:
+
+- blocked-versus-runnable interpretation in workflow context;
+- plan assembly;
+- workflow-level explanation;
+- next-safe-action reasoning;
+- mapping local operation outcomes into the public runtime result envelope.
+
+## Migration direction
+
+Current connector implementations may still be authored against runtime-shaped models during migration.
+
+The target direction is a dedicated connector authoring surface or plugin SDK that preserves:
+
+- simple local operation code;
+- stable structured outcomes;
+- runtime ownership of orchestration semantics.
+
+<!-- source: model/connector/plugin-sdk.md -->
+
+# Connector plugin SDK sketch
+
+## Role
+
+The connector plugin SDK is the concrete authoring-facing surface that should realize the connector authoring boundary.
+
+It exists to let operation files stay small, local, and readable without importing core runtime models directly.
+
+## Design goal
+
+For a simple operation such as `git.branch`, the SDK should allow a single-file implementation that:
+
+- declares its operation contract locally;
+- executes narrow local integration work;
+- returns a structured local outcome;
+- avoids unnecessary incidental technical ceremony.
+
+Simple operation files should not need avoidable scaffolding such as broad runtime-shaped arguments or unnecessary `from __future__ import annotations` imports.
+
+## Minimal SDK entities
+
+The SDK should expose only a small set of authoring-facing entities.
+
+At minimum:
+
+- operation metadata type for probes;
+- operation metadata type for actions;
+- uniform publication-hook return type for operation modules;
+- narrow operation context type;
+- structured operation outcome type;
+- structured local diagnostic type;
+- reusable local integration helper result types where needed.
+
+The SDK should prefer one small coherent surface over many narrowly sliced helper types.
+
+## Metadata expectations
+
+Operation metadata should let an authored module declare at least:
+
+- operation name;
+- operation kind;
+- inputs when applicable;
+- outputs;
+- failure modes;
+- effects when applicable.
+
+Metadata should remain local to the operation module rather than requiring a second hand-maintained registry declaration elsewhere.
+
+The SDK should support a uniform publication hook such as `info()` that returns the published operation definition for the module.
+
+That published definition should bind operation metadata and execution handler explicitly.
+
+## Context expectations
+
+The operation context should stay narrow and authoring-oriented.
+
+At minimum it should support:
+
+- operation-local input access;
+- reusable command execution for command-backed operations;
+- inline failure mapping for repetitive transport-level failures;
+- narrow execution-environment access when needed for local behavior or diagnostics;
+- explicit access to shared family bootstrap state or shared capability context when the operation depends on it.
+
+The context should not require small operations to know workflow internals, guard-expression internals, or runtime mode state.
+
+When operation-to-operation reuse is allowed, the SDK should prefer an explicit local dependency surface over hidden runtime magic.
+
+## Command helper expectations
+
+Command-backed operations are expected to be common.
+
+The SDK should therefore provide a command helper that:
+
+- executes a command locally;
+- normalizes repetitive transport-level failure categories;
+- supports inline failure mapping close to the call site;
+- returns a structured helper result suitable for local domain-specific checks after the command succeeds technically.
+
+This helper exists to avoid repeated low-level `if` ladders for command spawn failure, non-zero exit handling, and similar transport concerns.
+
+## Outcome expectations
+
+The SDK outcome type should preserve the minimal structured operation outcome surface already defined elsewhere in meta:
+
+- `status`;
+- `summary`;
+- `outputs`;
+- `diagnostics`;
+- `raw`.
+
+The SDK may provide convenience constructors or helpers for common success and failure cases, but those helpers must not hide the structured outcome model itself.
+
+## Low-ceremony requirement
+
+The SDK should optimize for low incidental ceremony in small operation files.
+
+Implications:
+
+- simple probes and actions should fit comfortably in one small file;
+- import surfaces should stay small;
+- common success and failure paths should be concise;
+- publication should remain explicit without requiring ad hoc module-global binding conventions;
+- operation code should remain more prominent than authoring-framework boilerplate.
+
+## Runtime boundary
+
+The SDK is not a second runtime.
+
+It should not re-expose:
+
+- workflow orchestration semantics;
+- runtime mode semantics;
+- full runtime result-envelope assembly;
+- policy evaluation logic.
+
+Those remain runtime responsibilities.
+
+## Dependency-layer boundary
+
+The SDK should help keep three layers distinct:
+
+- family bootstrap and shared capability state;
+- explicit operation-to-operation reuse;
+- workflow-level policy composition.
+
+It should not encourage simple technical prerequisites to masquerade as arbitrary public probe graphs, and it should not hide derived-operation dependencies behind opaque runtime behavior.
+
+## Expected migration use
+
+The first migration step should be able to prove the SDK shape on one or two very small operations before broader connector migration begins.
+
+If the resulting operation code is not visibly simpler and more local than the current runtime-shaped form, the SDK shape should be reconsidered before wider adoption.
 
 <!-- source: model/connector/resolution-policy.md -->
 
@@ -1151,6 +1482,16 @@ Connector operation results must also preserve enough structure for the runtime 
 - meaningful effect summaries for successful actions
 - structured failure diagnostics even when the underlying implementation raised an exception
 - optional raw stdout/stderr detail fields when an implementation produces them
+
+At minimum, a connector operation outcome should preserve:
+
+- operation-local `status`
+- short local `summary`
+- structured `outputs` carrying observations or effect summary
+- structured `diagnostics` when local problem detail matters
+- optional supplementary `raw` detail
+
+This operation outcome is the connector-local structured input to runtime adaptation, not the entire public runtime result envelope by itself.
 
 ## Serialization constraints
 

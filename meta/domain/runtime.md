@@ -34,6 +34,18 @@ The runtime needs modes that:
 - improve reviewability;
 - provide machine-readable reasoning.
 
+## Runtime ownership of mode semantics
+
+The runtime owns `check`, `plan`, `execute`, `explain`, and future next-safe-action semantics.
+Connector operations should not each reimplement those modes locally.
+
+Instead, runtime should derive higher-level execution meaning from structured operation contracts and structured operation outcomes.
+
+Implications:
+- connector operations may provide local observations, effect summaries, diagnostics, and supplementary raw detail;
+- runtime combines those local results with workflow structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
+- richer runtime modes should come from stronger structured operation surfaces rather than from pushing orchestration logic down into connector implementations.
+
 ## Connector dependency direction
 
 The runtime core should be agnostic to the physical location of built-in connectors.
