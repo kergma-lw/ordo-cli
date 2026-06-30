@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import cast
 
 from ordo.model.diagnostic import Diagnostic
@@ -13,10 +12,9 @@ from ordo.model.workflow import Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, UnaryNode
 from .profiles import apply_profile_to_workflow
+from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedExpressionProbe, ResolvedGuardExpression, ResolvedOperation, resolve_workflow_references
 from .validation import validate_workflow_document
-
-GuardProbe = Callable[[ResolvedOperation | ResolvedGuardExpression, Workflow], OperationResult]
 
 
 def check_workflow(
@@ -24,6 +22,7 @@ def check_workflow(
     *,
     profile: Profile | None = None,
     guard_probe: GuardProbe | None = None,
+    connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
     """Run check mode without executing effectful business steps."""
 
@@ -63,6 +62,7 @@ def check_workflow(
 
     resolution = resolve_workflow_references(
         effective_workflow,
+        connector_provider=connector_provider,
         active_overrides=active_overrides,
     )
     if not resolution.ok:
@@ -84,7 +84,7 @@ def check_workflow(
                 },
         )
 
-    probe = guard_probe or _default_guard_probe
+    probe = guard_probe or _default_guard_probe(provider=connector_provider)
     diagnostics: list[Diagnostic] = []
     operation_results: list[OperationResult] = []
     blockers: list[str] = []
@@ -147,12 +147,14 @@ def check_workflow(
     )
 
 
-def _default_guard_probe(resolved_guard: ResolvedOperation | ResolvedExpressionProbe, workflow: Workflow) -> OperationResult:
+def _default_guard_probe(*, provider: ConnectorProvider | None):
     """Default side-effect-free probe backed by canonical connector operations."""
 
-    from ordo.connectors.operations import evaluate_probe
+    def evaluate(resolved_guard: ResolvedOperation | ResolvedExpressionProbe, workflow: Workflow) -> OperationResult:
+        resolved_provider = provider or get_default_connector_provider()
+        return resolved_provider.guard_probe(resolved_guard, workflow)
 
-    return evaluate_probe(resolved_guard, workflow)
+    return evaluate
 
 
 def _evaluate_guard_expression(

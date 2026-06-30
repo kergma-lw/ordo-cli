@@ -26,6 +26,8 @@ Operation contract must define:
 - outputs
 - failure modes
 
+Operation contract may also expose lifecycle metadata when needed, for example whether an operation is deprecated and which canonical operations should replace it.
+
 ## Explainability and failure normalization
 
 Every operation must:

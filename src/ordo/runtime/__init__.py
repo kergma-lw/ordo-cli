@@ -6,13 +6,17 @@ from .explaining import explain_execution_result, explain_runtime_result, explai
 from .loading import LoadError, load_profile_file, load_profile_text, load_workflow_file, load_workflow_text, load_yaml_document
 from .planning import plan_workflow
 from .profiles import ProfileCompositionResult, WorkflowProfileApplicationResult, apply_profile_to_workflow, compose_profiles
+from .providers import ConnectorProvider, GuardProbe, StepExecutor, get_default_connector_provider, set_default_connector_provider
 from .resolution import ResolvedOperation, WorkflowResolution, resolve_workflow_references
 from .validation import ValidationReport, validate_profile_document, validate_profile_text, validate_workflow_document, validate_workflow_text
 
 __all__ = [
     "LoadError",
+    "ConnectorProvider",
+    "GuardProbe",
     "ProfileCompositionResult",
     "ResolvedOperation",
+    "StepExecutor",
     "ValidationReport",
     "WorkflowResolution",
     "WorkflowProfileApplicationResult",
@@ -30,6 +34,8 @@ __all__ = [
     "load_workflow_text",
     "load_yaml_document",
     "resolve_workflow_references",
+    "get_default_connector_provider",
+    "set_default_connector_provider",
     "validate_profile_document",
     "validate_profile_text",
     "validate_workflow_document",

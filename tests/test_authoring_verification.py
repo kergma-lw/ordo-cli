@@ -6,6 +6,8 @@ from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import compose_profiles, explain_workflow, validate_workflow_text
 
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
 
 class AuthoringVerificationTest(unittest.TestCase):
     def test_public_operations_are_discoverable_without_connector_internals(self) -> None:
@@ -54,6 +56,7 @@ class AuthoringVerificationTest(unittest.TestCase):
         explanation = explain_workflow(
             repaired,
             guard_probe=lambda _resolved, _workflow: OperationResult(status="ok", summary="clean", observations={"clean": True, "dirty_paths": []}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
         )
 
         self.assertEqual(invalid.status, RuntimeStatus.VALIDATION_ERROR)

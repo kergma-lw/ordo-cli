@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
@@ -11,9 +9,8 @@ from ordo.model.workflow import Workflow
 
 from .checking import GuardProbe, check_workflow
 from .profiles import apply_profile_to_workflow
+from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedOperation, resolve_workflow_references
-
-StepExecutor = Callable[[ResolvedOperation, Workflow], OperationResult]
 
 
 def execute_workflow(
@@ -22,10 +19,11 @@ def execute_workflow(
     profile: Profile | None = None,
     guard_probe: GuardProbe | None = None,
     step_executor: StepExecutor | None = None,
+    connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
     """Execute steps only after validation, resolution, and guards succeed."""
 
-    check_result = check_workflow(workflow, profile=profile, guard_probe=guard_probe)
+    check_result = check_workflow(workflow, profile=profile, guard_probe=guard_probe, connector_provider=connector_provider)
     if check_result.status is not RuntimeStatus.OK:
         return RuntimeResult(
             mode=Mode.EXECUTE,
@@ -52,8 +50,8 @@ def execute_workflow(
             active_profile = applied.active_profile
             active_overrides = applied.active_overrides
 
-    resolution = resolve_workflow_references(effective_workflow, active_overrides=active_overrides)
-    executor = step_executor or _default_step_executor
+    resolution = resolve_workflow_references(effective_workflow, connector_provider=connector_provider, active_overrides=active_overrides)
+    executor = step_executor or _default_step_executor(provider=connector_provider)
     diagnostics: list[Diagnostic] = list(check_result.diagnostics)
     operation_results: list[OperationResult] = list(check_result.operation_results)
     executed_steps: list[str] = []
@@ -100,9 +98,11 @@ def execute_workflow(
     )
 
 
-def _default_step_executor(resolved_step: ResolvedOperation, workflow: Workflow) -> OperationResult:
+def _default_step_executor(*, provider: ConnectorProvider | None):
     """Default executor backed by canonical connector operations."""
 
-    from ordo.connectors.operations import execute_action
+    def execute(resolved_step: ResolvedOperation, workflow: Workflow) -> OperationResult:
+        resolved_provider = provider or get_default_connector_provider()
+        return resolved_provider.step_executor(resolved_step, workflow)
 
-    return execute_action(resolved_step, workflow)
+    return execute

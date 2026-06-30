@@ -1,5 +1,8 @@
 """Public connector package namespace for Ordo v0."""
 
-from .registry import ConnectorRegistry, get_public_connector_registry
+from ordo.model.connector import ConnectorRegistry
 
-__all__ = ["ConnectorRegistry", "get_public_connector_registry"]
+from .provider import get_public_connector_provider
+from .registry import get_public_connector_registry
+
+__all__ = ["ConnectorRegistry", "get_public_connector_provider", "get_public_connector_registry"]

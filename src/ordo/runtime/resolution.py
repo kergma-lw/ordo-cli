@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ordo.connectors import ConnectorRegistry, get_public_connector_registry
-from ordo.model.connector import Connector, OperationContract
+from ordo.model.connector import Connector, ConnectorRegistry, OperationContract
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Override
@@ -13,6 +12,7 @@ from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, UnaryNode, parse_guard_expression
+from .providers import ConnectorProvider, get_default_connector_provider
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,12 +73,13 @@ def resolve_workflow_references(
     workflow: Workflow,
     *,
     registry: ConnectorRegistry | None = None,
+    connector_provider: ConnectorProvider | None = None,
     local_connectors: tuple[Connector, ...] = (),
     active_overrides: tuple[Override, ...] = (),
 ) -> WorkflowResolution:
     """Resolve workflow references against public connectors and explicit local namespaces."""
 
-    public_registry = registry or get_public_connector_registry()
+    public_registry = registry or (connector_provider.registry if connector_provider is not None else get_default_connector_provider().registry)
     diagnostics = _validate_local_connectors(local_connectors=local_connectors, public_registry=public_registry)
     local_registry = ConnectorRegistry(connectors=local_connectors)
 

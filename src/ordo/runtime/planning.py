@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
 
-from .checking import GuardProbe, check_workflow
+from .checking import check_workflow
+from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
 from .resolution import ResolvedGuardExpression, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
@@ -19,10 +18,11 @@ def plan_workflow(
     *,
     profile: Profile | None = None,
     guard_probe: GuardProbe | None = None,
+    connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
     """Build a structured plan without executing effectful business steps."""
 
-    check_result = check_workflow(workflow, profile=profile, guard_probe=guard_probe)
+    check_result = check_workflow(workflow, profile=profile, guard_probe=guard_probe, connector_provider=connector_provider)
     base_outputs = dict(check_result.outputs)
     effective_workflow = workflow
 
@@ -36,6 +36,7 @@ def plan_workflow(
     if validation_report.ok:
         resolution = resolve_workflow_references(
             effective_workflow,
+            connector_provider=connector_provider,
             active_overrides=tuple(profile.overrides) if profile is not None else (),
         )
 

@@ -5,6 +5,8 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import execute_workflow
 
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
 
 class ExecuteModeTest(unittest.TestCase):
     def test_execute_preserves_blocked_before_execution(self) -> None:
@@ -29,7 +31,7 @@ class ExecuteModeTest(unittest.TestCase):
                 ),
             )
 
-        result = execute_workflow(workflow, guard_probe=probe)
+        result = execute_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.mode, Mode.EXECUTE)
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
@@ -49,7 +51,7 @@ class ExecuteModeTest(unittest.TestCase):
             seen_steps.append(resolved_step.reference)
             return OperationResult(status="ok", summary="Executed")
 
-        result = execute_workflow(workflow, step_executor=executor)
+        result = execute_workflow(workflow, step_executor=executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(seen_steps, ["shell.command"])
@@ -75,7 +77,7 @@ class ExecuteModeTest(unittest.TestCase):
                 return OperationResult(status="execution_error", summary="Boom", raw={"stderr": "failed"})
             return OperationResult(status="ok")
 
-        result = execute_workflow(workflow, step_executor=executor)
+        result = execute_workflow(workflow, step_executor=executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         self.assertEqual(result.failed_step, "first-step")

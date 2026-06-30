@@ -5,6 +5,8 @@ from ordo.model.runtime import OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow
 
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
 
 class ExplainModeTest(unittest.TestCase):
     def test_explain_reports_guard_block_reason_and_next_action(self) -> None:
@@ -20,7 +22,7 @@ class ExplainModeTest(unittest.TestCase):
                 return OperationResult(status="ok", observations={"value": "main"})
             return OperationResult(status="ok")
 
-        result = explain_workflow(workflow, guard_probe=probe)
+        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.outputs["reason_category"], "guard")
@@ -35,7 +37,7 @@ class ExplainModeTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.missing")),),
         )
 
-        result = explain_workflow(workflow)
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.outputs["explanation"]["category"], "resolution")
@@ -49,7 +51,7 @@ class ExplainModeTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
         )
 
-        result = explain_workflow(workflow)
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["explanation"]["category"], "ok")
@@ -72,7 +74,7 @@ class ExplainModeTest(unittest.TestCase):
     def test_explain_execution_result_wraps_execute_mode(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(Step(name="ship", operation=OperationRef("shell.command")),))
 
-        result = explain_execution_result(workflow)
+        result = explain_execution_result(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.mode.value, "explain")
         self.assertIn("explanation", result.outputs)

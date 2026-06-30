@@ -85,6 +85,34 @@
 - The system must allow project-local extension without forking the global contract.
 - Project-specific policy must compose over stable connector operations instead of mutating their meaning.
 
+## Probe addition policy
+
+- Public probes should default to exposing stable observable facts rather than workflow-specific policy verdicts.
+- Workflow policy should prefer composition in guard expressions over growth of specialized probe names.
+- A new public probe should be added only when at least one of the following is true:
+  - it exposes a stable fact that is not otherwise available through existing probe outputs;
+  - repeated workflow composition would otherwise require awkward normalization in many places;
+  - the needed condition would otherwise force guard-expression language growth beyond compact reviewable policy;
+  - the needed condition would otherwise expose unstable operational detail that should remain inside the connector contract.
+- A proposed public probe should be rejected when its primary value is merely to avoid a simple comparison or boolean composition in workflow guards.
+- Public probe names should avoid encoding local policy, approval decisions, or workflow intent when those can be expressed as guard composition over existing probe results.
+
+## Canonical git probe set
+
+- The canonical `git` probe set should remain small and orthogonal.
+- The current target set for broad repo-state coverage is:
+  - `git.repo`
+  - `git.branch`
+  - `git.worktree`
+  - `git.worktrees`
+  - `git.stash`
+  - `git.state`
+  - `git.ref(ref=...)`
+  - `git.upstream`
+  - `git.range(base=..., head=...)`
+- This set should be preferred over adding many narrower git probes for local rituals.
+- Older specialized probes such as `git.clean_worktree`, `git.branch_not_main`, and `git.single_worktree` may remain temporarily for compatibility, but they should be treated as deprecated rather than as the preferred long-term public surface.
+
 <!-- source: requirements/workflow/core.md -->
 
 # Workflow requirements
@@ -317,11 +345,60 @@ Implications:
 - family-level semantics matter;
 - the meaning of a same-named operation must not change silently.
 
+## Runtime vs connector-library boundary
+
+Connectors should be treated as a built-in public integration library rather than as private runtime internals.
+They do not conceptually live inside the runtime core.
+
+Implications:
+- runtime owns orchestration, resolution, mode behavior, and explanation flow;
+- connector families own integration semantics for their public namespaces;
+- runtime consumes connector contracts and results, but should not silently redefine the meaning of connector operations;
+- runtime-facing wiring should flow through an explicit connector-provider surface rather than a hardcoded package location;
+- application composition may choose to install the standard built-in connector provider or omit it;
+- package placement should preserve this conceptual boundary even when Python packaging or repository layout introduces adapters.
+
+## Connector package structure
+
+The preferred connector package structure is organized first by family, then by operation kind, then by operation file.
+
+Canonical shape:
+
+- `connectors/<family>/bootstrap.py` for family-level bootstrap and shared prerequisites;
+- `connectors/<family>/probes/<operation>.py` for one public probe per file;
+- `connectors/<family>/actions/<operation>.py` for one public action per file.
+
+Helper files such as `__init__.py` are expected when needed.
+
+Manual central registries that duplicate the package structure should be avoided.
+
+If a public operation exists as a file in the family package tree, that file should be the primary source of truth for its contract and implementation rather than requiring a second hand-maintained registry entry elsewhere.
+
+Family-local autodiscovery or equivalent family-local assembly should be preferred so that each connector family assembles its public probe and action surface from its own package tree.
+
 ## Fixed v0 connector domains
 
 - `git.*`
 - `gh.*`
 - `shell.*`
+
+## Canonical git probe surface direction
+
+The preferred long-term `git` probe surface is a compact set of repo facts rather than many policy-encoded predicates.
+
+The main target probes are:
+
+- `git.repo`
+- `git.branch`
+- `git.worktree`
+- `git.worktrees`
+- `git.stash`
+- `git.state`
+- `git.ref(ref=...)`
+- `git.upstream`
+- `git.range(base=..., head=...)`
+
+Specialized names such as `git.clean_worktree`, `git.branch_not_main`, and `git.single_worktree` may still exist during migration, but they are a compatibility layer rather than the desired steady-state public surface.
 
 ## Possible future connector namespaces
 
@@ -411,6 +488,25 @@ The runtime needs modes that:
 - improve reviewability;
 - provide machine-readable reasoning.
 
+## Connector dependency direction
+
+The runtime core should be agnostic to the physical location of built-in connectors.
+
+It should depend on:
+- connector registry data for resolution;
+- probe and action execution capabilities provided through explicit wiring.
+
+It should not depend on a hardcoded connector package path as part of its core semantics.
+
+## Composition layer
+
+A composition layer such as CLI bootstrap, application bootstrap, or tests may choose which connector provider to install or pass explicitly.
+
+This layer may:
+- use the standard built-in connector provider;
+- combine the built-in provider with local or project-specific connectors;
+- run with no built-in connector provider at all.
+
 <!-- source: domain/policy.md -->
 
 # Policy domain
@@ -479,6 +575,26 @@ Guard expressions must not:
 - hide complex operational semantics that should remain in public connector contracts.
 
 Guard expressions also should not require a bespoke public probe name for every routine boolean policy question.
+
+## Probe versus policy boundary
+
+As a default design rule, probes should expose stable observable facts and guard expressions should compose those facts into policy.
+
+This means a proposed new probe is a poor fit when its only purpose is to avoid writing a short expression such as:
+
+- a boolean conjunction or disjunction;
+- a direct equality or inequality comparison;
+- a small membership check over documented probe outputs.
+
+A proposed new probe is a better fit when guard composition would otherwise:
+
+- repeat awkward normalization across many workflows;
+- require expression-language growth beyond compact reviewable policy;
+- expose unstable operational detail that belongs inside the connector contract.
+
+Probe naming should therefore prefer observable facts over local verdicts.
+
+For example, names such as `git.branch`, `git.worktree`, or `gh.issue` fit this boundary better than names that directly encode policy intent such as `git.branch_not_main` or `gh.issue_ready_for_review`.
 
 ## Readability standard
 
@@ -573,6 +689,11 @@ If these become the dominant shape, the project drifts toward existing task runn
 
 Workflow files hold orchestration intent.
 Algorithmic transformation lives in connector operation implementation code.
+
+The runtime is not the semantic owner of built-in connector families.
+Built-in connectors should be treated as a public library layer that the runtime resolves and executes, not as private helper code whose public meaning may drift with runtime refactors.
+Built-in connectors do not live in the runtime core, even when implementation packaging temporarily places adapter code near runtime-owned modules.
+The runtime core should depend on connector-provider wiring abstractions rather than on a specific connector package location.
 
 ## Execution rule
 
@@ -684,6 +805,7 @@ It is modeled as policy over public probe results rather than as a general embed
 - Within one guard expression, repeated identical probe references should be evaluated once and reused.
 - A probe reference inside an expression must resolve against the same public probe contract surface used by explicit operation-form guards.
 - A public probe surface used by expressions should remain as orthogonal as practical rather than encoding many bespoke policy predicates in probe names.
+- A new probe should not be introduced merely to avoid a short comparison, boolean composition, or small membership check over existing probe outputs.
 
 ## Output access semantics
 
@@ -768,7 +890,8 @@ The minimal v0 package layout is:
 
 - `ordo.model` — public domain models for workflow, profile, connector, diagnostic, and runtime result.
 - `ordo.runtime` — runtime orchestration entry points and mode-specific logic.
-- `ordo.connectors` — public connector family implementations and registries.
+- `connectors` — built-in public connector library packages, organized by family.
+- `ordo.connectors` — runtime-facing adapter and registry surface over the built-in connector library.
 - `ordo.types` — shared JSON-shaped value aliases used by public model surfaces.
 
 ## Model split inside `ordo.model`
@@ -793,6 +916,34 @@ Package layout must preserve the contract boundary:
 - The layout must stay small enough to explain directly from the public contract.
 - It must support YAML authoring and JSON-shaped runtime surfaces.
 - It must support `check`, `plan`, `execute`, and `explain` without treating connector authoring as the routine customization path.
+
+## Connector library shape
+
+The built-in connector library should live under the repository-level `connectors/` tree.
+
+`ordo.connectors` may provide adapter and registry entry points for the runtime, but it should not become the primary home of family implementations.
+The runtime core should reach built-in connectors through provider-style wiring, not through a hardcoded assumption about where family code lives.
+
+A separate composition layer should decide whether the standard built-in connector provider is installed by default for a particular application surface.
+
+Even when connector code is imported through `ordo.connectors`, the conceptual boundary remains:
+
+- `ordo.runtime` is the engine and orchestration layer;
+- `connectors` is the built-in public connector library consumed by the runtime;
+- `ordo.connectors` is the runtime-facing adapter surface over that library.
+
+The import path may be package-local for implementation convenience, but that should not blur ownership of connector semantics.
+Built-in connectors should not be modeled as part of the runtime core merely because they are shipped with the same distribution.
+
+Connector packages should follow the family-first layout:
+
+- `connectors/<family>/bootstrap.py` for family-level bootstrap;
+- `connectors/<family>/probes/<operation>.py` for a single public probe module;
+- `connectors/<family>/actions/<operation>.py` for a single public action module.
+
+This layout should be preferred over monolithic cross-family modules and over hand-maintained central registries that duplicate operation declarations outside the family package tree.
+
+Assembly should prefer family-local autodiscovery or an equivalent family-local mechanism rather than a cross-family hand-edited registry list.
 
 <!-- source: model/connector/contract.md -->
 
@@ -823,6 +974,8 @@ Operation contract must define:
 - effects
 - outputs
 - failure modes
+
+Operation contract may also expose lifecycle metadata when needed, for example whether an operation is deprecated and which canonical operations should replace it.
 
 ## Explainability and failure normalization
 

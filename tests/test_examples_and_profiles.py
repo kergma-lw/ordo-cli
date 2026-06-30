@@ -4,6 +4,8 @@ from pathlib import Path
 from ordo.model.runtime import OperationResult
 from ordo.runtime import explain_workflow, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
 
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
 
 class ExampleSurfaceTest(unittest.TestCase):
     def test_example_workflows_validate(self) -> None:
@@ -31,6 +33,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             guard_probe=lambda resolved, _workflow: OperationResult(status="ok", observations={"value": "main"})
             if resolved.reference == "git.branch"
             else OperationResult(status="guard_failed", summary="main branch"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
         )
 
         self.assertEqual(result.outputs["reason_category"], "guard")
@@ -40,7 +43,7 @@ class ExampleSurfaceTest(unittest.TestCase):
         workflow = load_workflow_file(Path("examples/inspect-issue.yaml"))
         profile = load_profile_file(Path("profiles/read-only-review.yaml"))
 
-        result = plan_workflow(workflow, profile=profile)
+        result = plan_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertIn("guard_items", result.outputs)
         self.assertIn("step_items", result.outputs)

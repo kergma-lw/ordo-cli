@@ -37,6 +37,8 @@ class OperationContract:
     effects: tuple[str, ...] = ()
     outputs: JSONObject = field(default_factory=dict)
     failure_modes: tuple[str, ...] = ()
+    deprecated: bool = False
+    replaced_by: tuple[str, ...] = ()
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped operation contract."""
@@ -49,6 +51,8 @@ class OperationContract:
             "effects": list(self.effects),
             "outputs": dict(self.outputs),
             "failure_modes": list(self.failure_modes),
+            "deprecated": self.deprecated,
+            "replaced_by": list(self.replaced_by),
         }
 
 
@@ -68,3 +72,36 @@ class Connector:
             "bootstrap": self.bootstrap.to_contract(),
             "operations": [operation.to_contract() for operation in self.operations],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorRegistry:
+    """Discoverable public registry of stable connector families and operations."""
+
+    connectors: tuple[Connector, ...]
+
+    def list_connectors(self) -> tuple[Connector, ...]:
+        return self.connectors
+
+    def get_connector(self, namespace: str) -> Connector | None:
+        for connector in self.connectors:
+            if connector.namespace == namespace:
+                return connector
+        return None
+
+    def get_operation(self, reference: str) -> OperationContract | None:
+        namespace, separator, operation_name = reference.partition(".")
+        if not separator:
+            return None
+
+        connector = self.get_connector(namespace)
+        if connector is None:
+            return None
+
+        for operation in connector.operations:
+            if operation.name == operation_name:
+                return operation
+        return None
+
+    def to_contract(self) -> JSONObject:
+        return {"connectors": [connector.to_contract() for connector in self.connectors]}

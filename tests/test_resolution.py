@@ -5,8 +5,16 @@ from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import resolve_workflow_references
 
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
 
 class ResolutionTest(unittest.TestCase):
+    def test_runtime_resolution_requires_explicit_provider_or_configured_default(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(), steps=())
+
+        with self.assertRaises(RuntimeError):
+            resolve_workflow_references(workflow)
+
     def test_known_public_operations_resolve(self) -> None:
         workflow = Workflow(
             version=0,
@@ -15,7 +23,7 @@ class ResolutionTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
         )
 
-        result = resolve_workflow_references(workflow)
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.resolved_guards[0].source, "public")
@@ -29,7 +37,7 @@ class ResolutionTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.missing")),),
         )
 
-        result = resolve_workflow_references(workflow)
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.unknown_operation")
@@ -44,7 +52,7 @@ class ResolutionTest(unittest.TestCase):
             ),
         )
 
-        result = resolve_workflow_references(workflow, local_connectors=local_connectors)
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER, local_connectors=local_connectors)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.namespace_shadowing")
@@ -63,7 +71,7 @@ class ResolutionTest(unittest.TestCase):
             ),
         )
 
-        result = resolve_workflow_references(workflow, local_connectors=local_connectors)
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER, local_connectors=local_connectors)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.resolved_steps[0].source, "local")
@@ -77,7 +85,7 @@ class ResolutionTest(unittest.TestCase):
             steps=(),
         )
 
-        result = resolve_workflow_references(workflow)
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.resolved_guards[0].reference, 'gh.issue(issue=inputs.issue).status not in ["Done"]')
@@ -92,7 +100,7 @@ class ResolutionTest(unittest.TestCase):
             steps=(),
         )
 
-        result = resolve_workflow_references(workflow)
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr.action_forbidden")
@@ -105,7 +113,7 @@ class ResolutionTest(unittest.TestCase):
             steps=(),
         )
 
-        result = resolve_workflow_references(workflow)
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr.field_unknown")

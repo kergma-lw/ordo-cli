@@ -58,11 +58,60 @@ Implications:
 - family-level semantics matter;
 - the meaning of a same-named operation must not change silently.
 
+## Runtime vs connector-library boundary
+
+Connectors should be treated as a built-in public integration library rather than as private runtime internals.
+They do not conceptually live inside the runtime core.
+
+Implications:
+- runtime owns orchestration, resolution, mode behavior, and explanation flow;
+- connector families own integration semantics for their public namespaces;
+- runtime consumes connector contracts and results, but should not silently redefine the meaning of connector operations;
+- runtime-facing wiring should flow through an explicit connector-provider surface rather than a hardcoded package location;
+- application composition may choose to install the standard built-in connector provider or omit it;
+- package placement should preserve this conceptual boundary even when Python packaging or repository layout introduces adapters.
+
+## Connector package structure
+
+The preferred connector package structure is organized first by family, then by operation kind, then by operation file.
+
+Canonical shape:
+
+- `connectors/<family>/bootstrap.py` for family-level bootstrap and shared prerequisites;
+- `connectors/<family>/probes/<operation>.py` for one public probe per file;
+- `connectors/<family>/actions/<operation>.py` for one public action per file.
+
+Helper files such as `__init__.py` are expected when needed.
+
+Manual central registries that duplicate the package structure should be avoided.
+
+If a public operation exists as a file in the family package tree, that file should be the primary source of truth for its contract and implementation rather than requiring a second hand-maintained registry entry elsewhere.
+
+Family-local autodiscovery or equivalent family-local assembly should be preferred so that each connector family assembles its public probe and action surface from its own package tree.
+
 ## Fixed v0 connector domains
 
 - `git.*`
 - `gh.*`
 - `shell.*`
+
+## Canonical git probe surface direction
+
+The preferred long-term `git` probe surface is a compact set of repo facts rather than many policy-encoded predicates.
+
+The main target probes are:
+
+- `git.repo`
+- `git.branch`
+- `git.worktree`
+- `git.worktrees`
+- `git.stash`
+- `git.state`
+- `git.ref(ref=...)`
+- `git.upstream`
+- `git.range(base=..., head=...)`
+
+Specialized names such as `git.clean_worktree`, `git.branch_not_main`, and `git.single_worktree` may still exist during migration, but they are a compatibility layer rather than the desired steady-state public surface.
 
 ## Possible future connector namespaces
 

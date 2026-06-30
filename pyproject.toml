@@ -12,7 +12,9 @@ dependencies = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {ordo = "src/ordo", connectors = "connectors"}
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["ordo*", "connectors*"]
+exclude = ["tests*"]

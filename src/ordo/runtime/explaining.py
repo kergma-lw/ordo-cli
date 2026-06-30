@@ -6,9 +6,9 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
 
-from .checking import GuardProbe
-from .executing import StepExecutor, execute_workflow
+from .executing import execute_workflow
 from .planning import plan_workflow
+from .providers import ConnectorProvider, GuardProbe, StepExecutor
 
 
 def explain_workflow(
@@ -16,10 +16,11 @@ def explain_workflow(
     *,
     profile: Profile | None = None,
     guard_probe: GuardProbe | None = None,
+    connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
     """Explain why execution is blocked or allowed without executing business steps."""
 
-    plan_result = plan_workflow(workflow, profile=profile, guard_probe=guard_probe)
+    plan_result = plan_workflow(workflow, profile=profile, guard_probe=guard_probe, connector_provider=connector_provider)
     return explain_runtime_result(plan_result)
 
 
@@ -56,6 +57,7 @@ def explain_execution_result(
     profile: Profile | None = None,
     guard_probe: GuardProbe | None = None,
     step_executor: StepExecutor | None = None,
+    connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
     """Execute and then explain the resulting runtime decision surface."""
 
@@ -64,6 +66,7 @@ def explain_execution_result(
         profile=profile,
         guard_probe=guard_probe,
         step_executor=step_executor,
+        connector_provider=connector_provider,
     )
     return explain_runtime_result(execution_result)
 

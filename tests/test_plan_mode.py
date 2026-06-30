@@ -6,6 +6,8 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import plan_workflow
 
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
 
 class PlanModeTest(unittest.TestCase):
     def test_plan_describes_checks_and_effectful_steps(self) -> None:
@@ -16,7 +18,7 @@ class PlanModeTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.project_set_status")),),
         )
 
-        result = plan_workflow(workflow)
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.mode, Mode.PLAN)
         self.assertEqual(result.status, RuntimeStatus.OK)
@@ -46,7 +48,7 @@ class PlanModeTest(unittest.TestCase):
                 ),
             )
 
-        result = plan_workflow(workflow, guard_probe=probe)
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.plan.blockers, ("git.clean_worktree",))
@@ -61,7 +63,7 @@ class PlanModeTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.missing")),),
         )
 
-        result = plan_workflow(workflow)
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.outputs["step_items"][0]["reference"], "gh.issue.missing")
@@ -76,7 +78,7 @@ class PlanModeTest(unittest.TestCase):
         )
         profile = Profile(name="repo-defaults", inputs={"branch": "keep"})
 
-        result = plan_workflow(workflow, profile=profile)
+        result = plan_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertTrue(result.outputs["execution_allowed"])
@@ -87,7 +89,7 @@ class PlanModeTest(unittest.TestCase):
         def probe(resolved_guard, _workflow):
             return OperationResult(status="ok", observations={"value": "main"})
 
-        result = plan_workflow(workflow, guard_probe=probe)
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.outputs["guard_items"][0]["reference"], 'git.branch.value != "main"')

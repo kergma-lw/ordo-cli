@@ -33,3 +33,22 @@ The runtime needs modes that:
 - reduce risk;
 - improve reviewability;
 - provide machine-readable reasoning.
+
+## Connector dependency direction
+
+The runtime core should be agnostic to the physical location of built-in connectors.
+
+It should depend on:
+- connector registry data for resolution;
+- probe and action execution capabilities provided through explicit wiring.
+
+It should not depend on a hardcoded connector package path as part of its core semantics.
+
+## Composition layer
+
+A composition layer such as CLI bootstrap, application bootstrap, or tests may choose which connector provider to install or pass explicitly.
+
+This layer may:
+- use the standard built-in connector provider;
+- combine the built-in provider with local or project-specific connectors;
+- run with no built-in connector provider at all.

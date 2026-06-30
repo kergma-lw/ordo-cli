@@ -81,10 +81,11 @@ Real canonical implementations currently exist for:
 - `gh.issue`
 - `shell.command`
 
-Legacy compatibility probes still exist for object-form guards, including:
+Deprecated legacy compatibility probes still exist for object-form guards, including:
 
 - `git.clean_worktree`
 - `git.branch_not_main`
+- `git.single_worktree`
 
 ## 5. Run `check`
 

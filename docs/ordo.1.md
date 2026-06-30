@@ -125,7 +125,7 @@ Real implementations currently exist for:
 - `gh.issue.view`
 - `gh.issue`
 
-Legacy compatibility probes for object-form guards still exist, including `git.clean_worktree` and `git.branch_not_main`.
+Deprecated legacy compatibility probes for object-form guards still exist, including `git.clean_worktree`, `git.branch_not_main`, and `git.single_worktree`.
 
 Other public operations may still be registry-visible but return structured not-yet-implemented results if executed.
 

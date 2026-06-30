@@ -37,6 +37,26 @@ Guard expressions must not:
 
 Guard expressions also should not require a bespoke public probe name for every routine boolean policy question.
 
+## Probe versus policy boundary
+
+As a default design rule, probes should expose stable observable facts and guard expressions should compose those facts into policy.
+
+This means a proposed new probe is a poor fit when its only purpose is to avoid writing a short expression such as:
+
+- a boolean conjunction or disjunction;
+- a direct equality or inequality comparison;
+- a small membership check over documented probe outputs.
+
+A proposed new probe is a better fit when guard composition would otherwise:
+
+- repeat awkward normalization across many workflows;
+- require expression-language growth beyond compact reviewable policy;
+- expose unstable operational detail that belongs inside the connector contract.
+
+Probe naming should therefore prefer observable facts over local verdicts.
+
+For example, names such as `git.branch`, `git.worktree`, or `gh.issue` fit this boundary better than names that directly encode policy intent such as `git.branch_not_main` or `gh.issue_ready_for_review`.
+
 ## Readability standard
 
 A good guard section should usually fit in a short top-to-bottom review window.

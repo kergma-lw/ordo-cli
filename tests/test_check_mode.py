@@ -6,12 +6,14 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import check_workflow
 
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
 
 class CheckModeTest(unittest.TestCase):
     def test_check_reports_validation_failure(self) -> None:
         workflow = Workflow(version=1, workflow="open-task", guards=(), steps=())
 
-        result = check_workflow(workflow)
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.mode, Mode.CHECK)
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
@@ -25,7 +27,7 @@ class CheckModeTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.missing")),),
         )
 
-        result = check_workflow(workflow)
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.unknown_operation")
@@ -54,7 +56,7 @@ class CheckModeTest(unittest.TestCase):
                 ),
             )
 
-        result = check_workflow(workflow, guard_probe=probe)
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.failed_guard, "git.clean_worktree")
@@ -75,7 +77,7 @@ class CheckModeTest(unittest.TestCase):
             overrides=(Override(target="shell.command", reason="repo verify policy"),),
         )
 
-        result = check_workflow(workflow, profile=profile)
+        result = check_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertTrue(result.outputs["can_execute"])
@@ -90,7 +92,7 @@ class CheckModeTest(unittest.TestCase):
                 return OperationResult(status="ok", observations={"value": "feature/demo"})
             return OperationResult(status="ok")
 
-        result = check_workflow(workflow, guard_probe=probe)
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["checked_guards"], ['git.branch.value != "main"'])
@@ -104,7 +106,7 @@ class CheckModeTest(unittest.TestCase):
             seen.append(resolved_guard.reference)
             return OperationResult(status="ok", observations={"clean": True})
 
-        result = check_workflow(workflow, guard_probe=probe)
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(seen, ["git.worktree"])
@@ -115,7 +117,7 @@ class CheckModeTest(unittest.TestCase):
         def probe(resolved_guard, _workflow):
             return OperationResult(status="probe_failed", diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),))
 
-        result = check_workflow(workflow, guard_probe=probe)
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.operation_results[0].status, "probe_failed")
@@ -131,7 +133,7 @@ class CheckModeTest(unittest.TestCase):
                 return OperationResult(status="ok", observations={"clean": False})
             return OperationResult(status="ok", observations={"value": "main"})
 
-        result = check_workflow(workflow, guard_probe=probe)
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(seen, ["git.worktree"])

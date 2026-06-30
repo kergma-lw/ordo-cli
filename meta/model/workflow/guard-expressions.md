@@ -24,6 +24,7 @@ It is modeled as policy over public probe results rather than as a general embed
 - Within one guard expression, repeated identical probe references should be evaluated once and reused.
 - A probe reference inside an expression must resolve against the same public probe contract surface used by explicit operation-form guards.
 - A public probe surface used by expressions should remain as orthogonal as practical rather than encoding many bespoke policy predicates in probe names.
+- A new probe should not be introduced merely to avoid a short comparison, boolean composition, or small membership check over existing probe outputs.
 
 ## Output access semantics
 
