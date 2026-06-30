@@ -1,20 +1,18 @@
 """gh.close_issue action."""
 
-from connectors._shared import not_implemented
-from ordo.model.connector import OperationContract
-
-ORDER = 70
-
-OPERATION = OperationContract(
-    name="close_issue",
-    kind="action",
-    inputs={"issue": "string"},
-    effects=("close GitHub issue",),
-    outputs={"issue": "string", "closed": "boolean"},
-    failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "action_failed"),
-)
+from ordo.plugin_sdk import OperationContext, OperationOutcome, action, not_implemented
 
 
-def execute(resolved, workflow):
-    _ = workflow
-    return not_implemented(resolved.reference, kind="action")
+def info():
+    return action(
+        name="close_issue",
+        inputs={"issue": "string"},
+        effects=("close GitHub issue",),
+        outputs={"issue": "string", "closed": "boolean"},
+        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "action_failed"),
+        handler=run,
+    )
+
+
+def run(ctx: OperationContext) -> OperationOutcome:
+    return not_implemented(reference=ctx.reference, kind="action")

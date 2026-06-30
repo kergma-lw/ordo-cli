@@ -28,8 +28,14 @@ class ConnectorRegistryTest(unittest.TestCase):
         contract = registry.to_contract()
 
         self.assertEqual(contract["connectors"][0]["namespace"], "git")
-        self.assertEqual(contract["connectors"][1]["operations"][0]["name"], "issue.view")
-        self.assertEqual(contract["connectors"][2]["operations"][0]["kind"], "action")
+        self.assertIn(
+            "issue.view",
+            {operation["name"] for operation in contract["connectors"][1]["operations"]},
+        )
+        self.assertIn(
+            "action",
+            {operation["kind"] for operation in contract["connectors"][2]["operations"]},
+        )
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import importlib
 import unittest
 from unittest.mock import patch
 
@@ -10,6 +11,19 @@ from ordo.connectors.registry import get_public_connector_registry
 
 
 class OperationTest(unittest.TestCase):
+    def test_migrated_git_probe_modules_publish_through_info_hook(self) -> None:
+        git_branch_module = importlib.import_module("connectors.git.probes.branch")
+        git_worktree_module = importlib.import_module("connectors.git.probes.worktree")
+        branch_info = git_branch_module.info()
+        worktree_info = git_worktree_module.info()
+
+        self.assertEqual(branch_info.name, "branch")
+        self.assertEqual(branch_info.kind, "probe")
+        self.assertIs(branch_info.handler, git_branch_module.run)
+        self.assertEqual(worktree_info.name, "worktree")
+        self.assertEqual(worktree_info.kind, "probe")
+        self.assertIs(worktree_info.handler, git_worktree_module.run)
+
     def test_git_clean_worktree_returns_structured_probe_observations(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.clean_worktree")),), steps=())
         operation = get_public_connector_registry().get_operation("git.clean_worktree")
@@ -61,7 +75,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.raw["stdout"], "hi\n")
-        self.assertEqual(result.observations["returncode"], 0)
+        self.assertEqual(result.observations["exit_code"], 0)
 
     def test_gh_issue_view_returns_structured_probe_data(self) -> None:
         workflow = Workflow(

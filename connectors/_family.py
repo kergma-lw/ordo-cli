@@ -14,6 +14,7 @@ from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 if TYPE_CHECKING:
+    from ordo.plugin_sdk import PublishedOperation
     from ordo.runtime.resolution import ResolvedExpressionProbe, ResolvedOperation
 
 ProbeHandler = Callable[["ResolvedOperation | ResolvedExpressionProbe", Workflow], OperationResult]
@@ -30,25 +31,25 @@ class AssembledFamily:
 def assemble_family(*, package_name: str, namespace: str, bootstrap: ConnectorBootstrap) -> AssembledFamily:
     probe_handlers: dict[str, ProbeHandler] = {}
     action_handlers: dict[str, ActionHandler] = {}
-    operations: list[tuple[int, str, OperationContract]] = []
+    operations: list[OperationContract] = []
 
     for operation in _load_operations(package_name=f"{package_name}.probes", kind="probe"):
-        operations.append((operation.order, operation.contract.name, operation.contract))
+        operations.append(operation.contract)
         if operation.handler is not None:
             probe_handlers[operation.contract.name] = operation.handler
 
     for operation in _load_operations(package_name=f"{package_name}.actions", kind="action"):
-        operations.append((operation.order, operation.contract.name, operation.contract))
+        operations.append(operation.contract)
         if operation.handler is not None:
             action_handlers[operation.contract.name] = operation.handler
 
-    operations.sort(key=lambda item: (item[0], item[1]))
+    operations.sort(key=lambda contract: contract.name)
 
     return AssembledFamily(
         connector=Connector(
             namespace=namespace,
             bootstrap=bootstrap,
-            operations=tuple(contract for _order, _name, contract in operations),
+            operations=tuple(operations),
         ),
         probe_handlers=probe_handlers,
         action_handlers=action_handlers,
@@ -79,7 +80,6 @@ def discover_family_modules() -> tuple[ModuleType, ...]:
 @dataclass(frozen=True, slots=True)
 class _LoadedOperation:
     contract: OperationContract
-    order: int
     handler: ProbeHandler | ActionHandler | None
 
 
@@ -91,16 +91,109 @@ def _load_operations(*, package_name: str, kind: str) -> Iterator[_LoadedOperati
 
     for module_name in walk_packages(package.__path__, f"{package.__name__}."):
         module = import_module(module_name.name)
-        contract = getattr(module, "OPERATION", None)
-        if contract is None:
+        published = _load_published_operation(module)
+        if published is None:
             continue
-        if contract.kind != kind:
-            message = f"Operation module '{module.__name__}' declared kind '{contract.kind}', expected '{kind}'"
+        if published.kind != kind:
+            message = f"Operation module '{module.__name__}' declared kind '{published.kind}', expected '{kind}'"
             raise ValueError(message)
-
-        handler_name = "evaluate" if kind == "probe" else "execute"
         yield _LoadedOperation(
-            contract=contract,
-            order=int(getattr(module, "ORDER", 1000)),
-            handler=getattr(module, handler_name, None),
+            contract=_contract_from_published(published),
+            handler=_adapt_published_handler(published=published, package_name=package_name),
         )
+
+
+def _load_published_operation(module: ModuleType) -> "PublishedOperation | None":
+    from ordo.plugin_sdk import PublishedOperation
+
+    info = getattr(module, "info", None)
+    if info is None:
+        return None
+    published = info()
+    if not isinstance(published, PublishedOperation):
+        message = f"Operation module '{module.__name__}' returned unsupported publication type '{type(published).__name__}'"
+        raise TypeError(message)
+    return published
+
+
+def _contract_from_published(published: "PublishedOperation") -> OperationContract:
+    return OperationContract(
+        name=published.name,
+        kind=published.kind,
+        inputs=dict(published.inputs),
+        prerequisites=published.prerequisites,
+        effects=published.effects,
+        outputs=dict(published.outputs),
+        failure_modes=published.failure_modes,
+        deprecated=published.deprecated,
+        replaced_by=published.replaced_by,
+    )
+
+
+def _adapt_published_handler(*, published: "PublishedOperation", package_name: str) -> ProbeHandler | ActionHandler:
+    from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, PublishedBootstrap, adapt_outcome
+
+    family_package = package_name.rsplit(".", 1)[0]
+    namespace = family_package.rsplit(".", 1)[-1]
+    bootstrap_module = import_module(f"{family_package}.bootstrap")
+    bootstrap_contract = getattr(bootstrap_module, "BOOTSTRAP")
+    bootstrap = PublishedBootstrap(
+        prerequisites=tuple(bootstrap_contract.prerequisites),
+        context_fields=tuple(bootstrap_contract.context_fields),
+        values={},
+    )
+
+    def handler(resolved: "ResolvedOperation | ResolvedExpressionProbe", workflow: Workflow) -> OperationResult:
+        def caller(name: str, inputs: dict[str, object] | None):
+            from ordo.plugin_sdk import _outcome_from_runtime_result
+            from ordo.runtime.resolution import ResolvedOperation
+
+            full_name = name if "." in name else f"{namespace}.{name}"
+            if inputs not in (None, {}):
+                raise MappedOutcomeError(
+                    OperationOutcome(
+                        status="execution_error",
+                        summary=f"Explicit operation dependency '{full_name}' does not yet support local input overrides",
+                    )
+                )
+
+            family_module = import_module(family_package)
+            connector = family_module.get_connector()
+            short_name = full_name.rsplit(".", 1)[-1]
+            operation = next((candidate for candidate in connector.operations if candidate.name == short_name), None)
+            if operation is None:
+                raise MappedOutcomeError(
+                    OperationOutcome(
+                        status="execution_error",
+                        summary=f"Explicit operation dependency '{full_name}' could not be resolved",
+                    )
+                )
+
+            dependency_handler = (
+                family_module.get_probe_handler(short_name)
+                if operation.kind == "probe"
+                else family_module.get_action_handler(short_name)
+            )
+            if dependency_handler is None:
+                raise MappedOutcomeError(
+                    OperationOutcome(
+                        status="execution_error",
+                        summary=f"Explicit operation dependency '{full_name}' does not have a concrete handler",
+                    )
+                )
+
+            dependency_resolved = ResolvedOperation(
+                reference=full_name,
+                connector_namespace=namespace,
+                operation=operation,
+                source=getattr(resolved, "source", "public"),
+            )
+            return _outcome_from_runtime_result(dependency_handler(dependency_resolved, workflow))
+
+        ctx = OperationContext(resolved=resolved, workflow=workflow, bootstrap=bootstrap, caller=caller)
+        try:
+            return adapt_outcome(published.handler(ctx))
+        except MappedOutcomeError as exc:
+            return adapt_outcome(exc.outcome)
+
+    return handler

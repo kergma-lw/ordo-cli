@@ -1,20 +1,18 @@
 """git.branch_from_issue action."""
 
-from connectors._shared import not_implemented
-from ordo.model.connector import OperationContract
-
-ORDER = 50
-
-OPERATION = OperationContract(
-    name="branch_from_issue",
-    kind="action",
-    inputs={"issue": "string", "branch": "string"},
-    effects=("create or switch task branch",),
-    outputs={"branch": "string", "created": "boolean"},
-    failure_modes=("git_unavailable", "not_repository", "invalid_issue", "action_failed"),
-)
+from ordo.plugin_sdk import OperationContext, OperationOutcome, action, not_implemented
 
 
-def execute(resolved, workflow):
-    _ = workflow
-    return not_implemented(resolved.reference, kind="action")
+def info():
+    return action(
+        name="branch_from_issue",
+        inputs={"issue": "string", "branch": "string"},
+        effects=("create or switch task branch",),
+        outputs={"branch": "string", "created": "boolean"},
+        failure_modes=("git_unavailable", "not_repository", "invalid_issue", "action_failed"),
+        handler=run,
+    )
+
+
+def run(ctx: OperationContext) -> OperationOutcome:
+    return not_implemented(reference=ctx.reference, kind="action")

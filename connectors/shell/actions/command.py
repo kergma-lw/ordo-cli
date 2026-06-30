@@ -1,23 +1,30 @@
 """shell.command action."""
 
-from connectors._shared import require_input, run_command
-from ordo.model.connector import OperationContract
-from ordo.model.runtime import OperationResult
-
-ORDER = 10
-
-OPERATION = OperationContract(
-    name="command",
-    kind="action",
-    inputs={"command": "string"},
-    effects=("execute shell command",),
-    outputs={"exit_code": "integer", "stdout": "string", "stderr": "string"},
-    failure_modes=("shell_unavailable", "command_failed", "action_failed"),
-)
+from ordo.plugin_sdk import OperationContext, OperationOutcome, action, ok
 
 
-def execute(resolved, workflow) -> OperationResult:
-    command = require_input(workflow, resolved, "command")
-    if isinstance(command, OperationResult):
-        return command
-    return run_command(["bash", "-lc", command], reference=resolved.reference)
+def info():
+    return action(
+        name="command",
+        inputs={"command": "string"},
+        effects=("execute shell command",),
+        outputs={"exit_code": "integer", "stdout": "string", "stderr": "string"},
+        failure_modes=("shell_unavailable", "command_failed", "action_failed"),
+        handler=run,
+    )
+
+
+def run(ctx: OperationContext) -> OperationOutcome:
+    command = str(ctx.input("command"))
+    result = ctx.command(
+        ["bash", "-lc", command],
+        failures={
+            "os_error": "shell_unavailable",
+            "nonzero": "command_failed",
+        },
+    )
+    return ok(
+        summary="Command completed successfully",
+        outputs={"exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr},
+        raw=result.raw,
+    )

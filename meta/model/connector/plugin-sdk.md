@@ -131,3 +131,5 @@ It should not encourage simple technical prerequisites to masquerade as arbitrar
 The first migration step should be able to prove the SDK shape on one or two very small operations before broader connector migration begins.
 
 If the resulting operation code is not visibly simpler and more local than the current runtime-shaped form, the SDK shape should be reconsidered before wider adoption.
+
+The concrete first-spike API proposal should live in a separate model document so code work can implement the SDK without reconstructing it from principles alone.

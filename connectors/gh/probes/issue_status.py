@@ -1,19 +1,17 @@
 """gh.issue_status probe."""
 
-from connectors._shared import not_implemented
-from ordo.model.connector import OperationContract
-
-ORDER = 20
-
-OPERATION = OperationContract(
-    name="issue_status",
-    kind="probe",
-    inputs={"issue": "string", "equals": "string"},
-    outputs={"status": "string", "matches": "boolean"},
-    failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "probe_failed"),
-)
+from ordo.plugin_sdk import OperationContext, OperationOutcome, not_implemented, probe
 
 
-def evaluate(resolved, workflow):
-    _ = workflow
-    return not_implemented(resolved.reference, kind="probe")
+def info():
+    return probe(
+        name="issue_status",
+        inputs={"issue": "string", "equals": "string"},
+        outputs={"status": "string", "matches": "boolean"},
+        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "probe_failed"),
+        handler=run,
+    )
+
+
+def run(ctx: OperationContext) -> OperationOutcome:
+    return not_implemented(reference=ctx.reference, kind="probe")
