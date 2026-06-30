@@ -7,16 +7,17 @@ def info():
     return probe(
         name="branch",
         outputs={"value": "string"},
-        failure_modes=("git_unavailable", "not_repository", "probe_failed"),
+        failure_modes=("probe_failed",),
         handler=run,
     )
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
+    repository_root = ctx.bootstrap().context.get("repository_root")
     command = ctx.command(
         ["git", "branch", "--show-current"],
         failures={
-            "os_error": "git_unavailable",
+            "os_error": "probe_failed",
             "nonzero": "probe_failed",
         },
     )
@@ -24,6 +25,6 @@ def run(ctx: OperationContext) -> OperationOutcome:
     branch = command.stdout.strip()
     return ok(
         summary="Current branch inspected successfully",
-        outputs={"value": branch},
+        outputs={"value": branch, "repository_root": repository_root},
         raw=command.raw,
     )

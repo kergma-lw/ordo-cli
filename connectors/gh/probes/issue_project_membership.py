@@ -8,7 +8,7 @@ def info():
         name="issue_project_membership",
         inputs={"issue": "string"},
         outputs={"member": "boolean", "project_items": ["object"]},
-        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "probe_failed"),
+        failure_modes=("issue_not_found", "probe_failed"),
         handler=run,
     )
 

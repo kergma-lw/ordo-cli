@@ -133,3 +133,5 @@ The first migration step should be able to prove the SDK shape on one or two ver
 If the resulting operation code is not visibly simpler and more local than the current runtime-shaped form, the SDK shape should be reconsidered before wider adoption.
 
 The concrete first-spike API proposal should live in a separate model document so code work can implement the SDK without reconstructing it from principles alone.
+
+Executable family bootstrap should likewise have its own concrete model document so shared prerequisite evaluation can be implemented explicitly rather than inferred from metadata-only bootstrap declarations.

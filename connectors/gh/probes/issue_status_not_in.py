@@ -8,7 +8,7 @@ def info():
         name="issue_status_not_in",
         inputs={"issue": "string", "statuses": ["string"]},
         outputs={"status": "string", "allowed": "boolean"},
-        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "probe_failed"),
+        failure_modes=("issue_not_found", "probe_failed"),
         handler=run,
     )
 

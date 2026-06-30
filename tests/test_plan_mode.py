@@ -96,6 +96,21 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_items"][0]["kind"], "expression")
         self.assertEqual(result.outputs["guard_items"][0]["failed_subcondition"], 'git.branch.value != "main"')
 
+    def test_plan_preserves_bootstrap_details_in_outputs(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.clean_worktree")),), steps=())
+
+        def probe(resolved_guard, _workflow):
+            _ = resolved_guard
+            return OperationResult(
+                status="not_repository",
+                raw={"bootstrap": {"namespace": "git", "status": "not_repository", "context": {}}},
+            )
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["bootstrap_details"][0]["namespace"], "git")
+        self.assertEqual(result.outputs["bootstrap_details"][0]["status"], "not_repository")
+
 
 if __name__ == "__main__":
     unittest.main()

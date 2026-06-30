@@ -9,7 +9,7 @@ def info():
         inputs={"command": "string"},
         effects=("execute shell command",),
         outputs={"exit_code": "integer", "stdout": "string", "stderr": "string"},
-        failure_modes=("shell_unavailable", "command_failed", "action_failed"),
+        failure_modes=("command_failed", "action_failed"),
         handler=run,
     )
 
@@ -19,7 +19,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
     result = ctx.command(
         ["bash", "-lc", command],
         failures={
-            "os_error": "shell_unavailable",
+            "os_error": "action_failed",
             "nonzero": "command_failed",
         },
     )

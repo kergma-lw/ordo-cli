@@ -9,7 +9,7 @@ def info():
         inputs={"issue": "string", "branch": "string"},
         effects=("create or switch task branch",),
         outputs={"branch": "string", "created": "boolean"},
-        failure_modes=("git_unavailable", "not_repository", "invalid_issue", "action_failed"),
+        failure_modes=("invalid_issue", "action_failed"),
         handler=run,
     )
 

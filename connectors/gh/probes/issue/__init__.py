@@ -12,7 +12,7 @@ def info():
         name="issue",
         inputs={"issue": "string"},
         outputs={"status": "string", "project": {"member": "boolean", "items": ["object"]}, "issue": "object"},
-        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "probe_failed"),
+        failure_modes=("issue_not_found", "probe_failed"),
         handler=run,
     )
 
@@ -22,7 +22,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
     command = ctx.command(
         ["gh", "issue", "view", str(issue), "--json", "number,title,state,body,url"],
         failures={
-            "os_error": "gh_unavailable",
+            "os_error": "probe_failed",
             "nonzero": "probe_failed",
         },
     )

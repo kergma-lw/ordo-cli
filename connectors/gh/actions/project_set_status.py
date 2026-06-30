@@ -9,7 +9,7 @@ def info():
         inputs={"issue": "string", "status": "string"},
         effects=("update project status field",),
         outputs={"issue": "string", "status": "string"},
-        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "action_failed"),
+        failure_modes=("issue_not_found", "action_failed"),
         handler=run,
     )
 

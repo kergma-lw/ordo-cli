@@ -7,7 +7,7 @@ def info():
     return probe(
         name="single_worktree",
         outputs={"single_worktree": "boolean", "worktree_count": "integer"},
-        failure_modes=("git_unavailable", "not_repository", "probe_failed"),
+        failure_modes=("probe_failed",),
         handler=run,
     )
 

@@ -8,7 +8,7 @@ def info():
         name="sync_main_ff_only",
         effects=("fast-forward main branch",),
         outputs={"synced": "boolean", "base_branch": "string"},
-        failure_modes=("git_unavailable", "not_repository", "non_fast_forward", "action_failed"),
+        failure_modes=("non_fast_forward", "action_failed"),
         handler=run,
     )
 

@@ -33,9 +33,10 @@ class PluginSdkSpikeTest(unittest.TestCase):
                 workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
 
                 with patch("subprocess.run") as run:
-                    run.return_value.returncode = 0
-                    run.return_value.stdout = "feature/test\n"
-                    run.return_value.stderr = ""
+                    run.side_effect = [
+                        self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                        self._completed(returncode=0, stdout="feature/test\n", stderr=""),
+                    ]
 
                     result = assembled.probe_handlers["branch"](resolved, workflow)
 
@@ -44,6 +45,7 @@ class PluginSdkSpikeTest(unittest.TestCase):
                 self.assertEqual(result.status, "ok")
                 self.assertEqual(result.observations["value"], "feature/test")
                 self.assertEqual(result.raw["returncode"], 0)
+                self.assertEqual(result.observations["repository_root"], "/tmp/demo-repo")
             finally:
                 sys.path.remove(tmp_dir)
                 self._clear_demo_modules()
@@ -67,15 +69,48 @@ class PluginSdkSpikeTest(unittest.TestCase):
                 workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
 
                 with patch("subprocess.run") as run:
-                    run.return_value.returncode = 128
-                    run.return_value.stdout = ""
-                    run.return_value.stderr = "fatal: not a git repository"
+                    run.side_effect = [
+                        self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                        self._completed(returncode=128, stdout="", stderr="fatal: not a git repository"),
+                    ]
 
                     result = assembled.probe_handlers["branch"](resolved, workflow)
 
                 self.assertEqual(result.status, "probe_failed")
                 self.assertEqual(result.diagnostics[0].code, "operation.command_failed")
                 self.assertEqual(result.raw["returncode"], 128)
+            finally:
+                sys.path.remove(tmp_dir)
+                self._clear_demo_modules()
+
+    def test_bootstrap_failure_short_circuits_operation_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            self._write_spike_family(root)
+
+            sys.path.insert(0, tmp_dir)
+            try:
+                bootstrap_module = importlib.import_module("demo_sdk_family.bootstrap")
+                assembled = assemble_family(
+                    package_name="demo_sdk_family",
+                    namespace="demo",
+                    bootstrap=bootstrap_module.BOOTSTRAP,
+                )
+
+                operation = assembled.connector.operations[0]
+                resolved = ResolvedOperation("demo.branch", "demo", operation, "public")
+                workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
+
+                with patch("subprocess.run") as run:
+                    run.side_effect = [
+                        self._completed(returncode=128, stdout="", stderr="fatal: not a git repository"),
+                    ]
+
+                    result = assembled.probe_handlers["branch"](resolved, workflow)
+
+                self.assertEqual(result.status, "not_repository")
+                self.assertEqual(result.diagnostics[0].code, "operation.command_failed")
+                self.assertEqual(run.call_count, 1)
             finally:
                 sys.path.remove(tmp_dir)
                 self._clear_demo_modules()
@@ -92,11 +127,49 @@ class PluginSdkSpikeTest(unittest.TestCase):
             textwrap.dedent(
                 """
                 from ordo.model.connector import ConnectorBootstrap
+                from ordo.plugin_sdk import Diagnostic, bootstrap, bootstrap_fail, bootstrap_ok
 
                 BOOTSTRAP = ConnectorBootstrap(
                     prerequisites=("git available",),
                     context_fields=("repository_root",),
                 )
+
+
+                def info():
+                    return bootstrap(
+                        prerequisites=BOOTSTRAP.prerequisites,
+                        context_fields=BOOTSTRAP.context_fields,
+                        handler=run,
+                    )
+
+
+                def run(ctx):
+                    command = ctx.command(
+                        ["git", "rev-parse", "--show-toplevel"],
+                        failures={
+                            "os_error": "git_unavailable",
+                            "nonzero": "not_repository",
+                        },
+                    )
+                    repository_root = command.stdout.strip()
+                    if not repository_root:
+                        return bootstrap_fail(
+                            code="not_repository",
+                            summary="Repository root could not be determined",
+                            diagnostics=(
+                                Diagnostic(
+                                    code="bootstrap.repository_missing",
+                                    level="error",
+                                    message="Repository root could not be determined",
+                                ),
+                            ),
+                            raw=command.raw,
+                        )
+                    return bootstrap_ok(
+                        summary="Git bootstrap completed successfully",
+                        context={"repository_root": repository_root},
+                        raw=command.raw,
+                    )
                 """
             ),
             encoding="utf-8",
@@ -126,13 +199,26 @@ class PluginSdkSpikeTest(unittest.TestCase):
                     )
                     return ok(
                         summary="Current branch inspected successfully",
-                        outputs={"value": command.stdout.strip()},
+                        outputs={
+                            "value": command.stdout.strip(),
+                            "repository_root": ctx.bootstrap().context.get("repository_root"),
+                        },
                         raw=command.raw,
                     )
                 """
             ),
             encoding="utf-8",
         )
+
+    def _completed(self, *, returncode: int, stdout: str, stderr: str):
+        class Completed:
+            pass
+
+        completed = Completed()
+        completed.returncode = returncode
+        completed.stdout = stdout
+        completed.stderr = stderr
+        return completed
 
     def _clear_demo_modules(self) -> None:
         for name in tuple(sys.modules):

@@ -123,6 +123,21 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.operation_results[0].status, "probe_failed")
         self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "probe_failed")
 
+    def test_check_surfaces_bootstrap_details_from_operation_results(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.clean_worktree")),), steps=())
+
+        def probe(resolved_guard, _workflow):
+            _ = resolved_guard
+            return OperationResult(
+                status="not_repository",
+                raw={"bootstrap": {"namespace": "git", "status": "not_repository", "context": {}}},
+            )
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["bootstrap_details"][0]["namespace"], "git")
+        self.assertEqual(result.outputs["bootstrap_details"][0]["status"], "not_repository")
+
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())
         seen: list[str] = []

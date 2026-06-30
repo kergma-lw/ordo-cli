@@ -7,7 +7,7 @@ def info():
     return probe(
         name="clean_worktree",
         outputs={"clean": "boolean", "dirty_paths": ["string"]},
-        failure_modes=("git_unavailable", "not_repository", "probe_failed"),
+        failure_modes=("probe_failed",),
         handler=run,
     )
 

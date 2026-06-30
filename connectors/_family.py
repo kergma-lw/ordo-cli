@@ -14,11 +14,12 @@ from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 if TYPE_CHECKING:
-    from ordo.plugin_sdk import PublishedOperation
+    from ordo.plugin_sdk import PublishedBootstrap, PublishedOperation
     from ordo.runtime.resolution import ResolvedExpressionProbe, ResolvedOperation
 
 ProbeHandler = Callable[["ResolvedOperation | ResolvedExpressionProbe", Workflow], OperationResult]
 ActionHandler = Callable[["ResolvedOperation", Workflow], OperationResult]
+BootstrapHandler = Callable[[], OperationResult]
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,12 +27,14 @@ class AssembledFamily:
     connector: Connector
     probe_handlers: dict[str, ProbeHandler]
     action_handlers: dict[str, ActionHandler]
+    bootstrap_handler: BootstrapHandler | None
 
 
 def assemble_family(*, package_name: str, namespace: str, bootstrap: ConnectorBootstrap) -> AssembledFamily:
     probe_handlers: dict[str, ProbeHandler] = {}
     action_handlers: dict[str, ActionHandler] = {}
     operations: list[OperationContract] = []
+    bootstrap_handler = _load_bootstrap_handler(package_name)
 
     for operation in _load_operations(package_name=f"{package_name}.probes", kind="probe"):
         operations.append(operation.contract)
@@ -53,6 +56,7 @@ def assemble_family(*, package_name: str, namespace: str, bootstrap: ConnectorBo
         ),
         probe_handlers=probe_handlers,
         action_handlers=action_handlers,
+        bootstrap_handler=bootstrap_handler,
     )
 
 
@@ -116,6 +120,18 @@ def _load_published_operation(module: ModuleType) -> "PublishedOperation | None"
     return published
 
 
+def _load_published_bootstrap(module: ModuleType) -> "PublishedBootstrap | None":
+    from ordo.plugin_sdk import PublishedBootstrap
+
+    info = getattr(module, "info", None)
+    if info is None:
+        return None
+    published = info()
+    if not isinstance(published, PublishedBootstrap):
+        return None
+    return published
+
+
 def _contract_from_published(published: "PublishedOperation") -> OperationContract:
     return OperationContract(
         name=published.name,
@@ -130,18 +146,52 @@ def _contract_from_published(published: "PublishedOperation") -> OperationContra
     )
 
 
+def _load_bootstrap_handler(package_name: str) -> BootstrapHandler | None:
+    from ordo.plugin_sdk import BootstrapContext, MappedBootstrapError, PublishedBootstrap, adapt_bootstrap, bootstrap_ok
+
+    bootstrap_module = import_module(f"{package_name}.bootstrap")
+    published = _load_published_bootstrap(bootstrap_module)
+    if published is None or published.handler is None:
+        return None
+
+    def evaluate() -> OperationResult:
+        try:
+            return adapt_bootstrap(published.handler(BootstrapContext()))
+        except MappedBootstrapError as exc:
+            return adapt_bootstrap(exc.outcome)
+
+    return evaluate
+
+
+def _evaluate_bootstrap(*, package_name: str) -> OperationResult:
+    from ordo.plugin_sdk import adapt_bootstrap, bootstrap_ok
+
+    bootstrap_module = import_module(f"{package_name}.bootstrap")
+    bootstrap_contract = getattr(bootstrap_module, "BOOTSTRAP")
+    published = _load_published_bootstrap(bootstrap_module)
+    if published is None or published.handler is None:
+        return adapt_bootstrap(
+            bootstrap_ok(
+                summary="Bootstrap metadata available",
+                context={field: None for field in bootstrap_contract.context_fields},
+            )
+        )
+    handler = _load_bootstrap_handler(package_name)
+    if handler is None:
+        return adapt_bootstrap(
+            bootstrap_ok(
+                summary="Bootstrap metadata available",
+                context={field: None for field in bootstrap_contract.context_fields},
+            )
+        )
+    return handler()
+
+
 def _adapt_published_handler(*, published: "PublishedOperation", package_name: str) -> ProbeHandler | ActionHandler:
-    from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, PublishedBootstrap, adapt_outcome
+    from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, _bootstrap_from_runtime_result, adapt_outcome
 
     family_package = package_name.rsplit(".", 1)[0]
     namespace = family_package.rsplit(".", 1)[-1]
-    bootstrap_module = import_module(f"{family_package}.bootstrap")
-    bootstrap_contract = getattr(bootstrap_module, "BOOTSTRAP")
-    bootstrap = PublishedBootstrap(
-        prerequisites=tuple(bootstrap_contract.prerequisites),
-        context_fields=tuple(bootstrap_contract.context_fields),
-        values={},
-    )
 
     def handler(resolved: "ResolvedOperation | ResolvedExpressionProbe", workflow: Workflow) -> OperationResult:
         def caller(name: str, inputs: dict[str, object] | None):
@@ -190,10 +240,56 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
             )
             return _outcome_from_runtime_result(dependency_handler(dependency_resolved, workflow))
 
-        ctx = OperationContext(resolved=resolved, workflow=workflow, bootstrap=bootstrap, caller=caller)
+        bootstrap_result = _evaluate_bootstrap(package_name=family_package)
+        if bootstrap_result.status != "ok":
+            return _attach_bootstrap_metadata(
+                bootstrap_result,
+                namespace=namespace,
+                bootstrap_status=bootstrap_result.status,
+                bootstrap_context=bootstrap_result.observations,
+            )
+
+        ctx = OperationContext(
+            resolved=resolved,
+            workflow=workflow,
+            bootstrap=_bootstrap_from_runtime_result(bootstrap_result),
+            caller=caller,
+        )
         try:
-            return adapt_outcome(published.handler(ctx))
+            return _attach_bootstrap_metadata(
+                adapt_outcome(published.handler(ctx)),
+                namespace=namespace,
+                bootstrap_status=bootstrap_result.status,
+                bootstrap_context=bootstrap_result.observations,
+            )
         except MappedOutcomeError as exc:
-            return adapt_outcome(exc.outcome)
+            return _attach_bootstrap_metadata(
+                adapt_outcome(exc.outcome),
+                namespace=namespace,
+                bootstrap_status=bootstrap_result.status,
+                bootstrap_context=bootstrap_result.observations,
+            )
 
     return handler
+
+
+def _attach_bootstrap_metadata(
+    result: OperationResult,
+    *,
+    namespace: str,
+    bootstrap_status: str,
+    bootstrap_context: dict[str, object],
+) -> OperationResult:
+    raw = dict(result.raw)
+    raw["bootstrap"] = {
+        "namespace": namespace,
+        "status": bootstrap_status,
+        "context": dict(bootstrap_context),
+    }
+    return OperationResult(
+        status=result.status,
+        summary=result.summary,
+        observations=dict(result.observations),
+        diagnostics=result.diagnostics,
+        raw=raw,
+    )

@@ -38,6 +38,15 @@ class OperationOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class BootstrapOutcome:
+    status: str
+    summary: str | None = None
+    diagnostics: tuple[Diagnostic, ...] = ()
+    raw: JSONObject = field(default_factory=dict)
+    context: JSONObject = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class PublishedOperation:
     name: str
     kind: OperationKind
@@ -55,7 +64,7 @@ class PublishedOperation:
 class PublishedBootstrap:
     prerequisites: tuple[str, ...]
     context_fields: tuple[str, ...]
-    values: JSONObject = field(default_factory=dict)
+    handler: Callable[["BootstrapContext"], BootstrapOutcome] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +83,21 @@ class MappedOutcomeError(Exception):
         self.outcome = outcome
 
 
+class MappedBootstrapError(Exception):
+    """Internal control-flow exception for mapped bootstrap failures."""
+
+    def __init__(self, outcome: BootstrapOutcome) -> None:
+        super().__init__(outcome.summary or outcome.status)
+        self.outcome = outcome
+
+
+class BootstrapContext:
+    """Minimal authoring context for executable family bootstrap."""
+
+    def command(self, argv: Sequence[str], *, failures: Mapping[str, str] | None = None) -> CommandResult:
+        return _run_command(argv, failures=failures, reference="bootstrap", error_type=MappedBootstrapError)
+
+
 class OperationContext:
     """Minimal authoring context for plugin-sdk operations."""
 
@@ -82,7 +106,7 @@ class OperationContext:
         *,
         resolved: "ResolvedOperation | ResolvedExpressionProbe",
         workflow: "Workflow",
-        bootstrap: PublishedBootstrap,
+        bootstrap: BootstrapOutcome,
         caller: Callable[[str, JSONObject | None], OperationOutcome],
     ) -> None:
         self._resolved = resolved
@@ -102,7 +126,7 @@ class OperationContext:
             raise MappedOutcomeError(_outcome_from_runtime_result(value))
         return value
 
-    def bootstrap(self) -> PublishedBootstrap:
+    def bootstrap(self) -> BootstrapOutcome:
         return self._bootstrap
 
     @property
@@ -113,64 +137,20 @@ class OperationContext:
         return self._caller(name, inputs)
 
     def command(self, argv: Sequence[str], *, failures: Mapping[str, str] | None = None) -> CommandResult:
-        try:
-            completed = subprocess.run(list(argv), capture_output=True, text=True, check=False)
-        except OSError as exc:
-            code = None if failures is None else failures.get("os_error")
-            if code is None:
-                code = "execution_error"
-            raise MappedOutcomeError(
-                OperationOutcome(
-                    status=code,
-                    summary="Command execution failed before completion",
-                    diagnostics=(
-                        Diagnostic(
-                            code="operation.command_os_error",
-                            level="error",
-                            message="Command execution failed before completion",
-                            details={"reference": self._resolved.reference, "error": str(exc)},
-                        ),
-                    ),
-                    raw={"argv": list(argv), "stdout": "", "stderr": str(exc), "os_error": str(exc)},
-                )
-            ) from exc
+        return _run_command(argv, failures=failures, reference=self._resolved.reference, error_type=MappedOutcomeError)
 
-        if completed.returncode != 0:
-            code = None if failures is None else failures.get("nonzero")
-            if code is None:
-                code = "execution_error"
-            raise MappedOutcomeError(
-                OperationOutcome(
-                    status=code,
-                    summary="Command returned non-zero exit status",
-                    diagnostics=(
-                        Diagnostic(
-                            code="operation.command_failed",
-                            level="error",
-                            message="Command returned non-zero exit status",
-                            details={"reference": self._resolved.reference, "returncode": completed.returncode},
-                        ),
-                    ),
-                    raw={
-                        "argv": list(argv),
-                        "stdout": completed.stdout,
-                        "stderr": completed.stderr,
-                        "returncode": completed.returncode,
-                    },
-                )
-            )
 
-        return CommandResult(
-            stdout=completed.stdout,
-            stderr=completed.stderr,
-            returncode=completed.returncode,
-            raw={
-                "argv": list(argv),
-                "stdout": completed.stdout,
-                "stderr": completed.stderr,
-                "returncode": completed.returncode,
-            },
-        )
+def bootstrap(
+    *,
+    prerequisites: tuple[str, ...] = (),
+    context_fields: tuple[str, ...] = (),
+    handler: Callable[[BootstrapContext], BootstrapOutcome] | None = None,
+) -> PublishedBootstrap:
+    return PublishedBootstrap(
+        prerequisites=prerequisites,
+        context_fields=context_fields,
+        handler=handler,
+    )
 
 
 def probe(
@@ -232,6 +212,15 @@ def ok(*, summary: str | None = None, outputs: JSONObject | None = None, raw: JS
     )
 
 
+def bootstrap_ok(*, summary: str | None = None, context: JSONObject | None = None, raw: JSONObject | None = None) -> BootstrapOutcome:
+    return BootstrapOutcome(
+        status="ok",
+        summary=summary,
+        context={} if context is None else dict(context),
+        raw={} if raw is None else dict(raw),
+    )
+
+
 def fail(
     *,
     code: str,
@@ -246,6 +235,23 @@ def fail(
         outputs={} if outputs is None else dict(outputs),
         diagnostics=diagnostics,
         raw={} if raw is None else dict(raw),
+    )
+
+
+def bootstrap_fail(
+    *,
+    code: str,
+    summary: str | None = None,
+    diagnostics: tuple[Diagnostic, ...] = (),
+    raw: JSONObject | None = None,
+    context: JSONObject | None = None,
+) -> BootstrapOutcome:
+    return BootstrapOutcome(
+        status=code,
+        summary=summary,
+        diagnostics=diagnostics,
+        raw={} if raw is None else dict(raw),
+        context={} if context is None else dict(context),
     )
 
 
@@ -282,6 +288,42 @@ def adapt_outcome(outcome: OperationOutcome) -> OperationResult:
     )
 
 
+def adapt_bootstrap(outcome: BootstrapOutcome) -> OperationResult:
+    return OperationResult(
+        status=outcome.status,
+        summary=outcome.summary,
+        observations=dict(outcome.context),
+        diagnostics=tuple(
+            RuntimeDiagnostic(
+                code=diagnostic.code,
+                level=diagnostic.level,
+                message=diagnostic.message,
+                details=dict(diagnostic.details),
+            )
+            for diagnostic in outcome.diagnostics
+        ),
+        raw=dict(outcome.raw),
+    )
+
+
+def _bootstrap_from_runtime_result(result: OperationResult) -> BootstrapOutcome:
+    return BootstrapOutcome(
+        status=result.status,
+        summary=result.summary,
+        diagnostics=tuple(
+            Diagnostic(
+                code=diagnostic.code,
+                level=diagnostic.level,
+                message=diagnostic.message,
+                details=dict(diagnostic.details),
+            )
+            for diagnostic in result.diagnostics
+        ),
+        raw=dict(result.raw),
+        context=dict(result.observations),
+    )
+
+
 def _outcome_from_runtime_result(result: OperationResult) -> OperationOutcome:
     return OperationOutcome(
         status=result.status,
@@ -298,3 +340,85 @@ def _outcome_from_runtime_result(result: OperationResult) -> OperationOutcome:
         ),
         raw=dict(result.raw),
     )
+
+
+def _run_command(
+    argv: Sequence[str],
+    *,
+    failures: Mapping[str, str] | None,
+    reference: str,
+    error_type: type[MappedOutcomeError] | type[MappedBootstrapError],
+) -> CommandResult:
+    try:
+        completed = subprocess.run(list(argv), capture_output=True, text=True, check=False)
+    except OSError as exc:
+        code = None if failures is None else failures.get("os_error")
+        if code is None:
+            code = "execution_error"
+        raise error_type(
+            _error_outcome(
+                outcome_type=error_type,
+                status=code,
+                summary="Command execution failed before completion",
+                diagnostic_code="operation.command_os_error",
+                diagnostic_message="Command execution failed before completion",
+                details={"reference": reference, "error": str(exc)},
+                raw={"argv": list(argv), "stdout": "", "stderr": str(exc), "os_error": str(exc)},
+            )
+        ) from exc
+
+    if completed.returncode != 0:
+        code = None if failures is None else failures.get("nonzero")
+        if code is None:
+            code = "execution_error"
+        raise error_type(
+            _error_outcome(
+                outcome_type=error_type,
+                status=code,
+                summary="Command returned non-zero exit status",
+                diagnostic_code="operation.command_failed",
+                diagnostic_message="Command returned non-zero exit status",
+                details={"reference": reference, "returncode": completed.returncode},
+                raw={
+                    "argv": list(argv),
+                    "stdout": completed.stdout,
+                    "stderr": completed.stderr,
+                    "returncode": completed.returncode,
+                },
+            )
+        )
+
+    return CommandResult(
+        stdout=completed.stdout,
+        stderr=completed.stderr,
+        returncode=completed.returncode,
+        raw={
+            "argv": list(argv),
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "returncode": completed.returncode,
+        },
+    )
+
+
+def _error_outcome(
+    *,
+    outcome_type: type[MappedOutcomeError] | type[MappedBootstrapError],
+    status: str,
+    summary: str,
+    diagnostic_code: str,
+    diagnostic_message: str,
+    details: JSONObject,
+    raw: JSONObject,
+) -> OperationOutcome | BootstrapOutcome:
+    diagnostics = (
+        Diagnostic(
+            code=diagnostic_code,
+            level="error",
+            message=diagnostic_message,
+            details=details,
+        ),
+    )
+    if outcome_type is MappedBootstrapError:
+        return BootstrapOutcome(status=status, summary=summary, diagnostics=diagnostics, raw=raw)
+    return OperationOutcome(status=status, summary=summary, diagnostics=diagnostics, raw=raw)

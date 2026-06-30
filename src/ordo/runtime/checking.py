@@ -89,6 +89,7 @@ def check_workflow(
     operation_results: list[OperationResult] = []
     blockers: list[str] = []
     guard_details: list[dict[str, object]] = []
+    bootstrap_details: list[dict[str, object]] = []
     failed_guard: str | None = None
 
     for resolved_guard in resolution.resolved_guards:
@@ -99,12 +100,23 @@ def check_workflow(
         operation_results.append(result)
         diagnostics.extend(result.diagnostics)
         guard_details.append(_build_guard_detail(resolved_guard.reference, result))
+        bootstrap_details = _collect_bootstrap_details(operation_results)
         if result.status != "ok":
             blockers.append(resolved_guard.reference)
             if failed_guard is None:
                 failed_guard = resolved_guard.reference
 
     if blockers:
+        outputs = {
+            "can_execute": False,
+            "blockers": blockers,
+            "checked_guards": [result.reference for result in resolution.resolved_guards],
+            "guard_details": guard_details,
+            "active_profile": active_profile,
+            "active_overrides": [override.to_contract() for override in active_overrides],
+        }
+        if bootstrap_details:
+            outputs["bootstrap_details"] = bootstrap_details
         return RuntimeResult(
             mode=Mode.CHECK,
             status=RuntimeStatus.GUARD_FAILED,
@@ -114,17 +126,21 @@ def check_workflow(
                 step_names=tuple(step.name for step in effective_workflow.steps),
                 blockers=tuple(blockers),
             ),
-            outputs={
-                "can_execute": False,
-                "blockers": blockers,
-                "checked_guards": [result.reference for result in resolution.resolved_guards],
-                "guard_details": guard_details,
-                "active_profile": active_profile,
-                "active_overrides": [override.to_contract() for override in active_overrides],
-            },
+            outputs=outputs,
             operation_results=tuple(operation_results),
             failed_guard=failed_guard,
         )
+
+    outputs = {
+        "can_execute": True,
+        "blockers": [],
+        "checked_guards": [result.reference for result in resolution.resolved_guards],
+        "guard_details": guard_details,
+        "active_profile": active_profile,
+        "active_overrides": [override.to_contract() for override in active_overrides],
+    }
+    if bootstrap_details:
+        outputs["bootstrap_details"] = bootstrap_details
 
     return RuntimeResult(
         mode=Mode.CHECK,
@@ -135,16 +151,30 @@ def check_workflow(
             step_names=tuple(step.name for step in effective_workflow.steps),
             blockers=(),
         ),
-        outputs={
-            "can_execute": True,
-            "blockers": [],
-            "checked_guards": [result.reference for result in resolution.resolved_guards],
-            "guard_details": guard_details,
-            "active_profile": active_profile,
-            "active_overrides": [override.to_contract() for override in active_overrides],
-        },
+        outputs=outputs,
         operation_results=tuple(operation_results),
     )
+
+
+def _collect_bootstrap_details(operation_results: list[OperationResult]) -> list[dict[str, object]]:
+    seen: set[str] = set()
+    details: list[dict[str, object]] = []
+    for result in operation_results:
+        bootstrap = result.raw.get("bootstrap")
+        if not isinstance(bootstrap, dict):
+            continue
+        namespace = bootstrap.get("namespace")
+        if not isinstance(namespace, str) or namespace in seen:
+            continue
+        seen.add(namespace)
+        details.append(
+            {
+                "namespace": namespace,
+                "status": bootstrap.get("status"),
+                "context": bootstrap.get("context", {}),
+            }
+        )
+    return details
 
 
 def _default_guard_probe(*, provider: ConnectorProvider | None):

@@ -71,6 +71,22 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["category"], "execution")
         self.assertEqual(result.outputs["next_actions"][0]["action"], "repair_failed_step")
 
+    def test_explain_reports_bootstrap_problem_separately_from_guard_logic(self) -> None:
+        runtime_result = RuntimeResult(
+            mode="check",  # type: ignore[arg-type]
+            status=RuntimeStatus.GUARD_FAILED,
+            outputs={
+                "blockers": ["git.branch"],
+                "guard_details": [{"reference": "git.branch", "failure_kind": "not_repository"}],
+                "bootstrap_details": [{"namespace": "git", "status": "not_repository", "context": {}}],
+            },
+        )
+
+        result = explain_runtime_result(runtime_result)
+
+        self.assertEqual(result.outputs["explanation"]["category"], "bootstrap")
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "repair_connector_bootstrap")
+
     def test_explain_execution_result_wraps_execute_mode(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(Step(name="ship", operation=OperationRef("shell.command")),))
 

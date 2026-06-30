@@ -27,6 +27,7 @@ sources = [
   "model/runtime/package-layout.md",
   "model/connector/contract.md",
   "model/connector/authoring-surface.md",
+  "model/connector/bootstrap-api.md",
   "model/connector/plugin-sdk.md",
   "model/connector/plugin-sdk-api.md",
   "model/connector/resolution-policy.md",

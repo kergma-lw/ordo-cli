@@ -7,7 +7,7 @@ def info():
     return probe(
         name="branch_not_main",
         outputs={"allowed": "boolean", "current_branch": "string"},
-        failure_modes=("git_unavailable", "not_repository", "probe_failed"),
+        failure_modes=("probe_failed",),
         handler=run,
     )
 

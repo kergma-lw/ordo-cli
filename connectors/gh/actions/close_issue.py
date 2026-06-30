@@ -9,7 +9,7 @@ def info():
         inputs={"issue": "string"},
         effects=("close GitHub issue",),
         outputs={"issue": "string", "closed": "boolean"},
-        failure_modes=("gh_unavailable", "auth_missing", "issue_not_found", "action_failed"),
+        failure_modes=("issue_not_found", "action_failed"),
         handler=run,
     )
 

@@ -90,6 +90,15 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
 
     if result.status is RuntimeStatus.GUARD_FAILED:
         guard_details = [detail for detail in result.outputs.get("guard_details", []) if isinstance(detail, dict)]
+        bootstrap_details = [detail for detail in result.outputs.get("bootstrap_details", []) if isinstance(detail, dict)]
+        if any(detail.get("status") != "ok" for detail in bootstrap_details):
+            return {
+                "category": "bootstrap",
+                "allowed": False,
+                "why": "A connector family bootstrap prerequisite failed before operation-local logic could proceed",
+                "blockers": [detail.get("namespace") for detail in bootstrap_details if detail.get("status") != "ok"],
+                "bootstrap_details": bootstrap_details,
+            }
         return {
             "category": "guard",
             "allowed": False,
@@ -132,6 +141,14 @@ def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:
         ]
 
     if result.status is RuntimeStatus.GUARD_FAILED:
+        bootstrap_details = [detail for detail in result.outputs.get("bootstrap_details", []) if isinstance(detail, dict)]
+        if any(detail.get("status") != "ok" for detail in bootstrap_details):
+            return [
+                {
+                    "action": "repair_connector_bootstrap",
+                    "reason": "Resolve the shared connector prerequisite failure before retrying",
+                }
+            ]
         return [
             {
                 "action": "resolve_blocking_guards",
