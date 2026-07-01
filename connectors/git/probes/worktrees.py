@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -31,10 +31,11 @@ def info():
 def run(ctx: OperationContext) -> OperationOutcome:
     repository_root = ctx.bootstrap().context.get("repository_root")
     if not isinstance(repository_root, str) or not repository_root.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git bootstrap did not provide a usable repository root",
             diagnostic_code="probe.git_worktrees.repo_root_missing",
+            reference=ctx.reference,
             raw={"bootstrap": dict(ctx.bootstrap().context)},
         )
 
@@ -86,10 +87,11 @@ def _parse_worktrees_output(
 
         field, separator, value = line.partition(" ")
         if not separator:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git worktree porcelain returned an invalid line",
                 diagnostic_code="probe.git_worktrees.invalid_line",
+                reference=ctx.reference,
                 raw={"worktrees": raw, "line": line},
             )
 
@@ -103,10 +105,11 @@ def _parse_worktrees_output(
             continue
 
         if current is None:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git worktree porcelain returned fields before a worktree header",
                 diagnostic_code="probe.git_worktrees.invalid_line",
+                reference=ctx.reference,
                 raw={"worktrees": raw, "line": line},
             )
 
@@ -115,10 +118,11 @@ def _parse_worktrees_output(
         elif field == "branch":
             prefix = "refs/heads/"
             if not value.startswith(prefix):
-                return _probe_failure(
-                    ctx,
+                return fail_with_diagnostic(
+                    code="probe_failed",
                     summary="Git worktree porcelain returned an unsupported branch ref format",
                     diagnostic_code="probe.git_worktrees.invalid_branch_ref",
+                    reference=ctx.reference,
                     raw={"worktrees": raw, "line": line},
                 )
             current["branch"] = value[len(prefix) :]
@@ -129,10 +133,11 @@ def _parse_worktrees_output(
         elif field in {"locked", "prunable"}:
             continue
         else:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git worktree porcelain returned an unexpected field",
                 diagnostic_code="probe.git_worktrees.invalid_line",
+                reference=ctx.reference,
                 raw={"worktrees": raw, "line": line},
             )
 
@@ -158,31 +163,35 @@ def _finalize_entry(
     detached = bool(entry.get("detached", False))
 
     if not isinstance(path, str) or not path:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git worktree porcelain omitted the worktree path",
             diagnostic_code="probe.git_worktrees.missing_path",
+            reference=ctx.reference,
             raw={"worktrees": raw, "entry": dict(entry)},
         )
     if not isinstance(head, str) or not head:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git worktree porcelain omitted the worktree head",
             diagnostic_code="probe.git_worktrees.missing_head",
+            reference=ctx.reference,
             raw={"worktrees": raw, "entry": dict(entry)},
         )
     if branch is not None and (not isinstance(branch, str) or not branch):
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git worktree porcelain returned an empty branch value",
             diagnostic_code="probe.git_worktrees.invalid_branch_ref",
+            reference=ctx.reference,
             raw={"worktrees": raw, "entry": dict(entry)},
         )
     if detached and branch is not None:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git worktree porcelain returned both detached and branch state",
             diagnostic_code="probe.git_worktrees.inconsistent_entry",
+            reference=ctx.reference,
             raw={"worktrees": raw, "entry": dict(entry)},
         )
 
@@ -194,25 +203,3 @@ def _finalize_entry(
         "current": path == repository_root,
         "detached": detached,
     }
-
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=summary,
-                details={"reference": ctx.reference},
-            ),
-        ),
-        raw=raw,
-    )

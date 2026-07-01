@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -29,10 +29,11 @@ def info():
 def run(ctx: OperationContext) -> OperationOutcome:
     repository_root = ctx.bootstrap().context.get("repository_root")
     if not isinstance(repository_root, str) or not repository_root.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git bootstrap did not provide a usable repository root",
             diagnostic_code="probe.git_branches.repo_root_missing",
+            reference=ctx.reference,
             raw={"bootstrap": dict(ctx.bootstrap().context)},
         )
 
@@ -57,44 +58,49 @@ def run(ctx: OperationContext) -> OperationOutcome:
             continue
         parts = line.split("\t")
         if len(parts) != 3:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git branch inventory returned an unexpected line format",
                 diagnostic_code="probe.git_branches.invalid_line",
+                reference=ctx.reference,
                 raw={"branches": dict(command.raw), "line": line},
             )
         head_marker, ref, short_name = parts
         if head_marker not in {"*", " "}:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git branch inventory returned an unsupported current-branch marker",
                 diagnostic_code="probe.git_branches.invalid_line",
+                reference=ctx.reference,
                 raw={"branches": dict(command.raw), "line": line},
             )
         if not ref or not short_name:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git branch inventory returned an entry without a ref or short name",
                 diagnostic_code="probe.git_branches.invalid_line",
+                reference=ctx.reference,
                 raw={"branches": dict(command.raw), "line": line},
             )
 
         kind = _classify_ref(ref)
         if kind is None:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git branch inventory returned an unsupported ref kind",
                 diagnostic_code="probe.git_branches.invalid_ref_kind",
+                reference=ctx.reference,
                 raw={"branches": dict(command.raw), "line": line, "ref": ref},
             )
 
         current = head_marker == "*"
         if current:
             if current_name is not None:
-                return _probe_failure(
-                    ctx,
+                return fail_with_diagnostic(
+                    code="probe_failed",
                     summary="Git branch inventory reported more than one current branch",
                     diagnostic_code="probe.git_branches.multiple_current",
+                    reference=ctx.reference,
                     raw={"branches": dict(command.raw)},
                 )
             current_name = short_name
@@ -127,24 +133,3 @@ def _classify_ref(ref: str) -> str | None:
         return "remote"
     return None
 
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=summary,
-                details={"reference": ctx.reference},
-            ),
-        ),
-        raw=raw,
-    )

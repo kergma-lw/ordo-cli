@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -28,10 +28,11 @@ def run(ctx: OperationContext) -> OperationOutcome:
 
     repository_root = branch_outcome.outputs.get("repository_root")
     if not isinstance(repository_root, str) or not repository_root.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="git.branch did not provide a usable repository root",
             diagnostic_code="probe.git_upstream.repo_root_missing",
+            reference=ctx.reference,
             raw={"branch": dict(branch_outcome.raw)},
         )
 
@@ -51,10 +52,11 @@ def run(ctx: OperationContext) -> OperationOutcome:
             raw={"branch": dict(branch_outcome.raw)},
         )
     if not isinstance(branch, str) or not branch:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="git.branch returned an unusable branch name for upstream inspection",
             diagnostic_code="probe.git_upstream.invalid_branch",
+            reference=ctx.reference,
             raw={"branch": dict(branch_outcome.raw)},
         )
 
@@ -82,19 +84,21 @@ def run(ctx: OperationContext) -> OperationOutcome:
 
     upstream_ref = command.stdout.strip()
     if not upstream_ref:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git upstream command returned empty output",
             diagnostic_code="probe.git_upstream.empty_ref",
+            reference=ctx.reference,
             raw={"branch": dict(branch_outcome.raw), "upstream": dict(command.raw)},
         )
 
     remote, remote_branch = _split_upstream_ref(upstream_ref)
     if remote is None or remote_branch is None:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git upstream command returned an unsupported upstream ref format",
             diagnostic_code="probe.git_upstream.invalid_ref",
+            reference=ctx.reference,
             raw={"branch": dict(branch_outcome.raw), "upstream": dict(command.raw), "ref": upstream_ref},
         )
 
@@ -125,24 +129,3 @@ def _split_upstream_ref(upstream_ref: str) -> tuple[str | None, str | None]:
         return None, None
     return remote, remote_branch
 
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=summary,
-                details={"reference": ctx.reference},
-            ),
-        ),
-        raw=raw,
-    )

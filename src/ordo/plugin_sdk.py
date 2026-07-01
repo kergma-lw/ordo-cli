@@ -238,6 +238,37 @@ def fail(
     )
 
 
+def fail_with_diagnostic(
+    *,
+    code: str,
+    summary: str,
+    diagnostic_code: str,
+    message: str | None = None,
+    level: DiagnosticLevel = "error",
+    reference: str | None = None,
+    details: JSONObject | None = None,
+    outputs: JSONObject | None = None,
+    raw: JSONObject | None = None,
+) -> OperationOutcome:
+    diagnostic_details = {} if details is None else dict(details)
+    if reference is not None and "reference" not in diagnostic_details:
+        diagnostic_details["reference"] = reference
+    return fail(
+        code=code,
+        summary=summary,
+        outputs=outputs,
+        diagnostics=(
+            Diagnostic(
+                code=diagnostic_code,
+                level=level,
+                message=summary if message is None else message,
+                details=diagnostic_details,
+            ),
+        ),
+        raw=raw,
+    )
+
+
 def bootstrap_fail(
     *,
     code: str,

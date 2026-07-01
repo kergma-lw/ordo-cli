@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -27,20 +27,22 @@ def info():
 def run(ctx: OperationContext) -> OperationOutcome:
     repository_root = ctx.bootstrap().context.get("repository_root")
     if not isinstance(repository_root, str) or not repository_root.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git bootstrap did not provide a usable repository root",
             diagnostic_code="probe.git_range.repo_root_missing",
+            reference=ctx.reference,
             raw={"bootstrap": dict(ctx.bootstrap().context)},
         )
 
     base = ctx.input("base")
     head = ctx.input("head")
     if not isinstance(base, str) or not base.strip() or not isinstance(head, str) or not head.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="git.range requires non-empty base and head inputs",
             diagnostic_code="probe.git_range.invalid_input",
+            reference=ctx.reference,
             raw={"base": base, "head": head},
         )
 
@@ -93,20 +95,22 @@ def _resolve_oid(
     except MappedOutcomeError as exc:
         returncode = exc.outcome.raw.get("returncode")
         if returncode == 128:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary=f"Git could not resolve {label} ref '{ref_name}'",
                 diagnostic_code="probe.git_range.unresolved_ref",
+                reference=ctx.reference,
                 raw={**raw, label: dict(exc.outcome.raw), "ref": ref_name},
             )
         return exc.outcome
     raw[label] = dict(command.raw)
     oid = command.stdout.strip()
     if not oid:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary=f"Git returned an empty oid for {label} ref '{ref_name}'",
             diagnostic_code="probe.git_range.empty_oid",
+            reference=ctx.reference,
             raw={**raw, "ref": ref_name},
         )
     return oid
@@ -133,10 +137,11 @@ def _resolve_merge_base(
     raw["merge_base"] = dict(command.raw)
     merge_base_oid = command.stdout.strip()
     if not merge_base_oid:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git merge-base returned empty output",
             diagnostic_code="probe.git_range.empty_merge_base",
+            reference=ctx.reference,
             raw=raw,
         )
     return merge_base_oid
@@ -156,49 +161,30 @@ def _resolve_counts(
     raw["counts"] = dict(command.raw)
     parts = command.stdout.strip().split()
     if len(parts) != 2:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git rev-list returned an unexpected ahead/behind count format",
             diagnostic_code="probe.git_range.invalid_counts",
+            reference=ctx.reference,
             raw=raw,
         )
     try:
         behind_count = int(parts[0])
         ahead_count = int(parts[1])
     except ValueError:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git rev-list returned non-integer ahead/behind counts",
             diagnostic_code="probe.git_range.invalid_counts",
+            reference=ctx.reference,
             raw=raw,
         )
     if behind_count < 0 or ahead_count < 0:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git rev-list returned negative ahead/behind counts",
             diagnostic_code="probe.git_range.invalid_counts",
+            reference=ctx.reference,
             raw=raw,
         )
     return ahead_count, behind_count
-
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=summary,
-                details={"reference": ctx.reference},
-            ),
-        ),
-        raw=raw,
-    )

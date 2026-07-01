@@ -91,6 +91,8 @@ The SDK outcome type should preserve the minimal structured operation outcome su
 
 The SDK may provide convenience constructors or helpers for common success and failure cases, but those helpers must not hide the structured outcome model itself.
 
+For example, a helper that constructs a single structured diagnostic together with a failure outcome is a good fit for the SDK when it reduces repeated boilerplate across many operations without inventing a second failure abstraction.
+
 ## Low-ceremony requirement
 
 The SDK should optimize for low incidental ceremony in small operation files.
@@ -100,6 +102,7 @@ Implications:
 - simple probes and actions should fit comfortably in one small file;
 - import surfaces should stay small;
 - common success and failure paths should be concise;
+- repeated one-diagnostic failure shaping should not require each operation to rebuild the same local helper function;
 - publication should remain explicit without requiring ad hoc module-global binding conventions;
 - operation code should remain more prominent than authoring-framework boilerplate.
 

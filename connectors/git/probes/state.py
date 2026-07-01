@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -69,10 +69,11 @@ def run(ctx: OperationContext) -> OperationOutcome:
     worktree_root = worktree_outcome.outputs.get("repository_root")
     branch_root = outputs.get("repository_root")
     if worktree_root != branch_root:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="git.branch and git.worktree reported different repository roots",
             diagnostic_code="probe.git_state.inconsistent_repository_root",
+            reference=ctx.reference,
             raw=raw,
         )
 
@@ -82,10 +83,11 @@ def run(ctx: OperationContext) -> OperationOutcome:
 
     stash_root = stash_outcome.outputs.get("repository_root")
     if stash_root != branch_root:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="git.branch and git.stash reported different repository roots",
             diagnostic_code="probe.git_state.inconsistent_repository_root",
+            reference=ctx.reference,
             raw=raw,
         )
 
@@ -104,31 +106,10 @@ def _set_output(outputs: dict[str, object], key: str, value: object) -> str | No
 
 
 def _collision_failure(ctx: OperationContext, key: str, raw: dict[str, object]) -> OperationOutcome:
-    return _probe_failure(
-        ctx,
+    return fail_with_diagnostic(
+        code="probe_failed",
         summary=f"Field collision while assembling git.state outputs: {key}",
         diagnostic_code="probe.git_state.field_collision",
-        raw=raw,
-    )
-
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=summary,
-                details={"reference": ctx.reference},
-            ),
-        ),
+        reference=ctx.reference,
         raw=raw,
     )

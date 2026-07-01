@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -22,10 +22,11 @@ def info():
 def run(ctx: OperationContext) -> OperationOutcome:
     repository_root = ctx.bootstrap().context.get("repository_root")
     if not isinstance(repository_root, str) or not repository_root.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git bootstrap did not provide a usable repository root",
             diagnostic_code="probe.git_branch.repo_root_missing",
+            reference=ctx.reference,
             raw={"bootstrap": dict(ctx.bootstrap().context)},
         )
 
@@ -54,52 +55,33 @@ def run(ctx: OperationContext) -> OperationOutcome:
 
     ref = command.stdout.strip()
     if not ref:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git symbolic-ref returned empty output",
             diagnostic_code="probe.git_branch.empty_ref",
+            reference=ctx.reference,
             raw={"branch": dict(command.raw)},
         )
     prefix = "refs/heads/"
     if not ref.startswith(prefix):
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git symbolic-ref returned unsupported ref format",
             diagnostic_code="probe.git_branch.invalid_ref",
+            reference=ctx.reference,
             raw={"branch": dict(command.raw), "ref": ref},
         )
     branch = ref[len(prefix) :]
     if not branch:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git symbolic-ref returned an empty branch name",
             diagnostic_code="probe.git_branch.empty_name",
+            reference=ctx.reference,
             raw={"branch": dict(command.raw), "ref": ref},
         )
     return ok(
         summary="Current branch context inspected successfully",
         outputs={"value": branch, "ref": ref, "detached": False, "repository_root": repository_root},
         raw={"branch": dict(command.raw)},
-    )
-
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=summary,
-                details={"reference": ctx.reference},
-            ),
-        ),
-        raw=raw,
     )

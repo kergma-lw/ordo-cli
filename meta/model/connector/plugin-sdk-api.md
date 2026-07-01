@@ -140,9 +140,20 @@ The first spike may provide small convenience helpers such as:
 
 - `ok(...)`
 - `fail(...)`
+- `fail_with_diagnostic(...)`
 
 Those helpers should only construct `OperationOutcome` values more concisely.
 They should not replace or obscure the underlying structured outcome model.
+
+`fail_with_diagnostic(...)` is appropriate when many operations would otherwise repeat the same pattern of:
+
+- `status`
+- `summary`
+- one structured diagnostic code and message
+- optional `details`
+- optional `raw`
+
+The helper should stay small and explicit rather than growing hidden policy or operation-kind-specific semantics.
 
 ## First-spike example shape
 

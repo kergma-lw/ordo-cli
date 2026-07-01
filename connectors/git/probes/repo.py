@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -29,11 +29,11 @@ def run(ctx: OperationContext) -> OperationOutcome:
     bootstrap = ctx.bootstrap()
     root = bootstrap.context.get("repository_root")
     if not isinstance(root, str) or not root.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git bootstrap did not provide a usable repository root",
             diagnostic_code="probe.git_repo.bootstrap_root_missing",
-            diagnostic_message="Git bootstrap did not provide a usable repository root",
+            reference=ctx.reference,
             raw={"bootstrap": dict(bootstrap.context)},
         )
 
@@ -127,11 +127,11 @@ def _required_text(
     raw_commands[label] = command.raw
     value = command.stdout.strip()
     if not value:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary=f"Git command for '{label}' returned empty output",
             diagnostic_code="probe.git_repo.empty_required_field",
-            diagnostic_message=f"Git command for '{label}' returned empty output",
+            reference=ctx.reference,
             raw={"commands": raw_commands},
         )
     return value
@@ -151,11 +151,11 @@ def _required_bool(
         return True
     if value == "false":
         return False
-    return _probe_failure(
-        ctx,
+    return fail_with_diagnostic(
+        code="probe_failed",
         summary=f"Git command for '{label}' returned unsupported boolean output",
         diagnostic_code="probe.git_repo.invalid_boolean",
-        diagnostic_message=f"Git command for '{label}' returned unsupported boolean output",
+        reference=ctx.reference,
         raw={"commands": raw_commands, "value": value},
     )
 
@@ -193,11 +193,11 @@ def _optional_text(
     raw_commands[label] = command.raw
     value = command.stdout.strip()
     if not value:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary=f"Git command for '{label}' returned empty output",
             diagnostic_code="probe.git_repo.empty_optional_field",
-            diagnostic_message=f"Git command for '{label}' returned empty output",
+            reference=ctx.reference,
             raw={"commands": raw_commands},
         )
     return value
@@ -221,11 +221,11 @@ def _optional_short_remote_branch(
     if isinstance(value, OperationOutcome) or value is None:
         return value
     if "/" not in value:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary=f"Git command for '{label}' returned unsupported remote HEAD format",
             diagnostic_code="probe.git_repo.invalid_remote_head",
-            diagnostic_message=f"Git command for '{label}' returned unsupported remote HEAD format",
+            reference=ctx.reference,
             raw={"commands": raw_commands, "value": value},
         )
     return value.split("/", 1)[1]
@@ -237,25 +237,3 @@ def _normalize_path(value: str) -> str:
         return str(path)
     return str((Path.cwd() / path).resolve())
 
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    diagnostic_message: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=diagnostic_message,
-                details={"reference": ctx.reference},
-            ),
-        ),
-        raw=raw,
-    )

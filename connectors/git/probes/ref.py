@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -25,19 +25,21 @@ def info():
 def run(ctx: OperationContext) -> OperationOutcome:
     repository_root = ctx.bootstrap().context.get("repository_root")
     if not isinstance(repository_root, str) or not repository_root.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git bootstrap did not provide a usable repository root",
             diagnostic_code="probe.git_ref.repo_root_missing",
+            reference=ctx.reference,
             raw={"bootstrap": dict(ctx.bootstrap().context)},
         )
 
     ref_name = ctx.input("ref")
     if not isinstance(ref_name, str) or not ref_name.strip():
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="git.ref requires a non-empty ref input",
             diagnostic_code="probe.git_ref.invalid_input",
+            reference=ctx.reference,
             raw={"ref": ref_name},
         )
 
@@ -69,10 +71,11 @@ def run(ctx: OperationContext) -> OperationOutcome:
     raw["oid"] = dict(oid_command.raw)
     oid = oid_command.stdout.strip()
     if not oid:
-        return _probe_failure(
-            ctx,
+        return fail_with_diagnostic(
+            code="probe_failed",
             summary="Git rev-parse returned an empty oid for an existing ref",
             diagnostic_code="probe.git_ref.empty_oid",
+            reference=ctx.reference,
             raw=raw,
         )
 
@@ -93,10 +96,11 @@ def run(ctx: OperationContext) -> OperationOutcome:
         raw["symbolic"] = dict(symbolic_command.raw)
         symbolic_target = symbolic_command.stdout.strip()
         if not symbolic_target:
-            return _probe_failure(
-                ctx,
+            return fail_with_diagnostic(
+                code="probe_failed",
                 summary="Git symbolic-ref returned empty output for a symbolic ref",
                 diagnostic_code="probe.git_ref.empty_symbolic_target",
+                reference=ctx.reference,
                 raw=raw,
             )
         symbolic = True
@@ -114,24 +118,3 @@ def run(ctx: OperationContext) -> OperationOutcome:
         raw=raw,
     )
 
-
-def _probe_failure(
-    ctx: OperationContext,
-    *,
-    summary: str,
-    diagnostic_code: str,
-    raw: dict[str, object],
-) -> OperationOutcome:
-    return fail(
-        code="probe_failed",
-        summary=summary,
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message=summary,
-                details={"reference": ctx.reference},
-            ),
-        ),
-        raw=raw,
-    )
