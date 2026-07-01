@@ -18,8 +18,8 @@
 ## Stage 2 — first real connector operations
 
 - `shell.command`
-- `git.clean_worktree`
-- `git.branch_not_main`
+- `git.worktree`
+- `git.branch`
 - `gh.issue.view`
 - `gh.project.item.fields`
 

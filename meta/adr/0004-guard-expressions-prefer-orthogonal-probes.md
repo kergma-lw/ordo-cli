@@ -14,7 +14,7 @@ Guard-expression design should prefer a minimal and orthogonal public probe surf
 
 Policy composition should primarily live in the workflow declaration through guard expressions rather than in a growing catalog of bespoke policy-encoded probe names.
 
-Specialized probes may remain temporarily for migration or compatibility, but they are not the preferred long-term direction.
+Specialized policy-shaped probes are not the preferred long-term direction and should be avoided in favor of canonical fact probes plus guard composition.
 
 ## Consequences
 

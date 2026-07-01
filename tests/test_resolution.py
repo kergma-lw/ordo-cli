@@ -19,7 +19,7 @@ class ResolutionTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
         )
 

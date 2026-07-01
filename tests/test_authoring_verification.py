@@ -26,8 +26,8 @@ class AuthoringVerificationTest(unittest.TestCase):
             workflow="review-issue",
             inputs={"issue": "kergma-lw/ordo-cli#1", "command": "echo review"},
             guards=(
-                Guard(OperationRef("git.clean_worktree")),
-                Guard(OperationRef("git.branch_not_main")),
+                Guard(OperationRef("git.worktree")),
+                Guard(expr='git.branch.value != "main"'),
             ),
             steps=(
                 Step(name="inspect-issue", operation=OperationRef("gh.issue.view", with_={"issue": "kergma-lw/ordo-cli#1"})),
@@ -49,7 +49,7 @@ class AuthoringVerificationTest(unittest.TestCase):
         repaired = Workflow(
             version=0,
             workflow="review-issue",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view", with_={"issue": "kergma-lw/ordo-cli#1"})),),
         )
 

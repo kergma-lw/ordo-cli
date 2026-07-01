@@ -56,6 +56,29 @@ Implications:
 - operation code should stay focused on local input handling, integration work, and structured outcome shaping;
 - mode semantics should remain a runtime responsibility even when an operation offers local summary text, diagnostics, or supplementary raw detail.
 
+## Probe readiness
+
+A probe is ready when:
+
+- it answers one clear domain question;
+- its output fields are minimal but sufficient for downstream use;
+- its output fields are domain-natural rather than artificially standardized;
+- it does not encode runtime mode semantics such as `check`, `plan`, `explain`, or `next`;
+- it does not primarily own shared family prerequisite failures that belong to executable bootstrap;
+- its remaining failure modes are narrow, local, and honest;
+- its result is understandable from structured outcome fields without relying on raw transport output as the primary contract;
+- it is reusable both directly and as a building block for derived probes or workflow-level composition.
+
+Useful review questions:
+
+- what single question does this probe answer;
+- which output fields are actually needed by consumers;
+- does each field carry distinct machine-relevant meaning;
+- are any shared prerequisite failures still incorrectly owned by the probe;
+- is any workflow or policy logic leaking into the probe;
+- can the result be explained without scraping stdout or stderr;
+- would this probe still look clean if reused by another probe or by guard evaluation.
+
 ## Bootstrap
 
 A connector may have shared bootstrap or shared context for the whole family.
@@ -143,6 +166,7 @@ The main target probes are:
 
 - `git.repo`
 - `git.branch`
+- `git.branches`
 - `git.worktree`
 - `git.worktrees`
 - `git.stash`
@@ -151,7 +175,7 @@ The main target probes are:
 - `git.upstream`
 - `git.range(base=..., head=...)`
 
-Specialized names such as `git.clean_worktree`, `git.branch_not_main`, and `git.single_worktree` may still exist during migration, but they are a compatibility layer rather than the desired steady-state public surface.
+Specialized policy-shaped names such as `git.branch_not_main` are not part of the desired steady-state public surface and should not be added as canonical git probes.
 
 ## Possible future connector namespaces
 

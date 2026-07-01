@@ -36,7 +36,7 @@ class CheckModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
         )
         seen_references: list[str] = []
@@ -59,16 +59,16 @@ class CheckModeTest(unittest.TestCase):
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
-        self.assertEqual(result.failed_guard, "git.clean_worktree")
-        self.assertEqual(result.outputs["blockers"], ["git.clean_worktree"])
-        self.assertEqual(result.outputs["guard_details"][0]["reference"], "git.clean_worktree")
-        self.assertEqual(seen_references, ["git.clean_worktree"])
+        self.assertEqual(result.failed_guard, "git.worktree")
+        self.assertEqual(result.outputs["blockers"], ["git.worktree"])
+        self.assertEqual(result.outputs["guard_details"][0]["reference"], "git.worktree")
+        self.assertEqual(seen_references, ["git.worktree"])
 
     def test_check_reports_success_and_active_profile_metadata(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
         )
         profile = Profile(
@@ -124,7 +124,7 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "probe_failed")
 
     def test_check_surfaces_bootstrap_details_from_operation_results(self) -> None:
-        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.clean_worktree")),), steps=())
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.worktree")),), steps=())
 
         def probe(resolved_guard, _workflow):
             _ = resolved_guard

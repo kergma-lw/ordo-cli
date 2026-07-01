@@ -14,7 +14,7 @@ class PlanModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(Step(name="inspect", operation=OperationRef("gh.project_set_status")),),
         )
 
@@ -22,7 +22,7 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertEqual(result.mode, Mode.PLAN)
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.plan.guard_checks, ("git.clean_worktree",))
+        self.assertEqual(result.plan.guard_checks, ("git.worktree",))
         self.assertEqual(result.outputs["step_items"][0]["effect"], "effectful")
         self.assertEqual(result.outputs["step_items"][0]["eligibility"], "eligible")
 
@@ -30,7 +30,7 @@ class PlanModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
         )
 
@@ -51,7 +51,7 @@ class PlanModeTest(unittest.TestCase):
         result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
-        self.assertEqual(result.plan.blockers, ("git.clean_worktree",))
+        self.assertEqual(result.plan.blockers, ("git.worktree",))
         self.assertEqual(result.outputs["guard_items"][0]["status"], "blocked")
         self.assertEqual(result.outputs["step_items"][0]["eligibility"], "blocked")
 
@@ -73,7 +73,7 @@ class PlanModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
         )
         profile = Profile(name="repo-defaults", inputs={"branch": "keep"})
@@ -97,7 +97,7 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_items"][0]["failed_subcondition"], 'git.branch.value != "main"')
 
     def test_plan_preserves_bootstrap_details_in_outputs(self) -> None:
-        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.clean_worktree")),), steps=())
+        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.worktree")),), steps=())
 
         def probe(resolved_guard, _workflow):
             _ = resolved_guard

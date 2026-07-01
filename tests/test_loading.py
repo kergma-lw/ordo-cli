@@ -18,7 +18,7 @@ class LoadingTest(unittest.TestCase):
                 inputs:
                   issue: repo#1
                 guards:
-                  - uses: git.clean_worktree
+                  - uses: git.worktree
                 steps:
                   - name: inspect
                     uses: gh.issue.view

@@ -15,7 +15,7 @@ class ValidationTest(unittest.TestCase):
                 inputs:
                   issue: repo#1
                 guards:
-                  - uses: git.clean_worktree
+                  - uses: git.worktree
                 steps:
                   - name: inspect-issue
                     uses: gh.issue.view
@@ -50,7 +50,7 @@ class ValidationTest(unittest.TestCase):
                 version: 0
                 workflow: open-task
                 guards:
-                  - uses: git.clean_worktree
+                  - uses: git.worktree
                     expr: git.branch != "main"
                 steps: []
                 """

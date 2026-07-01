@@ -12,7 +12,7 @@ class ContractShapeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             inputs={"issue": "repo#1"},
-            guards=(Guard(OperationRef("git.clean_worktree")),),
+            guards=(Guard(OperationRef("git.worktree")),),
             steps=(
                 Step(
                     name="inspect-issue",
@@ -27,7 +27,7 @@ class ContractShapeTest(unittest.TestCase):
                 "version": 0,
                 "workflow": "open-task",
                 "inputs": {"issue": "repo#1"},
-                "guards": [{"uses": "git.clean_worktree", "with": {}}],
+                "guards": [{"uses": "git.worktree", "with": {}}],
                 "steps": [
                     {
                         "name": "inspect-issue",
@@ -62,13 +62,13 @@ class ContractShapeTest(unittest.TestCase):
                     level="error",
                     message="Worktree is dirty",
                     path=("guards", "0"),
-                    details={"uses": "git.clean_worktree"},
+                    details={"uses": "git.worktree"},
                 ),
             ),
             plan=ExecutionPlan(
-                guard_checks=("git.clean_worktree",),
+                guard_checks=("git.worktree",),
                 step_names=("inspect-issue",),
-                blockers=("git.clean_worktree",),
+                blockers=("git.worktree",),
             ),
             outputs={"can_execute": False},
             operation_results=(
@@ -78,7 +78,7 @@ class ContractShapeTest(unittest.TestCase):
                     observations={"dirty": True},
                 ),
             ),
-            failed_guard="git.clean_worktree",
+            failed_guard="git.worktree",
             failed_step=None,
         )
 
@@ -86,9 +86,9 @@ class ContractShapeTest(unittest.TestCase):
 
         self.assertEqual(contract["mode"], "plan")
         self.assertEqual(contract["status"], "guard_failed")
-        self.assertEqual(contract["failed_guard"], "git.clean_worktree")
+        self.assertEqual(contract["failed_guard"], "git.worktree")
         self.assertIsNone(contract["failed_step"])
-        self.assertEqual(contract["plan"]["blockers"], ["git.clean_worktree"])
+        self.assertEqual(contract["plan"]["blockers"], ["git.worktree"])
         json.dumps(contract)
 
 

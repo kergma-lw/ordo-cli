@@ -40,6 +40,7 @@
 - The current target set for broad repo-state coverage is:
   - `git.repo`
   - `git.branch`
+  - `git.branches`
   - `git.worktree`
   - `git.worktrees`
   - `git.stash`
@@ -48,4 +49,4 @@
   - `git.upstream`
   - `git.range(base=..., head=...)`
 - This set should be preferred over adding many narrower git probes for local rituals.
-- Older specialized probes such as `git.clean_worktree`, `git.branch_not_main`, and `git.single_worktree` may remain temporarily for compatibility, but they should be treated as deprecated rather than as the preferred long-term public surface.
+- Older specialized policy-shaped probes should not be used as the preferred long-term public surface when the same intent can be expressed through canonical git facts and guard composition.
