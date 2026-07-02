@@ -15,6 +15,8 @@
 - Every connector operation must support narrow local explainability of its own outcome.
 - A successful `probe` result must contain meaningful observations or diagnostics, not only a bare success flag.
 - A successful `action` result must contain a meaningful effect summary or diagnostics, not only a bare success flag.
+- A successful `action` result must expose at least one documented action-specific output field.
+- Documented operation `failure_modes` must describe expected contract-level non-success rather than exceptional runtime breakdown.
 - Raw stdout/stderr, when produced by an implementation, must be treated as optional detail fields rather than the primary contract surface.
 
 ## Extension boundary

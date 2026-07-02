@@ -19,6 +19,7 @@ Workflow source may be authored in YAML, but canonical runtime-facing structures
 - `scenarios/` — canonical use cases
 - `adr/` — architecture decisions
 - `verification/` — checks and invariants organized by domain
+- `gaps/` — documented product or contract gaps with still-open design
 - `notes/` — longer positioning and project notes
 - `domain-packs.toml` — derived pack assembly config
 - `packs/` — generated artifacts built from the source documents above

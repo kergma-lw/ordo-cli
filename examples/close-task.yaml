@@ -17,7 +17,9 @@ steps:
       command: .venv/bin/python -m pytest
 
   - name: merge-main
-    uses: git.merge_to_main_ff
+    uses: git.integrate.merge_ff_only
+    with:
+      ref: main
 
   - name: close-issue
     uses: gh.close_issue

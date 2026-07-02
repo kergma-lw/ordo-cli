@@ -79,6 +79,78 @@ Useful review questions:
 - can the result be explained without scraping stdout or stderr;
 - would this probe still look clean if reused by another probe or by guard evaluation.
 
+## Action readiness
+
+An action is ready when:
+
+- it performs one clear effectful operation within a narrow semantic scope;
+- it is an executable leaf operation rather than an abstract namespace or action group;
+- its inputs reflect the natural semantic structure of the domain target rather than an artificial scalar-versus-batch normalization;
+- its success outputs describe durable effects or effect-relevant observations rather than only a bare success flag;
+- it exposes at least one documented action-specific output field on success;
+- it does not encode runtime mode semantics such as `check`, `plan`, `explain`, or `next`;
+- it validates only facts required for the action to be executable and to remain the action it claims to be;
+- it does not hard-code workflow etiquette, safety preferences, or local policy as intrinsic action preconditions;
+- distinctions that change the action's result class, failure semantics, or mental model are modeled as separate actions rather than as incidental parameters;
+- incidental operational variation that does not change action identity is carried in inputs rather than expanded into many near-duplicate action names;
+- its effect boundary is clear enough that a reader can tell what completion of the action actually means;
+- if partial effect or partial success is possible, the contract represents that possibility honestly rather than pretending the action is all-or-nothing;
+- the meaning of a repeated call is semantically clear, including whether it is idempotent, duplicate, conflicting, additive, or a no-op;
+- its resulting post-state is observable through documented outputs, probes, or both;
+- when the action creates, selects, moves, or updates an addressable result, that result is returned in a documented addressable form;
+- if the action is a true batch operation, its atomic-versus-partial semantics are part of the contract rather than left implicit;
+- its remaining failure modes are narrow, local, and honest;
+- its documented `failure_modes` describe expected contract-level non-success rather than exceptional runtime breakdown;
+- its result is understandable from structured outcome fields without relying on raw transport output as the primary contract;
+- it would still make sense if invoked from a different workflow with different surrounding policy.
+
+Useful review questions:
+
+- what single effect does this action produce;
+- is this operation a concrete executable leaf, or only a category that should remain non-executable;
+- do the inputs reflect the natural target shape of the domain, or are they forcing an artificial scalar-versus-batch model;
+- which output fields are actually needed by consumers to understand what changed;
+- is there at least one documented success output field whose meaning is specific to this action rather than generic outcome scaffolding;
+- which checks are truly required for executability or action identity, and which are only policy or etiquette;
+- does any named variant here actually change result class, failure semantics, or mental model enough to deserve a separate action;
+- does any existing action name differ only by incidental parameterization that should instead live in inputs;
+- is any apparent batch shape really one aggregated domain target, or is it a set of independent repeated actions;
+- where exactly is the action's effect boundary, and what does completion mean;
+- can the action produce partial effect or partial success, and if so is that represented honestly in the contract;
+- what does a repeated identical call mean here: idempotent retry, duplicate effect, conflict, or no-op;
+- is the resulting post-state observable through documented outputs, probes, or both;
+- if the action yields an addressable result, is that result returned explicitly enough for downstream use;
+- if this is a true batch action, are atomic-versus-partial semantics explicit;
+- do the documented `failure_modes` describe expected action-level refusal or non-success, rather than interruption, crash, timeout, or other runtime-level breakdown;
+- is any workflow or approval logic leaking into the action;
+- can the result be explained without scraping stdout or stderr;
+- would this action still look clean if another workflow reused it under a different safety policy.
+
+## Action input norms
+
+- Action inputs should reflect the natural semantic structure of the target domain rather than an artificially imposed scalar-versus-batch split.
+- An action may take no inputs when its target and scope are fully determined by current context.
+- When an action operates on one aggregated domain target, it may naturally affect many underlying objects without becoming a batch action.
+- A batch action is not merely an action that touches many objects; it is one call that is semantically equivalent to a set of independent repeated actions over multiple targets.
+- If multiplicity is an internal property of one domain target, it should remain part of the ordinary action contract rather than being forced into a separate batch surface purely because many objects are involved.
+- Inputs should distinguish, when applicable:
+  - `target` — what the action is directed at;
+  - `payload` — what is created, transmitted, or changed;
+  - `constraints` — restrictions that limit the allowed result class;
+  - `justification` — explanation or grounds, when the action itself genuinely requires them.
+- Free text should be preferred only when the payload structure is inherently unstable or would not produce a useful stable contract shape.
+- If an action's inputs grow without clear role separation, this is a signal to review whether the action is too broad or is hiding a small workflow.
+- Input differences that only change call data should remain inputs.
+- Input differences that change result class, failure semantics, or mental model should lead to separate action leaves rather than one overloaded action surface.
+
+## Contract failure versus exceptional runtime error
+
+- An operation's documented `failure_modes` should describe expected contract-level non-success within the semantic world of that operation.
+- Exceptional runtime breakdown must remain distinct from documented contract failure modes.
+- Examples of exceptional runtime breakdown include interruption, timeout, transport corruption, uncaught implementation fault, and other failures that do not honestly belong to the operation's narrow domain semantics.
+- Connectors should not encode catastrophic or runtime-level breakdown as if it were merely another ordinary business-style action refusal.
+- Runtime should preserve the distinction between an operation that failed within contract and an operation whose execution broke down exceptionally.
+
 ## Bootstrap
 
 A connector may have shared bootstrap or shared context for the whole family.

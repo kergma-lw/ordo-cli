@@ -69,10 +69,10 @@ steps:
       value: ${inputs.iteration}
 
   - name: sync-main
-    uses: git.sync_main_ff_only
+    uses: git.sync.fetch
 
   - name: create-or-switch-task-branch
-    uses: git.branch_from_issue
+    uses: git.branch.switch
     with:
       issue: ${inputs.issue}
       branch: ${inputs.branch}

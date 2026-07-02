@@ -77,11 +77,94 @@ class OperationTest(unittest.TestCase):
 
         branch = registry.get_operation("git.branch")
         worktree = registry.get_operation("git.worktree")
-        merge = registry.get_operation("git.merge_to_main_ff")
+        merge = registry.get_operation("git.integrate.merge_ff_only")
 
         self.assertEqual(branch.failure_modes, ("probe_failed",))
         self.assertEqual(worktree.failure_modes, ("probe_failed",))
-        self.assertEqual(merge.failure_modes, ("non_fast_forward", "action_failed"))
+        self.assertEqual(merge.failure_modes, ("ref_not_found", "non_fast_forward", "merge_blocked"))
+
+        switch = registry.get_operation("git.branch.switch")
+        self.assertEqual(
+            switch.failure_modes,
+            ("branch_not_found", "worktree_change_conflict", "unresolved_state", "switch_blocked"),
+        )
+        create = registry.get_operation("git.branch.create")
+        self.assertEqual(
+            create.failure_modes,
+            ("invalid_branch", "branch_exists", "start_point_not_found", "create_blocked"),
+        )
+        commit_create = registry.get_operation("git.commit.create")
+        self.assertEqual(
+            commit_create.failure_modes,
+            ("message_invalid", "nothing_to_commit", "commit_blocked"),
+        )
+        commit_amend = registry.get_operation("git.commit.amend")
+        self.assertEqual(
+            commit_amend.failure_modes,
+            ("message_invalid", "nothing_to_amend", "amend_blocked"),
+        )
+        commit_revert = registry.get_operation("git.commit.revert")
+        self.assertEqual(
+            commit_revert.failure_modes,
+            ("commit_not_found", "merge_commit_not_supported", "revert_conflict", "revert_blocked"),
+        )
+        integrate_merge = registry.get_operation("git.integrate.merge")
+        self.assertEqual(
+            integrate_merge.failure_modes,
+            ("ref_not_found", "merge_conflict", "merge_blocked"),
+        )
+        integrate_merge_ff = registry.get_operation("git.integrate.merge_ff_only")
+        self.assertEqual(
+            integrate_merge_ff.failure_modes,
+            ("ref_not_found", "non_fast_forward", "merge_blocked"),
+        )
+        integrate_rebase = registry.get_operation("git.integrate.rebase_onto")
+        self.assertEqual(
+            integrate_rebase.failure_modes,
+            ("onto_not_found", "upstream_not_found", "branch_not_found", "default_branch_protected", "rebase_conflict", "rebase_blocked"),
+        )
+        integrate_cherry_pick = registry.get_operation("git.integrate.cherry_pick")
+        self.assertEqual(
+            integrate_cherry_pick.failure_modes,
+            ("commit_not_found", "merge_commit_not_supported", "cherry_pick_conflict", "cherry_pick_blocked"),
+        )
+        sync_fetch = registry.get_operation("git.sync.fetch")
+        self.assertEqual(sync_fetch.failure_modes, ("remote_not_found", "fetch_blocked"))
+        sync_push = registry.get_operation("git.sync.push")
+        self.assertEqual(
+            sync_push.failure_modes,
+            ("branch_not_found", "remote_not_found", "upstream_remote_missing", "non_fast_forward", "push_blocked"),
+        )
+        delete = registry.get_operation("git.branch.delete")
+        self.assertEqual(
+            delete.failure_modes,
+            ("branch_not_found", "branch_checked_out", "default_branch_protected", "branch_not_merged", "delete_blocked"),
+        )
+
+    def test_git_initial_action_surface_replaces_previous_custom_actions(self) -> None:
+        registry = get_public_connector_registry()
+
+        expected = {
+            "git.branch.switch",
+            "git.branch.create",
+            "git.branch.delete",
+            "git.commit.create",
+            "git.commit.amend",
+            "git.commit.revert",
+            "git.integrate.merge",
+            "git.integrate.merge_ff_only",
+            "git.integrate.rebase_onto",
+            "git.integrate.cherry_pick",
+            "git.sync.fetch",
+            "git.sync.push",
+        }
+
+        for reference in expected:
+            self.assertIsNotNone(registry.get_operation(reference), reference)
+
+        self.assertIsNone(registry.get_operation("git.branch_from_issue"))
+        self.assertIsNone(registry.get_operation("git.merge_to_main_ff"))
+        self.assertIsNone(registry.get_operation("git.sync_main_ff_only"))
 
     def test_gh_and_shell_operation_contracts_no_longer_primary_own_shared_bootstrap_failures(self) -> None:
         registry = get_public_connector_registry()
@@ -715,6 +798,1020 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.raw["stdout"], "hi\n")
         self.assertEqual(result.observations["exit_code"], 0)
+
+    def test_git_branch_switch_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="switch", operation=OperationRef("git.branch.switch", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.switch")
+        resolved = ResolvedOperation("git.branch.switch", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertTrue(result.observations["changed"])
+
+    def test_git_branch_switch_reports_successful_noop_when_branch_already_current(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="switch", operation=OperationRef("git.branch.switch", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.switch")
+        resolved = ResolvedOperation("git.branch.switch", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="Already on 'feature/demo'\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertFalse(result.observations["changed"])
+
+    def test_git_branch_switch_distinguishes_worktree_conflict(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="switch", operation=OperationRef("git.branch.switch", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.switch")
+        resolved = ResolvedOperation("git.branch.switch", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(
+                    returncode=1,
+                    stdout="",
+                    stderr="error: Your local changes to the following files would be overwritten by checkout:\n README.md\n",
+                ),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "worktree_change_conflict")
+
+    def test_git_branch_switch_distinguishes_unresolved_state(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="switch", operation=OperationRef("git.branch.switch", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.switch")
+        resolved = ResolvedOperation("git.branch.switch", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: you need to resolve your current index first\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "unresolved_state")
+
+    def test_git_commit_create_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="commit", operation=OperationRef("git.commit.create", with_={"message": "Add demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.create")
+        resolved = ResolvedOperation("git.commit.create", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="[feature/demo abc1234] Add demo\n 1 file changed\n", stderr=""),
+                self._completed(returncode=0, stdout="abc1234567890\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.observations["commit"], "abc1234567890")
+
+    def test_git_commit_create_rejects_blank_message(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="commit", operation=OperationRef("git.commit.create", with_={"message": "   "})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.create")
+        resolved = ResolvedOperation("git.commit.create", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+            ]
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "message_invalid")
+        self.assertEqual(run.call_count, 1)
+
+    def test_git_commit_create_distinguishes_nothing_to_commit(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="commit", operation=OperationRef("git.commit.create", with_={"message": "Add demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.create")
+        resolved = ResolvedOperation("git.commit.create", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="nothing to commit, working tree clean\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "nothing_to_commit")
+
+    def test_git_commit_amend_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="amend", operation=OperationRef("git.commit.amend", with_={"message": "Refine demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.amend")
+        resolved = ResolvedOperation("git.commit.amend", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="abc111\n", stderr=""),
+                self._completed(returncode=0, stdout="[feature/demo def5678] Refine demo\n 1 file changed\n", stderr=""),
+                self._completed(returncode=0, stdout="def5678901234\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.observations["previous_commit"], "abc111")
+        self.assertEqual(result.observations["commit"], "def5678901234")
+
+    def test_git_commit_amend_supports_preserving_message(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="amend", operation=OperationRef("git.commit.amend")),))
+        operation = get_public_connector_registry().get_operation("git.commit.amend")
+        resolved = ResolvedOperation("git.commit.amend", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="abc111\n", stderr=""),
+                self._completed(returncode=0, stdout="[feature/demo def5678] Existing title\n 1 file changed\n", stderr=""),
+                self._completed(returncode=0, stdout="def5678901234\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["previous_commit"], "abc111")
+        self.assertEqual(result.observations["commit"], "def5678901234")
+
+    def test_git_commit_amend_rejects_blank_message(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="amend", operation=OperationRef("git.commit.amend", with_={"message": "  "})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.amend")
+        resolved = ResolvedOperation("git.commit.amend", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr="")]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "message_invalid")
+
+    def test_git_commit_amend_distinguishes_nothing_to_amend(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="amend", operation=OperationRef("git.commit.amend", with_={"message": "Refine demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.amend")
+        resolved = ResolvedOperation("git.commit.amend", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: Needed a single revision\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "nothing_to_amend")
+
+    def test_git_commit_revert_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="revert", operation=OperationRef("git.commit.revert", with_={"commit": "abc123"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.revert")
+        resolved = ResolvedOperation("git.commit.revert", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="abc123\n", stderr=""),
+                self._completed(returncode=0, stdout="[feature/demo def5678] Revert \"Add demo\"\n 1 file changed\n", stderr=""),
+                self._completed(returncode=0, stdout="def5678901234\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["reverted_commit"], "abc123")
+        self.assertEqual(result.observations["revert_commit"], "def5678901234")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+
+    def test_git_commit_revert_distinguishes_merge_commit_not_supported(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="revert", operation=OperationRef("git.commit.revert", with_={"commit": "merge123"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.revert")
+        resolved = ResolvedOperation("git.commit.revert", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="merge123\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="error: commit merge123 is a merge but no -m option was given\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "merge_commit_not_supported")
+
+    def test_git_commit_revert_distinguishes_revert_conflict(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="revert", operation=OperationRef("git.commit.revert", with_={"commit": "abc123"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.commit.revert")
+        resolved = ResolvedOperation("git.commit.revert", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="abc123\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="error: could not revert abc123\nhint: after resolving the conflicts, mark the corrected paths\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "revert_conflict")
+
+    def test_git_integrate_merge_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="merge", operation=OperationRef("git.integrate.merge", with_={"ref": "main"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.merge")
+        resolved = ResolvedOperation("git.integrate.merge", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="mainsha\n", stderr=""),
+                self._completed(returncode=0, stdout="Merge made by the 'ort' strategy.\n", stderr=""),
+                self._completed(returncode=0, stdout="mergedhead\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["merged_ref"], "mainsha")
+        self.assertEqual(result.observations["head_commit"], "mergedhead")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+
+    def test_git_integrate_merge_distinguishes_missing_ref(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="merge", operation=OperationRef("git.integrate.merge", with_={"ref": "missing"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.merge")
+        resolved = ResolvedOperation("git.integrate.merge", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: Needed a single revision\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ref_not_found")
+
+    def test_git_integrate_merge_distinguishes_merge_conflict(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="merge", operation=OperationRef("git.integrate.merge", with_={"ref": "main"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.merge")
+        resolved = ResolvedOperation("git.integrate.merge", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="mainsha\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="Automatic merge failed; fix conflicts and then commit the result.\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "merge_conflict")
+
+    def test_git_integrate_merge_ff_only_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="merge", operation=OperationRef("git.integrate.merge_ff_only", with_={"ref": "main"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.merge_ff_only")
+        resolved = ResolvedOperation("git.integrate.merge_ff_only", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="mainsha\n", stderr=""),
+                self._completed(returncode=0, stdout="Updating abc..def\nFast-forward\n", stderr=""),
+                self._completed(returncode=0, stdout="mergedhead\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["merged_ref"], "mainsha")
+        self.assertEqual(result.observations["head_commit"], "mergedhead")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+
+    def test_git_integrate_merge_ff_only_distinguishes_missing_ref(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="merge", operation=OperationRef("git.integrate.merge_ff_only", with_={"ref": "missing"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.merge_ff_only")
+        resolved = ResolvedOperation("git.integrate.merge_ff_only", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: Needed a single revision\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ref_not_found")
+
+    def test_git_integrate_merge_ff_only_distinguishes_non_fast_forward(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="merge", operation=OperationRef("git.integrate.merge_ff_only", with_={"ref": "main"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.merge_ff_only")
+        resolved = ResolvedOperation("git.integrate.merge_ff_only", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="mainsha\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: Not possible to fast-forward, aborting.\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "non_fast_forward")
+
+    def test_git_integrate_rebase_onto_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(
+                Step(
+                    name="rebase",
+                    operation=OperationRef("git.integrate.rebase_onto", with_={"onto": "main", "upstream": "origin/main", "branch": "feature/demo"}),
+                ),
+            ),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.rebase_onto")
+        resolved = ResolvedOperation("git.integrate.rebase_onto", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="mainsha\n", stderr=""),
+                self._completed(returncode=0, stdout="upstreamsha\n", stderr=""),
+                self._completed(returncode=0, stdout="branchsha\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="true\n", stderr=""),
+                self._completed(returncode=0, stdout="false\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="origin/main\n", stderr=""),
+                self._completed(returncode=0, stdout="Successfully rebased and updated refs/heads/feature/demo.\n", stderr=""),
+                self._completed(returncode=0, stdout="rebasedhead\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.observations["onto"], "mainsha")
+        self.assertEqual(result.observations["head_commit"], "rebasedhead")
+
+    def test_git_integrate_rebase_onto_distinguishes_missing_onto(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(
+                Step(
+                    name="rebase",
+                    operation=OperationRef("git.integrate.rebase_onto", with_={"onto": "missing", "upstream": "origin/main", "branch": "feature/demo"}),
+                ),
+            ),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.rebase_onto")
+        resolved = ResolvedOperation("git.integrate.rebase_onto", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: Needed a single revision\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "onto_not_found")
+
+    def test_git_integrate_rebase_onto_protects_default_branch(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(
+                Step(
+                    name="rebase",
+                    operation=OperationRef("git.integrate.rebase_onto", with_={"onto": "main", "upstream": "origin/main", "branch": "main"}),
+                ),
+            ),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.rebase_onto")
+        resolved = ResolvedOperation("git.integrate.rebase_onto", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="mainsha\n", stderr=""),
+                self._completed(returncode=0, stdout="upstreamsha\n", stderr=""),
+                self._completed(returncode=0, stdout="mainbranchsha\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="true\n", stderr=""),
+                self._completed(returncode=0, stdout="false\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="origin/main\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "default_branch_protected")
+
+    def test_git_integrate_rebase_onto_distinguishes_rebase_conflict(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(
+                Step(
+                    name="rebase",
+                    operation=OperationRef("git.integrate.rebase_onto", with_={"onto": "main", "upstream": "origin/main", "branch": "feature/demo"}),
+                ),
+            ),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.rebase_onto")
+        resolved = ResolvedOperation("git.integrate.rebase_onto", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="mainsha\n", stderr=""),
+                self._completed(returncode=0, stdout="upstreamsha\n", stderr=""),
+                self._completed(returncode=0, stdout="branchsha\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="true\n", stderr=""),
+                self._completed(returncode=0, stdout="false\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="origin/main\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="error: could not apply abc123\nhint: Resolve all conflicts manually\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "rebase_conflict")
+
+    def test_git_integrate_cherry_pick_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="pick", operation=OperationRef("git.integrate.cherry_pick", with_={"commit": "abc123"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.cherry_pick")
+        resolved = ResolvedOperation("git.integrate.cherry_pick", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="abc123\n", stderr=""),
+                self._completed(returncode=0, stdout="[main def5678] Add demo\n 1 file changed\n", stderr=""),
+                self._completed(returncode=0, stdout="def5678901234\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["picked_commit"], "abc123")
+        self.assertEqual(result.observations["head_commit"], "def5678901234")
+        self.assertEqual(result.observations["branch"], "main")
+
+    def test_git_integrate_cherry_pick_distinguishes_merge_commit_not_supported(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="pick", operation=OperationRef("git.integrate.cherry_pick", with_={"commit": "merge123"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.cherry_pick")
+        resolved = ResolvedOperation("git.integrate.cherry_pick", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="merge123\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="error: commit merge123 is a merge but no -m option was given\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "merge_commit_not_supported")
+
+    def test_git_integrate_cherry_pick_distinguishes_conflict(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="pick", operation=OperationRef("git.integrate.cherry_pick", with_={"commit": "abc123"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.integrate.cherry_pick")
+        resolved = ResolvedOperation("git.integrate.cherry_pick", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="abc123\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="error: could not apply abc123\nhint: after resolving the conflicts, mark the corrected paths\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "cherry_pick_conflict")
+
+    def test_git_sync_fetch_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="fetch", operation=OperationRef("git.sync.fetch", with_={"remote": "origin"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.sync.fetch")
+        resolved = ResolvedOperation("git.sync.fetch", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["remote"], "origin")
+        self.assertTrue(result.observations["fetched"])
+
+    def test_git_sync_fetch_distinguishes_missing_remote(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="fetch", operation=OperationRef("git.sync.fetch", with_={"remote": "missing"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.sync.fetch")
+        resolved = ResolvedOperation("git.sync.fetch", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: 'missing' does not appear to be a git repository\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "remote_not_found")
+
+    def test_git_sync_push_returns_structured_action_result_with_explicit_remote(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="push", operation=OperationRef("git.sync.push", with_={"branch": "feature/demo", "remote": "origin"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.sync.push")
+        resolved = ResolvedOperation("git.sync.push", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["remote"], "origin")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+
+    def test_git_sync_push_uses_upstream_remote_when_remote_omitted(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="push", operation=OperationRef("git.sync.push", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.sync.push")
+        resolved = ResolvedOperation("git.sync.push", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="origin/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["remote"], "origin")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+
+    def test_git_sync_push_reports_missing_upstream_remote(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="push", operation=OperationRef("git.sync.push", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.sync.push")
+        resolved = ResolvedOperation("git.sync.push", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=128, stdout="", stderr="fatal: no upstream configured\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "upstream_remote_missing")
+
+    def test_git_branch_create_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("git.branch.create", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.create")
+        resolved = ResolvedOperation("git.branch.create", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=1, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="abc1234567890\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.observations["start_point"], "abc1234567890")
+
+    def test_git_branch_create_supports_explicit_start_point(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(
+                Step(
+                    name="create",
+                    operation=OperationRef("git.branch.create", with_={"branch": "feature/demo", "start_point": "main"}),
+                ),
+            ),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.create")
+        resolved = ResolvedOperation("git.branch.create", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=1, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="feedface12345678\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.observations["start_point"], "feedface12345678")
+
+    def test_git_branch_create_distinguishes_existing_branch(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("git.branch.create", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.create")
+        resolved = ResolvedOperation("git.branch.create", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "branch_exists")
+
+    def test_git_branch_create_distinguishes_missing_start_point(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(
+                Step(
+                    name="create",
+                    operation=OperationRef("git.branch.create", with_={"branch": "feature/demo", "start_point": "missing"}),
+                ),
+            ),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.create")
+        resolved = ResolvedOperation("git.branch.create", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=1, stdout="", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: Needed a single revision\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "start_point_not_found")
+
+    def test_git_branch_delete_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="delete", operation=OperationRef("git.branch.delete", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.delete")
+        resolved = ResolvedOperation("git.branch.delete", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="true\n", stderr=""),
+                self._completed(returncode=0, stdout="false\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="main\n", stderr=""),
+                self._completed(returncode=0, stdout="origin/main\n", stderr=""),
+                self._completed(returncode=0, stdout="Deleted branch feature/demo (was abc1234).\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["branch"], "feature/demo")
+
+    def test_git_branch_delete_protects_default_branch(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="delete", operation=OperationRef("git.branch.delete", with_={"branch": "main"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.delete")
+        resolved = ResolvedOperation("git.branch.delete", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="true\n", stderr=""),
+                self._completed(returncode=0, stdout="false\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="origin/main\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "default_branch_protected")
+
+    def test_git_branch_delete_distinguishes_checked_out_branch(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="delete", operation=OperationRef("git.branch.delete", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.delete")
+        resolved = ResolvedOperation("git.branch.delete", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "branch_checked_out")
+
+    def test_git_branch_delete_distinguishes_not_merged_branch(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="delete", operation=OperationRef("git.branch.delete", with_={"branch": "feature/demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("git.branch.delete")
+        resolved = ResolvedOperation("git.branch.delete", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="true\n", stderr=""),
+                self._completed(returncode=0, stdout="false\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo/.git\n", stderr=""),
+                self._completed(returncode=0, stdout="main\n", stderr=""),
+                self._completed(returncode=0, stdout="origin/main\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="error: The branch 'feature/demo' is not fully merged.\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "branch_not_merged")
 
     def test_gh_issue_view_returns_structured_probe_data(self) -> None:
         workflow = Workflow(
