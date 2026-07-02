@@ -18,7 +18,7 @@ class AuthoringVerificationTest(unittest.TestCase):
         gh_ops = [op["name"] for op in contract["connectors"][1]["operations"]]
 
         self.assertEqual(namespaces, ["git", "gh", "shell"])
-        self.assertIn("issue.view", gh_ops)
+        self.assertIn("issue", gh_ops)
 
     def test_agent_can_compose_non_trivial_workflow_and_profile(self) -> None:
         workflow = Workflow(
@@ -30,7 +30,7 @@ class AuthoringVerificationTest(unittest.TestCase):
                 Guard(expr='git.branch.value != "main"'),
             ),
             steps=(
-                Step(name="inspect-issue", operation=OperationRef("gh.issue.view", with_={"issue": "kergma-lw/ordo-cli#1"})),
+                Step(name="inspect-issue", operation=OperationRef("gh.issue", with_={"issue": "kergma-lw/ordo-cli#1"})),
                 Step(name="verify-command", operation=OperationRef("shell.command", with_={"command": "echo review"})),
             ),
         )
@@ -39,7 +39,7 @@ class AuthoringVerificationTest(unittest.TestCase):
         composed = compose_profiles(profile)
 
         self.assertTrue(composed.ok)
-        self.assertEqual(workflow.steps[0].operation.uses, "gh.issue.view")
+        self.assertEqual(workflow.steps[0].operation.uses, "gh.issue")
         self.assertEqual(composed.profile.name, "review-defaults")
 
     def test_structured_feedback_supports_iterative_repair(self) -> None:
@@ -50,7 +50,7 @@ class AuthoringVerificationTest(unittest.TestCase):
             version=0,
             workflow="review-issue",
             guards=(Guard(OperationRef("git.worktree")),),
-            steps=(Step(name="inspect", operation=OperationRef("gh.issue.view", with_={"issue": "kergma-lw/ordo-cli#1"})),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"issue": "kergma-lw/ordo-cli#1"})),),
         )
 
         explanation = explain_workflow(

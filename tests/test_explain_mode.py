@@ -14,7 +14,7 @@ class ExplainModeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             guards=(Guard(expr='git.branch.value != "main"'),),
-            steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue")),),
         )
 
         def probe(resolved_guard, _workflow):
@@ -48,7 +48,7 @@ class ExplainModeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             guards=(),
-            steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue")),),
         )
 
         result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)

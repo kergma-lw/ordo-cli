@@ -9,6 +9,6 @@ guards:
 
 steps:
   - name: inspect-issue
-    uses: gh.issue.view
+    uses: gh.issue
     with:
       issue: ${inputs.issue}

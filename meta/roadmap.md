@@ -20,7 +20,7 @@
 - `shell.command`
 - `git.worktree`
 - `git.branch`
-- `gh.issue.view`
+- `gh.issue`
 - `gh.project.item.fields`
 
 ## Stage 3 — explainable runtime

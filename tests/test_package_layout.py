@@ -19,14 +19,14 @@ class PackageLayoutSmokeTest(unittest.TestCase):
         connector = Connector(namespace="gh")
         diagnostic = Diagnostic(code="demo", level="info", message="ok")
         result = RuntimeResult(mode=Mode.CHECK, status=RuntimeStatus.OK)
-        operation_ref = OperationRef(uses="gh.issue.view")
+        operation_ref = OperationRef(uses="gh.issue")
 
         self.assertEqual(workflow.version, 0)
         self.assertEqual(profile.name, "default")
         self.assertEqual(connector.namespace, "gh")
         self.assertEqual(diagnostic.code, "demo")
         self.assertEqual(result.mode, Mode.CHECK)
-        self.assertEqual(operation_ref.uses, "gh.issue.view")
+        self.assertEqual(operation_ref.uses, "gh.issue")
 
 
 if __name__ == "__main__":

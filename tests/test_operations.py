@@ -1813,36 +1813,36 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "branch_not_merged")
 
-    def test_gh_issue_view_returns_structured_probe_data(self) -> None:
+    def test_gh_issue_returns_structured_probe_data(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.issue.view", with_={"issue": "owner/repo#1"})),),
+            guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#1"})),),
             steps=(),
         )
-        operation = get_public_connector_registry().get_operation("gh.issue.view")
-        resolved = ResolvedOperation("gh.issue.view", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.issue")
+        resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"number":1,"title":"Demo","state":"OPEN","body":"x","url":"https://example.test"}', stderr=""),
+                self._completed(returncode=0, stdout='{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":[],"assignees":[],"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"repository":{"nameWithOwner":"owner/repo"},"stateReason":null,"projectItems":[]}', stderr=""),
             ]
 
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["issue"]["number"], 1)
+        self.assertEqual(result.observations["number"], 1)
 
     def test_gh_probe_surfaces_bootstrap_failure_before_operation_logic(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.issue.view", with_={"issue": "owner/repo#1"})),),
+            guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#1"})),),
             steps=(),
         )
-        operation = get_public_connector_registry().get_operation("gh.issue.view")
-        resolved = ResolvedOperation("gh.issue.view", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.issue")
+        resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2023,21 +2023,137 @@ class OperationTest(unittest.TestCase):
             connector_namespace="gh",
             operation=operation,  # type: ignore[arg-type]
             source="public",
-            expression_text="gh.issue(issue=inputs.issue).status",
-            fields=("status",),
+            expression_text="gh.issue(issue=inputs.issue).state",
+            fields=("state",),
             arguments=(("issue", ReferenceNode(start=0, end=12, parts=("inputs", "issue"))),),
         )
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"number":1,"title":"Demo","state":"OPEN","body":"x","url":"https://example.test"}', stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":[],"assignees":[],"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"repository":{"nameWithOwner":"owner/repo"},"stateReason":null,"projectItems":[]}',
+                    stderr="",
+                ),
             ]
 
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["status"], "OPEN")
+        self.assertEqual(result.observations["state"], "OPEN")
+        self.assertEqual(result.observations["repository"]["nameWithOwner"], "owner/repo")
+
+    def test_gh_issue_probe_maps_not_found_to_local_failure_mode(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#999"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.issue")
+        resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="GraphQL: Could not resolve to an issue with the number of 999.\n"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_issue.not_found")
+
+    def test_gh_issue_probe_reports_invalid_json(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#1"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.issue")
+        resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"number": 1', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "probe_failed")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_issue.invalid_json")
+
+    def test_gh_project_issue_probe_returns_project_local_fields(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.issue", with_={"issue": "owner/repo#1", "project": "PVT_demo"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue")
+        resolved = ResolvedOperation("gh.project.issue", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout=(
+                        '{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_1","project":{"id":"PVT_demo","title":"Checklists"},'
+                        '"fieldValues":{"nodes":[{"name":"In progress","field":{"name":"Status"}},{"name":"Task","field":{"name":"Type"}},'
+                        '{"name":"P1","field":{"name":"Priority"}},{"title":"Sprint 12","field":{"name":"Iteration"}},{"name":"M","field":{"name":"Size"}},'
+                        '{"number":5,"field":{"name":"Estimate"}}]}}]}}}}}'
+                    ),
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertTrue(result.observations["exists"])
+        self.assertEqual(result.observations["status"], "In progress")
+        self.assertEqual(result.observations["type"], "Task")
+        self.assertEqual(result.observations["iteration"], "Sprint 12")
+        self.assertEqual(result.observations["estimate"], 5)
+
+    def test_gh_project_issue_probe_reports_issue_not_in_project_via_exists_false(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.issue", with_={"issue": "owner/repo#1", "project": "PVT_demo"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue")
+        resolved = ResolvedOperation("gh.project.issue", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists"}}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.observations["exists"])
+        self.assertIsNone(result.observations["status"])
+
+    def test_gh_project_issue_probe_reports_project_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.issue", with_={"issue": "owner/repo#1", "project": "PVT_missing"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue")
+        resolved = ResolvedOperation("gh.project.issue", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_project_issue.project_not_found")
 
     def _completed(self, *, returncode: int, stdout: str, stderr: str):
         class Completed:

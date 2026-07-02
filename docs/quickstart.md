@@ -28,7 +28,7 @@ guards:
 
 steps:
   - name: inspect-issue
-    uses: gh.issue.view
+    uses: gh.issue
     with:
       issue: ${inputs.issue}
 ```
@@ -77,7 +77,6 @@ Real canonical implementations currently exist for:
 
 - `git.worktree`
 - `git.branch`
-- `gh.issue.view`
 - `gh.issue`
 - `shell.command`
 

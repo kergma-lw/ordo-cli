@@ -20,7 +20,7 @@ class ResolutionTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             guards=(Guard(OperationRef("git.worktree")),),
-            steps=(Step(name="inspect", operation=OperationRef("gh.issue.view")),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue")),),
         )
 
         result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -48,7 +48,7 @@ class ResolutionTest(unittest.TestCase):
         local_connectors = (
             Connector(
                 namespace="gh",
-                operations=(OperationContract(name="issue.view", kind="probe"),),
+                operations=(OperationContract(name="issue", kind="probe"),),
             ),
         )
 
@@ -62,12 +62,12 @@ class ResolutionTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             guards=(),
-            steps=(Step(name="inspect", operation=OperationRef("local.issue.view")),),
+            steps=(Step(name="inspect", operation=OperationRef("local.issue")),),
         )
         local_connectors = (
             Connector(
                 namespace="local",
-                operations=(OperationContract(name="issue.view", kind="probe"),),
+                operations=(OperationContract(name="issue", kind="probe"),),
             ),
         )
 
@@ -75,22 +75,22 @@ class ResolutionTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.resolved_steps[0].source, "local")
-        self.assertEqual(result.resolved_steps[0].reference, "local.issue.view")
+        self.assertEqual(result.resolved_steps[0].reference, "local.issue")
 
     def test_expr_guard_resolves_probe_call_and_documented_field_path(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(expr='gh.issue(issue=inputs.issue).status not in ["Done"]'),),
+            guards=(Guard(expr='gh.issue(issue=inputs.issue).state != "CLOSED"'),),
             steps=(),
         )
 
         result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.resolved_guards[0].reference, 'gh.issue(issue=inputs.issue).status not in ["Done"]')
+        self.assertEqual(result.resolved_guards[0].reference, 'gh.issue(issue=inputs.issue).state != "CLOSED"')
         self.assertEqual(result.resolved_guards[0].probes[0].reference, "gh.issue")
-        self.assertEqual(result.resolved_guards[0].probes[0].fields, ("status",))
+        self.assertEqual(result.resolved_guards[0].probes[0].fields, ("state",))
 
     def test_expr_guard_rejects_action_reference(self) -> None:
         workflow = Workflow(
@@ -117,6 +117,21 @@ class ResolutionTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.guard_expr.field_unknown")
+
+    def test_expr_guard_resolves_nested_project_issue_probe_call(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"issue": "owner/repo#1", "project": "PVT_demo"},
+            guards=(Guard(expr='gh.project.issue(issue=inputs.issue, project=inputs.project).exists'),),
+            steps=(),
+        )
+
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.resolved_guards[0].probes[0].reference, "gh.project.issue")
+        self.assertEqual(result.resolved_guards[0].probes[0].fields, ("exists",))
 
 
 if __name__ == "__main__":

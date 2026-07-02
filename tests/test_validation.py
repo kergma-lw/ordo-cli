@@ -18,7 +18,7 @@ class ValidationTest(unittest.TestCase):
                   - uses: git.worktree
                 steps:
                   - name: inspect-issue
-                    uses: gh.issue.view
+                    uses: gh.issue
                     with:
                       issue: repo#1
                 """
@@ -164,7 +164,25 @@ class ValidationTest(unittest.TestCase):
                 version: 0
                 workflow: open-task
                 guards:
-                  - gh.issue(issue=inputs.issue).status not in ["Done", "In review"]
+                  - gh.issue(issue=inputs.issue).state != "CLOSED"
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_valid_nested_project_issue_guard_expression_passes(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  issue: owner/repo#1
+                  project: PVT_demo
+                guards:
+                  - gh.project.issue(issue=inputs.issue, project=inputs.project).exists
                 steps: []
                 """
             )
@@ -198,7 +216,7 @@ class ValidationTest(unittest.TestCase):
                 guards:
                   - with: {}
                 steps:
-                  - uses: gh.issue.view
+                  - uses: gh.issue
                 """
             )
         )
@@ -216,9 +234,9 @@ class ValidationTest(unittest.TestCase):
                 guards: []
                 steps:
                   - name: inspect
-                    uses: gh.issue.view
+                    uses: gh.issue
                   - name: inspect
-                    uses: gh.issue.view
+                    uses: gh.issue
                 """
             )
         )

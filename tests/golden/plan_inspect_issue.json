@@ -73,7 +73,7 @@
         "eligibility": "eligible",
         "kind": "probe",
         "name": "inspect-issue",
-        "reference": "gh.issue.view"
+        "reference": "gh.issue"
       }
     ]
   },

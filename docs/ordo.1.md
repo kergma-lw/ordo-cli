@@ -122,7 +122,6 @@ Real implementations currently exist for:
 - `shell.command`
 - `git.worktree`
 - `git.branch`
-- `gh.issue.view`
 - `gh.issue`
 
 Deprecated legacy compatibility probes for object-form guards still exist, including `git.clean_worktree`, `git.branch_not_main`, and `git.single_worktree`.

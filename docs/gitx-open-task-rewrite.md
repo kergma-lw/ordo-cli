@@ -52,8 +52,7 @@ inputs:
 guards:
   - uses: git.single_worktree
   - git.worktree.clean
-  - gh.issue(issue=inputs.issue).project.member
-  - gh.issue(issue=inputs.issue).status == "OPEN"
+  - gh.issue(issue=inputs.issue).state == "OPEN"
 
 steps:
   - name: move-issue-to-in-progress

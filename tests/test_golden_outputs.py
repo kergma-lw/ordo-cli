@@ -28,9 +28,10 @@ def _expr_blocked_probe(resolved, _workflow):
             status="ok",
             summary="issue fetched",
             observations={
-                "status": "DONE",
-                "project": {"member": False, "items": []},
-                "issue": {"number": 1, "state": "DONE"},
+                "number": 1,
+                "state": "DONE",
+                "title": "Demo issue",
+                "url": "https://example.test/issues/1",
             },
         )
     return OperationResult(status="ok", summary="unused")

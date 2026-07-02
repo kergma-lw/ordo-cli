@@ -6,6 +6,6 @@ guards:
 
 steps:
   - name: inspect-issue
-    uses: gh.issue.view
+    uses: gh.issue
     with:
       issue: kergma-lw/checklist-backend#16

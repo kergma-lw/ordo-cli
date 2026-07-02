@@ -16,7 +16,7 @@ class ContractShapeTest(unittest.TestCase):
             steps=(
                 Step(
                     name="inspect-issue",
-                    operation=OperationRef("gh.issue.view", with_={"issue": "repo#1"}),
+                    operation=OperationRef("gh.issue", with_={"issue": "repo#1"}),
                 ),
             ),
         )
@@ -31,7 +31,7 @@ class ContractShapeTest(unittest.TestCase):
                 "steps": [
                     {
                         "name": "inspect-issue",
-                        "uses": "gh.issue.view",
+                        "uses": "gh.issue",
                         "with": {"issue": "repo#1"},
                     }
                 ],

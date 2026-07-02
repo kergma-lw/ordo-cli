@@ -7,7 +7,7 @@ checks:
   - review
 
 overrides:
-  - target: gh.issue.view
+  - target: gh.issue
     with:
       issue: kergma-lw/ordo-cli#1
     reason: explicit issue default for review workflows

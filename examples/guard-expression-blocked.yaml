@@ -6,7 +6,7 @@ inputs:
   command: echo proceed
 
 guards:
-  - gh.issue(issue=inputs.issue).status not in ["DONE", "CLOSED"]
+  - gh.issue(issue=inputs.issue).state not in ["DONE", "CLOSED"]
 
 steps:
   - name: verify-command

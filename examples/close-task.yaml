@@ -8,7 +8,7 @@ inputs:
 guards:
   - git.worktree.clean
   - git.branch.value != "main"
-  - gh.issue(issue=inputs.issue).status == "OPEN"
+  - gh.issue(issue=inputs.issue).state == "OPEN"
 
 steps:
   - name: verify
