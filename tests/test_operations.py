@@ -2842,6 +2842,141 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "priority_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_priority_set.command_failed")
 
+    def test_gh_project_issue_type_set_updates_type(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Bug"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
+        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"Task","field":{"name":"Type"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_T","name":"Type","options":[{"id":"OPT_TASK","name":"Task"},{"id":"OPT_BUG","name":"Bug"}]}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["item_id"], "PVTI_7")
+        self.assertEqual(result.observations["type"], "Bug")
+        self.assertTrue(result.observations["changed"])
+
+    def test_gh_project_issue_type_set_is_noop_for_same_type(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Task"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
+        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"Task","field":{"name":"Type"}}]}}]}}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.observations["changed"])
+        self.assertEqual(result.summary, "GitHub project issue type is already set")
+
+    def test_gh_project_issue_type_set_reports_type_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Story"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
+        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"Task","field":{"name":"Type"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_T","name":"Type","options":[{"id":"OPT_TASK","name":"Task"},{"id":"OPT_BUG","name":"Bug"}]}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "type_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.type_not_found")
+
+    def test_gh_project_issue_type_set_reports_project_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "type": "Task"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
+        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.project_not_found")
+
+    def test_gh_project_issue_type_set_reports_issue_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "type": "Task"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
+        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.issue_not_found")
+
+    def test_gh_project_issue_type_set_reports_type_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Bug"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
+        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"Task","field":{"name":"Type"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_T","name":"Type","options":[{"id":"OPT_TASK","name":"Task"},{"id":"OPT_BUG","name":"Bug"}]}]}}}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "type_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.command_failed")
+
     def test_git_branch_probe_returns_branch_value_for_expression_surface(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
         operation = get_public_connector_registry().get_operation("git.branch")
