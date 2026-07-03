@@ -43,13 +43,13 @@ class ProfileCompositionTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "composition.profile.override_conflict")
 
     def test_profile_applies_defaults_without_overriding_workflow_inputs(self) -> None:
-        workflow = Workflow(version=0, workflow="open-task", inputs={"issue": "repo#1"})
+        workflow = Workflow(version=0, workflow="open-task", inputs={"issue_ref": "repo#1"})
         profile = Profile(name="repo-defaults", inputs={"branch": "keep"})
 
         result = apply_profile_to_workflow(workflow, profile)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.workflow.inputs["issue"], "repo#1")
+        self.assertEqual(result.workflow.inputs["issue_ref"], "repo#1")
         self.assertEqual(result.workflow.inputs["branch"], "keep")
         self.assertEqual(result.active_profile, "repo-defaults")
 

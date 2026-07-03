@@ -50,7 +50,7 @@
 
 - A zero-argument boolean probe fact should read like a compact fact, for example `git.worktree.clean`.
 - A zero-argument non-boolean probe value should remain readable through explicit documented field access, for example `git.branch.value`.
-- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(issue=inputs.issue).status`.
+- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(issue_ref=inputs.issue_ref).state`.
 - The authoring surface should prefer a minimal and orthogonal public probe vocabulary over many specialized policy-encoded probe names.
 
 ## Checkability
@@ -1885,8 +1885,8 @@ Guards may be expressed either as explicit operation calls or as compact express
 ```
 
 ```yaml
-- gh.issue(issue=inputs.issue).project.member
-- gh.issue(issue=inputs.issue).status not in ["Done", "In review"]
+- gh.issue(issue_ref=inputs.issue_ref).state != "CLOSED"
+- gh.project.issue(issue_ref=inputs.issue_ref, project_id=inputs.project_id).exists
 ```
 
 ## Expression shape rules

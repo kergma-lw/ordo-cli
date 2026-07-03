@@ -21,7 +21,7 @@
 
 - A zero-argument boolean probe fact should read like a compact fact, for example `git.worktree.clean`.
 - A zero-argument non-boolean probe value should remain readable through explicit documented field access, for example `git.branch.value`.
-- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(issue=inputs.issue).status`.
+- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(issue_ref=inputs.issue_ref).state`.
 - The authoring surface should prefer a minimal and orthogonal public probe vocabulary over many specialized policy-encoded probe names.
 
 ## Checkability

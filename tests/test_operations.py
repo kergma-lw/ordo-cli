@@ -1817,7 +1817,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#1"})),),
+            guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#1"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.issue")
@@ -1833,12 +1833,13 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.observations["number"], 1)
+        self.assertEqual(result.observations["created_at"], "2026-01-01T00:00:00Z")
 
     def test_gh_probe_surfaces_bootstrap_failure_before_operation_logic(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#1"})),),
+            guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#1"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.issue")
@@ -3365,16 +3366,16 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
 
     def test_gh_issue_probe_resolves_named_argument_from_workflow_inputs(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", inputs={"issue": "owner/repo#1"}, guards=(), steps=())
+        workflow = Workflow(version=0, workflow="demo", inputs={"issue_ref": "owner/repo#1"}, guards=(), steps=())
         operation = get_public_connector_registry().get_operation("gh.issue")
         resolved = ResolvedExpressionProbe(
             reference="gh.issue",
             connector_namespace="gh",
             operation=operation,  # type: ignore[arg-type]
             source="public",
-            expression_text="gh.issue(issue=inputs.issue).state",
+            expression_text="gh.issue(issue_ref=inputs.issue_ref).state",
             fields=("state",),
-            arguments=(("issue", ReferenceNode(start=0, end=12, parts=("inputs", "issue"))),),
+            arguments=(("issue_ref", ReferenceNode(start=0, end=16, parts=("inputs", "issue_ref"))),),
         )
 
         with patch("subprocess.run") as run:
@@ -3394,7 +3395,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.observations["repository"]["nameWithOwner"], "owner/repo")
 
     def test_gh_issue_probe_maps_not_found_to_local_failure_mode(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#999"})),), steps=())
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#999"})),), steps=())
         operation = get_public_connector_registry().get_operation("gh.issue")
         resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -3410,7 +3411,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "probe.gh_issue.not_found")
 
     def test_gh_issue_probe_reports_invalid_json(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue": "owner/repo#1"})),), steps=())
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#1"})),), steps=())
         operation = get_public_connector_registry().get_operation("gh.issue")
         resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -3429,7 +3430,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.project.issue", with_={"issue": "owner/repo#1", "project": "PVT_demo"})),),
+            guards=(Guard(OperationRef("gh.project.issue", with_={"issue_ref": "owner/repo#1", "project_id": "PVT_demo"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue")
@@ -3458,12 +3459,13 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.observations["type"], "Task")
         self.assertEqual(result.observations["iteration"], "Sprint 12")
         self.assertEqual(result.observations["estimate"], 5)
+        self.assertEqual(result.observations["item_id"], "PVTI_1")
 
     def test_gh_project_issue_probe_reports_issue_not_in_project_via_exists_false(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.project.issue", with_={"issue": "owner/repo#1", "project": "PVT_demo"})),),
+            guards=(Guard(OperationRef("gh.project.issue", with_={"issue_ref": "owner/repo#1", "project_id": "PVT_demo"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue")
@@ -3486,7 +3488,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.project.issue", with_={"issue": "owner/repo#1", "project": "PVT_missing"})),),
+            guards=(Guard(OperationRef("gh.project.issue", with_={"issue_ref": "owner/repo#1", "project_id": "PVT_missing"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue")

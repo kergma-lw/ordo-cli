@@ -81,14 +81,14 @@ class ResolutionTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(expr='gh.issue(issue=inputs.issue).state != "CLOSED"'),),
+            guards=(Guard(expr='gh.issue(issue_ref=inputs.issue_ref).state != "CLOSED"'),),
             steps=(),
         )
 
         result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.resolved_guards[0].reference, 'gh.issue(issue=inputs.issue).state != "CLOSED"')
+        self.assertEqual(result.resolved_guards[0].reference, 'gh.issue(issue_ref=inputs.issue_ref).state != "CLOSED"')
         self.assertEqual(result.resolved_guards[0].probes[0].reference, "gh.issue")
         self.assertEqual(result.resolved_guards[0].probes[0].fields, ("state",))
 
@@ -96,8 +96,8 @@ class ResolutionTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            inputs={"issue": "owner/repo#1", "project_id": "PVT_demo"},
-            guards=(Guard(expr='gh.project.issue.status.set(issue_ref=inputs.issue, project_id=inputs.project_id, status="Done").status == "Done"'),),
+            inputs={"issue_ref": "owner/repo#1", "project_id": "PVT_demo"},
+            guards=(Guard(expr='gh.project.issue.status.set(issue_ref=inputs.issue_ref, project_id=inputs.project_id, status="Done").status == "Done"'),),
             steps=(),
         )
 
@@ -110,7 +110,7 @@ class ResolutionTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(expr='gh.issue(issue=inputs.issue).project.owner == "me"'),),
+            guards=(Guard(expr='gh.issue(issue_ref=inputs.issue_ref).project.owner == "me"'),),
             steps=(),
         )
 
@@ -123,8 +123,8 @@ class ResolutionTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            inputs={"issue": "owner/repo#1", "project": "PVT_demo"},
-            guards=(Guard(expr='gh.project.issue(issue=inputs.issue, project=inputs.project).exists'),),
+            inputs={"issue_ref": "owner/repo#1", "project_id": "PVT_demo"},
+            guards=(Guard(expr='gh.project.issue(issue_ref=inputs.issue_ref, project_id=inputs.project_id).exists'),),
             steps=(),
         )
 

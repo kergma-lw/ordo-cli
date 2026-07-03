@@ -69,7 +69,7 @@ Illustrative examples:
 guards:
   - git.worktree.clean
   - git.branch.value != "main"
-  - gh.issue(issue=inputs.issue).state not in ["DONE", "CLOSED"]
+  - gh.issue(issue_ref=inputs.issue_ref).state not in ["DONE", "CLOSED"]
 ```
 
 Current implementation note:

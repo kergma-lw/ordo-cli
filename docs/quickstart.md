@@ -21,7 +21,7 @@ version: 0
 workflow: inspect-issue
 
 inputs:
-  issue: kergma-lw/ordo-cli#1
+  issue_ref: kergma-lw/ordo-cli#1
 
 guards:
   - git.worktree.clean
@@ -30,7 +30,7 @@ steps:
   - name: inspect-issue
     uses: gh.issue
     with:
-      issue: ${inputs.issue}
+      issue_ref: ${inputs.issue_ref}
 ```
 
 ## 3. Load and validate it

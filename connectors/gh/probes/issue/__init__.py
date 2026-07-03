@@ -40,21 +40,21 @@ ISSUE_OUTPUTS = {
     "labels": ["object"],
     "assignees": ["object"],
     "milestone": "object",
-    "createdAt": "string",
-    "updatedAt": "string",
-    "closedAt": "string",
+    "created_at": "string",
+    "updated_at": "string",
+    "closed_at": "string",
     "comments": "object",
-    "reactionGroups": ["object"],
+    "reaction_groups": ["object"],
     "repository": "object",
-    "stateReason": "string",
-    "projectItems": ["object"],
+    "state_reason": "string",
+    "project_items": ["object"],
 }
 
 
 def info():
     return probe(
         name="issue",
-        inputs={"issue": "string"},
+        inputs={"issue_ref": "string"},
         outputs=ISSUE_OUTPUTS,
         failure_modes=("issue_not_found", "probe_failed"),
         handler=run,
@@ -62,11 +62,11 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue = str(ctx.input("issue"))
+    issue_ref = str(ctx.input("issue_ref"))
 
     try:
         command = ctx.command(
-            ["gh", "issue", "view", issue, "--json", ",".join(ISSUE_JSON_FIELDS)],
+            ["gh", "issue", "view", issue_ref, "--json", ",".join(ISSUE_JSON_FIELDS)],
             failures={"os_error": "probe_failed"},
         )
     except MappedOutcomeError as exc:
@@ -85,7 +85,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                         code="probe.gh_issue.not_found",
                         level="error",
                         message="GitHub issue was not found",
-                        details={"reference": ctx.reference, "issue": issue},
+                        details={"reference": ctx.reference, "issue_ref": issue_ref},
                     ),
                 ),
                 raw=outcome.raw,
@@ -99,7 +99,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                         code="probe.gh_issue.command_failed",
                         level="error",
                         message="GitHub issue probe failed",
-                        details={"reference": ctx.reference, "issue": issue},
+                        details={"reference": ctx.reference, "issue_ref": issue_ref},
                     ),
                 ),
                 raw=outcome.raw,
@@ -140,6 +140,30 @@ def run(ctx: OperationContext) -> OperationOutcome:
 
     return ok(
         summary="GitHub issue retrieved successfully",
-        outputs=issue_data,
+        outputs=_to_public_outputs(issue_data),
         raw=command.raw,
     )
+
+
+def _to_public_outputs(issue_data: dict[str, object]) -> dict[str, object]:
+    return {
+        "id": issue_data.get("id"),
+        "number": issue_data.get("number"),
+        "title": issue_data.get("title"),
+        "state": issue_data.get("state"),
+        "closed": issue_data.get("closed"),
+        "url": issue_data.get("url"),
+        "body": issue_data.get("body"),
+        "author": issue_data.get("author"),
+        "labels": issue_data.get("labels"),
+        "assignees": issue_data.get("assignees"),
+        "milestone": issue_data.get("milestone"),
+        "created_at": issue_data.get("createdAt"),
+        "updated_at": issue_data.get("updatedAt"),
+        "closed_at": issue_data.get("closedAt"),
+        "comments": issue_data.get("comments"),
+        "reaction_groups": issue_data.get("reactionGroups"),
+        "repository": issue_data.get("repository"),
+        "state_reason": issue_data.get("stateReason"),
+        "project_items": issue_data.get("projectItems"),
+    }

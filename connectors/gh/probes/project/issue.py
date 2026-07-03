@@ -13,10 +13,10 @@ _ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$"
 def info():
     return probe(
         name="project.issue",
-        inputs={"issue": "string", "project": "string"},
+        inputs={"issue_ref": "string", "project_id": "string"},
         outputs={
             "exists": "boolean",
-            "itemId": "string",
+            "item_id": "string",
             "status": "string",
             "type": "string",
             "priority": "string",
@@ -30,8 +30,8 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue_ref = str(ctx.input("issue"))
-    project_ref = str(ctx.input("project"))
+    issue_ref = str(ctx.input("issue_ref"))
+    project_id = str(ctx.input("project_id"))
     parsed = _parse_issue_ref(issue_ref)
     if parsed is None:
         return fail(
@@ -42,7 +42,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                     code="probe.gh_project_issue.invalid_issue_ref",
                     level="error",
                     message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue": issue_ref},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref},
                 ),
             ),
         )
@@ -93,7 +93,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                         code="probe.gh_project_issue.issue_not_found",
                         level="error",
                         message="GitHub issue was not found",
-                        details={"reference": ctx.reference, "issue": issue_ref},
+                        details={"reference": ctx.reference, "issue_ref": issue_ref},
                     ),
                 ),
                 raw=outcome.raw,
@@ -106,7 +106,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                     code="probe.gh_project_issue.command_failed",
                     level="error",
                     message="GitHub project issue probe failed",
-                    details={"reference": ctx.reference, "issue": issue_ref, "project": project_ref},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref, "project_id": project_id},
                 ),
             ),
             raw=outcome.raw,
@@ -139,7 +139,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                     code="probe.gh_project_issue.issue_not_found",
                     level="error",
                     message="GitHub issue was not found",
-                    details={"reference": ctx.reference, "issue": issue_ref},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref},
                 ),
             ),
             raw=command.raw,
@@ -176,16 +176,16 @@ def run(ctx: OperationContext) -> OperationOutcome:
             raw=command.raw,
         )
 
-    item = _match_project_item(nodes, project_ref)
+    item = _match_project_item(nodes, project_id)
     if item is None:
-        project_lookup = _lookup_project(ctx, project_ref)
+        project_lookup = _lookup_project(ctx, project_id)
         if project_lookup is not None:
             return project_lookup
         return ok(
             summary="GitHub issue is not in the requested project",
             outputs={
                 "exists": False,
-                "itemId": None,
+                "item_id": None,
                 "status": None,
                 "type": None,
                 "priority": None,
@@ -200,7 +200,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
         summary="GitHub project issue facts retrieved successfully",
         outputs={
             "exists": True,
-            "itemId": item.get("id"),
+            "item_id": item.get("id"),
             "status": item.get("status"),
             "type": item.get("type"),
             "priority": item.get("priority"),
@@ -219,16 +219,15 @@ def _parse_issue_ref(value: str) -> tuple[str, str, int] | None:
     return match.group("owner"), match.group("repo"), int(match.group("number"))
 
 
-def _match_project_item(nodes: list[object], project_ref: str) -> dict[str, object] | None:
+def _match_project_item(nodes: list[object], project_id: str) -> dict[str, object] | None:
     for node in nodes:
         if not isinstance(node, dict):
             continue
         project = node.get("project")
         if not isinstance(project, dict):
             continue
-        project_id = project.get("id")
-        project_title = project.get("title")
-        if project_ref not in (project_id, project_title):
+        candidate_project_id = project.get("id")
+        if candidate_project_id != project_id:
             continue
         return {
             "id": node.get("id"),
@@ -282,9 +281,7 @@ def _number_value(node: dict[str, object], field_name: str) -> object:
     return None
 
 
-def _lookup_project(ctx: OperationContext, project_ref: str) -> OperationOutcome | None:
-    if not project_ref.startswith("PVT_"):
-        return None
+def _lookup_project(ctx: OperationContext, project_id: str) -> OperationOutcome | None:
     try:
         command = ctx.command(
             [
@@ -294,7 +291,7 @@ def _lookup_project(ctx: OperationContext, project_ref: str) -> OperationOutcome
                 "-f",
                 "query($id:ID!){node(id:$id){... on ProjectV2{id title}}}",
                 "-f",
-                f"id={project_ref}",
+                f"id={project_id}",
             ],
             failures={"os_error": "probe_failed"},
         )
@@ -314,7 +311,7 @@ def _lookup_project(ctx: OperationContext, project_ref: str) -> OperationOutcome
                     code="probe.gh_project_issue.project_not_found",
                     level="error",
                     message="GitHub project was not found",
-                    details={"reference": ctx.reference, "project": project_ref},
+                    details={"reference": ctx.reference, "project_id": project_id},
                 ),
             ),
             raw=command.raw,

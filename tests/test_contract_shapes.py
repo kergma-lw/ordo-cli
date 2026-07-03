@@ -11,12 +11,12 @@ class ContractShapeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            inputs={"issue": "repo#1"},
+            inputs={"issue_ref": "repo#1"},
             guards=(Guard(OperationRef("git.worktree")),),
             steps=(
                 Step(
                     name="inspect-issue",
-                    operation=OperationRef("gh.issue", with_={"issue": "repo#1"}),
+                    operation=OperationRef("gh.issue", with_={"issue_ref": "repo#1"}),
                 ),
             ),
         )
@@ -26,13 +26,13 @@ class ContractShapeTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "open-task",
-                "inputs": {"issue": "repo#1"},
+                "inputs": {"issue_ref": "repo#1"},
                 "guards": [{"uses": "git.worktree", "with": {}}],
                 "steps": [
                     {
                         "name": "inspect-issue",
                         "uses": "gh.issue",
-                        "with": {"issue": "repo#1"},
+                        "with": {"issue_ref": "repo#1"},
                     }
                 ],
             },
