@@ -2041,6 +2041,92 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "create_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.command_failed")
 
+    def test_gh_issue_comment_add_creates_comment(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#17", "body": "Looks good."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
+        resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"id":"I_17","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=0, stdout="commented\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"comments":{"nodes":[{"id":"IC_1","url":"https://github.com/owner/repo/issues/17#issuecomment-1","body":"Looks good."}]}}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["issue_ref"], "owner/repo#17")
+        self.assertEqual(result.observations["comment_id"], "IC_1")
+        self.assertEqual(result.observations["body"], "Looks good.")
+
+    def test_gh_issue_comment_add_reports_issue_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#999", "body": "Looks good."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
+        resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_comment_add.issue_not_found")
+
+    def test_gh_issue_comment_add_reports_body_invalid(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#17", "body": "   "})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
+        resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="authenticated\n", stderr="")]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "body_invalid")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_comment_add.body_invalid")
+
+    def test_gh_issue_comment_add_reports_comment_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#17", "body": "Looks good."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
+        resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"id":"I_17","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "comment_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_comment_add.command_failed")
+
     def test_gh_project_issue_add_creates_project_item(self) -> None:
         workflow = Workflow(
             version=0,
