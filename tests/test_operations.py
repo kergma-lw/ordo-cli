@@ -2977,6 +2977,141 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "type_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.command_failed")
 
+    def test_gh_project_issue_size_set_updates_size(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "L"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
+        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"M","field":{"name":"Size"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_S","name":"Size","options":[{"id":"OPT_M","name":"M"},{"id":"OPT_L","name":"L"}]}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["item_id"], "PVTI_7")
+        self.assertEqual(result.observations["size"], "L")
+        self.assertTrue(result.observations["changed"])
+
+    def test_gh_project_issue_size_set_is_noop_for_same_size(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "M"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
+        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"M","field":{"name":"Size"}}]}}]}}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.observations["changed"])
+        self.assertEqual(result.summary, "GitHub project issue size is already set")
+
+    def test_gh_project_issue_size_set_reports_size_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "XL"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
+        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"M","field":{"name":"Size"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_S","name":"Size","options":[{"id":"OPT_M","name":"M"},{"id":"OPT_L","name":"L"}]}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "size_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.size_not_found")
+
+    def test_gh_project_issue_size_set_reports_project_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "size": "M"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
+        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.project_not_found")
+
+    def test_gh_project_issue_size_set_reports_issue_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "size": "M"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
+        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.issue_not_found")
+
+    def test_gh_project_issue_size_set_reports_size_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "L"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
+        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"M","field":{"name":"Size"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_S","name":"Size","options":[{"id":"OPT_M","name":"M"},{"id":"OPT_L","name":"L"}]}]}}}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "size_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.command_failed")
+
     def test_git_branch_probe_returns_branch_value_for_expression_surface(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
         operation = get_public_connector_registry().get_operation("git.branch")

@@ -107,6 +107,15 @@ class ConnectorRegistryTest(unittest.TestCase):
         self.assertEqual(project_issue_type_set.outputs["changed"], "boolean")
         self.assertIn("type_not_found", project_issue_type_set.failure_modes)
 
+        project_issue_size_set = registry.get_operation("gh.project.issue.size.set")
+        self.assertIsNotNone(project_issue_size_set)
+        self.assertEqual(project_issue_size_set.kind, "action")
+        self.assertEqual(project_issue_size_set.inputs["issue_ref"], "string")
+        self.assertEqual(project_issue_size_set.inputs["project_id"], "string")
+        self.assertEqual(project_issue_size_set.inputs["size"], "string")
+        self.assertEqual(project_issue_size_set.outputs["changed"], "boolean")
+        self.assertIn("size_not_found", project_issue_size_set.failure_modes)
+
     def test_registry_contract_is_public_json_shaped_surface(self) -> None:
         registry = get_public_connector_registry()
 
