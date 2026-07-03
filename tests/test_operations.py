@@ -2127,6 +2127,95 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "comment_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_comment_add.command_failed")
 
+    def test_gh_issue_body_replace_updates_body(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#17", "body": "Updated body."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
+        resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"body":"Old body.","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=0, stdout="edited\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["issue_ref"], "owner/repo#17")
+        self.assertEqual(result.observations["body"], "Updated body.")
+        self.assertTrue(result.observations["changed"])
+
+    def test_gh_issue_body_replace_is_noop_for_same_body(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#17", "body": "Same body."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
+        resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"body":"Same body.","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.observations["changed"])
+        self.assertEqual(result.summary, "GitHub issue body is already set")
+
+    def test_gh_issue_body_replace_reports_issue_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#999", "body": "Updated body."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
+        resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_body_replace.issue_not_found")
+
+    def test_gh_issue_body_replace_reports_replace_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#17", "body": "Updated body."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
+        resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"body":"Old body.","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "replace_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_body_replace.command_failed")
+
     def test_gh_project_issue_add_creates_project_item(self) -> None:
         workflow = Workflow(
             version=0,

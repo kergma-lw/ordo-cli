@@ -40,6 +40,14 @@ class ConnectorRegistryTest(unittest.TestCase):
         self.assertEqual(issue_comment_add.outputs["comment_id"], "string")
         self.assertIn("comment_blocked", issue_comment_add.failure_modes)
 
+        issue_body_replace = registry.get_operation("gh.issue.body.replace")
+        self.assertIsNotNone(issue_body_replace)
+        self.assertEqual(issue_body_replace.kind, "action")
+        self.assertEqual(issue_body_replace.inputs["issue_ref"], "string")
+        self.assertEqual(issue_body_replace.inputs["body"], "string")
+        self.assertEqual(issue_body_replace.outputs["changed"], "boolean")
+        self.assertIn("replace_blocked", issue_body_replace.failure_modes)
+
         project_issue = registry.get_operation("gh.project.issue")
         self.assertIsNotNone(project_issue)
         self.assertEqual(project_issue.kind, "probe")
