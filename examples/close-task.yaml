@@ -22,6 +22,6 @@ steps:
       ref: main
 
   - name: close-issue
-    uses: gh.close_issue
+    uses: gh.issue.close
     with:
       issue: ${inputs.issue}

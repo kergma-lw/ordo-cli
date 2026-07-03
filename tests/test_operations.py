@@ -170,11 +170,11 @@ class OperationTest(unittest.TestCase):
         registry = get_public_connector_registry()
 
         gh_issue = registry.get_operation("gh.issue")
-        gh_close = registry.get_operation("gh.close_issue")
+        gh_close = registry.get_operation("gh.issue.close")
         shell_command = registry.get_operation("shell.command")
 
         self.assertEqual(gh_issue.failure_modes, ("issue_not_found", "probe_failed"))
-        self.assertEqual(gh_close.failure_modes, ("issue_not_found", "action_failed"))
+        self.assertEqual(gh_close.failure_modes, ("issue_not_found", "close_blocked"))
         self.assertEqual(shell_command.failure_modes, ("command_failed", "action_failed"))
 
     def test_git_worktree_returns_structured_probe_observations(self) -> None:
@@ -1883,6 +1883,77 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "action_not_implemented")
         self.assertEqual(result.diagnostics[0].code, "operation.not_implemented")
+
+    def test_gh_issue_close_closes_open_issue(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        operation = get_public_connector_registry().get_operation("gh.issue.close")
+        resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"state":"OPEN","url":"https://github.com/owner/repo/issues/7"}', stderr=""),
+                self._completed(returncode=0, stdout="✓ Closed issue owner/repo#7\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["issue"], "owner/repo#7")
+        self.assertEqual(result.observations["state"], "CLOSED")
+        self.assertTrue(result.observations["closed"])
+        self.assertEqual(run.call_count, 3)
+
+    def test_gh_issue_close_is_noop_for_closed_issue(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        operation = get_public_connector_registry().get_operation("gh.issue.close")
+        resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"state":"CLOSED","url":"https://github.com/owner/repo/issues/7"}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.summary, "GitHub issue is already closed")
+        self.assertTrue(result.observations["closed"])
+        self.assertEqual(run.call_count, 2)
+
+    def test_gh_issue_close_reports_issue_not_found(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        operation = get_public_connector_registry().get_operation("gh.issue.close")
+        resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_close.issue_not_found")
+
+    def test_gh_issue_close_reports_close_blocked(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        operation = get_public_connector_registry().get_operation("gh.issue.close")
+        resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"state":"OPEN","url":"https://github.com/owner/repo/issues/7"}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "close_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_close.command_failed")
 
     def test_git_branch_probe_returns_branch_value_for_expression_surface(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
