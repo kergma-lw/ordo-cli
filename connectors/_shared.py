@@ -11,6 +11,7 @@ from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 from ordo.runtime.guard_expressions import GuardExpressionNode, ListNode, LiteralNode, ReferenceNode
+from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
 
 if TYPE_CHECKING:
     from ordo.runtime.resolution import ResolvedExpressionProbe, ResolvedOperation
@@ -23,12 +24,26 @@ def require_input(workflow: Workflow, resolved: "ResolvedOperation | ResolvedExp
         if guard.operation is not None and guard.operation.uses == resolved.reference and key in guard.operation.with_:
             candidate = guard.operation.with_[key]
             if candidate is not None:
-                return candidate
+                try:
+                    return resolve_runtime_value(candidate, workflow)
+                except ValueResolutionError as exc:
+                    return OperationResult(
+                        status="input_error",
+                        summary=exc.message,
+                        diagnostics=(exc.to_diagnostic(),),
+                    )
     for step in workflow.steps:
-        if step.operation.uses == resolved.reference and key in step.operation.with_:
+        if step.operation is not None and step.operation.uses == resolved.reference and key in step.operation.with_:
             candidate = step.operation.with_[key]
             if candidate is not None:
-                return candidate
+                try:
+                    return resolve_runtime_value(candidate, workflow)
+                except ValueResolutionError as exc:
+                    return OperationResult(
+                        status="input_error",
+                        summary=exc.message,
+                        diagnostics=(exc.to_diagnostic(),),
+                    )
     return OperationResult(
         status="input_error",
         summary=f"Required input '{key}' is missing",
