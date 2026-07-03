@@ -1955,6 +1955,92 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "close_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_close.command_failed")
 
+    def test_gh_issue_create_creates_issue(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("gh.issue.create", with_={"repository": "owner/repo", "title": "Add checklist", "body": "Need a checklist."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.create")
+        resolved = ResolvedOperation("gh.issue.create", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo"}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"number":17,"url":"https://github.com/owner/repo/issues/17","title":"Add checklist"}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["issue_ref"], "owner/repo#17")
+        self.assertEqual(result.observations["repository"], "owner/repo")
+        self.assertEqual(result.observations["number"], 17)
+        self.assertEqual(result.observations["title"], "Add checklist")
+
+    def test_gh_issue_create_reports_repository_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("gh.issue.create", with_={"repository": "owner/missing", "title": "Add checklist"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.create")
+        resolved = ResolvedOperation("gh.issue.create", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="repository not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "repository_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.repository_not_found")
+
+    def test_gh_issue_create_reports_title_invalid(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("gh.issue.create", with_={"repository": "owner/repo", "title": "   "})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.create")
+        resolved = ResolvedOperation("gh.issue.create", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="authenticated\n", stderr="")]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "title_invalid")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.title_invalid")
+
+    def test_gh_issue_create_reports_create_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("gh.issue.create", with_={"repository": "owner/repo", "title": "Add checklist"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.create")
+        resolved = ResolvedOperation("gh.issue.create", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo"}}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "create_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.command_failed")
+
     def test_gh_project_issue_add_creates_project_item(self) -> None:
         workflow = Workflow(
             version=0,

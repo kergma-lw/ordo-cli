@@ -23,6 +23,15 @@ class ConnectorRegistryTest(unittest.TestCase):
         self.assertEqual(operation.outputs["state"], "string")
         self.assertIn("issue_not_found", operation.failure_modes)
 
+        issue_create = registry.get_operation("gh.issue.create")
+        self.assertIsNotNone(issue_create)
+        self.assertEqual(issue_create.kind, "action")
+        self.assertEqual(issue_create.inputs["repository"], "string")
+        self.assertEqual(issue_create.inputs["title"], "string")
+        self.assertEqual(issue_create.outputs["issue_ref"], "string")
+        self.assertEqual(issue_create.outputs["title"], "string")
+        self.assertIn("create_blocked", issue_create.failure_modes)
+
         project_issue = registry.get_operation("gh.project.issue")
         self.assertIsNotNone(project_issue)
         self.assertEqual(project_issue.kind, "probe")
