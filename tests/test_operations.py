@@ -1874,16 +1874,6 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "shell_unavailable")
         self.assertEqual(run.call_count, 1)
 
-    def test_unimplemented_operation_returns_structured_failure(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="move", operation=OperationRef("gh.project_set_status")),))
-        operation = get_public_connector_registry().get_operation("gh.project_set_status")
-        resolved = ResolvedOperation("gh.project_set_status", "gh", operation, "public")  # type: ignore[arg-type]
-
-        result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "action_not_implemented")
-        self.assertEqual(result.diagnostics[0].code, "operation.not_implemented")
-
     def test_gh_issue_close_closes_open_issue(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")

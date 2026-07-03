@@ -96,7 +96,8 @@ class ResolutionTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            guards=(Guard(expr='gh.project_set_status(issue=inputs.issue).status == "Done"'),),
+            inputs={"issue": "owner/repo#1", "project_id": "PVT_demo"},
+            guards=(Guard(expr='gh.project.issue.status.set(issue_ref=inputs.issue, project_id=inputs.project_id, status="Done").status == "Done"'),),
             steps=(),
         )
 

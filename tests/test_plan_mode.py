@@ -15,7 +15,7 @@ class PlanModeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             guards=(Guard(OperationRef("git.worktree")),),
-            steps=(Step(name="inspect", operation=OperationRef("gh.project_set_status")),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.project.issue.status.set")),),
         )
 
         result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
