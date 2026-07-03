@@ -2216,6 +2216,112 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "replace_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_body_replace.command_failed")
 
+    def test_gh_issue_body_append_appends_with_default_separator(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "New section."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.append")
+        resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"body":"Old body.","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=0, stdout="edited\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["body"], "Old body.\n\nNew section.")
+        self.assertTrue(result.observations["changed"])
+
+    def test_gh_issue_body_append_uses_custom_separator(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "tail", "separator": ""})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.append")
+        resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"body":"head","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=0, stdout="edited\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["body"], "headtail")
+
+    def test_gh_issue_body_append_reports_issue_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#999", "text": "New section."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.append")
+        resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_body_append.issue_not_found")
+
+    def test_gh_issue_body_append_reports_text_invalid(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "   "})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.append")
+        resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="authenticated\n", stderr="")]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "text_invalid")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_body_append.text_invalid")
+
+    def test_gh_issue_body_append_reports_append_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "New section."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.body.append")
+        resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"body":"Old body.","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "append_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_body_append.command_failed")
+
     def test_gh_project_issue_add_creates_project_item(self) -> None:
         workflow = Workflow(
             version=0,
