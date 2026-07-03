@@ -2205,6 +2205,141 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "status_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_status_set.command_failed")
 
+    def test_gh_project_issue_iteration_set_updates_project_iteration(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 11","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTIF_1","name":"Iteration","configuration":{"iterations":[{"id":"IT_11","title":"Sprint 11","startDate":"2026-07-01","duration":14},{"id":"IT_12","title":"Sprint 12","startDate":"2026-07-15","duration":14}]}}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["item_id"], "PVTI_7")
+        self.assertEqual(result.observations["iteration"], "Sprint 12")
+        self.assertTrue(result.observations["changed"])
+
+    def test_gh_project_issue_iteration_set_is_noop_for_same_iteration(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 12","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.observations["changed"])
+        self.assertEqual(result.summary, "GitHub project issue iteration is already set")
+
+    def test_gh_project_issue_iteration_set_reports_iteration_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 13"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 11","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTIF_1","name":"Iteration","configuration":{"iterations":[{"id":"IT_11","title":"Sprint 11","startDate":"2026-07-01","duration":14}]}}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "iteration_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.iteration_not_found")
+
+    def test_gh_project_issue_iteration_set_reports_project_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "iteration": "Sprint 12"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.project_not_found")
+
+    def test_gh_project_issue_iteration_set_reports_issue_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.issue_not_found")
+
+    def test_gh_project_issue_iteration_set_reports_iteration_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 11","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTIF_1","name":"Iteration","configuration":{"iterations":[{"id":"IT_11","title":"Sprint 11","startDate":"2026-07-01","duration":14},{"id":"IT_12","title":"Sprint 12","startDate":"2026-07-15","duration":14}]}}]}}}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "iteration_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.command_failed")
+
     def test_git_branch_probe_returns_branch_value_for_expression_surface(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
         operation = get_public_connector_registry().get_operation("git.branch")
