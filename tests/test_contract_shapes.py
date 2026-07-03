@@ -55,6 +55,25 @@ class ContractShapeTest(unittest.TestCase):
             },
         )
 
+    def test_step_contract_allows_builtin_state_forms(self) -> None:
+        state_set = Step(name="remember-branch", state_set={"states.task_state[inputs.issue_ref].branch": "${inputs.branch}"})
+        state_delete = Step(name="forget-branch", state_delete="states.task_state[inputs.issue_ref].branch")
+
+        self.assertEqual(
+            state_set.to_contract(),
+            {
+                "name": "remember-branch",
+                "state_set": {"states.task_state[inputs.issue_ref].branch": "${inputs.branch}"},
+            },
+        )
+        self.assertEqual(
+            state_delete.to_contract(),
+            {
+                "name": "forget-branch",
+                "state_delete": "states.task_state[inputs.issue_ref].branch",
+            },
+        )
+
     def test_runtime_result_contract_is_json_serializable(self) -> None:
         result = RuntimeResult(
             mode=Mode.PLAN,

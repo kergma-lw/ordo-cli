@@ -132,10 +132,32 @@ def _load_guard(payload: JSONValue, *, index: int, source: str) -> Guard:
 
 
 def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:
-    data = _require_object(payload, path=("steps", str(index)), source=source)
+    path = ("steps", str(index))
+    data = _require_object(payload, path=path, source=source)
+    has_uses = "uses" in data
+    has_state_set = "state_set" in data
+    has_state_delete = "state_delete" in data
+    if sum((has_uses, has_state_set, has_state_delete)) != 1:
+        raise _load_error(
+            code="load.step.form",
+            message="Step must define exactly one of 'uses', 'state_set', or 'state_delete'",
+            path=path,
+            details={"source": source},
+        )
+
+    state_set = None
+    if has_state_set:
+        state_set = _require_object(data.get("state_set"), path=path + ("state_set",), source=source)
+
+    state_delete = None
+    if has_state_delete:
+        state_delete = _require_string(data, "state_delete", path=path + ("state_delete",), source=source)
+
     return Step(
-        name=_require_string(data, "name", path=("steps", str(index), "name"), source=source),
-        operation=_load_operation_ref(data, path=("steps", str(index)), source=source),
+        name=_require_string(data, "name", path=path + ("name",), source=source),
+        operation=_load_operation_ref(data, path=path, source=source) if has_uses else None,
+        state_set=state_set,
+        state_delete=state_delete,
     )
 
 

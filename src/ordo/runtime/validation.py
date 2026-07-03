@@ -16,7 +16,7 @@ USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 
 WORKFLOW_ALLOWED_FIELDS = frozenset({"version", "workflow", "inputs", "states", "guards", "steps"})
 CALL_ALLOWED_FIELDS = frozenset({"uses", "with"})
-STEP_ALLOWED_FIELDS = frozenset({"name", "uses", "with"})
+STEP_ALLOWED_FIELDS = frozenset({"name", "uses", "with", "state_set", "state_delete"})
 PROFILE_ALLOWED_FIELDS = frozenset({"name", "inputs", "checks", "overrides"})
 OVERRIDE_ALLOWED_FIELDS = frozenset({"target", "with", "reason"})
 
@@ -133,7 +133,36 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
 
         diagnostics.extend(_validate_unknown_fields(item, STEP_ALLOWED_FIELDS, path=path, source=source))
         diagnostics.extend(_require_non_empty_string(item, "name", path=path + ("name",), source=source))
-        diagnostics.extend(_validate_call(item, path=path, source=source, allowed_fields=STEP_ALLOWED_FIELDS))
+        has_uses = "uses" in item
+        has_state_set = "state_set" in item
+        has_state_delete = "state_delete" in item
+        form_count = sum((has_uses, has_state_set, has_state_delete))
+
+        if form_count != 1:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.form",
+                    "Step must define exactly one of 'uses', 'state_set', or 'state_delete'",
+                    path,
+                    source,
+                )
+            )
+        elif has_uses:
+            diagnostics.extend(_validate_call(item, path=path, source=source, allowed_fields=STEP_ALLOWED_FIELDS))
+        elif "with" in item:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.with_without_uses",
+                    "Step field 'with' is allowed only together with 'uses'",
+                    path + ("with",),
+                    source,
+                )
+            )
+
+        if has_state_set:
+            diagnostics.extend(_require_object_field(item, "state_set", path=path + ("state_set",), source=source, required=True))
+        if has_state_delete:
+            diagnostics.extend(_require_non_empty_string(item, "state_delete", path=path + ("state_delete",), source=source))
 
         name = item.get("name")
         if isinstance(name, str) and name:

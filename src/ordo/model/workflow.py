@@ -52,12 +52,27 @@ class Step:
     """Ordered effectful workflow step."""
 
     name: str
-    operation: OperationRef
+    operation: OperationRef | None = None
+    state_set: JSONObject | None = None
+    state_delete: str | None = None
+
+    def __post_init__(self) -> None:
+        forms = (
+            self.operation is not None,
+            self.state_set is not None,
+            self.state_delete is not None,
+        )
+        if sum(forms) != 1:
+            raise ValueError("Step must define exactly one of operation, state_set, or state_delete")
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped contract form."""
 
-        return {"name": self.name, **self.operation.to_contract()}
+        if self.operation is not None:
+            return {"name": self.name, **self.operation.to_contract()}
+        if self.state_set is not None:
+            return {"name": self.name, "state_set": dict(self.state_set)}
+        return {"name": self.name, "state_delete": self.state_delete}
 
 
 @dataclass(frozen=True, slots=True)
