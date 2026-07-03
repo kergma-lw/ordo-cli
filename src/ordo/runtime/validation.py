@@ -11,6 +11,7 @@ from ordo.model.runtime import RuntimeStatus
 
 from .guard_expressions import GuardExpressionParseError, parse_guard_expression, validate_parsed_guard_expression
 from .loading import LoadError, load_yaml_document
+from .state_paths import StatePathParseError, parse_state_path
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 
@@ -161,8 +162,10 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
 
         if has_state_set:
             diagnostics.extend(_require_object_field(item, "state_set", path=path + ("state_set",), source=source, required=True))
+            diagnostics.extend(_validate_state_set_shape(item.get("state_set"), path=path + ("state_set",), source=source))
         if has_state_delete:
             diagnostics.extend(_require_non_empty_string(item, "state_delete", path=path + ("state_delete",), source=source))
+            diagnostics.extend(_validate_state_path_text(item.get("state_delete"), path=path + ("state_delete",), source=source))
 
         name = item.get("name")
         if isinstance(name, str) and name:
@@ -192,6 +195,46 @@ def _validate_call(
     diagnostics.extend(_require_non_empty_string(value, "uses", path=path + ("uses",), source=source, pattern=USES_PATTERN, pattern_message="Operation reference must match the stable connector operation pattern"))
     diagnostics.extend(_require_object_field(value, "with", path=path + ("with",), source=source, required=False))
     return diagnostics
+
+
+def _validate_state_set_shape(value: JSONValue | None, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(value, dict):
+        return diagnostics
+    if len(value) != 1:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.state_set.entry_count",
+                "Field 'state_set' must contain exactly one target entry",
+                path,
+                source,
+                actual_count=len(value),
+            )
+        )
+    for key in value:
+        if not isinstance(key, str) or not key:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.state_set.target_type",
+                    "State set target must be a non-empty string",
+                    path,
+                    source,
+                    actual_type=type(key).__name__,
+                )
+            )
+            continue
+        diagnostics.extend(_validate_state_path_text(key, path=path + (key,), source=source))
+    return diagnostics
+
+
+def _validate_state_path_text(value: JSONValue | None, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    if not isinstance(value, str) or not value:
+        return []
+    try:
+        parse_state_path(value)
+    except StatePathParseError as exc:
+        return [exc.to_diagnostic(path=path, source=source, expression=value)]
+    return []
 
 
 def _validate_checks(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
