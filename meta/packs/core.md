@@ -137,6 +137,54 @@
 - Drift between docs, schema, examples, and runtime must be detectable.
 - Workflow and profile authoring must remain easier and more common than connector authoring in early product stages.
 
+<!-- source: requirements/workflow/value-expressions.md -->
+
+# Workflow requirements for value expressions
+
+## Role
+
+- Workflows may use value expressions for pure local computation of derived values.
+- Value expressions exist to keep common normalization and formatting inside workflow authoring without pushing those concerns into connector operations.
+- Value expressions are part of workflow authoring surface, not a second orchestration or integration language.
+
+## Allowed capability
+
+- A value expression may read declared workflow inputs.
+- A value expression may read runtime state through the documented `states...` read surface.
+- A value expression may combine multiple local values into one derived value.
+- A value expression may apply a closed set of deterministic built-in transforms.
+- Inline composition should use the pipe form `|` as the canonical compact authoring surface.
+- String formatting may be expressed as a root built-in form.
+
+## Permanent exclusions
+
+- A value expression must never cause side effects.
+- A value expression must never call connector operations, whether action or probe.
+- A value expression must never encode workflow control flow such as branching, looping, or step selection.
+- A value expression must never duplicate guard or policy semantics as a general boolean language.
+- A value expression must never support user-defined functions, macros, operators, or workflow-defined extension hooks.
+- A value expression must never become an open-ended collection programming or query language.
+- A value expression must never rely on project-defined syntax whose meaning is not part of the stable product contract.
+
+## Readability and reviewability
+
+- Inline value expressions should stay short enough for quick review inside workflow fields.
+- Built-in transforms should be understandable left-to-right without reconstructing hidden evaluation rules.
+- Validation and diagnostics should identify the failing segment of a value expression rather than only reporting a generic value-resolution failure.
+
+## YAML alternative policy
+
+- Some root built-in value forms may also provide a structured YAML equivalent when inline syntax becomes hard to read.
+- YAML equivalence is selective rather than universal.
+- Not every inline value expression needs or should have a YAML equivalent.
+- A YAML equivalent, when present, should represent the same semantic operation as its inline root form rather than introducing a parallel computation model.
+
+## Growth discipline
+
+- Product growth should prefer adding a small number of high-value built-in transforms over widening value expressions into a general programming language.
+- New value-expression capability is a poor fit when it would be better modeled as workflow control, guard policy, connector behavior, or runtime-owned state mutation.
+- New value-expression capability is also a poor fit when it would require open-ended semantics for iteration, branching, remote access, or user-defined evaluation.
+
 <!-- source: requirements/runtime/core.md -->
 
 # Runtime requirements
@@ -959,6 +1007,142 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.
+
+<!-- source: model/workflow/value-expressions.md -->
+
+# Workflow value expressions
+
+## Position
+
+Value expressions provide a compact workflow-owned surface for deriving values from local runtime-visible inputs.
+
+They sit between two existing surfaces:
+
+- plain scalar values with no runtime evaluation;
+- connector operations and built-in runtime step forms that carry effects.
+
+They are intended for local shaping of values, not for orchestration, policy, or integration logic.
+
+## Core expression forms
+
+The initial model supports three author-facing forms inside `${...}`:
+
+- direct references such as `inputs.name`;
+- left-to-right filter pipelines using `|`;
+- root built-in calls such as `format(...)`.
+
+Illustrative examples:
+
+```yaml
+${inputs.issue_ref}
+${states.task_state[inputs.issue_ref].branch}
+${inputs.title | slug}
+${inputs.title | trim | slug | truncate(60)}
+${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)}
+```
+
+## Filter pipeline
+
+The pipe form `|` is the canonical compact composition surface.
+
+It should be read left to right:
+
+1. resolve the value on the left;
+2. apply each built-in transform in order;
+3. produce one final derived value.
+
+The pipeline model is intentionally narrow:
+
+- each stage is pure and deterministic;
+- each stage consumes the previous stage output;
+- the pipeline does not imply connector execution, control flow, or collection programming.
+
+## Root built-ins
+
+Some value operations are better expressed as a dedicated root built-in form than as an ordinary pipeline stage.
+
+The first supported root built-in is `format(...)`.
+
+Illustrative inline form:
+
+```yaml
+${format("{}/{}#{}", inputs.owner, inputs.repo, inputs.number)}
+```
+
+`format(...)` exists because workflows often need to compose multiple local values into one string while preserving a compact, reviewable surface.
+
+## YAML equivalent forms
+
+Some root built-ins may also define a structured YAML equivalent.
+
+The structured equivalent is determined by the root expression form, not by arbitrary subexpressions inside the inline syntax.
+
+The first dual-form built-in is `format`.
+
+Illustrative YAML form:
+
+```yaml
+branch:
+  format: "{}/{}-{}"
+  args:
+    - ${inputs.type | lower}
+    - ${inputs.issue_number}
+    - ${inputs.title | slug}
+```
+
+This YAML form exists for readability when the equivalent inline `format(...)` call becomes too dense.
+
+Simple filter pipelines such as `${inputs.title | slug}` do not require a YAML equivalent.
+
+## Initial built-in set
+
+The initial built-in set should stay intentionally small.
+
+Illustrative MVP set:
+
+- `lower`
+- `trim`
+- `slug`
+- `truncate(n)`
+- `replace(from, to)`
+- `format(...)`
+
+This set is closed product surface, not workflow-defined or project-defined syntax.
+
+## Examples
+
+Branch name assembly:
+
+```yaml
+${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug | truncate(60))}
+```
+
+Safe file name assembly:
+
+```yaml
+${format("{}_{}-{}-issue{}.md", inputs.ts, inputs.owner, inputs.repo, inputs.issue_number)}
+```
+
+Structured alternative for a longer formatted value:
+
+```yaml
+branch:
+  format: "{}/{}-{}"
+  args:
+    - ${inputs.type | lower}
+    - ${inputs.issue_number}
+    - ${inputs.title | trim | slug | truncate(60)}
+```
+
+## Non-goals
+
+Value expressions are not meant to become:
+
+- a connector invocation surface;
+- a second guard-expression language;
+- a general-purpose programming language;
+- a workflow-defined macro system;
+- an open-ended query or collection-transformation language.
 
 <!-- source: model/workflow/guard-expressions.md -->
 

@@ -12,6 +12,7 @@ from ordo.model.runtime import RuntimeStatus
 from .guard_expressions import GuardExpressionParseError, parse_guard_expression, validate_parsed_guard_expression
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
+from .value_expressions import ValueExpressionParseError, parse_value_expression
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 
@@ -194,6 +195,9 @@ def _validate_call(
 
     diagnostics.extend(_require_non_empty_string(value, "uses", path=path + ("uses",), source=source, pattern=USES_PATTERN, pattern_message="Operation reference must match the stable connector operation pattern"))
     diagnostics.extend(_require_object_field(value, "with", path=path + ("with",), source=source, required=False))
+    with_payload = value.get("with")
+    if isinstance(with_payload, dict):
+        diagnostics.extend(_validate_runtime_value_surface(with_payload, path=path + ("with",), source=source))
     return diagnostics
 
 
@@ -224,6 +228,86 @@ def _validate_state_set_shape(value: JSONValue | None, *, path: tuple[str, ...],
             )
             continue
         diagnostics.extend(_validate_state_path_text(key, path=path + (key,), source=source))
+    for key, item in value.items():
+        if isinstance(key, str):
+            diagnostics.extend(_validate_runtime_value_surface(item, path=path + (key,), source=source))
+    return diagnostics
+
+
+def _validate_runtime_value_surface(value: JSONValue | None, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if _is_format_value_object(value):
+        diagnostics.extend(_validate_format_value_object(value, path=path, source=source))
+        return diagnostics
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            diagnostics.extend(_validate_runtime_value_surface(item, path=path + (str(index),), source=source))
+        return diagnostics
+    if isinstance(value, dict):
+        for key, item in value.items():
+            diagnostics.extend(_validate_runtime_value_surface(item, path=path + (str(key),), source=source))
+        return diagnostics
+    if not isinstance(value, str):
+        return diagnostics
+    expression = _extract_runtime_value_expression(value)
+    if expression is None:
+        return diagnostics
+    try:
+        parse_value_expression(expression)
+    except ValueExpressionParseError as exc:
+        diagnostics.append(exc.to_diagnostic(path=path, source=source, expression=expression))
+    return diagnostics
+
+
+def _extract_runtime_value_expression(value: str) -> str | None:
+    if value.startswith("${") and value.endswith("}") and len(value) >= 4:
+        return value[2:-1]
+    return None
+
+
+def _is_format_value_object(value: JSONValue | None) -> bool:
+    return isinstance(value, dict) and "format" in value
+
+
+def _validate_format_value_object(value: JSONObject, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    allowed_fields = {"format", "args"}
+    for key in value:
+        if key not in allowed_fields:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.value_expr.format.unknown_field",
+                    f"Unknown value-expression format field '{key}'",
+                    path + (key,),
+                    source,
+                    allowed_fields=sorted(allowed_fields),
+                )
+            )
+    template = value.get("format")
+    if not isinstance(template, str):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.value_expr.format.template_type",
+                "Field 'format' must be a string",
+                path + ("format",),
+                source,
+                actual_type=type(template).__name__,
+            )
+        )
+    args = value.get("args", [])
+    if not isinstance(args, list):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.value_expr.format.args_type",
+                "Field 'args' must be a list when provided",
+                path + ("args",),
+                source,
+                actual_type=type(args).__name__,
+            )
+        )
+        return diagnostics
+    for index, item in enumerate(args):
+        diagnostics.extend(_validate_runtime_value_surface(item, path=path + ("args", str(index)), source=source))
     return diagnostics
 
 

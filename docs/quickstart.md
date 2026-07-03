@@ -233,7 +233,7 @@ Current important limits:
 
 - no stable CLI yet;
 - only a minimal canonical operation set has concrete implementations;
-- direct `${inputs.foo}` and `${states...}` step-value references exist but still represent an early runtime surface rather than a fully general expression system;
+- direct references, pipe-based value expressions, and dual-form `format` exist for local workflow value computation, but the surface remains intentionally small rather than a general programming language;
 - some registry-visible operations still intentionally return structured not-yet-implemented results.
 
 ## 11. Runtime state example

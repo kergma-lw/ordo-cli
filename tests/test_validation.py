@@ -244,6 +244,64 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.duplicate_name")
 
+    def test_invalid_value_expression_syntax_in_step_input_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    uses: gh.issue
+                    with:
+                      issue_ref: ${inputs.issue_ref |}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.syntax")
+
+    def test_invalid_value_expression_syntax_in_state_set_value_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: remember
+                    state_set:
+                      states.task_state[inputs.issue_ref].branch: ${format("unterminated)}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.syntax")
+
+    def test_invalid_yaml_format_args_type_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    uses: gh.issue
+                    with:
+                      branch:
+                        format: "{}/{}"
+                        args: nope
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.format.args_type")
+
     def test_profile_unknown_field_fails(self) -> None:
         report = validate_profile_text(
             textwrap.dedent(

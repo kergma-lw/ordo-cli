@@ -108,6 +108,30 @@ Built-in runtime state mutation forms:
   state_delete: states.task_state[inputs.issue_ref].branch
 ```
 
+## Value expressions
+
+Workflow values may use `${...}` for pure local value computation.
+
+Illustrative examples:
+
+```yaml
+${inputs.title | slug}
+${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)}
+```
+
+When an inline `format(...)` call becomes too dense, the same root form may use a structured YAML equivalent:
+
+```yaml
+branch:
+  format: "{}/{}-{}"
+  args:
+    - ${inputs.type | lower}
+    - ${inputs.issue_number}
+    - ${inputs.title | slug}
+```
+
+This YAML form is selective rather than universal. Simple filter pipelines such as `${inputs.title | slug}` stay inline.
+
 ## Runtime state
 
 Workflows may declare named runtime-managed state locations.

@@ -73,6 +73,62 @@ steps:
             self.assertEqual(result.operation_results[0].status, "input_error")
             self.assertEqual(result.operation_results[0].diagnostics[0].code, "runtime.value.state_missing")
 
+    def test_execute_resolves_format_expression_in_step_input(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  type: Task
+  issue_number: 7
+  title: Hello World
+guards: []
+steps:
+  - name: run-command
+    uses: shell.command
+    with:
+      command: ${format("printf {}", format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug))}
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.operation_results[0].status, "ok")
+        self.assertEqual(result.operation_results[0].observations.get("stdout"), "task/7-hello-world")
+
+    def test_execute_resolves_yaml_format_object_in_step_input(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  type: Task
+  issue_number: 7
+  title: Hello World
+guards: []
+steps:
+  - name: run-command
+    uses: shell.command
+    with:
+      command:
+        format: "printf {}"
+        args:
+          -
+            format: "{}/{}-{}"
+            args:
+              - ${inputs.type | lower}
+              - ${inputs.issue_number}
+              - ${inputs.title | slug}
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.operation_results[0].status, "ok")
+        self.assertEqual(result.operation_results[0].observations.get("stdout"), "task/7-hello-world")
+
 
 if __name__ == "__main__":
     unittest.main()

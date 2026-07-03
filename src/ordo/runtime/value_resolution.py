@@ -1,4 +1,4 @@
-"""Runtime value resolution for workflow inputs and state reads."""
+"""Runtime value resolution for workflow value expressions."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONArray, JSONObject, JSONValue
 from ordo.model.workflow import Workflow
 
-from .state import RuntimeStateError, resolve_state_target, resolve_workflow_input_reference, read_state_document, read_state_value
+from .value_expressions import ValueExpressionEvaluationError, ValueExpressionParseError, evaluate_value_expression, parse_value_expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,8 +30,10 @@ class ValueResolutionError(Exception):
 
 
 def resolve_runtime_value(value: JSONValue, workflow: Workflow) -> JSONValue:
-    """Resolve runtime value references against workflow inputs and runtime state."""
+    """Resolve runtime value expressions against workflow inputs and runtime state."""
 
+    if _is_format_object(value):
+        return _resolve_format_object(value, workflow)
     if isinstance(value, list):
         return [resolve_runtime_value(item, workflow) for item in value]
     if isinstance(value, dict):
@@ -42,11 +44,18 @@ def resolve_runtime_value(value: JSONValue, workflow: Workflow) -> JSONValue:
     expression = _extract_expression(value)
     if expression is None:
         return value
-    if expression.startswith("inputs."):
-        return _resolve_input_reference(tuple(expression.split(".")), workflow)
-    if expression.startswith("states."):
-        return _resolve_state_reference(expression, workflow)
-    return value
+    try:
+        parsed = parse_value_expression(expression)
+    except ValueExpressionParseError as exc:
+        raise ValueResolutionError(
+            code="runtime.value.expression_syntax",
+            message=exc.message,
+            details={"expression": expression, "position": exc.position, "end": exc.end if exc.end is not None else exc.position},
+        ) from exc
+    try:
+        return evaluate_value_expression(parsed, workflow)
+    except ValueExpressionEvaluationError as exc:
+        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
 
 
 def _extract_expression(value: str) -> str | None:
@@ -55,47 +64,33 @@ def _extract_expression(value: str) -> str | None:
     return None
 
 
-def _resolve_input_reference(parts: tuple[str, ...], workflow: Workflow) -> JSONValue:
-    try:
-        return resolve_workflow_input_reference(parts, workflow)
-    except RuntimeStateError as exc:
-        raise ValueResolutionError(
-            code="runtime.value.input_missing",
-            message=exc.message,
-            details=exc.details,
-        ) from exc
+def _is_format_object(value: JSONValue) -> bool:
+    return isinstance(value, dict) and "format" in value and set(value.keys()) <= {"format", "args"}
 
 
-def _resolve_state_reference(expression: str, workflow: Workflow) -> JSONValue:
-    try:
-        target = resolve_state_target(expression, workflow)
-    except RuntimeStateError as exc:
+def _resolve_format_object(value: JSONObject, workflow: Workflow) -> JSONValue:
+    template = value.get("format")
+    if not isinstance(template, str):
+        return value
+    args_value = value.get("args", [])
+    if not isinstance(args_value, list):
+        return value
+    resolved_args = [resolve_runtime_value(item, workflow) for item in args_value]
+    placeholder_count = template.count("{}")
+    if placeholder_count != len(resolved_args):
         raise ValueResolutionError(
-            code=(
-                "runtime.value.state_path_invalid"
-                if exc.code == "runtime.state.path_invalid"
-                else "runtime.value.state_key_invalid"
-                if exc.code == "runtime.state.key_invalid"
-                else "runtime.value.input_missing"
-                if exc.code == "runtime.state.input_missing"
-                else exc.code
-            ),
-            message=exc.message,
-            details=exc.details,
+            code="runtime.value.format_args_invalid",
+            message="Built-in value expression 'format' received the wrong number of arguments",
+            details={"placeholders": placeholder_count, "arguments": len(resolved_args)},
         )
-    try:
-        document = read_state_document(target.location)
-        value = read_state_value(document, key=target.key, fields=target.fields)
-    except RuntimeStateError as exc:
-        raise ValueResolutionError(
-            code=exc.code,
-            message=exc.message,
-            details=exc.details,
-        ) from exc
-    if value is None:
-        raise ValueResolutionError(
-            code="runtime.value.state_missing",
-            message="Runtime state value is missing",
-            details={"expression": expression, "state": target.location.name, "key": target.key, "fields": list(target.fields)},
-        )
-    return value
+    return template.format(*tuple(_coerce_format_scalar(argument) for argument in resolved_args))
+
+
+def _coerce_format_scalar(value: JSONValue) -> JSONValue:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    raise ValueResolutionError(
+        code="runtime.value.format_arg_type_invalid",
+        message="Built-in value expression 'format' requires scalar arguments",
+        details={"actual_type": type(value).__name__},
+    )

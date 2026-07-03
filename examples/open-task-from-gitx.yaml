@@ -4,7 +4,9 @@ workflow: open-task
 inputs:
   issue_ref: kergma-lw/checklist-backend#16
   project_id: PVT_kwDOBQfyUc4A3Q3j
-  branch: keep
+  issue_number: 16
+  title: Keep issue workflow in sync
+  type: Task
   iteration: Sprint 12
 
 states:
@@ -38,8 +40,18 @@ steps:
   - name: create-or-switch-task-branch
     uses: git.branch.switch
     with:
-      branch: ${inputs.branch}
+      branch:
+        format: "{}/{}-{}"
+        args:
+          - ${inputs.type | lower}
+          - ${inputs.issue_number}
+          - ${inputs.title | slug}
 
   - name: remember-task-branch
     state_set:
-      states.task_state[inputs.issue_ref].branch: ${inputs.branch}
+      states.task_state[inputs.issue_ref].branch:
+        format: "{}/{}-{}"
+        args:
+          - ${inputs.type | lower}
+          - ${inputs.issue_number}
+          - ${inputs.title | slug}
