@@ -67,6 +67,7 @@ class Workflow:
     version: int
     workflow: str
     inputs: JSONObject = field(default_factory=dict)
+    states: JSONObject = field(default_factory=dict)
     guards: tuple[Guard, ...] = ()
     steps: tuple[Step, ...] = ()
 
@@ -77,6 +78,7 @@ class Workflow:
             "version": self.version,
             "workflow": self.workflow,
             "inputs": dict(self.inputs),
+            "states": dict(self.states),
             "guards": [guard.to_contract() for guard in self.guards],
             "steps": [step.to_contract() for step in self.steps],
         }

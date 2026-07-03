@@ -5,6 +5,7 @@
 - `version`
 - `workflow`
 - `inputs`
+- `states`
 - `guards`
 - `steps`
 
@@ -21,6 +22,30 @@
 - name: some-step
   uses: namespace.name
   with: {}
+```
+
+Built-in runtime state mutation forms may also appear in `steps`.
+
+Set example:
+
+```yaml
+- name: remember-branch
+  state_set:
+    states.task_state[inputs.issue_ref].branch: ${inputs.branch}
+```
+
+Delete example:
+
+```yaml
+- name: forget-branch
+  state_delete: states.task_state[inputs.issue_ref].branch
+```
+
+## Stable state declaration shape
+
+```yaml
+states:
+  task_state: .ordo/task-state.json
 ```
 
 ## Current rule

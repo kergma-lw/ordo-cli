@@ -14,7 +14,7 @@ from .loading import LoadError, load_yaml_document
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 
-WORKFLOW_ALLOWED_FIELDS = frozenset({"version", "workflow", "inputs", "guards", "steps"})
+WORKFLOW_ALLOWED_FIELDS = frozenset({"version", "workflow", "inputs", "states", "guards", "steps"})
 CALL_ALLOWED_FIELDS = frozenset({"uses", "with"})
 STEP_ALLOWED_FIELDS = frozenset({"name", "uses", "with"})
 PROFILE_ALLOWED_FIELDS = frozenset({"name", "inputs", "checks", "overrides"})
@@ -69,6 +69,7 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_exact_int(payload, "version", 0, source=source))
     diagnostics.extend(_require_non_empty_string(payload, "workflow", source=source))
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
+    diagnostics.extend(_require_object_field(payload, "states", source=source, required=False))
     diagnostics.extend(_validate_guard_list(payload.get("guards"), source=source))
     diagnostics.extend(_validate_step_list(payload.get("steps"), source=source))
 

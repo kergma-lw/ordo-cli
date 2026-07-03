@@ -12,6 +12,7 @@ class ContractShapeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             inputs={"issue_ref": "repo#1"},
+            states={"task_state": ".ordo/task-state.json"},
             guards=(Guard(OperationRef("git.worktree")),),
             steps=(
                 Step(
@@ -27,6 +28,7 @@ class ContractShapeTest(unittest.TestCase):
                 "version": 0,
                 "workflow": "open-task",
                 "inputs": {"issue_ref": "repo#1"},
+                "states": {"task_state": ".ordo/task-state.json"},
                 "guards": [{"uses": "git.worktree", "with": {}}],
                 "steps": [
                     {
@@ -47,6 +49,7 @@ class ContractShapeTest(unittest.TestCase):
                 "version": 0,
                 "workflow": "open-task",
                 "inputs": {},
+                "states": {},
                 "guards": ['git.branch != "main"'],
                 "steps": [],
             },

@@ -43,6 +43,7 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
         inputs=_optional_object(payload, "inputs", source=source),
+        states=_optional_object(payload, "states", source=source),
         guards=tuple(_load_guard(item, index=index, source=source) for index, item in enumerate(guards_data)),
         steps=tuple(_load_step(item, index=index, source=source) for index, item in enumerate(steps_data)),
     )
