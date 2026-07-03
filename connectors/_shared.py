@@ -16,18 +16,18 @@ if TYPE_CHECKING:
     from ordo.runtime.resolution import ResolvedExpressionProbe, ResolvedOperation
 
 
-def require_input(workflow: Workflow, resolved: "ResolvedOperation | ResolvedExpressionProbe", key: str) -> str | OperationResult:
+def require_input(workflow: Workflow, resolved: "ResolvedOperation | ResolvedExpressionProbe", key: str) -> JSONValue | OperationResult:
     value = resolved.operation.inputs.get(key)
     _ = value
     for guard in workflow.guards:
         if guard.operation is not None and guard.operation.uses == resolved.reference and key in guard.operation.with_:
             candidate = guard.operation.with_[key]
-            if isinstance(candidate, str):
+            if candidate is not None:
                 return candidate
     for step in workflow.steps:
         if step.operation.uses == resolved.reference and key in step.operation.with_:
             candidate = step.operation.with_[key]
-            if isinstance(candidate, str):
+            if candidate is not None:
                 return candidate
     return OperationResult(
         status="input_error",
