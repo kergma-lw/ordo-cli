@@ -233,8 +233,17 @@ Current important limits:
 
 - no stable CLI yet;
 - only a minimal canonical operation set has concrete implementations;
-- `${inputs.foo}` interpolation is not yet a fully stabilized execution feature;
+- direct `${inputs.foo}` and `${states...}` step-value references exist but still represent an early runtime surface rather than a fully general expression system;
 - some registry-visible operations still intentionally return structured not-yet-implemented results.
+
+## 11. Runtime state example
+
+`examples/open-task-from-gitx.yaml` now shows one small runtime state use:
+
+- declare a named `states` location;
+- write `states.task_state[inputs.issue_ref].branch` with `state_set`;
+- read that value later through `${states.task_state[inputs.issue_ref].branch}`;
+- remove it through `state_delete` when the workflow is done.
 
 ## Next docs
 

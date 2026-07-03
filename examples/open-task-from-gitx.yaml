@@ -7,6 +7,9 @@ inputs:
   branch: keep
   iteration: Sprint 12
 
+states:
+  task_state: .ordo/task-state.json
+
 guards:
   - uses: git.single_worktree
   - git.worktree.clean
@@ -36,3 +39,7 @@ steps:
     uses: git.branch.switch
     with:
       branch: ${inputs.branch}
+
+  - name: remember-task-branch
+    state_set:
+      states.task_state[inputs.issue_ref].branch: ${inputs.branch}

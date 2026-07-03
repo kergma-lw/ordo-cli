@@ -19,6 +19,7 @@ version: 0
 workflow: string
 
 inputs: {}
+states: {}
 guards: []
 steps: []
 ```
@@ -86,7 +87,7 @@ Expected outcome classes:
 ## Steps
 
 Steps are effectful actions.
-They reference public connector operations.
+They may reference public connector operations or use built-in runtime state mutation forms.
 
 Minimal shape:
 
@@ -94,6 +95,32 @@ Minimal shape:
 - name: some-step
   uses: namespace.name
   with: {}
+```
+
+Built-in runtime state mutation forms:
+
+```yaml
+- name: remember-branch
+  state_set:
+    states.task_state[inputs.issue_ref].branch: ${inputs.branch}
+
+- name: forget-branch
+  state_delete: states.task_state[inputs.issue_ref].branch
+```
+
+## Runtime state
+
+Workflows may declare named runtime-managed state locations.
+
+```yaml
+states:
+  task_state: .ordo/task-state.json
+```
+
+Step values may read from runtime state through direct references:
+
+```yaml
+${states.task_state[inputs.issue_ref].branch}
 ```
 
 Optional later extensions:
