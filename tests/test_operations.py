@@ -1885,7 +1885,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "operation.not_implemented")
 
     def test_gh_issue_close_closes_open_issue(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -1899,13 +1899,13 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["issue"], "owner/repo#7")
+        self.assertEqual(result.observations["issue_ref"], "owner/repo#7")
         self.assertEqual(result.observations["state"], "CLOSED")
         self.assertTrue(result.observations["closed"])
         self.assertEqual(run.call_count, 3)
 
     def test_gh_issue_close_is_noop_for_closed_issue(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -1923,7 +1923,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
 
     def test_gh_issue_close_reports_issue_not_found(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -1939,7 +1939,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_close.issue_not_found")
 
     def test_gh_issue_close_reports_close_blocked(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 

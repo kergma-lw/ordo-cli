@@ -13,16 +13,16 @@ _ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$"
 def info():
     return action(
         name="issue.close",
-        inputs={"issue": "string"},
+        inputs={"issue_ref": "string"},
         effects=("close GitHub issue",),
-        outputs={"issue": "string", "state": "string", "closed": "boolean"},
+        outputs={"issue_ref": "string", "state": "string", "closed": "boolean"},
         failure_modes=("issue_not_found", "close_blocked"),
         handler=run,
     )
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue_ref = str(ctx.input("issue"))
+    issue_ref = str(ctx.input("issue_ref"))
     parsed = _parse_issue_ref(issue_ref)
     if parsed is None:
         return fail(
@@ -33,7 +33,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                     code="action.gh_issue_close.invalid_issue_ref",
                     level="error",
                     message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue": issue_ref},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref},
                 ),
             ),
         )
@@ -48,7 +48,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
     if issue_state.upper() == "CLOSED":
         return ok(
             summary="GitHub issue is already closed",
-            outputs={"issue": issue_ref, "state": "CLOSED", "closed": True},
+            outputs={"issue_ref": issue_ref, "state": "CLOSED", "closed": True},
             raw={"view": inspect.get("raw", {})},
         )
 
@@ -71,7 +71,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                         code="action.gh_issue_close.issue_not_found",
                         level="error",
                         message="GitHub issue was not found",
-                        details={"reference": ctx.reference, "issue": issue_ref},
+                        details={"reference": ctx.reference, "issue_ref": issue_ref},
                     ),
                 ),
                 raw=outcome.raw,
@@ -84,7 +84,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                     code="action.gh_issue_close.command_failed",
                     level="error",
                     message="Closing GitHub issue failed",
-                    details={"reference": ctx.reference, "issue": issue_ref},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref},
                 ),
             ),
             raw=outcome.raw,
@@ -92,7 +92,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
 
     return ok(
         summary="Closed GitHub issue",
-        outputs={"issue": issue_ref, "state": "CLOSED", "closed": True},
+        outputs={"issue_ref": issue_ref, "state": "CLOSED", "closed": True},
         raw={"view": inspect.get("raw", {}), "close": close_command.raw},
     )
 
@@ -126,7 +126,7 @@ def _view_issue(
                         code="action.gh_issue_close.issue_not_found",
                         level="error",
                         message="GitHub issue was not found",
-                        details={"reference": ctx.reference, "issue": issue_ref},
+                        details={"reference": ctx.reference, "issue_ref": issue_ref},
                     ),
                 ),
                 raw=outcome.raw,
@@ -139,7 +139,7 @@ def _view_issue(
                     code="action.gh_issue_close.inspect_failed",
                     level="error",
                     message="Inspecting GitHub issue state failed",
-                    details={"reference": ctx.reference, "issue": issue_ref},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref},
                 ),
             ),
             raw=outcome.raw,
@@ -156,7 +156,7 @@ def _view_issue(
                     code="action.gh_issue_close.invalid_json",
                     level="error",
                     message="GitHub issue state output was not valid JSON",
-                    details={"reference": ctx.reference, "issue": issue_ref, "error": str(exc)},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref, "error": str(exc)},
                 ),
             ),
             raw=command.raw,
@@ -171,7 +171,7 @@ def _view_issue(
                     code="action.gh_issue_close.invalid_shape",
                     level="error",
                     message="GitHub issue state output was not an object",
-                    details={"reference": ctx.reference, "issue": issue_ref},
+                    details={"reference": ctx.reference, "issue_ref": issue_ref},
                 ),
             ),
             raw=command.raw,
