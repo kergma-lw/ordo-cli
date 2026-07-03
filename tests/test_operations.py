@@ -1955,6 +1955,121 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "close_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_close.command_failed")
 
+    def test_gh_project_issue_add_creates_project_item(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.add")
+        resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"id":"I_7","projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists"}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"addProjectV2ItemById":{"item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.observations["issue_ref"], "owner/repo#7")
+        self.assertEqual(result.observations["project_id"], "PVT_demo")
+        self.assertEqual(result.observations["item_id"], "PVTI_7")
+        self.assertTrue(result.observations["added"])
+
+    def test_gh_project_issue_add_is_noop_for_existing_project_item(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.add")
+        resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"id":"I_7","projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"}}]}}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.summary, "GitHub issue is already in the requested project")
+        self.assertEqual(result.observations["item_id"], "PVTI_7")
+        self.assertFalse(result.observations["added"])
+
+    def test_gh_project_issue_add_reports_project_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.add")
+        resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"id":"I_7","projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_add.project_not_found")
+
+    def test_gh_project_issue_add_reports_issue_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.add")
+        resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_add.issue_not_found")
+
+    def test_gh_project_issue_add_reports_add_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.add")
+        resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"id":"I_7","projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists"}}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "add_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_add.command_failed")
+
     def test_git_branch_probe_returns_branch_value_for_expression_surface(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
         operation = get_public_connector_registry().get_operation("git.branch")
