@@ -1,0 +1,227 @@
+"""Runtime-owned persistent state support."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+from ordo.model.diagnostic import Diagnostic
+from ordo.model.json import JSONObject, JSONValue
+from ordo.model.workflow import Workflow
+
+STATE_FILE_VERSION = 1
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeStateError(Exception):
+    """Structured runtime state error with a stable code."""
+
+    code: str
+    message: str
+    details: JSONObject
+
+    def to_diagnostic(self, *, path: tuple[str, ...] = ()) -> Diagnostic:
+        return Diagnostic(
+            code=self.code,
+            level="error",
+            message=self.message,
+            path=path,
+            details=dict(self.details),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class StateLocation:
+    """Resolved runtime state location."""
+
+    name: str
+    path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeStateRegistry:
+    """Named runtime-managed state locations declared by a workflow."""
+
+    locations: dict[str, StateLocation]
+
+    @classmethod
+    def from_workflow(cls, workflow: Workflow, *, base_dir: str | Path | None = None) -> "RuntimeStateRegistry":
+        root = Path(base_dir) if base_dir is not None else Path.cwd()
+        locations: dict[str, StateLocation] = {}
+        for name, raw_location in workflow.states.items():
+            if not isinstance(raw_location, str) or not raw_location:
+                raise RuntimeStateError(
+                    code="runtime.state.declaration_invalid",
+                    message="Runtime state location must be a non-empty string",
+                    details={"state": name, "actual_type": type(raw_location).__name__},
+                )
+            location_path = Path(raw_location)
+            if not location_path.is_absolute():
+                location_path = root / location_path
+            locations[name] = StateLocation(name=name, path=location_path)
+        return cls(locations=locations)
+
+    def require(self, name: str) -> StateLocation:
+        location = self.locations.get(name)
+        if location is None:
+            raise RuntimeStateError(
+                code="runtime.state.declaration_missing",
+                message=f"Runtime state '{name}' is not declared",
+                details={"state": name},
+            )
+        return location
+
+
+def read_state_document(location: StateLocation) -> JSONObject:
+    """Return the versioned state document for a declared location."""
+
+    if not location.path.exists():
+        return {"version": STATE_FILE_VERSION, "values": {}}
+    try:
+        payload = json.loads(location.path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise RuntimeStateError(
+            code="runtime.state.read_failed",
+            message="Reading runtime state file failed",
+            details={"state": location.name, "path": str(location.path), "error": str(exc)},
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeStateError(
+            code="runtime.state.invalid_json",
+            message="Runtime state file did not contain valid JSON",
+            details={"state": location.name, "path": str(location.path), "error": str(exc)},
+        ) from exc
+    return _validate_state_document(payload, location=location)
+
+
+def write_state_document(location: StateLocation, document: JSONObject) -> None:
+    """Persist a versioned state document to a declared location."""
+
+    _validate_state_document(document, location=location)
+    try:
+        location.path.parent.mkdir(parents=True, exist_ok=True)
+        location.path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeStateError(
+            code="runtime.state.write_failed",
+            message="Writing runtime state file failed",
+            details={"state": location.name, "path": str(location.path), "error": str(exc)},
+        ) from exc
+
+
+def read_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...] = ()) -> JSONValue | None:
+    """Read a stored value from a versioned state document."""
+
+    values = _values_object(document)
+    if key not in values:
+        return None
+    current: JSONValue = values[key]
+    for field in fields:
+        if not isinstance(current, dict) or field not in current:
+            return None
+        current = current[field]
+    return current
+
+
+def write_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...] = (), value: JSONValue) -> JSONObject:
+    """Create or replace a stored value inside a versioned state document."""
+
+    values = _values_object(document)
+    if not fields:
+        values[key] = value
+        return document
+
+    current = values.get(key)
+    if current is None:
+        current = {}
+        values[key] = current
+    if not isinstance(current, dict):
+        current = {}
+        values[key] = current
+
+    node = current
+    for field in fields[:-1]:
+        child = node.get(field)
+        if not isinstance(child, dict):
+            child = {}
+            node[field] = child
+        node = child
+    node[fields[-1]] = value
+    return document
+
+
+def delete_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...] = ()) -> bool:
+    """Delete a stored value from a versioned state document."""
+
+    values = _values_object(document)
+    if key not in values:
+        return False
+    if not fields:
+        del values[key]
+        return True
+
+    current = values[key]
+    if not isinstance(current, dict):
+        return False
+
+    node = current
+    parents: list[tuple[dict[str, JSONValue], str]] = []
+    for field in fields[:-1]:
+        child = node.get(field)
+        if not isinstance(child, dict):
+            return False
+        parents.append((node, field))
+        node = child
+
+    leaf = fields[-1]
+    if leaf not in node:
+        return False
+    del node[leaf]
+
+    while parents:
+        parent, field = parents.pop()
+        child = parent.get(field)
+        if isinstance(child, dict) and not child:
+            del parent[field]
+            continue
+        break
+
+    if isinstance(values.get(key), dict) and not values[key]:
+        del values[key]
+    return True
+
+
+def _validate_state_document(payload: JSONValue, *, location: StateLocation) -> JSONObject:
+    if not isinstance(payload, dict):
+        raise RuntimeStateError(
+            code="runtime.state.invalid_shape",
+            message="Runtime state file root must be an object",
+            details={"state": location.name, "path": str(location.path), "actual_type": type(payload).__name__},
+        )
+    version = payload.get("version")
+    if version != STATE_FILE_VERSION:
+        raise RuntimeStateError(
+            code="runtime.state.unsupported_version",
+            message="Runtime state file version is not supported",
+            details={"state": location.name, "path": str(location.path), "version": version},
+        )
+    values = payload.get("values")
+    if not isinstance(values, dict):
+        raise RuntimeStateError(
+            code="runtime.state.invalid_shape",
+            message="Runtime state file 'values' field must be an object",
+            details={"state": location.name, "path": str(location.path), "actual_type": type(values).__name__},
+        )
+    return {"version": STATE_FILE_VERSION, "values": dict(values)}
+
+
+def _values_object(document: JSONObject) -> dict[str, JSONValue]:
+    values = document.get("values")
+    if not isinstance(values, dict):
+        raise RuntimeStateError(
+            code="runtime.state.invalid_shape",
+            message="Runtime state document 'values' field must be an object",
+            details={"actual_type": type(values).__name__},
+        )
+    return values
