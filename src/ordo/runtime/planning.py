@@ -9,7 +9,7 @@ from ordo.model.workflow import Workflow
 from .checking import check_workflow
 from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
-from .resolution import ResolvedGuardExpression, WorkflowResolution, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedGuardExpression, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
 
 
@@ -126,6 +126,17 @@ def _build_step_items(
 
     if resolution is not None and resolution.resolved_steps:
         for step, resolved_step in zip(workflow.steps, resolution.resolved_steps, strict=False):
+            if isinstance(resolved_step, ResolvedBuiltinStep):
+                step_items.append(
+                    {
+                        "name": step.name,
+                        "reference": resolved_step.reference,
+                        "kind": "builtin",
+                        "effect": "effectful",
+                        "eligibility": "blocked" if blocked else "eligible",
+                    }
+                )
+                continue
             step_items.append(
                 {
                     "name": step.name,
@@ -141,9 +152,9 @@ def _build_step_items(
         step_items.append(
             {
                 "name": step.name,
-                "reference": step.operation.uses,
-                "kind": "unknown",
-                "effect": "unknown",
+                "reference": step.operation.uses if step.operation is not None else "builtin",
+                "kind": "unknown" if step.operation is not None else "builtin",
+                "effect": "unknown" if step.operation is not None else "effectful",
                 "eligibility": "blocked" if blocked else "unknown",
             }
         )

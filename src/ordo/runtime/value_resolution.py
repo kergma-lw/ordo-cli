@@ -8,8 +8,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONArray, JSONObject, JSONValue
 from ordo.model.workflow import Workflow
 
-from .state import RuntimeStateError, RuntimeStateRegistry, read_state_document, read_state_value
-from .state_paths import StatePathParseError, parse_state_path
+from .state import RuntimeStateError, resolve_state_target, resolve_workflow_input_reference, read_state_document, read_state_value
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,45 +56,36 @@ def _extract_expression(value: str) -> str | None:
 
 
 def _resolve_input_reference(parts: tuple[str, ...], workflow: Workflow) -> JSONValue:
-    current: JSONValue = workflow.inputs
-    for part in parts[1:]:
-        if not isinstance(current, dict) or part not in current:
-            raise ValueResolutionError(
-                code="runtime.value.input_missing",
-                message=f"Workflow input reference '{'.'.join(parts)}' is missing",
-                details={"reference": ".".join(parts)},
-            )
-        current = current[part]
-    return current
+    try:
+        return resolve_workflow_input_reference(parts, workflow)
+    except RuntimeStateError as exc:
+        raise ValueResolutionError(
+            code="runtime.value.input_missing",
+            message=exc.message,
+            details=exc.details,
+        ) from exc
 
 
 def _resolve_state_reference(expression: str, workflow: Workflow) -> JSONValue:
     try:
-        parsed = parse_state_path(expression)
-    except StatePathParseError as exc:
+        target = resolve_state_target(expression, workflow)
+    except RuntimeStateError as exc:
         raise ValueResolutionError(
-            code="runtime.value.state_path_invalid",
+            code=(
+                "runtime.value.state_path_invalid"
+                if exc.code == "runtime.state.path_invalid"
+                else "runtime.value.state_key_invalid"
+                if exc.code == "runtime.state.key_invalid"
+                else "runtime.value.input_missing"
+                if exc.code == "runtime.state.input_missing"
+                else exc.code
+            ),
             message=exc.message,
-            details={
-                "expression": expression,
-                "position": exc.position,
-                "end": exc.end if exc.end is not None else exc.position,
-            },
-        ) from exc
-
-    registry = RuntimeStateRegistry.from_workflow(workflow)
-    location = registry.require(parsed.state_name)
-    document = read_state_document(location)
-    key_value = _resolve_input_reference(parsed.key_reference, workflow)
-    if isinstance(key_value, dict) or isinstance(key_value, list):
-        raise ValueResolutionError(
-            code="runtime.value.state_key_invalid",
-            message="Runtime state key reference must resolve to a scalar value",
-            details={"expression": expression, "reference": ".".join(parsed.key_reference)},
+            details=exc.details,
         )
-
     try:
-        value = read_state_value(document, key=str(key_value), fields=parsed.fields)
+        document = read_state_document(target.location)
+        value = read_state_value(document, key=target.key, fields=target.fields)
     except RuntimeStateError as exc:
         raise ValueResolutionError(
             code=exc.code,
@@ -106,6 +96,6 @@ def _resolve_state_reference(expression: str, workflow: Workflow) -> JSONValue:
         raise ValueResolutionError(
             code="runtime.value.state_missing",
             message="Runtime state value is missing",
-            details={"expression": expression, "state": parsed.state_name, "key": str(key_value), "fields": list(parsed.fields)},
+            details={"expression": expression, "state": target.location.name, "key": target.key, "fields": list(target.fields)},
         )
     return value

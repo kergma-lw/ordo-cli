@@ -55,13 +55,28 @@ ResolvedGuard = ResolvedOperation | ResolvedGuardExpression
 
 
 @dataclass(frozen=True, slots=True)
+class ResolvedBuiltinStep:
+    """Resolved built-in runtime step."""
+
+    name: str
+    builtin: str
+
+    @property
+    def reference(self) -> str:
+        return self.builtin
+
+
+ResolvedStep = ResolvedOperation | ResolvedBuiltinStep
+
+
+@dataclass(frozen=True, slots=True)
 class WorkflowResolution:
     """Structured workflow resolution result."""
 
     status: RuntimeStatus
     diagnostics: tuple[Diagnostic, ...] = ()
     resolved_guards: tuple[ResolvedGuard, ...] = ()
-    resolved_steps: tuple[ResolvedOperation, ...] = ()
+    resolved_steps: tuple[ResolvedStep, ...] = ()
     active_overrides: tuple[Override, ...] = ()
 
     @property
@@ -91,7 +106,7 @@ def resolve_workflow_references(
         )
 
     resolved_guards: list[ResolvedGuard] = []
-    resolved_steps: list[ResolvedOperation] = []
+    resolved_steps: list[ResolvedStep] = []
 
     for index, guard in enumerate(workflow.guards):
         if guard.operation is None:
@@ -118,6 +133,12 @@ def resolve_workflow_references(
             resolved_guards.append(resolved)
 
     for index, step in enumerate(workflow.steps):
+        if step.state_set is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_set"))
+            continue
+        if step.state_delete is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_delete"))
+            continue
         resolved = _resolve_reference(
             step.operation.uses,
             path=("steps", str(index), "uses"),

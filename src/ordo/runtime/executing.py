@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
@@ -10,7 +11,9 @@ from ordo.model.workflow import Workflow
 from .checking import GuardProbe, check_workflow
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
-from .resolution import ResolvedOperation, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedOperation, resolve_workflow_references
+from .state import RuntimeStateError, delete_state_value, read_state_document, resolve_state_target, write_state_document, write_state_value
+from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
 def execute_workflow(
@@ -58,7 +61,10 @@ def execute_workflow(
     skipped_steps: list[str] = []
 
     for step, resolved_step in zip(effective_workflow.steps, resolution.resolved_steps, strict=False):
-        result = executor(resolved_step, effective_workflow)
+        if isinstance(resolved_step, ResolvedBuiltinStep):
+            result = _execute_builtin_state_step(step, effective_workflow)
+        else:
+            result = executor(resolved_step, effective_workflow)
         operation_results.append(result)
         diagnostics.extend(result.diagnostics)
 
@@ -106,3 +112,56 @@ def _default_step_executor(*, provider: ConnectorProvider | None):
         return resolved_provider.step_executor(resolved_step, workflow)
 
     return execute
+
+
+def _execute_builtin_state_step(step, workflow: Workflow) -> OperationResult:
+    try:
+        if step.state_set is not None:
+            return _execute_state_set(step.name, step.state_set, workflow)
+        if step.state_delete is not None:
+            return _execute_state_delete(step.name, step.state_delete, workflow)
+    except RuntimeStateError as exc:
+        return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
+    except ValueResolutionError as exc:
+        return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
+    return OperationResult(status="state_error", summary="Unknown builtin step form")
+
+
+def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow: Workflow) -> OperationResult:
+    target_expr, raw_value = next(iter(state_set.items()))
+    target = resolve_state_target(target_expr, workflow)
+    value = resolve_runtime_value(raw_value, workflow)
+    document = read_state_document(target.location)
+    write_state_value(document, key=target.key, fields=target.fields, value=value)
+    write_state_document(target.location, document)
+    return OperationResult(
+        status="ok",
+        summary=f"Stored runtime state for step '{step_name}'",
+        observations={
+            "state": target.location.name,
+            "key": target.key,
+            "fields": list(target.fields),
+            "written": True,
+        },
+    )
+
+
+def _execute_state_delete(step_name: str, target_expr: str, workflow: Workflow) -> OperationResult:
+    target = resolve_state_target(target_expr, workflow)
+    document = read_state_document(target.location)
+    deleted = delete_state_value(document, key=target.key, fields=target.fields)
+    write_state_document(target.location, document)
+    return OperationResult(
+        status="ok",
+        summary=(
+            f"Deleted runtime state for step '{step_name}'"
+            if deleted
+            else f"Runtime state target for step '{step_name}' was already absent"
+        ),
+        observations={
+            "state": target.location.name,
+            "key": target.key,
+            "fields": list(target.fields),
+            "deleted": deleted,
+        },
+    )
