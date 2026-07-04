@@ -81,7 +81,7 @@
     },
     {
       "name": "search",
-      "summary": "Search topics and operation references"
+      "summary": "Search topics, contract facts, and operation references"
     }
   ]
 }

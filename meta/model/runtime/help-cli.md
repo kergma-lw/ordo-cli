@@ -46,7 +46,7 @@ The public contract should remain topic-oriented rather than exposing implementa
 - `examples` exposes verified repository examples intended as public authoring references.
 - `operation <reference>` exposes one focused operation contract.
 - `describe <topic>` resolves a supported public topic to the same canonical discovery surface.
-- `search <query>` helps a caller bridge from vague terms to public topics or operation references.
+- `search <query>` helps a caller bridge from vague terms to public topics, published contract facts, or operation references.
 
 ## Bootstrap sequence
 

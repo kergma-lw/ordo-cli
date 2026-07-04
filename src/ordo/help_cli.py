@@ -20,7 +20,7 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "examples", "summary": "Inspect verified repository examples"},
     {"name": "operation", "summary": "Inspect one public operation by reference"},
     {"name": "describe", "summary": "Resolve a supported public topic"},
-    {"name": "search", "summary": "Search topics and operation references"},
+    {"name": "search", "summary": "Search topics, contract facts, and operation references"},
 )
 
 DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "capabilities", "model", "operations", "examples")
@@ -170,10 +170,93 @@ def build_search_response(query: str) -> JSONObject:
                 }
             )
 
+    fact_results = []
+    for capability in describe_capabilities()["capabilities"]:
+        searchable = " ".join([capability["name"], capability["scope"], capability["status"]]).lower()
+        if lowered_query in searchable:
+            fact_results.append(
+                {
+                    "kind": "capability",
+                    "name": capability["name"],
+                    "summary": f"Capability in scope '{capability['scope']}' is {capability['status']}",
+                    "topic": "capabilities",
+                    "command": "ordo-help capabilities --json",
+                }
+            )
+
+    for rule in describe_capabilities()["negative_rules"]:
+        searchable = " ".join([rule["name"], rule["surface"], rule["rule"], rule["reason"]]).lower()
+        if lowered_query in searchable:
+            fact_results.append(
+                {
+                    "kind": "negative_rule",
+                    "name": rule["name"],
+                    "summary": rule["rule"],
+                    "topic": "capabilities",
+                    "command": "ordo-help capabilities --json",
+                }
+            )
+
+    model = build_model_response()
+    contract_field_groups = (
+        ("workflow", model["workflow"], ("top_level_fields", "step_forms", "step_form_rules", "guard_forms")),
+        ("profile", model["profile"], ("top_level_fields", "override_fields")),
+        ("playbook", model["playbook"], ("top_level_fields", "workflow_entry_fields", "profile_entry_fields", "state_entry_fields", "defaults_fields")),
+        ("state", model["state"], ("workflow_surface",)),
+    )
+    for contract_name, payload, keys in contract_field_groups:
+        for key in keys:
+            section = payload.get(key)
+            if isinstance(section, list):
+                for item in section:
+                    if not isinstance(item, dict):
+                        continue
+                    name = item.get("name") or item.get("field")
+                    if not isinstance(name, str):
+                        continue
+                    searchable = f"{contract_name} {json.dumps(item, sort_keys=True)}".lower()
+                    if lowered_query in searchable:
+                        fact_results.append(
+                            {
+                                "kind": "model_field",
+                                "name": f"{contract_name}.{name}",
+                                "summary": f"Published field metadata under the {contract_name} contract",
+                                "topic": "model",
+                                "command": "ordo-help model --json",
+                            }
+                        )
+            elif isinstance(section, dict):
+                for field_name, field_value in section.items():
+                    searchable = f"{field_name} {json.dumps(field_value, sort_keys=True)}".lower()
+                    if lowered_query in searchable:
+                        fact_results.append(
+                            {
+                                "kind": "model_field",
+                                "name": f"{contract_name}.{field_name}",
+                                "summary": f"Published field metadata under the {contract_name} contract",
+                                "topic": "model",
+                                "command": "ordo-help model --json",
+                            }
+                        )
+
+    for example in describe_examples_catalog()["examples"]:
+        searchable = " ".join([example["name"], example["path"], *example["shows"], *example["related_topics"]]).lower()
+        if lowered_query in searchable:
+            fact_results.append(
+                {
+                    "kind": "example",
+                    "name": example["name"],
+                    "summary": f"Verified example at {example['path']}",
+                    "topic": "examples",
+                    "command": "ordo-help examples --json",
+                }
+            )
+
     return {
         "document_kind": "search_results",
         "query": query,
         "topics": topic_results,
+        "facts": fact_results,
         "operations": operation_results,
     }
 
@@ -307,12 +390,16 @@ def render_search_text(payload: JSONObject) -> str:
         lines.extend(["", "Topic matches:"])
         for topic in payload["topics"]:
             lines.append(f"- {topic['name']}: {topic['command']}")
+    if payload["facts"]:
+        lines.extend(["", "Fact matches:"])
+        for fact in payload["facts"]:
+            lines.append(f"- {fact['name']} ({fact['kind']}): {fact['command']}")
     if payload["operations"]:
         lines.extend(["", "Operation matches:"])
         for operation in payload["operations"]:
             lines.append(f"- {operation['reference']}: {operation['command']}")
-    if not payload["topics"] and not payload["operations"]:
-        lines.extend(["", "No topic or operation matches found."])
+    if not payload["topics"] and not payload["facts"] and not payload["operations"]:
+        lines.extend(["", "No topic, fact, or operation matches found."])
     return "\n".join(lines)
 
 

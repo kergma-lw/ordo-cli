@@ -73,6 +73,17 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connectors", operations)
         self.assertEqual(examples["document_kind"], "examples_catalog")
 
+    def test_search_indexes_capabilities_model_fields_and_examples(self) -> None:
+        profile_result = json.loads(self.run_help("search", "profile", "--json").stdout)
+        branching_result = json.loads(self.run_help("search", "branching", "--json").stdout)
+        override_result = json.loads(self.run_help("search", "override", "--json").stdout)
+        example_result = json.loads(self.run_help("search", "open-task", "--json").stdout)
+
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in profile_result["facts"]))
+        self.assertTrue(any(item["kind"] == "capability" and item["name"] == "workflow.branching" for item in branching_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in override_result["facts"]))
+        self.assertTrue(any(item["kind"] == "example" and item["name"] == "open-task-from-gitx" for item in example_result["facts"]))
+
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)
