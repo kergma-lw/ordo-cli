@@ -10,7 +10,7 @@ from ordo import (
     RuntimeStatus,
     Workflow,
 )
-from ordo.introspection import INTROSPECTION_VERSION, build_introspection_envelope
+from ordo.introspection import INTROSPECTION_VERSION, build_introspection_envelope, describe_operations, describe_system
 
 
 class PackageLayoutSmokeTest(unittest.TestCase):
@@ -30,6 +30,8 @@ class PackageLayoutSmokeTest(unittest.TestCase):
         self.assertEqual(operation_ref.uses, "gh.issue")
         self.assertEqual(INTROSPECTION_VERSION, 1)
         self.assertIn("introspection_version", build_introspection_envelope())
+        self.assertIn("connectors", describe_operations())
+        self.assertIn("sections", describe_system())
 
 
 if __name__ == "__main__":
