@@ -7,7 +7,9 @@ from dataclasses import dataclass
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
+from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
+from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .guard_expressions import GuardExpressionParseError, parse_guard_expression, validate_parsed_guard_expression
 from .loading import LoadError, load_yaml_document
@@ -16,11 +18,22 @@ from .value_expressions import ValueExpressionParseError, parse_value_expression
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 
-WORKFLOW_ALLOWED_FIELDS = frozenset({"version", "workflow", "inputs", "states", "guards", "steps"})
+
+def _field_names(items: list[JSONObject]) -> frozenset[str]:
+    return frozenset(item["name"] for item in items if isinstance(item.get("name"), str))
+
+
+WORKFLOW_ALLOWED_FIELDS = _field_names(WORKFLOW_CONTRACT["top_level_fields"])
 CALL_ALLOWED_FIELDS = frozenset({"uses", "with"})
-STEP_ALLOWED_FIELDS = frozenset({"name", "uses", "with", "state_set", "state_delete"})
-PROFILE_ALLOWED_FIELDS = frozenset({"name", "inputs", "checks", "overrides"})
-OVERRIDE_ALLOWED_FIELDS = frozenset({"target", "with", "reason"})
+STEP_ALLOWED_FIELDS = frozenset().union(
+    *(
+        frozenset(form["required_fields"]) | frozenset(form["optional_fields"])
+        for form in WORKFLOW_CONTRACT["step_forms"]
+        if isinstance(form, dict)
+    )
+)
+PROFILE_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["top_level_fields"])
+OVERRIDE_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["override_fields"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +84,7 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_exact_int(payload, "version", 0, source=source))
     diagnostics.extend(_require_non_empty_string(payload, "workflow", source=source))
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
-    diagnostics.extend(_require_object_field(payload, "states", source=source, required=False))
+    diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
     diagnostics.extend(_validate_guard_list(payload.get("guards"), source=source))
     diagnostics.extend(_validate_step_list(payload.get("steps"), source=source))
 

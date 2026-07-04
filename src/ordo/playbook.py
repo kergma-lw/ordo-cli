@@ -7,17 +7,23 @@ from pathlib import Path
 import yaml
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
 from ordo.model.workflow import Workflow
 from ordo.runtime import LoadError, load_profile_file, load_workflow_text, load_yaml_document
 
-PLAYBOOK_VERSION = 1
-PLAYBOOK_DISCOVERY_PATH = ".ordo/playbook.yml"
-PLAYBOOK_ALLOWED_FIELDS = frozenset({"version", "states", "defaults", "workflows", "profiles"})
-DEFAULTS_ALLOWED_FIELDS = frozenset({"profile"})
-PROFILE_ENTRY_ALLOWED_FIELDS = frozenset({"file"})
-STATE_ENTRY_ALLOWED_FIELDS = frozenset({"path"})
-WORKFLOW_ENTRY_ALLOWED_FIELDS = frozenset({"file", "state_bindings"})
+
+def _field_names(items: list[dict[str, object]]) -> frozenset[str]:
+    return frozenset(item["name"] for item in items if isinstance(item.get("name"), str))
+
+
+PLAYBOOK_VERSION = PLAYBOOK_CONTRACT["version"]
+PLAYBOOK_DISCOVERY_PATH = PLAYBOOK_CONTRACT["discovery"]["path"]
+PLAYBOOK_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["top_level_fields"])
+DEFAULTS_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["defaults_fields"])
+PROFILE_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["profile_entry_fields"])
+STATE_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["state_entry_fields"])
+WORKFLOW_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["workflow_entry_fields"])
 
 
 @dataclass(frozen=True, slots=True)
