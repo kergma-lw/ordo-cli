@@ -108,11 +108,13 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         }
 
     if result.status is RuntimeStatus.EXECUTION_ERROR:
+        step_condition_details = [detail for detail in result.outputs.get("step_condition_details", []) if isinstance(detail, dict)]
         return {
             "category": "execution",
             "allowed": False,
             "why": "Execution started but a step failed",
             "blockers": [result.failed_step] if result.failed_step is not None else [],
+            "step_condition_details": step_condition_details,
         }
 
     return {

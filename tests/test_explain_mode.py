@@ -95,6 +95,20 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.mode.value, "explain")
         self.assertIn("explanation", result.outputs)
 
+    def test_explain_execution_result_preserves_step_condition_outcomes(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"enabled": False},
+            guards=(),
+            steps=(Step(name="ship", operation=OperationRef("shell.command"), if_="${inputs.enabled}"),),
+        )
+
+        result = explain_execution_result(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["step_condition_details"][0]["outcome"], "skipped")
+        self.assertEqual(result.outputs["step_condition_details"][0]["reason"], "condition_false")
+
 
 if __name__ == "__main__":
     unittest.main()

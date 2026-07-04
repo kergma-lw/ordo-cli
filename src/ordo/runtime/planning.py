@@ -134,6 +134,8 @@ def _build_step_items(
                         "kind": "builtin",
                         "effect": "effectful",
                         "eligibility": "blocked" if blocked else "eligible",
+                        "conditional": step.if_ is not None,
+                        "condition": step.if_,
                     }
                 )
                 continue
@@ -144,6 +146,8 @@ def _build_step_items(
                     "kind": resolved_step.operation.kind,
                     "effect": "read_only" if resolved_step.operation.kind == "probe" else "effectful",
                     "eligibility": "blocked" if blocked else "eligible",
+                    "conditional": step.if_ is not None,
+                    "condition": step.if_,
                 }
             )
         return step_items
@@ -156,6 +160,8 @@ def _build_step_items(
                 "kind": "unknown" if step.operation is not None else "builtin",
                 "effect": "unknown" if step.operation is not None else "effectful",
                 "eligibility": "blocked" if blocked else "unknown",
+                "conditional": step.if_ is not None,
+                "condition": step.if_,
             }
         )
     return step_items

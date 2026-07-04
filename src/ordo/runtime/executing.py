@@ -37,6 +37,7 @@ def execute_workflow(
                 **dict(check_result.outputs),
                 "executed_steps": [],
                 "skipped_steps": [step.name for step in workflow.steps],
+                "step_condition_details": [],
             },
             operation_results=check_result.operation_results,
             failed_guard=check_result.failed_guard,
@@ -59,12 +60,21 @@ def execute_workflow(
     operation_results: list[OperationResult] = list(check_result.operation_results)
     executed_steps: list[str] = []
     skipped_steps: list[str] = []
+    step_condition_details: list[dict[str, object]] = []
     effective_workflow.step_results.clear()
 
     for step, resolved_step in zip(effective_workflow.steps, resolution.resolved_steps, strict=False):
         if step.if_ is not None:
             condition_result = _evaluate_step_condition(step, effective_workflow)
             if isinstance(condition_result, Diagnostic):
+                step_condition_details.append(
+                    {
+                        "name": step.name,
+                        "condition": step.if_,
+                        "outcome": "error",
+                        "reason": "condition_evaluation_failed",
+                    }
+                )
                 skipped_steps.extend(remaining.name for remaining in effective_workflow.steps[len(executed_steps) + len(skipped_steps) + 1 :])
                 diagnostics.append(condition_result)
                 return RuntimeResult(
@@ -78,13 +88,23 @@ def execute_workflow(
                         "active_overrides": [override.to_contract() for override in active_overrides],
                         "executed_steps": executed_steps,
                         "skipped_steps": skipped_steps,
+                        "step_condition_details": step_condition_details,
                     },
                     operation_results=tuple(operation_results),
                     failed_step=step.name,
                 )
             if condition_result is False:
+                step_condition_details.append(
+                    {
+                        "name": step.name,
+                        "condition": step.if_,
+                        "outcome": "skipped",
+                        "reason": "condition_false",
+                    }
+                )
                 skipped_steps.append(step.name)
                 continue
+            step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed"})
         if isinstance(resolved_step, ResolvedBuiltinStep):
             result = _execute_builtin_state_step(step, effective_workflow)
         else:
@@ -111,6 +131,7 @@ def execute_workflow(
                     "active_overrides": [override.to_contract() for override in active_overrides],
                     "executed_steps": executed_steps,
                     "skipped_steps": skipped_steps,
+                    "step_condition_details": step_condition_details,
                 },
                 operation_results=tuple(operation_results),
                 failed_step=step.name,
@@ -129,6 +150,7 @@ def execute_workflow(
             "active_overrides": [override.to_contract() for override in active_overrides],
             "executed_steps": executed_steps,
             "skipped_steps": skipped_steps,
+            "step_condition_details": step_condition_details,
         },
         operation_results=tuple(operation_results),
     )

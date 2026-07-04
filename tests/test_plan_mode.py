@@ -111,6 +111,19 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["bootstrap_details"][0]["namespace"], "git")
         self.assertEqual(result.outputs["bootstrap_details"][0]["status"], "not_repository")
 
+    def test_plan_marks_conditional_steps(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}"),),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertTrue(result.outputs["step_items"][0]["conditional"])
+        self.assertEqual(result.outputs["step_items"][0]["condition"], "${inputs.enabled}")
+
 
 if __name__ == "__main__":
     unittest.main()
