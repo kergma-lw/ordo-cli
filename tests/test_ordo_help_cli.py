@@ -113,6 +113,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.step.condition is unsupported", branching["must_not_infer"])
         self.assertIn("workflow.step.register is unsupported", branching["must_not_infer"])
 
+    def test_describe_resolves_capability_and_model_nodes(self) -> None:
+        capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
+        model_node = json.loads(self.run_help("describe", "profile.inputs", "--json").stdout)
+        missing = self.run_help("describe", "missing.node", "--json")
+
+        self.assertEqual(capability_node["document_kind"], "capability_node")
+        self.assertEqual(capability_node["node_kind"], "capability")
+        self.assertEqual(capability_node["name"], "workflow.branching")
+        self.assertEqual(model_node["document_kind"], "model_node")
+        self.assertEqual(model_node["name"], "profile.inputs")
+        self.assertEqual(model_node["metadata"]["runtime_effect"], "applies_missing_workflow_inputs")
+        self.assertEqual(missing.returncode, 1)
+        self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
+
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)

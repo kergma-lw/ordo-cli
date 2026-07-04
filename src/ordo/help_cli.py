@@ -125,6 +125,94 @@ def build_operation_response(reference: str) -> JSONObject | None:
     }
 
 
+def _build_capability_lookup() -> dict[str, JSONObject]:
+    payload = describe_capabilities()
+    lookup: dict[str, JSONObject] = {}
+    for capability in payload["capabilities"]:
+        lookup[capability["name"]] = {
+            "document_kind": "capability_node",
+            "node_kind": "capability",
+            **capability,
+        }
+    for rule in payload["negative_rules"]:
+        lookup[rule["name"]] = {
+            "document_kind": "capability_node",
+            "node_kind": "negative_rule",
+            **rule,
+        }
+    return lookup
+
+
+def _build_model_node_lookup() -> dict[str, JSONObject]:
+    model = build_model_response()
+    lookup: dict[str, JSONObject] = {}
+
+    def add_node(name: str, *, contract: str, node_category: str, summary: str, metadata: JSONObject) -> None:
+        lookup[name] = {
+            "document_kind": "model_node",
+            "node_kind": node_category,
+            "name": name,
+            "contract": contract,
+            "summary": summary,
+            "metadata": metadata,
+        }
+
+    for field in model["workflow"]["top_level_fields"]:
+        add_node(f"workflow.{field['name']}", contract="workflow", node_category="field", summary="Published workflow field metadata", metadata=field)
+    for form in model["workflow"]["step_forms"]:
+        add_node(
+            f"workflow.step_forms.{form['name']}",
+            contract="workflow",
+            node_category="step_form",
+            summary="Published workflow step-form metadata",
+            metadata=form,
+        )
+        for field_name in form.get("required_fields", []):
+            add_node(
+                f"workflow.step.{field_name}",
+                contract="workflow",
+                node_category="step_field",
+                summary="Published workflow step field metadata",
+                metadata={"name": field_name, "required_in_forms": [form["name"]]},
+            )
+        for field_name in form.get("optional_fields", []):
+            existing = lookup.get(f"workflow.step.{field_name}")
+            if existing is not None:
+                existing["metadata"].setdefault("optional_in_forms", []).append(form["name"])
+                continue
+            add_node(
+                f"workflow.step.{field_name}",
+                contract="workflow",
+                node_category="step_field",
+                summary="Published workflow step field metadata",
+                metadata={"name": field_name, "optional_in_forms": [form["name"]]},
+            )
+    for field in model["profile"]["top_level_fields"]:
+        add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)
+    for field in model["profile"]["override_fields"]:
+        add_node(f"profile.overrides.{field['name']}", contract="profile", node_category="override_field", summary="Published profile override field metadata", metadata=field)
+    for field in model["playbook"]["top_level_fields"]:
+        add_node(f"playbook.{field['name']}", contract="playbook", node_category="field", summary="Published playbook field metadata", metadata=field)
+    for field in model["playbook"]["defaults_fields"]:
+        add_node(f"playbook.defaults.{field['name']}", contract="playbook", node_category="default_field", summary="Published playbook default field metadata", metadata=field)
+    for field in model["playbook"]["workflow_entry_fields"]:
+        add_node(f"playbook.workflows.{field['name']}", contract="playbook", node_category="workflow_entry_field", summary="Published playbook workflow-entry field metadata", metadata=field)
+    for field in model["playbook"]["profile_entry_fields"]:
+        add_node(f"playbook.profiles.{field['name']}", contract="playbook", node_category="profile_entry_field", summary="Published playbook profile-entry field metadata", metadata=field)
+    for field in model["playbook"]["state_entry_fields"]:
+        add_node(f"playbook.states.{field['name']}", contract="playbook", node_category="state_entry_field", summary="Published playbook state-entry field metadata", metadata=field)
+
+    for field_name, value in model["state"]["workflow_surface"].items():
+        add_node(
+            f"state.workflow_surface.{field_name}",
+            contract="state",
+            node_category="workflow_surface_field",
+            summary="Published state workflow-surface metadata",
+            metadata={"name": field_name, "value": value},
+        )
+    return lookup
+
+
 def build_search_response(query: str) -> JSONObject:
     """Return search results across public topics and operation references."""
 
@@ -180,7 +268,7 @@ def build_search_response(query: str) -> JSONObject:
                     "name": capability["name"],
                     "summary": f"Capability in scope '{capability['scope']}' is {capability['status']}",
                     "topic": "capabilities",
-                    "command": "ordo-help capabilities --json",
+                    "command": f"ordo-help describe {capability['name']} --json",
                 }
             )
 
@@ -193,51 +281,22 @@ def build_search_response(query: str) -> JSONObject:
                     "name": rule["name"],
                     "summary": rule["rule"],
                     "topic": "capabilities",
-                    "command": "ordo-help capabilities --json",
+                    "command": f"ordo-help describe {rule['name']} --json",
                 }
             )
 
-    model = build_model_response()
-    contract_field_groups = (
-        ("workflow", model["workflow"], ("top_level_fields", "step_forms", "step_form_rules", "guard_forms")),
-        ("profile", model["profile"], ("top_level_fields", "override_fields")),
-        ("playbook", model["playbook"], ("top_level_fields", "workflow_entry_fields", "profile_entry_fields", "state_entry_fields", "defaults_fields")),
-        ("state", model["state"], ("workflow_surface",)),
-    )
-    for contract_name, payload, keys in contract_field_groups:
-        for key in keys:
-            section = payload.get(key)
-            if isinstance(section, list):
-                for item in section:
-                    if not isinstance(item, dict):
-                        continue
-                    name = item.get("name") or item.get("field")
-                    if not isinstance(name, str):
-                        continue
-                    searchable = f"{contract_name} {json.dumps(item, sort_keys=True)}".lower()
-                    if lowered_query in searchable:
-                        fact_results.append(
-                            {
-                                "kind": "model_field",
-                                "name": f"{contract_name}.{name}",
-                                "summary": f"Published field metadata under the {contract_name} contract",
-                                "topic": "model",
-                                "command": "ordo-help model --json",
-                            }
-                        )
-            elif isinstance(section, dict):
-                for field_name, field_value in section.items():
-                    searchable = f"{field_name} {json.dumps(field_value, sort_keys=True)}".lower()
-                    if lowered_query in searchable:
-                        fact_results.append(
-                            {
-                                "kind": "model_field",
-                                "name": f"{contract_name}.{field_name}",
-                                "summary": f"Published field metadata under the {contract_name} contract",
-                                "topic": "model",
-                                "command": "ordo-help model --json",
-                            }
-                        )
+    for node_name, node in _build_model_node_lookup().items():
+        searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
+        if lowered_query in searchable:
+            fact_results.append(
+                {
+                    "kind": "model_field",
+                    "name": node_name,
+                    "summary": node["summary"],
+                    "topic": "model",
+                    "command": f"ordo-help describe {node_name} --json",
+                }
+            )
 
     for example in describe_examples_catalog()["examples"]:
         searchable = " ".join([example["name"], example["path"], *example["shows"], *example["related_topics"]]).lower()
@@ -389,6 +448,24 @@ def render_operation_text(payload: JSONObject) -> str:
     return "\n".join(lines)
 
 
+def render_capability_node_text(payload: JSONObject) -> str:
+    """Return the text capability-node surface."""
+
+    lines = [payload["name"], payload["node_kind"]]
+    if payload["node_kind"] == "capability":
+        lines.extend([f"status: {payload['status']}", f"scope: {payload['scope']}"])
+    else:
+        lines.extend([f"surface: {payload['surface']}", payload["rule"]])
+    return "\n".join(lines)
+
+
+def render_model_node_text(payload: JSONObject) -> str:
+    """Return the text model-node surface."""
+
+    lines = [payload["name"], payload["summary"], "", f"contract: {payload['contract']}", f"node kind: {payload['node_kind']}"]
+    return "\n".join(lines)
+
+
 def render_search_text(payload: JSONObject) -> str:
     """Return the text search surface."""
 
@@ -448,8 +525,9 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
         "document_kind": "topic_error",
         "topic": topic,
         "status": "unknown_topic",
-        "message": f"Unsupported public topic '{topic}'",
+        "message": f"Unsupported public topic or node '{topic}'",
         "supported_topics": list(DESCRIBABLE_TOPICS),
+        "supported_node_kinds": ["capability", "negative_rule", "model_node"],
     }
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -473,6 +551,12 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
         return describe_operations(), render_operations_text
     if topic == "examples":
         return describe_examples_catalog(), render_examples_text
+    capability_node = _build_capability_lookup().get(topic)
+    if capability_node is not None:
+        return capability_node, render_capability_node_text
+    model_node = _build_model_node_lookup().get(topic)
+    if model_node is not None:
+        return model_node, render_model_node_text
     return None
 
 
