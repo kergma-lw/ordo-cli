@@ -7,6 +7,7 @@ from ordo.model.json import JSONObject
 from .capabilities import describe_capabilities
 from .envelope import build_introspection_envelope
 from .operations import describe_operations
+from .workflow import describe_workflow_contract
 
 
 def describe_system() -> JSONObject:
@@ -14,6 +15,7 @@ def describe_system() -> JSONObject:
 
     capabilities = describe_capabilities()
     operations = describe_operations()
+    workflow_contract = describe_workflow_contract()
     return build_introspection_envelope(
         sections={
             "discovery": {
@@ -26,10 +28,15 @@ def describe_system() -> JSONObject:
                     "operations": {
                         "producer": "describe_operations",
                         "published": True,
+                    },
+                    "workflow_contract": {
+                        "producer": "describe_workflow_contract",
+                        "published": True,
                     }
                 },
             },
             "capabilities": capabilities,
             "operations": operations,
+            "workflow_contract": workflow_contract,
         }
     )

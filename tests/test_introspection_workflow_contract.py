@@ -1,0 +1,34 @@
+import unittest
+
+from ordo.introspection import describe_system, describe_workflow_contract
+from ordo.runtime.validation import STEP_ALLOWED_FIELDS, WORKFLOW_ALLOWED_FIELDS
+
+
+class IntrospectionWorkflowContractTest(unittest.TestCase):
+    def test_workflow_contract_publishes_top_level_fields_and_step_forms(self) -> None:
+        payload = describe_workflow_contract()
+
+        field_names = {field["name"] for field in payload["top_level_fields"]}
+        step_forms = {item["name"]: item for item in payload["step_forms"]}
+        self.assertEqual(field_names, {"version", "workflow", "inputs", "state_needs", "guards", "steps"})
+        self.assertEqual(step_forms["state_set"]["required_fields"], ["name", "state_set"])
+        self.assertEqual(step_forms["state_delete"]["required_fields"], ["name", "state_delete"])
+
+    def test_workflow_contract_stays_aligned_with_validator_field_sets(self) -> None:
+        payload = describe_workflow_contract()
+
+        field_names = {field["name"] for field in payload["top_level_fields"]}
+        operation_step = next(item for item in payload["step_forms"] if item["name"] == "operation_call")
+        step_fields = set(operation_step["required_fields"]) | set(operation_step["optional_fields"]) | {"state_set", "state_delete"}
+        self.assertEqual(field_names, set(WORKFLOW_ALLOWED_FIELDS))
+        self.assertEqual(step_fields, set(STEP_ALLOWED_FIELDS))
+
+    def test_root_introspection_publishes_workflow_contract_section(self) -> None:
+        payload = describe_system()
+
+        self.assertEqual(payload["sections"]["discovery"]["sections"]["workflow_contract"]["producer"], "describe_workflow_contract")
+        self.assertIn("workflow_contract", payload["sections"])
+
+
+if __name__ == "__main__":
+    unittest.main()

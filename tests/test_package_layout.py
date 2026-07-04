@@ -10,7 +10,14 @@ from ordo import (
     RuntimeStatus,
     Workflow,
 )
-from ordo.introspection import INTROSPECTION_VERSION, build_introspection_envelope, describe_capabilities, describe_operations, describe_system
+from ordo.introspection import (
+    INTROSPECTION_VERSION,
+    build_introspection_envelope,
+    describe_capabilities,
+    describe_operations,
+    describe_system,
+    describe_workflow_contract,
+)
 from ordo.runtime.value_expressions import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 
 
@@ -34,6 +41,7 @@ class PackageLayoutSmokeTest(unittest.TestCase):
         self.assertIn("capabilities", describe_capabilities())
         self.assertIn("connectors", describe_operations())
         self.assertIn("sections", describe_system())
+        self.assertEqual(describe_workflow_contract()["document_kind"], "workflow")
         self.assertIn("lower", VALUE_EXPRESSION_FILTERS)
         self.assertIn("format", VALUE_EXPRESSION_BUILTINS)
 
