@@ -202,6 +202,10 @@
           "producer": "describe_operations",
           "published": true
         },
+        "pattern_hints": {
+          "producer": "describe_pattern_hints",
+          "published": true
+        },
         "playbook_contract": {
           "producer": "describe_playbook_contract",
           "published": true
@@ -1289,6 +1293,40 @@
               "replaced_by": []
             }
           ]
+        }
+      ]
+    },
+    "pattern_hints": {
+      "document_kind": "pattern_hints",
+      "hints": [
+        {
+          "because": "Profiles separate environment-specific inputs and checks from the canonical workflow shape",
+          "category": "authoring_strategy",
+          "name": "profiles.prefer_for_environment_differences",
+          "prefer": [
+            "profile_contract"
+          ],
+          "when": "A workflow needs backend/frontend or environment-specific defaults without changing its core step graph"
+        },
+        {
+          "because": "State bindings plus state_set/state_delete provide the runtime-owned persistent memory surface",
+          "category": "authoring_strategy",
+          "name": "state.use_for_persistent_memory",
+          "prefer": [
+            "workflow_contract.state_needs",
+            "state_contract",
+            "workflow_step.state_set"
+          ],
+          "when": "A workflow needs persistent memory across runs keyed by workflow inputs"
+        },
+        {
+          "because": "shell.command is the explicit low-level fallback when no higher-level connector operation exists",
+          "category": "fallback_strategy",
+          "name": "shell_command.use_as_capability_fallback",
+          "prefer": [
+            "shell.command"
+          ],
+          "when": "A needed runtime action is not published as a dedicated connector capability"
         }
       ]
     },
