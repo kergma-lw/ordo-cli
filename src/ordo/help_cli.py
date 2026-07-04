@@ -331,6 +331,9 @@ def render_capabilities_text(payload: JSONObject) -> str:
         related = capability.get("related_capabilities") or []
         if related:
             summary = f"{summary} (related: {', '.join(related)})"
+        must_not_infer = capability.get("must_not_infer") or []
+        if must_not_infer:
+            summary = f"{summary} (must not infer: {', '.join(must_not_infer)})"
         lines.append(summary)
     return "\n".join(lines)
 

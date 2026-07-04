@@ -106,6 +106,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
 
+    def test_capabilities_publish_explicit_non_inference_metadata(self) -> None:
+        capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
+        branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")
+
+        self.assertIn("workflow.step.condition is unsupported", branching["must_not_infer"])
+        self.assertIn("workflow.step.register is unsupported", branching["must_not_infer"])
+
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)

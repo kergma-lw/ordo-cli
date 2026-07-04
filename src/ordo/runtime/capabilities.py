@@ -22,6 +22,7 @@ class CapabilitySpec:
     related_capabilities: tuple[str, ...] = ()
     related_negative_rules: tuple[str, ...] = ()
     related_model_nodes: tuple[str, ...] = ()
+    must_not_infer: tuple[str, ...] = ()
 
     def to_contract(self) -> JSONObject:
         return {
@@ -31,6 +32,7 @@ class CapabilitySpec:
             "related_capabilities": list(self.related_capabilities),
             "related_negative_rules": list(self.related_negative_rules),
             "related_model_nodes": list(self.related_model_nodes),
+            "must_not_infer": list(self.must_not_infer),
         }
 
 
@@ -117,6 +119,10 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         related_capabilities=("workflow.step.condition", "workflow.step.register"),
         related_negative_rules=("workflow_step.if_conflicts_with_register",),
         related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call"),
+        must_not_infer=(
+            "workflow.step.condition is unsupported",
+            "workflow.step.register is unsupported",
+        ),
     ),
 )
 
