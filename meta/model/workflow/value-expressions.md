@@ -142,8 +142,13 @@ Value expressions are not meant to become:
 
 - a connector invocation surface;
 - a second guard-expression language;
+- an embedded conditional value-selection language;
 - a general-purpose programming language;
 - a workflow-defined macro system;
 - an open-ended query or collection-transformation language.
+
+They may evaluate predicates and return boolean values, but they must not choose between alternative values or subexpressions based on a runtime condition.
+
+Illustrative forbidden forms include ternary syntax and helpers such as `if(...)`, `select(...)`, or `case(...)`.
 
 They also must not read future step results or smuggle step-result access into guard evaluation.

@@ -36,5 +36,7 @@
   - blocked before execution;
   - execution intentionally skipped;
   - execution attempted and failed.
+- When a step is intentionally skipped because its `if` condition evaluated to `false`, runtime outputs should preserve that reason in machine-usable form.
+- When a step `if` condition cannot be evaluated, the runtime must fail execution rather than silently treating the condition as `false`.
 - `explain` output should include useful next actions when the runtime can infer them safely.
 - The explanation surface must remain stable enough for agent tooling to rely on status codes and categories.

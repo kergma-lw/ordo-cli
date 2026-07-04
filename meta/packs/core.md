@@ -199,8 +199,10 @@
 - A value expression must never cause side effects.
 - A value expression must never call connector operations, whether action or probe.
 - A value expression must never read future step results.
-- A value expression must never encode workflow control flow such as branching, looping, or step selection.
-- A value expression must never duplicate guard or policy semantics as a general boolean language.
+- A value expression may evaluate predicates and return boolean values.
+- A value expression must never embed control-flow constructs such as conditional branch selection, looping, or step selection.
+- A value expression must never choose between alternative values or subexpressions based on a runtime condition, whether through ternary syntax, `if(...)`, `select(...)`, `case(...)`, or equivalent forms.
+- A value expression must never duplicate guard or policy semantics as an open-ended boolean language.
 - A value expression must never support user-defined functions, macros, operators, or workflow-defined extension hooks.
 - A value expression must never become an open-ended collection programming or query language.
 - A value expression must never rely on project-defined syntax whose meaning is not part of the stable product contract.
@@ -264,6 +266,8 @@
   - blocked before execution;
   - execution intentionally skipped;
   - execution attempted and failed.
+- When a step is intentionally skipped because its `if` condition evaluated to `false`, runtime outputs should preserve that reason in machine-usable form.
+- When a step `if` condition cannot be evaluated, the runtime must fail execution rather than silently treating the condition as `false`.
 - `explain` output should include useful next actions when the runtime can infer them safely.
 - The explanation surface must remain stable enough for agent tooling to rely on status codes and categories.
 
@@ -783,6 +787,7 @@ It must not answer the question:
 - compact references and parameters that remain workflow-semantic;
 - logical state needs that express workflow-owned state roles without naming project storage instances;
 - compact parameters;
+- simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
 
 Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
@@ -1135,6 +1140,7 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - A `Workflow` contains ordered `Guard` and `Step` entries.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` and a `Step` reference an `OperationRef`.
+- A `Step` may declare an `if` condition that controls whether that one declared step executes or is skipped.
 - A `Step` may publish an execution-local registered result for later steps through a workflow-local `register` identifier.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
 - A `Profile` supplies reusable parameters or composition defaults.
@@ -1149,6 +1155,7 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - `Playbook` expresses project-local launch intent and resolution context.
 - `Workflow`, `Guard`, and `Step` express orchestration intent.
 - `StateNeed` expresses workflow-level need for persistent state without naming concrete project storage instances.
+- Step conditions express per-step eligibility, not first-class branch topology.
 - Registered step results express execution-local data flow, not persistent workflow state.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
@@ -1498,9 +1505,14 @@ Value expressions are not meant to become:
 
 - a connector invocation surface;
 - a second guard-expression language;
+- an embedded conditional value-selection language;
 - a general-purpose programming language;
 - a workflow-defined macro system;
 - an open-ended query or collection-transformation language.
+
+They may evaluate predicates and return boolean values, but they must not choose between alternative values or subexpressions based on a runtime condition.
+
+Illustrative forbidden forms include ternary syntax and helpers such as `if(...)`, `select(...)`, or `case(...)`.
 
 They also must not read future step results or smuggle step-result access into guard evaluation.
 

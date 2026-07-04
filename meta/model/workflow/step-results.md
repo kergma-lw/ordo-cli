@@ -74,6 +74,7 @@ Registered step results are not:
 ## Step-form restrictions
 
 - The MVP `register` field belongs only to operation-call steps that use `uses`.
+- A step that declares `if` must not also declare `register` in the MVP.
 - `state_set` and `state_delete` do not publish registered step results in the MVP.
 - A probe operation used as a normal step may declare `register` like any other operation-call step.
 

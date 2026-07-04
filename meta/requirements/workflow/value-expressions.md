@@ -21,8 +21,10 @@
 - A value expression must never cause side effects.
 - A value expression must never call connector operations, whether action or probe.
 - A value expression must never read future step results.
-- A value expression must never encode workflow control flow such as branching, looping, or step selection.
-- A value expression must never duplicate guard or policy semantics as a general boolean language.
+- A value expression may evaluate predicates and return boolean values.
+- A value expression must never embed control-flow constructs such as conditional branch selection, looping, or step selection.
+- A value expression must never choose between alternative values or subexpressions based on a runtime condition, whether through ternary syntax, `if(...)`, `select(...)`, `case(...)`, or equivalent forms.
+- A value expression must never duplicate guard or policy semantics as an open-ended boolean language.
 - A value expression must never support user-defined functions, macros, operators, or workflow-defined extension hooks.
 - A value expression must never become an open-ended collection programming or query language.
 - A value expression must never rely on project-defined syntax whose meaning is not part of the stable product contract.
