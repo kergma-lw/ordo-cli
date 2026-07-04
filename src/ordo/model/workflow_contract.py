@@ -61,7 +61,7 @@ WORKFLOW_CONTRACT: JSONObject = {
         "runtime_value_surface": {
             "allowed_roots": ["inputs", "state", "step"],
             "allowed_builtins": ["format"],
-            "allowed_filters": ["lower", "trim", "slug"],
+            "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not"],
         },
     },
 }

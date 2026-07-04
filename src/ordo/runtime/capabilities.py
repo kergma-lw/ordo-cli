@@ -79,7 +79,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.state_bindings", status="supported", scope="workflow"),
     CapabilitySpec(name="workflow.step.state_set", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.state_delete", status="supported", scope="workflow.step"),
-    CapabilitySpec(name="workflow.step.condition", status="unsupported", scope="workflow.step"),
+    CapabilitySpec(name="workflow.step.condition", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.register", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.outputs", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.branching", status="unsupported", scope="workflow"),
@@ -149,6 +149,13 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         rule="The register field is allowed only together with uses",
         reason="the MVP publishes registered step results only for operation-call steps",
         related_codes=("validation.workflow.step.register_without_uses",),
+    ),
+    NegativeRuleSpec(
+        name="workflow_step.if_conflicts_with_register",
+        surface="workflow_step",
+        rule="The if and register fields cannot be used together in the MVP",
+        reason="the MVP avoids publishing synthetic registered step results for skipped conditional steps",
+        related_codes=("validation.workflow.step.if_with_register",),
     ),
     NegativeRuleSpec(
         name="value_expression.step_refs_must_be_backward",
