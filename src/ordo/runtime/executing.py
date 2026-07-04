@@ -62,6 +62,29 @@ def execute_workflow(
     effective_workflow.step_results.clear()
 
     for step, resolved_step in zip(effective_workflow.steps, resolution.resolved_steps, strict=False):
+        if step.if_ is not None:
+            condition_result = _evaluate_step_condition(step, effective_workflow)
+            if isinstance(condition_result, Diagnostic):
+                skipped_steps.extend(remaining.name for remaining in effective_workflow.steps[len(executed_steps) + len(skipped_steps) + 1 :])
+                diagnostics.append(condition_result)
+                return RuntimeResult(
+                    mode=Mode.EXECUTE,
+                    status=RuntimeStatus.EXECUTION_ERROR,
+                    diagnostics=tuple(diagnostics),
+                    plan=check_result.plan,
+                    outputs={
+                        "can_execute": False,
+                        "active_profile": active_profile,
+                        "active_overrides": [override.to_contract() for override in active_overrides],
+                        "executed_steps": executed_steps,
+                        "skipped_steps": skipped_steps,
+                    },
+                    operation_results=tuple(operation_results),
+                    failed_step=step.name,
+                )
+            if condition_result is False:
+                skipped_steps.append(step.name)
+                continue
         if isinstance(resolved_step, ResolvedBuiltinStep):
             result = _execute_builtin_state_step(step, effective_workflow)
         else:
@@ -108,6 +131,22 @@ def execute_workflow(
             "skipped_steps": skipped_steps,
         },
         operation_results=tuple(operation_results),
+    )
+
+
+def _evaluate_step_condition(step, workflow: Workflow) -> bool | Diagnostic:
+    try:
+        value = resolve_runtime_value(step.if_, workflow)
+    except ValueResolutionError as exc:
+        return exc.to_diagnostic(path=("steps", step.name, "if"))
+    if isinstance(value, bool):
+        return value
+    return Diagnostic(
+        code="runtime.step.if.result_type",
+        level="error",
+        message="Step condition must evaluate to a boolean value",
+        path=("steps", step.name, "if"),
+        details={"actual_type": type(value).__name__},
     )
 
 

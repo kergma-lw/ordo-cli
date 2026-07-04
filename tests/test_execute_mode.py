@@ -85,6 +85,67 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["skipped_steps"], ["second-step"])
         self.assertEqual(result.operation_results[-1].raw["stderr"], "failed")
 
+    def test_execute_skips_step_when_condition_is_false(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"enabled": False},
+            guards=(),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command"), if_="${inputs.enabled}"),),
+        )
+        seen_steps: list[str] = []
+
+        def executor(resolved_step, _workflow):
+            seen_steps.append(resolved_step.reference)
+            return OperationResult(status="ok", summary="Executed")
+
+        result = execute_workflow(workflow, step_executor=executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen_steps, [])
+        self.assertEqual(result.outputs["executed_steps"], [])
+        self.assertEqual(result.outputs["skipped_steps"], ["effectful-step"])
+
+    def test_execute_runs_step_when_condition_is_true(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"enabled": True},
+            guards=(),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command"), if_="${inputs.enabled}"),),
+        )
+        seen_steps: list[str] = []
+
+        def executor(resolved_step, _workflow):
+            seen_steps.append(resolved_step.reference)
+            return OperationResult(status="ok", summary="Executed")
+
+        result = execute_workflow(workflow, step_executor=executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen_steps, ["shell.command"])
+        self.assertEqual(result.outputs["executed_steps"], ["effectful-step"])
+        self.assertEqual(result.outputs["skipped_steps"], [])
+
+    def test_execute_fails_when_step_condition_cannot_be_evaluated(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(
+                Step(name="first-step", operation=OperationRef("shell.command"), if_="${inputs.enabled}"),
+                Step(name="second-step", operation=OperationRef("shell.command")),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.failed_step, "first-step")
+        self.assertEqual(result.outputs["executed_steps"], [])
+        self.assertEqual(result.outputs["skipped_steps"], ["second-step"])
+        self.assertEqual(result.diagnostics[-1].code, "runtime.value.input_missing")
+
 
 if __name__ == "__main__":
     unittest.main()
