@@ -14,6 +14,7 @@ from ordo.introspection import (
     INTROSPECTION_VERSION,
     build_introspection_envelope,
     describe_capabilities,
+    describe_errors,
     describe_operations,
     describe_playbook_contract,
     describe_profile_contract,
@@ -42,6 +43,7 @@ class PackageLayoutSmokeTest(unittest.TestCase):
         self.assertEqual(INTROSPECTION_VERSION, 1)
         self.assertIn("introspection_version", build_introspection_envelope())
         self.assertIn("capabilities", describe_capabilities())
+        self.assertEqual(describe_errors()["document_kind"], "error_taxonomy")
         self.assertIn("connectors", describe_operations())
         self.assertEqual(describe_playbook_contract()["document_kind"], "playbook")
         self.assertEqual(describe_profile_contract()["document_kind"], "profile")

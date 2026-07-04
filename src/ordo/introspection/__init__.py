@@ -2,6 +2,7 @@
 
 from .capabilities import describe_capabilities
 from .envelope import INTROSPECTION_VERSION, build_introspection_envelope
+from .errors import describe_errors
 from .operations import describe_operations
 from .playbook import describe_playbook_contract
 from .profile import describe_profile_contract
@@ -13,6 +14,7 @@ __all__ = [
     "INTROSPECTION_VERSION",
     "build_introspection_envelope",
     "describe_capabilities",
+    "describe_errors",
     "describe_operations",
     "describe_playbook_contract",
     "describe_profile_contract",
