@@ -10,9 +10,9 @@ PROFILE_CONTRACT: JSONObject = {
     "document_kind": "profile",
     "top_level_fields": [
         {"name": "name", "required": True, "type": "string"},
-        {"name": "inputs", "required": False, "type": "object"},
-        {"name": "checks", "required": False, "type": "array"},
-        {"name": "overrides", "required": False, "type": "array"},
+        {"name": "inputs", "required": False, "type": "object", "runtime_effect": "applies_missing_workflow_inputs"},
+        {"name": "checks", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
+        {"name": "overrides", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
     ],
     "override_fields": [
         {"name": "target", "required": True, "type": "string"},

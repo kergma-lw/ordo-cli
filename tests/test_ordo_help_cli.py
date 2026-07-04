@@ -96,6 +96,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.branching", if_conflict["related_capabilities"])
         self.assertIn("workflow.step.register", if_conflict["related_capabilities"])
 
+    def test_model_publishes_runtime_effect_metadata_for_profiles(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        profile_fields = {item["name"]: item for item in model["profile"]["top_level_fields"]}
+        defaults_fields = {item["name"]: item for item in model["playbook"]["defaults_fields"]}
+
+        self.assertEqual(profile_fields["inputs"]["runtime_effect"], "applies_missing_workflow_inputs")
+        self.assertEqual(profile_fields["checks"]["runtime_effect"], "published_metadata_only")
+        self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
+        self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
+
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)

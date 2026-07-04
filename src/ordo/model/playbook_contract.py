@@ -28,7 +28,7 @@ PLAYBOOK_CONTRACT: JSONObject = {
         {"name": "path", "required": True, "type": "string"},
     ],
     "defaults_fields": [
-        {"name": "profile", "required": False, "type": "string"},
+        {"name": "profile", "required": False, "type": "string", "runtime_effect": "selects_active_profile"},
     ],
     "activation_semantics": {
         "discovery": {
