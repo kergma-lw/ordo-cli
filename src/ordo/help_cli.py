@@ -6,7 +6,9 @@ import argparse
 import json
 import sys
 
-from ordo.introspection import describe_system
+from ordo.connectors import get_public_connector_registry
+from ordo.introspection import describe_capabilities, describe_operations, describe_playbook_contract, describe_profile_contract, describe_state_contract, describe_system, describe_workflow_contract
+from ordo.model.runtime import Mode, RuntimeStatus
 from ordo.model.json import JSONObject
 
 
@@ -53,6 +55,71 @@ def build_root_response() -> JSONObject:
     }
 
 
+def build_overview_response() -> JSONObject:
+    """Return the aggregated overview discovery response."""
+
+    system = describe_system()
+    operations = describe_operations()
+    document_kinds = []
+    for name, payload in system["sections"].items():
+        if name == "discovery":
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("document_kind"), str):
+            document_kinds.append(payload["document_kind"])
+
+    return {
+        "document_kind": "overview",
+        "purpose": "World map for Ordo discovery and authoring bootstrap",
+        "document_kinds": sorted(set(document_kinds)),
+        "execution_concepts": {
+            "modes": [mode.value for mode in Mode],
+            "statuses": [status.value for status in RuntimeStatus],
+        },
+        "connector_namespaces": [connector["namespace"] for connector in operations["connectors"]],
+        "published_topics": [topic["name"] for topic in PUBLIC_TOPICS],
+        "recommended_next_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS[1:]],
+    }
+
+
+def build_model_response() -> JSONObject:
+    """Return the aggregated model discovery response."""
+
+    return {
+        "document_kind": "model",
+        "workflow": describe_workflow_contract(),
+        "profile": describe_profile_contract(),
+        "playbook": describe_playbook_contract(),
+        "state": describe_state_contract(),
+    }
+
+
+def build_operation_response(reference: str) -> JSONObject | None:
+    """Return the focused operation discovery response for one reference."""
+
+    registry = get_public_connector_registry()
+    connector_name, separator, operation_name = reference.partition(".")
+    if not separator:
+        return None
+
+    connector = registry.get_connector(connector_name)
+    operation = registry.get_operation(reference)
+    if connector is None or operation is None:
+        return None
+
+    return {
+        "document_kind": "operation",
+        "reference": reference,
+        "namespace": connector.namespace,
+        "bootstrap": connector.bootstrap.to_contract(),
+        "operation": operation.to_contract(),
+        "related_commands": {
+            "operations": "ordo-help operations --json",
+            "capabilities": "ordo-help capabilities --json",
+        },
+        "operation_name": operation_name,
+    }
+
+
 def render_root_text() -> str:
     """Return the human-readable bootstrap screen."""
 
@@ -87,26 +154,165 @@ def render_root_text() -> str:
     return "\n".join(lines)
 
 
+def render_overview_text(payload: JSONObject) -> str:
+    """Return the text overview surface."""
+
+    lines = [
+        "overview",
+        payload["purpose"],
+        "",
+        "Document kinds:",
+    ]
+    lines.extend(f"- {item}" for item in payload["document_kinds"])
+    lines.extend(
+        [
+            "",
+            "Execution concepts:",
+            f"- modes: {', '.join(payload['execution_concepts']['modes'])}",
+            f"- statuses: {', '.join(payload['execution_concepts']['statuses'])}",
+            "",
+            "Connector namespaces:",
+        ]
+    )
+    lines.extend(f"- {namespace}" for namespace in payload["connector_namespaces"])
+    return "\n".join(lines)
+
+
+def render_capabilities_text(payload: JSONObject) -> str:
+    """Return the text capabilities surface."""
+
+    capabilities = payload["capabilities"]
+    lines = ["capabilities", "Supported and unsupported runtime surfaces.", "", "Capability states:"]
+    for capability in capabilities:
+        lines.append(f"- {capability['name']}: {capability['status']}")
+    return "\n".join(lines)
+
+
+def render_model_text(payload: JSONObject) -> str:
+    """Return the text model surface."""
+
+    lines = [
+        "model",
+        "Main authoring contracts exposed by Ordo.",
+        "",
+        "Contracts:",
+        f"- workflow: {payload['workflow']['document_kind']}",
+        f"- profile: {payload['profile']['document_kind']}",
+        f"- playbook: {payload['playbook']['document_kind']}",
+        f"- state: {payload['state']['document_kind']}",
+    ]
+    return "\n".join(lines)
+
+
+def render_operations_text(payload: JSONObject) -> str:
+    """Return the text operations surface."""
+
+    lines = ["operations", "Public connector namespaces and operations.", ""]
+    for connector in payload["connectors"]:
+        operation_names = ", ".join(operation["name"] for operation in connector["operations"])
+        lines.append(f"- {connector['namespace']}: {operation_names}")
+    return "\n".join(lines)
+
+
+def render_operation_text(payload: JSONObject) -> str:
+    """Return the text single-operation surface."""
+
+    operation = payload["operation"]
+    lines = [
+        payload["reference"],
+        operation["summary"] or "No summary published.",
+        "",
+        f"kind: {operation['kind']}",
+        f"namespace: {payload['namespace']}",
+        f"maturity: {operation['maturity']}",
+    ]
+    return "\n".join(lines)
+
+
+def _emit_payload(payload: JSONObject, *, as_json: bool, renderer) -> int:
+    """Emit one discovery payload in JSON or text mode."""
+
+    if as_json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+        return 0
+
+    sys.stdout.write(renderer(payload))
+    sys.stdout.write("\n")
+    return 0
+
+
+def _emit_unknown_operation(reference: str, *, as_json: bool) -> int:
+    """Emit a focused unknown-operation error."""
+
+    payload = {
+        "document_kind": "operation_error",
+        "reference": reference,
+        "status": "unknown_operation",
+        "message": f"Unknown public operation reference '{reference}'",
+    }
+    if as_json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        sys.stderr.write(payload["message"])
+        sys.stderr.write("\n")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the ordo-help CLI."""
 
     parser = argparse.ArgumentParser(prog="ordo-help", add_help=False)
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("-h", "--help", action="store_true", dest="show_help")
-    parser.add_argument("args", nargs="*")
+    subparsers = parser.add_subparsers(dest="command")
+
+    overview_parser = subparsers.add_parser("overview", add_help=False)
+    overview_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    capabilities_parser = subparsers.add_parser("capabilities", add_help=False)
+    capabilities_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    model_parser = subparsers.add_parser("model", add_help=False)
+    model_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    operations_parser = subparsers.add_parser("operations", add_help=False)
+    operations_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    operation_parser = subparsers.add_parser("operation", add_help=False)
+    operation_parser.add_argument("reference")
+    operation_parser.add_argument("--json", action="store_true", dest="as_json")
+
     parsed = parser.parse_args(argv)
+    as_json = bool(getattr(parsed, "as_json", False))
 
-    if parsed.args:
-        parser.error(f"Unsupported command for current root-only implementation: {' '.join(parsed.args)}")
+    if parsed.command is None:
+        if as_json:
+            json.dump(build_root_response(), sys.stdout, indent=2, sort_keys=True)
+            sys.stdout.write("\n")
+            return 0
 
-    if parsed.as_json:
-        json.dump(build_root_response(), sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write(render_root_text())
         sys.stdout.write("\n")
         return 0
 
-    sys.stdout.write(render_root_text())
-    sys.stdout.write("\n")
-    return 0
+    if parsed.command == "overview":
+        return _emit_payload(build_overview_response(), as_json=as_json, renderer=render_overview_text)
+    if parsed.command == "capabilities":
+        return _emit_payload(describe_capabilities(), as_json=as_json, renderer=render_capabilities_text)
+    if parsed.command == "model":
+        return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text)
+    if parsed.command == "operations":
+        return _emit_payload(describe_operations(), as_json=as_json, renderer=render_operations_text)
+    if parsed.command == "operation":
+        payload = build_operation_response(parsed.reference)
+        if payload is None:
+            return _emit_unknown_operation(parsed.reference, as_json=as_json)
+        return _emit_payload(payload, as_json=as_json, renderer=render_operation_text)
+
+    parser.error(f"Unsupported command: {parsed.command}")
+    return 2
 
 
 if __name__ == "__main__":  # pragma: no cover
