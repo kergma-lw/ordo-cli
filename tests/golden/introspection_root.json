@@ -143,6 +143,10 @@
           "producer": "describe_playbook_contract",
           "published": true
         },
+        "profile_contract": {
+          "producer": "describe_profile_contract",
+          "published": true
+        },
         "workflow_contract": {
           "producer": "describe_workflow_contract",
           "published": true
@@ -1183,6 +1187,58 @@
           "type": "object"
         }
       ]
+    },
+    "profile_contract": {
+      "compose_semantics": {
+        "checks": "deduplicated left-to-right union",
+        "inputs": "first-writer wins; conflicting later values are validation errors",
+        "overrides": "duplicate override targets across profiles are validation errors"
+      },
+      "document_kind": "profile",
+      "override_fields": [
+        {
+          "name": "target",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "with",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "reason",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "top_level_fields": [
+        {
+          "name": "name",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "inputs",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "checks",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "name": "overrides",
+          "required": false,
+          "type": "array"
+        }
+      ],
+      "workflow_apply_semantics": {
+        "checks": "profile checks do not mutate workflow contract",
+        "inputs": "profile may add missing workflow inputs but may not override explicit workflow input values",
+        "overrides": "profile overrides remain explicit metadata and do not silently mutate workflow steps"
+      }
     },
     "workflow_contract": {
       "document_kind": "workflow",
