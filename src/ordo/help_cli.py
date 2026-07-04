@@ -22,6 +22,8 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "search", "summary": "Search topics and operation references"},
 )
 
+DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "capabilities", "model", "operations")
+
 RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
     {"command": "ordo-help overview --json", "purpose": "Get the Ordo world map"},
     {"command": "ordo-help capabilities --json", "purpose": "Learn capability boundaries"},
@@ -117,6 +119,59 @@ def build_operation_response(reference: str) -> JSONObject | None:
             "capabilities": "ordo-help capabilities --json",
         },
         "operation_name": operation_name,
+    }
+
+
+def build_search_response(query: str) -> JSONObject:
+    """Return search results across public topics and operation references."""
+
+    lowered_query = query.strip().lower()
+    operation_results = []
+    for connector in describe_operations()["connectors"]:
+        namespace = connector["namespace"]
+        for operation in connector["operations"]:
+            reference = f"{namespace}.{operation['name']}"
+            searchable = " ".join(
+                [
+                    reference,
+                    operation["name"],
+                    operation["kind"],
+                    operation.get("summary") or "",
+                ]
+            ).lower()
+            if lowered_query in searchable:
+                operation_results.append(
+                    {
+                        "reference": reference,
+                        "summary": operation.get("summary"),
+                        "command": f"ordo-help operation {reference} --json",
+                    }
+                )
+
+    topic_results = []
+    for topic in PUBLIC_TOPICS:
+        searchable = f"{topic['name']} {topic['summary']}".lower()
+        if lowered_query in searchable:
+            command = f"ordo-help {topic['name']} --json"
+            if topic["name"] == "operation":
+                command = "ordo-help operation <reference> --json"
+            elif topic["name"] == "describe":
+                command = "ordo-help describe <topic> --json"
+            elif topic["name"] == "search":
+                command = "ordo-help search <query> --json"
+            topic_results.append(
+                {
+                    "name": topic["name"],
+                    "summary": topic["summary"],
+                    "command": command,
+                }
+            )
+
+    return {
+        "document_kind": "search_results",
+        "query": query,
+        "topics": topic_results,
+        "operations": operation_results,
     }
 
 
@@ -229,6 +284,23 @@ def render_operation_text(payload: JSONObject) -> str:
     return "\n".join(lines)
 
 
+def render_search_text(payload: JSONObject) -> str:
+    """Return the text search surface."""
+
+    lines = [f"search: {payload['query']}"]
+    if payload["topics"]:
+        lines.extend(["", "Topic matches:"])
+        for topic in payload["topics"]:
+            lines.append(f"- {topic['name']}: {topic['command']}")
+    if payload["operations"]:
+        lines.extend(["", "Operation matches:"])
+        for operation in payload["operations"]:
+            lines.append(f"- {operation['reference']}: {operation['command']}")
+    if not payload["topics"] and not payload["operations"]:
+        lines.extend(["", "No topic or operation matches found."])
+    return "\n".join(lines)
+
+
 def _emit_payload(payload: JSONObject, *, as_json: bool, renderer) -> int:
     """Emit one discovery payload in JSON or text mode."""
 
@@ -260,6 +332,39 @@ def _emit_unknown_operation(reference: str, *, as_json: bool) -> int:
     return 1
 
 
+def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
+    """Emit a focused unknown-topic error."""
+
+    payload = {
+        "document_kind": "topic_error",
+        "topic": topic,
+        "status": "unknown_topic",
+        "message": f"Unsupported public topic '{topic}'",
+        "supported_topics": list(DESCRIBABLE_TOPICS),
+    }
+    if as_json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        sys.stderr.write(payload["message"])
+        sys.stderr.write("\n")
+    return 1
+
+
+def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
+    """Resolve one describable public topic to its payload and renderer."""
+
+    if topic == "overview":
+        return build_overview_response(), render_overview_text
+    if topic == "capabilities":
+        return describe_capabilities(), render_capabilities_text
+    if topic == "model":
+        return build_model_response(), render_model_text
+    if topic == "operations":
+        return describe_operations(), render_operations_text
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the ordo-help CLI."""
 
@@ -283,6 +388,14 @@ def main(argv: list[str] | None = None) -> int:
     operation_parser = subparsers.add_parser("operation", add_help=False)
     operation_parser.add_argument("reference")
     operation_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    describe_parser = subparsers.add_parser("describe", add_help=False)
+    describe_parser.add_argument("topic")
+    describe_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    search_parser = subparsers.add_parser("search", add_help=False)
+    search_parser.add_argument("query")
+    search_parser.add_argument("--json", action="store_true", dest="as_json")
 
     parsed = parser.parse_args(argv)
     as_json = bool(getattr(parsed, "as_json", False))
@@ -310,6 +423,14 @@ def main(argv: list[str] | None = None) -> int:
         if payload is None:
             return _emit_unknown_operation(parsed.reference, as_json=as_json)
         return _emit_payload(payload, as_json=as_json, renderer=render_operation_text)
+    if parsed.command == "describe":
+        resolved = _resolve_public_topic(parsed.topic)
+        if resolved is None:
+            return _emit_unknown_topic(parsed.topic, as_json=as_json)
+        payload, renderer = resolved
+        return _emit_payload(payload, as_json=as_json, renderer=renderer)
+    if parsed.command == "search":
+        return _emit_payload(build_search_response(parsed.query), as_json=as_json, renderer=render_search_text)
 
     parser.error(f"Unsupported command: {parsed.command}")
     return 2
