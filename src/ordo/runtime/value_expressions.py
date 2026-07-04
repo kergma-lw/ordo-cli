@@ -4,12 +4,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+from typing import TYPE_CHECKING
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONScalar, JSONValue
 from ordo.model.workflow import Workflow
 
 from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target, resolve_workflow_input_reference
+from .value_expression_registry import (
+    ValueExpressionBuiltinSpec,
+    ValueExpressionFilterSpec,
+    build_builtin_registry,
+    build_filter_registry,
+)
+
+if TYPE_CHECKING:
+    from .value_expression_registry import ValueExpressionBuiltinSpec, ValueExpressionFilterSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,9 +46,9 @@ class ReferenceNode(ValueExpressionNode):
 
 @dataclass(frozen=True, slots=True)
 class StateReferenceNode(ValueExpressionNode):
-    """Runtime-state read such as ``states.task_state[inputs.issue_ref].branch``."""
+    """Runtime-state read such as ``state.task_memory[inputs.issue_ref].branch``."""
 
-    state_name: str
+    state_role: str
     key_reference: tuple[str, ...]
     fields: tuple[str, ...] = ()
 
@@ -173,7 +183,7 @@ class _Parser:
             return LiteralNode(start=token.start, end=token.end, value=_decode_number(token.text))
         if token.kind != "IDENT":
             raise ValueExpressionParseError("Expected value-expression term", token.start, token.end)
-        if self._peek_kind("IDENT", expected_text="states"):
+        if self._peek_kind("IDENT", expected_text="state"):
             return self._parse_state_reference()
         if self._peek_kind("IDENT") and self._peek_kind("LPAREN", offset=1):
             return self._parse_builtin_call()
@@ -202,10 +212,10 @@ class _Parser:
         return ReferenceNode(start=start_token.start, end=end, parts=tuple(parts))
 
     def _parse_state_reference(self) -> StateReferenceNode:
-        start = self._consume("IDENT", "Expected 'states'")
-        self._consume("DOT", "Expected '.' after 'states'")
-        state_name = self._consume("IDENT", "Expected state name")
-        self._consume("LBRACKET", "Expected '[' after state name")
+        start = self._consume("IDENT", "Expected 'state'")
+        self._consume("DOT", "Expected '.' after 'state'")
+        state_role = self._consume("IDENT", "Expected state role")
+        self._consume("LBRACKET", "Expected '[' after state role")
         key_reference = self._parse_dotted_reference()
         if key_reference.parts[0] != "inputs" or len(key_reference.parts) < 2:
             raise ValueExpressionParseError(
@@ -215,7 +225,7 @@ class _Parser:
             )
         self._consume("RBRACKET", "Expected ']' after state key reference")
         fields: list[str] = []
-        end = state_name.end
+        end = state_role.end
         while self._match("DOT") is not None:
             field_token = self._consume("IDENT", "Expected field name after '.'")
             fields.append(field_token.text)
@@ -223,11 +233,11 @@ class _Parser:
         if fields:
             end = end
         else:
-            end = self._previous().end if self._previous().kind == "RBRACKET" else state_name.end
+            end = self._previous().end if self._previous().kind == "RBRACKET" else state_role.end
         return StateReferenceNode(
             start=start.start,
             end=end,
-            state_name=state_name.text,
+            state_role=state_role.text,
             key_reference=key_reference.parts,
             fields=tuple(fields),
         )
@@ -395,26 +405,20 @@ def _resolve_state_reference(node: StateReferenceNode, *, parsed: ParsedValueExp
 
 
 def _apply_filter(filter_node: FilterApplicationNode, value: JSONValue, *, parsed: ParsedValueExpression) -> JSONValue:
-    name = filter_node.name
-    if name == "lower":
-        text = _require_string(value, filter_name=name, parsed=parsed)
-        return text.lower()
-    if name == "trim":
-        text = _require_string(value, filter_name=name, parsed=parsed)
-        return text.strip()
-    if name == "slug":
-        text = _require_string(value, filter_name=name, parsed=parsed)
-        return _slugify(text)
+    spec = VALUE_EXPRESSION_FILTERS.get(filter_node.name)
+    if spec is not None:
+        return spec.handler(value, filter_node, parsed)
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_unknown",
-        message=f"Unknown value-expression filter '{name}'",
-        details={"expression": parsed.source, "filter": name},
+        message=f"Unknown value-expression filter '{filter_node.name}'",
+        details={"expression": parsed.source, "filter": filter_node.name},
     )
 
 
 def _evaluate_builtin_call(node: BuiltinCallNode, *, parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:
-    if node.name == "format":
-        return _evaluate_format_call(node, parsed=parsed, workflow=workflow)
+    spec = VALUE_EXPRESSION_BUILTINS.get(node.name)
+    if spec is not None:
+        return spec.handler(node, parsed=parsed, workflow=workflow)
     raise ValueExpressionEvaluationError(
         code="runtime.value.expression_builtin_unsupported",
         message=f"Built-in value expression '{node.name}' is not supported yet",
@@ -461,6 +465,32 @@ def _slugify(value: str) -> str:
     lowered = value.lower()
     normalized = re.sub(r"[^a-z0-9]+", "-", lowered)
     return normalized.strip("-")
+
+
+def _apply_lower_filter(value: JSONValue, _filter_node: FilterApplicationNode, parsed: ParsedValueExpression) -> JSONValue:
+    text = _require_string(value, filter_name="lower", parsed=parsed)
+    return text.lower()
+
+
+def _apply_trim_filter(value: JSONValue, _filter_node: FilterApplicationNode, parsed: ParsedValueExpression) -> JSONValue:
+    text = _require_string(value, filter_name="trim", parsed=parsed)
+    return text.strip()
+
+
+def _apply_slug_filter(value: JSONValue, _filter_node: FilterApplicationNode, parsed: ParsedValueExpression) -> JSONValue:
+    text = _require_string(value, filter_name="slug", parsed=parsed)
+    return _slugify(text)
+
+
+VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_registry(
+    ValueExpressionFilterSpec(name="lower", input_type="string", output_type="string", handler=_apply_lower_filter),
+    ValueExpressionFilterSpec(name="trim", input_type="string", output_type="string", handler=_apply_trim_filter),
+    ValueExpressionFilterSpec(name="slug", input_type="string", output_type="string", handler=_apply_slug_filter),
+)
+
+VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(
+    ValueExpressionBuiltinSpec(name="format", handler=_evaluate_format_call),
+)
 
 
 def _coerce_format_value(value: JSONValue) -> JSONScalar:
