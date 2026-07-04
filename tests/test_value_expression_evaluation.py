@@ -157,6 +157,73 @@ steps: []
 
         self.assertEqual(ctx.exception.code, "runtime.value.format_template_invalid")
 
+    def test_evaluate_eq_filter_returns_boolean(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  status: ok
+guards: []
+steps: []
+"""
+        )
+
+        parsed = parse_value_expression('inputs.status | eq("ok")')
+
+        self.assertIs(evaluate_value_expression(parsed, workflow), True)
+
+    def test_evaluate_ne_filter_can_compare_boolean_literal(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  open: false
+guards: []
+steps: []
+"""
+        )
+
+        parsed = parse_value_expression("inputs.open | ne(true)")
+
+        self.assertIs(evaluate_value_expression(parsed, workflow), True)
+
+    def test_evaluate_not_filter_negates_boolean(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  open: false
+guards: []
+steps: []
+"""
+        )
+
+        parsed = parse_value_expression("inputs.open | not")
+
+        self.assertIs(evaluate_value_expression(parsed, workflow), True)
+
+    def test_evaluate_not_filter_rejects_non_boolean_input(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  status: ok
+guards: []
+steps: []
+"""
+        )
+
+        parsed = parse_value_expression("inputs.status | not")
+
+        with self.assertRaises(ValueExpressionEvaluationError) as ctx:
+            evaluate_value_expression(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
 
 if __name__ == "__main__":
     unittest.main()

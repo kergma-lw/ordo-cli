@@ -55,6 +55,7 @@ class PackageLayoutSmokeTest(unittest.TestCase):
         self.assertIn("sections", describe_system())
         self.assertEqual(describe_workflow_contract()["document_kind"], "workflow")
         self.assertIn("lower", VALUE_EXPRESSION_FILTERS)
+        self.assertIn("eq", VALUE_EXPRESSION_FILTERS)
         self.assertIn("format", VALUE_EXPRESSION_BUILTINS)
 
 

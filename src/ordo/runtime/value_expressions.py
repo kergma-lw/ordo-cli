@@ -182,7 +182,16 @@ class _Parser:
         filters: list[FilterApplicationNode] = []
         while self._match("PIPE") is not None:
             name_token = self._consume("IDENT", "Expected filter name after '|'")
-            filters.append(FilterApplicationNode(start=name_token.start, end=name_token.end, name=name_token.text))
+            arguments: list[ValueExpressionNode] = []
+            end = name_token.end
+            if self._match("LPAREN") is not None:
+                if self._peek().kind != "RPAREN":
+                    while True:
+                        arguments.append(self._parse_pipeline())
+                        if self._match("COMMA") is None:
+                            break
+                end = self._consume("RPAREN", "Expected ')' after filter arguments").end
+            filters.append(FilterApplicationNode(start=name_token.start, end=end, name=name_token.text, arguments=tuple(arguments)))
         if not filters:
             return source
         return PipelineNode(start=source.start, end=filters[-1].end, source=source, filters=tuple(filters))
@@ -197,6 +206,10 @@ class _Parser:
             return LiteralNode(start=token.start, end=token.end, value=_decode_number(token.text))
         if token.kind != "IDENT":
             raise ValueExpressionParseError("Expected value-expression term", token.start, token.end)
+        if token.text in {"true", "false", "null"}:
+            self._advance()
+            value = {"true": True, "false": False, "null": None}[token.text]
+            return LiteralNode(start=token.start, end=token.end, value=value)
         if self._peek_kind("IDENT", expected_text="state"):
             return self._parse_state_reference()
         if self._peek_kind("IDENT", expected_text="step"):
@@ -384,7 +397,7 @@ def _evaluate_node(
     if isinstance(node, PipelineNode):
         value = _evaluate_node(node.source, parsed=parsed, workflow=workflow, step_results=step_results)
         for filter_node in node.filters:
-            value = _apply_filter(filter_node, value, parsed=parsed)
+            value = _apply_filter(filter_node, value, parsed=parsed, workflow=workflow, step_results=step_results)
         return value
     if isinstance(node, BuiltinCallNode):
         return _evaluate_builtin_call(node, parsed=parsed, workflow=workflow, step_results=step_results)
@@ -465,10 +478,17 @@ def _resolve_step_reference(node: StepReferenceNode, *, parsed: ParsedValueExpre
     return current
 
 
-def _apply_filter(filter_node: FilterApplicationNode, value: JSONValue, *, parsed: ParsedValueExpression) -> JSONValue:
+def _apply_filter(
+    filter_node: FilterApplicationNode,
+    value: JSONValue,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
     spec = VALUE_EXPRESSION_FILTERS.get(filter_node.name)
     if spec is not None:
-        return spec.handler(value, filter_node, parsed)
+        return spec.handler(value, filter_node, parsed, workflow, step_results)
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_unknown",
         message=f"Unknown value-expression filter '{filter_node.name}'",
@@ -540,25 +560,118 @@ def _slugify(value: str) -> str:
     return normalized.strip("-")
 
 
-def _apply_lower_filter(value: JSONValue, _filter_node: FilterApplicationNode, parsed: ParsedValueExpression) -> JSONValue:
+def _apply_lower_filter(
+    value: JSONValue,
+    _filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _step_results: dict[str, OperationResult],
+) -> JSONValue:
     text = _require_string(value, filter_name="lower", parsed=parsed)
     return text.lower()
 
 
-def _apply_trim_filter(value: JSONValue, _filter_node: FilterApplicationNode, parsed: ParsedValueExpression) -> JSONValue:
+def _apply_trim_filter(
+    value: JSONValue,
+    _filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _step_results: dict[str, OperationResult],
+) -> JSONValue:
     text = _require_string(value, filter_name="trim", parsed=parsed)
     return text.strip()
 
 
-def _apply_slug_filter(value: JSONValue, _filter_node: FilterApplicationNode, parsed: ParsedValueExpression) -> JSONValue:
+def _apply_slug_filter(
+    value: JSONValue,
+    _filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _step_results: dict[str, OperationResult],
+) -> JSONValue:
     text = _require_string(value, filter_name="slug", parsed=parsed)
     return _slugify(text)
 
 
+def _evaluate_filter_argument(
+    filter_node: FilterApplicationNode,
+    index: int,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
+    try:
+        argument = filter_node.arguments[index]
+    except IndexError as exc:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.filter_args_invalid",
+            message=f"Filter '{filter_node.name}' received the wrong number of arguments",
+            details={"expression": parsed.source, "filter": filter_node.name, "arguments": len(filter_node.arguments)},
+        ) from exc
+    return _evaluate_node(argument, parsed=parsed, workflow=workflow, step_results=step_results)
+
+
+def _require_no_extra_filter_arguments(filter_node: FilterApplicationNode, *, parsed: ParsedValueExpression, expected: int) -> None:
+    if len(filter_node.arguments) != expected:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.filter_args_invalid",
+            message=f"Filter '{filter_node.name}' received the wrong number of arguments",
+            details={
+                "expression": parsed.source,
+                "filter": filter_node.name,
+                "expected_arguments": expected,
+                "arguments": len(filter_node.arguments),
+            },
+        )
+
+
+def _apply_eq_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
+    expected_value = _evaluate_filter_argument(filter_node, 0, parsed=parsed, workflow=workflow, step_results=step_results)
+    return value == expected_value
+
+
+def _apply_ne_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
+    expected_value = _evaluate_filter_argument(filter_node, 0, parsed=parsed, workflow=workflow, step_results=step_results)
+    return value != expected_value
+
+
+def _apply_not_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _step_results: dict[str, OperationResult],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    if isinstance(value, bool):
+        return not value
+    raise ValueExpressionEvaluationError(
+        code="runtime.value.filter_type_invalid",
+        message="Filter 'not' requires a boolean input",
+        details={"expression": parsed.source, "filter": "not", "actual_type": type(value).__name__},
+    )
 VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_registry(
     ValueExpressionFilterSpec(name="lower", input_type="string", output_type="string", handler=_apply_lower_filter),
     ValueExpressionFilterSpec(name="trim", input_type="string", output_type="string", handler=_apply_trim_filter),
     ValueExpressionFilterSpec(name="slug", input_type="string", output_type="string", handler=_apply_slug_filter),
+    ValueExpressionFilterSpec(name="eq", input_type="json", output_type="boolean", handler=_apply_eq_filter),
+    ValueExpressionFilterSpec(name="ne", input_type="json", output_type="boolean", handler=_apply_ne_filter),
+    ValueExpressionFilterSpec(name="not", input_type="boolean", output_type="boolean", handler=_apply_not_filter),
 )
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(

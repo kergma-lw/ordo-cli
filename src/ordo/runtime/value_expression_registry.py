@@ -12,7 +12,7 @@ if False:  # pragma: no cover
     from ordo.model.workflow import Workflow
 
 
-FilterHandler = Callable[[JSONValue, "FilterApplicationNode", "ParsedValueExpression"], JSONValue]
+FilterHandler = Callable[[JSONValue, "FilterApplicationNode", "ParsedValueExpression", "Workflow", dict], JSONValue]
 BuiltinHandler = Callable[["BuiltinCallNode", "ParsedValueExpression", "Workflow"], JSONValue]
 
 

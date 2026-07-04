@@ -37,6 +37,24 @@ class ValueExpressionParsingTest(unittest.TestCase):
             FilterApplicationNode(start=22, end=26, name="slug"),
         ))
 
+    def test_parse_filter_with_argument(self) -> None:
+        parsed = parse_value_expression('inputs.status | eq("ok")')
+
+        self.assertIsInstance(parsed.root, PipelineNode)
+        self.assertEqual(parsed.root.filters, (
+            FilterApplicationNode(
+                start=16,
+                end=24,
+                name="eq",
+                arguments=(LiteralNode(start=19, end=23, value="ok"),),
+            ),
+        ))
+
+    def test_parse_boolean_literal(self) -> None:
+        parsed = parse_value_expression("true")
+
+        self.assertEqual(parsed.root, LiteralNode(start=0, end=4, value=True))
+
     def test_parse_rejects_missing_filter_name(self) -> None:
         with self.assertRaises(ValueExpressionParseError) as ctx:
             parse_value_expression("inputs.title |")
