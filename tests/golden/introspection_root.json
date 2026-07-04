@@ -1,0 +1,1265 @@
+{
+  "introspection_version": 1,
+  "sections": {
+    "capabilities": {
+      "capabilities": [
+        {
+          "name": "workflow.value_expressions",
+          "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "name": "workflow.state_needs",
+          "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "name": "workflow.state_bindings",
+          "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "name": "workflow.step.state_set",
+          "scope": "workflow.step",
+          "status": "supported"
+        },
+        {
+          "name": "workflow.step.state_delete",
+          "scope": "workflow.step",
+          "status": "supported"
+        },
+        {
+          "name": "workflow.step.condition",
+          "scope": "workflow.step",
+          "status": "unsupported"
+        },
+        {
+          "name": "workflow.step.register",
+          "scope": "workflow.step",
+          "status": "unsupported"
+        },
+        {
+          "name": "workflow.step.outputs",
+          "scope": "workflow.step",
+          "status": "unsupported"
+        },
+        {
+          "name": "workflow.branching",
+          "scope": "workflow",
+          "status": "unsupported"
+        }
+      ],
+      "expression_roots": [
+        {
+          "name": "inputs",
+          "surfaces": [
+            "guard_expression",
+            "state_key_reference",
+            "value_expression"
+          ]
+        },
+        {
+          "name": "probe",
+          "surfaces": [
+            "guard_expression"
+          ]
+        },
+        {
+          "name": "state",
+          "surfaces": [
+            "value_expression"
+          ]
+        }
+      ],
+      "expression_surfaces": [
+        {
+          "builtins": [],
+          "filters": [],
+          "name": "guard_expression",
+          "roots": [
+            "inputs",
+            "probe"
+          ]
+        },
+        {
+          "builtins": [
+            "format"
+          ],
+          "filters": [
+            "lower",
+            "trim",
+            "slug"
+          ],
+          "name": "value_expression",
+          "roots": [
+            "inputs",
+            "state"
+          ]
+        },
+        {
+          "builtins": [],
+          "filters": [],
+          "name": "state_key_reference",
+          "roots": [
+            "inputs"
+          ]
+        }
+      ],
+      "value_expression_builtins": [
+        {
+          "name": "format"
+        }
+      ],
+      "value_expression_filters": [
+        {
+          "input_type": "string",
+          "name": "lower",
+          "output_type": "string"
+        },
+        {
+          "input_type": "string",
+          "name": "trim",
+          "output_type": "string"
+        },
+        {
+          "input_type": "string",
+          "name": "slug",
+          "output_type": "string"
+        }
+      ]
+    },
+    "discovery": {
+      "entrypoint": "describe_system",
+      "sections": {
+        "capabilities": {
+          "producer": "describe_capabilities",
+          "published": true
+        },
+        "operations": {
+          "producer": "describe_operations",
+          "published": true
+        },
+        "playbook_contract": {
+          "producer": "describe_playbook_contract",
+          "published": true
+        },
+        "workflow_contract": {
+          "producer": "describe_workflow_contract",
+          "published": true
+        }
+      }
+    },
+    "operations": {
+      "connectors": [
+        {
+          "bootstrap": {
+            "context_fields": [
+              "repository_root"
+            ],
+            "prerequisites": [
+              "git binary available",
+              "inside git repository"
+            ]
+          },
+          "namespace": "git",
+          "operations": [
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "branch",
+              "outputs": {
+                "detached": "boolean",
+                "ref": "string | null",
+                "repository_root": "string",
+                "value": "string | null"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "create a new local branch"
+              ],
+              "failure_modes": [
+                "invalid_branch",
+                "branch_exists",
+                "start_point_not_found",
+                "create_blocked"
+              ],
+              "inputs": {
+                "branch": "string",
+                "start_point": "string | null"
+              },
+              "kind": "action",
+              "name": "branch.create",
+              "outputs": {
+                "branch": "string",
+                "start_point": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "delete a local non-default branch"
+              ],
+              "failure_modes": [
+                "branch_not_found",
+                "branch_checked_out",
+                "default_branch_protected",
+                "branch_not_merged",
+                "delete_blocked"
+              ],
+              "inputs": {
+                "branch": "string"
+              },
+              "kind": "action",
+              "name": "branch.delete",
+              "outputs": {
+                "branch": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "switch current checkout to a local branch"
+              ],
+              "failure_modes": [
+                "branch_not_found",
+                "worktree_change_conflict",
+                "unresolved_state",
+                "switch_blocked"
+              ],
+              "inputs": {
+                "branch": "string"
+              },
+              "kind": "action",
+              "name": "branch.switch",
+              "outputs": {
+                "branch": "string",
+                "changed": "boolean"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "branches",
+              "outputs": {
+                "count": "integer",
+                "current": "string | null",
+                "items": [
+                  {
+                    "current": "boolean",
+                    "kind": "string",
+                    "name": "string",
+                    "ref": "string"
+                  }
+                ],
+                "repository_root": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "rewrite the current HEAD commit"
+              ],
+              "failure_modes": [
+                "message_invalid",
+                "nothing_to_amend",
+                "amend_blocked"
+              ],
+              "inputs": {
+                "message": "string | null"
+              },
+              "kind": "action",
+              "name": "commit.amend",
+              "outputs": {
+                "branch": "string | null",
+                "commit": "string",
+                "previous_commit": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "create a new commit from the current index"
+              ],
+              "failure_modes": [
+                "message_invalid",
+                "nothing_to_commit",
+                "commit_blocked"
+              ],
+              "inputs": {
+                "message": "string"
+              },
+              "kind": "action",
+              "name": "commit.create",
+              "outputs": {
+                "branch": "string | null",
+                "commit": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "create a new commit that reverts a target commit"
+              ],
+              "failure_modes": [
+                "commit_not_found",
+                "merge_commit_not_supported",
+                "revert_conflict",
+                "revert_blocked"
+              ],
+              "inputs": {
+                "commit": "string"
+              },
+              "kind": "action",
+              "name": "commit.revert",
+              "outputs": {
+                "branch": "string | null",
+                "revert_commit": "string",
+                "reverted_commit": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "apply a target commit onto the current checkout as a new commit"
+              ],
+              "failure_modes": [
+                "commit_not_found",
+                "merge_commit_not_supported",
+                "cherry_pick_conflict",
+                "cherry_pick_blocked"
+              ],
+              "inputs": {
+                "commit": "string"
+              },
+              "kind": "action",
+              "name": "integrate.cherry_pick",
+              "outputs": {
+                "branch": "string | null",
+                "head_commit": "string",
+                "picked_commit": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "integrate a target ref into the current checkout using merge semantics"
+              ],
+              "failure_modes": [
+                "ref_not_found",
+                "merge_conflict",
+                "merge_blocked"
+              ],
+              "inputs": {
+                "ref": "string"
+              },
+              "kind": "action",
+              "name": "integrate.merge",
+              "outputs": {
+                "branch": "string | null",
+                "head_commit": "string",
+                "merged_ref": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "integrate a target ref into the current checkout using fast-forward-only semantics"
+              ],
+              "failure_modes": [
+                "ref_not_found",
+                "non_fast_forward",
+                "merge_blocked"
+              ],
+              "inputs": {
+                "ref": "string"
+              },
+              "kind": "action",
+              "name": "integrate.merge_ff_only",
+              "outputs": {
+                "branch": "string | null",
+                "head_commit": "string",
+                "merged_ref": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "rebase a non-default branch range onto a new base using rebase --onto semantics"
+              ],
+              "failure_modes": [
+                "onto_not_found",
+                "upstream_not_found",
+                "branch_not_found",
+                "default_branch_protected",
+                "rebase_conflict",
+                "rebase_blocked"
+              ],
+              "inputs": {
+                "branch": "string",
+                "onto": "string",
+                "upstream": "string"
+              },
+              "kind": "action",
+              "name": "integrate.rebase_onto",
+              "outputs": {
+                "branch": "string",
+                "head_commit": "string",
+                "onto": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {
+                "base": "string",
+                "head": "string"
+              },
+              "kind": "probe",
+              "name": "range",
+              "outputs": {
+                "ahead_count": "integer",
+                "base": "string",
+                "base_oid": "string",
+                "behind_count": "integer",
+                "head": "string",
+                "head_oid": "string",
+                "merge_base_oid": "string | null",
+                "repository_root": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {
+                "ref": "string"
+              },
+              "kind": "probe",
+              "name": "ref",
+              "outputs": {
+                "exists": "boolean",
+                "name": "string",
+                "oid": "string | null",
+                "repository_root": "string",
+                "symbolic": "boolean",
+                "symbolic_target": "string | null"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "repo",
+              "outputs": {
+                "bare": "boolean",
+                "common_dir": "string",
+                "default_branch": "string | null",
+                "git_dir": "string",
+                "head_ref": "string | null",
+                "inside_work_tree": "boolean",
+                "root": "string",
+                "worktree_path": "string | null"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "stash",
+              "outputs": {
+                "count": "integer",
+                "items": [
+                  {
+                    "name": "string",
+                    "selector": "string",
+                    "summary": "string"
+                  }
+                ],
+                "repository_root": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "state",
+              "outputs": {
+                "branch": "string | null",
+                "detached": "boolean",
+                "has_staged_changes": "boolean",
+                "has_unstaged_changes": "boolean",
+                "has_untracked": "boolean",
+                "repository_root": "string",
+                "stash_count": "integer",
+                "worktree_clean": "boolean"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "fetch refs from a remote into the local repository"
+              ],
+              "failure_modes": [
+                "remote_not_found",
+                "fetch_blocked"
+              ],
+              "inputs": {
+                "remote": "string"
+              },
+              "kind": "action",
+              "name": "sync.fetch",
+              "outputs": {
+                "fetched": "boolean",
+                "remote": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "push a local branch to a remote"
+              ],
+              "failure_modes": [
+                "branch_not_found",
+                "remote_not_found",
+                "upstream_remote_missing",
+                "non_fast_forward",
+                "push_blocked"
+              ],
+              "inputs": {
+                "branch": "string",
+                "remote": "string | null"
+              },
+              "kind": "action",
+              "name": "sync.push",
+              "outputs": {
+                "branch": "string",
+                "remote": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "upstream",
+              "outputs": {
+                "branch": "string | null",
+                "configured": "boolean",
+                "remote": "string | null",
+                "remote_branch": "string | null",
+                "repository_root": "string",
+                "upstream_ref": "string | null"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "worktree",
+              "outputs": {
+                "clean": "boolean",
+                "dirty_paths": [
+                  "string"
+                ],
+                "has_staged_changes": "boolean",
+                "has_unstaged_changes": "boolean",
+                "has_untracked": "boolean",
+                "repository_root": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {},
+              "kind": "probe",
+              "name": "worktrees",
+              "outputs": {
+                "count": "integer",
+                "current_path": "string | null",
+                "items": [
+                  {
+                    "bare": "boolean",
+                    "branch": "string | null",
+                    "current": "boolean",
+                    "detached": "boolean",
+                    "head": "string",
+                    "path": "string"
+                  }
+                ],
+                "repository_root": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            }
+          ]
+        },
+        {
+          "bootstrap": {
+            "context_fields": [
+              "host",
+              "viewer",
+              "scopes"
+            ],
+            "prerequisites": [
+              "gh binary available",
+              "GitHub auth available"
+            ]
+          },
+          "namespace": "gh",
+          "operations": [
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "issue_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "issue_ref": "string"
+              },
+              "kind": "probe",
+              "name": "issue",
+              "outputs": {
+                "assignees": [
+                  "object"
+                ],
+                "author": "object",
+                "body": "string",
+                "closed": "boolean",
+                "closed_at": "string",
+                "comments": "object",
+                "created_at": "string",
+                "id": "string",
+                "labels": [
+                  "object"
+                ],
+                "milestone": "object",
+                "number": "number",
+                "project_items": [
+                  "object"
+                ],
+                "reaction_groups": [
+                  "object"
+                ],
+                "repository": "object",
+                "state": "string",
+                "state_reason": "string",
+                "title": "string",
+                "updated_at": "string",
+                "url": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "append text to GitHub issue body"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "text_invalid",
+                "append_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "separator": "string | null",
+                "text": "string"
+              },
+              "kind": "action",
+              "name": "issue.body.append",
+              "outputs": {
+                "body": "string",
+                "changed": "boolean",
+                "issue_ref": "string",
+                "url": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "replace GitHub issue body"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "body_invalid",
+                "replace_blocked"
+              ],
+              "inputs": {
+                "body": "string",
+                "issue_ref": "string"
+              },
+              "kind": "action",
+              "name": "issue.body.replace",
+              "outputs": {
+                "body": "string",
+                "changed": "boolean",
+                "issue_ref": "string",
+                "url": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "close GitHub issue"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "close_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string"
+              },
+              "kind": "action",
+              "name": "issue.close",
+              "outputs": {
+                "closed": "boolean",
+                "issue_ref": "string",
+                "state": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "add GitHub issue comment"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "body_invalid",
+                "comment_blocked"
+              ],
+              "inputs": {
+                "body": "string",
+                "issue_ref": "string"
+              },
+              "kind": "action",
+              "name": "issue.comment.add",
+              "outputs": {
+                "body": "string",
+                "comment_id": "string",
+                "issue_ref": "string",
+                "url": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "create GitHub issue"
+              ],
+              "failure_modes": [
+                "repository_not_found",
+                "title_invalid",
+                "create_blocked"
+              ],
+              "inputs": {
+                "body": "string | null",
+                "repository": "string",
+                "title": "string"
+              },
+              "kind": "action",
+              "name": "issue.create",
+              "outputs": {
+                "issue_ref": "string",
+                "number": "integer",
+                "repository": "string",
+                "title": "string",
+                "url": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "project_id": "string"
+              },
+              "kind": "probe",
+              "name": "project.issue",
+              "outputs": {
+                "estimate": "number",
+                "exists": "boolean",
+                "item_id": "string",
+                "iteration": "string",
+                "priority": "string",
+                "size": "string",
+                "status": "string",
+                "type": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "add GitHub issue to project"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "add_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "project_id": "string"
+              },
+              "kind": "action",
+              "name": "project.issue.add",
+              "outputs": {
+                "added": "boolean",
+                "issue_ref": "string",
+                "item_id": "string",
+                "project_id": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set GitHub project issue estimate"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "estimate_invalid",
+                "estimate_blocked"
+              ],
+              "inputs": {
+                "estimate": "number",
+                "issue_ref": "string",
+                "project_id": "string"
+              },
+              "kind": "action",
+              "name": "project.issue.estimate.set",
+              "outputs": {
+                "changed": "boolean",
+                "estimate": "number",
+                "issue_ref": "string",
+                "item_id": "string",
+                "project_id": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set GitHub project issue iteration"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "iteration_not_found",
+                "iteration_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "iteration": "string",
+                "project_id": "string"
+              },
+              "kind": "action",
+              "name": "project.issue.iteration.set",
+              "outputs": {
+                "changed": "boolean",
+                "issue_ref": "string",
+                "item_id": "string",
+                "iteration": "string",
+                "project_id": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set GitHub project issue priority"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "priority_not_found",
+                "priority_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "priority": "string",
+                "project_id": "string"
+              },
+              "kind": "action",
+              "name": "project.issue.priority.set",
+              "outputs": {
+                "changed": "boolean",
+                "issue_ref": "string",
+                "item_id": "string",
+                "priority": "string",
+                "project_id": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set GitHub project issue size"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "size_not_found",
+                "size_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "size": "string"
+              },
+              "kind": "action",
+              "name": "project.issue.size.set",
+              "outputs": {
+                "changed": "boolean",
+                "issue_ref": "string",
+                "item_id": "string",
+                "project_id": "string",
+                "size": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set GitHub project issue status"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "status_not_found",
+                "status_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "status": "string"
+              },
+              "kind": "action",
+              "name": "project.issue.status.set",
+              "outputs": {
+                "changed": "boolean",
+                "issue_ref": "string",
+                "item_id": "string",
+                "project_id": "string",
+                "status": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set GitHub project issue type"
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "type_not_found",
+                "type_blocked"
+              ],
+              "inputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "type": "string"
+              },
+              "kind": "action",
+              "name": "project.issue.type.set",
+              "outputs": {
+                "changed": "boolean",
+                "issue_ref": "string",
+                "item_id": "string",
+                "project_id": "string",
+                "type": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            }
+          ]
+        },
+        {
+          "bootstrap": {
+            "context_fields": [
+              "shell",
+              "working_directory"
+            ],
+            "prerequisites": [
+              "supported shell available"
+            ]
+          },
+          "namespace": "shell",
+          "operations": [
+            {
+              "deprecated": false,
+              "effects": [
+                "execute shell command"
+              ],
+              "failure_modes": [
+                "command_failed",
+                "action_failed"
+              ],
+              "inputs": {
+                "command": "string"
+              },
+              "kind": "action",
+              "name": "command",
+              "outputs": {
+                "exit_code": "integer",
+                "stderr": "string",
+                "stdout": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": []
+            }
+          ]
+        }
+      ]
+    },
+    "playbook_contract": {
+      "defaults_fields": [
+        {
+          "name": "profile",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "discovery": {
+        "path": ".ordo/playbook.yml"
+      },
+      "document_kind": "playbook",
+      "profile_entry_fields": [
+        {
+          "name": "file",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "state_entry_fields": [
+        {
+          "name": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "top_level_fields": [
+        {
+          "name": "version",
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "name": "states",
+          "required": true,
+          "type": "object"
+        },
+        {
+          "name": "defaults",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "workflows",
+          "required": true,
+          "type": "object"
+        },
+        {
+          "name": "profiles",
+          "required": false,
+          "type": "object"
+        }
+      ],
+      "version": 1,
+      "workflow_entry_fields": [
+        {
+          "name": "file",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "state_bindings",
+          "required": false,
+          "type": "object"
+        }
+      ]
+    },
+    "workflow_contract": {
+      "document_kind": "workflow",
+      "guard_forms": [
+        {
+          "name": "operation_call",
+          "shape": {
+            "uses": "string",
+            "with": "object"
+          }
+        },
+        {
+          "name": "expression",
+          "shape": "string"
+        }
+      ],
+      "step_forms": [
+        {
+          "name": "operation_call",
+          "optional_fields": [
+            "with"
+          ],
+          "required_fields": [
+            "name",
+            "uses"
+          ]
+        },
+        {
+          "name": "state_set",
+          "optional_fields": [],
+          "required_fields": [
+            "name",
+            "state_set"
+          ]
+        },
+        {
+          "name": "state_delete",
+          "optional_fields": [],
+          "required_fields": [
+            "name",
+            "state_delete"
+          ]
+        }
+      ],
+      "top_level_fields": [
+        {
+          "name": "version",
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "name": "workflow",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "inputs",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "state_needs",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "guards",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "name": "steps",
+          "required": true,
+          "type": "array"
+        }
+      ],
+      "version": 0
+    }
+  }
+}
