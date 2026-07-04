@@ -33,6 +33,31 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.to_contract()["steps"][0]["uses"], "gh.issue")
         self.assertEqual(workflow.to_contract()["steps"][0]["register"], "issue")
 
+    def test_loads_step_if_field_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                guards: []
+                steps:
+                  - name: inspect
+                    if: ${inputs.enabled}
+                    uses: gh.issue
+                  - name: remember
+                    if: ${inputs.enabled}
+                    state_set:
+                      state.task_memory[inputs.enabled].flag: ${inputs.enabled}
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].if_, "${inputs.enabled}")
+        self.assertEqual(workflow.to_contract()["steps"][0]["if"], "${inputs.enabled}")
+        self.assertEqual(workflow.steps[1].if_, "${inputs.enabled}")
+
     def test_loads_expr_guard_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(

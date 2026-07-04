@@ -76,6 +76,13 @@ class ContractShapeTest(unittest.TestCase):
             },
         )
 
+    def test_step_contract_preserves_optional_if_field(self) -> None:
+        operation_step = Step(name="inspect", operation=OperationRef("gh.issue"), if_='${inputs.enabled}')
+        state_step = Step(name="remember", state_set={"state.task_memory[inputs.issue_ref].branch": "${inputs.branch}"}, if_='${inputs.persist}')
+
+        self.assertEqual(operation_step.to_contract()["if"], '${inputs.enabled}')
+        self.assertEqual(state_step.to_contract()["if"], '${inputs.persist}')
+
     def test_runtime_result_contract_is_json_serializable(self) -> None:
         result = RuntimeResult(
             mode=Mode.PLAN,

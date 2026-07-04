@@ -40,17 +40,17 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "operation_call",
             "required_fields": ["name", "uses"],
-            "optional_fields": ["with", "register"],
+            "optional_fields": ["if", "with", "register"],
         },
         {
             "name": "state_set",
             "required_fields": ["name", "state_set"],
-            "optional_fields": [],
+            "optional_fields": ["if"],
         },
         {
             "name": "state_delete",
             "required_fields": ["name", "state_delete"],
-            "optional_fields": [],
+            "optional_fields": ["if"],
         },
     ],
     "surface_constraints": {

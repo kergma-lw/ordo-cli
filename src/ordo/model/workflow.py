@@ -55,6 +55,7 @@ class Step:
     operation: OperationRef | None = None
     state_set: JSONObject | None = None
     state_delete: str | None = None
+    if_: str | None = field(default=None, metadata={"contract_name": "if"})
     register: str | None = None
 
     def __post_init__(self) -> None:
@@ -71,12 +72,20 @@ class Step:
 
         if self.operation is not None:
             contract = {"name": self.name, **self.operation.to_contract()}
+            if self.if_ is not None:
+                contract["if"] = self.if_
             if self.register is not None:
                 contract["register"] = self.register
             return contract
         if self.state_set is not None:
-            return {"name": self.name, "state_set": dict(self.state_set)}
-        return {"name": self.name, "state_delete": self.state_delete}
+            contract = {"name": self.name, "state_set": dict(self.state_set)}
+            if self.if_ is not None:
+                contract["if"] = self.if_
+            return contract
+        contract = {"name": self.name, "state_delete": self.state_delete}
+        if self.if_ is not None:
+            contract["if"] = self.if_
+        return contract
 
 
 @dataclass(frozen=True, slots=True)

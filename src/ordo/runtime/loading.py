@@ -160,6 +160,7 @@ def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:
         operation=_load_operation_ref(data, path=path, source=source) if has_uses else None,
         state_set=state_set,
         state_delete=state_delete,
+        if_=_optional_string(data, "if", path=path + ("if",), source=source),
         register=_optional_string(data, "register", path=path + ("register",), source=source),
     )
 
