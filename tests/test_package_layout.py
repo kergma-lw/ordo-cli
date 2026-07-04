@@ -18,6 +18,7 @@ from ordo.introspection import (
     describe_operations,
     describe_pattern_hints,
     describe_playbook_contract,
+    describe_plugin_surface_contract,
     describe_profile_contract,
     describe_state_contract,
     describe_system,
@@ -48,6 +49,7 @@ class PackageLayoutSmokeTest(unittest.TestCase):
         self.assertIn("connectors", describe_operations())
         self.assertEqual(describe_pattern_hints()["document_kind"], "pattern_hints")
         self.assertEqual(describe_playbook_contract()["document_kind"], "playbook")
+        self.assertEqual(describe_plugin_surface_contract()["document_kind"], "plugin_surface_contract")
         self.assertEqual(describe_profile_contract()["document_kind"], "profile")
         self.assertEqual(describe_state_contract()["document_kind"], "state_contract")
         self.assertIn("sections", describe_system())

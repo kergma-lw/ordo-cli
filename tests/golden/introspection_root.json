@@ -210,6 +210,10 @@
           "producer": "describe_playbook_contract",
           "published": true
         },
+        "plugin_surface_contract": {
+          "producer": "describe_plugin_surface_contract",
+          "published": true
+        },
         "profile_contract": {
           "producer": "describe_profile_contract",
           "published": true
@@ -1948,6 +1952,52 @@
           "type": "object"
         }
       ]
+    },
+    "plugin_surface_contract": {
+      "bootstrap_requirements": {
+        "optional_fields": [],
+        "required_fields": [
+          "prerequisites",
+          "context_fields"
+        ]
+      },
+      "connector_requirements": {
+        "required_fields": [
+          "namespace",
+          "bootstrap",
+          "operations"
+        ],
+        "shared_registry": "public_connector_registry"
+      },
+      "document_kind": "plugin_surface_contract",
+      "operation_requirements": {
+        "kind_values": [
+          "probe",
+          "action"
+        ],
+        "required_fields": [
+          "name",
+          "kind",
+          "summary",
+          "inputs",
+          "prerequisites",
+          "effects",
+          "outputs",
+          "failure_modes",
+          "tags",
+          "examples",
+          "maturity",
+          "deprecated",
+          "replaced_by"
+        ]
+      },
+      "participation_rules": {
+        "publication_model": "plugin metadata must enter introspection through the same public connector registry contract as built-in families",
+        "shared_introspection_sections": [
+          "operations"
+        ],
+        "special_case_help_logic_required": false
+      }
     },
     "profile_contract": {
       "compose_semantics": {
