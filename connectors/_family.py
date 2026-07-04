@@ -102,7 +102,7 @@ def _load_operations(*, package_name: str, kind: str) -> Iterator[_LoadedOperati
             message = f"Operation module '{module.__name__}' declared kind '{published.kind}', expected '{kind}'"
             raise ValueError(message)
         yield _LoadedOperation(
-            contract=_contract_from_published(published),
+            contract=_contract_from_published(published, package_name=package_name),
             handler=_adapt_published_handler(published=published, package_name=package_name),
         )
 
@@ -132,15 +132,22 @@ def _load_published_bootstrap(module: ModuleType) -> "PublishedBootstrap | None"
     return published
 
 
-def _contract_from_published(published: "PublishedOperation") -> OperationContract:
+def _contract_from_published(published: "PublishedOperation", *, package_name: str) -> OperationContract:
+    family_package = package_name.rsplit(".", 1)[0]
+    namespace = family_package.rsplit(".", 1)[-1]
+    reference = f"{namespace}.{published.name}"
     return OperationContract(
         name=published.name,
         kind=published.kind,
+        summary=published.summary or f"{published.kind.capitalize()} operation '{reference}'",
         inputs=dict(published.inputs),
         prerequisites=published.prerequisites,
         effects=published.effects,
         outputs=dict(published.outputs),
         failure_modes=published.failure_modes,
+        tags=published.tags or (namespace, published.kind),
+        examples=published.examples or ({"reference": reference, "inputs": dict(published.inputs)},),
+        maturity=published.maturity,
         deprecated=published.deprecated,
         replaced_by=published.replaced_by,
     )

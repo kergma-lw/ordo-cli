@@ -19,6 +19,7 @@ class ConnectorRegistryTest(unittest.TestCase):
 
         self.assertIsNotNone(operation)
         self.assertEqual(operation.kind, "probe")
+        self.assertEqual(operation.summary, "Probe operation 'gh.issue'")
         self.assertEqual(operation.inputs["issue_ref"], "string")
         self.assertEqual(operation.outputs["state"], "string")
         self.assertEqual(operation.outputs["created_at"], "string")

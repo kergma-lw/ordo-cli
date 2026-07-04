@@ -51,11 +51,15 @@ class PublishedOperation:
     name: str
     kind: OperationKind
     handler: Callable[["OperationContext"], OperationOutcome]
+    summary: str | None = None
     inputs: JSONObject = field(default_factory=dict)
     prerequisites: tuple[str, ...] = ()
     effects: tuple[str, ...] = ()
     outputs: JSONObject = field(default_factory=dict)
     failure_modes: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
+    examples: tuple[JSONObject, ...] = ()
+    maturity: str = "stable"
     deprecated: bool = False
     replaced_by: tuple[str, ...] = ()
 
@@ -157,10 +161,14 @@ def probe(
     *,
     name: str,
     handler: Callable[[OperationContext], OperationOutcome],
+    summary: str | None = None,
     inputs: JSONObject | None = None,
     prerequisites: tuple[str, ...] = (),
     outputs: JSONObject | None = None,
     failure_modes: tuple[str, ...] = (),
+    tags: tuple[str, ...] = (),
+    examples: tuple[JSONObject, ...] = (),
+    maturity: str = "stable",
     deprecated: bool = False,
     replaced_by: tuple[str, ...] = (),
 ) -> PublishedOperation:
@@ -168,10 +176,14 @@ def probe(
         name=name,
         kind="probe",
         handler=handler,
+        summary=summary,
         inputs={} if inputs is None else dict(inputs),
         prerequisites=prerequisites,
         outputs={} if outputs is None else dict(outputs),
         failure_modes=failure_modes,
+        tags=tags,
+        examples=examples,
+        maturity=maturity,
         deprecated=deprecated,
         replaced_by=replaced_by,
     )
@@ -181,11 +193,15 @@ def action(
     *,
     name: str,
     handler: Callable[[OperationContext], OperationOutcome],
+    summary: str | None = None,
     inputs: JSONObject | None = None,
     prerequisites: tuple[str, ...] = (),
     effects: tuple[str, ...] = (),
     outputs: JSONObject | None = None,
     failure_modes: tuple[str, ...] = (),
+    tags: tuple[str, ...] = (),
+    examples: tuple[JSONObject, ...] = (),
+    maturity: str = "stable",
     deprecated: bool = False,
     replaced_by: tuple[str, ...] = (),
 ) -> PublishedOperation:
@@ -193,11 +209,15 @@ def action(
         name=name,
         kind="action",
         handler=handler,
+        summary=summary,
         inputs={} if inputs is None else dict(inputs),
         prerequisites=prerequisites,
         effects=effects,
         outputs={} if outputs is None else dict(outputs),
         failure_modes=failure_modes,
+        tags=tags,
+        examples=examples,
+        maturity=maturity,
         deprecated=deprecated,
         replaced_by=replaced_by,
     )

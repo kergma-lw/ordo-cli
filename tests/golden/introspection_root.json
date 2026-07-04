@@ -345,11 +345,18 @@
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.branch"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "branch",
               "outputs": {
                 "detached": "boolean",
@@ -358,12 +365,26 @@
                 "value": "string | null"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.branch'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "create a new local branch"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "branch": "string",
+                    "start_point": "string | null"
+                  },
+                  "reference": "git.branch.create"
+                }
               ],
               "failure_modes": [
                 "invalid_branch",
@@ -376,18 +397,32 @@
                 "start_point": "string | null"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "branch.create",
               "outputs": {
                 "branch": "string",
                 "start_point": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.branch.create'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "delete a local non-default branch"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "branch": "string"
+                  },
+                  "reference": "git.branch.delete"
+                }
               ],
               "failure_modes": [
                 "branch_not_found",
@@ -400,17 +435,31 @@
                 "branch": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "branch.delete",
               "outputs": {
                 "branch": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.branch.delete'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "switch current checkout to a local branch"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "branch": "string"
+                  },
+                  "reference": "git.branch.switch"
+                }
               ],
               "failure_modes": [
                 "branch_not_found",
@@ -422,22 +471,35 @@
                 "branch": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "branch.switch",
               "outputs": {
                 "branch": "string",
                 "changed": "boolean"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.branch.switch'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.branches"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "branches",
               "outputs": {
                 "count": "integer",
@@ -453,12 +515,25 @@
                 "repository_root": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.branches'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "rewrite the current HEAD commit"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "message": "string | null"
+                  },
+                  "reference": "git.commit.amend"
+                }
               ],
               "failure_modes": [
                 "message_invalid",
@@ -469,6 +544,7 @@
                 "message": "string | null"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "commit.amend",
               "outputs": {
                 "branch": "string | null",
@@ -476,12 +552,25 @@
                 "previous_commit": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.commit.amend'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "create a new commit from the current index"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "message": "string"
+                  },
+                  "reference": "git.commit.create"
+                }
               ],
               "failure_modes": [
                 "message_invalid",
@@ -492,18 +581,32 @@
                 "message": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "commit.create",
               "outputs": {
                 "branch": "string | null",
                 "commit": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.commit.create'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "create a new commit that reverts a target commit"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "commit": "string"
+                  },
+                  "reference": "git.commit.revert"
+                }
               ],
               "failure_modes": [
                 "commit_not_found",
@@ -515,6 +618,7 @@
                 "commit": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "commit.revert",
               "outputs": {
                 "branch": "string | null",
@@ -522,12 +626,25 @@
                 "reverted_commit": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.commit.revert'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "apply a target commit onto the current checkout as a new commit"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "commit": "string"
+                  },
+                  "reference": "git.integrate.cherry_pick"
+                }
               ],
               "failure_modes": [
                 "commit_not_found",
@@ -539,6 +656,7 @@
                 "commit": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "integrate.cherry_pick",
               "outputs": {
                 "branch": "string | null",
@@ -546,12 +664,25 @@
                 "picked_commit": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.integrate.cherry_pick'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "integrate a target ref into the current checkout using merge semantics"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "ref": "string"
+                  },
+                  "reference": "git.integrate.merge"
+                }
               ],
               "failure_modes": [
                 "ref_not_found",
@@ -562,6 +693,7 @@
                 "ref": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "integrate.merge",
               "outputs": {
                 "branch": "string | null",
@@ -569,12 +701,25 @@
                 "merged_ref": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.integrate.merge'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "integrate a target ref into the current checkout using fast-forward-only semantics"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "ref": "string"
+                  },
+                  "reference": "git.integrate.merge_ff_only"
+                }
               ],
               "failure_modes": [
                 "ref_not_found",
@@ -585,6 +730,7 @@
                 "ref": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "integrate.merge_ff_only",
               "outputs": {
                 "branch": "string | null",
@@ -592,12 +738,27 @@
                 "merged_ref": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.integrate.merge_ff_only'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "rebase a non-default branch range onto a new base using rebase --onto semantics"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "branch": "string",
+                    "onto": "string",
+                    "upstream": "string"
+                  },
+                  "reference": "git.integrate.rebase_onto"
+                }
               ],
               "failure_modes": [
                 "onto_not_found",
@@ -613,6 +774,7 @@
                 "upstream": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "integrate.rebase_onto",
               "outputs": {
                 "branch": "string",
@@ -620,11 +782,25 @@
                 "onto": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.integrate.rebase_onto'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "base": "string",
+                    "head": "string"
+                  },
+                  "reference": "git.range"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
@@ -633,6 +809,7 @@
                 "head": "string"
               },
               "kind": "probe",
+              "maturity": "stable",
               "name": "range",
               "outputs": {
                 "ahead_count": "integer",
@@ -645,11 +822,24 @@
                 "repository_root": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.range'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "ref": "string"
+                  },
+                  "reference": "git.ref"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
@@ -657,6 +847,7 @@
                 "ref": "string"
               },
               "kind": "probe",
+              "maturity": "stable",
               "name": "ref",
               "outputs": {
                 "exists": "boolean",
@@ -667,16 +858,28 @@
                 "symbolic_target": "string | null"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.ref'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.repo"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "repo",
               "outputs": {
                 "bare": "boolean",
@@ -689,16 +892,28 @@
                 "worktree_path": "string | null"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.repo'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.stash"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "stash",
               "outputs": {
                 "count": "integer",
@@ -712,16 +927,28 @@
                 "repository_root": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.stash'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.state"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "state",
               "outputs": {
                 "branch": "string | null",
@@ -734,12 +961,25 @@
                 "worktree_clean": "boolean"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.state'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "fetch refs from a remote into the local repository"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "remote": "string"
+                  },
+                  "reference": "git.sync.fetch"
+                }
               ],
               "failure_modes": [
                 "remote_not_found",
@@ -749,18 +989,33 @@
                 "remote": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "sync.fetch",
               "outputs": {
                 "fetched": "boolean",
                 "remote": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.sync.fetch'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "push a local branch to a remote"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "branch": "string",
+                    "remote": "string | null"
+                  },
+                  "reference": "git.sync.push"
+                }
               ],
               "failure_modes": [
                 "branch_not_found",
@@ -774,22 +1029,35 @@
                 "remote": "string | null"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "sync.push",
               "outputs": {
                 "branch": "string",
                 "remote": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'git.sync.push'",
+              "tags": [
+                "git",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.upstream"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "upstream",
               "outputs": {
                 "branch": "string | null",
@@ -800,16 +1068,28 @@
                 "upstream_ref": "string | null"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.upstream'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.worktree"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "worktree",
               "outputs": {
                 "clean": "boolean",
@@ -822,16 +1102,28 @@
                 "repository_root": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.worktree'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.worktrees"
+                }
+              ],
               "failure_modes": [
                 "probe_failed"
               ],
               "inputs": {},
               "kind": "probe",
+              "maturity": "stable",
               "name": "worktrees",
               "outputs": {
                 "count": "integer",
@@ -849,7 +1141,12 @@
                 "repository_root": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'git.worktrees'",
+              "tags": [
+                "git",
+                "probe"
+              ]
             }
           ]
         },
@@ -870,6 +1167,14 @@
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string"
+                  },
+                  "reference": "gh.issue"
+                }
+              ],
               "failure_modes": [
                 "issue_not_found",
                 "probe_failed"
@@ -878,6 +1183,7 @@
                 "issue_ref": "string"
               },
               "kind": "probe",
+              "maturity": "stable",
               "name": "issue",
               "outputs": {
                 "assignees": [
@@ -909,12 +1215,27 @@
                 "url": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'gh.issue'",
+              "tags": [
+                "gh",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "append text to GitHub issue body"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "separator": "string | null",
+                    "text": "string"
+                  },
+                  "reference": "gh.issue.body.append"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -927,6 +1248,7 @@
                 "text": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "issue.body.append",
               "outputs": {
                 "body": "string",
@@ -935,12 +1257,26 @@
                 "url": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.issue.body.append'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "replace GitHub issue body"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "body": "string",
+                    "issue_ref": "string"
+                  },
+                  "reference": "gh.issue.body.replace"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -952,6 +1288,7 @@
                 "issue_ref": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "issue.body.replace",
               "outputs": {
                 "body": "string",
@@ -960,12 +1297,25 @@
                 "url": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.issue.body.replace'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "close GitHub issue"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string"
+                  },
+                  "reference": "gh.issue.close"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -975,6 +1325,7 @@
                 "issue_ref": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "issue.close",
               "outputs": {
                 "closed": "boolean",
@@ -982,12 +1333,26 @@
                 "state": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.issue.close'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "add GitHub issue comment"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "body": "string",
+                    "issue_ref": "string"
+                  },
+                  "reference": "gh.issue.comment.add"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -999,6 +1364,7 @@
                 "issue_ref": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "issue.comment.add",
               "outputs": {
                 "body": "string",
@@ -1007,12 +1373,27 @@
                 "url": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.issue.comment.add'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "create GitHub issue"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "body": "string | null",
+                    "repository": "string",
+                    "title": "string"
+                  },
+                  "reference": "gh.issue.create"
+                }
               ],
               "failure_modes": [
                 "repository_not_found",
@@ -1025,6 +1406,7 @@
                 "title": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "issue.create",
               "outputs": {
                 "issue_ref": "string",
@@ -1034,11 +1416,25 @@
                 "url": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.issue.create'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project.issue"
+                }
+              ],
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
@@ -1049,6 +1445,7 @@
                 "project_id": "string"
               },
               "kind": "probe",
+              "maturity": "stable",
               "name": "project.issue",
               "outputs": {
                 "estimate": "number",
@@ -1061,12 +1458,26 @@
                 "type": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Probe operation 'gh.project.issue'",
+              "tags": [
+                "gh",
+                "probe"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "add GitHub issue to project"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project.issue.add"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -1078,6 +1489,7 @@
                 "project_id": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "project.issue.add",
               "outputs": {
                 "added": "boolean",
@@ -1086,12 +1498,27 @@
                 "project_id": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.add'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "set GitHub project issue estimate"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "estimate": "number",
+                    "issue_ref": "string",
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project.issue.estimate.set"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -1105,6 +1532,7 @@
                 "project_id": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "project.issue.estimate.set",
               "outputs": {
                 "changed": "boolean",
@@ -1114,12 +1542,27 @@
                 "project_id": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.estimate.set'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "set GitHub project issue iteration"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "iteration": "string",
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project.issue.iteration.set"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -1133,6 +1576,7 @@
                 "project_id": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "project.issue.iteration.set",
               "outputs": {
                 "changed": "boolean",
@@ -1142,12 +1586,27 @@
                 "project_id": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.iteration.set'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "set GitHub project issue priority"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "priority": "string",
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project.issue.priority.set"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -1161,6 +1620,7 @@
                 "project_id": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "project.issue.priority.set",
               "outputs": {
                 "changed": "boolean",
@@ -1170,12 +1630,27 @@
                 "project_id": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.priority.set'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "set GitHub project issue size"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "project_id": "string",
+                    "size": "string"
+                  },
+                  "reference": "gh.project.issue.size.set"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -1189,6 +1664,7 @@
                 "size": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "project.issue.size.set",
               "outputs": {
                 "changed": "boolean",
@@ -1198,12 +1674,27 @@
                 "size": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.size.set'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "set GitHub project issue status"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "project_id": "string",
+                    "status": "string"
+                  },
+                  "reference": "gh.project.issue.status.set"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -1217,6 +1708,7 @@
                 "status": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "project.issue.status.set",
               "outputs": {
                 "changed": "boolean",
@@ -1226,12 +1718,27 @@
                 "status": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.status.set'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             },
             {
               "deprecated": false,
               "effects": [
                 "set GitHub project issue type"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_ref": "string",
+                    "project_id": "string",
+                    "type": "string"
+                  },
+                  "reference": "gh.project.issue.type.set"
+                }
               ],
               "failure_modes": [
                 "issue_not_found",
@@ -1245,6 +1752,7 @@
                 "type": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "project.issue.type.set",
               "outputs": {
                 "changed": "boolean",
@@ -1254,7 +1762,12 @@
                 "type": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.type.set'",
+              "tags": [
+                "gh",
+                "action"
+              ]
             }
           ]
         },
@@ -1275,6 +1788,14 @@
               "effects": [
                 "execute shell command"
               ],
+              "examples": [
+                {
+                  "inputs": {
+                    "command": "string"
+                  },
+                  "reference": "shell.command"
+                }
+              ],
               "failure_modes": [
                 "command_failed",
                 "action_failed"
@@ -1283,6 +1804,7 @@
                 "command": "string"
               },
               "kind": "action",
+              "maturity": "stable",
               "name": "command",
               "outputs": {
                 "exit_code": "integer",
@@ -1290,7 +1812,12 @@
                 "stdout": "string"
               },
               "prerequisites": [],
-              "replaced_by": []
+              "replaced_by": [],
+              "summary": "Action operation 'shell.command'",
+              "tags": [
+                "shell",
+                "action"
+              ]
             }
           ]
         }

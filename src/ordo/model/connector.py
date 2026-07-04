@@ -32,11 +32,15 @@ class OperationContract:
 
     name: str
     kind: OperationKind
+    summary: str | None = None
     inputs: JSONObject = field(default_factory=dict)
     prerequisites: tuple[str, ...] = ()
     effects: tuple[str, ...] = ()
     outputs: JSONObject = field(default_factory=dict)
     failure_modes: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
+    examples: tuple[JSONObject, ...] = ()
+    maturity: str = "stable"
     deprecated: bool = False
     replaced_by: tuple[str, ...] = ()
 
@@ -46,11 +50,15 @@ class OperationContract:
         return {
             "name": self.name,
             "kind": self.kind,
+            "summary": self.summary,
             "inputs": dict(self.inputs),
             "prerequisites": list(self.prerequisites),
             "effects": list(self.effects),
             "outputs": dict(self.outputs),
             "failure_modes": list(self.failure_modes),
+            "tags": list(self.tags),
+            "examples": [dict(example) for example in self.examples],
+            "maturity": self.maturity,
             "deprecated": self.deprecated,
             "replaced_by": list(self.replaced_by),
         }
