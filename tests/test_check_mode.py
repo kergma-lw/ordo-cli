@@ -89,7 +89,7 @@ class CheckModeTest(unittest.TestCase):
 
         def probe(resolved_guard, _workflow):
             if resolved_guard.reference == "git.branch":
-                return OperationResult(status="ok", observations={"value": "feature/demo"})
+                return OperationResult(status="ok", outputs={"value": "feature/demo"})
             return OperationResult(status="ok")
 
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -104,7 +104,7 @@ class CheckModeTest(unittest.TestCase):
 
         def probe(resolved_guard, _workflow):
             seen.append(resolved_guard.reference)
-            return OperationResult(status="ok", observations={"clean": True})
+            return OperationResult(status="ok", outputs={"clean": True})
 
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
@@ -145,8 +145,8 @@ class CheckModeTest(unittest.TestCase):
         def probe(resolved_guard, _workflow):
             seen.append(resolved_guard.reference)
             if resolved_guard.reference == "git.worktree":
-                return OperationResult(status="ok", observations={"clean": False})
-            return OperationResult(status="ok", observations={"value": "main"})
+                return OperationResult(status="ok", outputs={"clean": False})
+            return OperationResult(status="ok", outputs={"value": "main"})
 
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 

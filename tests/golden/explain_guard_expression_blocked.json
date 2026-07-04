@@ -6,7 +6,7 @@
   "operation_results": [
     {
       "diagnostics": [],
-      "observations": {
+      "outputs": {
         "failed_subcondition": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
         "guard": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
         "result": false

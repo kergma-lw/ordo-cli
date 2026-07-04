@@ -177,7 +177,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(gh_close.failure_modes, ("issue_not_found", "close_blocked"))
         self.assertEqual(shell_command.failure_modes, ("command_failed", "action_failed"))
 
-    def test_git_worktree_returns_structured_probe_observations(self) -> None:
+    def test_git_worktree_returns_structured_probe_outputs(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.worktree")),), steps=())
         operation = get_public_connector_registry().get_operation("git.worktree")
         resolved = ResolvedOperation("git.worktree", "git", operation, "public")  # type: ignore[arg-type]
@@ -191,12 +191,12 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["clean"])
-        self.assertEqual(result.observations["dirty_paths"], ["README.md", "tmp.txt"])
-        self.assertTrue(result.observations["has_untracked"])
-        self.assertFalse(result.observations["has_staged_changes"])
-        self.assertTrue(result.observations["has_unstaged_changes"])
-        self.assertEqual(result.observations["repository_root"], "/tmp/demo-repo")
+        self.assertFalse(result.outputs["clean"])
+        self.assertEqual(result.outputs["dirty_paths"], ["README.md", "tmp.txt"])
+        self.assertTrue(result.outputs["has_untracked"])
+        self.assertFalse(result.outputs["has_staged_changes"])
+        self.assertTrue(result.outputs["has_unstaged_changes"])
+        self.assertEqual(result.outputs["repository_root"], "/tmp/demo-repo")
 
     def test_git_worktree_probe_reports_staged_and_untracked_state(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.worktree")),), steps=())
@@ -212,11 +212,11 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["clean"])
-        self.assertEqual(result.observations["dirty_paths"], ["staged.txt", "unstaged.txt", "tmp.txt"])
-        self.assertTrue(result.observations["has_untracked"])
-        self.assertTrue(result.observations["has_staged_changes"])
-        self.assertTrue(result.observations["has_unstaged_changes"])
+        self.assertFalse(result.outputs["clean"])
+        self.assertEqual(result.outputs["dirty_paths"], ["staged.txt", "unstaged.txt", "tmp.txt"])
+        self.assertTrue(result.outputs["has_untracked"])
+        self.assertTrue(result.outputs["has_staged_changes"])
+        self.assertTrue(result.outputs["has_unstaged_changes"])
 
     def test_git_worktree_probe_fails_on_unexpected_status_shape(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.worktree")),), steps=())
@@ -261,10 +261,10 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["count"], 2)
-        self.assertEqual(result.observations["current_path"], "/tmp/demo-repo")
+        self.assertEqual(result.outputs["count"], 2)
+        self.assertEqual(result.outputs["current_path"], "/tmp/demo-repo")
         self.assertEqual(
-            result.observations["items"],
+            result.outputs["items"],
             [
                 {
                     "path": "/tmp/demo-repo",
@@ -331,10 +331,10 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["count"], 3)
-        self.assertEqual(result.observations["current"], "feature/demo")
+        self.assertEqual(result.outputs["count"], 3)
+        self.assertEqual(result.outputs["current"], "feature/demo")
         self.assertEqual(
-            result.observations["items"],
+            result.outputs["items"],
             [
                 {
                     "name": "feature/demo",
@@ -371,7 +371,7 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertIsNone(result.observations["current"])
+        self.assertIsNone(result.outputs["current"])
 
     def test_git_branches_probe_fails_on_unsupported_ref_kind(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.branches")),), steps=())
@@ -410,9 +410,9 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["count"], 2)
+        self.assertEqual(result.outputs["count"], 2)
         self.assertEqual(
-            result.observations["items"],
+            result.outputs["items"],
             [
                 {
                     "name": "stash@{0}",
@@ -463,7 +463,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
-            result.observations,
+            result.outputs,
             {
                 "branch": "feature/demo",
                 "detached": False,
@@ -514,7 +514,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
-            result.observations,
+            result.outputs,
             {
                 "name": "HEAD",
                 "exists": True,
@@ -544,11 +544,11 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["name"], "refs/heads/missing")
-        self.assertFalse(result.observations["exists"])
-        self.assertIsNone(result.observations["oid"])
-        self.assertFalse(result.observations["symbolic"])
-        self.assertIsNone(result.observations["symbolic_target"])
+        self.assertEqual(result.outputs["name"], "refs/heads/missing")
+        self.assertFalse(result.outputs["exists"])
+        self.assertIsNone(result.outputs["oid"])
+        self.assertFalse(result.outputs["symbolic"])
+        self.assertIsNone(result.outputs["symbolic_target"])
 
     def test_git_ref_probe_fails_on_empty_symbolic_target(self) -> None:
         workflow = Workflow(
@@ -589,7 +589,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
-            result.observations,
+            result.outputs,
             {
                 "configured": True,
                 "branch": "feature/demo",
@@ -615,9 +615,9 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["configured"])
-        self.assertIsNone(result.observations["branch"])
-        self.assertIsNone(result.observations["upstream_ref"])
+        self.assertFalse(result.outputs["configured"])
+        self.assertIsNone(result.outputs["branch"])
+        self.assertIsNone(result.outputs["upstream_ref"])
 
     def test_git_upstream_probe_returns_unconfigured_without_tracking_branch(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.upstream")),), steps=())
@@ -635,9 +635,9 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["configured"])
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertIsNone(result.observations["upstream_ref"])
+        self.assertFalse(result.outputs["configured"])
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertIsNone(result.outputs["upstream_ref"])
 
     def test_git_upstream_probe_fails_on_invalid_upstream_shape(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.upstream")),), steps=())
@@ -680,7 +680,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
-            result.observations,
+            result.outputs,
             {
                 "base": "main",
                 "head": "feature/demo",
@@ -715,9 +715,9 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertIsNone(result.observations["merge_base_oid"])
-        self.assertEqual(result.observations["ahead_count"], 7)
-        self.assertEqual(result.observations["behind_count"], 0)
+        self.assertIsNone(result.outputs["merge_base_oid"])
+        self.assertEqual(result.outputs["ahead_count"], 7)
+        self.assertEqual(result.outputs["behind_count"], 0)
 
     def test_git_range_probe_fails_when_ref_cannot_be_resolved(self) -> None:
         workflow = Workflow(
@@ -770,7 +770,7 @@ class OperationTest(unittest.TestCase):
 
         def probe(resolved_guard, _workflow):
             if resolved_guard.reference == "git.branch":
-                return OperationResult(status="ok", observations={"value": "main"})
+                return OperationResult(status="ok", outputs={"value": "main"})
             return OperationResult(status="ok")
 
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -797,7 +797,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.raw["stdout"], "hi\n")
-        self.assertEqual(result.observations["exit_code"], 0)
+        self.assertEqual(result.outputs["exit_code"], 0)
 
     def test_git_branch_switch_returns_structured_action_result(self) -> None:
         workflow = Workflow(
@@ -821,8 +821,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertTrue(result.outputs["changed"])
 
     def test_git_branch_switch_reports_successful_noop_when_branch_already_current(self) -> None:
         workflow = Workflow(
@@ -846,8 +846,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertFalse(result.observations["changed"])
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertFalse(result.outputs["changed"])
 
     def test_git_branch_switch_distinguishes_worktree_conflict(self) -> None:
         workflow = Workflow(
@@ -921,8 +921,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertEqual(result.observations["commit"], "abc1234567890")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertEqual(result.outputs["commit"], "abc1234567890")
 
     def test_git_commit_create_rejects_blank_message(self) -> None:
         workflow = Workflow(
@@ -988,9 +988,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertEqual(result.observations["previous_commit"], "abc111")
-        self.assertEqual(result.observations["commit"], "def5678901234")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertEqual(result.outputs["previous_commit"], "abc111")
+        self.assertEqual(result.outputs["commit"], "def5678901234")
 
     def test_git_commit_amend_supports_preserving_message(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="amend", operation=OperationRef("git.commit.amend")),))
@@ -1010,8 +1010,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["previous_commit"], "abc111")
-        self.assertEqual(result.observations["commit"], "def5678901234")
+        self.assertEqual(result.outputs["previous_commit"], "abc111")
+        self.assertEqual(result.outputs["commit"], "def5678901234")
 
     def test_git_commit_amend_rejects_blank_message(self) -> None:
         workflow = Workflow(
@@ -1075,9 +1075,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["reverted_commit"], "abc123")
-        self.assertEqual(result.observations["revert_commit"], "def5678901234")
-        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.outputs["reverted_commit"], "abc123")
+        self.assertEqual(result.outputs["revert_commit"], "def5678901234")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
 
     def test_git_commit_revert_distinguishes_merge_commit_not_supported(self) -> None:
         workflow = Workflow(
@@ -1148,9 +1148,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["merged_ref"], "mainsha")
-        self.assertEqual(result.observations["head_commit"], "mergedhead")
-        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.outputs["merged_ref"], "mainsha")
+        self.assertEqual(result.outputs["head_commit"], "mergedhead")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
 
     def test_git_integrate_merge_distinguishes_missing_ref(self) -> None:
         workflow = Workflow(
@@ -1220,9 +1220,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["merged_ref"], "mainsha")
-        self.assertEqual(result.observations["head_commit"], "mergedhead")
-        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.outputs["merged_ref"], "mainsha")
+        self.assertEqual(result.outputs["head_commit"], "mergedhead")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
 
     def test_git_integrate_merge_ff_only_distinguishes_missing_ref(self) -> None:
         workflow = Workflow(
@@ -1306,9 +1306,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertEqual(result.observations["onto"], "mainsha")
-        self.assertEqual(result.observations["head_commit"], "rebasedhead")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertEqual(result.outputs["onto"], "mainsha")
+        self.assertEqual(result.outputs["head_commit"], "rebasedhead")
 
     def test_git_integrate_rebase_onto_distinguishes_missing_onto(self) -> None:
         workflow = Workflow(
@@ -1433,9 +1433,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["picked_commit"], "abc123")
-        self.assertEqual(result.observations["head_commit"], "def5678901234")
-        self.assertEqual(result.observations["branch"], "main")
+        self.assertEqual(result.outputs["picked_commit"], "abc123")
+        self.assertEqual(result.outputs["head_commit"], "def5678901234")
+        self.assertEqual(result.outputs["branch"], "main")
 
     def test_git_integrate_cherry_pick_distinguishes_merge_commit_not_supported(self) -> None:
         workflow = Workflow(
@@ -1502,8 +1502,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["remote"], "origin")
-        self.assertTrue(result.observations["fetched"])
+        self.assertEqual(result.outputs["remote"], "origin")
+        self.assertTrue(result.outputs["fetched"])
 
     def test_git_sync_fetch_distinguishes_missing_remote(self) -> None:
         workflow = Workflow(
@@ -1545,8 +1545,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["remote"], "origin")
-        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.outputs["remote"], "origin")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
 
     def test_git_sync_push_uses_upstream_remote_when_remote_omitted(self) -> None:
         workflow = Workflow(
@@ -1572,8 +1572,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["remote"], "origin")
-        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.outputs["remote"], "origin")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
 
     def test_git_sync_push_reports_missing_upstream_remote(self) -> None:
         workflow = Workflow(
@@ -1621,8 +1621,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertEqual(result.observations["start_point"], "abc1234567890")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertEqual(result.outputs["start_point"], "abc1234567890")
 
     def test_git_branch_create_supports_explicit_start_point(self) -> None:
         workflow = Workflow(
@@ -1651,8 +1651,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
-        self.assertEqual(result.observations["start_point"], "feedface12345678")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertEqual(result.outputs["start_point"], "feedface12345678")
 
     def test_git_branch_create_distinguishes_existing_branch(self) -> None:
         workflow = Workflow(
@@ -1731,7 +1731,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["branch"], "feature/demo")
+        self.assertEqual(result.outputs["branch"], "feature/demo")
 
     def test_git_branch_delete_protects_default_branch(self) -> None:
         workflow = Workflow(
@@ -1832,8 +1832,8 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["number"], 1)
-        self.assertEqual(result.observations["created_at"], "2026-01-01T00:00:00Z")
+        self.assertEqual(result.outputs["number"], 1)
+        self.assertEqual(result.outputs["created_at"], "2026-01-01T00:00:00Z")
 
     def test_gh_probe_surfaces_bootstrap_failure_before_operation_logic(self) -> None:
         workflow = Workflow(
@@ -1890,9 +1890,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["issue_ref"], "owner/repo#7")
-        self.assertEqual(result.observations["state"], "CLOSED")
-        self.assertTrue(result.observations["closed"])
+        self.assertEqual(result.outputs["issue_ref"], "owner/repo#7")
+        self.assertEqual(result.outputs["state"], "CLOSED")
+        self.assertTrue(result.outputs["closed"])
         self.assertEqual(run.call_count, 3)
 
     def test_gh_issue_close_is_noop_for_closed_issue(self) -> None:
@@ -1910,7 +1910,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.summary, "GitHub issue is already closed")
-        self.assertTrue(result.observations["closed"])
+        self.assertTrue(result.outputs["closed"])
         self.assertEqual(run.call_count, 2)
 
     def test_gh_issue_close_reports_issue_not_found(self) -> None:
@@ -1966,10 +1966,10 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["issue_ref"], "owner/repo#17")
-        self.assertEqual(result.observations["repository"], "owner/repo")
-        self.assertEqual(result.observations["number"], 17)
-        self.assertEqual(result.observations["title"], "Add checklist")
+        self.assertEqual(result.outputs["issue_ref"], "owner/repo#17")
+        self.assertEqual(result.outputs["repository"], "owner/repo")
+        self.assertEqual(result.outputs["number"], 17)
+        self.assertEqual(result.outputs["title"], "Add checklist")
 
     def test_gh_issue_create_reports_repository_not_found(self) -> None:
         workflow = Workflow(
@@ -2053,9 +2053,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["issue_ref"], "owner/repo#17")
-        self.assertEqual(result.observations["comment_id"], "IC_1")
-        self.assertEqual(result.observations["body"], "Looks good.")
+        self.assertEqual(result.outputs["issue_ref"], "owner/repo#17")
+        self.assertEqual(result.outputs["comment_id"], "IC_1")
+        self.assertEqual(result.outputs["body"], "Looks good.")
 
     def test_gh_issue_comment_add_reports_issue_not_found(self) -> None:
         workflow = Workflow(
@@ -2138,9 +2138,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["issue_ref"], "owner/repo#17")
-        self.assertEqual(result.observations["body"], "Updated body.")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["issue_ref"], "owner/repo#17")
+        self.assertEqual(result.outputs["body"], "Updated body.")
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_issue_body_replace_is_noop_for_same_body(self) -> None:
         workflow = Workflow(
@@ -2161,7 +2161,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["changed"])
+        self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub issue body is already set")
 
     def test_gh_issue_body_replace_reports_issue_not_found(self) -> None:
@@ -2227,8 +2227,8 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["body"], "Old body.\n\nNew section.")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["body"], "Old body.\n\nNew section.")
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_issue_body_append_uses_custom_separator(self) -> None:
         workflow = Workflow(
@@ -2250,7 +2250,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["body"], "headtail")
+        self.assertEqual(result.outputs["body"], "headtail")
 
     def test_gh_issue_body_append_reports_issue_not_found(self) -> None:
         workflow = Workflow(
@@ -2334,10 +2334,10 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["issue_ref"], "owner/repo#7")
-        self.assertEqual(result.observations["project_id"], "PVT_demo")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertTrue(result.observations["added"])
+        self.assertEqual(result.outputs["issue_ref"], "owner/repo#7")
+        self.assertEqual(result.outputs["project_id"], "PVT_demo")
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertTrue(result.outputs["added"])
 
     def test_gh_project_issue_add_is_noop_for_existing_project_item(self) -> None:
         workflow = Workflow(
@@ -2359,8 +2359,8 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.summary, "GitHub issue is already in the requested project")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertFalse(result.observations["added"])
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertFalse(result.outputs["added"])
 
     def test_gh_project_issue_add_reports_project_not_found(self) -> None:
         workflow = Workflow(
@@ -2449,9 +2449,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertEqual(result.observations["status"], "In progress")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertEqual(result.outputs["status"], "In progress")
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_status_set_is_noop_for_same_status(self) -> None:
         workflow = Workflow(
@@ -2472,7 +2472,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["changed"])
+        self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub project issue status is already set")
 
     def test_gh_project_issue_status_set_reports_status_not_found(self) -> None:
@@ -2584,9 +2584,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertEqual(result.observations["iteration"], "Sprint 12")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertEqual(result.outputs["iteration"], "Sprint 12")
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_iteration_set_is_noop_for_same_iteration(self) -> None:
         workflow = Workflow(
@@ -2607,7 +2607,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["changed"])
+        self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub project issue iteration is already set")
 
     def test_gh_project_issue_iteration_set_reports_iteration_not_found(self) -> None:
@@ -2719,9 +2719,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertEqual(result.observations["priority"], "P1")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertEqual(result.outputs["priority"], "P1")
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_priority_set_is_noop_for_same_priority(self) -> None:
         workflow = Workflow(
@@ -2742,7 +2742,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["changed"])
+        self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub project issue priority is already set")
 
     def test_gh_project_issue_priority_set_reports_priority_not_found(self) -> None:
@@ -2854,9 +2854,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertEqual(result.observations["type"], "Bug")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertEqual(result.outputs["type"], "Bug")
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_type_set_is_noop_for_same_type(self) -> None:
         workflow = Workflow(
@@ -2877,7 +2877,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["changed"])
+        self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub project issue type is already set")
 
     def test_gh_project_issue_type_set_reports_type_not_found(self) -> None:
@@ -2989,9 +2989,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertEqual(result.observations["size"], "L")
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertEqual(result.outputs["size"], "L")
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_size_set_is_noop_for_same_size(self) -> None:
         workflow = Workflow(
@@ -3012,7 +3012,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["changed"])
+        self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub project issue size is already set")
 
     def test_gh_project_issue_size_set_reports_size_not_found(self) -> None:
@@ -3124,9 +3124,9 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["item_id"], "PVTI_7")
-        self.assertEqual(result.observations["estimate"], 5)
-        self.assertTrue(result.observations["changed"])
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertEqual(result.outputs["estimate"], 5)
+        self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_estimate_set_is_noop_for_same_estimate(self) -> None:
         workflow = Workflow(
@@ -3147,7 +3147,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["changed"])
+        self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub project issue estimate is already set")
 
     def test_gh_project_issue_estimate_set_reports_project_not_found(self) -> None:
@@ -3255,10 +3255,10 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["value"], "feature/demo")
-        self.assertEqual(result.observations["ref"], "refs/heads/feature/demo")
-        self.assertFalse(result.observations["detached"])
-        self.assertEqual(result.observations["repository_root"], "/tmp/demo-repo")
+        self.assertEqual(result.outputs["value"], "feature/demo")
+        self.assertEqual(result.outputs["ref"], "refs/heads/feature/demo")
+        self.assertFalse(result.outputs["detached"])
+        self.assertEqual(result.outputs["repository_root"], "/tmp/demo-repo")
 
     def test_git_branch_probe_returns_detached_head_state(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.branch")),), steps=())
@@ -3274,9 +3274,9 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertIsNone(result.observations["value"])
-        self.assertIsNone(result.observations["ref"])
-        self.assertTrue(result.observations["detached"])
+        self.assertIsNone(result.outputs["value"])
+        self.assertIsNone(result.outputs["ref"])
+        self.assertTrue(result.outputs["detached"])
 
     def test_git_branch_probe_fails_on_unexpected_symbolic_ref_shape(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.branch")),), steps=())
@@ -3315,7 +3315,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(
-            result.observations,
+            result.outputs,
             {
                 "root": "/tmp/demo-repo",
                 "git_dir": "/tmp/demo-repo/.git",
@@ -3391,8 +3391,8 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.observations["state"], "OPEN")
-        self.assertEqual(result.observations["repository"]["nameWithOwner"], "owner/repo")
+        self.assertEqual(result.outputs["state"], "OPEN")
+        self.assertEqual(result.outputs["repository"]["nameWithOwner"], "owner/repo")
 
     def test_gh_issue_probe_maps_not_found_to_local_failure_mode(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#999"})),), steps=())
@@ -3454,12 +3454,12 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertTrue(result.observations["exists"])
-        self.assertEqual(result.observations["status"], "In progress")
-        self.assertEqual(result.observations["type"], "Task")
-        self.assertEqual(result.observations["iteration"], "Sprint 12")
-        self.assertEqual(result.observations["estimate"], 5)
-        self.assertEqual(result.observations["item_id"], "PVTI_1")
+        self.assertTrue(result.outputs["exists"])
+        self.assertEqual(result.outputs["status"], "In progress")
+        self.assertEqual(result.outputs["type"], "Task")
+        self.assertEqual(result.outputs["iteration"], "Sprint 12")
+        self.assertEqual(result.outputs["estimate"], 5)
+        self.assertEqual(result.outputs["item_id"], "PVTI_1")
 
     def test_gh_project_issue_probe_reports_issue_not_in_project_via_exists_false(self) -> None:
         workflow = Workflow(
@@ -3481,8 +3481,8 @@ class OperationTest(unittest.TestCase):
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertFalse(result.observations["exists"])
-        self.assertIsNone(result.observations["status"])
+        self.assertFalse(result.outputs["exists"])
+        self.assertIsNone(result.outputs["status"])
 
     def test_gh_project_issue_probe_reports_project_not_found(self) -> None:
         workflow = Workflow(

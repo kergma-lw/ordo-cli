@@ -36,12 +36,12 @@
         {
           "name": "workflow.step.register",
           "scope": "workflow.step",
-          "status": "unsupported"
+          "status": "supported"
         },
         {
           "name": "workflow.step.outputs",
           "scope": "workflow.step",
-          "status": "unsupported"
+          "status": "supported"
         },
         {
           "name": "workflow.branching",
@@ -69,6 +69,12 @@
           "surfaces": [
             "value_expression"
           ]
+        },
+        {
+          "name": "step",
+          "surfaces": [
+            "value_expression"
+          ]
         }
       ],
       "expression_surfaces": [
@@ -93,7 +99,8 @@
           "name": "value_expression",
           "roots": [
             "inputs",
-            "state"
+            "state",
+            "step"
           ]
         },
         {
@@ -111,6 +118,15 @@
           "reason": "guards run before steps and only support input references and public probe references",
           "related_codes": [],
           "rule": "State references are not allowed in guard expressions",
+          "surface": "guard_expression"
+        },
+        {
+          "name": "guard_expression.no_step_root",
+          "reason": "guards run before effectful step execution and therefore cannot depend on registered step results",
+          "related_codes": [
+            "validation.workflow.guard_expr.step_ref"
+          ],
+          "rule": "Registered step references are not allowed in guard expressions",
           "surface": "guard_expression"
         },
         {
@@ -144,6 +160,24 @@
           ],
           "rule": "The with field is allowed only together with uses",
           "surface": "workflow_step"
+        },
+        {
+          "name": "workflow_step.register_requires_uses",
+          "reason": "the MVP publishes registered step results only for operation-call steps",
+          "related_codes": [
+            "validation.workflow.step.register_without_uses"
+          ],
+          "rule": "The register field is allowed only together with uses",
+          "surface": "workflow_step"
+        },
+        {
+          "name": "value_expression.step_refs_must_be_backward",
+          "reason": "step-result reads are order-sensitive execution-local data flow rather than random access workflow state",
+          "related_codes": [
+            "validation.workflow.step_ref.forward"
+          ],
+          "rule": "Registered step references may target only earlier steps in the same workflow",
+          "surface": "value_expression"
         },
         {
           "name": "state_set.single_target_entry",
@@ -2165,7 +2199,8 @@
         {
           "name": "operation_call",
           "optional_fields": [
-            "with"
+            "with",
+            "register"
           ],
           "required_fields": [
             "name",
@@ -2212,7 +2247,8 @@
           ],
           "allowed_roots": [
             "inputs",
-            "state"
+            "state",
+            "step"
           ]
         }
       },

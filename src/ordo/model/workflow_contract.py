@@ -59,7 +59,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "forbidden_features": ["value_expression_filters", "value_expression_builtins", "state_references"],
         },
         "runtime_value_surface": {
-            "allowed_roots": ["inputs", "state"],
+            "allowed_roots": ["inputs", "state", "step"],
             "allowed_builtins": ["format"],
             "allowed_filters": ["lower", "trim", "slug"],
         },

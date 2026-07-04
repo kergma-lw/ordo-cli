@@ -63,15 +63,14 @@ A good guard section should usually fit in a short top-to-bottom review window.
 
 If the conditions take a screen of repetitive structured boilerplate, the product is failing one of its core workflow goals even if the shape is technically machine-checkable.
 
-## Open pressure that guard expressions do not settle yet
+## Boundary pressure that guard expressions do not settle by themselves
 
 Guard expressions address compact policy declaration for execution preconditions.
 
 They do not by themselves settle later workflow control-flow questions such as:
 
 - step-level conditional execution;
-- registering step results for later use;
 - branching based on effectful step outcomes;
 - cross-step data flow semantics.
 
-These concerns should remain explicit future design work rather than being smuggled into guard expression semantics.
+These concerns should remain explicit separate workflow surfaces rather than being smuggled into guard expression semantics.

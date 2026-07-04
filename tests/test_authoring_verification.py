@@ -55,7 +55,7 @@ class AuthoringVerificationTest(unittest.TestCase):
 
         explanation = explain_workflow(
             repaired,
-            guard_probe=lambda _resolved, _workflow: OperationResult(status="ok", summary="clean", observations={"clean": True, "dirty_paths": []}),
+            guard_probe=lambda _resolved, _workflow: OperationResult(status="ok", summary="clean", outputs={"clean": True, "dirty_paths": []}),
             connector_provider=STANDARD_CONNECTOR_PROVIDER,
         )
 

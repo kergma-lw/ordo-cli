@@ -43,9 +43,9 @@ class PluginSdkSpikeTest(unittest.TestCase):
                 self.assertEqual(operation.name, "branch")
                 self.assertEqual(operation.kind, "probe")
                 self.assertEqual(result.status, "ok")
-                self.assertEqual(result.observations["value"], "feature/test")
+                self.assertEqual(result.outputs["value"], "feature/test")
                 self.assertEqual(result.raw["returncode"], 0)
-                self.assertEqual(result.observations["repository_root"], "/tmp/demo-repo")
+                self.assertEqual(result.outputs["repository_root"], "/tmp/demo-repo")
             finally:
                 sys.path.remove(tmp_dir)
                 self._clear_demo_modules()

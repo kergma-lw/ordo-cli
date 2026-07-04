@@ -289,7 +289,7 @@ def _evaluate_guard_expression(
             status="probe_failed",
             summary="Guard expression could not be evaluated safely",
             diagnostics=tuple(diagnostics),
-            observations={"guard": resolved_guard.expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.get("expr")},
+            outputs={"guard": resolved_guard.expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.get("expr")},
             raw={"cache_entries": len(cache), "trace": trace, "failure_kind": "probe_failed"},
         )
     passed = bool(value)
@@ -297,7 +297,7 @@ def _evaluate_guard_expression(
         status="ok" if passed else "guard_failed",
         summary="Guard expression evaluated successfully" if passed else "Guard expression evaluated false",
         diagnostics=tuple(diagnostics),
-        observations={"guard": resolved_guard.expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.get("expr")},
+        outputs={"guard": resolved_guard.expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.get("expr")},
         raw={"cache_entries": len(cache), "trace": trace, "failure_kind": "guard_failed" if not passed else None},
     )
 
@@ -354,7 +354,7 @@ def _evaluate_probe_reference(
         cache[cache_key] = ("probe_failed", None, result)
         return "probe_failed", None
 
-    value = _extract_probe_value(result.observations, probe_spec.fields)
+    value = _extract_probe_value(result.outputs, probe_spec.fields)
     if value is _MISSING:
         diagnostics.append(
             Diagnostic(
@@ -375,8 +375,8 @@ def _evaluate_probe_reference(
 _MISSING = object()
 
 
-def _extract_probe_value(observations: dict[str, JSONValue], fields: tuple[str, ...]) -> JSONValue | object:
-    current: JSONValue = observations
+def _extract_probe_value(outputs: dict[str, JSONValue], fields: tuple[str, ...]) -> JSONValue | object:
+    current: JSONValue = outputs
     if not fields:
         return current
     for field in fields:
@@ -391,7 +391,7 @@ def _build_guard_detail(reference: str, result: OperationResult) -> dict[str, ob
         "reference": reference,
         "status": result.status,
         "summary": result.summary,
-        "failed_subcondition": result.observations.get("failed_subcondition"),
+        "failed_subcondition": result.outputs.get("failed_subcondition"),
         "failure_kind": result.raw.get("failure_kind"),
         "trace": result.raw.get("trace", []),
     }

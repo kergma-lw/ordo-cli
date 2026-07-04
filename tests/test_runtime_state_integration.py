@@ -50,7 +50,7 @@ steps:
 
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(result.outputs["executed_steps"], ["remember-command", "run-command", "forget-command"])
-            self.assertEqual(result.operation_results[1].observations.get("stdout"), "integrated-state")
+            self.assertEqual(result.operation_results[1].outputs.get("stdout"), "integrated-state")
             with open(state_path, "r", encoding="utf-8") as handle:
                 persisted = json.load(handle)
             self.assertEqual(persisted["values"], {})

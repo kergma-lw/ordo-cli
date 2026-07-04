@@ -46,7 +46,7 @@ steps:
 
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(result.operation_results[0].status, "ok")
-            self.assertEqual(result.operation_results[1].observations.get("deleted"), True)
+            self.assertEqual(result.operation_results[1].outputs.get("deleted"), True)
             with open(state_path, "r", encoding="utf-8") as handle:
                 persisted = json.load(handle)
             self.assertEqual(persisted["values"], {})

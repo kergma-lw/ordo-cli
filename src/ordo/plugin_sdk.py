@@ -325,7 +325,7 @@ def adapt_outcome(outcome: OperationOutcome) -> OperationResult:
     return OperationResult(
         status=outcome.status,
         summary=outcome.summary,
-        observations=dict(outcome.outputs),
+        outputs=dict(outcome.outputs),
         diagnostics=tuple(
             RuntimeDiagnostic(
                 code=diagnostic.code,
@@ -343,7 +343,7 @@ def adapt_bootstrap(outcome: BootstrapOutcome) -> OperationResult:
     return OperationResult(
         status=outcome.status,
         summary=outcome.summary,
-        observations=dict(outcome.context),
+        outputs=dict(outcome.context),
         diagnostics=tuple(
             RuntimeDiagnostic(
                 code=diagnostic.code,
@@ -371,7 +371,7 @@ def _bootstrap_from_runtime_result(result: OperationResult) -> BootstrapOutcome:
             for diagnostic in result.diagnostics
         ),
         raw=dict(result.raw),
-        context=dict(result.observations),
+        context=dict(result.outputs),
     )
 
 
@@ -379,7 +379,7 @@ def _outcome_from_runtime_result(result: OperationResult) -> OperationOutcome:
     return OperationOutcome(
         status=result.status,
         summary=result.summary,
-        outputs=dict(result.observations),
+        outputs=dict(result.outputs),
         diagnostics=tuple(
             Diagnostic(
                 code=diagnostic.code,

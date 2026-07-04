@@ -9,7 +9,8 @@
 ## Allowed capability
 
 - A value expression may read declared workflow inputs.
-- A value expression may read runtime state through the documented `states...` read surface.
+- A value expression may read runtime state through the documented `state...` read surface.
+- A value expression may read prior registered step results through the documented `step...` read surface.
 - A value expression may combine multiple local values into one derived value.
 - A value expression may apply a closed set of deterministic built-in transforms.
 - Inline composition should use the pipe form `|` as the canonical compact authoring surface.
@@ -19,6 +20,7 @@
 
 - A value expression must never cause side effects.
 - A value expression must never call connector operations, whether action or probe.
+- A value expression must never read future step results.
 - A value expression must never encode workflow control flow such as branching, looping, or step selection.
 - A value expression must never duplicate guard or policy semantics as a general boolean language.
 - A value expression must never support user-defined functions, macros, operators, or workflow-defined extension hooks.

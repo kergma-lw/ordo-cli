@@ -52,7 +52,7 @@ class OperationResult:
 
     status: str
     summary: str | None = None
-    observations: JSONObject = field(default_factory=dict)
+    outputs: JSONObject = field(default_factory=dict)
     diagnostics: tuple[Diagnostic, ...] = ()
     raw: JSONObject = field(default_factory=dict)
 
@@ -62,7 +62,7 @@ class OperationResult:
         return {
             "status": self.status,
             "summary": self.summary,
-            "observations": dict(self.observations),
+            "outputs": dict(self.outputs),
             "diagnostics": [diagnostic.to_contract() for diagnostic in self.diagnostics],
             "raw": dict(self.raw),
         }

@@ -19,7 +19,7 @@ class ExplainModeTest(unittest.TestCase):
 
         def probe(resolved_guard, _workflow):
             if resolved_guard.reference == "git.branch":
-                return OperationResult(status="ok", observations={"value": "main"})
+                return OperationResult(status="ok", outputs={"value": "main"})
             return OperationResult(status="ok")
 
         result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)

@@ -87,7 +87,7 @@ class PlanModeTest(unittest.TestCase):
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
 
         def probe(resolved_guard, _workflow):
-            return OperationResult(status="ok", observations={"value": "main"})
+            return OperationResult(status="ok", outputs={"value": "main"})
 
         result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 

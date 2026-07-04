@@ -16,7 +16,7 @@ def execute_action(resolved_step, workflow):
 
 
 def evaluate_probe(resolved_guard, workflow):
-    """Evaluate a supported probe operation with structured observations."""
+    """Evaluate a supported probe operation with structured outputs."""
 
     handler = get_public_probe_handlers().get(resolved_guard.reference)
     if handler is None:

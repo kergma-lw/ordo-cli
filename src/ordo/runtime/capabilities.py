@@ -80,8 +80,8 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.step.state_set", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.state_delete", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.condition", status="unsupported", scope="workflow.step"),
-    CapabilitySpec(name="workflow.step.register", status="unsupported", scope="workflow.step"),
-    CapabilitySpec(name="workflow.step.outputs", status="unsupported", scope="workflow.step"),
+    CapabilitySpec(name="workflow.step.register", status="supported", scope="workflow.step"),
+    CapabilitySpec(name="workflow.step.outputs", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.branching", status="unsupported", scope="workflow"),
 )
 
@@ -89,13 +89,14 @@ EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
     ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "value_expression")),
     ExpressionRootSpec(name="probe", surfaces=("guard_expression",)),
     ExpressionRootSpec(name="state", surfaces=("value_expression",)),
+    ExpressionRootSpec(name="step", surfaces=("value_expression",)),
 )
 
 EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
     ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe")),
     ExpressionSurfaceSpec(
         name="value_expression",
-        roots=("inputs", "state"),
+        roots=("inputs", "state", "step"),
         filters=tuple(VALUE_EXPRESSION_FILTERS),
         builtins=tuple(VALUE_EXPRESSION_BUILTINS),
     ),
@@ -108,6 +109,13 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         surface="guard_expression",
         rule="State references are not allowed in guard expressions",
         reason="guards run before steps and only support input references and public probe references",
+    ),
+    NegativeRuleSpec(
+        name="guard_expression.no_step_root",
+        surface="guard_expression",
+        rule="Registered step references are not allowed in guard expressions",
+        reason="guards run before effectful step execution and therefore cannot depend on registered step results",
+        related_codes=("validation.workflow.guard_expr.step_ref",),
     ),
     NegativeRuleSpec(
         name="guard_expression.no_filters",
@@ -134,6 +142,20 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         rule="The with field is allowed only together with uses",
         reason="runtime value inputs belong to operation-call step form only",
         related_codes=("validation.workflow.step.with_without_uses",),
+    ),
+    NegativeRuleSpec(
+        name="workflow_step.register_requires_uses",
+        surface="workflow_step",
+        rule="The register field is allowed only together with uses",
+        reason="the MVP publishes registered step results only for operation-call steps",
+        related_codes=("validation.workflow.step.register_without_uses",),
+    ),
+    NegativeRuleSpec(
+        name="value_expression.step_refs_must_be_backward",
+        surface="value_expression",
+        rule="Registered step references may target only earlier steps in the same workflow",
+        reason="step-result reads are order-sensitive execution-local data flow rather than random access workflow state",
+        related_codes=("validation.workflow.step_ref.forward",),
     ),
     NegativeRuleSpec(
         name="state_set.single_target_entry",

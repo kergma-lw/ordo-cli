@@ -2,7 +2,7 @@
 
 ## Position
 
-Value expressions provide a compact workflow-owned surface for deriving values from local runtime-visible inputs.
+Value expressions provide a compact workflow-owned surface for deriving values from local runtime-visible inputs and prior registered step results.
 
 They sit between two existing surfaces:
 
@@ -16,6 +16,7 @@ They are intended for local shaping of values, not for orchestration, policy, or
 The initial model supports three author-facing forms inside `${...}`:
 
 - direct references such as `inputs.name`;
+- direct references to prior registered step results such as `step.issue.outputs.id`;
 - left-to-right filter pipelines using `|`;
 - root built-in calls such as `format(...)`.
 
@@ -23,11 +24,24 @@ Illustrative examples:
 
 ```yaml
 ${inputs.issue_ref}
-${states.task_state[inputs.issue_ref].branch}
+${state.task_state[inputs.issue_ref].branch}
+${step.issue.outputs.id}
 ${inputs.title | slug}
 ${inputs.title | trim | slug | truncate(60)}
 ${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)}
 ```
+
+## Expression roots
+
+The workflow-facing value-expression roots are:
+
+- `inputs...` for declared workflow inputs;
+- `state...` for persistent runtime state reads;
+- `step...` for prior registered step results.
+
+The `step...` root is execution-local and order-sensitive.
+
+It is not a persistent storage surface.
 
 ## Filter pipeline
 
@@ -131,3 +145,5 @@ Value expressions are not meant to become:
 - a general-purpose programming language;
 - a workflow-defined macro system;
 - an open-ended query or collection-transformation language.
+
+They also must not read future step results or smuggle step-result access into guard evaluation.

@@ -10,16 +10,16 @@ from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 def _blocked_probe(resolved, _workflow):
     if resolved.reference == "git.branch":
-        return OperationResult(status="ok", observations={"value": "main"})
+        return OperationResult(status="ok", outputs={"value": "main"})
     return OperationResult(status="guard_failed", summary="main branch")
 
 
 def _ok_probe(_resolved, _workflow):
-    return OperationResult(status="ok", summary="clean", observations={"clean": True, "dirty_paths": []})
+    return OperationResult(status="ok", summary="clean", outputs={"clean": True, "dirty_paths": []})
 
 
 def _ok_executor(_resolved, _workflow):
-    return OperationResult(status="ok", summary="inspected", observations={"issue": {"number": 1}})
+    return OperationResult(status="ok", summary="inspected", outputs={"issue": {"number": 1}})
 
 
 def _expr_blocked_probe(resolved, _workflow):
@@ -27,7 +27,7 @@ def _expr_blocked_probe(resolved, _workflow):
         return OperationResult(
             status="ok",
             summary="issue fetched",
-            observations={
+            outputs={
                 "number": 1,
                 "state": "DONE",
                 "title": "Demo issue",

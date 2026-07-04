@@ -165,6 +165,7 @@
 - An agent author must be able to predict whether a workflow is valid, resolvable, and likely executable from schema, examples, and connector contracts.
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
+- Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
 
 ## Product boundary
 
@@ -186,7 +187,8 @@
 ## Allowed capability
 
 - A value expression may read declared workflow inputs.
-- A value expression may read runtime state through the documented `states...` read surface.
+- A value expression may read runtime state through the documented `state...` read surface.
+- A value expression may read prior registered step results through the documented `step...` read surface.
 - A value expression may combine multiple local values into one derived value.
 - A value expression may apply a closed set of deterministic built-in transforms.
 - Inline composition should use the pipe form `|` as the canonical compact authoring surface.
@@ -196,6 +198,7 @@
 
 - A value expression must never cause side effects.
 - A value expression must never call connector operations, whether action or probe.
+- A value expression must never read future step results.
 - A value expression must never encode workflow control flow such as branching, looping, or step selection.
 - A value expression must never duplicate guard or policy semantics as a general boolean language.
 - A value expression must never support user-defined functions, macros, operators, or workflow-defined extension hooks.
@@ -965,18 +968,17 @@ A good guard section should usually fit in a short top-to-bottom review window.
 
 If the conditions take a screen of repetitive structured boilerplate, the product is failing one of its core workflow goals even if the shape is technically machine-checkable.
 
-## Open pressure that guard expressions do not settle yet
+## Boundary pressure that guard expressions do not settle by themselves
 
 Guard expressions address compact policy declaration for execution preconditions.
 
 They do not by themselves settle later workflow control-flow questions such as:
 
 - step-level conditional execution;
-- registering step results for later use;
 - branching based on effectful step outcomes;
 - cross-step data flow semantics.
 
-These concerns should remain explicit future design work rather than being smuggled into guard expression semantics.
+These concerns should remain explicit separate workflow surfaces rather than being smuggled into guard expression semantics.
 
 <!-- source: domain/boundaries.md -->
 
@@ -1133,6 +1135,7 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - A `Workflow` contains ordered `Guard` and `Step` entries.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` and a `Step` reference an `OperationRef`.
+- A `Step` may publish an execution-local registered result for later steps through a workflow-local `register` identifier.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
 - A `Profile` supplies reusable parameters or composition defaults.
 - An `Override` changes resolution explicitly, never silently.
@@ -1146,6 +1149,7 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - `Playbook` expresses project-local launch intent and resolution context.
 - `Workflow`, `Guard`, and `Step` express orchestration intent.
 - `StateNeed` expresses workflow-level need for persistent state without naming concrete project storage instances.
+- Registered step results express execution-local data flow, not persistent workflow state.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.
@@ -1354,7 +1358,7 @@ The entry must resolve to exactly one workflow file.
 
 ## Position
 
-Value expressions provide a compact workflow-owned surface for deriving values from local runtime-visible inputs.
+Value expressions provide a compact workflow-owned surface for deriving values from local runtime-visible inputs and prior registered step results.
 
 They sit between two existing surfaces:
 
@@ -1368,6 +1372,7 @@ They are intended for local shaping of values, not for orchestration, policy, or
 The initial model supports three author-facing forms inside `${...}`:
 
 - direct references such as `inputs.name`;
+- direct references to prior registered step results such as `step.issue.outputs.id`;
 - left-to-right filter pipelines using `|`;
 - root built-in calls such as `format(...)`.
 
@@ -1375,11 +1380,24 @@ Illustrative examples:
 
 ```yaml
 ${inputs.issue_ref}
-${states.task_state[inputs.issue_ref].branch}
+${state.task_state[inputs.issue_ref].branch}
+${step.issue.outputs.id}
 ${inputs.title | slug}
 ${inputs.title | trim | slug | truncate(60)}
 ${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)}
 ```
+
+## Expression roots
+
+The workflow-facing value-expression roots are:
+
+- `inputs...` for declared workflow inputs;
+- `state...` for persistent runtime state reads;
+- `step...` for prior registered step results.
+
+The `step...` root is execution-local and order-sensitive.
+
+It is not a persistent storage surface.
 
 ## Filter pipeline
 
@@ -1483,6 +1501,8 @@ Value expressions are not meant to become:
 - a general-purpose programming language;
 - a workflow-defined macro system;
 - an open-ended query or collection-transformation language.
+
+They also must not read future step results or smuggle step-result access into guard evaluation.
 
 <!-- source: model/workflow/guard-expressions.md -->
 

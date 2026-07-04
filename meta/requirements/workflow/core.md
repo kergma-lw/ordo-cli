@@ -9,6 +9,7 @@
 - An agent author must be able to predict whether a workflow is valid, resolvable, and likely executable from schema, examples, and connector contracts.
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
+- Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
 
 ## Product boundary
 
