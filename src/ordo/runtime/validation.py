@@ -17,6 +17,7 @@ from .state_paths import StatePathParseError, parse_state_path
 from .value_expressions import ValueExpressionParseError, parse_value_expression
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
+REGISTER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _field_names(items: list[JSONObject]) -> frozenset[str]:
@@ -140,6 +141,7 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
         return diagnostics
 
     seen_names: dict[str, tuple[str, ...]] = {}
+    seen_registers: dict[str, tuple[str, ...]] = {}
     for index, item in enumerate(value):
         path = ("steps", str(index))
         if not isinstance(item, dict):
@@ -174,6 +176,8 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
                 )
             )
 
+        diagnostics.extend(_validate_step_register(item, path=path, source=source, has_uses=has_uses))
+
         if has_state_set:
             diagnostics.extend(_require_object_field(item, "state_set", path=path + ("state_set",), source=source, required=True))
             diagnostics.extend(_validate_state_set_shape(item.get("state_set"), path=path + ("state_set",), source=source))
@@ -188,6 +192,70 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
             else:
                 seen_names[name] = path + ("name",)
 
+        register = item.get("register")
+        if isinstance(register, str) and register and has_uses and REGISTER_PATTERN.fullmatch(register):
+            if register in seen_registers:
+                diagnostics.append(
+                    _diagnostic(
+                        "validation.workflow.step.duplicate_register",
+                        f"Duplicate step register '{register}'",
+                        path + ("register",),
+                        source,
+                        first_seen_path=list(seen_registers[register]),
+                    )
+                )
+            else:
+                seen_registers[register] = path + ("register",)
+
+    return diagnostics
+
+
+def _validate_step_register(value: JSONObject, *, path: tuple[str, ...], source: str, has_uses: bool) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    register = value.get("register")
+    if register is None:
+        return diagnostics
+    if not has_uses:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.register_without_uses",
+                "Step field 'register' is allowed only together with 'uses'",
+                path + ("register",),
+                source,
+            )
+        )
+        return diagnostics
+    if not isinstance(register, str):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.register.type",
+                "Step field 'register' must be a string",
+                path + ("register",),
+                source,
+                actual_type=type(register).__name__,
+            )
+        )
+        return diagnostics
+    if not register:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.register.empty",
+                "Step field 'register' must not be empty",
+                path + ("register",),
+                source,
+            )
+        )
+        return diagnostics
+    if not REGISTER_PATTERN.fullmatch(register):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.register.pattern",
+                "Step register must match the stable workflow register pattern",
+                path + ("register",),
+                source,
+                pattern=REGISTER_PATTERN.pattern,
+            )
+        )
     return diagnostics
 
 

@@ -244,6 +244,64 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.duplicate_name")
 
+    def test_register_without_uses_fails(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: remember
+                    register: issue
+                    state_set:
+                      state.memory[inputs.issue].value: ok
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.register_without_uses")
+
+    def test_duplicate_register_names_fail(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    uses: gh.issue
+                    register: issue
+                  - name: comment
+                    uses: gh.issue.comment
+                    register: issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.duplicate_register")
+
+    def test_invalid_register_shape_fails(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    uses: gh.issue
+                    register: 7issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.register.pattern")
+
     def test_invalid_value_expression_syntax_in_step_input_fails_validation(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

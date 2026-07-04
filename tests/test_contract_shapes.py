@@ -18,6 +18,7 @@ class ContractShapeTest(unittest.TestCase):
                 Step(
                     name="inspect-issue",
                     operation=OperationRef("gh.issue", with_={"issue_ref": "repo#1"}),
+                    register="issue",
                 ),
             ),
         )
@@ -35,6 +36,7 @@ class ContractShapeTest(unittest.TestCase):
                         "name": "inspect-issue",
                         "uses": "gh.issue",
                         "with": {"issue_ref": "repo#1"},
+                        "register": "issue",
                     }
                 ],
             },
@@ -97,7 +99,7 @@ class ContractShapeTest(unittest.TestCase):
                 OperationResult(
                     status="guard_failed",
                     summary="Dirty worktree",
-                    observations={"dirty": True},
+                    outputs={"dirty": True},
                 ),
             ),
             failed_guard="git.worktree",

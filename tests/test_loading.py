@@ -22,6 +22,7 @@ class LoadingTest(unittest.TestCase):
                 steps:
                   - name: inspect
                     uses: gh.issue
+                    register: issue
                     with:
                       issue: repo#1
                 """
@@ -30,6 +31,7 @@ class LoadingTest(unittest.TestCase):
 
         self.assertIsInstance(workflow, Workflow)
         self.assertEqual(workflow.to_contract()["steps"][0]["uses"], "gh.issue")
+        self.assertEqual(workflow.to_contract()["steps"][0]["register"], "issue")
 
     def test_loads_expr_guard_into_typed_model(self) -> None:
         workflow = load_workflow_text(

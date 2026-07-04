@@ -40,7 +40,7 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "operation_call",
             "required_fields": ["name", "uses"],
-            "optional_fields": ["with"],
+            "optional_fields": ["with", "register"],
         },
         {
             "name": "state_set",

@@ -55,6 +55,7 @@ class Step:
     operation: OperationRef | None = None
     state_set: JSONObject | None = None
     state_delete: str | None = None
+    register: str | None = None
 
     def __post_init__(self) -> None:
         forms = (
@@ -69,7 +70,10 @@ class Step:
         """Return the stable JSON-shaped contract form."""
 
         if self.operation is not None:
-            return {"name": self.name, **self.operation.to_contract()}
+            contract = {"name": self.name, **self.operation.to_contract()}
+            if self.register is not None:
+                contract["register"] = self.register
+            return contract
         if self.state_set is not None:
             return {"name": self.name, "state_set": dict(self.state_set)}
         return {"name": self.name, "state_delete": self.state_delete}

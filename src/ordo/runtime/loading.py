@@ -160,6 +160,7 @@ def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:
         operation=_load_operation_ref(data, path=path, source=source) if has_uses else None,
         state_set=state_set,
         state_delete=state_delete,
+        register=_optional_string(data, "register", path=path + ("register",), source=source),
     )
 
 
@@ -266,6 +267,26 @@ def _require_string(
             details={"source": source, "actual_type": type(value).__name__},
         )
     return value
+
+
+def _optional_string(
+    data: JSONObject,
+    key: str,
+    *,
+    path: tuple[str, ...] | None = None,
+    source: str,
+) -> str | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    raise _load_error(
+        code=f"load.{key}.type",
+        message=f"Field '{key}' must be a string",
+        path=path or (key,),
+        details={"source": source, "actual_type": type(value).__name__},
+    )
 
 
 def _require_string_item(value: JSONValue, *, path: tuple[str, ...], source: str) -> str:
