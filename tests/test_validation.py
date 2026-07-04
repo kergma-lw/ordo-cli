@@ -302,6 +302,63 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.register.pattern")
 
+    def test_unknown_step_register_reference_fails(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: comment
+                    uses: gh.issue.comment
+                    with:
+                      issue_id: ${step.issue.outputs.id}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.unknown")
+
+    def test_forward_step_register_reference_fails(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: comment
+                    uses: gh.issue.comment
+                    with:
+                      issue_id: ${step.issue.outputs.id}
+                  - name: inspect
+                    uses: gh.issue
+                    register: issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.forward")
+
+    def test_guard_expression_rejects_registered_step_reference(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards:
+                  - step.issue.outputs.id == 1
+                steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.step_ref")
+
     def test_invalid_value_expression_syntax_in_step_input_fails_validation(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

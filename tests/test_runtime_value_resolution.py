@@ -2,9 +2,11 @@ import json
 import tempfile
 import unittest
 
+from ordo.model.runtime import OperationResult
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
 from ordo.runtime import execute_workflow, load_workflow_text
+from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -53,7 +55,7 @@ steps:
 
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(result.operation_results[0].status, "ok")
-            self.assertEqual(result.operation_results[0].observations.get("stdout"), "resolved-from-state")
+            self.assertEqual(result.operation_results[0].outputs.get("stdout"), "resolved-from-state")
 
     def test_execute_reports_missing_state_value_as_input_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -116,7 +118,7 @@ steps:
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.operation_results[0].status, "ok")
-        self.assertEqual(result.operation_results[0].observations.get("stdout"), "task/7-hello-world")
+        self.assertEqual(result.operation_results[0].outputs.get("stdout"), "task/7-hello-world")
 
     def test_execute_resolves_yaml_format_object_in_step_input(self) -> None:
         workflow = load_workflow_text(
@@ -148,7 +150,26 @@ steps:
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.operation_results[0].status, "ok")
-        self.assertEqual(result.operation_results[0].observations.get("stdout"), "task/7-hello-world")
+        self.assertEqual(result.operation_results[0].outputs.get("stdout"), "task/7-hello-world")
+
+    def test_resolve_runtime_value_reads_registered_step_outputs(self) -> None:
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nguards: []\nsteps: []\n")
+
+        value = resolve_runtime_value(
+            "${step.issue.outputs.id}",
+            workflow,
+            step_results={"issue": OperationResult(status="ok", summary="inspected", outputs={"id": 17})},
+        )
+
+        self.assertEqual(value, 17)
+
+    def test_resolve_runtime_value_reports_missing_registered_step(self) -> None:
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nguards: []\nsteps: []\n")
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value("${step.issue.outputs.id}", workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.step_missing")
 
 
 if __name__ == "__main__":

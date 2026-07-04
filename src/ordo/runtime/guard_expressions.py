@@ -478,6 +478,14 @@ class _SemanticValidator:
                 )
             return
 
+        if node.parts[0] == "step":
+            self._error(
+                "validation.workflow.guard_expr.step_ref",
+                "Registered step results are not allowed in guard expressions",
+                node,
+            )
+            return
+
         if len(node.parts) < 2:
             self._error(
                 "validation.workflow.guard_expr.reference_shape",

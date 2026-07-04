@@ -14,7 +14,7 @@ from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 from .guard_expressions import GuardExpressionParseError, parse_guard_expression, validate_parsed_guard_expression
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
-from .value_expressions import ValueExpressionParseError, parse_value_expression
+from .value_expressions import StepReferenceNode, ValueExpressionParseError, collect_step_references, parse_value_expression
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 REGISTER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -142,6 +142,14 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
 
     seen_names: dict[str, tuple[str, ...]] = {}
     seen_registers: dict[str, tuple[str, ...]] = {}
+    declared_registers = {
+        item["register"]: ("steps", str(index), "register")
+        for index, item in enumerate(value)
+        if isinstance(item, dict)
+        and "uses" in item
+        and isinstance(item.get("register"), str)
+        and REGISTER_PATTERN.fullmatch(item["register"])
+    }
     for index, item in enumerate(value):
         path = ("steps", str(index))
         if not isinstance(item, dict):
@@ -155,6 +163,8 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
         has_state_delete = "state_delete" in item
         form_count = sum((has_uses, has_state_set, has_state_delete))
 
+        prior_registers = {name: register_path for name, register_path in seen_registers.items()}
+
         if form_count != 1:
             diagnostics.append(
                 _diagnostic(
@@ -165,7 +175,16 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
                 )
             )
         elif has_uses:
-            diagnostics.extend(_validate_call(item, path=path, source=source, allowed_fields=STEP_ALLOWED_FIELDS))
+            diagnostics.extend(
+                _validate_call(
+                    item,
+                    path=path,
+                    source=source,
+                    allowed_fields=STEP_ALLOWED_FIELDS,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
         elif "with" in item:
             diagnostics.append(
                 _diagnostic(
@@ -180,7 +199,15 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
 
         if has_state_set:
             diagnostics.extend(_require_object_field(item, "state_set", path=path + ("state_set",), source=source, required=True))
-            diagnostics.extend(_validate_state_set_shape(item.get("state_set"), path=path + ("state_set",), source=source))
+            diagnostics.extend(
+                _validate_state_set_shape(
+                    item.get("state_set"),
+                    path=path + ("state_set",),
+                    source=source,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
         if has_state_delete:
             diagnostics.extend(_require_non_empty_string(item, "state_delete", path=path + ("state_delete",), source=source))
             diagnostics.extend(_validate_state_path_text(item.get("state_delete"), path=path + ("state_delete",), source=source))
@@ -265,6 +292,8 @@ def _validate_call(
     path: tuple[str, ...],
     source: str,
     allowed_fields: frozenset[str] = CALL_ALLOWED_FIELDS,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, dict):
@@ -278,11 +307,26 @@ def _validate_call(
     diagnostics.extend(_require_object_field(value, "with", path=path + ("with",), source=source, required=False))
     with_payload = value.get("with")
     if isinstance(with_payload, dict):
-        diagnostics.extend(_validate_runtime_value_surface(with_payload, path=path + ("with",), source=source))
+        diagnostics.extend(
+            _validate_runtime_value_surface(
+                with_payload,
+                path=path + ("with",),
+                source=source,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
+            )
+        )
     return diagnostics
 
 
-def _validate_state_set_shape(value: JSONValue | None, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+def _validate_state_set_shape(
+    value: JSONValue | None,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, dict):
         return diagnostics
@@ -311,22 +355,61 @@ def _validate_state_set_shape(value: JSONValue | None, *, path: tuple[str, ...],
         diagnostics.extend(_validate_state_path_text(key, path=path + (key,), source=source))
     for key, item in value.items():
         if isinstance(key, str):
-            diagnostics.extend(_validate_runtime_value_surface(item, path=path + (key,), source=source))
+            diagnostics.extend(
+                _validate_runtime_value_surface(
+                    item,
+                    path=path + (key,),
+                    source=source,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
     return diagnostics
 
 
-def _validate_runtime_value_surface(value: JSONValue | None, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+def _validate_runtime_value_surface(
+    value: JSONValue | None,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if _is_format_value_object(value):
-        diagnostics.extend(_validate_format_value_object(value, path=path, source=source))
+        diagnostics.extend(
+            _validate_format_value_object(
+                value,
+                path=path,
+                source=source,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
+            )
+        )
         return diagnostics
     if isinstance(value, list):
         for index, item in enumerate(value):
-            diagnostics.extend(_validate_runtime_value_surface(item, path=path + (str(index),), source=source))
+            diagnostics.extend(
+                _validate_runtime_value_surface(
+                    item,
+                    path=path + (str(index),),
+                    source=source,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
         return diagnostics
     if isinstance(value, dict):
         for key, item in value.items():
-            diagnostics.extend(_validate_runtime_value_surface(item, path=path + (str(key),), source=source))
+            diagnostics.extend(
+                _validate_runtime_value_surface(
+                    item,
+                    path=path + (str(key),),
+                    source=source,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
         return diagnostics
     if not isinstance(value, str):
         return diagnostics
@@ -334,9 +417,19 @@ def _validate_runtime_value_surface(value: JSONValue | None, *, path: tuple[str,
     if expression is None:
         return diagnostics
     try:
-        parse_value_expression(expression)
+        parsed = parse_value_expression(expression)
     except ValueExpressionParseError as exc:
         diagnostics.append(exc.to_diagnostic(path=path, source=source, expression=expression))
+        return diagnostics
+    diagnostics.extend(
+        _validate_step_references(
+            collect_step_references(parsed.root),
+            path=path,
+            source=source,
+            prior_registers={} if prior_registers is None else prior_registers,
+            declared_registers={} if declared_registers is None else declared_registers,
+        )
+    )
     return diagnostics
 
 
@@ -350,7 +443,14 @@ def _is_format_value_object(value: JSONValue | None) -> bool:
     return isinstance(value, dict) and "format" in value
 
 
-def _validate_format_value_object(value: JSONObject, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+def _validate_format_value_object(
+    value: JSONObject,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     allowed_fields = {"format", "args"}
     for key in value:
@@ -388,7 +488,63 @@ def _validate_format_value_object(value: JSONObject, *, path: tuple[str, ...], s
         )
         return diagnostics
     for index, item in enumerate(args):
-        diagnostics.extend(_validate_runtime_value_surface(item, path=path + ("args", str(index)), source=source))
+        diagnostics.extend(
+            _validate_runtime_value_surface(
+                item,
+                path=path + ("args", str(index)),
+                source=source,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
+            )
+        )
+    return diagnostics
+
+
+def _validate_step_references(
+    references: tuple[StepReferenceNode, ...],
+    *,
+    path: tuple[str, ...],
+    source: str,
+    prior_registers: dict[str, tuple[str, ...]],
+    declared_registers: dict[str, tuple[str, ...]],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    for reference in references:
+        if not reference.fields or reference.fields[0] not in {"status", "summary", "outputs"}:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step_ref.surface",
+                    "Registered step references must use status, summary, or outputs as the first field",
+                    path,
+                    source,
+                    register=reference.register,
+                    fields=list(reference.fields),
+                )
+            )
+            continue
+        if reference.register in prior_registers:
+            continue
+        if reference.register in declared_registers:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step_ref.forward",
+                    f"Registered step '{reference.register}' must be declared by an earlier step",
+                    path,
+                    source,
+                    register=reference.register,
+                    declared_at=list(declared_registers[reference.register]),
+                )
+            )
+            continue
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step_ref.unknown",
+                f"Registered step '{reference.register}' is not declared in this workflow",
+                path,
+                source,
+                register=reference.register,
+            )
+        )
     return diagnostics
 
 

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONScalar, JSONValue
+from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target, resolve_workflow_input_reference
@@ -50,6 +51,14 @@ class StateReferenceNode(ValueExpressionNode):
 
     state_role: str
     key_reference: tuple[str, ...]
+    fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class StepReferenceNode(ValueExpressionNode):
+    """Prior registered step result read such as ``step.issue.outputs.id``."""
+
+    register: str
     fields: tuple[str, ...] = ()
 
 
@@ -144,10 +153,15 @@ def parse_value_expression(expression: str) -> ParsedValueExpression:
     return ParsedValueExpression(source=expression, root=root)
 
 
-def evaluate_value_expression(parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:
+def evaluate_value_expression(
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult] | None = None,
+) -> JSONValue:
     """Evaluate a parsed value expression against workflow inputs and state."""
 
-    return _evaluate_node(parsed.root, parsed=parsed, workflow=workflow)
+    return _evaluate_node(parsed.root, parsed=parsed, workflow=workflow, step_results={} if step_results is None else step_results)
 
 
 class _Parser:
@@ -185,6 +199,8 @@ class _Parser:
             raise ValueExpressionParseError("Expected value-expression term", token.start, token.end)
         if self._peek_kind("IDENT", expected_text="state"):
             return self._parse_state_reference()
+        if self._peek_kind("IDENT", expected_text="step"):
+            return self._parse_step_reference()
         if self._peek_kind("IDENT") and self._peek_kind("LPAREN", offset=1):
             return self._parse_builtin_call()
         return self._parse_dotted_reference()
@@ -241,6 +257,20 @@ class _Parser:
             key_reference=key_reference.parts,
             fields=tuple(fields),
         )
+
+    def _parse_step_reference(self) -> StepReferenceNode:
+        start = self._consume("IDENT", "Expected 'step'")
+        self._consume("DOT", "Expected '.' after 'step'")
+        register = self._consume("IDENT", "Expected registered step identifier")
+        self._consume("DOT", "Expected '.' after registered step identifier")
+        field = self._consume("IDENT", "Expected registered step field")
+        fields = [field.text]
+        end = field.end
+        while self._match("DOT") is not None:
+            next_field = self._consume("IDENT", "Expected registered step field after '.'")
+            fields.append(next_field.text)
+            end = next_field.end
+        return StepReferenceNode(start=start.start, end=end, register=register.text, fields=tuple(fields))
 
     def _peek(self) -> _Token:
         return self._tokens[self._index]
@@ -336,20 +366,28 @@ def _tokenize(text: str) -> tuple[_Token, ...]:
     return tuple(tokens)
 
 
-def _evaluate_node(node: ValueExpressionNode, *, parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:
+def _evaluate_node(
+    node: ValueExpressionNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
     if isinstance(node, LiteralNode):
         return node.value
     if isinstance(node, ReferenceNode):
         return _resolve_input_reference(node.parts, workflow=workflow)
     if isinstance(node, StateReferenceNode):
         return _resolve_state_reference(node, parsed=parsed, workflow=workflow)
+    if isinstance(node, StepReferenceNode):
+        return _resolve_step_reference(node, parsed=parsed, step_results=step_results)
     if isinstance(node, PipelineNode):
-        value = _evaluate_node(node.source, parsed=parsed, workflow=workflow)
+        value = _evaluate_node(node.source, parsed=parsed, workflow=workflow, step_results=step_results)
         for filter_node in node.filters:
             value = _apply_filter(filter_node, value, parsed=parsed)
         return value
     if isinstance(node, BuiltinCallNode):
-        return _evaluate_builtin_call(node, parsed=parsed, workflow=workflow)
+        return _evaluate_builtin_call(node, parsed=parsed, workflow=workflow, step_results=step_results)
     raise ValueExpressionEvaluationError(
         code="runtime.value.expression_invalid",
         message="Value expression node is not evaluable",
@@ -404,6 +442,26 @@ def _resolve_state_reference(node: StateReferenceNode, *, parsed: ParsedValueExp
     return value
 
 
+def _resolve_step_reference(node: StepReferenceNode, *, parsed: ParsedValueExpression, step_results: dict[str, OperationResult]) -> JSONValue:
+    result = step_results.get(node.register)
+    if result is None:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.step_missing",
+            message=f"Registered step '{node.register}' is not available",
+            details={"expression": parsed.source, "register": node.register},
+        )
+    current: JSONValue = {"status": result.status, "summary": result.summary, "outputs": result.outputs}
+    for field in node.fields:
+        if not isinstance(current, dict) or field not in current:
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.step_field_missing",
+                message=f"Registered step field '{field}' is not available",
+                details={"expression": parsed.source, "register": node.register, "fields": list(node.fields)},
+            )
+        current = current[field]
+    return current
+
+
 def _apply_filter(filter_node: FilterApplicationNode, value: JSONValue, *, parsed: ParsedValueExpression) -> JSONValue:
     spec = VALUE_EXPRESSION_FILTERS.get(filter_node.name)
     if spec is not None:
@@ -415,10 +473,16 @@ def _apply_filter(filter_node: FilterApplicationNode, value: JSONValue, *, parse
     )
 
 
-def _evaluate_builtin_call(node: BuiltinCallNode, *, parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:
+def _evaluate_builtin_call(
+    node: BuiltinCallNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
     spec = VALUE_EXPRESSION_BUILTINS.get(node.name)
     if spec is not None:
-        return spec.handler(node, parsed=parsed, workflow=workflow)
+        return spec.handler(node, parsed=parsed, workflow=workflow, step_results=step_results)
     raise ValueExpressionEvaluationError(
         code="runtime.value.expression_builtin_unsupported",
         message=f"Built-in value expression '{node.name}' is not supported yet",
@@ -426,21 +490,27 @@ def _evaluate_builtin_call(node: BuiltinCallNode, *, parsed: ParsedValueExpressi
     )
 
 
-def _evaluate_format_call(node: BuiltinCallNode, *, parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:
+def _evaluate_format_call(
+    node: BuiltinCallNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
     if not node.arguments:
         raise ValueExpressionEvaluationError(
             code="runtime.value.format_args_invalid",
             message="Built-in value expression 'format' requires a template argument",
             details={"expression": parsed.source, "builtin": node.name},
         )
-    template = _evaluate_node(node.arguments[0], parsed=parsed, workflow=workflow)
+    template = _evaluate_node(node.arguments[0], parsed=parsed, workflow=workflow, step_results=step_results)
     if not isinstance(template, str):
         raise ValueExpressionEvaluationError(
             code="runtime.value.format_template_invalid",
             message="Built-in value expression 'format' requires a string template",
             details={"expression": parsed.source, "builtin": node.name, "actual_type": type(template).__name__},
         )
-    values = tuple(_evaluate_node(argument, parsed=parsed, workflow=workflow) for argument in node.arguments[1:])
+    values = tuple(_evaluate_node(argument, parsed=parsed, workflow=workflow, step_results=step_results) for argument in node.arguments[1:])
     placeholder_count = template.count("{}")
     if placeholder_count != len(values):
         raise ValueExpressionEvaluationError(
@@ -491,6 +561,29 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(
     ValueExpressionBuiltinSpec(name="format", handler=_evaluate_format_call),
 )
+
+
+def collect_step_references(node: ValueExpressionNode) -> tuple[StepReferenceNode, ...]:
+    """Collect registered step-result references from a parsed value-expression tree."""
+
+    refs: list[StepReferenceNode] = []
+
+    def visit(current: ValueExpressionNode) -> None:
+        if isinstance(current, StepReferenceNode):
+            refs.append(current)
+            return
+        if isinstance(current, PipelineNode):
+            visit(current.source)
+            for filter_node in current.filters:
+                for argument in filter_node.arguments:
+                    visit(argument)
+            return
+        if isinstance(current, BuiltinCallNode):
+            for argument in current.arguments:
+                visit(argument)
+
+    visit(node)
+    return tuple(refs)
 
 
 def _coerce_format_value(value: JSONValue) -> JSONScalar:
