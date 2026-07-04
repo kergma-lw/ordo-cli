@@ -14,7 +14,19 @@ from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 from .guard_expressions import GuardExpressionParseError, parse_guard_expression, validate_parsed_guard_expression
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
-from .value_expressions import StepReferenceNode, ValueExpressionParseError, collect_step_references, parse_value_expression
+from .value_expressions import (
+    BuiltinCallNode,
+    FilterApplicationNode,
+    LiteralNode,
+    PipelineNode,
+    ReferenceNode,
+    StateReferenceNode,
+    StepReferenceNode,
+    ValueExpressionNode,
+    ValueExpressionParseError,
+    collect_step_references,
+    parse_value_expression,
+)
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 REGISTER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -195,6 +207,15 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
                 )
             )
 
+        diagnostics.extend(
+            _validate_step_condition(
+                item,
+                path=path,
+                source=source,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
+            )
+        )
         diagnostics.extend(_validate_step_register(item, path=path, source=source, has_uses=has_uses))
 
         if has_state_set:
@@ -234,6 +255,68 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
             else:
                 seen_registers[register] = path + ("register",)
 
+    return diagnostics
+
+
+def _validate_step_condition(
+    value: JSONObject,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    condition = value.get("if")
+    if condition is None:
+        return diagnostics
+    condition_path = path + ("if",)
+    if not isinstance(condition, str):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.if.type",
+                "Step field 'if' must be a string-form value expression",
+                condition_path,
+                source,
+                actual_type=type(condition).__name__,
+            )
+        )
+        return diagnostics
+    expression = _extract_runtime_value_expression(condition)
+    if expression is None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.if.expression",
+                "Step field 'if' must use the '${...}' value-expression form",
+                condition_path,
+                source,
+            )
+        )
+        return diagnostics
+    if value.get("register") is not None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.if_with_register",
+                "Step fields 'if' and 'register' cannot be used together in the MVP",
+                condition_path,
+                source,
+            )
+        )
+    try:
+        parsed = parse_value_expression(expression)
+    except ValueExpressionParseError as exc:
+        diagnostics.append(exc.to_diagnostic(path=condition_path, source=source, expression=expression))
+        return diagnostics
+    diagnostics.extend(
+        _validate_step_references(
+            collect_step_references(parsed.root),
+            path=condition_path,
+            source=source,
+            prior_registers={} if prior_registers is None else prior_registers,
+            declared_registers={} if declared_registers is None else declared_registers,
+        )
+    )
+    diagnostics.extend(_validate_step_condition_type(parsed.root, path=condition_path, source=source))
     return diagnostics
 
 
@@ -437,6 +520,124 @@ def _extract_runtime_value_expression(value: str) -> str | None:
     if value.startswith("${") and value.endswith("}") and len(value) >= 4:
         return value[2:-1]
     return None
+
+
+def _validate_step_condition_type(node: ValueExpressionNode, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    inferred, diagnostics = _infer_value_expression_type(node, path=path, source=source)
+    if inferred not in {"boolean", "unknown"}:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.if_expr.result_type",
+                "Step condition must evaluate to a boolean value",
+                path,
+                source,
+                inferred_type=inferred,
+            )
+        )
+    return diagnostics
+
+
+def _infer_value_expression_type(
+    node: ValueExpressionNode,
+    *,
+    path: tuple[str, ...],
+    source: str,
+) -> tuple[str, list[Diagnostic]]:
+    diagnostics: list[Diagnostic] = []
+    if isinstance(node, LiteralNode):
+        if isinstance(node.value, bool):
+            return "boolean", diagnostics
+        if isinstance(node.value, str):
+            return "string", diagnostics
+        if isinstance(node.value, int):
+            return "integer", diagnostics
+        if node.value is None:
+            return "null", diagnostics
+        return "unknown", diagnostics
+    if isinstance(node, (ReferenceNode, StateReferenceNode, StepReferenceNode)):
+        return "unknown", diagnostics
+    if isinstance(node, BuiltinCallNode):
+        if node.name == "format":
+            return "string", diagnostics
+        return "unknown", diagnostics
+    if isinstance(node, PipelineNode):
+        current_type, diagnostics = _infer_value_expression_type(node.source, path=path, source=source)
+        for filter_node in node.filters:
+            current_type, filter_diagnostics = _infer_filter_result_type(filter_node, input_type=current_type, path=path, source=source)
+            diagnostics.extend(filter_diagnostics)
+        return current_type, diagnostics
+    return "unknown", diagnostics
+
+
+def _infer_filter_result_type(
+    filter_node: FilterApplicationNode,
+    *,
+    input_type: str,
+    path: tuple[str, ...],
+    source: str,
+) -> tuple[str, list[Diagnostic]]:
+    diagnostics: list[Diagnostic] = []
+    if filter_node.name in {"lower", "trim", "slug"}:
+        if filter_node.arguments:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.if_expr.filter_args",
+                    f"Filter '{filter_node.name}' does not accept arguments",
+                    path,
+                    source,
+                    filter=filter_node.name,
+                    arguments=len(filter_node.arguments),
+                )
+            )
+        if input_type not in {"string", "unknown"}:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.if_expr.filter_type",
+                    f"Filter '{filter_node.name}' requires a string input",
+                    path,
+                    source,
+                    filter=filter_node.name,
+                    actual_type=input_type,
+                )
+            )
+        return "string", diagnostics
+    if filter_node.name in {"eq", "ne"}:
+        if len(filter_node.arguments) != 1:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.if_expr.filter_args",
+                    f"Filter '{filter_node.name}' requires exactly one argument",
+                    path,
+                    source,
+                    filter=filter_node.name,
+                    arguments=len(filter_node.arguments),
+                )
+            )
+        return "boolean", diagnostics
+    if filter_node.name == "not":
+        if filter_node.arguments:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.if_expr.filter_args",
+                    "Filter 'not' does not accept arguments",
+                    path,
+                    source,
+                    filter="not",
+                    arguments=len(filter_node.arguments),
+                )
+            )
+        if input_type not in {"boolean", "unknown"}:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.if_expr.not_type",
+                    "Filter 'not' requires a boolean input",
+                    path,
+                    source,
+                    actual_type=input_type,
+                )
+            )
+        return "boolean", diagnostics
+    return "unknown", diagnostics
 
 
 def _is_format_value_object(value: JSONValue | None) -> bool:

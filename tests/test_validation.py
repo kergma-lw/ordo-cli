@@ -419,6 +419,118 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.format.args_type")
 
+    def test_step_if_must_use_expression_envelope(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    if: inputs.enabled
+                    uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if.expression")
+
+    def test_step_if_rejects_yaml_boolean(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    if: true
+                    uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if.type")
+
+    def test_step_if_and_register_cannot_be_used_together(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    if: ${inputs.enabled}
+                    uses: gh.issue
+                    register: issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_with_register")
+
+    def test_forward_step_register_reference_in_if_fails(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: comment
+                    if: ${step.issue.outputs.open}
+                    uses: gh.issue.comment
+                  - name: inspect
+                    uses: gh.issue
+                    register: issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.forward")
+
+    def test_step_if_rejects_statically_non_boolean_result(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    if: ${format("hello")}
+                    uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.result_type")
+
+    def test_step_if_rejects_statically_non_boolean_not_input(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                guards: []
+                steps:
+                  - name: inspect
+                    if: ${format("hello") | not}
+                    uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.not_type")
+
     def test_profile_unknown_field_fails(self) -> None:
         report = validate_profile_text(
             textwrap.dedent(
