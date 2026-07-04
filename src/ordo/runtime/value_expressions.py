@@ -442,7 +442,7 @@ def _resolve_state_reference(node: StateReferenceNode, *, parsed: ParsedValueExp
     return value
 
 
-def _resolve_step_reference(node: StepReferenceNode, *, parsed: ParsedValueExpression, step_results: dict[str, OperationResult]) -> JSONValue:
+def _resolve_step_reference(node: StepReferenceNode, *, parsed: ParsedValueExpression, step_results: dict[str, OperationResult | JSONObject]) -> JSONValue:
     result = step_results.get(node.register)
     if result is None:
         raise ValueExpressionEvaluationError(
@@ -450,7 +450,10 @@ def _resolve_step_reference(node: StepReferenceNode, *, parsed: ParsedValueExpre
             message=f"Registered step '{node.register}' is not available",
             details={"expression": parsed.source, "register": node.register},
         )
-    current: JSONValue = {"status": result.status, "summary": result.summary, "outputs": result.outputs}
+    if isinstance(result, OperationResult):
+        current: JSONValue = {"status": result.status, "summary": result.summary, "outputs": result.outputs}
+    else:
+        current = result
     for field in node.fields:
         if not isinstance(current, dict) or field not in current:
             raise ValueExpressionEvaluationError(

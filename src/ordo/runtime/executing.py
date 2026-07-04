@@ -59,12 +59,19 @@ def execute_workflow(
     operation_results: list[OperationResult] = list(check_result.operation_results)
     executed_steps: list[str] = []
     skipped_steps: list[str] = []
+    effective_workflow.step_results.clear()
 
     for step, resolved_step in zip(effective_workflow.steps, resolution.resolved_steps, strict=False):
         if isinstance(resolved_step, ResolvedBuiltinStep):
             result = _execute_builtin_state_step(step, effective_workflow)
         else:
             result = executor(resolved_step, effective_workflow)
+        if step.register is not None:
+            effective_workflow.step_results[step.register] = {
+                "status": result.status,
+                "summary": result.summary,
+                "outputs": dict(result.outputs),
+            }
         operation_results.append(result)
         diagnostics.extend(result.diagnostics)
 
@@ -137,7 +144,7 @@ def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow
     return OperationResult(
         status="ok",
         summary=f"Stored runtime state for step '{step_name}'",
-        observations={
+        outputs={
             "state": target.location.name,
             "key": target.key,
             "fields": list(target.fields),
@@ -158,7 +165,7 @@ def _execute_state_delete(step_name: str, target_expr: str, workflow: Workflow) 
             if deleted
             else f"Runtime state target for step '{step_name}' was already absent"
         ),
-        observations={
+        outputs={
             "state": target.location.name,
             "key": target.key,
             "fields": list(target.fields),

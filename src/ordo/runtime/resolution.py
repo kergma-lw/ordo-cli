@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from ordo.model.connector import Connector, ConnectorRegistry, OperationContract
 from ordo.model.diagnostic import Diagnostic
-from ordo.model.json import JSONValue
+from ordo.model.json import JSONObject, JSONValue
 from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
@@ -23,6 +23,7 @@ class ResolvedOperation:
     connector_namespace: str
     operation: OperationContract
     source: str
+    declared_with: JSONObject | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +127,7 @@ def resolve_workflow_references(
             path=("guards", str(index), "uses"),
             public_registry=public_registry,
             local_registry=local_registry,
+            declared_with=guard.operation.with_,
         )
         if isinstance(resolved, Diagnostic):
             diagnostics.append(resolved)
@@ -144,6 +146,7 @@ def resolve_workflow_references(
             path=("steps", str(index), "uses"),
             public_registry=public_registry,
             local_registry=local_registry,
+            declared_with=step.operation.with_,
         )
         if isinstance(resolved, Diagnostic):
             diagnostics.append(resolved)
@@ -317,6 +320,7 @@ def _resolve_reference(
     path: tuple[str, ...],
     public_registry: ConnectorRegistry,
     local_registry: ConnectorRegistry,
+    declared_with: JSONObject | None = None,
 ) -> ResolvedOperation | Diagnostic:
     public_operation = public_registry.get_operation(reference)
     local_operation = local_registry.get_operation(reference)
@@ -336,6 +340,7 @@ def _resolve_reference(
             connector_namespace=namespace,
             operation=public_operation,
             source="public",
+            declared_with={} if declared_with is None else dict(declared_with),
         )
 
     if local_operation is not None:
@@ -345,6 +350,7 @@ def _resolve_reference(
             connector_namespace=namespace,
             operation=local_operation,
             source="local",
+            declared_with={} if declared_with is None else dict(declared_with),
         )
 
     return _diagnostic(

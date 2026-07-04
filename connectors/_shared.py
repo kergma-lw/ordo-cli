@@ -20,6 +20,18 @@ if TYPE_CHECKING:
 def require_input(workflow: Workflow, resolved: "ResolvedOperation | ResolvedExpressionProbe", key: str) -> JSONValue | OperationResult:
     value = resolved.operation.inputs.get(key)
     _ = value
+    candidate_inputs = getattr(resolved, "declared_with", None)
+    if isinstance(candidate_inputs, dict) and key in candidate_inputs:
+        candidate = candidate_inputs[key]
+        if candidate is not None:
+            try:
+                return resolve_runtime_value(candidate, workflow)
+            except ValueResolutionError as exc:
+                return OperationResult(
+                    status="input_error",
+                    summary=exc.message,
+                    diagnostics=(exc.to_diagnostic(),),
+                )
     for guard in workflow.guards:
         if guard.operation is not None and guard.operation.uses == resolved.reference and key in guard.operation.with_:
             candidate = guard.operation.with_[key]
@@ -127,7 +139,7 @@ def run_command(command: Sequence[str], *, reference: str) -> OperationResult:
     return OperationResult(
         status=status,
         summary="Command completed successfully" if completed.returncode == 0 else "Command returned non-zero exit status",
-        observations={"returncode": completed.returncode},
+        outputs={"returncode": completed.returncode},
         diagnostics=diagnostics,
         raw={"stdout": completed.stdout, "stderr": completed.stderr},
     )

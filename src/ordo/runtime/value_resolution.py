@@ -30,10 +30,10 @@ class ValueResolutionError(Exception):
         )
 
 
-def resolve_runtime_value(value: JSONValue, workflow: Workflow, *, step_results: dict[str, OperationResult] | None = None) -> JSONValue:
+def resolve_runtime_value(value: JSONValue, workflow: Workflow, *, step_results: dict[str, OperationResult | JSONObject] | None = None) -> JSONValue:
     """Resolve runtime value expressions against workflow inputs and runtime state."""
 
-    resolved_step_results = {} if step_results is None else step_results
+    resolved_step_results = dict(workflow.step_results) if step_results is None else step_results
     if _is_format_object(value):
         return _resolve_format_object(value, workflow, step_results=resolved_step_results)
     if isinstance(value, list):
@@ -70,7 +70,7 @@ def _is_format_object(value: JSONValue) -> bool:
     return isinstance(value, dict) and "format" in value and set(value.keys()) <= {"format", "args"}
 
 
-def _resolve_format_object(value: JSONObject, workflow: Workflow, *, step_results: dict[str, OperationResult]) -> JSONValue:
+def _resolve_format_object(value: JSONObject, workflow: Workflow, *, step_results: dict[str, OperationResult | JSONObject]) -> JSONValue:
     template = value.get("format")
     if not isinstance(template, str):
         return value

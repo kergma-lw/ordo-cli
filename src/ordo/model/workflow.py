@@ -89,6 +89,7 @@ class Workflow:
     state_needs: JSONObject = field(default_factory=dict)
     state_bindings: JSONObject = field(default_factory=dict)
     states: JSONObject = field(default_factory=dict)
+    step_results: JSONObject = field(default_factory=dict)
     guards: tuple[Guard, ...] = ()
     steps: tuple[Step, ...] = ()
 

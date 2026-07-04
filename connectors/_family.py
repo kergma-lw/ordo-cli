@@ -244,6 +244,7 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
                 connector_namespace=namespace,
                 operation=operation,
                 source=getattr(resolved, "source", "public"),
+                declared_with={},
             )
             return _outcome_from_runtime_result(dependency_handler(dependency_resolved, workflow))
 
@@ -253,7 +254,7 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
                 bootstrap_result,
                 namespace=namespace,
                 bootstrap_status=bootstrap_result.status,
-                bootstrap_context=bootstrap_result.observations,
+                bootstrap_context=bootstrap_result.outputs,
             )
 
         ctx = OperationContext(
@@ -267,14 +268,14 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
                 adapt_outcome(published.handler(ctx)),
                 namespace=namespace,
                 bootstrap_status=bootstrap_result.status,
-                bootstrap_context=bootstrap_result.observations,
+                bootstrap_context=bootstrap_result.outputs,
             )
         except MappedOutcomeError as exc:
             return _attach_bootstrap_metadata(
                 adapt_outcome(exc.outcome),
                 namespace=namespace,
                 bootstrap_status=bootstrap_result.status,
-                bootstrap_context=bootstrap_result.observations,
+                bootstrap_context=bootstrap_result.outputs,
             )
 
     return handler
@@ -296,7 +297,7 @@ def _attach_bootstrap_metadata(
     return OperationResult(
         status=result.status,
         summary=result.summary,
-        observations=dict(result.observations),
+        outputs=dict(result.outputs),
         diagnostics=result.diagnostics,
         raw=raw,
     )
