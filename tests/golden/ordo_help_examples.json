@@ -1,0 +1,48 @@
+{
+  "document_kind": "examples_catalog",
+  "examples": [
+    {
+      "name": "minimal",
+      "path": "examples/minimal.yaml",
+      "related_topics": [
+        "overview",
+        "model",
+        "operations"
+      ],
+      "shows": [
+        "minimal_workflow",
+        "public_operation_composition"
+      ],
+      "verified": true
+    },
+    {
+      "name": "inspect-issue",
+      "path": "examples/inspect-issue.yaml",
+      "related_topics": [
+        "capabilities",
+        "model",
+        "operations"
+      ],
+      "shows": [
+        "guard_probe_usage",
+        "blocked_before_execution"
+      ],
+      "verified": true
+    },
+    {
+      "name": "open-task-from-gitx",
+      "path": "examples/open-task-from-gitx.yaml",
+      "related_topics": [
+        "capabilities",
+        "model",
+        "operations"
+      ],
+      "shows": [
+        "multi_step_workflow",
+        "state_updates",
+        "shell_fallback"
+      ],
+      "verified": true
+    }
+  ]
+}

@@ -13,7 +13,7 @@
 
 ## Public topic vocabulary
 
-- The initial public top-level vocabulary must include `overview`, `capabilities`, `model`, and `operations`.
+- The initial public top-level vocabulary must include `overview`, `capabilities`, `model`, `operations`, and `examples`.
 - The initial focused lookup vocabulary must include `operation <reference>`.
 - The public vocabulary may expose `describe <topic>` and `search <query>` as discovery aids, but those surfaces must resolve back to the same stable topic model.
 - Internal implementation names such as `workflow_contract` or `pattern_hints` must not be the primary public vocabulary for bootstrap.

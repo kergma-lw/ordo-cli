@@ -9,6 +9,7 @@ from ordo.model.json import JSONValue
 
 from .capabilities import describe_capabilities
 from .errors import describe_errors
+from .examples import describe_examples_catalog
 from .operations import describe_operations
 from .patterns import describe_pattern_hints
 from .playbook import describe_playbook_contract
@@ -30,6 +31,7 @@ class PublishedIntrospectionSection:
 PUBLISHED_INTROSPECTION_SECTIONS: tuple[PublishedIntrospectionSection, ...] = (
     PublishedIntrospectionSection(name="capabilities", producer_name="describe_capabilities", producer=describe_capabilities),
     PublishedIntrospectionSection(name="errors", producer_name="describe_errors", producer=describe_errors),
+    PublishedIntrospectionSection(name="examples_catalog", producer_name="describe_examples_catalog", producer=describe_examples_catalog),
     PublishedIntrospectionSection(name="operations", producer_name="describe_operations", producer=describe_operations),
     PublishedIntrospectionSection(name="pattern_hints", producer_name="describe_pattern_hints", producer=describe_pattern_hints),
     PublishedIntrospectionSection(name="playbook_contract", producer_name="describe_playbook_contract", producer=describe_playbook_contract),

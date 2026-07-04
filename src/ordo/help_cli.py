@@ -7,7 +7,7 @@ import json
 import sys
 
 from ordo.connectors import get_public_connector_registry
-from ordo.introspection import describe_capabilities, describe_operations, describe_playbook_contract, describe_profile_contract, describe_state_contract, describe_system, describe_workflow_contract
+from ordo.introspection import describe_capabilities, describe_examples_catalog, describe_operations, describe_playbook_contract, describe_profile_contract, describe_state_contract, describe_system, describe_workflow_contract
 from ordo.model.runtime import Mode, RuntimeStatus
 from ordo.model.json import JSONObject
 
@@ -17,18 +17,20 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "capabilities", "summary": "Inspect supported and unsupported surfaces"},
     {"name": "model", "summary": "Inspect the main authoring contracts"},
     {"name": "operations", "summary": "Inspect the public connector catalog"},
+    {"name": "examples", "summary": "Inspect verified repository examples"},
     {"name": "operation", "summary": "Inspect one public operation by reference"},
     {"name": "describe", "summary": "Resolve a supported public topic"},
     {"name": "search", "summary": "Search topics and operation references"},
 )
 
-DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "capabilities", "model", "operations")
+DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "capabilities", "model", "operations", "examples")
 
 RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
     {"command": "ordo-help overview --json", "purpose": "Get the Ordo world map"},
     {"command": "ordo-help capabilities --json", "purpose": "Learn capability boundaries"},
     {"command": "ordo-help model --json", "purpose": "Learn the main DSL surfaces"},
     {"command": "ordo-help operations --json", "purpose": "Inspect the public operation catalog"},
+    {"command": "ordo-help examples --json", "purpose": "Inspect verified repository examples"},
 )
 
 
@@ -48,6 +50,7 @@ def build_root_response() -> JSONObject:
             "ordo-help capabilities --json",
             "ordo-help model --json",
             "ordo-help operations --json",
+            "ordo-help examples --json",
         ],
         "introspection": {
             "version": system["introspection_version"],
@@ -198,12 +201,14 @@ def render_root_text() -> str:
             "2. ordo-help capabilities --json",
             "3. ordo-help model --json",
             "4. ordo-help operations --json",
+            "5. ordo-help examples --json",
             "",
             "Next command examples:",
             "- ordo-help overview --json",
             "- ordo-help capabilities --json",
             "- ordo-help model --json",
             "- ordo-help operations --json",
+            "- ordo-help examples --json",
         ]
     )
     return "\n".join(lines)
@@ -266,6 +271,16 @@ def render_operations_text(payload: JSONObject) -> str:
     for connector in payload["connectors"]:
         operation_names = ", ".join(operation["name"] for operation in connector["operations"])
         lines.append(f"- {connector['namespace']}: {operation_names}")
+    return "\n".join(lines)
+
+
+def render_examples_text(payload: JSONObject) -> str:
+    """Return the text verified-examples surface."""
+
+    lines = ["examples", "Verified repository examples published for discovery.", ""]
+    for example in payload["examples"]:
+        shows = ", ".join(example["shows"])
+        lines.append(f"- {example['name']}: {example['path']} ({shows})")
     return "\n".join(lines)
 
 
@@ -362,6 +377,8 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
         return build_model_response(), render_model_text
     if topic == "operations":
         return describe_operations(), render_operations_text
+    if topic == "examples":
+        return describe_examples_catalog(), render_examples_text
     return None
 
 
@@ -384,6 +401,9 @@ def main(argv: list[str] | None = None) -> int:
 
     operations_parser = subparsers.add_parser("operations", add_help=False)
     operations_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    examples_parser = subparsers.add_parser("examples", add_help=False)
+    examples_parser.add_argument("--json", action="store_true", dest="as_json")
 
     operation_parser = subparsers.add_parser("operation", add_help=False)
     operation_parser.add_argument("reference")
@@ -418,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text)
     if parsed.command == "operations":
         return _emit_payload(describe_operations(), as_json=as_json, renderer=render_operations_text)
+    if parsed.command == "examples":
+        return _emit_payload(describe_examples_catalog(), as_json=as_json, renderer=render_examples_text)
     if parsed.command == "operation":
         payload = build_operation_response(parsed.reference)
         if payload is None:

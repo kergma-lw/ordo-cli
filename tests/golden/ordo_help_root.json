@@ -3,13 +3,15 @@
     "ordo-help overview --json",
     "ordo-help capabilities --json",
     "ordo-help model --json",
-    "ordo-help operations --json"
+    "ordo-help operations --json",
+    "ordo-help examples --json"
   ],
   "introspection": {
     "entrypoint": "describe_system",
     "published_sections": [
       "capabilities",
       "errors",
+      "examples_catalog",
       "operations",
       "pattern_hints",
       "playbook_contract",
@@ -41,6 +43,10 @@
     {
       "command": "ordo-help operations --json",
       "purpose": "Inspect the public operation catalog"
+    },
+    {
+      "command": "ordo-help examples --json",
+      "purpose": "Inspect verified repository examples"
     }
   ],
   "tool_name": "ordo-help",
@@ -60,6 +66,10 @@
     {
       "name": "operations",
       "summary": "Inspect the public connector catalog"
+    },
+    {
+      "name": "examples",
+      "summary": "Inspect verified repository examples"
     },
     {
       "name": "operation",
