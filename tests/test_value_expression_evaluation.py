@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 
+from ordo.model.workflow import Workflow
 from ordo.runtime import load_workflow_text
 from ordo.runtime.value_expressions import ValueExpressionEvaluationError, evaluate_value_expression, parse_value_expression
 
@@ -37,14 +38,25 @@ version: 0
 workflow: demo
 inputs:
   issue_ref: owner/repo#1
-states:
-  task_state: {state_path}
+state_needs:
+  task_memory: {{}}
 guards: []
 steps: []
 """
             )
 
-            parsed = parse_value_expression("states.task_state[inputs.issue_ref].branch")
+            workflow = Workflow(
+                version=workflow.version,
+                workflow=workflow.workflow,
+                inputs=workflow.inputs,
+                state_needs=workflow.state_needs,
+                state_bindings={"task_memory": "repo_task_state"},
+                states={"repo_task_state": state_path},
+                guards=workflow.guards,
+                steps=workflow.steps,
+            )
+
+            parsed = parse_value_expression("state.task_memory[inputs.issue_ref].branch")
 
             value = evaluate_value_expression(parsed, workflow)
 

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
+PYTHONPATH_VALUE="$ROOT_DIR/src:$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
+
+if [[ ! -x "$VENV_PYTHON" ]]; then
+  printf 'Missing project virtualenv interpreter: %s\n' "$VENV_PYTHON" >&2
+  printf 'Create the project virtualenv and install Ordo first.\n' >&2
+  exit 1
+fi
+
+exec env PYTHONPATH="$PYTHONPATH_VALUE" "$VENV_PYTHON" -m ordo.cli "$@"

@@ -2,7 +2,9 @@
 
 ## Main entities
 
+- `Playbook`
 - `Workflow`
+- `StateNeed`
 - `OperationRef`
 - `Guard`
 - `Step`
@@ -18,7 +20,9 @@
 
 ## Key relations
 
+- A `Playbook` names project-local workflow entries, profile entries, and runtime state declarations.
 - A `Workflow` contains ordered `Guard` and `Step` entries.
+- A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` and a `Step` reference an `OperationRef`.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
 - A `Profile` supplies reusable parameters or composition defaults.
@@ -30,7 +34,9 @@
 
 ## Boundary reminder
 
+- `Playbook` expresses project-local launch intent and resolution context.
 - `Workflow`, `Guard`, and `Step` express orchestration intent.
+- `StateNeed` expresses workflow-level need for persistent state without naming concrete project storage instances.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.

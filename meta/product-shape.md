@@ -2,7 +2,22 @@
 
 ## Layers
 
-### 1. `workflows/`
+### 1. `.ordo/playbook.yml`
+
+Project-local orchestration root.
+
+It contains:
+- named workflow catalog;
+- named profile catalog;
+- project-local runtime state declarations;
+- launch-time defaults and resolution context.
+
+It does not contain:
+- workflow business-step logic;
+- connector semantics;
+- runtime mode semantics.
+
+### 2. `workflows/`
 
 Declarative scenarios.
 
@@ -18,7 +33,7 @@ They do not contain:
 - hidden shell magic as the primary mechanism;
 - project-specific code when it can be moved into a profile or an operation.
 
-### 2. `connectors/`
+### 3. `connectors/`
 
 Public connector families and their operations.
 
@@ -35,7 +50,7 @@ An operation is:
 - with explicit semantics;
 - with a structured result.
 
-### 3. `profiles/`
+### 4. `profiles/`
 
 Compositional sets of parameters and presets.
 
@@ -46,15 +61,15 @@ Examples:
 
 These are a primary authoring surface for both humans and agents.
 
-### 4. `schema/`
+### 5. `schema/`
 
 Machine-readable contract.
 
-### 5. `docs/`
+### 6. `docs/`
 
 Public format documentation.
 
-### 6. `meta/`
+### 7. `meta/`
 
 Internal project support: decisions, invariants, and model.
 
@@ -67,5 +82,5 @@ The most important project boundary is:
 - non-trivial computation and transformation belong in connector operation code.
 
 Another important product boundary is:
-- workflow and profile authoring are expected and common;
+- playbook, workflow, and profile authoring are expected and common;
 - connector authoring is a higher-cost extension path and not the default way to adapt a project.

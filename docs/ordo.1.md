@@ -58,12 +58,14 @@ It already supports:
 - example workflows, example profiles, and golden runtime outputs.
 
 It does **not** yet provide a stable user-facing CLI.
+The initial playbook contract is documented, but not yet fully implemented as a stable launch command.
 
 ## FILES
 
 - `schema/workflow.schema.json` - workflow schema
 - `schema/runtime-result.schema.json` - runtime result schema
 - `docs/contracts.md` - stable v0 contract summary
+- `docs/playbook.md` - initial playbook contract draft
 - `examples/` - example workflows
 - `profiles/` - example profiles
 
@@ -214,6 +216,7 @@ for connector in registry.list_connectors():
 Current v0 limits are important:
 
 - there is no stable CLI yet;
+- the initial playbook contract exists in docs, but playbook activation is not yet a stable end-user command surface;
 - only a minimal canonical operation set has concrete implementations;
 - authoring examples may show composition patterns that go beyond the currently implemented execution surface;
 - `${inputs.foo}`-style interpolation is not yet a stabilized execution feature;
@@ -223,6 +226,7 @@ Current v0 limits are important:
 
 - `README.md`
 - `docs/contracts.md`
+- `docs/playbook.md`
 - `docs/format.md`
 - `examples/inspect-issue.yaml`
 - `examples/blocked-main-branch.yaml`

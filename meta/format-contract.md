@@ -9,6 +9,8 @@ The minimal workflow describes:
 - `guards`
 - `steps`
 
+Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the minimal workflow contract.
+
 ## Invariants
 
 - unknown fields fail validation;

@@ -36,6 +36,13 @@ def set_default_connector_provider(provider: ConnectorProvider) -> None:
     _default_connector_provider = provider
 
 
+def clear_default_connector_provider() -> None:
+    """Clear the process-wide default connector provider."""
+
+    global _default_connector_provider
+    _default_connector_provider = None
+
+
 def get_default_connector_provider() -> ConnectorProvider:
     """Return the configured default connector provider."""
 

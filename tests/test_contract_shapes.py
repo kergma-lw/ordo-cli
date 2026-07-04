@@ -12,7 +12,7 @@ class ContractShapeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             inputs={"issue_ref": "repo#1"},
-            states={"task_state": ".ordo/task-state.json"},
+            state_needs={"task_memory": {}},
             guards=(Guard(OperationRef("git.worktree")),),
             steps=(
                 Step(
@@ -28,7 +28,7 @@ class ContractShapeTest(unittest.TestCase):
                 "version": 0,
                 "workflow": "open-task",
                 "inputs": {"issue_ref": "repo#1"},
-                "states": {"task_state": ".ordo/task-state.json"},
+                "state_needs": {"task_memory": {}},
                 "guards": [{"uses": "git.worktree", "with": {}}],
                 "steps": [
                     {
@@ -49,28 +49,28 @@ class ContractShapeTest(unittest.TestCase):
                 "version": 0,
                 "workflow": "open-task",
                 "inputs": {},
-                "states": {},
+                "state_needs": {},
                 "guards": ['git.branch != "main"'],
                 "steps": [],
             },
         )
 
     def test_step_contract_allows_builtin_state_forms(self) -> None:
-        state_set = Step(name="remember-branch", state_set={"states.task_state[inputs.issue_ref].branch": "${inputs.branch}"})
-        state_delete = Step(name="forget-branch", state_delete="states.task_state[inputs.issue_ref].branch")
+        state_set = Step(name="remember-branch", state_set={"state.task_memory[inputs.issue_ref].branch": "${inputs.branch}"})
+        state_delete = Step(name="forget-branch", state_delete="state.task_memory[inputs.issue_ref].branch")
 
         self.assertEqual(
             state_set.to_contract(),
             {
                 "name": "remember-branch",
-                "state_set": {"states.task_state[inputs.issue_ref].branch": "${inputs.branch}"},
+                "state_set": {"state.task_memory[inputs.issue_ref].branch": "${inputs.branch}"},
             },
         )
         self.assertEqual(
             state_delete.to_contract(),
             {
                 "name": "forget-branch",
-                "state_delete": "states.task_state[inputs.issue_ref].branch",
+                "state_delete": "state.task_memory[inputs.issue_ref].branch",
             },
         )
 

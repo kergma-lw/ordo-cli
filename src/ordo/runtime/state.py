@@ -51,7 +51,7 @@ class ResolvedStateTarget:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeStateRegistry:
-    """Named runtime-managed state locations declared by a workflow."""
+    """Named runtime-managed state locations resolved for a workflow run."""
 
     locations: dict[str, StateLocation]
 
@@ -125,9 +125,17 @@ def resolve_state_target(expression: str, workflow: Workflow, *, base_dir: str |
             details={"expression": expression, "reference": ".".join(parsed.key_reference)},
         )
 
+    state_name = workflow.state_bindings.get(parsed.state_role)
+    if not isinstance(state_name, str) or not state_name:
+        raise RuntimeStateError(
+            code="runtime.state.binding_missing",
+            message=f"Workflow logical state role '{parsed.state_role}' is not bound",
+            details={"expression": expression, "role": parsed.state_role},
+        )
+
     registry = RuntimeStateRegistry.from_workflow(workflow, base_dir=base_dir)
     return ResolvedStateTarget(
-        location=registry.require(parsed.state_name),
+        location=registry.require(state_name),
         key=str(key_value),
         fields=parsed.fields,
     )

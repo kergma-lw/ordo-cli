@@ -1,0 +1,16 @@
+name: checklist-frontend-open-task
+
+inputs:
+  project_id: PVT_FRONTEND_PROJECT_ID
+  remote: origin
+  base_branch: main
+  allow_backlog: false
+  allowed_issue_types_csv: Task,Bug
+  post_open_command: npm run openapi && npm run errors:sync
+  repository_kind: frontend
+
+checks:
+  - open-task
+  - frontend
+
+overrides: []

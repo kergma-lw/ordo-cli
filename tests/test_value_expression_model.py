@@ -26,17 +26,17 @@ class ValueExpressionModelTest(unittest.TestCase):
 
     def test_model_can_represent_state_read(self) -> None:
         parsed = ParsedValueExpression(
-            source="states.task_state[inputs.issue_ref].branch",
+            source="state.task_memory[inputs.issue_ref].branch",
             root=StateReferenceNode(
                 start=0,
-                end=42,
-                state_name="task_state",
+                end=40,
+                state_role="task_memory",
                 key_reference=("inputs", "issue_ref"),
                 fields=("branch",),
             ),
         )
 
-        self.assertEqual(parsed.root.state_name, "task_state")
+        self.assertEqual(parsed.root.state_role, "task_memory")
         self.assertEqual(parsed.root.key_reference, ("inputs", "issue_ref"))
         self.assertEqual(parsed.root.fields, ("branch",))
 

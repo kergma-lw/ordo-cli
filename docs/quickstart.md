@@ -232,6 +232,7 @@ Right now Ordo is a Python API first.
 Current important limits:
 
 - no stable CLI yet;
+- the initial playbook contract is documented, but the user-facing playbook CLI is still not implemented;
 - only a minimal canonical operation set has concrete implementations;
 - direct references, pipe-based value expressions, and dual-form `format` exist for local workflow value computation, but the surface remains intentionally small rather than a general programming language;
 - some registry-visible operations still intentionally return structured not-yet-implemented results.
@@ -240,13 +241,14 @@ Current important limits:
 
 `examples/open-task-from-gitx.yaml` now shows one small runtime state use:
 
-- declare a named `states` location;
-- write `states.task_state[inputs.issue_ref].branch` with `state_set`;
-- read that value later through `${states.task_state[inputs.issue_ref].branch}`;
+- declare a logical `state_needs` role and bind it through the playbook layer;
+- write `state.task_memory[inputs.issue_ref].branch` with `state_set`;
+- read that value later through `${state.task_memory[inputs.issue_ref].branch}`;
 - remove it through `state_delete` when the workflow is done.
 
 ## Next docs
 
 - `docs/ordo.1.md`
+- `docs/playbook.md`
 - `docs/contracts.md`
 - `docs/format.md`

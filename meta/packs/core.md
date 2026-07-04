@@ -116,6 +116,42 @@
 - This set should be preferred over adding many narrower git probes for local rituals.
 - Older specialized policy-shaped probes should not be used as the preferred long-term public surface when the same intent can be expressed through canonical git facts and guard composition.
 
+<!-- source: requirements/playbook/core.md -->
+
+# Playbook requirements
+
+## Discovery and launch surface
+
+- A project-local playbook must be discoverable through a deterministic default location.
+- The default discovery rule must be simple enough for both humans and agents to predict without trial-and-error.
+- Playbook discovery failure must produce a structured and reviewable error rather than an implicit fallback to unrelated files.
+- An explicit playbook path must override default discovery when the caller provides one.
+
+## Catalog and composition
+
+- A playbook must support named workflow entries as the primary launch surface.
+- A playbook may support named profile entries for launch-time selection and defaults.
+- A playbook must support named runtime state declarations for project-local reuse.
+- A playbook must support binding workflow logical state roles to named project state declarations.
+- Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
+- Every playbook state binding must target an existing named playbook state declaration.
+- Playbook must fail validation when a workflow entry contains a state binding for an undeclared workflow logical state need.
+- Playbook-owned names must be unique within their own catalogs.
+- Playbook composition must remain explicit rather than relying on silent shadowing or broad filename guessing.
+
+## Resolution discipline
+
+- Relative workflow and profile references must resolve deterministically from playbook-owned context.
+- Named references must either resolve to one declared target or fail clearly.
+- Missing catalog targets must fail validation before effectful execution starts.
+- Unknown stable fields in the playbook contract should fail validation.
+
+## Product boundary
+
+- A playbook must remain a project-level launch surface rather than becoming a second workflow language.
+- Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
+- Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
+
 <!-- source: requirements/workflow/core.md -->
 
 # Workflow requirements
@@ -228,6 +264,37 @@
 - `explain` output should include useful next actions when the runtime can infer them safely.
 - The explanation surface must remain stable enough for agent tooling to rely on status codes and categories.
 
+<!-- source: requirements/runtime/introspection.md -->
+
+# Runtime requirements for introspection
+
+## Role
+
+- The runtime must expose a machine-readable introspection surface for tools and agents.
+- This surface exists so external consumers can discover supported contracts and capabilities without prose parsing or direct code-reading.
+
+## Source of truth
+
+- Published introspection must come from runtime-owned metadata or canonical contract data.
+- Introspection must not be maintained as a separate descriptive mirror of implementation behavior.
+- Human-facing prose may explain the surface but must not define it.
+
+## Minimum surface
+
+The runtime must be able to answer, in machine-readable form:
+
+- what discovery entrypoint exists;
+- what workflow and playbook contract surfaces are supported;
+- what capability states are supported, unsupported, or planned;
+- what expression roots, filters, builtins, and allowed surfaces are supported;
+- what public operation metadata is available.
+
+## Growth discipline
+
+- New runtime-visible surface should be added through canonical metadata first or in the same change.
+- The project should prefer one shared metadata source over separate runtime and help descriptions.
+- Introspection should fail closed for covered surfaces rather than silently omitting changed behavior.
+
 <!-- source: requirements/runtime/state.md -->
 
 # Runtime requirements for state
@@ -240,18 +307,24 @@
 
 ## MVP scope
 
-- The initial authoring surface should support a top-level `states` mapping that names runtime-managed state locations.
+- The initial authoring surface should support a playbook-level `states` mapping that names runtime-managed state locations.
+- The initial authoring surface should support workflow-level logical state needs that remain separate from concrete project state declarations.
+- The initial workflow `state_needs` surface should be marker-only rather than carrying richer per-need configuration fields.
 - The initial authoring surface should support explicit effectful mutation through `state_set` and `state_delete` step forms.
-- The initial authoring surface should support direct value reads through `states...` references rather than requiring a dedicated `state_get` step.
+- The initial authoring surface should support direct value reads through `state...` references rather than requiring a dedicated `state_get` step.
+- The initial state access grammar should use one aligned path surface for reads, `state_set`, and `state_delete`.
 - The initial capability should remain intentionally small and should not require a general-purpose memory or fact system.
 
 ## Minimal semantics
 
 - A named state entry should identify a runtime-managed persistent location.
+- Workflow state reads and writes should resolve through workflow logical state roles that are bound by the playbook to concrete state declarations.
+- A workflow that declares a logical state need is not activatable without a corresponding playbook state binding.
 - `state_set` should create or replace the addressed value deterministically.
 - `state_delete` should remove the addressed value deterministically.
 - State reads should resolve to stored values through the same stable state path surface used by authoring.
 - Missing state reads should remain structured and predictable rather than falling back to hidden defaults.
+- The initial stable state path should require a logical role, one `inputs...` key reference, and optional dotted field traversal.
 
 ## Boundary discipline
 
@@ -631,6 +704,61 @@ Specialized policy-shaped names such as `git.branch_not_main` are not part of th
 - `local.*`
 - `project.*`
 
+<!-- source: domain/playbook.md -->
+
+# Playbook domain
+
+## Role of the playbook
+
+The playbook answers the question:
+
+> which workflows are available in this project, under which names, with which project-local launch context.
+
+It must not answer the question:
+
+> what business steps a workflow performs internally.
+
+## What a playbook owns
+
+- project-local workflow catalog;
+- named profile catalog for playbook-run profile selection;
+- named runtime state declarations shared across project workflows;
+- bindings from workflow-level logical state roles to concrete project state declarations;
+- deterministic discovery of the project orchestration root;
+- deterministic resolution of project-local workflow and profile references.
+
+## What a playbook does not own
+
+- connector semantics;
+- workflow step semantics;
+- runtime mode semantics such as `check`, `plan`, `execute`, or `explain`;
+- hidden shell-first execution logic.
+
+## Relationship to adjacent domains
+
+- A workflow defines guarded operational intent.
+- A profile defines reusable parameters and explicit overrides.
+- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, and logical state-role bindings.
+- Runtime still owns mode behavior and execution semantics after playbook discovery and resolution complete.
+
+## Quality bar
+
+A good playbook:
+
+- can be discovered predictably by both humans and agents;
+- gives stable names to common project operations;
+- keeps project-local launch concerns out of generic workflow logic;
+- makes workflow, profile, and state resolution explicit enough for review;
+- fails early when catalog entries are missing, ambiguous, or structurally invalid.
+
+## Boundary rule
+
+A playbook is not a workflow.
+
+It is a project-level composition and launch document.
+It may select, name, and parameterize workflows through explicit catalogs and defaults,
+but it must not absorb the inner business-step logic that belongs in workflow files.
+
 <!-- source: domain/workflow.md -->
 
 # Workflow domain
@@ -649,9 +777,12 @@ It must not answer the question:
 
 - guards;
 - ordered steps;
-- references to profiles;
+- compact references and parameters that remain workflow-semantic;
+- logical state needs that express workflow-owned state roles without naming project storage instances;
 - compact parameters;
 - simple branching when it has clear semantics.
+
+Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
 
 ## What is undesirable
 
@@ -695,7 +826,8 @@ Executes the workflow.
 
 Returns an explanation of the runtime decision:
 - why a guard failed;
-- why a particular step or profile was chosen;
+- why a particular step was chosen;
+- which playbook-run profile is active;
 - which overrides are active.
 
 ## Why this matters
@@ -856,7 +988,7 @@ These concerns should remain explicit future design work rather than being smugg
 - public connector contracts
 - validation and explainability
 - human + agent authored declarations
-- composition via profiles and explicit local extensions
+- composition via playbooks, profiles, and explicit local extensions
 
 ## Product identity boundary
 
@@ -921,6 +1053,9 @@ If these become the dominant shape, the project drifts toward existing task runn
 Workflow files hold orchestration intent.
 Algorithmic transformation lives in connector operation implementation code.
 
+Playbook files hold project-local launch intent and resolution context.
+They should not absorb workflow business-step logic.
+
 The runtime is not the semantic owner of built-in connector families.
 Built-in connectors should be treated as a public library layer that the runtime resolves and executes, not as private helper code whose public meaning may drift with runtime refactors.
 Built-in connectors do not live in the runtime core, even when implementation packaging temporarily places adapter code near runtime-owned modules.
@@ -938,6 +1073,7 @@ Connector code may implement checks, but the workflow/runtime contract must pres
 
 ## Related domain docs
 
+- playbook semantics: `domain/playbook.md`
 - connector semantics: `domain/connector.md`
 - workflow semantics: `domain/workflow.md`
 - runtime semantics: `domain/runtime.md`
@@ -975,7 +1111,9 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 
 ## Main entities
 
+- `Playbook`
 - `Workflow`
+- `StateNeed`
 - `OperationRef`
 - `Guard`
 - `Step`
@@ -991,7 +1129,9 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 
 ## Key relations
 
+- A `Playbook` names project-local workflow entries, profile entries, and runtime state declarations.
 - A `Workflow` contains ordered `Guard` and `Step` entries.
+- A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` and a `Step` reference an `OperationRef`.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
 - A `Profile` supplies reusable parameters or composition defaults.
@@ -1003,10 +1143,210 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 
 ## Boundary reminder
 
+- `Playbook` expresses project-local launch intent and resolution context.
 - `Workflow`, `Guard`, and `Step` express orchestration intent.
+- `StateNeed` expresses workflow-level need for persistent state without naming concrete project storage instances.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.
+
+<!-- source: model/playbook/shape.md -->
+
+# Playbook model shape
+
+## Position
+
+The playbook is the project-local orchestration root.
+
+Canonical path in the initial model:
+
+```text
+.ordo/playbook.yml
+```
+
+## Minimal shape
+
+```yaml
+version: 1
+
+states:
+  repo_task_state:
+    path: .ordo/state/task-state.json
+
+defaults:
+  profile: backend-default
+
+workflows:
+  inspect-issue:
+    file: inspect-issue.yml
+
+  close-task:
+    file: close-task.yml
+    state_bindings:
+      task_memory: repo_task_state
+
+profiles:
+  backend-default:
+    file: backend-default.yml
+```
+
+## Stable top-level concepts
+
+- `version` — playbook contract version;
+- `states` — named project-local runtime state declarations;
+- `workflows` — named launchable workflow entries;
+- `profiles` — named launchable profile entries;
+- `defaults` — optional playbook-run defaults such as the active profile.
+
+## Workflow entry role
+
+A workflow entry gives a stable project-local name to a workflow file.
+
+It may additionally declare:
+
+- state bindings from workflow logical roles to concrete playbook state entries;
+- future launch metadata that remains project-local rather than workflow-semantic.
+
+## Defaults role
+
+Playbook defaults apply to one playbook run.
+
+The initial important default is:
+
+- `defaults.profile` — the default active profile for the run when the caller does not select one explicitly.
+
+## Profile entry role
+
+A profile entry gives a stable project-local name to a profile file.
+
+It does not create a new profile semantic layer;
+it only makes project-local launch selection explicit and reviewable.
+
+## State entry role
+
+A state entry gives a stable project-local name to a runtime-managed state location.
+
+The initial standard field is:
+
+- `path` — storage path or location identifier.
+
+Future state metadata such as format, initialization policy, or backend kind may extend the state entry shape when runtime semantics standardize them.
+
+## State binding role
+
+A workflow entry may bind workflow logical state roles to concrete playbook state entries.
+
+This keeps workflow authoring focused on logical state usage such as `task_memory`,
+while the playbook owns the concrete project binding such as `repo_task_state`.
+
+## Activation rule
+
+The initial playbook model assumes one workflow per run.
+The run selects one active profile, applies that profile, and then activates one named workflow entry.
+
+<!-- source: model/playbook/discovery.md -->
+
+# Playbook discovery model
+
+## Default discovery rule
+
+When the caller does not provide an explicit playbook path, CLI should look for:
+
+```text
+.ordo/playbook.yml
+```
+
+relative to the current working directory.
+
+## Explicit playbook path
+
+When the caller provides an explicit playbook path, that path becomes the discovery result and default discovery is skipped.
+
+## Initial simplicity rule
+
+The initial model should prefer a small and predictable discovery rule over aggressive filesystem search.
+
+Implications:
+
+- no silent fallback from `playbook.yml` to unrelated filenames;
+- no broad directory crawling as a hidden convenience mechanism;
+- no dependence on shell aliases or external wrappers for the canonical discovery rule.
+
+## Failure rule
+
+If default discovery does not find `.ordo/playbook.yml`, runtime should return a structured missing-playbook outcome rather than guessing a workflow file.
+
+## Future extensions
+
+Possible future behaviors such as parent-directory search or alternate filenames should remain explicit additions to the model rather than being assumed by convention.
+
+<!-- source: model/playbook/resolution.md -->
+
+# Playbook resolution model
+
+## Resolution base
+
+Resolution starts from the directory that contains the discovered playbook file.
+
+For the canonical default path:
+
+```text
+<project>/.ordo/playbook.yml
+```
+
+the resolution base is:
+
+```text
+<project>/.ordo/
+```
+
+## Named workflow resolution
+
+When CLI is asked to run a named workflow entry such as `close-task`, it resolves that name through `workflows.<name>` in the playbook.
+
+The entry must resolve to exactly one workflow file.
+
+## Workflow file resolution
+
+- A bare workflow filename such as `close-task.yml` resolves under `<playbook-dir>/workflows/`.
+- A relative workflow path containing directory segments resolves relative to `<playbook-dir>/`.
+- An absolute workflow path remains absolute.
+
+## Profile reference resolution
+
+- A bare named profile reference such as `backend-default` resolves through `profiles.<name>` in the playbook.
+- A bare profile filename such as `backend-default.yml` resolves under `<playbook-dir>/profiles/`.
+- A relative profile path containing directory segments resolves relative to `<playbook-dir>/`.
+- An absolute profile path remains absolute.
+
+## Active profile resolution
+
+- Each playbook run selects at most one active profile.
+- If the caller specifies a profile explicitly, that selection wins.
+- Otherwise `defaults.profile` becomes the active profile when present.
+- If no explicit profile and no default profile are present, the run proceeds without a profile.
+- Active profile resolution happens before workflow activation and step execution.
+
+## State resolution
+
+- Playbook state names resolve through `states.<name>`.
+- A relative state `path` resolves relative to `<playbook-dir>/`.
+- An absolute state `path` remains absolute.
+
+## Workflow state binding resolution
+
+- Workflow state reads and writes address logical roles through `state.<role>...`.
+- The active workflow entry resolves those logical roles through `state_bindings.<role>`.
+- Each bound value must resolve to one declared playbook state entry.
+- Every workflow-declared logical state role must resolve through `state_bindings.<role>`.
+- Missing state bindings fail before effectful workflow execution begins.
+- Extra state bindings that do not correspond to declared workflow logical state roles fail validation.
+
+## Resolution discipline
+
+- Resolution must be deterministic.
+- Ambiguous implicit matches are not allowed.
+- Playbook resolution must complete before effectful workflow execution begins.
 
 <!-- source: model/workflow/value-expressions.md -->
 
@@ -1225,6 +1565,8 @@ It is modeled as policy over public probe results rather than as a general embed
 
 Runtime state is a built-in runtime capability for small persistent workflow-owned values.
 
+Its declaration point belongs to playbook-level project orchestration context rather than to individual workflow files.
+
 It is not:
 
 - a connector family;
@@ -1233,16 +1575,35 @@ It is not:
 
 ## Top-level declaration
 
-Workflows may declare named runtime state locations through a top-level `states` mapping.
+Playbooks may declare named runtime state locations through a top-level `states` mapping.
 
 Minimal shape:
 
 ```yaml
 states:
-  task_state: .ordo/task-state.json
+  repo_task_state:
+    path: .ordo/state/task-state.json
 ```
 
 The initial model treats the declared value as a runtime-managed location identifier. The first backend may be file-backed.
+
+Workflow files consume logical state roles through `state.<role>...` references and state mutation step forms.
+The playbook binds those logical roles to declared project state entries.
+If a workflow declares a logical state role, activation requires a corresponding playbook binding.
+
+The initial `state_needs` contract is marker-only.
+It declares that a workflow needs a named logical role such as `task_memory`,
+but it does not yet add per-need schema, purpose, kind, or capability subfields.
+
+Illustrative binding shape:
+
+```yaml
+workflows:
+  close-task:
+    file: close-task.yml
+    state_bindings:
+      task_memory: repo_task_state
+```
 
 ## Mutation step forms
 
@@ -1251,10 +1612,13 @@ State mutation uses dedicated built-in step forms rather than connector `uses` r
 Set example:
 
 ```yaml
+state_needs:
+  task_memory: {}
+
 steps:
   - name: remember-branch
     state_set:
-      states.task_state[inputs.issue_ref].branch: ${inputs.branch}
+      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
 ```
 
 Delete example:
@@ -1262,7 +1626,7 @@ Delete example:
 ```yaml
 steps:
   - name: forget-branch
-    state_delete: states.task_state[inputs.issue_ref].branch
+    state_delete: state.task_memory[inputs.issue_ref].branch
 ```
 
 These forms are effectful runtime operations even though they do not go through the public connector registry.
@@ -1274,14 +1638,56 @@ State reads use direct references instead of a dedicated retrieval step.
 Illustrative form:
 
 ```yaml
-${states.task_state[inputs.issue_ref].branch}
+${state.task_memory[inputs.issue_ref].branch}
 ```
 
 The read surface should stay aligned with the mutation target surface so that authors do not learn two unrelated addressing models.
 
+## Stable path grammar
+
+The initial stable state path grammar is:
+
+```text
+state.<role>[inputs.<key-reference>][.<field>...]
+```
+
+Examples:
+
+- `state.task_memory[inputs.issue_ref]`
+- `state.task_memory[inputs.issue_ref].branch`
+- `state.task_memory[inputs.issue_ref].metadata.owner`
+
+Read usage wraps the same path inside a value expression:
+
+```yaml
+${state.task_memory[inputs.issue_ref].branch}
+```
+
+Mutation targets use the same path text directly:
+
+```yaml
+state_set:
+  state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+
+state_delete: state.task_memory[inputs.issue_ref].branch
+```
+
+## Initial grammar restrictions
+
+- the path must start with `state.`;
+- `<role>` is an identifier-like logical state role name;
+- the bracketed key reference must use dotted `inputs...` form;
+- at least one segment must follow `inputs` inside the key reference;
+- field traversal after the key is optional and uses dotted identifiers only;
+- the initial grammar does not support literal keys, quoted keys, multiple bracket segments, arbitrary nested expressions, or mixed index syntaxes.
+
 ## MVP constraints
 
 - The initial model should remain centered on named state locations and addressed values.
+- State declaration ownership should remain at playbook level so workflows do not duplicate project-local storage setup.
+- Workflow authoring should use logical state roles rather than concrete project state instance names.
+- A declared workflow logical state role is a required composition dependency rather than an optional hint.
+- The initial state-need contract should stay marker-only until runtime owns a clear reason for richer per-need fields.
 - The initial model should not assume multiple state scopes beyond explicitly declared named entries.
 - The initial model should not require bulk update semantics, query semantics, or concurrency semantics.
 - The initial model should not rename this capability into a larger semantic system before the runtime actually owns those broader concerns.
@@ -2119,7 +2525,7 @@ Workflow readability and portability depend on visible resolution semantics.
 - `version`
 - `workflow`
 - `inputs`
-- `states`
+- `state_needs`
 - `guards`
 - `steps`
 
@@ -2129,6 +2535,21 @@ Workflow readability and portability depend on visible resolution semantics.
 - uses: namespace.name
   with: {}
 ```
+
+## Stable logical state need shape
+
+```yaml
+state_needs:
+  task_memory: {}
+```
+
+The initial stable shape is marker-only.
+
+Implications:
+
+- each logical state role name maps to an empty object;
+- additional per-need fields are not part of the initial stable contract;
+- unknown nested fields under a logical state need fail validation.
 
 ## Stable step shape
 
@@ -2140,27 +2561,39 @@ Workflow readability and portability depend on visible resolution semantics.
 
 Built-in runtime state mutation forms may also appear in `steps`.
 
+Stable state target/read path grammar:
+
+```text
+state.<role>[inputs.<key-reference>][.<field>...]
+```
+
+Rules:
+
+- reads use this path only inside `${...}`;
+- `state_set` keys use this path text directly;
+- `state_delete` uses this path text directly;
+- the key reference inside `[...]` must use dotted `inputs...` form;
+- post-key field traversal uses dotted identifiers only.
+
 Set example:
 
 ```yaml
 - name: remember-branch
   state_set:
-    states.task_state[inputs.issue_ref].branch: ${inputs.branch}
+    state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
 ```
 
 Delete example:
 
 ```yaml
 - name: forget-branch
-  state_delete: states.task_state[inputs.issue_ref].branch
+  state_delete: state.task_memory[inputs.issue_ref].branch
 ```
 
-## Stable state declaration shape
+Workflow files do not declare runtime state locations themselves.
+They declare logical state needs and reference them through the `state.<role>...` read and mutation surface.
 
-```yaml
-states:
-  task_state: .ordo/task-state.json
-```
+Unsupported or ambiguous variants are outside the initial stable contract.
 
 ## Current rule
 
@@ -2172,6 +2605,89 @@ Unknown top-level and nested stable fields fail validation.
 - Workflow semantics are defined over the loaded data model, not over YAML-specific syntax.
 - Stable workflow data must be representable as a losslessly JSON-serializable structure after loading.
 - YAML-specific mechanisms such as anchors, aliases, tags, or merge behavior must not introduce distinct runtime semantics unless explicitly standardized.
+
+<!-- source: data/playbook/shape.md -->
+
+# Playbook data shape
+
+## Stable top-level fields
+
+- `version`
+- `states`
+- `workflows`
+- `profiles`
+- `defaults`
+
+## Stable workflow entry shape
+
+```yaml
+workflows:
+  close-task:
+    file: close-task.yml
+    state_bindings:
+      task_memory: repo_task_state
+```
+
+Required field:
+
+- `file`
+
+Optional stable field:
+
+- `state_bindings`
+
+Stable `state_bindings` shape:
+
+```yaml
+state_bindings:
+  task_memory: repo_task_state
+```
+
+## Stable defaults shape
+
+```yaml
+defaults:
+  profile: backend-default
+```
+
+Optional stable field:
+
+- `profile`
+
+## Stable profile entry shape
+
+```yaml
+profiles:
+  backend-default:
+    file: backend-default.yml
+```
+
+Required field:
+
+- `file`
+
+## Stable state entry shape
+
+```yaml
+states:
+  task_state:
+    path: .ordo/state/task-state.json
+```
+
+Required field:
+
+- `path`
+
+## Serialization rule
+
+- Playbook files may be authored in YAML.
+- Playbook semantics are defined over the loaded data model, not over YAML-specific syntax.
+- Stable playbook data must be representable as a losslessly JSON-serializable structure after loading.
+- YAML-specific mechanisms such as anchors, aliases, tags, or merge behavior must not introduce distinct runtime semantics unless explicitly standardized.
+
+## Current rule
+
+Unknown top-level and nested stable fields fail validation.
 
 <!-- source: data/workflow/guard-expressions.md -->
 
@@ -2380,6 +2896,80 @@ Expected Ordo value:
 - user and agent get a clearer recovery path;
 - the project stays different from a generic step runner that mainly exposes logs and exceptions.
 
+<!-- source: scenarios/playbook/core.md -->
+
+# Playbook scenarios
+
+## Scenario 1: project-local workflow catalog
+
+Repo exposes a small named set of common operational workflows through `.ordo/playbook.yml`.
+
+Expected Ordo value:
+
+- humans can discover available operations quickly;
+- agents can target named workflows without reconstructing local bootstrap commands;
+- project launch ergonomics improve without changing workflow semantics.
+
+## Scenario 2: default profile selection
+
+Playbook run selects a default profile such as `backend-default` before activating one workflow.
+
+Expected Ordo value:
+
+- common project defaults stay reviewable in one place;
+- workflow files remain less repo-specific;
+- callers may still override profile selection explicitly.
+
+## Scenario 3: shared project state declaration
+
+Multiple workflows use one named runtime state entry such as `task_state` declared in the playbook.
+
+Expected Ordo value:
+
+- state naming stays stable across workflows;
+- storage location is managed in project-local orchestration context;
+- workflows do not each duplicate the same storage declaration.
+
+## Scenario 4: logical workflow state binding
+
+Workflow uses a logical state role such as `task_memory`, while the playbook binds that role to a concrete state entry such as `repo_task_state`.
+
+Expected Ordo value:
+
+- workflow files stay portable across projects with different storage naming;
+- playbook owns project-local storage binding rather than workflow files;
+- missing bindings fail clearly before effectful execution.
+
+## Scenario 5: missing playbook on default discovery
+
+Caller runs `ordo plan close-task` in a directory without `.ordo/playbook.yml`.
+
+Expected Ordo value:
+
+- failure is immediate and explicit;
+- runtime does not guess a workflow file from nearby YAML;
+- both human and agent receive a clear next step.
+
+## Scenario 6: unresolved named workflow
+
+Playbook contains a named workflow entry whose target file no longer exists.
+
+Expected Ordo value:
+
+- validation or pre-execution resolution fails before effectful work;
+- diagnostics name the missing entry and its target;
+- the project can repair the catalog without inspecting runtime internals.
+
+## Scenario 7: missing required state binding
+
+Workflow declares `state_needs.task_memory`, but the active playbook workflow entry does not bind `task_memory`.
+
+Expected Ordo value:
+
+- activation fails before effectful execution;
+- diagnostics identify the missing logical state role;
+- runtime does not attempt to guess or auto-create a binding.
+
 <!-- source: scenarios/authoring.md -->
 
 # Authoring scenarios
@@ -2560,6 +3150,29 @@ If schema or runtime semantics change, corresponding `meta/` source docs must ch
 
 If a change breaks any invariant, `meta/` must be updated explicitly in the same work.
 
+<!-- source: verification/playbook/core.md -->
+
+# Playbook verification
+
+## Rule
+
+Playbook must provide a deterministic and reviewable project-local launch surface.
+
+## Checks
+
+- `.ordo/playbook.yml` discovery behavior is documented and testable.
+- Missing playbook, missing workflow entry, and missing profile entry fail with distinct structured outcomes.
+- Workflow names are unique within the playbook workflow catalog.
+- Profile names are unique within the playbook profile catalog.
+- State names are unique within the playbook state catalog.
+- Workflow state-binding role names are unique within a workflow entry.
+- Relative workflow, profile, and state paths resolve deterministically from playbook-owned context.
+- Workflow logical state roles resolve deterministically to declared playbook state entries.
+- Every declared workflow logical state role has a binding in the active playbook workflow entry.
+- No playbook workflow entry provides extra state bindings for undeclared workflow logical state roles.
+- No silent fallback resolves a missing named workflow or profile to an arbitrary nearby file.
+- Workflow business logic remains in workflow files rather than being duplicated as playbook-only execution semantics.
+
 <!-- source: verification/workflow/authoring.md -->
 
 # Workflow authoring verification
@@ -2609,6 +3222,44 @@ Guard evaluation results must remain explainable as a machine-usable runtime sur
 - Runtime output distinguishes boolean guard failure from probe evaluation failure.
 - Guard-evaluation traces remain structured enough for `check`, `plan`, and `explain` to report consistent blocker identity.
 - Reuse of repeated identical probe references inside one expression does not weaken explainability.
+
+<!-- source: verification/runtime/introspection-drift.md -->
+
+# Verification for introspection drift
+
+## Rule
+
+If a runtime-visible surface changes, the published introspection surface must change in the same work.
+
+## Runtime-visible surface
+
+At minimum this includes:
+
+- root discovery surface;
+- workflow contract surface;
+- playbook contract surface;
+- capability states exposed to tools;
+- expression roots, filters, builtins, and allowed surfaces;
+- public operation metadata exposed for machine-readable consumption.
+
+## Source-of-truth rule
+
+Introspection must be assembled from runtime-owned metadata or from canonical contract data owned by the runtime-facing product layer.
+
+Prose documents must not be the source of truth for published introspection.
+
+## Enforcement expectations
+
+The project must verify, at minimum:
+
+- published introspection is machine-readable;
+- published introspection is versioned;
+- covered runtime-visible surface changes fail verification when introspection is not updated;
+- parity checks detect drift between runtime-owned metadata and published introspection output.
+
+## Review rule
+
+A change that widens, narrows, renames, removes, or reclassifies a covered runtime-visible surface is incomplete unless the corresponding introspection and verification updates are included in the same work.
 
 <!-- source: verification/runtime/invariants.md -->
 

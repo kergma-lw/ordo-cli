@@ -11,6 +11,9 @@ dependencies = [
   "PyYAML>=6,<7",
 ]
 
+[project.scripts]
+ordo-playbook = "ordo.cli:main"
+
 [tool.setuptools]
 package-dir = {ordo = "src/ordo", connectors = "connectors"}
 

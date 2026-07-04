@@ -6,7 +6,7 @@
 - public connector contracts
 - validation and explainability
 - human + agent authored declarations
-- composition via profiles and explicit local extensions
+- composition via playbooks, profiles, and explicit local extensions
 
 ## Product identity boundary
 
@@ -71,6 +71,9 @@ If these become the dominant shape, the project drifts toward existing task runn
 Workflow files hold orchestration intent.
 Algorithmic transformation lives in connector operation implementation code.
 
+Playbook files hold project-local launch intent and resolution context.
+They should not absorb workflow business-step logic.
+
 The runtime is not the semantic owner of built-in connector families.
 Built-in connectors should be treated as a public library layer that the runtime resolves and executes, not as private helper code whose public meaning may drift with runtime refactors.
 Built-in connectors do not live in the runtime core, even when implementation packaging temporarily places adapter code near runtime-owned modules.
@@ -88,6 +91,7 @@ Connector code may implement checks, but the workflow/runtime contract must pres
 
 ## Related domain docs
 
+- playbook semantics: `domain/playbook.md`
 - connector semantics: `domain/connector.md`
 - workflow semantics: `domain/workflow.md`
 - runtime semantics: `domain/runtime.md`

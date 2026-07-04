@@ -22,7 +22,8 @@ Executes the workflow.
 
 Returns an explanation of the runtime decision:
 - why a guard failed;
-- why a particular step or profile was chosen;
+- why a particular step was chosen;
+- which playbook-run profile is active;
 - which overrides are active.
 
 ## Why this matters

@@ -6,14 +6,14 @@ from ordo.runtime.state_paths import parse_state_path
 
 class RuntimeStatePathTest(unittest.TestCase):
     def test_parse_state_path_returns_stable_shape(self) -> None:
-        parsed = parse_state_path("states.task_state[inputs.issue_ref].branch")
+        parsed = parse_state_path("state.task_memory[inputs.issue_ref].branch")
 
-        self.assertEqual(parsed.state_name, "task_state")
+        self.assertEqual(parsed.state_role, "task_memory")
         self.assertEqual(parsed.key_reference, ("inputs", "issue_ref"))
         self.assertEqual(parsed.fields, ("branch",))
 
     def test_parse_state_path_allows_nested_input_reference_and_field_chain(self) -> None:
-        parsed = parse_state_path("states.task_state[inputs.issue.ref].branch.name")
+        parsed = parse_state_path("state.task_memory[inputs.issue.ref].branch.name")
 
         self.assertEqual(parsed.key_reference, ("inputs", "issue", "ref"))
         self.assertEqual(parsed.fields, ("branch", "name"))
@@ -23,10 +23,12 @@ class RuntimeStatePathTest(unittest.TestCase):
             """
 version: 0
 workflow: open-task
+state_needs:
+  task_memory: {}
 guards: []
 steps:
   - name: forget-branch
-    state_delete: states.task_state[issue_ref].branch
+    state_delete: "state.task_memory[issue_ref].branch"
 """
         )
 
@@ -38,12 +40,14 @@ steps:
             """
 version: 0
 workflow: open-task
+state_needs:
+  task_memory: {}
 guards: []
 steps:
   - name: remember-branch
     state_set:
-      states.task_state[inputs.issue_ref].branch: ${inputs.branch}
-      states.task_state[inputs.issue_ref].pr: ${inputs.pr}
+      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+      state.task_memory[inputs.issue_ref].pr: ${inputs.pr}
 """
         )
 

@@ -12,7 +12,7 @@ class ParsedStatePath:
     """Structured parsed representation of a runtime state path."""
 
     source: str
-    state_name: str
+    state_role: str
     key_reference: tuple[str, ...]
     fields: tuple[str, ...] = ()
 
@@ -56,9 +56,9 @@ class _Parser:
         self.position = 0
 
     def parse(self) -> ParsedStatePath:
-        self._expect_literal("states")
+        self._expect_literal("state")
         self._expect_char(".")
-        state_name = self._parse_identifier(allow_hyphen=True, label="state name")
+        state_role = self._parse_identifier(allow_hyphen=True, label="state role")
         self._expect_char("[")
         key_reference = self._parse_input_reference()
         self._expect_char("]")
@@ -70,7 +70,7 @@ class _Parser:
             raise StatePathParseError("Unexpected trailing content in state path", self.position, self.length)
         return ParsedStatePath(
             source=self.expression,
-            state_name=state_name,
+            state_role=state_role,
             key_reference=key_reference,
             fields=tuple(fields),
         )

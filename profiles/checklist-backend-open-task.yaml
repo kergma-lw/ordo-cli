@@ -1,0 +1,16 @@
+name: checklist-backend-open-task
+
+inputs:
+  project_id: PVT_BACKEND_PROJECT_ID
+  remote: origin
+  base_branch: main
+  allow_backlog: false
+  allowed_issue_types_csv: Task,Bug
+  post_open_command: ""
+  repository_kind: backend
+
+checks:
+  - open-task
+  - backend
+
+overrides: []

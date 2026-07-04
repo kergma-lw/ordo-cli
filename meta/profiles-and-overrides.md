@@ -4,6 +4,9 @@
 
 A profile is not a new connector operation; it is a composition layer.
 
+Named profile discovery and project-local profile catalogs may be owned by the playbook launch surface.
+That launch surface does not change what a profile is; it only gives project-local names and selects the active profile for a playbook run.
+
 It exists for:
 - parameter presets;
 - common verification sets;

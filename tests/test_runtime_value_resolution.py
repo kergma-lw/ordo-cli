@@ -3,6 +3,7 @@ import tempfile
 import unittest
 
 from ordo.model.runtime import RuntimeStatus
+from ordo.model.workflow import Workflow
 from ordo.runtime import execute_workflow, load_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -27,15 +28,25 @@ version: 0
 workflow: open-task
 inputs:
   issue_ref: owner/repo#1
-states:
-  task_state: {state_path}
+state_needs:
+  task_memory: {{}}
 guards: []
 steps:
   - name: run-command
     uses: shell.command
     with:
-      command: ${{states.task_state[inputs.issue_ref].command}}
+      command: ${{state.task_memory[inputs.issue_ref].command}}
 """
+            )
+            workflow = Workflow(
+                version=workflow.version,
+                workflow=workflow.workflow,
+                inputs=workflow.inputs,
+                state_needs=workflow.state_needs,
+                state_bindings={"task_memory": "repo_task_state"},
+                states={"repo_task_state": state_path},
+                guards=workflow.guards,
+                steps=workflow.steps,
             )
 
             result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -56,15 +67,25 @@ version: 0
 workflow: open-task
 inputs:
   issue_ref: owner/repo#1
-states:
-  task_state: {state_path}
+state_needs:
+  task_memory: {{}}
 guards: []
 steps:
   - name: run-command
     uses: shell.command
     with:
-      command: ${{states.task_state[inputs.issue_ref].command}}
+      command: ${{state.task_memory[inputs.issue_ref].command}}
 """
+            )
+            workflow = Workflow(
+                version=workflow.version,
+                workflow=workflow.workflow,
+                inputs=workflow.inputs,
+                state_needs=workflow.state_needs,
+                state_bindings={"task_memory": "repo_task_state"},
+                states={"repo_task_state": state_path},
+                guards=workflow.guards,
+                steps=workflow.steps,
             )
 
             result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)

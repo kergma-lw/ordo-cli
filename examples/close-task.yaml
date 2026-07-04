@@ -5,8 +5,8 @@ inputs:
   issue_ref: kergma-lw/checklist-backend#16
   ship: true
 
-states:
-  task_state: .ordo/task-state.json
+state_needs:
+  task_memory: {}
 
 guards:
   - git.worktree.clean
@@ -22,7 +22,7 @@ steps:
   - name: merge-main
     uses: git.integrate.merge_ff_only
     with:
-      ref: ${states.task_state[inputs.issue_ref].branch}
+      ref: ${state.task_memory[inputs.issue_ref].branch}
 
   - name: close-issue
     uses: gh.issue.close
@@ -30,4 +30,4 @@ steps:
       issue_ref: ${inputs.issue_ref}
 
   - name: forget-task-branch
-    state_delete: states.task_state[inputs.issue_ref].branch
+    state_delete: state.task_memory[inputs.issue_ref].branch

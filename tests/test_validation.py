@@ -269,11 +269,13 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                state_needs:
+                  task_memory: {}
                 guards: []
                 steps:
                   - name: remember
                     state_set:
-                      states.task_state[inputs.issue_ref].branch: ${format("unterminated)}
+                      state.task_memory[inputs.issue_ref].branch: ${format("unterminated)}
                 """
             )
         )

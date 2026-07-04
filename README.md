@@ -26,6 +26,7 @@ Target use cases:
 Notable docs:
 - `docs/quickstart.md` — fastest path to loading, checking, planning, explaining, and executing examples
 - `docs/ordo.1.md` — man-style overview of current capabilities and usage
+- `docs/playbook.md` — initial project-local playbook contract and discovery rules
 - `docs/format.md` — current format draft
 - `docs/contracts.md` — stable v0 workflow and runtime result contracts
 - `docs/pypyr-comparison.md` — honest positioning notes vs pypyr

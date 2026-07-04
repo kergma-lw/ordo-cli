@@ -20,10 +20,10 @@ class ValueExpressionParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root.parts, ("inputs", "title"))
 
     def test_parse_state_reference(self) -> None:
-        parsed = parse_value_expression("states.task_state[inputs.issue_ref].branch")
+        parsed = parse_value_expression("state.task_memory[inputs.issue_ref].branch")
 
         self.assertIsInstance(parsed.root, StateReferenceNode)
-        self.assertEqual(parsed.root.state_name, "task_state")
+        self.assertEqual(parsed.root.state_role, "task_memory")
         self.assertEqual(parsed.root.key_reference, ("inputs", "issue_ref"))
         self.assertEqual(parsed.root.fields, ("branch",))
 
@@ -45,7 +45,7 @@ class ValueExpressionParsingTest(unittest.TestCase):
 
     def test_parse_rejects_non_input_state_key_reference(self) -> None:
         with self.assertRaises(ValueExpressionParseError) as ctx:
-            parse_value_expression("states.task_state[foo.bar]")
+            parse_value_expression("state.task_memory[foo.bar]")
 
         self.assertIn("State path key reference", ctx.exception.message)
 

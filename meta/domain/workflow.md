@@ -14,9 +14,12 @@ It must not answer the question:
 
 - guards;
 - ordered steps;
-- references to profiles;
+- compact references and parameters that remain workflow-semantic;
+- logical state needs that express workflow-owned state roles without naming project storage instances;
 - compact parameters;
 - simple branching when it has clear semantics.
+
+Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
 
 ## What is undesirable
 

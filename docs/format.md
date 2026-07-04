@@ -19,7 +19,7 @@ version: 0
 workflow: string
 
 inputs: {}
-states: {}
+state_needs: {}
 guards: []
 steps: []
 ```
@@ -102,11 +102,33 @@ Built-in runtime state mutation forms:
 ```yaml
 - name: remember-branch
   state_set:
-    states.task_state[inputs.issue_ref].branch: ${inputs.branch}
+    state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
 
 - name: forget-branch
-  state_delete: states.task_state[inputs.issue_ref].branch
+  state_delete: state.task_memory[inputs.issue_ref].branch
 ```
+
+Stable state path grammar:
+
+```text
+state.<role>[inputs.<key-reference>][.<field>...]
+```
+
+Examples:
+
+- `state.task_memory[inputs.issue_ref]`
+- `state.task_memory[inputs.issue_ref].branch`
+- `state.task_memory[inputs.issue_ref].metadata.owner`
+
+Initial restrictions:
+
+- reads use this path only inside `${...}`;
+- `state_set` keys use the path text directly;
+- `state_delete` uses the path text directly;
+- `<role>` is a logical workflow state role;
+- the bracketed key must use dotted `inputs...` form;
+- field traversal after the key uses dotted identifiers only;
+- quoted keys, literal keys, repeated bracket segments, and arbitrary nested expressions are not part of the initial stable syntax.
 
 ## Value expressions
 
@@ -134,17 +156,31 @@ This YAML form is selective rather than universal. Simple filter pipelines such 
 
 ## Runtime state
 
-Workflows may declare named runtime-managed state locations.
+Workflows declare logical state needs, while the playbook declares concrete runtime-managed state locations.
+
+```yaml
+state_needs:
+  task_memory: {}
+```
+
+The initial `state_needs` shape is marker-only.
+Each logical role maps to an empty object.
+The workflow does not define storage path, backend, or other concrete project state details there.
+
+Playbook-side state declarations look like:
 
 ```yaml
 states:
-  task_state: .ordo/task-state.json
+  repo_task_state:
+    path: .ordo/state/task-state.json
 ```
+
+The playbook then binds workflow logical roles to concrete state entries.
 
 Step values may read from runtime state through direct references:
 
 ```yaml
-${states.task_state[inputs.issue_ref].branch}
+${state.task_memory[inputs.issue_ref].branch}
 ```
 
 Optional later extensions:
