@@ -147,6 +147,10 @@
           "producer": "describe_profile_contract",
           "published": true
         },
+        "state_contract": {
+          "producer": "describe_state_contract",
+          "published": true
+        },
         "workflow_contract": {
           "producer": "describe_workflow_contract",
           "published": true
@@ -1238,6 +1242,41 @@
         "checks": "profile checks do not mutate workflow contract",
         "inputs": "profile may add missing workflow inputs but may not override explicit workflow input values",
         "overrides": "profile overrides remain explicit metadata and do not silently mutate workflow steps"
+      }
+    },
+    "state_contract": {
+      "document_kind": "state_contract",
+      "invalid_path_rules": [
+        "state path must start with 'state'",
+        "state path key reference must use dotted inputs form such as 'inputs.issue_ref'",
+        "state path must not contain trailing content"
+      ],
+      "path_forms": {
+        "root": "state",
+        "root_reference": "inputs",
+        "shape": "state.<role>[inputs.<key>][.<field>...]",
+        "supports_hyphenated_roles": true,
+        "supports_nested_fields": true
+      },
+      "runtime_rules": [
+        "state role must be bound before runtime access",
+        "state key reference must resolve to a scalar value",
+        "undeclared state locations are runtime errors"
+      ],
+      "storage_document": {
+        "required_fields": [
+          "version",
+          "values"
+        ],
+        "values_type": "object",
+        "version": 1
+      },
+      "workflow_surface": {
+        "state_binding_field": "state_bindings",
+        "state_needs_field": "state_needs",
+        "step_state_delete_field": "state_delete",
+        "step_state_set_field": "state_set",
+        "storage_targets_field": "states"
       }
     },
     "workflow_contract": {

@@ -10,6 +10,7 @@ from .capabilities import describe_capabilities
 from .operations import describe_operations
 from .playbook import describe_playbook_contract
 from .profile import describe_profile_contract
+from .state import describe_state_contract
 from .workflow import describe_workflow_contract
 
 
@@ -27,6 +28,7 @@ PUBLISHED_INTROSPECTION_SECTIONS: tuple[PublishedIntrospectionSection, ...] = (
     PublishedIntrospectionSection(name="operations", producer_name="describe_operations", producer=describe_operations),
     PublishedIntrospectionSection(name="playbook_contract", producer_name="describe_playbook_contract", producer=describe_playbook_contract),
     PublishedIntrospectionSection(name="profile_contract", producer_name="describe_profile_contract", producer=describe_profile_contract),
+    PublishedIntrospectionSection(name="state_contract", producer_name="describe_state_contract", producer=describe_state_contract),
     PublishedIntrospectionSection(name="workflow_contract", producer_name="describe_workflow_contract", producer=describe_workflow_contract),
 )
 
