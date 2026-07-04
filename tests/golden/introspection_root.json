@@ -105,6 +105,65 @@
           ]
         }
       ],
+      "negative_rules": [
+        {
+          "name": "guard_expression.no_state_root",
+          "reason": "guards run before steps and only support input references and public probe references",
+          "related_codes": [],
+          "rule": "State references are not allowed in guard expressions",
+          "surface": "guard_expression"
+        },
+        {
+          "name": "guard_expression.no_filters",
+          "reason": "guard expressions are a distinct probe/input language and do not evaluate value-expression filter pipelines",
+          "related_codes": [],
+          "rule": "Value-expression filters are not allowed in guard expressions",
+          "surface": "guard_expression"
+        },
+        {
+          "name": "guard_expression.no_format_builtin",
+          "reason": "guard expressions do not evaluate value-expression builtins",
+          "related_codes": [],
+          "rule": "The format builtin is not allowed in guard expressions",
+          "surface": "guard_expression"
+        },
+        {
+          "name": "workflow_step.exactly_one_form",
+          "reason": "step forms are mutually exclusive in the workflow contract",
+          "related_codes": [
+            "validation.workflow.step.form"
+          ],
+          "rule": "A workflow step must define exactly one of uses, state_set, or state_delete",
+          "surface": "workflow_step"
+        },
+        {
+          "name": "workflow_step.with_requires_uses",
+          "reason": "runtime value inputs belong to operation-call step form only",
+          "related_codes": [
+            "validation.workflow.step.with_without_uses"
+          ],
+          "rule": "The with field is allowed only together with uses",
+          "surface": "workflow_step"
+        },
+        {
+          "name": "state_set.single_target_entry",
+          "reason": "each state-set step writes one resolved state target at a time",
+          "related_codes": [
+            "validation.workflow.state_set.entry_count"
+          ],
+          "rule": "state_set must contain exactly one target entry",
+          "surface": "state_set"
+        },
+        {
+          "name": "format_value.args_must_be_list",
+          "reason": "format object arguments are evaluated positionally",
+          "related_codes": [
+            "validation.workflow.value_expr.format.args_type"
+          ],
+          "rule": "format-object args must be a list when provided",
+          "surface": "value_expression.format_object"
+        }
+      ],
       "value_expression_builtins": [
         {
           "name": "format"

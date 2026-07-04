@@ -20,6 +20,14 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         self.assertEqual(surfaces["value_expression"]["filters"], ["lower", "trim", "slug"])
         self.assertEqual(surfaces["value_expression"]["builtins"], ["format"])
 
+    def test_describe_capabilities_publishes_high_value_negative_rules(self) -> None:
+        payload = describe_capabilities()
+
+        rules = {item["name"]: item for item in payload["negative_rules"]}
+        self.assertEqual(rules["guard_expression.no_state_root"]["surface"], "guard_expression")
+        self.assertEqual(rules["workflow_step.with_requires_uses"]["related_codes"], ["validation.workflow.step.with_without_uses"])
+        self.assertEqual(rules["format_value.args_must_be_list"]["related_codes"], ["validation.workflow.value_expr.format.args_type"])
+
     def test_root_introspection_publishes_capabilities_section(self) -> None:
         payload = describe_system()
 

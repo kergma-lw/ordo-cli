@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ordo.model.json import JSONObject
-from ordo.runtime.capabilities import EXPRESSION_ROOTS, EXPRESSION_SURFACES, RUNTIME_CAPABILITIES
+from ordo.runtime.capabilities import EXPRESSION_ROOTS, EXPRESSION_SURFACES, NEGATIVE_RULES, RUNTIME_CAPABILITIES
 from ordo.runtime.value_expressions import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 
 
@@ -16,4 +16,5 @@ def describe_capabilities() -> JSONObject:
         "expression_surfaces": [surface.to_contract() for surface in EXPRESSION_SURFACES],
         "value_expression_filters": [spec.to_contract() for spec in VALUE_EXPRESSION_FILTERS.values()],
         "value_expression_builtins": [spec.to_contract() for spec in VALUE_EXPRESSION_BUILTINS.values()],
+        "negative_rules": [rule.to_contract() for rule in NEGATIVE_RULES],
     }
