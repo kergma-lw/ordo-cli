@@ -13,8 +13,10 @@ class IntrospectionProfileContractTest(unittest.TestCase):
         override_fields = {field["name"] for field in payload["override_fields"]}
         self.assertEqual(field_names, {"name", "inputs", "checks", "overrides"})
         self.assertEqual(override_fields, {"target", "with", "reason"})
-        self.assertIn("first-writer wins", payload["compose_semantics"]["inputs"])
-        self.assertIn("may add missing workflow inputs", payload["workflow_apply_semantics"]["inputs"])
+        self.assertEqual(payload["compose_semantics"]["inputs"]["strategy"], "first_writer_wins")
+        self.assertEqual(payload["compose_semantics"]["overrides"]["conflict"], "validation_error")
+        self.assertTrue(payload["workflow_apply_semantics"]["inputs"]["may_add_missing"])
+        self.assertFalse(payload["workflow_apply_semantics"]["inputs"]["may_override_explicit_workflow_values"])
 
     def test_profile_contract_stays_aligned_with_validation_field_sets(self) -> None:
         payload = describe_profile_contract()

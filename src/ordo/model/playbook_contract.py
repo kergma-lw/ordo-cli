@@ -30,6 +30,23 @@ PLAYBOOK_CONTRACT: JSONObject = {
     "defaults_fields": [
         {"name": "profile", "required": False, "type": "string"},
     ],
+    "activation_semantics": {
+        "discovery": {
+            "strategy": "cwd_relative_single_path",
+            "path": ".ordo/playbook.yml",
+            "missing": "playbook.discovery.missing",
+        },
+        "workflow_entries": {
+            "requires": ["file"],
+            "optional": ["state_bindings"],
+        },
+        "profile_entries": {
+            "requires": ["file"],
+        },
+        "state_entries": {
+            "requires": ["path"],
+        },
+    },
 }
 
 

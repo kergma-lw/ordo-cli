@@ -23,9 +23,18 @@ STATE_CONTRACT: JSONObject = {
         "supports_hyphenated_roles": True,
     },
     "invalid_path_rules": [
-        "state path must start with 'state'",
-        "state path key reference must use dotted inputs form such as 'inputs.issue_ref'",
-        "state path must not contain trailing content",
+        {
+            "name": "root_must_be_state",
+            "message": "state path must start with 'state'",
+        },
+        {
+            "name": "key_reference_must_use_dotted_inputs",
+            "message": "state path key reference must use dotted inputs form such as 'inputs.issue_ref'",
+        },
+        {
+            "name": "no_trailing_content",
+            "message": "state path must not contain trailing content",
+        },
     ],
     "storage_document": {
         "version": 1,
@@ -33,9 +42,21 @@ STATE_CONTRACT: JSONObject = {
         "values_type": "object",
     },
     "runtime_rules": [
-        "state role must be bound before runtime access",
-        "state key reference must resolve to a scalar value",
-        "undeclared state locations are runtime errors",
+        {
+            "name": "bound_role_required",
+            "message": "state role must be bound before runtime access",
+            "error_code": "runtime.state.binding_missing",
+        },
+        {
+            "name": "scalar_key_required",
+            "message": "state key reference must resolve to a scalar value",
+            "error_code": "runtime.state.key_invalid",
+        },
+        {
+            "name": "declared_location_required",
+            "message": "undeclared state locations are runtime errors",
+            "error_code": "runtime.state.declaration_missing",
+        },
     ],
 }
 

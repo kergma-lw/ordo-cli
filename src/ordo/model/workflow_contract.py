@@ -21,6 +21,21 @@ WORKFLOW_CONTRACT: JSONObject = {
         {"name": "operation_call", "shape": {"uses": "string", "with": "object"}},
         {"name": "expression", "shape": "string"},
     ],
+    "step_form_rules": [
+        {
+            "name": "exactly_one_step_form",
+            "kind": "exclusive_choice",
+            "fields": ["uses", "state_set", "state_delete"],
+            "message": "A workflow step must define exactly one of uses, state_set, or state_delete",
+        },
+        {
+            "name": "with_requires_uses",
+            "kind": "dependency",
+            "field": "with",
+            "requires": ["uses"],
+            "message": "The with field is allowed only together with uses",
+        },
+    ],
     "step_forms": [
         {
             "name": "operation_call",
@@ -38,6 +53,17 @@ WORKFLOW_CONTRACT: JSONObject = {
             "optional_fields": [],
         },
     ],
+    "surface_constraints": {
+        "guard_expression": {
+            "allowed_roots": ["inputs", "probe"],
+            "forbidden_features": ["value_expression_filters", "value_expression_builtins", "state_references"],
+        },
+        "runtime_value_surface": {
+            "allowed_roots": ["inputs", "state"],
+            "allowed_builtins": ["format"],
+            "allowed_filters": ["lower", "trim", "slug"],
+        },
+    },
 }
 
 

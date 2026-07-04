@@ -20,14 +20,32 @@ PROFILE_CONTRACT: JSONObject = {
         {"name": "reason", "required": False, "type": "string"},
     ],
     "compose_semantics": {
-        "inputs": "first-writer wins; conflicting later values are validation errors",
-        "checks": "deduplicated left-to-right union",
-        "overrides": "duplicate override targets across profiles are validation errors",
+        "inputs": {
+            "strategy": "first_writer_wins",
+            "conflict": "validation_error",
+        },
+        "checks": {
+            "strategy": "deduplicated_union",
+            "order": "left_to_right",
+        },
+        "overrides": {
+            "conflict_key": "target",
+            "conflict": "validation_error",
+        },
     },
     "workflow_apply_semantics": {
-        "inputs": "profile may add missing workflow inputs but may not override explicit workflow input values",
-        "checks": "profile checks do not mutate workflow contract",
-        "overrides": "profile overrides remain explicit metadata and do not silently mutate workflow steps",
+        "inputs": {
+            "may_add_missing": True,
+            "may_override_explicit_workflow_values": False,
+            "conflict": "validation_error",
+        },
+        "checks": {
+            "mutates_workflow_contract": False,
+        },
+        "overrides": {
+            "mutates_workflow_steps": False,
+            "published_as_explicit_metadata": True,
+        },
     },
 }
 

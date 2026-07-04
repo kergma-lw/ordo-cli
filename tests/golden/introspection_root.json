@@ -1331,6 +1331,31 @@
       ]
     },
     "playbook_contract": {
+      "activation_semantics": {
+        "discovery": {
+          "missing": "playbook.discovery.missing",
+          "path": ".ordo/playbook.yml",
+          "strategy": "cwd_relative_single_path"
+        },
+        "profile_entries": {
+          "requires": [
+            "file"
+          ]
+        },
+        "state_entries": {
+          "requires": [
+            "path"
+          ]
+        },
+        "workflow_entries": {
+          "optional": [
+            "state_bindings"
+          ],
+          "requires": [
+            "file"
+          ]
+        }
+      },
       "defaults_fields": [
         {
           "name": "profile",
@@ -1399,9 +1424,18 @@
     },
     "profile_contract": {
       "compose_semantics": {
-        "checks": "deduplicated left-to-right union",
-        "inputs": "first-writer wins; conflicting later values are validation errors",
-        "overrides": "duplicate override targets across profiles are validation errors"
+        "checks": {
+          "order": "left_to_right",
+          "strategy": "deduplicated_union"
+        },
+        "inputs": {
+          "conflict": "validation_error",
+          "strategy": "first_writer_wins"
+        },
+        "overrides": {
+          "conflict": "validation_error",
+          "conflict_key": "target"
+        }
       },
       "document_kind": "profile",
       "override_fields": [
@@ -1444,17 +1478,35 @@
         }
       ],
       "workflow_apply_semantics": {
-        "checks": "profile checks do not mutate workflow contract",
-        "inputs": "profile may add missing workflow inputs but may not override explicit workflow input values",
-        "overrides": "profile overrides remain explicit metadata and do not silently mutate workflow steps"
+        "checks": {
+          "mutates_workflow_contract": false
+        },
+        "inputs": {
+          "conflict": "validation_error",
+          "may_add_missing": true,
+          "may_override_explicit_workflow_values": false
+        },
+        "overrides": {
+          "mutates_workflow_steps": false,
+          "published_as_explicit_metadata": true
+        }
       }
     },
     "state_contract": {
       "document_kind": "state_contract",
       "invalid_path_rules": [
-        "state path must start with 'state'",
-        "state path key reference must use dotted inputs form such as 'inputs.issue_ref'",
-        "state path must not contain trailing content"
+        {
+          "message": "state path must start with 'state'",
+          "name": "root_must_be_state"
+        },
+        {
+          "message": "state path key reference must use dotted inputs form such as 'inputs.issue_ref'",
+          "name": "key_reference_must_use_dotted_inputs"
+        },
+        {
+          "message": "state path must not contain trailing content",
+          "name": "no_trailing_content"
+        }
       ],
       "path_forms": {
         "root": "state",
@@ -1464,9 +1516,21 @@
         "supports_nested_fields": true
       },
       "runtime_rules": [
-        "state role must be bound before runtime access",
-        "state key reference must resolve to a scalar value",
-        "undeclared state locations are runtime errors"
+        {
+          "error_code": "runtime.state.binding_missing",
+          "message": "state role must be bound before runtime access",
+          "name": "bound_role_required"
+        },
+        {
+          "error_code": "runtime.state.key_invalid",
+          "message": "state key reference must resolve to a scalar value",
+          "name": "scalar_key_required"
+        },
+        {
+          "error_code": "runtime.state.declaration_missing",
+          "message": "undeclared state locations are runtime errors",
+          "name": "declared_location_required"
+        }
       ],
       "storage_document": {
         "required_fields": [
@@ -1499,6 +1563,27 @@
           "shape": "string"
         }
       ],
+      "step_form_rules": [
+        {
+          "fields": [
+            "uses",
+            "state_set",
+            "state_delete"
+          ],
+          "kind": "exclusive_choice",
+          "message": "A workflow step must define exactly one of uses, state_set, or state_delete",
+          "name": "exactly_one_step_form"
+        },
+        {
+          "field": "with",
+          "kind": "dependency",
+          "message": "The with field is allowed only together with uses",
+          "name": "with_requires_uses",
+          "requires": [
+            "uses"
+          ]
+        }
+      ],
       "step_forms": [
         {
           "name": "operation_call",
@@ -1527,6 +1612,33 @@
           ]
         }
       ],
+      "surface_constraints": {
+        "guard_expression": {
+          "allowed_roots": [
+            "inputs",
+            "probe"
+          ],
+          "forbidden_features": [
+            "value_expression_filters",
+            "value_expression_builtins",
+            "state_references"
+          ]
+        },
+        "runtime_value_surface": {
+          "allowed_builtins": [
+            "format"
+          ],
+          "allowed_filters": [
+            "lower",
+            "trim",
+            "slug"
+          ],
+          "allowed_roots": [
+            "inputs",
+            "state"
+          ]
+        }
+      },
       "top_level_fields": [
         {
           "name": "version",
