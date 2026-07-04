@@ -1,0 +1,56 @@
+{
+  "connector_namespaces": [
+    "git",
+    "gh",
+    "shell"
+  ],
+  "document_kind": "overview",
+  "document_kinds": [
+    "error_taxonomy",
+    "pattern_hints",
+    "playbook",
+    "plugin_surface_contract",
+    "profile",
+    "state_contract",
+    "workflow"
+  ],
+  "execution_concepts": {
+    "modes": [
+      "check",
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "statuses": [
+      "ok",
+      "guard_failed",
+      "validation_error",
+      "resolution_error",
+      "execution_error"
+    ]
+  },
+  "published_topics": [
+    "overview",
+    "capabilities",
+    "model",
+    "operations",
+    "operation",
+    "describe",
+    "search"
+  ],
+  "purpose": "World map for Ordo discovery and authoring bootstrap",
+  "recommended_next_calls": [
+    {
+      "command": "ordo-help capabilities --json",
+      "purpose": "Learn capability boundaries"
+    },
+    {
+      "command": "ordo-help model --json",
+      "purpose": "Learn the main DSL surfaces"
+    },
+    {
+      "command": "ordo-help operations --json",
+      "purpose": "Inspect the public operation catalog"
+    }
+  ]
+}
