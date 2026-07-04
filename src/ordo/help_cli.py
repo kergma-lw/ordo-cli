@@ -327,7 +327,11 @@ def render_capabilities_text(payload: JSONObject) -> str:
     capabilities = payload["capabilities"]
     lines = ["capabilities", "Supported and unsupported runtime surfaces.", "", "Capability states:"]
     for capability in capabilities:
-        lines.append(f"- {capability['name']}: {capability['status']}")
+        summary = f"- {capability['name']}: {capability['status']}"
+        related = capability.get("related_capabilities") or []
+        if related:
+            summary = f"{summary} (related: {', '.join(related)})"
+        lines.append(summary)
     return "\n".join(lines)
 
 

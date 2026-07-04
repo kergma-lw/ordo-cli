@@ -84,6 +84,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in override_result["facts"]))
         self.assertTrue(any(item["kind"] == "example" and item["name"] == "open-task-from-gitx" for item in example_result["facts"]))
 
+    def test_capabilities_publish_cross_links_for_branching(self) -> None:
+        capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
+        branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")
+        if_conflict = next(item for item in capabilities["negative_rules"] if item["name"] == "workflow_step.if_conflicts_with_register")
+
+        self.assertIn("workflow.step.condition", branching["related_capabilities"])
+        self.assertIn("workflow.step.register", branching["related_capabilities"])
+        self.assertIn("workflow_step.if_conflicts_with_register", branching["related_negative_rules"])
+        self.assertIn("workflow.step.if", branching["related_model_nodes"])
+        self.assertIn("workflow.branching", if_conflict["related_capabilities"])
+        self.assertIn("workflow.step.register", if_conflict["related_capabilities"])
+
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             temp_root = Path(tmp_dir)

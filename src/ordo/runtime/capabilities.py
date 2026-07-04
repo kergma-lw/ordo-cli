@@ -19,9 +19,19 @@ class CapabilitySpec:
     name: str
     status: CapabilityStatus
     scope: str
+    related_capabilities: tuple[str, ...] = ()
+    related_negative_rules: tuple[str, ...] = ()
+    related_model_nodes: tuple[str, ...] = ()
 
     def to_contract(self) -> JSONObject:
-        return {"name": self.name, "status": self.status, "scope": self.scope}
+        return {
+            "name": self.name,
+            "status": self.status,
+            "scope": self.scope,
+            "related_capabilities": list(self.related_capabilities),
+            "related_negative_rules": list(self.related_negative_rules),
+            "related_model_nodes": list(self.related_model_nodes),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +72,8 @@ class NegativeRuleSpec:
     rule: str
     reason: str
     related_codes: tuple[str, ...] = ()
+    related_capabilities: tuple[str, ...] = ()
+    related_model_nodes: tuple[str, ...] = ()
 
     def to_contract(self) -> JSONObject:
         return {
@@ -70,6 +82,8 @@ class NegativeRuleSpec:
             "rule": self.rule,
             "reason": self.reason,
             "related_codes": list(self.related_codes),
+            "related_capabilities": list(self.related_capabilities),
+            "related_model_nodes": list(self.related_model_nodes),
         }
 
 
@@ -79,10 +93,31 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.state_bindings", status="supported", scope="workflow"),
     CapabilitySpec(name="workflow.step.state_set", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.state_delete", status="supported", scope="workflow.step"),
-    CapabilitySpec(name="workflow.step.condition", status="supported", scope="workflow.step"),
-    CapabilitySpec(name="workflow.step.register", status="supported", scope="workflow.step"),
+    CapabilitySpec(
+        name="workflow.step.condition",
+        status="supported",
+        scope="workflow.step",
+        related_capabilities=("workflow.step.register",),
+        related_negative_rules=("workflow_step.if_conflicts_with_register",),
+        related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call"),
+    ),
+    CapabilitySpec(
+        name="workflow.step.register",
+        status="supported",
+        scope="workflow.step",
+        related_capabilities=("workflow.step.condition", "workflow.step.outputs"),
+        related_negative_rules=("workflow_step.register_requires_uses", "workflow_step.if_conflicts_with_register"),
+        related_model_nodes=("workflow.step.register", "workflow.step.uses", "workflow.step_forms.operation_call"),
+    ),
     CapabilitySpec(name="workflow.step.outputs", status="supported", scope="workflow.step"),
-    CapabilitySpec(name="workflow.branching", status="unsupported", scope="workflow"),
+    CapabilitySpec(
+        name="workflow.branching",
+        status="unsupported",
+        scope="workflow",
+        related_capabilities=("workflow.step.condition", "workflow.step.register"),
+        related_negative_rules=("workflow_step.if_conflicts_with_register",),
+        related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call"),
+    ),
 )
 
 EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
@@ -142,6 +177,7 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         rule="The with field is allowed only together with uses",
         reason="runtime value inputs belong to operation-call step form only",
         related_codes=("validation.workflow.step.with_without_uses",),
+        related_model_nodes=("workflow.step.with", "workflow.step.uses", "workflow.step_forms.operation_call"),
     ),
     NegativeRuleSpec(
         name="workflow_step.register_requires_uses",
@@ -149,6 +185,8 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         rule="The register field is allowed only together with uses",
         reason="the MVP publishes registered step results only for operation-call steps",
         related_codes=("validation.workflow.step.register_without_uses",),
+        related_capabilities=("workflow.step.register",),
+        related_model_nodes=("workflow.step.register", "workflow.step.uses", "workflow.step_forms.operation_call"),
     ),
     NegativeRuleSpec(
         name="workflow_step.if_conflicts_with_register",
@@ -156,6 +194,8 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         rule="The if and register fields cannot be used together in the MVP",
         reason="the MVP avoids publishing synthetic registered step results for skipped conditional steps",
         related_codes=("validation.workflow.step.if_with_register",),
+        related_capabilities=("workflow.step.condition", "workflow.step.register", "workflow.branching"),
+        related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call"),
     ),
     NegativeRuleSpec(
         name="value_expression.step_refs_must_be_backward",
