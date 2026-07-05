@@ -13,6 +13,7 @@ workflow: open-task
 
 inputs:
   issue_ref: kergma-lw/checklist-backend#16
+  repository: kergma-lw/checklist-backend
   project_id: PVT_BACKEND_PROJECT_ID
   issue_number: 16
   issue_title: Keep issue workflow in sync
@@ -30,13 +31,14 @@ state_needs:
 guards:
   - git.worktrees.count == 1
   - git.state.worktree_clean
-  - gh.issue(issue_ref=inputs.issue_ref).state == "OPEN"
+  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
 
 steps:
   - name: add-issue-to-project
     uses: gh.project.issue.add
     with:
-      issue_ref: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
       project_id: ${inputs.project_id}
 
   - name: validate-project-policy
@@ -49,13 +51,13 @@ steps:
           import subprocess
           import sys
 
-          issue_ref = "{}"
+          repository = "{}"
           project_id = "{}"
           allow_backlog = "{}".lower() == "true"
           allowed_types = [item.strip() for item in "{}".split(",") if item.strip()]
+          issue_number = int("{}")
 
-          owner_repo, issue_number = issue_ref.split("#", 1)
-          owner, repo = owner_repo.split("/", 1)
+          owner, repo = repository.split("/", 1)
 
           query = (
               "query($owner:String!,$repo:String!,$number:Int!){"
@@ -99,7 +101,7 @@ steps:
               None,
           )
           if item is None:
-              sys.stderr.write(f"Issue {issue_ref} is not in project {project_id}.\n")
+              sys.stderr.write(f"Issue {repository}#{issue_number} is not in project {project_id}.\n")
               sys.exit(1)
 
           def single_select(field_name: str):
@@ -116,28 +118,30 @@ steps:
 
           if issue_type not in allowed_types:
               sys.stderr.write(
-                  f"Issue {issue_ref} has unsupported project type {issue_type!r}; expected one of {allowed_types!r}.\n"
+                  f"Issue {repository}#{issue_number} has unsupported project type {issue_type!r}; expected one of {allowed_types!r}.\n"
               )
               sys.exit(1)
 
           if status in {"Done", "In review"}:
-              sys.stderr.write(f"Issue {issue_ref} has blocking project status {status!r}.\n")
+              sys.stderr.write(f"Issue {repository}#{issue_number} has blocking project status {status!r}.\n")
               sys.exit(1)
 
           if status == "Backlog" and not allow_backlog:
-              sys.stderr.write(f"Issue {issue_ref} is still in Backlog and allow_backlog=false.\n")
+              sys.stderr.write(f"Issue {repository}#{issue_number} is still in Backlog and allow_backlog=false.\n")
               sys.exit(1)
           PY
         args:
-          - ${inputs.issue_ref}
+          - ${inputs.repository}
           - ${inputs.project_id}
           - ${inputs.allow_backlog}
           - ${inputs.allowed_issue_types_csv}
+          - ${inputs.issue_number}
 
   - name: move-issue-to-in-progress
     uses: gh.project.issue.status.set
     with:
-      issue_ref: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
       project_id: ${inputs.project_id}
       status: In progress
 

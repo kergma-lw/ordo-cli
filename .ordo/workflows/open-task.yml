@@ -1,0 +1,190 @@
+version: 0
+workflow: open-task
+inputs:
+  issue_number: {}
+guards:
+  - uses: git.repo
+steps:
+  - name: load-issue
+    uses: gh.issue
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+    register: issue
+
+  - name: probe-project-membership
+    uses: gh.project.issue
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+    register: project_probe
+
+  - name: add-issue-to-project
+    if: ${step.project_probe.outputs.exists | not}
+    uses: gh.project.issue.add
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+
+  - name: load-project-fields
+    uses: gh.project.issue
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+    register: project
+
+  - name: validate-issue-open-state
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'state="%s"; ref="%s"; if [[ "$state" != "OPEN" ]]; then echo "error: issue must be OPEN for $ref (got $state)" >&2; exit 1; fi'
+        args:
+          - ${step.issue.outputs.state}
+          -
+            format: "%s#%s"
+            args:
+              - ${inputs.repository}
+              - ${inputs.issue_number}
+
+  - name: validate-added-project-type
+    if: ${step.project_probe.outputs.exists | not}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'profile_kind="%s"; type="%s"; ref="%s"; case "$profile_kind" in meta) if [[ "$type" != "Story" ]]; then echo "error: meta open-task requires Type=Story for $ref (got $type)" >&2; exit 1; fi ;; backend|frontend) if [[ "$type" != "Task" && "$type" != "Bug" ]]; then echo "error: open-task requires Type=Task or Type=Bug for $ref (got $type)" >&2; exit 1; fi ;; *) echo "error: unsupported profile kind: $profile_kind" >&2; exit 1 ;; esac'
+        args:
+          - ${inputs.repo_kind}
+          - ${step.project.outputs.type}
+          -
+            format: "%s#%s"
+            args:
+              - ${inputs.repository}
+              - ${inputs.issue_number}
+
+  - name: validate-existing-project-type
+    if: ${step.project_probe.outputs.exists}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'profile_kind="%s"; type="%s"; ref="%s"; case "$profile_kind" in meta) if [[ "$type" != "Story" ]]; then echo "error: meta open-task requires Type=Story for $ref (got $type)" >&2; exit 1; fi ;; backend|frontend) if [[ "$type" != "Task" && "$type" != "Bug" ]]; then echo "error: open-task requires Type=Task or Type=Bug for $ref (got $type)" >&2; exit 1; fi ;; *) echo "error: unsupported profile kind: $profile_kind" >&2; exit 1 ;; esac'
+        args:
+          - ${inputs.repo_kind}
+          - ${step.project.outputs.type}
+          -
+            format: "%s#%s"
+            args:
+              - ${inputs.repository}
+              - ${inputs.issue_number}
+
+  - name: validate-added-project-status
+    if: ${step.project_probe.outputs.exists | not}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'status="%s"; ref="%s"; if [[ -z "$status" ]]; then echo "error: cannot read project status for $ref" >&2; exit 1; fi; if [[ "$status" == "Done" || "$status" == "In review" ]]; then echo "error: refusing to open task with status $status for $ref" >&2; exit 1; fi; if [[ "$status" == "Backlog" ]]; then echo "error: refusing to open task from Backlog for $ref" >&2; exit 1; fi'
+        args:
+          - ${step.project.outputs.status}
+          -
+            format: "%s#%s"
+            args:
+              - ${inputs.repository}
+              - ${inputs.issue_number}
+
+  - name: validate-existing-project-status
+    if: ${step.project_probe.outputs.exists}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'status="%s"; ref="%s"; if [[ -z "$status" ]]; then echo "error: cannot read project status for $ref" >&2; exit 1; fi; if [[ "$status" == "Done" || "$status" == "In review" ]]; then echo "error: refusing to open task with status $status for $ref" >&2; exit 1; fi; if [[ "$status" == "Backlog" ]]; then echo "error: refusing to open task from Backlog for $ref" >&2; exit 1; fi'
+        args:
+          - ${step.project.outputs.status}
+          -
+            format: "%s#%s"
+            args:
+              - ${inputs.repository}
+              - ${inputs.issue_number}
+
+  - name: set-status-in-progress
+    uses: gh.project.issue.status.set
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+      status: In progress
+
+  - name: compute-branch-name
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'prefix=$(echo "%s" | tr "[:upper:]" "[:lower:]" ); slug=$(echo "%s" | tr "[:upper:]" "[:lower:]" | sed -E "s/[^a-z0-9]+/-/g; s/^-+//; s/-+$//" | cut -c1-60); num="%s"; echo -n "$prefix/$num-$slug"'
+        args:
+          - ${step.project.outputs.type}
+          - ${step.issue.outputs.title}
+          - ${step.issue.outputs.number}
+    register: branch
+
+  - name: ensure-clean-worktree
+    if: ${inputs.repo_kind | ne("meta")}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'dir="%s"; out=$(git -C "$dir" status --porcelain=v1 || true); if [[ -n "$out" ]]; then echo "error: dirty worktree in $dir" >&2; echo "$out" >&2; exit 1; fi'
+        args:
+          - ${inputs.repo_dir}
+
+  - name: prepare-task-branch
+    if: ${inputs.repo_kind | ne("meta")}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'dir="%s"; branch="%s"; base_ref=""; if git -C "$dir" show-ref --verify --quiet refs/heads/main; then if git -C "$dir" switch main >/dev/null 2>&1; then git -C "$dir" pull --ff-only; base_ref="main"; else git -C "$dir" fetch origin main; base_ref="origin/main"; fi; else git -C "$dir" fetch origin main; base_ref="origin/main"; fi; if git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then git -C "$dir" switch "$branch"; else git -C "$dir" switch -c "$branch" "$base_ref"; fi'
+        args:
+          - ${inputs.repo_dir}
+          - ${step.branch.outputs.stdout | trim}
+
+  - name: refresh-frontend-generated-artifacts
+    if: ${inputs.repo_kind | eq("frontend")}
+    uses: shell.command
+    with:
+      command: >-
+        bash -lc 'set -euo pipefail; dir=frontend; export NVM_DIR=${NVM_DIR:-$HOME/.nvm}; if [[ -s "$NVM_DIR/nvm.sh" ]]; then source "$NVM_DIR/nvm.sh" --no-use; fi; if ! type nvm >/dev/null 2>&1; then echo "error: nvm is required for frontend open-task" >&2; exit 1; fi; (cd "$dir" && nvm use >/dev/null); if ! bash -lc "cd \"$dir\" && (npm run openapi || npx --yes openapi-typescript ../backend/openapi.snapshot.json -o src/api/types.gen.ts --root-types --root-types-no-schema-prefix)"; then echo "error: openapi refresh failed" >&2; exit 1; fi; (cd "$dir" && npm run errors:sync); gen_out=$(git -C "$dir" status --porcelain=v1 -- src/api/types.gen.ts src/api/error-codes.gen.ts || true); if [[ -n "$gen_out" ]]; then git -C "$dir" add src/api/types.gen.ts src/api/error-codes.gen.ts; git -C "$dir" commit -m "chore(openapi): regenerate api types"; else (cd "$dir" && npm run check); fi'
+
+  - name: report-opened-meta-task
+    if: ${inputs.repo_kind | eq("meta")}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'issue_ref="%s"; echo "Opened: $issue_ref"; echo "Status: In progress"'
+        args:
+          -
+            format: "%s#%s"
+            args:
+              - ${inputs.repository}
+              - ${inputs.issue_number}
+
+  - name: report-opened-branch-task
+    if: ${inputs.repo_kind | ne("meta")}
+    uses: shell.command
+    with:
+      command:
+        format: >-
+          bash -lc 'issue_ref="%s"; branch="%s"; echo "Opened: $issue_ref"; echo "Status: In progress"; echo "Branch: $branch"'
+        args:
+          -
+            format: "%s#%s"
+            args:
+              - ${inputs.repository}
+              - ${inputs.issue_number}
+          - ${step.branch.outputs.stdout | trim}

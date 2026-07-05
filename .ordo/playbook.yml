@@ -1,0 +1,12 @@
+version: 1
+states: {}
+workflows:
+  open-task:
+    file: workflows/open-task.yml
+profiles:
+  frontend:
+    file: profiles/frontend.yml
+  backend:
+    file: profiles/backend.yml
+  meta:
+    file: profiles/meta.yml

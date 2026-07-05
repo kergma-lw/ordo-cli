@@ -8,4 +8,5 @@ steps:
   - name: inspect-issue
     uses: gh.issue
     with:
-      issue_ref: kergma-lw/checklist-backend#16
+      repository: kergma-lw/checklist-backend
+      issue_number: 16

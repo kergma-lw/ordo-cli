@@ -3,6 +3,8 @@ workflow: close-task
 
 inputs:
   issue_ref: kergma-lw/checklist-backend#16
+  repository: kergma-lw/checklist-backend
+  issue_number: 16
   ship: true
 
 state_needs:
@@ -11,7 +13,7 @@ state_needs:
 guards:
   - git.worktree.clean
   - git.branch.value != "main"
-  - gh.issue(issue_ref=inputs.issue_ref).state == "OPEN"
+  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
 
 steps:
   - name: verify
@@ -27,7 +29,8 @@ steps:
   - name: close-issue
     uses: gh.issue.close
     with:
-      issue_ref: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
 
   - name: forget-task-branch
     state_delete: state.task_memory[inputs.issue_ref].branch
