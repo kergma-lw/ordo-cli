@@ -3,6 +3,7 @@ states: {}
 workflows:
   open-task:
     file: workflows/open-task.yml
+    working_directory: ${inputs.repo_dir}
 profiles:
   frontend:
     file: profiles/frontend.yml

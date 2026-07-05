@@ -38,6 +38,8 @@ steps:
 
 The initial `if` surface uses the existing string-form value-expression envelope `if: ${...}`.
 
+Within that envelope, step conditions may use limited boolean composition such as `and`, `or`, `not`, and grouped subexpressions.
+
 ## Expression boundary
 
 The `if` field hosts value expressions with workflow step-condition semantics.
@@ -52,11 +54,15 @@ The expression may evaluate predicates and return a boolean value.
 
 It must not invoke connectors or probes and must not choose between alternative values or subexpressions based on a runtime condition.
 
+This keeps step conditions in the local workflow data domain even when they share boolean syntax with guard expressions.
+
 ## Boolean discipline
 
 - The final `if` result must be boolean.
+- Step conditions may combine boolean-valued subexpressions with `and`, `or`, `not`, and parentheses.
 - A direct reference is valid only when it resolves to boolean.
 - Predicate helpers such as equality comparison may be used when they return boolean.
+- Existing value-expression pipelines remain valid leaf forms when they produce boolean values.
 - `not` is boolean-only.
 
 Condition evaluation failure is a runtime error, not an implicit `false`.

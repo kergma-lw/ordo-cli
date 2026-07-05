@@ -25,9 +25,13 @@
 ## Boolean discipline
 
 - An `if` expression must evaluate to a boolean result.
+- Step conditions should support boolean composition through `and`, `or`, `not`, and parentheses.
+- Boolean composition in step conditions should combine only boolean-valued subexpressions.
 - A direct reference is valid in `if` only when the referenced value is boolean.
 - Predicate transforms such as equality comparison may be used when they return boolean.
 - `not` should accept only boolean input and return boolean output.
+- Existing value-expression pipelines may appear inside boolean subexpressions when they produce boolean output.
+- Shared boolean syntax with guards should not change the allowed step-condition reference domains or permit probe calls.
 - Failure to evaluate an `if` expression must fail execution rather than being treated as `false`.
 
 ## Register interaction

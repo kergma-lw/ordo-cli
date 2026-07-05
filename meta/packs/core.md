@@ -1423,6 +1423,8 @@ They sit between two existing surfaces:
 
 They are intended for local shaping of values, whether inline inside workflow fields or materialized through a dedicated pure value step, not for orchestration, policy, or integration logic.
 
+Step conditions may also reuse the `${...}` envelope for local boolean evaluation over the same workflow-visible roots.
+
 ## Core expression forms
 
 The initial model supports three author-facing forms inside `${...}`:
@@ -1484,6 +1486,16 @@ ${format("{}/{}#{}", inputs.owner, inputs.repo, inputs.number)}
 ```
 
 `format(...)` exists because workflows often need to compose multiple local values into one string while preserving a compact, reviewable surface.
+
+## Boolean use in step conditions
+
+When a value expression appears in a workflow step condition, it may participate in limited boolean composition through `and`, `or`, `not`, and parentheses.
+
+This boolean layer exists for local workflow-owned condition evaluation over `inputs...`, `state...`, and prior `step...` results.
+
+It may combine direct boolean references and boolean-producing predicate expressions, including existing pipeline forms that end in a boolean result.
+
+This does not permit connector or probe calls and does not turn value expressions into the public guard-expression surface.
 
 ## YAML equivalent forms
 
@@ -1559,7 +1571,7 @@ Value expressions are not meant to become:
 - a workflow-defined macro system;
 - an open-ended query or collection-transformation language.
 
-They may evaluate predicates and return boolean values, but they must not choose between alternative values or subexpressions based on a runtime condition.
+They may evaluate predicates and participate in limited boolean composition for step-condition semantics, but they must not choose between alternative values or subexpressions based on a runtime condition.
 
 Illustrative forbidden forms include ternary syntax and helpers such as `if(...)`, `select(...)`, or `case(...)`.
 
