@@ -194,6 +194,7 @@
 - A value expression may apply a closed set of deterministic built-in transforms.
 - Inline composition should use the pipe form `|` as the canonical compact authoring surface.
 - String formatting may be expressed as a root built-in form.
+- A workflow may materialize one derived value through a dedicated pure `value` step form when later steps need to reuse that value through the registered-step read surface.
 
 ## Permanent exclusions
 
@@ -220,6 +221,7 @@
 - YAML equivalence is selective rather than universal.
 - Not every inline value expression needs or should have a YAML equivalent.
 - A YAML equivalent, when present, should represent the same semantic operation as its inline root form rather than introducing a parallel computation model.
+- A dedicated `value` step form, when present, should materialize one already-supported value-expression result rather than introducing a second expression language or a variable-programming surface.
 
 ## Growth discipline
 
@@ -1150,7 +1152,8 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - A `Playbook` names project-local workflow entries, profile entries, and runtime state declarations.
 - A `Workflow` contains ordered `Guard` and `Step` entries.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
-- A `Guard` and a `Step` reference an `OperationRef`.
+- A `Guard` references an `OperationRef`.
+- A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.
 - A `Step` may declare an `if` condition that controls whether that one declared step executes or is skipped.
 - A `Step` may publish an execution-local registered result for later steps through a workflow-local `register` identifier.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
@@ -1167,6 +1170,7 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - `Workflow`, `Guard`, and `Step` express orchestration intent.
 - `StateNeed` expresses workflow-level need for persistent state without naming concrete project storage instances.
 - Step conditions express per-step eligibility, not first-class branch topology.
+- Built-in runtime step forms may be effectful, such as state mutation, or pure, such as value materialization.
 - Registered step results express execution-local data flow, not persistent workflow state.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
@@ -1392,7 +1396,7 @@ They sit between two existing surfaces:
 - plain scalar values with no runtime evaluation;
 - connector operations and built-in runtime step forms that carry effects.
 
-They are intended for local shaping of values, not for orchestration, policy, or integration logic.
+They are intended for local shaping of values, whether inline inside workflow fields or materialized through a dedicated pure value step, not for orchestration, policy, or integration logic.
 
 ## Core expression forms
 
@@ -1535,6 +1539,28 @@ They may evaluate predicates and return boolean values, but they must not choose
 Illustrative forbidden forms include ternary syntax and helpers such as `if(...)`, `select(...)`, or `case(...)`.
 
 They also must not read future step results or smuggle step-result access into guard evaluation.
+
+## Value-step relation
+
+A workflow may also materialize one derived value through a dedicated built-in `value` step form when later steps should reuse that derived result through the normal `step.<register>...` surface.
+
+Illustrative form:
+
+```yaml
+steps:
+  - name: compute-branch-name
+    value:
+      format: "{}/{}-{}"
+      args:
+        - ${step.project.outputs.type | lower}
+        - ${step.issue.outputs.number}
+        - ${step.issue.outputs.title | slug}
+    register: branch
+```
+
+This does not introduce a second computation model.
+
+The `value` step merely materializes one already-supported workflow value into a registered step result so later steps may read it without recomputing the same expression.
 
 <!-- source: model/workflow/guard-expressions.md -->
 

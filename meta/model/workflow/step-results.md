@@ -10,6 +10,8 @@ It exists so a workflow may reuse structured outputs from an earlier step withou
 
 An operation-call step may declare an optional `register` field.
 
+A built-in `value` step may also declare `register` so it can publish one derived workflow-owned value for later steps.
+
 Illustrative form:
 
 ```yaml
@@ -49,6 +51,8 @@ Examples:
 
 The `outputs` subtree is the workflow-facing projection of the structured operation result outputs.
 
+For a `value` step, the published workflow-facing output is the single derived payload at `step.<register>.outputs.value`.
+
 ## Boundary
 
 Registered step results are:
@@ -74,9 +78,10 @@ Registered step results are not:
 
 ## Step-form restrictions
 
-- The MVP `register` field belongs only to operation-call steps that use `uses`.
+- The `register` field belongs only to operation-call steps that use `uses` and to built-in `value` steps.
 - A step that declares `if` must not also declare `register` in the MVP.
 - `state_set` and `state_delete` do not publish registered step results in the MVP.
+- A built-in `value` step publishes exactly one derived output value rather than an open-ended output object assembled by workflow syntax.
 - A probe operation used as a normal step may declare `register` like any other operation-call step.
 
 ## Guard boundary

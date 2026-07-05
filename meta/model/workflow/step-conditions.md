@@ -77,4 +77,4 @@ The runtime should preserve machine-usable visibility that a step was skipped be
 
 The MVP does not allow one step to declare both `if` and `register`.
 
-This keeps registered step results tied to actually executed operation-call steps and avoids publishing synthetic results for skipped steps.
+This keeps registered step results tied to actually executed operation-call or value steps and avoids publishing synthetic results for skipped steps.

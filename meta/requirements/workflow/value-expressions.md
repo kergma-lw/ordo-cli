@@ -15,6 +15,7 @@
 - A value expression may apply a closed set of deterministic built-in transforms.
 - Inline composition should use the pipe form `|` as the canonical compact authoring surface.
 - String formatting may be expressed as a root built-in form.
+- A workflow may materialize one derived value through a dedicated pure `value` step form when later steps need to reuse that value through the registered-step read surface.
 
 ## Permanent exclusions
 
@@ -41,6 +42,7 @@
 - YAML equivalence is selective rather than universal.
 - Not every inline value expression needs or should have a YAML equivalent.
 - A YAML equivalent, when present, should represent the same semantic operation as its inline root form rather than introducing a parallel computation model.
+- A dedicated `value` step form, when present, should materialize one already-supported value-expression result rather than introducing a second expression language or a variable-programming surface.
 
 ## Growth discipline
 

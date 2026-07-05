@@ -9,7 +9,7 @@ They sit between two existing surfaces:
 - plain scalar values with no runtime evaluation;
 - connector operations and built-in runtime step forms that carry effects.
 
-They are intended for local shaping of values, not for orchestration, policy, or integration logic.
+They are intended for local shaping of values, whether inline inside workflow fields or materialized through a dedicated pure value step, not for orchestration, policy, or integration logic.
 
 ## Core expression forms
 
@@ -152,3 +152,25 @@ They may evaluate predicates and return boolean values, but they must not choose
 Illustrative forbidden forms include ternary syntax and helpers such as `if(...)`, `select(...)`, or `case(...)`.
 
 They also must not read future step results or smuggle step-result access into guard evaluation.
+
+## Value-step relation
+
+A workflow may also materialize one derived value through a dedicated built-in `value` step form when later steps should reuse that derived result through the normal `step.<register>...` surface.
+
+Illustrative form:
+
+```yaml
+steps:
+  - name: compute-branch-name
+    value:
+      format: "{}/{}-{}"
+      args:
+        - ${step.project.outputs.type | lower}
+        - ${step.issue.outputs.number}
+        - ${step.issue.outputs.title | slug}
+    register: branch
+```
+
+This does not introduce a second computation model.
+
+The `value` step merely materializes one already-supported workflow value into a registered step result so later steps may read it without recomputing the same expression.
