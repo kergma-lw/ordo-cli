@@ -47,7 +47,7 @@ class ReferenceNode(ValueExpressionNode):
 
 @dataclass(frozen=True, slots=True)
 class StateReferenceNode(ValueExpressionNode):
-    """Runtime-state read such as ``state.task_memory[inputs.issue_ref].branch``."""
+    """Runtime-state read such as ``state.task_memory[inputs.task_key].branch``."""
 
     state_role: str
     key_reference: tuple[str, ...]
@@ -248,7 +248,7 @@ class _Parser:
         key_reference = self._parse_dotted_reference()
         if key_reference.parts[0] != "inputs" or len(key_reference.parts) < 2:
             raise ValueExpressionParseError(
-                "State path key reference must use dotted form such as 'inputs.issue_ref'",
+                "State path key reference must use dotted form such as 'inputs.task_key'",
                 key_reference.start,
                 key_reference.end,
             )

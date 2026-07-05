@@ -29,7 +29,7 @@ STATE_CONTRACT: JSONObject = {
         },
         {
             "name": "key_reference_must_use_dotted_inputs",
-            "message": "state path key reference must use dotted inputs form such as 'inputs.issue_ref'",
+            "message": "state path key reference must use dotted inputs form such as 'inputs.task_key'",
         },
         {
             "name": "no_trailing_content",

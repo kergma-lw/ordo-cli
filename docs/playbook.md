@@ -114,8 +114,27 @@ Activation order is:
 1. discover or load the playbook;
 2. choose the active profile for the run;
 3. select one workflow entry;
-4. resolve state bindings;
-5. enter the chosen runtime mode.
+4. apply any explicit launch-time input overrides from the caller;
+5. resolve state bindings;
+6. enter the chosen runtime mode.
+
+## Launch-time input overrides
+
+`ordo-playbook` may add or override top-level workflow inputs for one run with repeatable flags such as:
+
+```text
+ordo-playbook --workflow inspect-issue --input repository=repo/name --input issue_number=42 --input enabled=true plan
+```
+
+These launch-time input values are parsed as YAML scalars or collections and take precedence over both workflow-declared inputs and profile-provided default inputs for that run only.
+
+For multiline string inputs, `ordo-playbook` may also read the value from a file:
+
+```text
+ordo-playbook --workflow inspect-issue --input-file body=./prompt.md plan
+```
+
+`--input-file` reads the file contents as a raw UTF-8 string for that one run. When both `--input` and `--input-file` set the same key, `--input-file` wins.
 
 ## Resolution notes
 

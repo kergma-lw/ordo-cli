@@ -45,7 +45,8 @@ version: 0
 workflow: open-task
 
 inputs:
-  issue_ref: kergma-lw/checklist-backend#16
+  repository: kergma-lw/checklist-backend
+  issue_number: 16
   project_id: PVT_kwDOBQfyUc4A3Q3j
   branch: keep
   iteration: Sprint 12
@@ -53,20 +54,22 @@ inputs:
 guards:
   - uses: git.single_worktree
   - git.worktree.clean
-  - gh.issue(issue_ref=inputs.issue_ref).state == "OPEN"
+  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
 
 steps:
   - name: move-issue-to-in-progress
     uses: gh.project.issue.status.set
     with:
-      issue_ref: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
       project_id: ${inputs.project_id}
       status: In progress
 
   - name: set-current-iteration
     uses: gh.project.issue.iteration.set
     with:
-      issue_ref: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
       project_id: ${inputs.project_id}
       iteration: ${inputs.iteration}
 

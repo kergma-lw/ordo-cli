@@ -18,8 +18,8 @@ Guards may be expressed either as explicit operation calls or as compact express
 ```
 
 ```yaml
-- gh.issue(issue_ref=inputs.issue_ref).state != "CLOSED"
-- gh.project.issue(issue_ref=inputs.issue_ref, project_id=inputs.project_id).exists
+- gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"
+- gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
 ```
 
 ## Expression shape rules

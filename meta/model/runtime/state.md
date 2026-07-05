@@ -57,7 +57,7 @@ state_needs:
 steps:
   - name: remember-branch
     state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+      state.task_memory[inputs.task_key].branch: ${inputs.branch}
 ```
 
 Delete example:
@@ -65,7 +65,7 @@ Delete example:
 ```yaml
 steps:
   - name: forget-branch
-    state_delete: state.task_memory[inputs.issue_ref].branch
+    state_delete: state.task_memory[inputs.task_key].branch
 ```
 
 These forms are effectful runtime operations even though they do not go through the public connector registry.
@@ -77,7 +77,7 @@ State reads use direct references instead of a dedicated retrieval step.
 Illustrative form:
 
 ```yaml
-${state.task_memory[inputs.issue_ref].branch}
+${state.task_memory[inputs.task_key].branch}
 ```
 
 The read surface should stay aligned with the mutation target surface so that authors do not learn two unrelated addressing models.
@@ -92,23 +92,23 @@ state.<role>[inputs.<key-reference>][.<field>...]
 
 Examples:
 
-- `state.task_memory[inputs.issue_ref]`
-- `state.task_memory[inputs.issue_ref].branch`
-- `state.task_memory[inputs.issue_ref].metadata.owner`
+- `state.task_memory[inputs.task_key]`
+- `state.task_memory[inputs.task_key].branch`
+- `state.task_memory[inputs.task_key].metadata.owner`
 
 Read usage wraps the same path inside a value expression:
 
 ```yaml
-${state.task_memory[inputs.issue_ref].branch}
+${state.task_memory[inputs.task_key].branch}
 ```
 
 Mutation targets use the same path text directly:
 
 ```yaml
 state_set:
-  state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+  state.task_memory[inputs.task_key].branch: ${inputs.branch}
 
-state_delete: state.task_memory[inputs.issue_ref].branch
+state_delete: state.task_memory[inputs.task_key].branch
 ```
 
 ## Initial grammar restrictions

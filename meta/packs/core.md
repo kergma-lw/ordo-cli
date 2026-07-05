@@ -50,7 +50,7 @@
 
 - A zero-argument boolean probe fact should read like a compact fact, for example `git.worktree.clean`.
 - A zero-argument non-boolean probe value should remain readable through explicit documented field access, for example `git.branch.value`.
-- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(issue_ref=inputs.issue_ref).state`.
+- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state`.
 - The authoring surface should prefer a minimal and orthogonal public probe vocabulary over many specialized policy-encoded probe names.
 
 ## Checkability
@@ -131,6 +131,7 @@
 
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
+- A playbook launch surface may support explicit launch-time input overrides for one run.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -1338,6 +1339,15 @@ The entry must resolve to exactly one workflow file.
 - If no explicit profile and no default profile are present, the run proceeds without a profile.
 - Active profile resolution happens before workflow activation and step execution.
 
+## Launch-time input overrides
+
+- A playbook run may accept explicit launch-time input overrides from the caller.
+- Launch-time input overrides apply to the selected workflow run only.
+- Launch-time input overrides take precedence over workflow-declared input defaults.
+- Launch-time input overrides also take precedence over profile-provided missing-input defaults.
+- A launch-time input override may be provided either inline or from a file-backed raw string value.
+- Launch-time input overrides do not mutate the playbook, workflow source file, or profile source file.
+
 ## State resolution
 
 - Playbook state names resolve through `states.<name>`.
@@ -1386,8 +1396,8 @@ The initial model supports three author-facing forms inside `${...}`:
 Illustrative examples:
 
 ```yaml
-${inputs.issue_ref}
-${state.task_state[inputs.issue_ref].branch}
+${inputs.repository}
+${state.task_state[inputs.task_key].branch}
 ${step.issue.outputs.id}
 ${inputs.title | slug}
 ${inputs.title | trim | slug | truncate(60)}
@@ -1650,7 +1660,7 @@ state_needs:
 steps:
   - name: remember-branch
     state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+      state.task_memory[inputs.task_key].branch: ${inputs.branch}
 ```
 
 Delete example:
@@ -1658,7 +1668,7 @@ Delete example:
 ```yaml
 steps:
   - name: forget-branch
-    state_delete: state.task_memory[inputs.issue_ref].branch
+    state_delete: state.task_memory[inputs.task_key].branch
 ```
 
 These forms are effectful runtime operations even though they do not go through the public connector registry.
@@ -1670,7 +1680,7 @@ State reads use direct references instead of a dedicated retrieval step.
 Illustrative form:
 
 ```yaml
-${state.task_memory[inputs.issue_ref].branch}
+${state.task_memory[inputs.task_key].branch}
 ```
 
 The read surface should stay aligned with the mutation target surface so that authors do not learn two unrelated addressing models.
@@ -1685,23 +1695,23 @@ state.<role>[inputs.<key-reference>][.<field>...]
 
 Examples:
 
-- `state.task_memory[inputs.issue_ref]`
-- `state.task_memory[inputs.issue_ref].branch`
-- `state.task_memory[inputs.issue_ref].metadata.owner`
+- `state.task_memory[inputs.task_key]`
+- `state.task_memory[inputs.task_key].branch`
+- `state.task_memory[inputs.task_key].metadata.owner`
 
 Read usage wraps the same path inside a value expression:
 
 ```yaml
-${state.task_memory[inputs.issue_ref].branch}
+${state.task_memory[inputs.task_key].branch}
 ```
 
 Mutation targets use the same path text directly:
 
 ```yaml
 state_set:
-  state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+  state.task_memory[inputs.task_key].branch: ${inputs.branch}
 
-state_delete: state.task_memory[inputs.issue_ref].branch
+state_delete: state.task_memory[inputs.task_key].branch
 ```
 
 ## Initial grammar restrictions
@@ -2612,14 +2622,14 @@ Set example:
 ```yaml
 - name: remember-branch
   state_set:
-    state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+    state.task_memory[inputs.task_key].branch: ${inputs.branch}
 ```
 
 Delete example:
 
 ```yaml
 - name: forget-branch
-  state_delete: state.task_memory[inputs.issue_ref].branch
+  state_delete: state.task_memory[inputs.task_key].branch
 ```
 
 Workflow files do not declare runtime state locations themselves.
@@ -2743,8 +2753,8 @@ Guards may be expressed either as explicit operation calls or as compact express
 ```
 
 ```yaml
-- gh.issue(issue_ref=inputs.issue_ref).state != "CLOSED"
-- gh.project.issue(issue_ref=inputs.issue_ref, project_id=inputs.project_id).exists
+- gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"
+- gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
 ```
 
 ## Expression shape rules
@@ -2961,6 +2971,16 @@ Expected Ordo value:
 - state naming stays stable across workflows;
 - storage location is managed in project-local orchestration context;
 - workflows do not each duplicate the same storage declaration.
+
+## Scenario 3b: launch-time input override
+
+Caller launches a named workflow entry but needs to override one input such as `repository`, `issue_number`, or `enabled` for a single run.
+
+Expected Ordo value:
+
+- the caller can override or add the input without editing the workflow file;
+- launch-time values win over workflow defaults and profile-provided defaults;
+- the override remains local to that one run.
 
 ## Scenario 4: logical workflow state binding
 
@@ -3199,6 +3219,7 @@ Playbook must provide a deterministic and reviewable project-local launch surfac
 - State names are unique within the playbook state catalog.
 - Workflow state-binding role names are unique within a workflow entry.
 - Relative workflow, profile, and state paths resolve deterministically from playbook-owned context.
+- Launch-time input overrides, when supported, deterministically override workflow and profile input defaults for one run only.
 - Workflow logical state roles resolve deterministically to declared playbook state entries.
 - Every declared workflow logical state role has a binding in the active playbook workflow entry.
 - No playbook workflow entry provides extra state bindings for undeclared workflow logical state roles.

@@ -30,6 +30,16 @@ Expected Ordo value:
 - storage location is managed in project-local orchestration context;
 - workflows do not each duplicate the same storage declaration.
 
+## Scenario 3b: launch-time input override
+
+Caller launches a named workflow entry but needs to override one input such as `repository`, `issue_number`, or `enabled` for a single run.
+
+Expected Ordo value:
+
+- the caller can override or add the input without editing the workflow file;
+- launch-time values win over workflow defaults and profile-provided defaults;
+- the override remains local to that one run.
+
 ## Scenario 4: logical workflow state binding
 
 Workflow uses a logical state role such as `task_memory`, while the playbook binds that role to a concrete state entry such as `repo_task_state`.

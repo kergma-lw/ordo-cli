@@ -17,7 +17,8 @@ steps:
   - name: inspect-issue
     uses: gh.issue
     with:
-      issue: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
     register: issue
 
   - name: comment

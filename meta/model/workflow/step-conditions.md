@@ -19,7 +19,8 @@ steps:
   - name: inspect-issue
     uses: gh.issue
     with:
-      issue: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
     register: issue
 
   - name: comment-open
@@ -32,7 +33,7 @@ steps:
   - name: remember-branch
     if: ${inputs.persist_branch}
     state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+      state.task_memory[inputs.task_key].branch: ${inputs.branch}
 ```
 
 The initial `if` surface uses the existing string-form value-expression envelope `if: ${...}`.

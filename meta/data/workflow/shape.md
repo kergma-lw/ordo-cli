@@ -60,14 +60,14 @@ Set example:
 ```yaml
 - name: remember-branch
   state_set:
-    state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+    state.task_memory[inputs.task_key].branch: ${inputs.branch}
 ```
 
 Delete example:
 
 ```yaml
 - name: forget-branch
-  state_delete: state.task_memory[inputs.issue_ref].branch
+  state_delete: state.task_memory[inputs.task_key].branch
 ```
 
 Workflow files do not declare runtime state locations themselves.

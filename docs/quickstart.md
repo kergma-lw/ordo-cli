@@ -21,7 +21,8 @@ version: 0
 workflow: inspect-issue
 
 inputs:
-  issue_ref: kergma-lw/ordo-cli#1
+  repository: kergma-lw/ordo-cli
+  issue_number: 1
 
 guards:
   - git.worktree.clean
@@ -30,7 +31,8 @@ steps:
   - name: inspect-issue
     uses: gh.issue
     with:
-      issue_ref: ${inputs.issue_ref}
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
 ```
 
 ## 3. Load and validate it
@@ -242,8 +244,8 @@ Current important limits:
 `examples/open-task-from-gitx.yaml` now shows one small runtime state use:
 
 - declare a logical `state_needs` role and bind it through the playbook layer;
-- write `state.task_memory[inputs.issue_ref].branch` with `state_set`;
-- read that value later through `${state.task_memory[inputs.issue_ref].branch}`;
+- write `state.task_memory[inputs.task_key].branch` with `state_set`;
+- read that value later through `${state.task_memory[inputs.task_key].branch}`;
 - remove it through `state_delete` when the workflow is done.
 
 ## Next docs

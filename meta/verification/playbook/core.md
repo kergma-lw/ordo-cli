@@ -13,6 +13,7 @@ Playbook must provide a deterministic and reviewable project-local launch surfac
 - State names are unique within the playbook state catalog.
 - Workflow state-binding role names are unique within a workflow entry.
 - Relative workflow, profile, and state paths resolve deterministically from playbook-owned context.
+- Launch-time input overrides, when supported, deterministically override workflow and profile input defaults for one run only.
 - Workflow logical state roles resolve deterministically to declared playbook state entries.
 - Every declared workflow logical state role has a binding in the active playbook workflow entry.
 - No playbook workflow entry provides extra state bindings for undeclared workflow logical state roles.

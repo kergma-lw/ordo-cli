@@ -28,6 +28,7 @@ The initial public command model is:
 ./ordo-help overview [--json]
 ./ordo-help capabilities [--json]
 ./ordo-help model [--json]
+./ordo-help command-line [--json]
 ./ordo-help operations [--json]
 ./ordo-help examples [--json]
 ./ordo-help operation <reference> [--json]
@@ -42,6 +43,7 @@ The public contract should remain topic-oriented rather than exposing implementa
 - `overview` aggregates the world map needed before authoring or execution planning.
 - `capabilities` exposes supported, unsupported, and planned surface states.
 - `model` aggregates the main authoring contracts over workflows, profiles, playbooks, and runtime state.
+- `command-line` exposes the public launch-command surface and stable flag semantics.
 - `operations` exposes the public connector operation catalog.
 - `examples` exposes verified repository examples intended as public authoring references.
 - `operation <reference>` exposes one focused operation contract.
@@ -57,6 +59,7 @@ The initial recommended bootstrap sequence is:
 ./ordo-help overview --json
 ./ordo-help capabilities --json
 ./ordo-help model --json
+./ordo-help command-line --json
 ./ordo-help operations --json
 ./ordo-help examples --json
 ```
@@ -66,6 +69,7 @@ This sequence should let a zero-knowledge caller discover:
 - the purpose and scope of Ordo;
 - the main supported and unsupported capability boundaries;
 - the main authoring surfaces and contracts;
+- the public launch-command surface for common entrypoints such as `ordo-playbook`;
 - the public executable operation inventory.
 
 ## Boundary rule

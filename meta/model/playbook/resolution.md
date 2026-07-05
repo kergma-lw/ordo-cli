@@ -43,6 +43,15 @@ The entry must resolve to exactly one workflow file.
 - If no explicit profile and no default profile are present, the run proceeds without a profile.
 - Active profile resolution happens before workflow activation and step execution.
 
+## Launch-time input overrides
+
+- A playbook run may accept explicit launch-time input overrides from the caller.
+- Launch-time input overrides apply to the selected workflow run only.
+- Launch-time input overrides take precedence over workflow-declared input defaults.
+- Launch-time input overrides also take precedence over profile-provided missing-input defaults.
+- A launch-time input override may be provided either inline or from a file-backed raw string value.
+- Launch-time input overrides do not mutate the playbook, workflow source file, or profile source file.
+
 ## State resolution
 
 - Playbook state names resolve through `states.<name>`.

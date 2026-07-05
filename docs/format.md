@@ -70,7 +70,7 @@ Illustrative examples:
 guards:
   - git.worktree.clean
   - git.branch.value != "main"
-  - gh.issue(issue_ref=inputs.issue_ref).state not in ["DONE", "CLOSED"]
+  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["DONE", "CLOSED"]
 ```
 
 Current implementation note:
@@ -102,10 +102,10 @@ Built-in runtime state mutation forms:
 ```yaml
 - name: remember-branch
   state_set:
-    state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+    state.task_memory[inputs.task_key].branch: ${inputs.branch}
 
 - name: forget-branch
-  state_delete: state.task_memory[inputs.issue_ref].branch
+  state_delete: state.task_memory[inputs.task_key].branch
 ```
 
 Stable state path grammar:
@@ -116,9 +116,9 @@ state.<role>[inputs.<key-reference>][.<field>...]
 
 Examples:
 
-- `state.task_memory[inputs.issue_ref]`
-- `state.task_memory[inputs.issue_ref].branch`
-- `state.task_memory[inputs.issue_ref].metadata.owner`
+- `state.task_memory[inputs.task_key]`
+- `state.task_memory[inputs.task_key].branch`
+- `state.task_memory[inputs.task_key].metadata.owner`
 
 Initial restrictions:
 
@@ -180,7 +180,7 @@ The playbook then binds workflow logical roles to concrete state entries.
 Step values may read from runtime state through direct references:
 
 ```yaml
-${state.task_memory[inputs.issue_ref].branch}
+${state.task_memory[inputs.task_key].branch}
 ```
 
 Optional later extensions:

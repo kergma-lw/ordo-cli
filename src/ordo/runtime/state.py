@@ -274,7 +274,7 @@ def _values_object(document: JSONObject) -> dict[str, JSONValue]:
 
 
 def resolve_workflow_input_reference(parts: tuple[str, ...], workflow: Workflow) -> JSONValue:
-    """Resolve a dotted workflow input reference such as `inputs.issue_ref`."""
+    """Resolve a dotted workflow input reference such as `inputs.task_key`."""
 
     current: JSONValue = workflow.inputs
     for part in parts[1:]:

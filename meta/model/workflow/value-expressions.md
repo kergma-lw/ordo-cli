@@ -23,8 +23,8 @@ The initial model supports three author-facing forms inside `${...}`:
 Illustrative examples:
 
 ```yaml
-${inputs.issue_ref}
-${state.task_state[inputs.issue_ref].branch}
+${inputs.repository}
+${state.task_state[inputs.task_key].branch}
 ${step.issue.outputs.id}
 ${inputs.title | slug}
 ${inputs.title | trim | slug | truncate(60)}

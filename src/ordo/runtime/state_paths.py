@@ -83,7 +83,7 @@ class _Parser:
             self.position += 1
             parts.append(self._parse_identifier(label="input reference segment"))
         if len(parts) == 1:
-            raise StatePathParseError("State path input reference must use dotted form such as 'inputs.issue_ref'", start, self.position)
+            raise StatePathParseError("State path input reference must use dotted form such as 'inputs.task_key'", start, self.position)
         return tuple(parts)
 
     def _parse_identifier(self, *, allow_hyphen: bool = False, label: str) -> str:

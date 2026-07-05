@@ -11,6 +11,7 @@
 
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
+- A playbook launch surface may support explicit launch-time input overrides for one run.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
