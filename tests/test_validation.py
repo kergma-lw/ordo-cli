@@ -671,6 +671,65 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.not_type")
 
+    def test_step_if_accepts_boolean_composition(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                  status: ok
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.enabled and (inputs.status | eq("ok"))}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_step_if_rejects_non_boolean_and_operand(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${format("hello") and inputs.enabled}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.boolean_operand_type")
+
+    def test_step_if_rejects_non_input_reference_root(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${git.worktree.clean and inputs.enabled}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.root")
+
     def test_profile_unknown_field_fails(self) -> None:
         report = validate_profile_text(
             textwrap.dedent(

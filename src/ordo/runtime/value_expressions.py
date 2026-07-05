@@ -767,6 +767,13 @@ def collect_step_references(node: ValueExpressionNode) -> tuple[StepReferenceNod
         if isinstance(current, BuiltinCallNode):
             for argument in current.arguments:
                 visit(argument)
+            return
+        if isinstance(current, UnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, BinaryNode):
+            visit(current.left)
+            visit(current.right)
 
     visit(node)
     return tuple(refs)

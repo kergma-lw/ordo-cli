@@ -15,6 +15,7 @@ from .guard_expressions import GuardExpressionParseError, parse_guard_expression
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .value_expressions import (
+    BinaryNode,
     BuiltinCallNode,
     FilterApplicationNode,
     LiteralNode,
@@ -22,6 +23,7 @@ from .value_expressions import (
     ReferenceNode,
     StateReferenceNode,
     StepReferenceNode,
+    UnaryNode,
     ValueExpressionNode,
     ValueExpressionParseError,
     collect_step_references,
@@ -603,7 +605,7 @@ def _extract_runtime_value_expression(value: str) -> str | None:
 
 
 def _validate_step_condition_type(node: ValueExpressionNode, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
-    inferred, diagnostics = _infer_value_expression_type(node, path=path, source=source)
+    inferred, diagnostics = _infer_value_expression_type(node, path=path, source=source, step_condition_mode=True)
     if inferred not in {"boolean", "unknown"}:
         diagnostics.append(
             _diagnostic(
@@ -622,6 +624,7 @@ def _infer_value_expression_type(
     *,
     path: tuple[str, ...],
     source: str,
+    step_condition_mode: bool = False,
 ) -> tuple[str, list[Diagnostic]]:
     diagnostics: list[Diagnostic] = []
     if isinstance(node, LiteralNode):
@@ -634,18 +637,91 @@ def _infer_value_expression_type(
         if node.value is None:
             return "null", diagnostics
         return "unknown", diagnostics
-    if isinstance(node, (ReferenceNode, StateReferenceNode, StepReferenceNode)):
+    if isinstance(node, ReferenceNode):
+        if step_condition_mode and node.parts[0] != "inputs":
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.if_expr.root",
+                    "Step conditions may reference only workflow-local roots",
+                    path,
+                    source,
+                    root=node.parts[0],
+                )
+            )
+        return "unknown", diagnostics
+    if isinstance(node, (StateReferenceNode, StepReferenceNode)):
         return "unknown", diagnostics
     if isinstance(node, BuiltinCallNode):
         if node.name == "format":
+            for argument in node.arguments:
+                _, argument_diagnostics = _infer_value_expression_type(
+                    argument,
+                    path=path,
+                    source=source,
+                    step_condition_mode=step_condition_mode,
+                )
+                diagnostics.extend(argument_diagnostics)
             return "string", diagnostics
         return "unknown", diagnostics
     if isinstance(node, PipelineNode):
-        current_type, diagnostics = _infer_value_expression_type(node.source, path=path, source=source)
+        current_type, diagnostics = _infer_value_expression_type(
+            node.source,
+            path=path,
+            source=source,
+            step_condition_mode=step_condition_mode,
+        )
         for filter_node in node.filters:
             current_type, filter_diagnostics = _infer_filter_result_type(filter_node, input_type=current_type, path=path, source=source)
             diagnostics.extend(filter_diagnostics)
         return current_type, diagnostics
+    if isinstance(node, UnaryNode):
+        operand_type, operand_diagnostics = _infer_value_expression_type(
+            node.operand,
+            path=path,
+            source=source,
+            step_condition_mode=step_condition_mode,
+        )
+        diagnostics.extend(operand_diagnostics)
+        if operand_type not in {"boolean", "unknown"}:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.if_expr.boolean_operand_type",
+                    f"Operator '{node.operator}' requires a boolean operand",
+                    path,
+                    source,
+                    operator=node.operator,
+                    actual_type=operand_type,
+                )
+            )
+        return "boolean", diagnostics
+    if isinstance(node, BinaryNode):
+        left_type, left_diagnostics = _infer_value_expression_type(
+            node.left,
+            path=path,
+            source=source,
+            step_condition_mode=step_condition_mode,
+        )
+        right_type, right_diagnostics = _infer_value_expression_type(
+            node.right,
+            path=path,
+            source=source,
+            step_condition_mode=step_condition_mode,
+        )
+        diagnostics.extend(left_diagnostics)
+        diagnostics.extend(right_diagnostics)
+        for operand_type in (left_type, right_type):
+            if operand_type not in {"boolean", "unknown"}:
+                diagnostics.append(
+                    _diagnostic(
+                        "validation.workflow.step.if_expr.boolean_operand_type",
+                        f"Operator '{node.operator}' requires boolean operands",
+                        path,
+                        source,
+                        operator=node.operator,
+                        actual_type=operand_type,
+                    )
+                )
+        return "boolean", diagnostics
     return "unknown", diagnostics
 
 
