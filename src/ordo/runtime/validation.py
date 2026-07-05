@@ -383,7 +383,7 @@ def _validate_step_condition(
             )
         )
     try:
-        parsed = parse_value_expression(expression)
+        parsed = parse_value_expression(expression, allow_boolean_composition=True)
     except ValueExpressionParseError as exc:
         diagnostics.append(exc.to_diagnostic(path=condition_path, source=source, expression=expression))
         return diagnostics

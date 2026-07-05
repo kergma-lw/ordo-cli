@@ -1,12 +1,14 @@
 import unittest
 
 from ordo.runtime.value_expressions import (
+    BinaryNode,
     BuiltinCallNode,
     FilterApplicationNode,
     LiteralNode,
     PipelineNode,
     ReferenceNode,
     StateReferenceNode,
+    UnaryNode,
     ValueExpressionParseError,
     parse_value_expression,
 )
@@ -81,6 +83,37 @@ class ValueExpressionParsingTest(unittest.TestCase):
             parse_value_expression('format("unterminated)')
 
         self.assertEqual(ctx.exception.message, "Unterminated string literal")
+
+    def test_parse_boolean_composition_for_step_condition(self) -> None:
+        parsed = parse_value_expression(
+            'inputs.enabled and (inputs.status | eq("ok"))',
+            allow_boolean_composition=True,
+        )
+
+        self.assertIsInstance(parsed.root, BinaryNode)
+        self.assertEqual(parsed.root.operator, "and")
+        self.assertIsInstance(parsed.root.left, ReferenceNode)
+        self.assertEqual(parsed.root.left.parts, ("inputs", "enabled"))
+        self.assertIsInstance(parsed.root.right, PipelineNode)
+
+    def test_parse_not_boolean_composition_for_step_condition(self) -> None:
+        parsed = parse_value_expression("not inputs.enabled", allow_boolean_composition=True)
+
+        self.assertEqual(
+            parsed.root,
+            UnaryNode(
+                start=0,
+                end=18,
+                operator="not",
+                operand=ReferenceNode(start=4, end=18, parts=("inputs", "enabled")),
+            ),
+        )
+
+    def test_parse_rejects_boolean_composition_when_not_enabled(self) -> None:
+        with self.assertRaises(ValueExpressionParseError) as ctx:
+            parse_value_expression("inputs.enabled and inputs.ready")
+
+        self.assertEqual(ctx.exception.message, "Unexpected trailing token")
 
 
 if __name__ == "__main__":

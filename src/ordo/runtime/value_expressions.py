@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONScalar, JSONValue
@@ -87,6 +87,23 @@ class BuiltinCallNode(ValueExpressionNode):
 
 
 @dataclass(frozen=True, slots=True)
+class UnaryNode(ValueExpressionNode):
+    """Unary boolean operator inside a step-condition expression."""
+
+    operator: Literal["not"]
+    operand: ValueExpressionNode
+
+
+@dataclass(frozen=True, slots=True)
+class BinaryNode(ValueExpressionNode):
+    """Binary boolean operator inside a step-condition expression."""
+
+    operator: Literal["and", "or"]
+    left: ValueExpressionNode
+    right: ValueExpressionNode
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedValueExpression:
     """Structured parsed representation of a string-form value expression."""
 
@@ -145,10 +162,10 @@ class _Token:
     end: int
 
 
-def parse_value_expression(expression: str) -> ParsedValueExpression:
+def parse_value_expression(expression: str, *, allow_boolean_composition: bool = False) -> ParsedValueExpression:
     """Parse a string-form value expression into a structured tree."""
 
-    parser = _Parser(expression)
+    parser = _Parser(expression, allow_boolean_composition=allow_boolean_composition)
     root = parser.parse()
     return ParsedValueExpression(source=expression, root=root)
 
@@ -165,17 +182,39 @@ def evaluate_value_expression(
 
 
 class _Parser:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, *, allow_boolean_composition: bool) -> None:
         self._text = text
         self._tokens = _tokenize(text)
         self._index = 0
+        self._allow_boolean_composition = allow_boolean_composition
 
     def parse(self) -> ValueExpressionNode:
-        node = self._parse_pipeline()
+        node = self._parse_or() if self._allow_boolean_composition else self._parse_pipeline()
         if self._peek().kind != "EOF":
             token = self._peek()
             raise ValueExpressionParseError("Unexpected trailing token", token.start, token.end)
         return node
+
+    def _parse_or(self) -> ValueExpressionNode:
+        node = self._parse_and()
+        while self._match_keyword("or") is not None:
+            right = self._parse_and()
+            node = BinaryNode(start=node.start, end=right.end, operator="or", left=node, right=right)
+        return node
+
+    def _parse_and(self) -> ValueExpressionNode:
+        node = self._parse_not()
+        while self._match_keyword("and") is not None:
+            right = self._parse_not()
+            node = BinaryNode(start=node.start, end=right.end, operator="and", left=node, right=right)
+        return node
+
+    def _parse_not(self) -> ValueExpressionNode:
+        if self._match_keyword("not") is not None:
+            operator = self._previous()
+            operand = self._parse_not()
+            return UnaryNode(start=operator.start, end=operand.end, operator="not", operand=operand)
+        return self._parse_pipeline()
 
     def _parse_pipeline(self) -> ValueExpressionNode:
         source = self._parse_primary()
@@ -198,6 +237,11 @@ class _Parser:
 
     def _parse_primary(self) -> ValueExpressionNode:
         token = self._peek()
+        if self._allow_boolean_composition and token.kind == "LPAREN":
+            self._advance()
+            node = self._parse_or()
+            end = self._consume("RPAREN", "Expected ')' to close grouped expression")
+            return _with_grouped_end(node, end.end)
         if token.kind == "STRING":
             self._advance()
             return LiteralNode(start=token.start, end=token.end, value=_decode_string(token.text, token.start))
@@ -315,6 +359,12 @@ class _Parser:
             return None
         return self._advance()
 
+    def _match_keyword(self, keyword: str) -> _Token | None:
+        token = self._peek()
+        if token.kind != "IDENT" or token.text != keyword:
+            return None
+        return self._advance()
+
 
 def _tokenize(text: str) -> tuple[_Token, ...]:
     tokens: list[_Token] = []
@@ -377,6 +427,26 @@ def _tokenize(text: str) -> tuple[_Token, ...]:
 
     tokens.append(_Token("EOF", "", length, length))
     return tuple(tokens)
+
+
+def _with_grouped_end(node: ValueExpressionNode, end: int) -> ValueExpressionNode:
+    if isinstance(node, LiteralNode):
+        return LiteralNode(start=node.start, end=end, value=node.value)
+    if isinstance(node, ReferenceNode):
+        return ReferenceNode(start=node.start, end=end, parts=node.parts)
+    if isinstance(node, StateReferenceNode):
+        return StateReferenceNode(start=node.start, end=end, state_role=node.state_role, key_reference=node.key_reference, fields=node.fields)
+    if isinstance(node, StepReferenceNode):
+        return StepReferenceNode(start=node.start, end=end, register=node.register, fields=node.fields)
+    if isinstance(node, PipelineNode):
+        return PipelineNode(start=node.start, end=end, source=node.source, filters=node.filters)
+    if isinstance(node, BuiltinCallNode):
+        return BuiltinCallNode(start=node.start, end=end, name=node.name, arguments=node.arguments)
+    if isinstance(node, UnaryNode):
+        return UnaryNode(start=node.start, end=end, operator=node.operator, operand=node.operand)
+    if isinstance(node, BinaryNode):
+        return BinaryNode(start=node.start, end=end, operator=node.operator, left=node.left, right=node.right)
+    return node
 
 
 def _evaluate_node(
