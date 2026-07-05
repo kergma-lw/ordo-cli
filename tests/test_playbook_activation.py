@@ -61,7 +61,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nguards: []\nsteps: []\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
 
@@ -99,7 +99,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nguards: []\nsteps: []\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "backend-default.yml").write_text(
@@ -145,8 +145,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     inputs:
                       source: workflow
                       keep: true
-                    guards: []
-                    steps: []
+                    blocks:
+                      - guards: []
+                      - steps: []
                     """
                 ).strip()
                 + "\n",
@@ -202,7 +203,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nguards: []\nsteps: []\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
 
@@ -237,7 +238,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nguards: []\nsteps: []\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
 
@@ -275,8 +276,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     workflow: close-task
                     state_needs:
                       task_memory: {}
-                    guards: []
-                    steps: []
+                    blocks:
+                      - guards: []
+                      - steps: []
                     """
                 ).strip()
                 + "\n",
@@ -317,8 +319,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     workflow: close-task
                     state_needs:
                       task_memory: {}
-                    guards: []
-                    steps: []
+                    blocks:
+                      - guards: []
+                      - steps: []
                     """
                 ).strip()
                 + "\n",
@@ -362,8 +365,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     workflow: close-task
                     state_needs:
                       task_memory: {}
-                    guards: []
-                    steps: []
+                    blocks:
+                      - guards: []
+                      - steps: []
                     """
                 ).strip()
                 + "\n",
@@ -414,13 +418,14 @@ class PlaybookActivationTest(unittest.TestCase):
                       branch: feature/demo
                     state_needs:
                       task_memory: {}
-                    guards: []
-                    steps:
-                      - name: remember-branch
-                        state_set:
-                          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
-                      - name: forget-branch
-                        state_delete: state.task_memory[inputs.issue_ref].branch
+                    blocks:
+                      - guards: []
+                      - steps:
+                          - name: remember-branch
+                            state_set:
+                              state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+                          - name: forget-branch
+                            state_delete: state.task_memory[inputs.issue_ref].branch
                     """
                 ).strip()
                 + "\n",
@@ -478,8 +483,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     """
                     version: 0
                     workflow: inspect-issue
-                    guards: []
-                    steps: []
+                    blocks:
+                      - guards: []
+                      - steps: []
                     """
                 ).strip()
                 + "\n",
@@ -539,8 +545,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     """
                     version: 0
                     workflow: inspect-issue
-                    guards: []
-                    steps: []
+                    blocks:
+                      - guards: []
+                      - steps: []
                     """
                 ).strip()
                 + "\n",

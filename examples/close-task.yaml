@@ -10,27 +10,28 @@ inputs:
 state_needs:
   task_memory: {}
 
-guards:
-  - git.worktree.clean
-  - git.branch.value != "main"
-  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
+blocks:
+  - guards:
+      - git.worktree.clean
+      - git.branch.value != "main"
+      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
 
-steps:
-  - name: verify
-    uses: shell.command
-    with:
-      command: .venv/bin/python -m pytest
+  - steps:
+      - name: verify
+        uses: shell.command
+        with:
+          command: .venv/bin/python -m pytest
 
-  - name: merge-main
-    uses: git.integrate.merge_ff_only
-    with:
-      ref: ${state.task_memory[inputs.task_key].branch}
+      - name: merge-main
+        uses: git.integrate.merge_ff_only
+        with:
+          ref: ${state.task_memory[inputs.task_key].branch}
 
-  - name: close-issue
-    uses: gh.issue.close
-    with:
-      repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
+      - name: close-issue
+        uses: gh.issue.close
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
 
-  - name: forget-task-branch
-    state_delete: state.task_memory[inputs.task_key].branch
+      - name: forget-task-branch
+        state_delete: state.task_memory[inputs.task_key].branch

@@ -28,186 +28,187 @@ inputs:
 state_needs:
   task_memory: {}
 
-guards:
-  - git.worktrees.count == 1
-  - git.state.worktree_clean
-  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
+blocks:
+  - guards:
+      - git.worktrees.count == 1
+      - git.state.worktree_clean
+      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
 
-steps:
-  - name: add-issue-to-project
-    uses: gh.project.issue.add
-    with:
-      repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
-      project_id: ${inputs.project_id}
+  - steps:
+      - name: add-issue-to-project
+        uses: gh.project.issue.add
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          project_id: ${inputs.project_id}
 
-  - name: validate-project-policy
-    uses: shell.command
-    with:
-      command:
-        format: |
-          python3 - <<'PY'
-          import json
-          import subprocess
-          import sys
+      - name: validate-project-policy
+        uses: shell.command
+        with:
+          command:
+            format: |
+              python3 - <<'PY'
+              import json
+              import subprocess
+              import sys
 
-          repository = "{}"
-          project_id = "{}"
-          allow_backlog = "{}".lower() == "true"
-          allowed_types = [item.strip() for item in "{}".split(",") if item.strip()]
-          issue_number = int("{}")
+              repository = "{}"
+              project_id = "{}"
+              allow_backlog = "{}".lower() == "true"
+              allowed_types = [item.strip() for item in "{}".split(",") if item.strip()]
+              issue_number = int("{}")
 
-          owner, repo = repository.split("/", 1)
+              owner, repo = repository.split("/", 1)
 
-          query = (
-              "query($owner:String!,$repo:String!,$number:Int!){"
-              "repository(owner:$owner,name:$repo){"
-              "issue(number:$number){"
-              "projectItems(first:50){nodes{"
-              "id project{... on ProjectV2{id}}"
-              "fieldValues(first:50){nodes{"
-              "... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2FieldCommon{name}}}"
-              "}}}}}}}"
-          )
-          payload = json.loads(
-              subprocess.check_output(
-                  [
-                      "gh",
-                      "api",
-                      "graphql",
-                      "-f",
-                      f"query={query}",
-                      "-f",
-                      f"owner={owner}",
-                      "-f",
-                      f"repo={repo}",
-                      "-F",
-                      f"number={int(issue_number)}",
-                  ],
-                  text=True,
+              query = (
+                  "query($owner:String!,$repo:String!,$number:Int!){"
+                  "repository(owner:$owner,name:$repo){"
+                  "issue(number:$number){"
+                  "projectItems(first:50){nodes{"
+                  "id project{... on ProjectV2{id}}"
+                  "fieldValues(first:50){nodes{"
+                  "... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2FieldCommon{name}}}"
+                  "}}}}}}}"
               )
-          )
-
-          issue = ((((payload.get("data") or {}).get("repository") or {}).get("issue")) or {})
-          nodes = (((issue.get("projectItems") or {}).get("nodes")) or [])
-          item = next(
-              (
-                  node
-                  for node in nodes
-                  if isinstance(node, dict)
-                  and isinstance(node.get("project"), dict)
-                  and node["project"].get("id") == project_id
-              ),
-              None,
-          )
-          if item is None:
-              sys.stderr.write(f"Issue {repository}#{issue_number} is not in project {project_id}.\n")
-              sys.exit(1)
-
-          def single_select(field_name: str):
-              for field_value in ((item.get("fieldValues") or {}).get("nodes") or []):
-                  if not isinstance(field_value, dict):
-                      continue
-                  field = field_value.get("field")
-                  if isinstance(field, dict) and field.get("name") == field_name:
-                      return field_value.get("name")
-              return None
-
-          issue_type = single_select("Type")
-          status = single_select("Status")
-
-          if issue_type not in allowed_types:
-              sys.stderr.write(
-                  f"Issue {repository}#{issue_number} has unsupported project type {issue_type!r}; expected one of {allowed_types!r}.\n"
+              payload = json.loads(
+                  subprocess.check_output(
+                      [
+                          "gh",
+                          "api",
+                          "graphql",
+                          "-f",
+                          f"query={query}",
+                          "-f",
+                          f"owner={owner}",
+                          "-f",
+                          f"repo={repo}",
+                          "-F",
+                          f"number={int(issue_number)}",
+                      ],
+                      text=True,
+                  )
               )
-              sys.exit(1)
 
-          if status in {"Done", "In review"}:
-              sys.stderr.write(f"Issue {repository}#{issue_number} has blocking project status {status!r}.\n")
-              sys.exit(1)
+              issue = ((((payload.get("data") or {}).get("repository") or {}).get("issue")) or {})
+              nodes = (((issue.get("projectItems") or {}).get("nodes")) or [])
+              item = next(
+                  (
+                      node
+                      for node in nodes
+                      if isinstance(node, dict)
+                      and isinstance(node.get("project"), dict)
+                      and node["project"].get("id") == project_id
+                  ),
+                  None,
+              )
+              if item is None:
+                  sys.stderr.write(f"Issue {repository}#{issue_number} is not in project {project_id}.\n")
+                  sys.exit(1)
 
-          if status == "Backlog" and not allow_backlog:
-              sys.stderr.write(f"Issue {repository}#{issue_number} is still in Backlog and allow_backlog=false.\n")
-              sys.exit(1)
-          PY
-        args:
-          - ${inputs.repository}
-          - ${inputs.project_id}
-          - ${inputs.allow_backlog}
-          - ${inputs.allowed_issue_types_csv}
-          - ${inputs.issue_number}
+              def single_select(field_name: str):
+                  for field_value in ((item.get("fieldValues") or {}).get("nodes") or []):
+                      if not isinstance(field_value, dict):
+                          continue
+                      field = field_value.get("field")
+                      if isinstance(field, dict) and field.get("name") == field_name:
+                          return field_value.get("name")
+                  return None
 
-  - name: move-issue-to-in-progress
-    uses: gh.project.issue.status.set
-    with:
-      repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
-      project_id: ${inputs.project_id}
-      status: In progress
+              issue_type = single_select("Type")
+              status = single_select("Status")
 
-  - name: create-or-switch-task-branch
-    uses: shell.command
-    with:
-      command:
-        format: |
-          set -euo pipefail
-          remote={}
-          base_branch={}
-          branch_name={}
+              if issue_type not in allowed_types:
+                  sys.stderr.write(
+                      f"Issue {repository}#{issue_number} has unsupported project type {issue_type!r}; expected one of {allowed_types!r}.\n"
+                  )
+                  sys.exit(1)
 
-          git fetch "$remote" "$base_branch"
-          if git show-ref --verify --quiet "refs/heads/$base_branch"; then
-            if git switch "$base_branch" >/dev/null 2>&1; then
-              git pull --ff-only "$remote" "$base_branch"
-              base_ref="$base_branch"
-            else
-              base_ref="$remote/$base_branch"
-            fi
-          else
-            base_ref="$remote/$base_branch"
-          fi
+              if status in {"Done", "In review"}:
+                  sys.stderr.write(f"Issue {repository}#{issue_number} has blocking project status {status!r}.\n")
+                  sys.exit(1)
 
-          if git show-ref --verify --quiet "refs/heads/$branch_name"; then
-            git switch "$branch_name"
-          else
-            git switch -c "$branch_name" "$base_ref"
-          fi
-        args:
-          - ${inputs.remote}
-          - ${inputs.base_branch}
-          -
+              if status == "Backlog" and not allow_backlog:
+                  sys.stderr.write(f"Issue {repository}#{issue_number} is still in Backlog and allow_backlog=false.\n")
+                  sys.exit(1)
+              PY
+            args:
+              - ${inputs.repository}
+              - ${inputs.project_id}
+              - ${inputs.allow_backlog}
+              - ${inputs.allowed_issue_types_csv}
+              - ${inputs.issue_number}
+
+      - name: move-issue-to-in-progress
+        uses: gh.project.issue.status.set
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          project_id: ${inputs.project_id}
+          status: In progress
+
+      - name: create-or-switch-task-branch
+        uses: shell.command
+        with:
+          command:
+            format: |
+              set -euo pipefail
+              remote={}
+              base_branch={}
+              branch_name={}
+
+              git fetch "$remote" "$base_branch"
+              if git show-ref --verify --quiet "refs/heads/$base_branch"; then
+                if git switch "$base_branch" >/dev/null 2>&1; then
+                  git pull --ff-only "$remote" "$base_branch"
+                  base_ref="$base_branch"
+                else
+                  base_ref="$remote/$base_branch"
+                fi
+              else
+                base_ref="$remote/$base_branch"
+              fi
+
+              if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+                git switch "$branch_name"
+              else
+                git switch -c "$branch_name" "$base_ref"
+              fi
+            args:
+              - ${inputs.remote}
+              - ${inputs.base_branch}
+              -
+                format: "{}/{}-{}"
+                args:
+                  - ${inputs.issue_type | lower}
+                  - ${inputs.issue_number}
+                  - ${inputs.issue_title | trim | slug}
+
+      - name: remember-issue-number
+        state_set:
+          state.task_memory[inputs.task_key].issue_number: ${inputs.issue_number}
+
+      - name: remember-issue-type
+        state_set:
+          state.task_memory[inputs.task_key].issue_type: ${inputs.issue_type}
+
+      - name: remember-issue-title
+        state_set:
+          state.task_memory[inputs.task_key].issue_title: ${inputs.issue_title}
+
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.task_key].branch:
             format: "{}/{}-{}"
             args:
               - ${inputs.issue_type | lower}
               - ${inputs.issue_number}
               - ${inputs.issue_title | trim | slug}
 
-  - name: remember-issue-number
-    state_set:
-      state.task_memory[inputs.task_key].issue_number: ${inputs.issue_number}
+      - name: remember-repository-kind
+        state_set:
+          state.task_memory[inputs.task_key].repository_kind: ${inputs.repository_kind}
 
-  - name: remember-issue-type
-    state_set:
-      state.task_memory[inputs.task_key].issue_type: ${inputs.issue_type}
-
-  - name: remember-issue-title
-    state_set:
-      state.task_memory[inputs.task_key].issue_title: ${inputs.issue_title}
-
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.task_key].branch:
-        format: "{}/{}-{}"
-        args:
-          - ${inputs.issue_type | lower}
-          - ${inputs.issue_number}
-          - ${inputs.issue_title | trim | slug}
-
-  - name: remember-repository-kind
-    state_set:
-      state.task_memory[inputs.task_key].repository_kind: ${inputs.repository_kind}
-
-  - name: run-post-open-command
-    uses: shell.command
-    with:
-      command: ${inputs.post_open_command}
+      - name: run-post-open-command
+        uses: shell.command
+        with:
+          command: ${inputs.post_open_command}

@@ -173,44 +173,14 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
 
 def _load_workflow_blocks(payload: JSONObject, *, source: str) -> tuple[WorkflowBlock, ...]:
     raw_blocks = payload.get("blocks")
-    has_blocks = raw_blocks is not None
-    has_legacy_guards = "guards" in payload
-    has_legacy_steps = "steps" in payload
-
-    if has_blocks and (has_legacy_guards or has_legacy_steps):
+    if not isinstance(raw_blocks, list):
         raise _load_error(
-            code="load.workflow.blocks.mixed_legacy",
-            message="Workflow must not mix 'blocks' with top-level 'guards' or 'steps'",
+            code="load.blocks.type",
+            message="Field 'blocks' must be a list",
             path=("blocks",),
-            details={"source": source},
+            details={"source": source, "actual_type": type(raw_blocks).__name__},
         )
-
-    if has_blocks:
-        if not isinstance(raw_blocks, list):
-            raise _load_error(
-                code="load.blocks.type",
-                message="Field 'blocks' must be a list",
-                path=("blocks",),
-                details={"source": source, "actual_type": type(raw_blocks).__name__},
-            )
-        return tuple(_load_block(item, index=index, source=source) for index, item in enumerate(raw_blocks))
-
-    blocks: list[WorkflowBlock] = []
-    if has_legacy_guards:
-        guards_data = _require_list(payload, "guards", source=source)
-        blocks.append(GuardBlock(guards=tuple(_load_guard(item, index=index, source=source) for index, item in enumerate(guards_data))))
-    if has_legacy_steps:
-        steps_data = _require_list(payload, "steps", source=source)
-        blocks.append(StepBlock(steps=tuple(_load_step(item, index=index, source=source) for index, item in enumerate(steps_data))))
-    if blocks:
-        return tuple(blocks)
-
-    raise _load_error(
-        code="load.workflow.blocks.missing",
-        message="Workflow must declare either 'blocks' or top-level 'guards'/'steps'",
-        path=(),
-        details={"source": source},
-    )
+    return tuple(_load_block(item, index=index, source=source) for index, item in enumerate(raw_blocks))
 
 
 def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock:

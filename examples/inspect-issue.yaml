@@ -5,12 +5,13 @@ inputs:
   repository: kergma-lw/ordo-cli
   issue_number: 1
 
-guards:
-  - git.worktree.clean
+blocks:
+  - guards:
+      - git.worktree.clean
 
-steps:
-  - name: inspect-issue
-    uses: gh.issue
-    with:
-      repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
+  - steps:
+      - name: inspect-issue
+        uses: gh.issue
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}

@@ -2516,18 +2516,6 @@
           "name": "blocks",
           "required": false,
           "type": "array"
-        },
-        {
-          "compatibility_only": true,
-          "name": "guards",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "compatibility_only": true,
-          "name": "steps",
-          "required": false,
-          "type": "array"
         }
       ],
       "version": 0

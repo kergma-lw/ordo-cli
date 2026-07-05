@@ -105,41 +105,7 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
 
 
 def _validate_workflow_blocks(payload: JSONObject, *, source: str) -> list[Diagnostic]:
-    diagnostics: list[Diagnostic] = []
-    has_blocks = "blocks" in payload
-    has_guards = "guards" in payload
-    has_steps = "steps" in payload
-
-    if has_blocks and (has_guards or has_steps):
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.blocks.mixed_legacy",
-                "Workflow must not mix 'blocks' with top-level 'guards' or 'steps'",
-                ("blocks",),
-                source,
-            )
-        )
-        return diagnostics
-
-    if has_blocks:
-        return _validate_block_list(payload.get("blocks"), source=source)
-
-    if not has_guards and not has_steps:
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.blocks.missing",
-                "Workflow must declare either 'blocks' or top-level 'guards'/'steps'",
-                (),
-                source,
-            )
-        )
-        return diagnostics
-
-    if has_guards:
-        diagnostics.extend(_validate_guard_list(payload.get("guards"), source=source, path=("guards",)))
-    if has_steps:
-        diagnostics.extend(_validate_step_list(payload.get("steps"), source=source, path=("steps",)))
-    return diagnostics
+    return _validate_block_list(payload.get("blocks"), source=source)
 
 
 def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagnostic]:

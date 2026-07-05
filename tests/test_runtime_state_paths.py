@@ -25,15 +25,16 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: forget-branch
-    state_delete: "state.task_memory[issue_ref].branch"
+blocks:
+  - guards: []
+  - steps:
+      - name: forget-branch
+        state_delete: "state.task_memory[issue_ref].branch"
 """
         )
 
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.state_path.syntax")
-        self.assertEqual(report.diagnostics[0].path, ("steps", "0", "state_delete"))
+        self.assertEqual(report.diagnostics[0].path, ("blocks", "1", "steps", "0", "state_delete"))
 
     def test_validation_rejects_multiple_state_set_targets(self) -> None:
         report = validate_workflow_text(
@@ -42,12 +43,13 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
-      state.task_memory[inputs.issue_ref].pr: ${inputs.pr}
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+          state.task_memory[inputs.issue_ref].pr: ${inputs.pr}
 """
         )
 

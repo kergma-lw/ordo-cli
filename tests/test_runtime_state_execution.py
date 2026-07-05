@@ -22,13 +22,14 @@ inputs:
   branch: feature/1
 state_needs:
   task_memory: {{}}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${{inputs.branch}}
-  - name: forget-branch
-    state_delete: state.task_memory[inputs.issue_ref].branch
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${{inputs.branch}}
+      - name: forget-branch
+        state_delete: state.task_memory[inputs.issue_ref].branch
 """
             )
             workflow = Workflow(
@@ -58,11 +59,12 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
 """
         )
         workflow = Workflow(
@@ -89,11 +91,12 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
 """
         )
         workflow = Workflow(

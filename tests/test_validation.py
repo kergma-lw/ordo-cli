@@ -14,13 +14,14 @@ class ValidationTest(unittest.TestCase):
                 workflow: open-task
                 inputs:
                   issue: repo#1
-                guards:
-                  - uses: git.worktree
-                steps:
-                  - name: inspect-issue
-                    uses: gh.issue
-                    with:
-                      issue: repo#1
+                blocks:
+                  - guards:
+                      - uses: git.worktree
+                  - steps:
+                      - name: inspect-issue
+                        uses: gh.issue
+                        with:
+                          issue: repo#1
                 """
             )
         )
@@ -34,9 +35,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - git.branch != "main"
-                steps: []
+                blocks:
+                  - guards:
+                      - git.branch != "main"
+                  - steps: []
                 """
             )
         )
@@ -49,10 +51,11 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - uses: git.worktree
-                    expr: git.branch != "main"
-                steps: []
+                blocks:
+                  - guards:
+                      - uses: git.worktree
+                        expr: git.branch != "main"
+                  - steps: []
                 """
             )
         )
@@ -66,9 +69,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - ""
-                steps: []
+                blocks:
+                  - guards:
+                      - ""
+                  - steps: []
                 """
             )
         )
@@ -82,16 +86,17 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - gh.issue(inputs.issue).status not in ["Done"]
-                steps: []
+                blocks:
+                  - guards:
+                      - gh.issue(inputs.issue).status not in ["Done"]
+                  - steps: []
                 """
             )
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.syntax")
-        self.assertEqual(report.diagnostics[0].path, ("guards", "0"))
+        self.assertEqual(report.diagnostics[0].path, ("blocks", "0", "guards", "0"))
 
     def test_guard_expression_requires_dotted_input_reference(self) -> None:
         report = validate_workflow_text(
@@ -99,9 +104,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - inputs == "repo#1"
-                steps: []
+                blocks:
+                  - guards:
+                      - inputs == "repo#1"
+                  - steps: []
                 """
             )
         )
@@ -115,9 +121,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - inputs.issue(value="repo#1") == "repo#1"
-                steps: []
+                blocks:
+                  - guards:
+                      - inputs.issue(value="repo#1") == "repo#1"
+                  - steps: []
                 """
             )
         )
@@ -131,9 +138,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - gh.issue(repository=inputs.repository and inputs.other, issue_number=inputs.issue_number).status == "Open"
-                steps: []
+                blocks:
+                  - guards:
+                      - gh.issue(repository=inputs.repository and inputs.other, issue_number=inputs.issue_number).status == "Open"
+                  - steps: []
                 """
             )
         )
@@ -147,9 +155,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - gh.issue(repository=inputs.repository, repository="repo#2", issue_number=inputs.issue_number).status == "Open"
-                steps: []
+                blocks:
+                  - guards:
+                      - gh.issue(repository=inputs.repository, repository="repo#2", issue_number=inputs.issue_number).status == "Open"
+                  - steps: []
                 """
             )
         )
@@ -163,9 +172,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"
-                steps: []
+                blocks:
+                  - guards:
+                      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"
+                  - steps: []
                 """
             )
         )
@@ -182,9 +192,10 @@ class ValidationTest(unittest.TestCase):
                   repository: owner/repo
                   issue_number: 1
                   project_id: PVT_demo
-                guards:
-                  - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
-                steps: []
+                blocks:
+                  - guards:
+                      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
+                  - steps: []
                 """
             )
         )
@@ -198,8 +209,9 @@ class ValidationTest(unittest.TestCase):
                 version: 0
                 workflow: open-task
                 notes: nope
-                guards: []
-                steps: []
+                blocks:
+                  - guards: []
+                  - steps: []
                 """
             )
         )
@@ -214,10 +226,11 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - with: {}
-                steps:
-                  - uses: gh.issue
+                blocks:
+                  - guards:
+                      - with: {}
+                  - steps:
+                      - uses: gh.issue
                 """
             )
         )
@@ -232,12 +245,13 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    uses: gh.issue
-                  - name: inspect
-                    uses: gh.issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                      - name: inspect
+                        uses: gh.issue
                 """
             )
         )
@@ -251,12 +265,13 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: remember
-                    register: issue
-                    state_set:
-                      state.memory[inputs.issue].value: ok
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: remember
+                        register: issue
+                        state_set:
+                          state.memory[inputs.issue].value: ok
                 """
             )
         )
@@ -270,14 +285,15 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    uses: gh.issue
-                    register: issue
-                  - name: comment
-                    uses: gh.issue.comment
-                    register: issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
+                      - name: comment
+                        uses: gh.issue.comment
+                        register: issue
                 """
             )
         )
@@ -291,11 +307,12 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    uses: gh.issue
-                    register: 7issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                        register: 7issue
                 """
             )
         )
@@ -309,12 +326,13 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: comment
-                    uses: gh.issue.comment
-                    with:
-                      issue_id: ${step.issue.outputs.id}
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: comment
+                        uses: gh.issue.comment
+                        with:
+                          issue_id: ${step.issue.outputs.id}
                 """
             )
         )
@@ -328,15 +346,16 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: comment
-                    uses: gh.issue.comment
-                    with:
-                      issue_id: ${step.issue.outputs.id}
-                  - name: inspect
-                    uses: gh.issue
-                    register: issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: comment
+                        uses: gh.issue.comment
+                        with:
+                          issue_id: ${step.issue.outputs.id}
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
                 """
             )
         )
@@ -350,9 +369,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - step.issue.outputs.id == 1
-                steps: []
+                blocks:
+                  - guards:
+                      - step.issue.outputs.id == 1
+                  - steps: []
                 """
             )
         )
@@ -366,12 +386,13 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    uses: gh.issue
-                    with:
-                      issue_ref: ${inputs.issue_ref |}
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                        with:
+                          issue_ref: ${inputs.issue_ref |}
                 """
             )
         )
@@ -387,11 +408,12 @@ class ValidationTest(unittest.TestCase):
                 workflow: open-task
                 state_needs:
                   task_memory: {}
-                guards: []
-                steps:
-                  - name: remember
-                    state_set:
-                      state.task_memory[inputs.issue_ref].branch: ${format("unterminated)}
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: remember
+                        state_set:
+                          state.task_memory[inputs.issue_ref].branch: ${format("unterminated)}
                 """
             )
         )
@@ -405,14 +427,15 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    uses: gh.issue
-                    with:
-                      branch:
-                        format: "{}/{}"
-                        args: nope
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                        with:
+                          branch:
+                            format: "{}/{}"
+                            args: nope
                 """
             )
         )
@@ -426,11 +449,12 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    if: inputs.enabled
-                    uses: gh.issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: inputs.enabled
+                        uses: gh.issue
                 """
             )
         )
@@ -444,11 +468,12 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    if: true
-                    uses: gh.issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: true
+                        uses: gh.issue
                 """
             )
         )
@@ -462,12 +487,13 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    if: ${inputs.enabled}
-                    uses: gh.issue
-                    register: issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.enabled}
+                        uses: gh.issue
+                        register: issue
                 """
             )
         )
@@ -481,14 +507,15 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: comment
-                    if: ${step.issue.outputs.open}
-                    uses: gh.issue.comment
-                  - name: inspect
-                    uses: gh.issue
-                    register: issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: comment
+                        if: ${step.issue.outputs.open}
+                        uses: gh.issue.comment
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
                 """
             )
         )
@@ -502,11 +529,12 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    if: ${format("hello")}
-                    uses: gh.issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${format("hello")}
+                        uses: gh.issue
                 """
             )
         )
@@ -520,11 +548,12 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards: []
-                steps:
-                  - name: inspect
-                    if: ${format("hello") | not}
-                    uses: gh.issue
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${format("hello") | not}
+                        uses: gh.issue
                 """
             )
         )

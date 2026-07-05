@@ -15,8 +15,9 @@ version: 0
 workflow: demo
 inputs:
   title: "  Hello World  "
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -40,8 +41,9 @@ inputs:
   issue_ref: owner/repo#1
 state_needs:
   task_memory: {{}}
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
             )
 
@@ -69,8 +71,9 @@ version: 0
 workflow: demo
 inputs:
   title: hello
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -88,8 +91,9 @@ version: 0
 workflow: demo
 inputs:
   number: 7
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -109,8 +113,9 @@ inputs:
   type: Task
   issue_number: 7
   title: "Hello World"
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -127,8 +132,9 @@ version: 0
 workflow: demo
 inputs:
   owner: acme
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -145,8 +151,9 @@ steps: []
 version: 0
 workflow: demo
 inputs: {}
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -164,8 +171,9 @@ version: 0
 workflow: demo
 inputs:
   status: ok
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -180,8 +188,9 @@ version: 0
 workflow: demo
 inputs:
   open: false
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -196,8 +205,9 @@ version: 0
 workflow: demo
 inputs:
   open: false
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -212,8 +222,9 @@ version: 0
 workflow: demo
 inputs:
   status: ok
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 

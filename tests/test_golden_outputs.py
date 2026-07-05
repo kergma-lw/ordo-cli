@@ -59,7 +59,7 @@ class GoldenOutputTest(unittest.TestCase):
 
 class RuntimeInvariantTest(unittest.TestCase):
     def test_unknown_field_failure_invariant(self) -> None:
-        report = validate_workflow_text("version: 0\nworkflow: demo\nextra: true\nguards: []\nsteps: []\n")
+        report = validate_workflow_text("version: 0\nworkflow: demo\nextra: true\nblocks:\n  - guards: []\n  - steps: []\n")
         self.assertFalse(report.ok)
 
     def test_unknown_operation_failure_invariant(self) -> None:

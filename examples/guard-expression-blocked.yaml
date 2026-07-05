@@ -6,11 +6,12 @@ inputs:
   issue_number: 1
   command: echo proceed
 
-guards:
-  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["DONE", "CLOSED"]
+blocks:
+  - guards:
+      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["DONE", "CLOSED"]
 
-steps:
-  - name: verify-command
-    uses: shell.command
-    with:
-      command: ${inputs.command}
+  - steps:
+      - name: verify-command
+        uses: shell.command
+        with:
+          command: ${inputs.command}

@@ -11,8 +11,9 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -25,8 +26,9 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -39,8 +41,9 @@ steps: []
 version: 0
 workflow: open-task
 state_needs: []
-guards: []
-steps: []
+blocks:
+  - guards: []
+  - steps: []
 """
         )
 
@@ -55,13 +58,14 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
-  - name: forget-branch
-    state_delete: state.task_memory[inputs.issue_ref].branch
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+      - name: forget-branch
+        state_delete: state.task_memory[inputs.issue_ref].branch
 """
         )
 
@@ -78,13 +82,14 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
-  - name: forget-branch
-    state_delete: state.task_memory[inputs.issue_ref].branch
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+      - name: forget-branch
+        state_delete: state.task_memory[inputs.issue_ref].branch
 """
         )
 
@@ -98,13 +103,14 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    uses: shell.command
-    state_delete: state.task_memory[inputs.issue_ref].branch
-    with:
-      command: echo hi
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        uses: shell.command
+        state_delete: state.task_memory[inputs.issue_ref].branch
+        with:
+          command: echo hi
 """
         )
 
@@ -118,13 +124,14 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
-    with:
-      command: echo hi
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+        with:
+          command: echo hi
 """
         )
 

@@ -32,12 +32,13 @@ inputs:
   issue_ref: owner/repo#1
 state_needs:
   task_memory: {{}}
-guards: []
-steps:
-  - name: run-command
-    uses: shell.command
-    with:
-      command: ${{state.task_memory[inputs.issue_ref].command}}
+blocks:
+  - guards: []
+  - steps:
+      - name: run-command
+        uses: shell.command
+        with:
+          command: ${{state.task_memory[inputs.issue_ref].command}}
 """
             )
             workflow = Workflow(
@@ -71,12 +72,13 @@ inputs:
   issue_ref: owner/repo#1
 state_needs:
   task_memory: {{}}
-guards: []
-steps:
-  - name: run-command
-    uses: shell.command
-    with:
-      command: ${{state.task_memory[inputs.issue_ref].command}}
+blocks:
+  - guards: []
+  - steps:
+      - name: run-command
+        uses: shell.command
+        with:
+          command: ${{state.task_memory[inputs.issue_ref].command}}
 """
             )
             workflow = Workflow(
@@ -105,12 +107,13 @@ inputs:
   type: Task
   issue_number: 7
   title: Hello World
-guards: []
-steps:
-  - name: run-command
-    uses: shell.command
-    with:
-      command: ${format("printf {}", format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug))}
+blocks:
+  - guards: []
+  - steps:
+      - name: run-command
+        uses: shell.command
+        with:
+          command: ${format("printf {}", format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug))}
 """
         )
 
@@ -129,20 +132,21 @@ inputs:
   type: Task
   issue_number: 7
   title: Hello World
-guards: []
-steps:
-  - name: run-command
-    uses: shell.command
-    with:
-      command:
-        format: "printf {}"
-        args:
-          -
-            format: "{}/{}-{}"
+blocks:
+  - guards: []
+  - steps:
+      - name: run-command
+        uses: shell.command
+        with:
+          command:
+            format: "printf {}"
             args:
-              - ${inputs.type | lower}
-              - ${inputs.issue_number}
-              - ${inputs.title | slug}
+              -
+                format: "{}/{}-{}"
+                args:
+                  - ${inputs.type | lower}
+                  - ${inputs.issue_number}
+                  - ${inputs.title | slug}
 """
         )
 
@@ -157,17 +161,18 @@ steps:
             """
 version: 0
 workflow: open-task
-guards: []
-steps:
-  - name: inspect
-    uses: shell.command
-    register: first
-    with:
-      command: printf hello
-  - name: replay
-    uses: shell.command
-    with:
-      command: ${format("printf {}", step.first.outputs.stdout)}
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect
+        uses: shell.command
+        register: first
+        with:
+          command: printf hello
+      - name: replay
+        uses: shell.command
+        with:
+          command: ${format("printf {}", step.first.outputs.stdout)}
 """
         )
 
@@ -178,7 +183,7 @@ steps:
         self.assertEqual(result.operation_results[1].outputs.get("stdout"), "hello")
 
     def test_resolve_runtime_value_reads_registered_step_outputs(self) -> None:
-        workflow = load_workflow_text("version: 0\nworkflow: demo\nguards: []\nsteps: []\n")
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps: []\n")
 
         value = resolve_runtime_value(
             "${step.issue.outputs.id}",
@@ -189,7 +194,7 @@ steps:
         self.assertEqual(value, 17)
 
     def test_resolve_runtime_value_reports_missing_registered_step(self) -> None:
-        workflow = load_workflow_text("version: 0\nworkflow: demo\nguards: []\nsteps: []\n")
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps: []\n")
 
         with self.assertRaises(ValueResolutionError) as context:
             resolve_runtime_value("${step.issue.outputs.id}", workflow)

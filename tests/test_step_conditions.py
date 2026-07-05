@@ -13,13 +13,14 @@ version: 0
 workflow: open-task
 inputs:
   status: ok
-guards: []
-steps:
-  - name: comment
-    if: ${inputs.status | eq("ok")}
-    uses: shell.command
-    with:
-      command: printf executed
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if: ${inputs.status | eq("ok")}
+        uses: shell.command
+        with:
+          command: printf executed
 """
 
         validation = validate_workflow_text(workflow_text)
@@ -38,13 +39,14 @@ version: 0
 workflow: open-task
 inputs:
   status: closed
-guards: []
-steps:
-  - name: comment
-    if: ${inputs.status | eq("ok")}
-    uses: shell.command
-    with:
-      command: printf executed
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if: ${inputs.status | eq("ok")}
+        uses: shell.command
+        with:
+          command: printf executed
 """
         )
 
@@ -60,13 +62,14 @@ steps:
             """
 version: 0
 workflow: open-task
-guards: []
-steps:
-  - name: comment
-    if: ${inputs.enabled | not}
-    uses: shell.command
-    with:
-      command: printf executed
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if: ${inputs.enabled | not}
+        uses: shell.command
+        with:
+          command: printf executed
 """
         )
 

@@ -22,17 +22,18 @@ inputs:
   command: printf integrated-state
 state_needs:
   task_memory: {{}}
-guards: []
-steps:
-  - name: remember-command
-    state_set:
-      state.task_memory[inputs.issue_ref].command: ${{inputs.command}}
-  - name: run-command
-    uses: shell.command
-    with:
-      command: ${{state.task_memory[inputs.issue_ref].command}}
-  - name: forget-command
-    state_delete: state.task_memory[inputs.issue_ref].command
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-command
+        state_set:
+          state.task_memory[inputs.issue_ref].command: ${{inputs.command}}
+      - name: run-command
+        uses: shell.command
+        with:
+          command: ${{state.task_memory[inputs.issue_ref].command}}
+      - name: forget-command
+        state_delete: state.task_memory[inputs.issue_ref].command
 """
             )
             workflow = Workflow(
@@ -62,13 +63,14 @@ version: 0
 workflow: open-task
 state_needs:
   task_memory: {}
-guards: []
-steps:
-  - name: remember-branch
-    state_set:
-      state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
-  - name: forget-branch
-    state_delete: state.task_memory[inputs.issue_ref].branch
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-branch
+        state_set:
+          state.task_memory[inputs.issue_ref].branch: ${inputs.branch}
+      - name: forget-branch
+        state_delete: state.task_memory[inputs.issue_ref].branch
 """
         )
         workflow = Workflow(

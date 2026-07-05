@@ -10,19 +10,19 @@ class IntrospectionNegativeRulesTest(unittest.TestCase):
         rules = {item["name"]: item for item in payload["negative_rules"]}
 
         mixed_form_report = validate_workflow_text(
-            "version: 0\nworkflow: demo\nguards: []\nsteps:\n  - name: bad\n    uses: gh.issue\n    state_delete: state.memory[inputs.issue]\n"
+            "version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps:\n      - name: bad\n        uses: gh.issue\n        state_delete: state.memory[inputs.issue]\n"
         )
         with_without_uses_report = validate_workflow_text(
-            "version: 0\nworkflow: demo\nguards: []\nsteps:\n  - name: bad\n    state_delete: state.memory[inputs.issue]\n    with:\n      issue: ${inputs.issue}\n"
+            "version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps:\n      - name: bad\n        state_delete: state.memory[inputs.issue]\n        with:\n          issue: ${inputs.issue}\n"
         )
         guard_step_ref_report = validate_workflow_text(
-            "version: 0\nworkflow: demo\nguards:\n  - step.issue.outputs.id == 1\nsteps: []\n"
+            "version: 0\nworkflow: demo\nblocks:\n  - guards:\n      - step.issue.outputs.id == 1\n  - steps: []\n"
         )
         forward_step_ref_report = validate_workflow_text(
-            "version: 0\nworkflow: demo\nguards: []\nsteps:\n  - name: later\n    uses: gh.issue.comment\n    with:\n      issue_id: ${step.issue.outputs.id}\n  - name: inspect\n    uses: gh.issue\n    register: issue\n"
+            "version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps:\n      - name: later\n        uses: gh.issue.comment\n        with:\n          issue_id: ${step.issue.outputs.id}\n      - name: inspect\n        uses: gh.issue\n        register: issue\n"
         )
         format_args_report = validate_workflow_text(
-            "version: 0\nworkflow: demo\nguards: []\nsteps:\n  - name: open\n    uses: gh.issue\n    with:\n      title:\n        format: hi {0}\n        args: nope\n"
+            "version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps:\n      - name: open\n        uses: gh.issue\n        with:\n          title:\n            format: hi {0}\n            args: nope\n"
         )
 
         self.assertEqual(mixed_form_report.diagnostics[0].code, rules["workflow_step.exactly_one_form"]["related_codes"][0])

@@ -50,7 +50,7 @@ class AuthoringVerificationTest(unittest.TestCase):
 
     def test_structured_feedback_supports_iterative_repair(self) -> None:
         invalid = validate_workflow_text(
-            "version: 0\nworkflow: review-issue\nextra: true\nguards: []\nsteps: []\n"
+            "version: 0\nworkflow: review-issue\nextra: true\nblocks:\n  - guards: []\n  - steps: []\n"
         )
         repaired = Workflow(
             version=0,

@@ -4,11 +4,12 @@ workflow: blocked-main-branch
 inputs:
   command: echo ready-to-ship
 
-guards:
-  - git.branch.value != "main"
+blocks:
+  - guards:
+      - git.branch.value != "main"
 
-steps:
-  - name: verify-command
-    uses: shell.command
-    with:
-      command: ${inputs.command}
+  - steps:
+      - name: verify-command
+        uses: shell.command
+        with:
+          command: ${inputs.command}

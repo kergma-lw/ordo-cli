@@ -17,14 +17,15 @@ class LoadingTest(unittest.TestCase):
                 workflow: open-task
                 inputs:
                   issue: repo#1
-                guards:
-                  - uses: git.worktree
-                steps:
-                  - name: inspect
-                    uses: gh.issue
-                    register: issue
-                    with:
-                      issue: repo#1
+                blocks:
+                  - guards:
+                      - uses: git.worktree
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
+                        with:
+                          issue: repo#1
                 """
             )
         )
@@ -41,15 +42,16 @@ class LoadingTest(unittest.TestCase):
                 workflow: open-task
                 inputs:
                   enabled: true
-                guards: []
-                steps:
-                  - name: inspect
-                    if: ${inputs.enabled}
-                    uses: gh.issue
-                  - name: remember
-                    if: ${inputs.enabled}
-                    state_set:
-                      state.task_memory[inputs.enabled].flag: ${inputs.enabled}
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.enabled}
+                        uses: gh.issue
+                      - name: remember
+                        if: ${inputs.enabled}
+                        state_set:
+                          state.task_memory[inputs.enabled].flag: ${inputs.enabled}
                 """
             )
         )
@@ -64,9 +66,10 @@ class LoadingTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
-                guards:
-                  - git.worktree.clean and git.branch != "main"
-                steps: []
+                blocks:
+                  - guards:
+                      - git.worktree.clean and git.branch != "main"
+                  - steps: []
                 """
             )
         )
