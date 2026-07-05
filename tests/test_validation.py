@@ -363,6 +363,54 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.forward")
 
+    def test_later_step_block_can_read_earlier_registered_step(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
+                  - guards: []
+                  - steps:
+                      - name: comment
+                        uses: gh.issue.comment
+                        with:
+                          issue_id: ${step.issue.outputs.id}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_duplicate_register_names_across_step_blocks_fail(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect-first
+                        uses: gh.issue
+                        register: issue
+                  - guards: []
+                  - steps:
+                      - name: inspect-second
+                        uses: gh.issue
+                        register: issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.duplicate_register")
+
     def test_guard_expression_rejects_registered_step_reference(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

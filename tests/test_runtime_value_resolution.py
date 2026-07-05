@@ -182,6 +182,34 @@ blocks:
         self.assertEqual(result.operation_results[0].outputs.get("stdout"), "hello")
         self.assertEqual(result.operation_results[1].outputs.get("stdout"), "hello")
 
+    def test_execute_resolves_registered_step_output_in_later_step_block(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect
+        uses: shell.command
+        register: first
+        with:
+          command: printf hello
+  - guards: []
+  - steps:
+      - name: replay
+        uses: shell.command
+        with:
+          command: ${format("printf {}", step.first.outputs.stdout)}
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.operation_results[0].outputs.get("stdout"), "hello")
+        self.assertEqual(result.operation_results[1].outputs.get("stdout"), "hello")
+
     def test_resolve_runtime_value_reads_registered_step_outputs(self) -> None:
         workflow = load_workflow_text("version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps: []\n")
 

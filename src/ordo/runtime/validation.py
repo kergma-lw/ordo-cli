@@ -114,6 +114,8 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
         diagnostics.append(_diagnostic("validation.workflow.blocks.type", "Field 'blocks' must be a list", ("blocks",), source, actual_type=type(value).__name__))
         return diagnostics
 
+    declared_registers = _collect_declared_registers_from_blocks(value)
+    seen_registers: dict[str, tuple[str, ...]] = {}
     for index, item in enumerate(value):
         path = ("blocks", str(index))
         if not isinstance(item, dict):
@@ -135,8 +137,40 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
         if has_guards:
             diagnostics.extend(_validate_guard_list(item.get("guards"), source=source, path=path + ("guards",)))
         else:
-            diagnostics.extend(_validate_step_list(item.get("steps"), source=source, path=path + ("steps",)))
+            step_path = path + ("steps",)
+            diagnostics.extend(
+                _validate_step_list(
+                    item.get("steps"),
+                    source=source,
+                    path=step_path,
+                    prior_registers=seen_registers,
+                    declared_registers=declared_registers,
+                )
+            )
+            seen_registers.update(_collect_declared_registers_from_step_list(item.get("steps"), path=step_path))
     return diagnostics
+
+
+def _collect_declared_registers_from_blocks(value: list[JSONValue]) -> dict[str, tuple[str, ...]]:
+    declared_registers: dict[str, tuple[str, ...]] = {}
+    for index, item in enumerate(value):
+        if not isinstance(item, dict) or "steps" not in item:
+            continue
+        declared_registers.update(_collect_declared_registers_from_step_list(item.get("steps"), path=("blocks", str(index), "steps")))
+    return declared_registers
+
+
+def _collect_declared_registers_from_step_list(value: JSONValue | None, *, path: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
+    if not isinstance(value, list):
+        return {}
+    return {
+        item["register"]: path + (str(index), "register")
+        for index, item in enumerate(value)
+        if isinstance(item, dict)
+        and "uses" in item
+        and isinstance(item.get("register"), str)
+        and REGISTER_PATTERN.fullmatch(item["register"])
+    }
 
 
 def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -> ValidationReport:
@@ -181,22 +215,22 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
     return diagnostics
 
 
-def _validate_step_list(value: JSONValue | None, *, source: str, path: tuple[str, ...] = ("steps",)) -> list[Diagnostic]:
+def _validate_step_list(
+    value: JSONValue | None,
+    *,
+    source: str,
+    path: tuple[str, ...] = ("steps",),
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, list):
         diagnostics.append(_diagnostic("validation.workflow.steps.type", "Field 'steps' must be a list", path, source, actual_type=type(value).__name__))
         return diagnostics
 
     seen_names: dict[str, tuple[str, ...]] = {}
-    seen_registers: dict[str, tuple[str, ...]] = {}
-    declared_registers = {
-        item["register"]: path + (str(index), "register")
-        for index, item in enumerate(value)
-        if isinstance(item, dict)
-        and "uses" in item
-        and isinstance(item.get("register"), str)
-        and REGISTER_PATTERN.fullmatch(item["register"])
-    }
+    seen_registers = {} if prior_registers is None else dict(prior_registers)
+    effective_declared_registers = declared_registers if declared_registers is not None else _collect_declared_registers_from_step_list(value, path=path)
     for index, item in enumerate(value):
         item_path = path + (str(index),)
         if not isinstance(item, dict):
@@ -229,7 +263,7 @@ def _validate_step_list(value: JSONValue | None, *, source: str, path: tuple[str
                     source=source,
                     allowed_fields=STEP_ALLOWED_FIELDS,
                     prior_registers=prior_registers,
-                    declared_registers=declared_registers,
+                    declared_registers=effective_declared_registers,
                 )
             )
         elif "with" in item:
@@ -248,7 +282,7 @@ def _validate_step_list(value: JSONValue | None, *, source: str, path: tuple[str
                 path=item_path,
                 source=source,
                 prior_registers=prior_registers,
-                declared_registers=declared_registers,
+                declared_registers=effective_declared_registers,
             )
         )
         diagnostics.extend(_validate_step_register(item, path=item_path, source=source, has_uses=has_uses))
@@ -261,7 +295,7 @@ def _validate_step_list(value: JSONValue | None, *, source: str, path: tuple[str
                     path=item_path + ("state_set",),
                     source=source,
                     prior_registers=prior_registers,
-                    declared_registers=declared_registers,
+                    declared_registers=effective_declared_registers,
                 )
             )
         if has_state_delete:
