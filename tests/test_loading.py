@@ -30,8 +30,8 @@ class LoadingTest(unittest.TestCase):
         )
 
         self.assertIsInstance(workflow, Workflow)
-        self.assertEqual(workflow.to_contract()["steps"][0]["uses"], "gh.issue")
-        self.assertEqual(workflow.to_contract()["steps"][0]["register"], "issue")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["uses"], "gh.issue")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["register"], "issue")
 
     def test_loads_step_if_field_into_typed_model(self) -> None:
         workflow = load_workflow_text(
@@ -55,7 +55,7 @@ class LoadingTest(unittest.TestCase):
         )
 
         self.assertEqual(workflow.steps[0].if_, "${inputs.enabled}")
-        self.assertEqual(workflow.to_contract()["steps"][0]["if"], "${inputs.enabled}")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "${inputs.enabled}")
         self.assertEqual(workflow.steps[1].if_, "${inputs.enabled}")
 
     def test_loads_expr_guard_into_typed_model(self) -> None:
@@ -72,7 +72,7 @@ class LoadingTest(unittest.TestCase):
         )
 
         self.assertEqual(workflow.guards[0].expr, 'git.worktree.clean and git.branch != "main"')
-        self.assertEqual(workflow.to_contract()["guards"][0], 'git.worktree.clean and git.branch != "main"')
+        self.assertEqual(workflow.to_contract()["blocks"][0]["guards"][0], 'git.worktree.clean and git.branch != "main"')
 
     def test_loads_profile_yaml_into_typed_model(self) -> None:
         profile = load_profile_text(

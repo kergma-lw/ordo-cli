@@ -89,6 +89,29 @@ class Step:
 
 
 @dataclass(frozen=True, slots=True)
+class GuardBlock:
+    """Ordered workflow block containing only guards."""
+
+    guards: tuple[Guard, ...] = ()
+
+    def to_contract(self) -> JSONObject:
+        return {"guards": [guard.to_contract() for guard in self.guards]}
+
+
+@dataclass(frozen=True, slots=True)
+class StepBlock:
+    """Ordered workflow block containing only steps."""
+
+    steps: tuple[Step, ...] = ()
+
+    def to_contract(self) -> JSONObject:
+        return {"steps": [step.to_contract() for step in self.steps]}
+
+
+WorkflowBlock = GuardBlock | StepBlock
+
+
+@dataclass(frozen=True, slots=True, init=False)
 class Workflow:
     """Declarative orchestration model loaded from author-facing data."""
 
@@ -99,8 +122,50 @@ class Workflow:
     state_bindings: JSONObject = field(default_factory=dict)
     states: JSONObject = field(default_factory=dict)
     step_results: JSONObject = field(default_factory=dict)
-    guards: tuple[Guard, ...] = ()
-    steps: tuple[Step, ...] = ()
+    blocks: tuple[WorkflowBlock, ...] = ()
+
+    def __init__(
+        self,
+        *,
+        version: int,
+        workflow: str,
+        inputs: JSONObject | None = None,
+        state_needs: JSONObject | None = None,
+        state_bindings: JSONObject | None = None,
+        states: JSONObject | None = None,
+        step_results: JSONObject | None = None,
+        blocks: tuple[WorkflowBlock, ...] = (),
+        guards: tuple[Guard, ...] | None = None,
+        steps: tuple[Step, ...] | None = None,
+    ) -> None:
+        if blocks and (guards is not None or steps is not None):
+            raise ValueError("Workflow must define either blocks or legacy guards/steps, not both")
+
+        normalized_blocks = tuple(blocks)
+        if not normalized_blocks and (guards is not None or steps is not None):
+            legacy_blocks: list[WorkflowBlock] = []
+            if guards is not None:
+                legacy_blocks.append(GuardBlock(guards=tuple(guards)))
+            if steps is not None:
+                legacy_blocks.append(StepBlock(steps=tuple(steps)))
+            normalized_blocks = tuple(legacy_blocks)
+
+        object.__setattr__(self, "version", version)
+        object.__setattr__(self, "workflow", workflow)
+        object.__setattr__(self, "inputs", {} if inputs is None else dict(inputs))
+        object.__setattr__(self, "state_needs", {} if state_needs is None else dict(state_needs))
+        object.__setattr__(self, "state_bindings", {} if state_bindings is None else dict(state_bindings))
+        object.__setattr__(self, "states", {} if states is None else dict(states))
+        object.__setattr__(self, "step_results", {} if step_results is None else dict(step_results))
+        object.__setattr__(self, "blocks", normalized_blocks)
+
+    @property
+    def guards(self) -> tuple[Guard, ...]:
+        return tuple(guard for block in self.blocks if isinstance(block, GuardBlock) for guard in block.guards)
+
+    @property
+    def steps(self) -> tuple[Step, ...]:
+        return tuple(step for block in self.blocks if isinstance(block, StepBlock) for step in block.steps)
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped workflow contract."""
@@ -110,6 +175,5 @@ class Workflow:
             "workflow": self.workflow,
             "inputs": dict(self.inputs),
             "state_needs": dict(self.state_needs),
-            "guards": [guard.to_contract() for guard in self.guards],
-            "steps": [step.to_contract() for step in self.steps],
+            "blocks": [block.to_contract() for block in self.blocks],
         }

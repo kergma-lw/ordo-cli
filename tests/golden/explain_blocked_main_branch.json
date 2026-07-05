@@ -149,6 +149,8 @@
     "reason_category": "guard",
     "step_items": [
       {
+        "condition": null,
+        "conditional": false,
         "effect": "effectful",
         "eligibility": "blocked",
         "kind": "action",

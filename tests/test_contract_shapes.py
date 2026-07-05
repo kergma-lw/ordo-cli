@@ -3,7 +3,7 @@ import unittest
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 
 
 class ContractShapeTest(unittest.TestCase):
@@ -13,12 +13,16 @@ class ContractShapeTest(unittest.TestCase):
             workflow="open-task",
             inputs={"repository": "repo/name", "issue_number": 1},
             state_needs={"task_memory": {}},
-            guards=(Guard(OperationRef("git.worktree")),),
-            steps=(
-                Step(
-                    name="inspect-issue",
-                    operation=OperationRef("gh.issue", with_={"repository": "repo/name", "issue_number": 1}),
-                    register="issue",
+            blocks=(
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="inspect-issue",
+                            operation=OperationRef("gh.issue", with_={"repository": "repo/name", "issue_number": 1}),
+                            register="issue",
+                        ),
+                    )
                 ),
             ),
         )
@@ -30,20 +34,24 @@ class ContractShapeTest(unittest.TestCase):
                 "workflow": "open-task",
                 "inputs": {"repository": "repo/name", "issue_number": 1},
                 "state_needs": {"task_memory": {}},
-                "guards": [{"uses": "git.worktree", "with": {}}],
-                "steps": [
+                "blocks": [
+                    {"guards": [{"uses": "git.worktree", "with": {}}]},
                     {
-                        "name": "inspect-issue",
-                        "uses": "gh.issue",
-                        "with": {"repository": "repo/name", "issue_number": 1},
-                        "register": "issue",
-                    }
+                        "steps": [
+                            {
+                                "name": "inspect-issue",
+                                "uses": "gh.issue",
+                                "with": {"repository": "repo/name", "issue_number": 1},
+                                "register": "issue",
+                            }
+                        ]
+                    },
                 ],
             },
         )
 
     def test_workflow_contract_allows_expr_guard_shape(self) -> None:
-        workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch != "main"'),), steps=())
+        workflow = Workflow(version=0, workflow="open-task", blocks=(GuardBlock(guards=(Guard(expr='git.branch != "main"'),)),))
 
         self.assertEqual(
             workflow.to_contract(),
@@ -52,8 +60,7 @@ class ContractShapeTest(unittest.TestCase):
                 "workflow": "open-task",
                 "inputs": {},
                 "state_needs": {},
-                "guards": ['git.branch != "main"'],
-                "steps": [],
+                "blocks": [{"guards": ['git.branch != "main"']}],
             },
         )
 

@@ -37,6 +37,7 @@ def _field_names(items: list[JSONObject]) -> frozenset[str]:
 
 
 WORKFLOW_ALLOWED_FIELDS = _field_names(WORKFLOW_CONTRACT["top_level_fields"])
+BLOCK_ALLOWED_FIELDS = frozenset({"guards", "steps"})
 CALL_ALLOWED_FIELDS = frozenset({"uses", "with"})
 STEP_ALLOWED_FIELDS = frozenset().union(
     *(
@@ -98,10 +99,78 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_non_empty_string(payload, "workflow", source=source))
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
     diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
-    diagnostics.extend(_validate_guard_list(payload.get("guards"), source=source))
-    diagnostics.extend(_validate_step_list(payload.get("steps"), source=source))
+    diagnostics.extend(_validate_workflow_blocks(payload, source=source))
 
     return _report("workflow", diagnostics)
+
+
+def _validate_workflow_blocks(payload: JSONObject, *, source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    has_blocks = "blocks" in payload
+    has_guards = "guards" in payload
+    has_steps = "steps" in payload
+
+    if has_blocks and (has_guards or has_steps):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.blocks.mixed_legacy",
+                "Workflow must not mix 'blocks' with top-level 'guards' or 'steps'",
+                ("blocks",),
+                source,
+            )
+        )
+        return diagnostics
+
+    if has_blocks:
+        return _validate_block_list(payload.get("blocks"), source=source)
+
+    if not has_guards and not has_steps:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.blocks.missing",
+                "Workflow must declare either 'blocks' or top-level 'guards'/'steps'",
+                (),
+                source,
+            )
+        )
+        return diagnostics
+
+    if has_guards:
+        diagnostics.extend(_validate_guard_list(payload.get("guards"), source=source, path=("guards",)))
+    if has_steps:
+        diagnostics.extend(_validate_step_list(payload.get("steps"), source=source, path=("steps",)))
+    return diagnostics
+
+
+def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(value, list):
+        diagnostics.append(_diagnostic("validation.workflow.blocks.type", "Field 'blocks' must be a list", ("blocks",), source, actual_type=type(value).__name__))
+        return diagnostics
+
+    for index, item in enumerate(value):
+        path = ("blocks", str(index))
+        if not isinstance(item, dict):
+            diagnostics.append(_diagnostic("validation.workflow.block.type", "Block entry must be an object", path, source, actual_type=type(item).__name__))
+            continue
+        diagnostics.extend(_validate_unknown_fields(item, BLOCK_ALLOWED_FIELDS, path=path, source=source))
+        has_guards = "guards" in item
+        has_steps = "steps" in item
+        if has_guards == has_steps:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.block.form",
+                    "Block must define exactly one of 'guards' or 'steps'",
+                    path,
+                    source,
+                )
+            )
+            continue
+        if has_guards:
+            diagnostics.extend(_validate_guard_list(item.get("guards"), source=source, path=path + ("guards",)))
+        else:
+            diagnostics.extend(_validate_step_list(item.get("steps"), source=source, path=path + ("steps",)))
+    return diagnostics
 
 
 def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -> ValidationReport:
@@ -122,40 +191,40 @@ def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -
     return _report("profile", diagnostics)
 
 
-def _validate_guard_list(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
+def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[str, ...] = ("guards",)) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, list):
-        diagnostics.append(_diagnostic("validation.workflow.guards.type", "Field 'guards' must be a list", ("guards",), source, actual_type=type(value).__name__))
+        diagnostics.append(_diagnostic("validation.workflow.guards.type", "Field 'guards' must be a list", path, source, actual_type=type(value).__name__))
         return diagnostics
 
     for index, item in enumerate(value):
-        path = ("guards", str(index))
+        item_path = path + (str(index),)
         if isinstance(item, str):
             if not item:
-                diagnostics.append(_diagnostic("validation.workflow.guard_expr.empty", "Guard expression must not be empty", path, source))
+                diagnostics.append(_diagnostic("validation.workflow.guard_expr.empty", "Guard expression must not be empty", item_path, source))
                 continue
             try:
                 parsed = parse_guard_expression(item)
             except GuardExpressionParseError as exc:
-                diagnostics.append(exc.to_diagnostic(path=path, source=source, expression=item))
+                diagnostics.append(exc.to_diagnostic(path=item_path, source=source, expression=item))
                 continue
             for validation_error in validate_parsed_guard_expression(parsed):
-                diagnostics.append(validation_error.to_diagnostic(path=path, source=source, expression=item))
+                diagnostics.append(validation_error.to_diagnostic(path=item_path, source=source, expression=item))
             continue
-        diagnostics.extend(_validate_call(item, path=path, source=source))
+        diagnostics.extend(_validate_call(item, path=item_path, source=source))
     return diagnostics
 
 
-def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
+def _validate_step_list(value: JSONValue | None, *, source: str, path: tuple[str, ...] = ("steps",)) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, list):
-        diagnostics.append(_diagnostic("validation.workflow.steps.type", "Field 'steps' must be a list", ("steps",), source, actual_type=type(value).__name__))
+        diagnostics.append(_diagnostic("validation.workflow.steps.type", "Field 'steps' must be a list", path, source, actual_type=type(value).__name__))
         return diagnostics
 
     seen_names: dict[str, tuple[str, ...]] = {}
     seen_registers: dict[str, tuple[str, ...]] = {}
     declared_registers = {
-        item["register"]: ("steps", str(index), "register")
+        item["register"]: path + (str(index), "register")
         for index, item in enumerate(value)
         if isinstance(item, dict)
         and "uses" in item
@@ -163,13 +232,13 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
         and REGISTER_PATTERN.fullmatch(item["register"])
     }
     for index, item in enumerate(value):
-        path = ("steps", str(index))
+        item_path = path + (str(index),)
         if not isinstance(item, dict):
-            diagnostics.append(_diagnostic("validation.workflow.step.type", "Step entry must be an object", path, source, actual_type=type(item).__name__))
+            diagnostics.append(_diagnostic("validation.workflow.step.type", "Step entry must be an object", item_path, source, actual_type=type(item).__name__))
             continue
 
-        diagnostics.extend(_validate_unknown_fields(item, STEP_ALLOWED_FIELDS, path=path, source=source))
-        diagnostics.extend(_require_non_empty_string(item, "name", path=path + ("name",), source=source))
+        diagnostics.extend(_validate_unknown_fields(item, STEP_ALLOWED_FIELDS, path=item_path, source=source))
+        diagnostics.extend(_require_non_empty_string(item, "name", path=item_path + ("name",), source=source))
         has_uses = "uses" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
@@ -182,7 +251,7 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
                 _diagnostic(
                     "validation.workflow.step.form",
                     "Step must define exactly one of 'uses', 'state_set', or 'state_delete'",
-                    path,
+                    item_path,
                     source,
                 )
             )
@@ -190,7 +259,7 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
             diagnostics.extend(
                 _validate_call(
                     item,
-                    path=path,
+                    path=item_path,
                     source=source,
                     allowed_fields=STEP_ALLOWED_FIELDS,
                     prior_registers=prior_registers,
@@ -202,7 +271,7 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
                 _diagnostic(
                     "validation.workflow.step.with_without_uses",
                     "Step field 'with' is allowed only together with 'uses'",
-                    path + ("with",),
+                    item_path + ("with",),
                     source,
                 )
             )
@@ -210,35 +279,35 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
         diagnostics.extend(
             _validate_step_condition(
                 item,
-                path=path,
+                path=item_path,
                 source=source,
                 prior_registers=prior_registers,
                 declared_registers=declared_registers,
             )
         )
-        diagnostics.extend(_validate_step_register(item, path=path, source=source, has_uses=has_uses))
+        diagnostics.extend(_validate_step_register(item, path=item_path, source=source, has_uses=has_uses))
 
         if has_state_set:
-            diagnostics.extend(_require_object_field(item, "state_set", path=path + ("state_set",), source=source, required=True))
+            diagnostics.extend(_require_object_field(item, "state_set", path=item_path + ("state_set",), source=source, required=True))
             diagnostics.extend(
                 _validate_state_set_shape(
                     item.get("state_set"),
-                    path=path + ("state_set",),
+                    path=item_path + ("state_set",),
                     source=source,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
                 )
             )
         if has_state_delete:
-            diagnostics.extend(_require_non_empty_string(item, "state_delete", path=path + ("state_delete",), source=source))
-            diagnostics.extend(_validate_state_path_text(item.get("state_delete"), path=path + ("state_delete",), source=source))
+            diagnostics.extend(_require_non_empty_string(item, "state_delete", path=item_path + ("state_delete",), source=source))
+            diagnostics.extend(_validate_state_path_text(item.get("state_delete"), path=item_path + ("state_delete",), source=source))
 
         name = item.get("name")
         if isinstance(name, str) and name:
             if name in seen_names:
-                diagnostics.append(_diagnostic("validation.workflow.step.duplicate_name", f"Duplicate step name '{name}'", path + ("name",), source, first_seen_path=list(seen_names[name])))
+                diagnostics.append(_diagnostic("validation.workflow.step.duplicate_name", f"Duplicate step name '{name}'", item_path + ("name",), source, first_seen_path=list(seen_names[name])))
             else:
-                seen_names[name] = path + ("name",)
+                seen_names[name] = item_path + ("name",)
 
         register = item.get("register")
         if isinstance(register, str) and register and has_uses and REGISTER_PATTERN.fullmatch(register):
@@ -247,13 +316,13 @@ def _validate_step_list(value: JSONValue | None, *, source: str) -> list[Diagnos
                     _diagnostic(
                         "validation.workflow.step.duplicate_register",
                         f"Duplicate step register '{register}'",
-                        path + ("register",),
+                        item_path + ("register",),
                         source,
                         first_seen_path=list(seen_registers[register]),
                     )
                 )
             else:
-                seen_registers[register] = path + ("register",)
+                seen_registers[register] = item_path + ("register",)
 
     return diagnostics
 

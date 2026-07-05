@@ -69,6 +69,8 @@
     "plan_ready": true,
     "step_items": [
       {
+        "condition": null,
+        "conditional": false,
         "effect": "read_only",
         "eligibility": "eligible",
         "kind": "probe",

@@ -11,7 +11,7 @@ import yaml
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
 from ordo.model.profile import Override, Profile
-from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,8 +36,7 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
             details={"source": source, "actual_type": type(payload).__name__},
         )
 
-    guards_data = _require_list(payload, "guards", source=source)
-    steps_data = _require_list(payload, "steps", source=source)
+    blocks = _load_workflow_blocks(payload, source=source)
 
     return Workflow(
         version=_require_int(payload, "version", source=source),
@@ -46,8 +45,7 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
         state_needs=_optional_object(payload, "state_needs", source=source),
         state_bindings=_optional_object(payload, "state_bindings", source=source),
         states=_optional_object(payload, "states", source=source),
-        guards=tuple(_load_guard(item, index=index, source=source) for index, item in enumerate(guards_data)),
-        steps=tuple(_load_step(item, index=index, source=source) for index, item in enumerate(steps_data)),
+        blocks=blocks,
     )
 
 
@@ -126,6 +124,10 @@ def load_yaml_document(text: str, *, source: str = "<memory>") -> JSONValue:
 
 def _load_guard(payload: JSONValue, *, index: int, source: str) -> Guard:
     path = ("guards", str(index))
+    return _load_guard_at_path(payload, path=path, source=source)
+
+
+def _load_guard_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str) -> Guard:
     if isinstance(payload, str):
         return Guard(expr=payload)
 
@@ -135,6 +137,10 @@ def _load_guard(payload: JSONValue, *, index: int, source: str) -> Guard:
 
 def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:
     path = ("steps", str(index))
+    return _load_step_at_path(payload, path=path, source=source)
+
+
+def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str) -> Step:
     data = _require_object(payload, path=path, source=source)
     has_uses = "uses" in data
     has_state_set = "state_set" in data
@@ -162,6 +168,86 @@ def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:
         state_delete=state_delete,
         if_=_optional_string(data, "if", path=path + ("if",), source=source),
         register=_optional_string(data, "register", path=path + ("register",), source=source),
+    )
+
+
+def _load_workflow_blocks(payload: JSONObject, *, source: str) -> tuple[WorkflowBlock, ...]:
+    raw_blocks = payload.get("blocks")
+    has_blocks = raw_blocks is not None
+    has_legacy_guards = "guards" in payload
+    has_legacy_steps = "steps" in payload
+
+    if has_blocks and (has_legacy_guards or has_legacy_steps):
+        raise _load_error(
+            code="load.workflow.blocks.mixed_legacy",
+            message="Workflow must not mix 'blocks' with top-level 'guards' or 'steps'",
+            path=("blocks",),
+            details={"source": source},
+        )
+
+    if has_blocks:
+        if not isinstance(raw_blocks, list):
+            raise _load_error(
+                code="load.blocks.type",
+                message="Field 'blocks' must be a list",
+                path=("blocks",),
+                details={"source": source, "actual_type": type(raw_blocks).__name__},
+            )
+        return tuple(_load_block(item, index=index, source=source) for index, item in enumerate(raw_blocks))
+
+    blocks: list[WorkflowBlock] = []
+    if has_legacy_guards:
+        guards_data = _require_list(payload, "guards", source=source)
+        blocks.append(GuardBlock(guards=tuple(_load_guard(item, index=index, source=source) for index, item in enumerate(guards_data))))
+    if has_legacy_steps:
+        steps_data = _require_list(payload, "steps", source=source)
+        blocks.append(StepBlock(steps=tuple(_load_step(item, index=index, source=source) for index, item in enumerate(steps_data))))
+    if blocks:
+        return tuple(blocks)
+
+    raise _load_error(
+        code="load.workflow.blocks.missing",
+        message="Workflow must declare either 'blocks' or top-level 'guards'/'steps'",
+        path=(),
+        details={"source": source},
+    )
+
+
+def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock:
+    path = ("blocks", str(index))
+    data = _require_object(payload, path=path, source=source)
+    has_guards = "guards" in data
+    has_steps = "steps" in data
+    if has_guards == has_steps:
+        raise _load_error(
+            code="load.workflow.block.form",
+            message="Block must define exactly one of 'guards' or 'steps'",
+            path=path,
+            details={"source": source},
+        )
+    if has_guards:
+        guards_payload = data.get("guards")
+        if not isinstance(guards_payload, list):
+            raise _load_error(
+                code="load.workflow.block.guards_type",
+                message="Block field 'guards' must be a list",
+                path=path + ("guards",),
+                details={"source": source, "actual_type": type(guards_payload).__name__},
+            )
+        return GuardBlock(
+            guards=tuple(_load_guard_at_path(item, path=path + ("guards", str(item_index)), source=source) for item_index, item in enumerate(guards_payload))
+        )
+
+    steps_payload = data.get("steps")
+    if not isinstance(steps_payload, list):
+        raise _load_error(
+            code="load.workflow.block.steps_type",
+            message="Block field 'steps' must be a list",
+            path=path + ("steps",),
+            details={"source": source, "actual_type": type(steps_payload).__name__},
+        )
+    return StepBlock(
+        steps=tuple(_load_step_at_path(item, path=path + ("steps", str(item_index)), source=source) for item_index, item in enumerate(steps_payload))
     )
 
 

@@ -46,7 +46,8 @@
     "executed_steps": [
       "inspect-issue"
     ],
-    "skipped_steps": []
+    "skipped_steps": [],
+    "step_condition_details": []
   },
   "plan": {
     "blockers": [],

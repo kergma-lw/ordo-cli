@@ -169,8 +169,7 @@ def _apply_input_overrides(
         state_bindings=workflow.state_bindings,
         states=workflow.states,
         step_results=workflow.step_results,
-        guards=workflow.guards,
-        steps=workflow.steps,
+        blocks=workflow.blocks,
     )
 
     if profile is None:

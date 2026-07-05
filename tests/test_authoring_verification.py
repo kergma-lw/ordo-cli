@@ -3,7 +3,7 @@ import unittest
 from ordo.connectors import get_public_connector_registry
 from ordo.model.profile import Profile
 from ordo.model.runtime import OperationResult, RuntimeStatus
-from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import compose_profiles, explain_workflow, validate_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -25,13 +25,19 @@ class AuthoringVerificationTest(unittest.TestCase):
             version=0,
             workflow="review-issue",
             inputs={"repository": "kergma-lw/ordo-cli", "issue_number": 1, "command": "echo review"},
-            guards=(
-                Guard(OperationRef("git.worktree")),
-                Guard(expr='git.branch.value != "main"'),
-            ),
-            steps=(
-                Step(name="inspect-issue", operation=OperationRef("gh.issue", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 1})),
-                Step(name="verify-command", operation=OperationRef("shell.command", with_={"command": "echo review"})),
+            blocks=(
+                GuardBlock(
+                    guards=(
+                        Guard(OperationRef("git.worktree")),
+                        Guard(expr='git.branch.value != "main"'),
+                    )
+                ),
+                StepBlock(
+                    steps=(
+                        Step(name="inspect-issue", operation=OperationRef("gh.issue", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 1})),
+                        Step(name="verify-command", operation=OperationRef("shell.command", with_={"command": "echo review"})),
+                    )
+                ),
             ),
         )
         profile = Profile(name="review-defaults", inputs={"command": "echo review"})
@@ -49,8 +55,10 @@ class AuthoringVerificationTest(unittest.TestCase):
         repaired = Workflow(
             version=0,
             workflow="review-issue",
-            guards=(Guard(OperationRef("git.worktree")),),
-            steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 1})),),
+            blocks=(
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 1})),)),
+            ),
         )
 
         explanation = explain_workflow(

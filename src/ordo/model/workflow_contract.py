@@ -14,8 +14,13 @@ WORKFLOW_CONTRACT: JSONObject = {
         {"name": "workflow", "required": True, "type": "string"},
         {"name": "inputs", "required": False, "type": "object"},
         {"name": "state_needs", "required": False, "type": "object"},
-        {"name": "guards", "required": True, "type": "array"},
-        {"name": "steps", "required": True, "type": "array"},
+        {"name": "blocks", "required": False, "type": "array"},
+        {"name": "guards", "required": False, "type": "array", "compatibility_only": True},
+        {"name": "steps", "required": False, "type": "array", "compatibility_only": True},
+    ],
+    "block_forms": [
+        {"name": "guard_block", "required_fields": ["guards"], "optional_fields": []},
+        {"name": "step_block", "required_fields": ["steps"], "optional_fields": []},
     ],
     "guard_forms": [
         {"name": "operation_call", "shape": {"uses": "string", "with": "object"}},

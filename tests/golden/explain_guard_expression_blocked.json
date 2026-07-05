@@ -1,14 +1,14 @@
 {
   "diagnostics": [],
-  "failed_guard": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+  "failed_guard": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
   "failed_step": null,
   "mode": "explain",
   "operation_results": [
     {
       "diagnostics": [],
       "outputs": {
-        "failed_subcondition": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
-        "guard": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+        "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
+        "guard": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "result": false
       },
       "raw": {
@@ -16,7 +16,7 @@
         "failure_kind": "guard_failed",
         "trace": [
           {
-            "expr": "gh.issue(issue_ref=inputs.issue_ref).state",
+            "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state",
             "kind": "probe",
             "reference": "gh.issue",
             "status": "ok",
@@ -44,7 +44,7 @@
             ]
           },
           {
-            "expr": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+            "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
             "kind": "binary",
             "left": "DONE",
             "operator": "not in",
@@ -65,29 +65,29 @@
     "active_overrides": [],
     "active_profile": null,
     "blockers": [
-      "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]"
+      "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],
     "can_execute": false,
     "checked_guards": [
-      "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]"
+      "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],
     "execution_allowed": false,
     "explanation": {
       "allowed": false,
       "blockers": [
-        "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]"
+        "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
       ],
       "category": "guard",
       "guard_details": [
         {
-          "failed_subcondition": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+          "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
           "failure_kind": "guard_failed",
-          "reference": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+          "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
           "status": "guard_failed",
           "summary": "Guard expression evaluated false",
           "trace": [
             {
-              "expr": "gh.issue(issue_ref=inputs.issue_ref).state",
+              "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state",
               "kind": "probe",
               "reference": "gh.issue",
               "status": "ok",
@@ -115,7 +115,7 @@
               ]
             },
             {
-              "expr": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+              "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
               "kind": "binary",
               "left": "DONE",
               "operator": "not in",
@@ -133,14 +133,14 @@
     },
     "guard_details": [
       {
-        "failed_subcondition": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+        "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "failure_kind": "guard_failed",
-        "reference": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+        "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "status": "guard_failed",
         "summary": "Guard expression evaluated false",
         "trace": [
           {
-            "expr": "gh.issue(issue_ref=inputs.issue_ref).state",
+            "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state",
             "kind": "probe",
             "reference": "gh.issue",
             "status": "ok",
@@ -168,7 +168,7 @@
             ]
           },
           {
-            "expr": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+            "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
             "kind": "binary",
             "left": "DONE",
             "operator": "not in",
@@ -185,11 +185,11 @@
     "guard_items": [
       {
         "effect": "read_only",
-        "failed_subcondition": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+        "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "failure_kind": "guard_failed",
         "kind": "expression",
         "operation_status": "guard_failed",
-        "reference": "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]",
+        "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "status": "blocked"
       }
     ],
@@ -203,6 +203,8 @@
     "reason_category": "guard",
     "step_items": [
       {
+        "condition": null,
+        "conditional": false,
         "effect": "effectful",
         "eligibility": "blocked",
         "kind": "action",
@@ -213,10 +215,10 @@
   },
   "plan": {
     "blockers": [
-      "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]"
+      "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],
     "guard_checks": [
-      "gh.issue(issue_ref=inputs.issue_ref).state not in [\"DONE\", \"CLOSED\"]"
+      "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],
     "step_names": [
       "verify-command"
