@@ -31,6 +31,7 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["executed_steps"], ["comment"])
         self.assertEqual(result.outputs["step_condition_details"][0]["outcome"], "executed")
+        self.assertIs(result.outputs["step_condition_details"][0]["result"], True)
 
     def test_execute_condition_false_preserves_skip_reason(self) -> None:
         workflow = load_workflow_text(
@@ -56,6 +57,54 @@ blocks:
         self.assertEqual(result.outputs["executed_steps"], [])
         self.assertEqual(result.outputs["skipped_steps"], ["comment"])
         self.assertEqual(result.outputs["step_condition_details"][0]["reason"], "condition_false")
+        self.assertIs(result.outputs["step_condition_details"][0]["result"], False)
+
+    def test_execute_composed_step_condition(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+  status: ok
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if: ${inputs.enabled and (inputs.status | eq("ok"))}
+        uses: shell.command
+        with:
+          command: printf executed
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["comment"])
+
+    def test_execute_composed_step_condition_short_circuits_or(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if: ${inputs.enabled or inputs.missing}
+        uses: shell.command
+        with:
+          command: printf executed
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["comment"])
 
     def test_explain_execution_result_preserves_condition_evaluation_failure(self) -> None:
         workflow = load_workflow_text(
@@ -78,6 +127,7 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         self.assertEqual(result.outputs["explanation"]["category"], "execution")
         self.assertEqual(result.outputs["step_condition_details"][0]["reason"], "condition_evaluation_failed")
+        self.assertEqual(result.outputs["step_condition_details"][0]["error_code"], "runtime.value.input_missing")
 
 
 if __name__ == "__main__":

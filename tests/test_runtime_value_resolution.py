@@ -262,6 +262,28 @@ blocks:
 
         self.assertEqual(context.exception.code, "runtime.value.step_missing")
 
+    def test_resolve_runtime_value_supports_boolean_composition_when_enabled(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  enabled: true
+  status: ok
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        value = resolve_runtime_value(
+            '${inputs.enabled and (inputs.status | eq("ok"))}',
+            workflow,
+            allow_boolean_composition=True,
+        )
+
+        self.assertIs(value, True)
+
 
 if __name__ == "__main__":
     unittest.main()

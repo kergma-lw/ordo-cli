@@ -30,7 +30,13 @@ class ValueResolutionError(Exception):
         )
 
 
-def resolve_runtime_value(value: JSONValue, workflow: Workflow, *, step_results: dict[str, OperationResult | JSONObject] | None = None) -> JSONValue:
+def resolve_runtime_value(
+    value: JSONValue,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+    allow_boolean_composition: bool = False,
+) -> JSONValue:
     """Resolve runtime value expressions against workflow inputs and runtime state."""
 
     resolved_step_results = dict(workflow.step_results) if step_results is None else step_results
@@ -47,7 +53,7 @@ def resolve_runtime_value(value: JSONValue, workflow: Workflow, *, step_results:
     if expression is None:
         return value
     try:
-        parsed = parse_value_expression(expression)
+        parsed = parse_value_expression(expression, allow_boolean_composition=allow_boolean_composition)
     except ValueExpressionParseError as exc:
         raise ValueResolutionError(
             code="runtime.value.expression_syntax",

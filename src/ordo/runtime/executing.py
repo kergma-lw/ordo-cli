@@ -137,6 +137,8 @@ def execute_workflow(
                             "condition": step.if_,
                             "outcome": "error",
                             "reason": "condition_evaluation_failed",
+                            "result": None,
+                            "error_code": condition_result.code,
                         }
                     )
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
@@ -178,12 +180,13 @@ def execute_workflow(
                             "condition": step.if_,
                             "outcome": "skipped",
                             "reason": "condition_false",
+                            "result": False,
                         }
                     )
                     skipped_steps.append(step.name)
                     block_skipped.append(step.name)
                     continue
-                step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed"})
+                step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True})
             if isinstance(resolved_step, ResolvedBuiltinStep):
                 result = _execute_builtin_step(step, effective_workflow)
             else:
@@ -266,7 +269,7 @@ def execute_workflow(
 
 def _evaluate_step_condition(step, workflow: Workflow) -> bool | Diagnostic:
     try:
-        value = resolve_runtime_value(step.if_, workflow)
+        value = resolve_runtime_value(step.if_, workflow, allow_boolean_composition=True)
     except ValueResolutionError as exc:
         return exc.to_diagnostic(path=("steps", step.name, "if"))
     if isinstance(value, bool):

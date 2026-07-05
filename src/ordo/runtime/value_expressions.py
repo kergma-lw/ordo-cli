@@ -471,6 +471,45 @@ def _evaluate_node(
         return value
     if isinstance(node, BuiltinCallNode):
         return _evaluate_builtin_call(node, parsed=parsed, workflow=workflow, step_results=step_results)
+    if isinstance(node, UnaryNode):
+        value = _evaluate_node(node.operand, parsed=parsed, workflow=workflow, step_results=step_results)
+        if isinstance(value, bool):
+            return not value
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.boolean_operand_type",
+            message=f"Operator '{node.operator}' requires a boolean operand",
+            details={"expression": parsed.source, "operator": node.operator, "actual_type": type(value).__name__},
+        )
+    if isinstance(node, BinaryNode):
+        left = _evaluate_node(node.left, parsed=parsed, workflow=workflow, step_results=step_results)
+        if not isinstance(left, bool):
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.boolean_operand_type",
+                message=f"Operator '{node.operator}' requires boolean operands",
+                details={"expression": parsed.source, "operator": node.operator, "actual_type": type(left).__name__},
+            )
+        if node.operator == "and":
+            if not left:
+                return False
+            right = _evaluate_node(node.right, parsed=parsed, workflow=workflow, step_results=step_results)
+            if isinstance(right, bool):
+                return right
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.boolean_operand_type",
+                message=f"Operator '{node.operator}' requires boolean operands",
+                details={"expression": parsed.source, "operator": node.operator, "actual_type": type(right).__name__},
+            )
+        if node.operator == "or":
+            if left:
+                return True
+            right = _evaluate_node(node.right, parsed=parsed, workflow=workflow, step_results=step_results)
+            if isinstance(right, bool):
+                return right
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.boolean_operand_type",
+                message=f"Operator '{node.operator}' requires boolean operands",
+                details={"expression": parsed.source, "operator": node.operator, "actual_type": type(right).__name__},
+            )
     raise ValueExpressionEvaluationError(
         code="runtime.value.expression_invalid",
         message="Value expression node is not evaluable",
