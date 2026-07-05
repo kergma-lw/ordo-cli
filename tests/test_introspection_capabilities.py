@@ -12,6 +12,7 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         self.assertEqual(capabilities["workflow.step.condition"]["status"], "supported")
         self.assertEqual(capabilities["workflow.step.register"]["status"], "supported")
         self.assertEqual(capabilities["workflow.step.value"]["status"], "supported")
+        self.assertEqual(capabilities["workflow.branching"]["status"], "supported")
 
     def test_describe_capabilities_publishes_expression_roots_and_surfaces(self) -> None:
         payload = describe_capabilities()
@@ -22,6 +23,8 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         self.assertIn("value_expression", roots["step"]["surfaces"])
         self.assertEqual(surfaces["value_expression"]["filters"], ["lower", "trim", "slug", "eq", "ne", "not"])
         self.assertEqual(surfaces["value_expression"]["builtins"], ["format"])
+        self.assertEqual(surfaces["value_expression"]["boolean_operators"], ["and", "or", "not", "parentheses"])
+        self.assertEqual(surfaces["guard_expression"]["boolean_operators"], ["and", "or", "not", "parentheses"])
         self.assertIn("step", surfaces["value_expression"]["roots"])
 
     def test_describe_capabilities_publishes_high_value_negative_rules(self) -> None:

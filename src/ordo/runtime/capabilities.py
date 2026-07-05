@@ -55,6 +55,7 @@ class ExpressionSurfaceSpec:
     roots: tuple[str, ...]
     filters: tuple[str, ...] = ()
     builtins: tuple[str, ...] = ()
+    boolean_operators: tuple[str, ...] = ()
 
     def to_contract(self) -> JSONObject:
         return {
@@ -62,6 +63,7 @@ class ExpressionSurfaceSpec:
             "roots": list(self.roots),
             "filters": list(self.filters),
             "builtins": list(self.builtins),
+            "boolean_operators": list(self.boolean_operators),
         }
 
 
@@ -115,15 +117,11 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.step.outputs", status="supported", scope="workflow.step"),
     CapabilitySpec(
         name="workflow.branching",
-        status="unsupported",
+        status="supported",
         scope="workflow",
         related_capabilities=("workflow.step.condition", "workflow.step.register", "workflow.step.value"),
         related_negative_rules=("workflow_step.if_conflicts_with_register",),
         related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
-        must_not_infer=(
-            "workflow.step.condition is unsupported",
-            "workflow.step.register is unsupported",
-        ),
     ),
 )
 
@@ -135,12 +133,13 @@ EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
 )
 
 EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
-    ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe")),
+    ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe"), boolean_operators=("and", "or", "not", "parentheses")),
     ExpressionSurfaceSpec(
         name="value_expression",
         roots=("inputs", "state", "step"),
         filters=tuple(VALUE_EXPRESSION_FILTERS),
         builtins=tuple(VALUE_EXPRESSION_BUILTINS),
+        boolean_operators=("and", "or", "not", "parentheses"),
     ),
     ExpressionSurfaceSpec(name="state_key_reference", roots=("inputs",)),
 )

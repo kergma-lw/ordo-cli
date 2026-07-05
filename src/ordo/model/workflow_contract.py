@@ -64,12 +64,14 @@ WORKFLOW_CONTRACT: JSONObject = {
     "surface_constraints": {
         "guard_expression": {
             "allowed_roots": ["inputs", "probe"],
+            "boolean_operators": ["and", "or", "not", "parentheses"],
             "forbidden_features": ["value_expression_filters", "value_expression_builtins", "state_references"],
         },
         "runtime_value_surface": {
             "allowed_roots": ["inputs", "state", "step"],
             "allowed_builtins": ["format"],
             "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not"],
+            "boolean_operators": ["and", "or", "not", "parentheses"],
         },
     },
 }

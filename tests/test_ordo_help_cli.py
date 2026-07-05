@@ -138,8 +138,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")
 
-        self.assertIn("workflow.step.condition is unsupported", branching["must_not_infer"])
-        self.assertIn("workflow.step.register is unsupported", branching["must_not_infer"])
+        self.assertEqual(branching["status"], "supported")
+        self.assertEqual(branching["must_not_infer"], [])
 
     def test_describe_resolves_capability_and_model_nodes(self) -> None:
         capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
