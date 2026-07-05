@@ -99,6 +99,22 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.step.state_delete", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.value", status="supported", scope="workflow.step"),
     CapabilitySpec(
+        name="runtime.launchers",
+        status="supported",
+        scope="runtime",
+        related_capabilities=("workflow.step.launcher",),
+        related_negative_rules=("workflow_step.launcher_requires_uses",),
+        related_model_nodes=("profile.launchers", "workflow.step.launcher", "workflow.step_forms.operation_call"),
+    ),
+    CapabilitySpec(
+        name="workflow.step.launcher",
+        status="supported",
+        scope="workflow.step",
+        related_capabilities=("runtime.launchers",),
+        related_negative_rules=("workflow_step.launcher_requires_uses",),
+        related_model_nodes=("workflow.step.launcher", "profile.launchers", "workflow.step_forms.operation_call"),
+    ),
+    CapabilitySpec(
         name="workflow.step.condition",
         status="supported",
         scope="workflow.step",
@@ -184,6 +200,15 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         reason="runtime value inputs belong to operation-call step form only",
         related_codes=("validation.workflow.step.with_without_uses",),
         related_model_nodes=("workflow.step.with", "workflow.step.uses", "workflow.step_forms.operation_call"),
+    ),
+    NegativeRuleSpec(
+        name="workflow_step.launcher_requires_uses",
+        surface="workflow_step",
+        rule="The launcher field is allowed only together with uses",
+        reason="launcher selection wraps operation-call execution surfaces rather than builtin value or state steps",
+        related_codes=("validation.workflow.step.launcher_without_uses",),
+        related_capabilities=("runtime.launchers", "workflow.step.launcher"),
+        related_model_nodes=("workflow.step.launcher", "workflow.step.uses", "workflow.step_forms.operation_call"),
     ),
     NegativeRuleSpec(
         name="workflow_step.register_requires_uses",

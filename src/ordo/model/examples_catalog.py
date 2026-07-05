@@ -28,6 +28,12 @@ EXAMPLES_CATALOG: JSONObject = {
             "shows": ["multi_step_workflow", "state_updates", "shell_fallback"],
             "related_topics": ["capabilities", "model", "operations"],
         },
+        {
+            "name": "launcher-step",
+            "path": "examples/launcher-step.yaml",
+            "shows": ["step_launcher_selection", "profile_scoped_launchers", "shell_wrapper_example"],
+            "related_topics": ["capabilities", "model", "examples"],
+        },
     ],
 }
 

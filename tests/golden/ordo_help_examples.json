@@ -43,6 +43,21 @@
         "shell_fallback"
       ],
       "verified": true
+    },
+    {
+      "name": "launcher-step",
+      "path": "examples/launcher-step.yaml",
+      "related_topics": [
+        "capabilities",
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "step_launcher_selection",
+        "profile_scoped_launchers",
+        "shell_wrapper_example"
+      ],
+      "verified": true
     }
   ]
 }

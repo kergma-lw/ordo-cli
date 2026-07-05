@@ -13,6 +13,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/minimal.yaml"),
             Path("examples/inspect-issue.yaml"),
             Path("examples/blocked-main-branch.yaml"),
+            Path("examples/launcher-step.yaml"),
         ):
             report = validate_workflow_text(path.read_text(encoding="utf-8"), source=str(path))
             self.assertTrue(report.ok, path.as_posix())
@@ -21,9 +22,15 @@ class ExampleSurfaceTest(unittest.TestCase):
         for path in (
             Path("profiles/backend-default.yaml"),
             Path("profiles/read-only-review.yaml"),
+            Path("profiles/frontend-launcher.yaml"),
         ):
             report = validate_profile_text(path.read_text(encoding="utf-8"), source=str(path))
             self.assertTrue(report.ok, path.as_posix())
+
+    def test_example_profile_with_launcher_file_loads(self) -> None:
+        profile = load_profile_file(Path("profiles/frontend-launcher.yaml"))
+
+        self.assertIn("shell_frontend", profile.launchers)
 
     def test_blocked_example_teaches_blocked_before_execution(self) -> None:
         workflow = load_workflow_file(Path("examples/blocked-main-branch.yaml"))

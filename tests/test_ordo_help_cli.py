@@ -90,6 +90,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         example_result = json.loads(self.run_help("search", "open-task", "--json").stdout)
         input_file_result = json.loads(self.run_help("search", "input-file", "--json").stdout)
         working_directory_result = json.loads(self.run_help("search", "working_directory", "--json").stdout)
+        launcher_result = json.loads(self.run_help("search", "launcher", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in profile_result["facts"]))
         self.assertTrue(any(item["kind"] == "capability" and item["name"] == "workflow.branching" for item in branching_result["facts"]))
@@ -97,6 +98,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "example" and item["name"] == "open-task-from-gitx" for item in example_result["facts"]))
         self.assertTrue(any(item["kind"] == "command_line_field" and item["name"] == "command-line.ordo-playbook.flag.input_file" for item in input_file_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.workflows.working_directory" for item in working_directory_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "profile.launchers" for item in launcher_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.step.launcher" for item in launcher_result["facts"]))
 
     def test_capabilities_publish_cross_links_for_branching(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -119,6 +122,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(profile_fields["inputs"]["runtime_effect"], "applies_missing_workflow_inputs")
         self.assertEqual(profile_fields["checks"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
+        self.assertEqual(profile_fields["launchers"]["runtime_effect"], "publishes_profile_scoped_launchers")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
         self.assertEqual(workflow_entry_fields["working_directory"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(workflow_entry_fields["working_directory"]["resolution_base"], "playbook_dir")
@@ -133,19 +137,24 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
         self.assertIn("register", step_forms["value"]["optional_fields"])
+        self.assertIn("launcher", step_forms["operation_call"]["optional_fields"])
 
     def test_capabilities_publish_explicit_non_inference_metadata(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")
+        launchers = next(item for item in capabilities["capabilities"] if item["name"] == "runtime.launchers")
 
         self.assertEqual(branching["status"], "supported")
         self.assertEqual(branching["must_not_infer"], [])
+        self.assertEqual(launchers["status"], "supported")
+        self.assertIn("workflow.step.launcher", launchers["related_model_nodes"])
 
     def test_describe_resolves_capability_and_model_nodes(self) -> None:
         capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
         model_node = json.loads(self.run_help("describe", "profile.inputs", "--json").stdout)
         command_line_node = json.loads(self.run_help("describe", "command-line.ordo-playbook.flag.input_file", "--json").stdout)
         working_directory_node = json.loads(self.run_help("describe", "playbook.workflows.working_directory", "--json").stdout)
+        launcher_node = json.loads(self.run_help("describe", "profile.launchers", "--json").stdout)
         missing = self.run_help("describe", "missing.node", "--json")
 
         self.assertEqual(capability_node["document_kind"], "capability_node")
@@ -161,6 +170,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(working_directory_node["name"], "playbook.workflows.working_directory")
         self.assertEqual(working_directory_node["metadata"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(working_directory_node["metadata"]["expression_syntax"], "${...}")
+        self.assertEqual(launcher_node["document_kind"], "model_node")
+        self.assertEqual(launcher_node["name"], "profile.launchers")
+        self.assertEqual(launcher_node["metadata"]["runtime_effect"], "publishes_profile_scoped_launchers")
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
 
@@ -180,6 +192,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["document_kind"], "operation")
         self.assertEqual(payload["operation"]["inputs"]["repository"], "string")
         self.assertEqual(payload["operation"]["inputs"]["issue_number"], "integer")
+
+    def test_examples_topic_publishes_launcher_step_example(self) -> None:
+        payload = json.loads(self.run_help("examples", "--json").stdout)
+
+        self.assertTrue(any(item["name"] == "launcher-step" for item in payload["examples"]))
 
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
