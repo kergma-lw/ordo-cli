@@ -46,8 +46,13 @@ The entry must resolve to exactly one workflow file.
 ## Execution working directory
 
 - A workflow entry may declare `working_directory` as explicit runtime context for runs of that entry.
-- A relative `working_directory` resolves relative to `<playbook-dir>/`.
-- An absolute `working_directory` remains absolute.
+- `working_directory` may be either a literal path string or a `${...}` value expression that resolves to a path string.
+- A `working_directory` expression reuses the existing value-expression syntax but with a narrower activation-time surface.
+- The activation-time surface may read only launch-known input values.
+- The activation-time surface must not read `state...`, `step...`, or any other runtime-derived value.
+- The activation-time surface must resolve fully before the first guard or step executes.
+- After expression evaluation, a relative `working_directory` path resolves relative to `<playbook-dir>/`.
+- After expression evaluation, an absolute `working_directory` path remains absolute.
 - When present, runtime executes the workflow with that resolved working directory as the execution working directory.
 - Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.
 - `working_directory` changes execution context only; it must not change playbook discovery, workflow/profile reference resolution, or state-path resolution.

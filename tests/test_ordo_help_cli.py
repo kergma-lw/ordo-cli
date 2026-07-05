@@ -122,6 +122,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
         self.assertEqual(workflow_entry_fields["working_directory"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(workflow_entry_fields["working_directory"]["resolution_base"], "playbook_dir")
+        self.assertEqual(workflow_entry_fields["working_directory"]["expression_syntax"], "${...}")
+        self.assertEqual(workflow_entry_fields["working_directory"]["expression_surface"], "activation_input_value_expression")
+        self.assertEqual(workflow_entry_fields["working_directory"]["expression_allowed_roots"], ["inputs"])
+        self.assertEqual(workflow_entry_fields["working_directory"]["expression_forbidden_roots"], ["state", "step"])
 
     def test_model_publishes_value_step_form(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -156,6 +160,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(working_directory_node["document_kind"], "model_node")
         self.assertEqual(working_directory_node["name"], "playbook.workflows.working_directory")
         self.assertEqual(working_directory_node["metadata"]["runtime_effect"], "sets_execution_working_directory")
+        self.assertEqual(working_directory_node["metadata"]["expression_syntax"], "${...}")
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
 

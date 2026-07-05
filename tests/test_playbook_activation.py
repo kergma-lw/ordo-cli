@@ -240,6 +240,162 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(diagnostic.code, "playbook.workflow.working_directory_missing")
             self.assertEqual(diagnostic.path, ("workflows", "inspect-issue", "working_directory"))
 
+    def test_activate_playbook_resolves_working_directory_from_input_expression(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / "repo-a").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ${inputs.repo_dir}
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  repo_dir: ../repo-a\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            self.assertEqual(activated.working_directory, (root / "repo-a").resolve())
+
+    def test_activate_playbook_resolves_working_directory_from_profile_input_expression(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / "repo-b").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    defaults:
+                      profile: review
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ${inputs.repo_dir}
+                    profiles:
+                      review:
+                        file: review.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs: {}\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "review.yml").write_text(
+                "name: review\ninputs:\n  repo_dir: ../repo-b\nchecks: []\noverrides: []\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            self.assertEqual(activated.working_directory, (root / "repo-b").resolve())
+
+    def test_activate_playbook_resolves_working_directory_from_input_override_expression(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / "repo-c").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ${inputs.repo_dir}
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs: {}\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", input_overrides={"repo_dir": "../repo-c"}, cwd=root)
+
+            self.assertEqual(activated.working_directory, (root / "repo-c").resolve())
+
+    def test_activate_playbook_rejects_state_reference_in_working_directory_expression(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ${state.task_memory[inputs.issue_ref].branch}
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  issue_ref: demo\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            diagnostic = ctx.exception.diagnostics[0]
+            self.assertEqual(diagnostic.code, "playbook.workflow.working_directory_expression_state_forbidden")
+
+    def test_activate_playbook_rejects_step_reference_in_working_directory_expression(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ${step.prepare.outputs.path}
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            diagnostic = ctx.exception.diagnostics[0]
+            self.assertEqual(diagnostic.code, "playbook.workflow.working_directory_expression_step_forbidden")
+
     def test_activated_working_directory_changes_process_cwd_temporarily(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

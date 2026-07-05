@@ -13,6 +13,7 @@
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
 - A playbook workflow entry may declare an explicit execution working directory for that run.
+- A playbook workflow entry working directory may use the existing `${...}` value-expression syntax when the expression stays within an activation-time-safe subset.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -25,6 +26,7 @@
 
 - Relative workflow and profile references must resolve deterministically from playbook-owned context.
 - An execution working directory must not change playbook discovery or reference resolution rules.
+- A working-directory expression must be fully resolvable before the first guard or step executes.
 - Named references must either resolve to one declared target or fail clearly.
 - Missing catalog targets must fail validation before effectful execution starts.
 - Unknown stable fields in the playbook contract should fail validation.
@@ -35,3 +37,5 @@
 - Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
 - Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
 - A playbook execution working directory should be explicit runtime context rather than hidden shell-first behavior.
+- A playbook working-directory expression must reuse the documented value-expression syntax rather than introducing a second expression language.
+- A playbook working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.

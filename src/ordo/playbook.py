@@ -13,6 +13,20 @@ from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
 from ordo.model.workflow import Workflow
 from ordo.runtime import LoadError, load_profile_file, load_workflow_text, load_yaml_document
+from ordo.runtime.value_expressions import (
+    BuiltinCallNode,
+    FilterApplicationNode,
+    ParsedValueExpression,
+    PipelineNode,
+    ReferenceNode,
+    StateReferenceNode,
+    StepReferenceNode,
+    ValueExpressionEvaluationError,
+    ValueExpressionNode,
+    ValueExpressionParseError,
+    evaluate_value_expression,
+    parse_value_expression,
+)
 
 
 def _field_names(items: list[dict[str, object]]) -> frozenset[str]:
@@ -106,12 +120,6 @@ def activate_playbook(
             details={"playbook": str(path), "workflow": workflow_name},
         )
     _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
-    working_directory = _resolve_working_directory(
-        workflow_entry,
-        workflow_name=workflow_name,
-        playbook_dir=playbook_dir,
-        playbook_path=path,
-    )
 
     workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
     workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
@@ -165,6 +173,15 @@ def activate_playbook(
         raise PlaybookError(exc.diagnostics) from exc
 
     workflow, profile = _apply_input_overrides(workflow, profile, input_overrides=input_overrides)
+    working_directory = _resolve_working_directory(
+        workflow_entry,
+        workflow_name=workflow_name,
+        playbook_dir=playbook_dir,
+        playbook_path=path,
+        workflow=workflow,
+        profile=profile,
+        input_overrides=None,
+    )
 
     return ActivatedPlaybook(
         playbook_path=path,
@@ -397,6 +414,9 @@ def _resolve_working_directory(
     workflow_name: str,
     playbook_dir: Path,
     playbook_path: Path,
+    workflow: Workflow | None = None,
+    profile: Profile | None = None,
+    input_overrides: dict[str, object] | None = None,
 ) -> Path | None:
     raw_value = workflow_entry.get("working_directory")
     if raw_value is None:
@@ -409,7 +429,19 @@ def _resolve_working_directory(
             details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(raw_value).__name__},
         )
 
-    resolved = Path(raw_value)
+    resolved_value = raw_value
+    expression = _extract_value_expression(raw_value)
+    if expression is not None:
+        resolved_value = _evaluate_working_directory_expression(
+            expression,
+            workflow_name=workflow_name,
+            playbook_path=playbook_path,
+            workflow=workflow,
+            profile=profile,
+            input_overrides=input_overrides,
+        )
+
+    resolved = Path(resolved_value)
     if not resolved.is_absolute():
         resolved = playbook_dir / resolved
     resolved = resolved.resolve()
@@ -425,6 +457,152 @@ def _resolve_working_directory(
             },
         )
     return resolved
+
+
+def _extract_value_expression(value: str) -> str | None:
+    if value.startswith("${") and value.endswith("}") and len(value) >= 4:
+        return value[2:-1]
+    return None
+
+
+def _evaluate_working_directory_expression(
+    expression: str,
+    *,
+    workflow_name: str,
+    playbook_path: Path,
+    workflow: Workflow | None,
+    profile: Profile | None,
+    input_overrides: dict[str, object] | None,
+) -> str:
+    try:
+        parsed = parse_value_expression(expression)
+    except ValueExpressionParseError as exc:
+        raise _playbook_error(
+            "playbook.workflow.working_directory_expression_syntax",
+            exc.message,
+            path=("workflows", workflow_name, "working_directory"),
+            details={
+                "playbook": str(playbook_path),
+                "workflow": workflow_name,
+                "expression": expression,
+                "position": exc.position,
+                "end": exc.end if exc.end is not None else exc.position,
+            },
+        ) from exc
+
+    invalid = _validate_working_directory_expression(parsed)
+    if invalid is not None:
+        code, message, details = invalid
+        raise _playbook_error(
+            code,
+            message,
+            path=("workflows", workflow_name, "working_directory"),
+            details={"playbook": str(playbook_path), "workflow": workflow_name, "expression": expression, **details},
+        )
+
+    activation_workflow = _working_directory_activation_workflow(workflow=workflow, profile=profile, input_overrides=input_overrides)
+    try:
+        value = evaluate_value_expression(parsed, activation_workflow, step_results={})
+    except ValueExpressionEvaluationError as exc:
+        raise _playbook_error(
+            "playbook.workflow.working_directory_expression_invalid",
+            exc.message,
+            path=("workflows", workflow_name, "working_directory"),
+            details={"playbook": str(playbook_path), "workflow": workflow_name, "expression": expression, **exc.details},
+        ) from exc
+
+    if not isinstance(value, str) or not value:
+        raise _playbook_error(
+            "playbook.workflow.working_directory_expression_type",
+            "Workflow entry working_directory expression must resolve to a non-empty string",
+            path=("workflows", workflow_name, "working_directory"),
+            details={
+                "playbook": str(playbook_path),
+                "workflow": workflow_name,
+                "expression": expression,
+                "actual_type": type(value).__name__,
+            },
+        )
+    return value
+
+
+def _working_directory_activation_workflow(
+    *,
+    workflow: Workflow | None,
+    profile: Profile | None,
+    input_overrides: dict[str, object] | None,
+) -> Workflow:
+    merged_inputs: dict[str, object] = {}
+    if workflow is not None:
+        merged_inputs.update(workflow.inputs)
+    if profile is not None:
+        for key, value in profile.inputs.items():
+            merged_inputs.setdefault(key, value)
+    if input_overrides:
+        merged_inputs.update(input_overrides)
+
+    template = workflow
+    if template is None:
+        return Workflow(version=0, workflow="activation", inputs=merged_inputs, state_needs={}, state_bindings={}, states={}, step_results={}, blocks=())
+
+    return Workflow(
+        version=template.version,
+        workflow=template.workflow,
+        inputs=merged_inputs,
+        state_needs=template.state_needs,
+        state_bindings=template.state_bindings,
+        states=template.states,
+        step_results={},
+        blocks=template.blocks,
+    )
+
+
+def _validate_working_directory_expression(parsed: ParsedValueExpression) -> tuple[str, str, dict[str, object]] | None:
+    def visit(node: ValueExpressionNode) -> tuple[str, str, dict[str, object]] | None:
+        if isinstance(node, ReferenceNode):
+            if len(node.parts) < 2 or node.parts[0] != "inputs":
+                return (
+                    "playbook.workflow.working_directory_expression_root",
+                    "Workflow entry working_directory expression may read only dotted inputs references",
+                    {"reference": ".".join(node.parts)},
+                )
+            return None
+        if isinstance(node, StateReferenceNode):
+            return (
+                "playbook.workflow.working_directory_expression_state_forbidden",
+                "Workflow entry working_directory expression must not read runtime state",
+                {"reference": parsed.source[node.start : node.end]},
+            )
+        if isinstance(node, StepReferenceNode):
+            return (
+                "playbook.workflow.working_directory_expression_step_forbidden",
+                "Workflow entry working_directory expression must not read registered step results",
+                {"reference": parsed.source[node.start : node.end]},
+            )
+        if isinstance(node, PipelineNode):
+            invalid = visit(node.source)
+            if invalid is not None:
+                return invalid
+            for filter_node in node.filters:
+                invalid = visit(filter_node)
+                if invalid is not None:
+                    return invalid
+            return None
+        if isinstance(node, BuiltinCallNode):
+            for argument in node.arguments:
+                invalid = visit(argument)
+                if invalid is not None:
+                    return invalid
+            return None
+        if isinstance(node, FilterApplicationNode):
+            for argument in node.arguments:
+                invalid = visit(argument)
+                if invalid is not None:
+                    return invalid
+            return None
+        return None
+
+    return visit(parsed.root)
 
 
 def _category_for_code(code: str) -> str:

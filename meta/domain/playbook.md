@@ -17,6 +17,7 @@ It must not answer the question:
 - named runtime state declarations shared across project workflows;
 - bindings from workflow-level logical state roles to concrete project state declarations;
 - explicit execution working directory selection for project-local workflow entries;
+- activation-time derivation of that execution working directory from launch-known inputs only;
 - deterministic discovery of the project orchestration root;
 - deterministic resolution of project-local workflow and profile references.
 

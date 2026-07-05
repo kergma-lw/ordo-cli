@@ -133,6 +133,7 @@
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
 - A playbook workflow entry may declare an explicit execution working directory for that run.
+- A playbook workflow entry working directory may use the existing `${...}` value-expression syntax when the expression stays within an activation-time-safe subset.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -145,6 +146,7 @@
 
 - Relative workflow and profile references must resolve deterministically from playbook-owned context.
 - An execution working directory must not change playbook discovery or reference resolution rules.
+- A working-directory expression must be fully resolvable before the first guard or step executes.
 - Named references must either resolve to one declared target or fail clearly.
 - Missing catalog targets must fail validation before effectful execution starts.
 - Unknown stable fields in the playbook contract should fail validation.
@@ -155,6 +157,8 @@
 - Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
 - Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
 - A playbook execution working directory should be explicit runtime context rather than hidden shell-first behavior.
+- A playbook working-directory expression must reuse the documented value-expression syntax rather than introducing a second expression language.
+- A playbook working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.
 
 <!-- source: requirements/workflow/core.md -->
 
@@ -738,6 +742,7 @@ It must not answer the question:
 - named runtime state declarations shared across project workflows;
 - bindings from workflow-level logical state roles to concrete project state declarations;
 - explicit execution working directory selection for project-local workflow entries;
+- activation-time derivation of that execution working directory from launch-known inputs only;
 - deterministic discovery of the project orchestration root;
 - deterministic resolution of project-local workflow and profile references.
 
@@ -1212,7 +1217,7 @@ workflows:
 
   close-task:
     file: close-task.yml
-    working_directory: ../
+    working_directory: ${inputs.repo_root}
     state_bindings:
       task_memory: repo_task_state
 
@@ -1236,7 +1241,7 @@ A workflow entry gives a stable project-local name to a workflow file.
 It may additionally declare:
 
 - state bindings from workflow logical roles to concrete playbook state entries;
-- an explicit execution `working_directory` for runs of that workflow entry;
+- an explicit execution `working_directory` for runs of that workflow entry, expressed either as a literal path string or as an activation-time-safe `${...}` value expression;
 - future launch metadata that remains project-local rather than workflow-semantic.
 
 ## Defaults role
@@ -1362,8 +1367,13 @@ The entry must resolve to exactly one workflow file.
 ## Execution working directory
 
 - A workflow entry may declare `working_directory` as explicit runtime context for runs of that entry.
-- A relative `working_directory` resolves relative to `<playbook-dir>/`.
-- An absolute `working_directory` remains absolute.
+- `working_directory` may be either a literal path string or a `${...}` value expression that resolves to a path string.
+- A `working_directory` expression reuses the existing value-expression syntax but with a narrower activation-time surface.
+- The activation-time surface may read only launch-known input values.
+- The activation-time surface must not read `state...`, `step...`, or any other runtime-derived value.
+- The activation-time surface must resolve fully before the first guard or step executes.
+- After expression evaluation, a relative `working_directory` path resolves relative to `<playbook-dir>/`.
+- After expression evaluation, an absolute `working_directory` path remains absolute.
 - When present, runtime executes the workflow with that resolved working directory as the execution working directory.
 - Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.
 - `working_directory` changes execution context only; it must not change playbook discovery, workflow/profile reference resolution, or state-path resolution.
