@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import json
-import re
 
+from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
-
-_ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$")
 
 
 def info():
     return action(
         name="project.issue.estimate.set",
-        inputs={"issue_ref": "string", "project_id": "string", "estimate": "number"},
+        inputs={**ISSUE_IDENTITY_INPUTS, "project_id": "string", "estimate": "number"},
         effects=("set GitHub project issue estimate",),
         outputs={"issue_ref": "string", "project_id": "string", "item_id": "string", "estimate": "number", "changed": "boolean"},
         failure_modes=("issue_not_found", "project_not_found", "estimate_invalid", "estimate_blocked"),
@@ -22,28 +20,19 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue_ref = str(ctx.input("issue_ref"))
     project_id = str(ctx.input("project_id"))
     estimate = _parse_estimate(ctx)
     if isinstance(estimate, OperationOutcome):
         return estimate
 
-    parsed = _parse_issue_ref(issue_ref)
-    if parsed is None:
-        return fail(
-            code="estimate_blocked",
-            summary="GitHub issue reference must use OWNER/REPO#N format",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_project_issue_estimate_set.invalid_issue_ref",
-                    level="error",
-                    message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
-        )
+    identity = resolve_issue_identity(ctx, failure_code="estimate_blocked", diagnostic_prefix="action.gh_project_issue_estimate_set")
+    if isinstance(identity, OperationOutcome):
+        return identity
 
-    owner, repo, number = parsed
+    issue_ref = identity.issue_ref
+    owner = identity.owner
+    repo = identity.repo
+    number = identity.issue_number
     issue_facts = _load_issue_membership(ctx, issue_ref=issue_ref, owner=owner, repo=repo, number=number)
     if isinstance(issue_facts, OperationOutcome):
         return issue_facts
@@ -178,15 +167,6 @@ def _parse_estimate(ctx: OperationContext) -> float | int | OperationOutcome:
             ),
         )
     return value
-
-
-def _parse_issue_ref(value: str) -> tuple[str, str, int] | None:
-    match = _ISSUE_REF_RE.match(value)
-    if match is None:
-        return None
-    return match.group("owner"), match.group("repo"), int(match.group("number"))
-
-
 def _load_issue_membership(
     ctx: OperationContext, *, issue_ref: str, owner: str, repo: str, number: int
 ) -> dict[str, object] | OperationOutcome:
@@ -198,6 +178,7 @@ def _load_issue_membership(
                 "graphql",
                 "-f",
                 (
+                    "query="
                     "query($owner:String!,$repo:String!,$number:Int!){"
                     "repository(owner:$owner,name:$repo){"
                     "issue(number:$number){"
@@ -333,7 +314,7 @@ def _lookup_project_estimate_field(ctx: OperationContext, *, project_id: str) ->
                 "api",
                 "graphql",
                 "-f",
-                "query($id:ID!){node(id:$id){... on ProjectV2{id title fields(first:50){nodes{... on ProjectV2Field{id name dataType}}}}}}",
+                "query=query($id:ID!){node(id:$id){... on ProjectV2{id title fields(first:50){nodes{... on ProjectV2Field{id name dataType}}}}}}",
                 "-f",
                 f"id={project_id}",
             ],

@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import json
-import re
 
+from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
-
-_ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$")
 
 
 def info():
     return probe(
         name="project.issue",
-        inputs={"issue_ref": "string", "project_id": "string"},
+        inputs={**ISSUE_IDENTITY_INPUTS, "project_id": "string"},
         outputs={
             "exists": "boolean",
             "item_id": "string",
@@ -30,24 +28,15 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue_ref = str(ctx.input("issue_ref"))
     project_id = str(ctx.input("project_id"))
-    parsed = _parse_issue_ref(issue_ref)
-    if parsed is None:
-        return fail(
-            code="probe_failed",
-            summary="GitHub issue reference must use OWNER/REPO#N format",
-            diagnostics=(
-                Diagnostic(
-                    code="probe.gh_project_issue.invalid_issue_ref",
-                    level="error",
-                    message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
-        )
+    identity = resolve_issue_identity(ctx, failure_code="probe_failed", diagnostic_prefix="probe.gh_project_issue")
+    if isinstance(identity, OperationOutcome):
+        return identity
 
-    owner, repo, number = parsed
+    issue_ref = identity.issue_ref
+    owner = identity.owner
+    repo = identity.repo
+    number = identity.issue_number
 
     try:
         command = ctx.command(
@@ -57,6 +46,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 "graphql",
                 "-f",
                 (
+                    "query="
                     "query($owner:String!,$repo:String!,$number:Int!){"
                     "repository(owner:$owner,name:$repo){"
                     "issue(number:$number){"
@@ -210,15 +200,6 @@ def run(ctx: OperationContext) -> OperationOutcome:
         },
         raw=command.raw,
     )
-
-
-def _parse_issue_ref(value: str) -> tuple[str, str, int] | None:
-    match = _ISSUE_REF_RE.match(value)
-    if match is None:
-        return None
-    return match.group("owner"), match.group("repo"), int(match.group("number"))
-
-
 def _match_project_item(nodes: list[object], project_id: str) -> dict[str, object] | None:
     for node in nodes:
         if not isinstance(node, dict):
@@ -289,7 +270,7 @@ def _lookup_project(ctx: OperationContext, project_id: str) -> OperationOutcome 
                 "api",
                 "graphql",
                 "-f",
-                "query($id:ID!){node(id:$id){... on ProjectV2{id title}}}",
+                "query=query($id:ID!){node(id:$id){... on ProjectV2{id title}}}",
                 "-f",
                 f"id={project_id}",
             ],

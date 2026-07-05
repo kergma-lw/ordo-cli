@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import json
-import re
 
+from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
-
-_ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$")
 
 
 def info():
     return action(
         name="issue.comment.add",
-        inputs={"issue_ref": "string", "body": "string"},
+        inputs={**ISSUE_IDENTITY_INPUTS, "body": "string"},
         effects=("add GitHub issue comment",),
         outputs={"issue_ref": "string", "comment_id": "string", "url": "string", "body": "string"},
         failure_modes=("issue_not_found", "body_invalid", "comment_blocked"),
@@ -22,23 +20,16 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue_ref = str(ctx.input("issue_ref"))
     body = str(ctx.input("body"))
 
-    parsed = _parse_issue_ref(issue_ref)
-    if parsed is None:
-        return fail(
-            code="comment_blocked",
-            summary="GitHub issue reference must use OWNER/REPO#N format",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_comment_add.invalid_issue_ref",
-                    level="error",
-                    message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
-        )
+    identity = resolve_issue_identity(ctx, failure_code="comment_blocked", diagnostic_prefix="action.gh_issue_comment_add")
+    if isinstance(identity, OperationOutcome):
+        return identity
+
+    issue_ref = identity.issue_ref
+    owner = identity.owner
+    repo = identity.repo
+    number = identity.issue_number
 
     if not body.strip():
         return fail(
@@ -53,8 +44,6 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 ),
             ),
         )
-
-    owner, repo, number = parsed
     issue_lookup = _lookup_issue(ctx, issue_ref=issue_ref, owner=owner, repo=repo, number=number)
     if isinstance(issue_lookup, OperationOutcome):
         return issue_lookup
@@ -109,15 +98,6 @@ def run(ctx: OperationContext) -> OperationOutcome:
         },
         raw={"issue": issue_lookup.get("raw", {}), "comment": command.raw, "comment_lookup": comment_data.get("raw", {})},
     )
-
-
-def _parse_issue_ref(value: str) -> tuple[str, str, int] | None:
-    match = _ISSUE_REF_RE.match(value)
-    if match is None:
-        return None
-    return match.group("owner"), match.group("repo"), int(match.group("number"))
-
-
 def _lookup_issue(
     ctx: OperationContext, *, issue_ref: str, owner: str, repo: str, number: int
 ) -> dict[str, object] | OperationOutcome:
@@ -204,6 +184,7 @@ def _lookup_latest_comment(
                 "graphql",
                 "-f",
                 (
+                    "query="
                     "query($owner:String!,$repo:String!,$number:Int!){"
                     "repository(owner:$owner,name:$repo){issue(number:$number){comments(last:1){nodes{id url body}}}}}"
                 ),

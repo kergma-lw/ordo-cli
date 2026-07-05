@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import json
-import re
 
+from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
-
-_ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$")
 _DEFAULT_SEPARATOR = "\n\n"
 
 
 def info():
     return action(
         name="issue.body.append",
-        inputs={"issue_ref": "string", "text": "string", "separator": "string | null"},
+        inputs={**ISSUE_IDENTITY_INPUTS, "text": "string", "separator": "string | null"},
         effects=("append text to GitHub issue body",),
         outputs={"issue_ref": "string", "url": "string", "body": "string", "changed": "boolean"},
         failure_modes=("issue_not_found", "text_invalid", "append_blocked"),
@@ -23,26 +21,19 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue_ref = str(ctx.input("issue_ref"))
     text = str(ctx.input("text"))
     separator = _optional_separator(ctx)
     if isinstance(separator, OperationOutcome):
         return separator
 
-    parsed = _parse_issue_ref(issue_ref)
-    if parsed is None:
-        return fail(
-            code="append_blocked",
-            summary="GitHub issue reference must use OWNER/REPO#N format",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_body_append.invalid_issue_ref",
-                    level="error",
-                    message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
-        )
+    identity = resolve_issue_identity(ctx, failure_code="append_blocked", diagnostic_prefix="action.gh_issue_body_append")
+    if isinstance(identity, OperationOutcome):
+        return identity
+
+    issue_ref = identity.issue_ref
+    owner = identity.owner
+    repo = identity.repo
+    number = identity.issue_number
 
     if not text.strip():
         return fail(
@@ -57,8 +48,6 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 ),
             ),
         )
-
-    owner, repo, number = parsed
     issue_data = _load_issue(ctx, issue_ref=issue_ref, owner=owner, repo=repo, number=number)
     if isinstance(issue_data, OperationOutcome):
         return issue_data
@@ -124,15 +113,6 @@ def _optional_separator(ctx: OperationContext) -> str | None | OperationOutcome:
     if value is None:
         return None
     return str(value)
-
-
-def _parse_issue_ref(value: str) -> tuple[str, str, int] | None:
-    match = _ISSUE_REF_RE.match(value)
-    if match is None:
-        return None
-    return match.group("owner"), match.group("repo"), int(match.group("number"))
-
-
 def _load_issue(
     ctx: OperationContext, *, issue_ref: str, owner: str, repo: str, number: int
 ) -> dict[str, object] | OperationOutcome:

@@ -1826,7 +1826,7 @@ class OperationTest(unittest.TestCase):
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":[],"assignees":[],"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"repository":{"nameWithOwner":"owner/repo"},"stateReason":null,"projectItems":[]}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"nameWithOwner":"owner/repo","issue":{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":{"nodes":[]},"assignees":{"nodes":[]},"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"stateReason":null,"projectItems":{"nodes":[]}}}}}', stderr=""),
             ]
 
             result = evaluate_probe(resolved, workflow)
@@ -1834,6 +1834,27 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["number"], 1)
         self.assertEqual(result.outputs["created_at"], "2026-01-01T00:00:00Z")
+
+    def test_gh_issue_accepts_repository_and_issue_number_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 1})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue")
+        resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"nameWithOwner":"owner/repo","issue":{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":{"nodes":[]},"assignees":{"nodes":[]},"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"stateReason":null,"projectItems":{"nodes":[]}}}}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["number"], 1)
 
     def test_gh_probe_surfaces_bootstrap_failure_before_operation_logic(self) -> None:
         workflow = Workflow(
@@ -1894,6 +1915,28 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["state"], "CLOSED")
         self.assertTrue(result.outputs["closed"])
         self.assertEqual(run.call_count, 3)
+
+    def test_gh_issue_close_accepts_repository_and_issue_number_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"repository": "owner/repo", "issue_number": 7})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.close")
+        resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"state":"OPEN","url":"https://github.com/owner/repo/issues/7"}', stderr=""),
+                self._completed(returncode=0, stdout="✓ Closed issue owner/repo#7\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["issue_ref"], "owner/repo#7")
 
     def test_gh_issue_close_is_noop_for_closed_issue(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
@@ -1960,7 +2003,7 @@ class OperationTest(unittest.TestCase):
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
                 self._completed(returncode=0, stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo"}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"number":17,"url":"https://github.com/owner/repo/issues/17","title":"Add checklist"}', stderr=""),
+                self._completed(returncode=0, stdout='https://github.com/owner/repo/issues/17\n', stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
@@ -2031,6 +2074,28 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "create_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.command_failed")
+
+    def test_gh_issue_create_reports_missing_issue_url(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("gh.issue.create", with_={"repository": "owner/repo", "title": "Add checklist"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.create")
+        resolved = ResolvedOperation("gh.issue.create", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo"}}}', stderr=""),
+                self._completed(returncode=0, stdout='created\n', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "create_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.missing_fields")
 
     def test_gh_issue_comment_add_creates_comment(self) -> None:
         workflow = Workflow(
@@ -3383,7 +3448,7 @@ class OperationTest(unittest.TestCase):
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
                 self._completed(
                     returncode=0,
-                    stdout='{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":[],"assignees":[],"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"repository":{"nameWithOwner":"owner/repo"},"stateReason":null,"projectItems":[]}',
+                    stdout='{"data":{"repository":{"nameWithOwner":"owner/repo","issue":{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":{"nodes":[]},"assignees":{"nodes":[]},"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"stateReason":null,"projectItems":{"nodes":[]}}}}}',
                     stderr="",
                 ),
             ]

@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import json
-import re
 
+from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
-
-_ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$")
 
 
 def info():
     return action(
         name="issue.close",
-        inputs={"issue_ref": "string"},
+        inputs=ISSUE_IDENTITY_INPUTS,
         effects=("close GitHub issue",),
         outputs={"issue_ref": "string", "state": "string", "closed": "boolean"},
         failure_modes=("issue_not_found", "close_blocked"),
@@ -22,23 +20,14 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    issue_ref = str(ctx.input("issue_ref"))
-    parsed = _parse_issue_ref(issue_ref)
-    if parsed is None:
-        return fail(
-            code="close_blocked",
-            summary="GitHub issue reference must use OWNER/REPO#N format",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_close.invalid_issue_ref",
-                    level="error",
-                    message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
-        )
+    identity = resolve_issue_identity(ctx, failure_code="close_blocked", diagnostic_prefix="action.gh_issue_close")
+    if isinstance(identity, OperationOutcome):
+        return identity
 
-    owner, repo, number = parsed
+    issue_ref = identity.issue_ref
+    owner = identity.owner
+    repo = identity.repo
+    number = identity.issue_number
 
     inspect = _view_issue(ctx, issue_ref=issue_ref, owner=owner, repo=repo, number=number)
     if isinstance(inspect, OperationOutcome):
@@ -95,15 +84,6 @@ def run(ctx: OperationContext) -> OperationOutcome:
         outputs={"issue_ref": issue_ref, "state": "CLOSED", "closed": True},
         raw={"view": inspect.get("raw", {}), "close": close_command.raw},
     )
-
-
-def _parse_issue_ref(value: str) -> tuple[str, str, int] | None:
-    match = _ISSUE_REF_RE.match(value)
-    if match is None:
-        return None
-    return match.group("owner"), match.group("repo"), int(match.group("number"))
-
-
 def _view_issue(
     ctx: OperationContext, *, issue_ref: str, owner: str, repo: str, number: int
 ) -> dict[str, object] | OperationOutcome:
