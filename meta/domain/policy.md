@@ -2,7 +2,7 @@
 
 ## Guard
 
-A guard is a precondition check evaluated as part of policy before effectful workflow steps.
+A guard is a precondition check evaluated as part of policy before a later effectful step block may run.
 
 A guard is first-class and must not collapse into a hidden step convention.
 

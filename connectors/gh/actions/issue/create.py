@@ -8,6 +8,7 @@ import re
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
 _REPOSITORY_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)$")
+_ISSUE_URL_RE = re.compile(r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/issues/(?P<number>\d+)$")
 
 
 def info():
@@ -62,7 +63,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
     if isinstance(repository_lookup, OperationOutcome):
         return repository_lookup
 
-    command = ["gh", "issue", "create", "-R", repository, "--title", title, "--json", "number,url,title"]
+    command = ["gh", "issue", "create", "-R", repository, "--title", title]
     if body is not None:
         command.extend(["--body", body])
 
@@ -143,7 +144,7 @@ def _lookup_repository(ctx: OperationContext, *, repository: str, owner: str, re
                 "api",
                 "graphql",
                 "-f",
-                "query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){id nameWithOwner}}",
+                "query=query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){id nameWithOwner}}",
                 "-f",
                 f"owner={owner}",
                 "-f",
@@ -236,51 +237,41 @@ def _lookup_repository(ctx: OperationContext, *, repository: str, owner: str, re
 def _parse_issue_output(
     ctx: OperationContext, *, repository: str, title: str, stdout: str, raw: dict[str, object]
 ) -> dict[str, object] | OperationOutcome:
-    try:
-        payload = json.loads(stdout) if stdout else {}
-    except json.JSONDecodeError as exc:
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    url = next((line for line in reversed(lines) if line.startswith("https://github.com/")), "")
+    match = _ISSUE_URL_RE.match(url)
+    if match is None:
         return fail(
             code="create_blocked",
-            summary="GitHub issue create output was not valid JSON",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.invalid_json",
-                    level="error",
-                    message="GitHub issue create output was not valid JSON",
-                    details={"reference": ctx.reference, "repository": repository, "title": title, "error": str(exc)},
-                ),
-            ),
-            raw=raw,
-        )
-
-    if not isinstance(payload, dict):
-        return fail(
-            code="create_blocked",
-            summary="GitHub issue create output was not an object",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.invalid_shape",
-                    level="error",
-                    message="GitHub issue create output was not an object",
-                    details={"reference": ctx.reference, "repository": repository, "title": title},
-                ),
-            ),
-            raw=raw,
-        )
-
-    number = payload.get("number")
-    url = payload.get("url")
-    created_title = payload.get("title")
-    if not isinstance(number, int) or not isinstance(url, str) or not isinstance(created_title, str):
-        return fail(
-            code="create_blocked",
-            summary="GitHub issue create output was missing required fields",
+            summary="GitHub issue create output was missing the created issue URL",
             diagnostics=(
                 Diagnostic(
                     code="action.gh_issue_create.missing_fields",
                     level="error",
-                    message="GitHub issue create output was missing required fields",
+                    message="GitHub issue create output was missing the created issue URL",
                     details={"reference": ctx.reference, "repository": repository, "title": title},
+                ),
+            ),
+            raw=raw,
+        )
+
+    created_repository = f"{match.group('owner')}/{match.group('repo')}"
+    number = int(match.group("number"))
+    if created_repository != repository:
+        return fail(
+            code="create_blocked",
+            summary="GitHub issue create output repository did not match the request",
+            diagnostics=(
+                Diagnostic(
+                    code="action.gh_issue_create.invalid_shape",
+                    level="error",
+                    message="GitHub issue create output repository did not match the request",
+                    details={
+                        "reference": ctx.reference,
+                        "repository": repository,
+                        "created_repository": created_repository,
+                        "title": title,
+                    },
                 ),
             ),
             raw=raw,
@@ -290,5 +281,5 @@ def _parse_issue_output(
         "issue_ref": f"{repository}#{number}",
         "number": number,
         "url": url,
-        "title": created_title,
+        "title": title,
     }

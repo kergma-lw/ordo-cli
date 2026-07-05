@@ -5,10 +5,12 @@ import os
 import tempfile
 import textwrap
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
 from ordo.cli import main as cli_main
+from ordo.model.runtime import ExecutionPlan, Mode, RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, discover_playbook_path
 
 
@@ -113,6 +115,70 @@ class PlaybookActivationTest(unittest.TestCase):
 
         self.assertEqual(activated.profile.name if activated.profile else None, "review")
         self.assertEqual(activated.profile.inputs["source"], "explicit")
+
+    def test_activate_playbook_applies_launch_time_input_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      review:
+                        file: review.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      source: workflow
+                      keep: true
+                    guards: []
+                    steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "review.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: review
+                    inputs:
+                      source: profile
+                      region: us
+                    checks: []
+                    overrides: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(
+                workflow_name="inspect-issue",
+                profile_name="review",
+                input_overrides={"source": "cli", "enabled": True},
+                cwd=root,
+            )
+
+        self.assertEqual(activated.workflow.inputs["source"], "cli")
+        self.assertEqual(activated.workflow.inputs["enabled"], True)
+        self.assertEqual(activated.workflow.inputs["keep"], True)
+        self.assertNotIn("source", activated.profile.inputs if activated.profile is not None else {})
+        self.assertEqual(activated.profile.inputs["region"], "us")
 
     def test_activate_playbook_rejects_workflow_entry_profile_field(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -493,6 +559,119 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["mode"], "run")
             self.assertEqual(payload["status"], "execution_error")
             self.assertEqual(payload["diagnostics"][0]["code"], "playbook.run.disabled")
+
+    def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.PLAN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={},
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "--input", "enabled=true", "--input", "count=3", "plan"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
+                with patch("ordo.cli._run_mode", return_value=runtime_result):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(activate_mock.call_args.kwargs["input_overrides"], {"enabled": True, "count": 3})
+
+    def test_cli_passes_input_file_overrides_to_playbook_activation(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.PLAN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={},
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            body_path = Path(temp_dir) / "body.md"
+            body_path.write_text("line 1\nline 2\n", encoding="utf-8")
+
+            with patch(
+                "sys.argv",
+                [
+                    "ordo-playbook",
+                    "--workflow",
+                    "inspect-issue",
+                    "--input",
+                    "enabled=true",
+                    "--input-file",
+                    f"body={body_path}",
+                    "plan",
+                ],
+            ):
+                with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
+                    with patch("ordo.cli._run_mode", return_value=runtime_result):
+                        stdout = io.StringIO()
+                        stderr = io.StringIO()
+                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                            exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            activate_mock.call_args.kwargs["input_overrides"],
+            {"enabled": True, "body": "line 1\nline 2\n"},
+        )
+
+    def test_cli_input_file_override_wins_over_inline_input_for_same_key(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.PLAN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={},
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            body_path = Path(temp_dir) / "body.md"
+            body_path.write_text("file value\n", encoding="utf-8")
+
+            with patch(
+                "sys.argv",
+                [
+                    "ordo-playbook",
+                    "--workflow",
+                    "inspect-issue",
+                    "--input",
+                    "body=inline",
+                    "--input-file",
+                    f"body={body_path}",
+                    "plan",
+                ],
+            ):
+                with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
+                    with patch("ordo.cli._run_mode", return_value=runtime_result):
+                        stdout = io.StringIO()
+                        stderr = io.StringIO()
+                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                            exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(activate_mock.call_args.kwargs["input_overrides"], {"body": "file value\n"})
 
 
 if __name__ == "__main__":

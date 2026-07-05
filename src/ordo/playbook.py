@@ -66,6 +66,7 @@ def activate_playbook(
     *,
     workflow_name: str,
     profile_name: str | None = None,
+    input_overrides: dict[str, object] | None = None,
     playbook_path: str | Path | None = None,
     cwd: str | Path | None = None,
 ) -> ActivatedPlaybook:
@@ -137,6 +138,8 @@ def activate_playbook(
     except LoadError as exc:
         raise PlaybookError(exc.diagnostics) from exc
 
+    workflow, profile = _apply_input_overrides(workflow, profile, input_overrides=input_overrides)
+
     return ActivatedPlaybook(
         playbook_path=path,
         workflow_name=workflow_name,
@@ -145,6 +148,45 @@ def activate_playbook(
         profile=profile,
         profile_path=resolved_profile_path,
     )
+
+
+def _apply_input_overrides(
+    workflow: Workflow,
+    profile: Profile | None,
+    *,
+    input_overrides: dict[str, object] | None,
+) -> tuple[Workflow, Profile | None]:
+    if not input_overrides:
+        return workflow, profile
+
+    merged_workflow_inputs = dict(workflow.inputs)
+    merged_workflow_inputs.update(input_overrides)
+    overridden_workflow = Workflow(
+        version=workflow.version,
+        workflow=workflow.workflow,
+        inputs=merged_workflow_inputs,
+        state_needs=workflow.state_needs,
+        state_bindings=workflow.state_bindings,
+        states=workflow.states,
+        step_results=workflow.step_results,
+        guards=workflow.guards,
+        steps=workflow.steps,
+    )
+
+    if profile is None:
+        return overridden_workflow, None
+
+    remaining_profile_inputs = {key: value for key, value in profile.inputs.items() if key not in input_overrides}
+    if remaining_profile_inputs == profile.inputs:
+        return overridden_workflow, profile
+
+    overridden_profile = Profile(
+        name=profile.name,
+        inputs=remaining_profile_inputs,
+        checks=profile.checks,
+        overrides=profile.overrides,
+    )
+    return overridden_workflow, overridden_profile
 
 
 def _load_playbook_document(path: Path) -> dict[str, object]:

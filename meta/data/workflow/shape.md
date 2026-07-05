@@ -6,8 +6,69 @@
 - `workflow`
 - `inputs`
 - `state_needs`
+- `blocks`
+
+Compatibility-only top-level fields:
+
 - `guards`
 - `steps`
+
+The stable execution shape is block-based.
+Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
+
+## Stable block shape
+
+```yaml
+blocks:
+  - guards:
+      - git.worktree.clean
+  - steps:
+      - name: verify
+        uses: shell.run
+        with: {}
+```
+
+Rules:
+
+- `blocks` is an ordered non-empty list;
+- each block item must declare exactly one of `guards` or `steps`;
+- `guards` block value is a non-empty guard list;
+- `steps` block value is a non-empty step list;
+- block order is semantically meaningful;
+- a `guards` block is evaluated before any later `steps` block may run.
+
+## Compatibility normalization
+
+Illustrative legacy form:
+
+```yaml
+guards:
+  - git.worktree.clean
+
+steps:
+  - name: verify
+    uses: shell.run
+    with: {}
+```
+
+Normalized form:
+
+```yaml
+blocks:
+  - guards:
+      - git.worktree.clean
+  - steps:
+      - name: verify
+        uses: shell.run
+        with: {}
+```
+
+Normalization rules:
+
+- if `blocks` is present, top-level `guards` and top-level `steps` must not be present;
+- if `blocks` is absent, at least one of top-level `guards` or top-level `steps` must be present;
+- top-level `guards` normalizes to one leading `guards` block;
+- top-level `steps` normalizes to one trailing `steps` block.
 
 ## Stable guard shape
 

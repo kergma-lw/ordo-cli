@@ -2,7 +2,7 @@
 
 ## Concept
 
-A guard expression is a boolean predicate evaluated during the guard phase.
+A guard expression is a boolean predicate evaluated when its containing guard block runs.
 
 It is modeled as policy over public probe results rather than as a general embedded program.
 
@@ -36,7 +36,7 @@ It is modeled as policy over public probe results rather than as a general embed
 
 ## Guard list semantics
 
-- A workflow may contain multiple guard items.
+- A workflow may contain multiple guard items inside one `guards` block.
 - Each guard item yields a boolean pass/fail outcome or an evaluation failure.
 - Multiple guard items combine as an ordered conjunction over the guard list.
 

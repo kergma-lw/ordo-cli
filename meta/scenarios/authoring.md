@@ -8,7 +8,7 @@ Human should be able to answer, by reading the declaration:
 
 - what policy is enforced;
 - which guards can block execution;
-- which steps are intended if guards pass;
+- which steps are intended after each guard barrier passes;
 - whether shell is being used as an escape hatch or as the main hidden mechanism.
 
 ## Agent authoring

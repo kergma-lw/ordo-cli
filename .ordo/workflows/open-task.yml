@@ -4,6 +4,12 @@ inputs:
   issue_number: {}
 guards:
   - uses: git.repo
+  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
+  - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists == false or gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).status != "Done"
+  - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists == false or gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).status != "In review"
+  - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists == false or gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).status != "Backlog"
+  - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists == false or inputs.repo_kind != "meta" or gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).type == "Story"
+  - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists == false or inputs.repo_kind == "meta" or gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).type == "Task" or gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).type == "Bug"
 steps:
   - name: load-issue
     uses: gh.issue
@@ -36,20 +42,6 @@ steps:
       project_id: ${inputs.project_id}
     register: project
 
-  - name: validate-issue-open-state
-    uses: shell.command
-    with:
-      command:
-        format: >-
-          bash -lc 'state="%s"; ref="%s"; if [[ "$state" != "OPEN" ]]; then echo "error: issue must be OPEN for $ref (got $state)" >&2; exit 1; fi'
-        args:
-          - ${step.issue.outputs.state}
-          -
-            format: "%s#%s"
-            args:
-              - ${inputs.repository}
-              - ${inputs.issue_number}
-
   - name: validate-added-project-type
     if: ${step.project_probe.outputs.exists | not}
     uses: shell.command
@@ -66,39 +58,8 @@ steps:
               - ${inputs.repository}
               - ${inputs.issue_number}
 
-  - name: validate-existing-project-type
-    if: ${step.project_probe.outputs.exists}
-    uses: shell.command
-    with:
-      command:
-        format: >-
-          bash -lc 'profile_kind="%s"; type="%s"; ref="%s"; case "$profile_kind" in meta) if [[ "$type" != "Story" ]]; then echo "error: meta open-task requires Type=Story for $ref (got $type)" >&2; exit 1; fi ;; backend|frontend) if [[ "$type" != "Task" && "$type" != "Bug" ]]; then echo "error: open-task requires Type=Task or Type=Bug for $ref (got $type)" >&2; exit 1; fi ;; *) echo "error: unsupported profile kind: $profile_kind" >&2; exit 1 ;; esac'
-        args:
-          - ${inputs.repo_kind}
-          - ${step.project.outputs.type}
-          -
-            format: "%s#%s"
-            args:
-              - ${inputs.repository}
-              - ${inputs.issue_number}
-
   - name: validate-added-project-status
     if: ${step.project_probe.outputs.exists | not}
-    uses: shell.command
-    with:
-      command:
-        format: >-
-          bash -lc 'status="%s"; ref="%s"; if [[ -z "$status" ]]; then echo "error: cannot read project status for $ref" >&2; exit 1; fi; if [[ "$status" == "Done" || "$status" == "In review" ]]; then echo "error: refusing to open task with status $status for $ref" >&2; exit 1; fi; if [[ "$status" == "Backlog" ]]; then echo "error: refusing to open task from Backlog for $ref" >&2; exit 1; fi'
-        args:
-          - ${step.project.outputs.status}
-          -
-            format: "%s#%s"
-            args:
-              - ${inputs.repository}
-              - ${inputs.issue_number}
-
-  - name: validate-existing-project-status
-    if: ${step.project_probe.outputs.exists}
     uses: shell.command
     with:
       command:

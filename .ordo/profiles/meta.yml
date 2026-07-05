@@ -1,0 +1,6 @@
+name: meta
+inputs:
+  repo_kind: meta
+  repo_dir: meta
+  repository: kergma-lw/checklist-meta
+  project_id: PVT_kwHOAahuQ84AwWwR

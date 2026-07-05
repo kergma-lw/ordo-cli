@@ -4,14 +4,14 @@
 
 ### `check`
 
-Checks guards and static prerequisites.
+Checks guard blocks and static prerequisites.
 It must not execute effectful business steps.
 
 ### `plan`
 
 Builds an explainable plan:
-- what will be checked;
-- which steps are expected;
+- what will be checked block by block;
+- which steps are expected in each step block;
 - where execution is blocked.
 
 ### `execute`
@@ -21,8 +21,8 @@ Executes the workflow.
 ### `explain`
 
 Returns an explanation of the runtime decision:
-- why a guard failed;
-- why a particular step was chosen;
+- why a guard block failed;
+- why a particular step block or step was chosen;
 - which playbook-run profile is active;
 - which overrides are active.
 
@@ -44,7 +44,7 @@ Instead, runtime should derive higher-level execution meaning from structured op
 
 Implications:
 - connector operations may provide local observations, effect summaries, diagnostics, and supplementary raw detail;
-- runtime combines those local results with workflow structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
+- runtime combines those local results with workflow block structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
 - richer runtime modes should come from stronger structured operation surfaces rather than from pushing orchestration logic down into connector implementations.
 
 ## Connector dependency direction

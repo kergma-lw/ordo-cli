@@ -783,13 +783,22 @@ It must not answer the question:
 
 ## What is acceptable in a workflow
 
-- guards;
-- ordered steps;
+- ordered guard and step blocks;
+- guard lists inside `guards` blocks;
+- ordered steps inside `steps` blocks;
 - compact references and parameters that remain workflow-semantic;
 - logical state needs that express workflow-owned state roles without naming project storage instances;
 - compact parameters;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
+
+The stable execution shape is an ordered `blocks` list.
+Each block declares exactly one of:
+
+- `guards`
+- `steps`
+
+Top-level `guards` and `steps` may remain as compatibility-only authoring sugar when they normalize to the same block structure.
 
 Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
 
@@ -806,6 +815,7 @@ A good workflow:
 - can be read quickly from top to bottom;
 - can be explained in `plan` and `explain`;
 - can be validated before execution;
+- can show where one guard barrier ends and the next step sequence begins;
 - can be moved across projects while preserving contracts.
 - can be authored and iteratively repaired by a sufficiently capable agent using contract docs, examples, and structured diagnostics.
 
@@ -817,14 +827,14 @@ A good workflow:
 
 ### `check`
 
-Checks guards and static prerequisites.
+Checks guard blocks and static prerequisites.
 It must not execute effectful business steps.
 
 ### `plan`
 
 Builds an explainable plan:
-- what will be checked;
-- which steps are expected;
+- what will be checked block by block;
+- which steps are expected in each step block;
 - where execution is blocked.
 
 ### `execute`
@@ -834,8 +844,8 @@ Executes the workflow.
 ### `explain`
 
 Returns an explanation of the runtime decision:
-- why a guard failed;
-- why a particular step was chosen;
+- why a guard block failed;
+- why a particular step block or step was chosen;
 - which playbook-run profile is active;
 - which overrides are active.
 
@@ -857,7 +867,7 @@ Instead, runtime should derive higher-level execution meaning from structured op
 
 Implications:
 - connector operations may provide local observations, effect summaries, diagnostics, and supplementary raw detail;
-- runtime combines those local results with workflow structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
+- runtime combines those local results with workflow block structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
 - richer runtime modes should come from stronger structured operation surfaces rather than from pushing orchestration logic down into connector implementations.
 
 ## Connector dependency direction
@@ -885,7 +895,7 @@ This layer may:
 
 ## Guard
 
-A guard is a precondition check evaluated as part of policy before effectful workflow steps.
+A guard is a precondition check evaluated as part of policy before a later effectful step block may run.
 
 A guard is first-class and must not collapse into a hidden step convention.
 
@@ -1532,7 +1542,7 @@ They also must not read future step results or smuggle step-result access into g
 
 ## Concept
 
-A guard expression is a boolean predicate evaluated during the guard phase.
+A guard expression is a boolean predicate evaluated when its containing guard block runs.
 
 It is modeled as policy over public probe results rather than as a general embedded program.
 
@@ -1566,7 +1576,7 @@ It is modeled as policy over public probe results rather than as a general embed
 
 ## Guard list semantics
 
-- A workflow may contain multiple guard items.
+- A workflow may contain multiple guard items inside one `guards` block.
 - Each guard item yields a boolean pass/fail outcome or an evaluation failure.
 - Multiple guard items combine as an ordered conjunction over the guard list.
 
@@ -2568,8 +2578,69 @@ Workflow readability and portability depend on visible resolution semantics.
 - `workflow`
 - `inputs`
 - `state_needs`
+- `blocks`
+
+Compatibility-only top-level fields:
+
 - `guards`
 - `steps`
+
+The stable execution shape is block-based.
+Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
+
+## Stable block shape
+
+```yaml
+blocks:
+  - guards:
+      - git.worktree.clean
+  - steps:
+      - name: verify
+        uses: shell.run
+        with: {}
+```
+
+Rules:
+
+- `blocks` is an ordered non-empty list;
+- each block item must declare exactly one of `guards` or `steps`;
+- `guards` block value is a non-empty guard list;
+- `steps` block value is a non-empty step list;
+- block order is semantically meaningful;
+- a `guards` block is evaluated before any later `steps` block may run.
+
+## Compatibility normalization
+
+Illustrative legacy form:
+
+```yaml
+guards:
+  - git.worktree.clean
+
+steps:
+  - name: verify
+    uses: shell.run
+    with: {}
+```
+
+Normalized form:
+
+```yaml
+blocks:
+  - guards:
+      - git.worktree.clean
+  - steps:
+      - name: verify
+        uses: shell.run
+        with: {}
+```
+
+Normalization rules:
+
+- if `blocks` is present, top-level `guards` and top-level `steps` must not be present;
+- if `blocks` is absent, at least one of top-level `guards` or top-level `steps` must be present;
+- top-level `guards` normalizes to one leading `guards` block;
+- top-level `steps` normalizes to one trailing `steps` block.
 
 ## Stable guard shape
 
@@ -2841,7 +2912,7 @@ Workflow checks local repo state, confirms guardrails, and executes a small sequ
 
 Expected Ordo value:
 
-- guards are visible before steps run;
+- guard barriers are visible before the affected steps run;
 - runtime can say whether the ritual is blocked before any business action happens;
 - result can tell both human and agent what to fix next.
 
@@ -3034,7 +3105,7 @@ Human should be able to answer, by reading the declaration:
 
 - what policy is enforced;
 - which guards can block execution;
-- which steps are intended if guards pass;
+- which steps are intended after each guard barrier passes;
 - whether shell is being used as an escape hatch or as the main hidden mechanism.
 
 ## Agent authoring

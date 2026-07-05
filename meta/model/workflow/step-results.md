@@ -83,4 +83,5 @@ Registered step results are not:
 
 Registered step results do not participate in guard evaluation.
 
-Guards run before effectful step execution and therefore do not read `step...` values.
+Guard expressions may read workflow inputs and public probe results, but not `step...` values.
+Interleaved guard blocks therefore remain a policy barrier over observable workflow state rather than over registered step-result memory.

@@ -6,7 +6,7 @@ Workflow checks local repo state, confirms guardrails, and executes a small sequ
 
 Expected Ordo value:
 
-- guards are visible before steps run;
+- guard barriers are visible before the affected steps run;
 - runtime can say whether the ritual is blocked before any business action happens;
 - result can tell both human and agent what to fix next.
 
