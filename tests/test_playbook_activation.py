@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from ordo.cli import main as cli_main
 from ordo.model.runtime import ExecutionPlan, Mode, RuntimeResult, RuntimeStatus
-from ordo.playbook import PlaybookError, activate_playbook, discover_playbook_path
+from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, discover_playbook_path
 
 
 class PlaybookActivationTest(unittest.TestCase):
@@ -180,6 +180,78 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.workflow.inputs["keep"], True)
         self.assertNotIn("source", activated.profile.inputs if activated.profile is not None else {})
         self.assertEqual(activated.profile.inputs["region"], "us")
+
+    def test_activate_playbook_resolves_working_directory_relative_to_playbook(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / "repo").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ../repo
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+            self.assertEqual(activated.working_directory, (root / "repo").resolve())
+
+    def test_activate_playbook_reports_missing_working_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ../missing
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            diagnostic = ctx.exception.diagnostics[0]
+            self.assertEqual(diagnostic.code, "playbook.workflow.working_directory_missing")
+            self.assertEqual(diagnostic.path, ("workflows", "inspect-issue", "working_directory"))
+
+    def test_activated_working_directory_changes_process_cwd_temporarily(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "repo"
+            target.mkdir()
+            original = Path.cwd()
+            activated = SimpleNamespace(working_directory=target)
+
+            with activated_working_directory(activated):
+                self.assertEqual(Path.cwd(), target)
+
+            self.assertEqual(Path.cwd(), original)
 
     def test_activate_playbook_rejects_workflow_entry_profile_field(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -505,6 +577,40 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["status"], "ok")
             self.assertEqual(payload["workflow"], "inspect-issue")
 
+    def test_cli_runs_mode_inside_activated_working_directory(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=Path("/tmp"),
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.PLAN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={},
+        )
+        observed: dict[str, str] = {}
+        original = Path.cwd()
+
+        def fake_run_mode(_mode, _workflow, _profile):
+            observed["cwd"] = os.getcwd()
+            return runtime_result
+
+        with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "plan"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated):
+                with patch("ordo.cli._run_mode", side_effect=fake_run_mode):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(observed["cwd"], "/tmp")
+        self.assertEqual(Path.cwd(), original)
+
     def test_cli_activation_error_uses_resolution_surface(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -573,6 +679,7 @@ class PlaybookActivationTest(unittest.TestCase):
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
+            working_directory=None,
         )
         runtime_result = RuntimeResult(
             mode=Mode.PLAN,
@@ -599,6 +706,7 @@ class PlaybookActivationTest(unittest.TestCase):
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
+            working_directory=None,
         )
         runtime_result = RuntimeResult(
             mode=Mode.PLAN,
@@ -644,6 +752,7 @@ class PlaybookActivationTest(unittest.TestCase):
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
+            working_directory=None,
         )
         runtime_result = RuntimeResult(
             mode=Mode.PLAN,

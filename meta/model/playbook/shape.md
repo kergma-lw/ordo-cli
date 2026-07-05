@@ -28,6 +28,7 @@ workflows:
 
   close-task:
     file: close-task.yml
+    working_directory: ../
     state_bindings:
       task_memory: repo_task_state
 
@@ -51,6 +52,7 @@ A workflow entry gives a stable project-local name to a workflow file.
 It may additionally declare:
 
 - state bindings from workflow logical roles to concrete playbook state entries;
+- an explicit execution `working_directory` for runs of that workflow entry;
 - future launch metadata that remains project-local rather than workflow-semantic.
 
 ## Defaults role

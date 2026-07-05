@@ -12,6 +12,7 @@
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
+- A playbook workflow entry may declare an explicit execution working directory for that run.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -23,6 +24,7 @@
 ## Resolution discipline
 
 - Relative workflow and profile references must resolve deterministically from playbook-owned context.
+- An execution working directory must not change playbook discovery or reference resolution rules.
 - Named references must either resolve to one declared target or fail clearly.
 - Missing catalog targets must fail validation before effectful execution starts.
 - Unknown stable fields in the playbook contract should fail validation.
@@ -32,3 +34,4 @@
 - A playbook must remain a project-level launch surface rather than becoming a second workflow language.
 - Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
 - Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
+- A playbook execution working directory should be explicit runtime context rather than hidden shell-first behavior.

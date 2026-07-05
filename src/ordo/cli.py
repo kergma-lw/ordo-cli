@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
 
@@ -10,7 +11,7 @@ import yaml
 
 from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, set_default_connector_provider
 from ordo.model.runtime import RuntimeResult
-from ordo.playbook import PlaybookError, activate_playbook
+from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory
 
 
 def main() -> int:
@@ -59,15 +60,20 @@ def main() -> int:
         except PlaybookError as exc:
             return _emit_error(exc, as_json=args.json)
 
+        context_manager = activated_working_directory(activated)
         if args.mode == "run":
-            return _emit_refusal(
-                workflow=args.workflow,
-                playbook=str(activated.playbook_path),
-                profile=None if activated.profile is None else activated.profile.name,
-                as_json=args.json,
-            )
+            context_manager = contextlib.nullcontext()
 
-        result = _run_mode(args.mode, activated.workflow, activated.profile)
+        with context_manager:
+            if args.mode == "run":
+                return _emit_refusal(
+                    workflow=args.workflow,
+                    playbook=str(activated.playbook_path),
+                    profile=None if activated.profile is None else activated.profile.name,
+                    as_json=args.json,
+                )
+
+            result = _run_mode(args.mode, activated.workflow, activated.profile)
         if args.mode == "next":
             payload = {
                 "mode": "next",

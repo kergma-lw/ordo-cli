@@ -132,6 +132,7 @@
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
+- A playbook workflow entry may declare an explicit execution working directory for that run.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -143,6 +144,7 @@
 ## Resolution discipline
 
 - Relative workflow and profile references must resolve deterministically from playbook-owned context.
+- An execution working directory must not change playbook discovery or reference resolution rules.
 - Named references must either resolve to one declared target or fail clearly.
 - Missing catalog targets must fail validation before effectful execution starts.
 - Unknown stable fields in the playbook contract should fail validation.
@@ -152,6 +154,7 @@
 - A playbook must remain a project-level launch surface rather than becoming a second workflow language.
 - Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
 - Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
+- A playbook execution working directory should be explicit runtime context rather than hidden shell-first behavior.
 
 <!-- source: requirements/workflow/core.md -->
 
@@ -734,6 +737,7 @@ It must not answer the question:
 - named profile catalog for playbook-run profile selection;
 - named runtime state declarations shared across project workflows;
 - bindings from workflow-level logical state roles to concrete project state declarations;
+- explicit execution working directory selection for project-local workflow entries;
 - deterministic discovery of the project orchestration root;
 - deterministic resolution of project-local workflow and profile references.
 
@@ -748,7 +752,7 @@ It must not answer the question:
 
 - A workflow defines guarded operational intent.
 - A profile defines reusable parameters and explicit overrides.
-- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, and logical state-role bindings.
+- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, logical state-role bindings, and other explicit execution context such as an entry working directory.
 - Runtime still owns mode behavior and execution semantics after playbook discovery and resolution complete.
 
 ## Quality bar
@@ -1208,6 +1212,7 @@ workflows:
 
   close-task:
     file: close-task.yml
+    working_directory: ../
     state_bindings:
       task_memory: repo_task_state
 
@@ -1231,6 +1236,7 @@ A workflow entry gives a stable project-local name to a workflow file.
 It may additionally declare:
 
 - state bindings from workflow logical roles to concrete playbook state entries;
+- an explicit execution `working_directory` for runs of that workflow entry;
 - future launch metadata that remains project-local rather than workflow-semantic.
 
 ## Defaults role
@@ -1352,6 +1358,15 @@ The entry must resolve to exactly one workflow file.
 - Otherwise `defaults.profile` becomes the active profile when present.
 - If no explicit profile and no default profile are present, the run proceeds without a profile.
 - Active profile resolution happens before workflow activation and step execution.
+
+## Execution working directory
+
+- A workflow entry may declare `working_directory` as explicit runtime context for runs of that entry.
+- A relative `working_directory` resolves relative to `<playbook-dir>/`.
+- An absolute `working_directory` remains absolute.
+- When present, runtime executes the workflow with that resolved working directory as the execution working directory.
+- Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.
+- `working_directory` changes execution context only; it must not change playbook discovery, workflow/profile reference resolution, or state-path resolution.
 
 ## Launch-time input overrides
 

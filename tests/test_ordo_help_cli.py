@@ -89,12 +89,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         override_result = json.loads(self.run_help("search", "override", "--json").stdout)
         example_result = json.loads(self.run_help("search", "open-task", "--json").stdout)
         input_file_result = json.loads(self.run_help("search", "input-file", "--json").stdout)
+        working_directory_result = json.loads(self.run_help("search", "working_directory", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in profile_result["facts"]))
         self.assertTrue(any(item["kind"] == "capability" and item["name"] == "workflow.branching" for item in branching_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in override_result["facts"]))
         self.assertTrue(any(item["kind"] == "example" and item["name"] == "open-task-from-gitx" for item in example_result["facts"]))
         self.assertTrue(any(item["kind"] == "command_line_field" and item["name"] == "command-line.ordo-playbook.flag.input_file" for item in input_file_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.workflows.working_directory" for item in working_directory_result["facts"]))
 
     def test_capabilities_publish_cross_links_for_branching(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -112,11 +114,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         model = json.loads(self.run_help("model", "--json").stdout)
         profile_fields = {item["name"]: item for item in model["profile"]["top_level_fields"]}
         defaults_fields = {item["name"]: item for item in model["playbook"]["defaults_fields"]}
+        workflow_entry_fields = {item["name"]: item for item in model["playbook"]["workflow_entry_fields"]}
 
         self.assertEqual(profile_fields["inputs"]["runtime_effect"], "applies_missing_workflow_inputs")
         self.assertEqual(profile_fields["checks"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
+        self.assertEqual(workflow_entry_fields["working_directory"]["runtime_effect"], "sets_execution_working_directory")
+        self.assertEqual(workflow_entry_fields["working_directory"]["resolution_base"], "playbook_dir")
 
     def test_model_publishes_value_step_form(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -136,6 +141,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
         model_node = json.loads(self.run_help("describe", "profile.inputs", "--json").stdout)
         command_line_node = json.loads(self.run_help("describe", "command-line.ordo-playbook.flag.input_file", "--json").stdout)
+        working_directory_node = json.loads(self.run_help("describe", "playbook.workflows.working_directory", "--json").stdout)
         missing = self.run_help("describe", "missing.node", "--json")
 
         self.assertEqual(capability_node["document_kind"], "capability_node")
@@ -147,6 +153,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(command_line_node["document_kind"], "command_line_node")
         self.assertEqual(command_line_node["name"], "command-line.ordo-playbook.flag.input_file")
         self.assertEqual(command_line_node["metadata"]["effect"], "override_input_from_file")
+        self.assertEqual(working_directory_node["document_kind"], "model_node")
+        self.assertEqual(working_directory_node["name"], "playbook.workflows.working_directory")
+        self.assertEqual(working_directory_node["metadata"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
 

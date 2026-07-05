@@ -43,6 +43,15 @@ The entry must resolve to exactly one workflow file.
 - If no explicit profile and no default profile are present, the run proceeds without a profile.
 - Active profile resolution happens before workflow activation and step execution.
 
+## Execution working directory
+
+- A workflow entry may declare `working_directory` as explicit runtime context for runs of that entry.
+- A relative `working_directory` resolves relative to `<playbook-dir>/`.
+- An absolute `working_directory` remains absolute.
+- When present, runtime executes the workflow with that resolved working directory as the execution working directory.
+- Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.
+- `working_directory` changes execution context only; it must not change playbook discovery, workflow/profile reference resolution, or state-path resolution.
+
 ## Launch-time input overrides
 
 - A playbook run may accept explicit launch-time input overrides from the caller.

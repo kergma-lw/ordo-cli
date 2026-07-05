@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import yaml
 
@@ -46,6 +48,24 @@ class ActivatedPlaybook:
     workflow_path: Path
     profile: Profile | None = None
     profile_path: Path | None = None
+    working_directory: Path | None = None
+
+
+@contextlib.contextmanager
+def activated_working_directory(activated: ActivatedPlaybook):
+    """Run inside the activated playbook working directory when one is set."""
+
+    target = activated.working_directory
+    if target is None:
+        yield
+        return
+
+    previous = Path.cwd()
+    os.chdir(target)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 def discover_playbook_path(*, cwd: str | Path | None = None) -> Path:
@@ -86,6 +106,12 @@ def activate_playbook(
             details={"playbook": str(path), "workflow": workflow_name},
         )
     _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
+    working_directory = _resolve_working_directory(
+        workflow_entry,
+        workflow_name=workflow_name,
+        playbook_dir=playbook_dir,
+        playbook_path=path,
+    )
 
     workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
     workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
@@ -147,6 +173,7 @@ def activate_playbook(
         workflow_path=workflow_path,
         profile=profile,
         profile_path=resolved_profile_path,
+        working_directory=working_directory,
     )
 
 
@@ -362,6 +389,42 @@ def _validate_workflow_entry_fields(workflow_entry: dict[str, object], *, workfl
                 path=("workflows", workflow_name, key),
                 details={"playbook": str(playbook_path), "workflow": workflow_name, "allowed_fields": sorted(WORKFLOW_ENTRY_ALLOWED_FIELDS)},
             )
+
+
+def _resolve_working_directory(
+    workflow_entry: dict[str, object],
+    *,
+    workflow_name: str,
+    playbook_dir: Path,
+    playbook_path: Path,
+) -> Path | None:
+    raw_value = workflow_entry.get("working_directory")
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, str) or not raw_value:
+        raise _playbook_error(
+            "playbook.workflow.working_directory_invalid",
+            "Workflow entry field 'working_directory' must be a non-empty string",
+            path=("workflows", workflow_name, "working_directory"),
+            details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(raw_value).__name__},
+        )
+
+    resolved = Path(raw_value)
+    if not resolved.is_absolute():
+        resolved = playbook_dir / resolved
+    resolved = resolved.resolve()
+    if not resolved.exists() or not resolved.is_dir():
+        raise _playbook_error(
+            "playbook.workflow.working_directory_missing",
+            "Workflow entry working_directory must resolve to an existing directory",
+            path=("workflows", workflow_name, "working_directory"),
+            details={
+                "playbook": str(playbook_path),
+                "workflow": workflow_name,
+                "working_directory": str(resolved),
+            },
+        )
+    return resolved
 
 
 def _category_for_code(code: str) -> str:

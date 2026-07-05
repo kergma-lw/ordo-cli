@@ -10,8 +10,12 @@ class IntrospectionPlaybookContractTest(unittest.TestCase):
 
         self.assertEqual(payload["discovery"]["path"], ".ordo/playbook.yml")
         workflow_entry_fields = {field["name"] for field in payload["workflow_entry_fields"]}
-        self.assertEqual(workflow_entry_fields, {"file", "state_bindings"})
+        self.assertEqual(workflow_entry_fields, {"file", "working_directory", "state_bindings"})
+        working_directory = next(field for field in payload["workflow_entry_fields"] if field["name"] == "working_directory")
+        self.assertEqual(working_directory["runtime_effect"], "sets_execution_working_directory")
+        self.assertEqual(working_directory["resolution_base"], "playbook_dir")
         self.assertEqual(payload["activation_semantics"]["discovery"]["missing"], "playbook.discovery.missing")
+        self.assertIn("working_directory", payload["activation_semantics"]["workflow_entries"]["optional"])
         self.assertEqual(payload["activation_semantics"]["state_entries"]["requires"], ["path"])
 
     def test_playbook_contract_stays_aligned_with_playbook_surface_constants(self) -> None:

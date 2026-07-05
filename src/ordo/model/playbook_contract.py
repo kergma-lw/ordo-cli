@@ -19,6 +19,13 @@ PLAYBOOK_CONTRACT: JSONObject = {
     ],
     "workflow_entry_fields": [
         {"name": "file", "required": True, "type": "string"},
+        {
+            "name": "working_directory",
+            "required": False,
+            "type": "string",
+            "runtime_effect": "sets_execution_working_directory",
+            "resolution_base": "playbook_dir",
+        },
         {"name": "state_bindings", "required": False, "type": "object"},
     ],
     "profile_entry_fields": [
@@ -38,7 +45,7 @@ PLAYBOOK_CONTRACT: JSONObject = {
         },
         "workflow_entries": {
             "requires": ["file"],
-            "optional": ["state_bindings"],
+            "optional": ["working_directory", "state_bindings"],
         },
         "profile_entries": {
             "requires": ["file"],
