@@ -11,7 +11,6 @@ ISSUE_IDENTITY_INPUTS = {"repository": "string", "issue_number": "integer"}
 
 _MISSING = object()
 _REPOSITORY_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)$")
-_ISSUE_REF_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^#]+)#(?P<number>\d+)$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,27 +35,14 @@ def resolve_issue_identity(
     if isinstance(issue_number_value, OperationOutcome):
         return issue_number_value
 
-    if repository_value is not _MISSING or issue_number_value is not _MISSING:
-        if repository_value is _MISSING:
-            return _required_input_outcome(ctx, "repository")
-        if issue_number_value is _MISSING:
-            return _required_input_outcome(ctx, "issue_number")
-        return _from_structured_inputs(
-            ctx,
-            repository_value=repository_value,
-            issue_number_value=issue_number_value,
-            failure_code=failure_code,
-            diagnostic_prefix=diagnostic_prefix,
-        )
-
-    issue_ref_value = _optional_input(ctx, "issue_ref")
-    if isinstance(issue_ref_value, OperationOutcome):
-        return issue_ref_value
-    if issue_ref_value is _MISSING:
+    if repository_value is _MISSING:
         return _required_input_outcome(ctx, "repository")
-    return _from_issue_ref(
+    if issue_number_value is _MISSING:
+        return _required_input_outcome(ctx, "issue_number")
+    return _from_structured_inputs(
         ctx,
-        issue_ref=str(issue_ref_value),
+        repository_value=repository_value,
+        issue_number_value=issue_number_value,
         failure_code=failure_code,
         diagnostic_prefix=diagnostic_prefix,
     )
@@ -110,41 +96,6 @@ def _from_structured_inputs(
         owner=owner,
         repo=repo,
     )
-
-
-def _from_issue_ref(
-    ctx: OperationContext,
-    *,
-    issue_ref: str,
-    failure_code: str,
-    diagnostic_prefix: str,
-) -> IssueIdentity | OperationOutcome:
-    match = _ISSUE_REF_RE.match(issue_ref)
-    if match is None:
-        return fail(
-            code=failure_code,
-            summary="GitHub issue reference must use OWNER/REPO#N format",
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.invalid_issue_ref",
-                    level="error",
-                    message="GitHub issue reference must use OWNER/REPO#N format",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
-        )
-
-    repository = f"{match.group('owner')}/{match.group('repo')}"
-    issue_number = int(match.group("number"))
-    return IssueIdentity(
-        repository=repository,
-        issue_number=issue_number,
-        issue_ref=issue_ref,
-        owner=match.group("owner"),
-        repo=match.group("repo"),
-    )
-
-
 def _optional_input(ctx: OperationContext, name: str) -> object | OperationOutcome:
     try:
         return ctx.input(name)

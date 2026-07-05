@@ -12,10 +12,10 @@ workflow: open-task
 #   yet support conditional branching between steps.
 
 inputs:
-  issue_ref: kergma-lw/checklist-backend#16
   repository: kergma-lw/checklist-backend
   project_id: PVT_BACKEND_PROJECT_ID
   issue_number: 16
+  task_key: checklist-backend-16
   issue_title: Keep issue workflow in sync
   issue_type: Task
   remote: origin
@@ -184,19 +184,19 @@ steps:
 
   - name: remember-issue-number
     state_set:
-      state.task_memory[inputs.issue_ref].issue_number: ${inputs.issue_number}
+      state.task_memory[inputs.task_key].issue_number: ${inputs.issue_number}
 
   - name: remember-issue-type
     state_set:
-      state.task_memory[inputs.issue_ref].issue_type: ${inputs.issue_type}
+      state.task_memory[inputs.task_key].issue_type: ${inputs.issue_type}
 
   - name: remember-issue-title
     state_set:
-      state.task_memory[inputs.issue_ref].issue_title: ${inputs.issue_title}
+      state.task_memory[inputs.task_key].issue_title: ${inputs.issue_title}
 
   - name: remember-branch
     state_set:
-      state.task_memory[inputs.issue_ref].branch:
+      state.task_memory[inputs.task_key].branch:
         format: "{}/{}-{}"
         args:
           - ${inputs.issue_type | lower}
@@ -205,7 +205,7 @@ steps:
 
   - name: remember-repository-kind
     state_set:
-      state.task_memory[inputs.issue_ref].repository_kind: ${inputs.repository_kind}
+      state.task_memory[inputs.task_key].repository_kind: ${inputs.repository_kind}
 
   - name: run-post-open-command
     uses: shell.command

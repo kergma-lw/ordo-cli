@@ -1817,7 +1817,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#1"})),),
+            guards=(Guard(OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 1})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.issue")
@@ -1860,7 +1860,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#1"})),),
+            guards=(Guard(OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 1})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.issue")
@@ -1897,7 +1897,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
 
     def test_gh_issue_close_closes_open_issue(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"repository": "owner/repo", "issue_number": 7})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -1939,7 +1939,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["issue_ref"], "owner/repo#7")
 
     def test_gh_issue_close_is_noop_for_closed_issue(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"repository": "owner/repo", "issue_number": 7})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -1957,7 +1957,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
 
     def test_gh_issue_close_reports_issue_not_found(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"repository": "owner/repo", "issue_number": 7})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -1973,7 +1973,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_close.issue_not_found")
 
     def test_gh_issue_close_reports_close_blocked(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"issue_ref": "owner/repo#7"})),))
+        workflow = Workflow(version=0, workflow="demo", guards=(), steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"repository": "owner/repo", "issue_number": 7})),))
         operation = get_public_connector_registry().get_operation("gh.issue.close")
         resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -2102,7 +2102,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#17", "body": "Looks good."})),),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"repository": "owner/repo", "issue_number": 17, "body": "Looks good."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
         resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2127,7 +2127,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#999", "body": "Looks good."})),),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"repository": "owner/repo", "issue_number": 999, "body": "Looks good."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
         resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2148,7 +2148,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#17", "body": "   "})),),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"repository": "owner/repo", "issue_number": 17, "body": "   "})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
         resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2166,7 +2166,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"issue_ref": "owner/repo#17", "body": "Looks good."})),),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"repository": "owner/repo", "issue_number": 17, "body": "Looks good."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
         resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2188,7 +2188,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#17", "body": "Updated body."})),),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"repository": "owner/repo", "issue_number": 17, "body": "Updated body."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
         resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2212,7 +2212,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#17", "body": "Same body."})),),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"repository": "owner/repo", "issue_number": 17, "body": "Same body."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
         resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2234,7 +2234,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#999", "body": "Updated body."})),),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"repository": "owner/repo", "issue_number": 999, "body": "Updated body."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
         resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2255,7 +2255,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"issue_ref": "owner/repo#17", "body": "Updated body."})),),
+            steps=(Step(name="replace-body", operation=OperationRef("gh.issue.body.replace", with_={"repository": "owner/repo", "issue_number": 17, "body": "Updated body."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.replace")
         resolved = ResolvedOperation("gh.issue.body.replace", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2277,7 +2277,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "New section."})),),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"repository": "owner/repo", "issue_number": 17, "text": "New section."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.append")
         resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2300,7 +2300,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "tail", "separator": ""})),),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"repository": "owner/repo", "issue_number": 17, "text": "tail", "separator": ""})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.append")
         resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2322,7 +2322,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#999", "text": "New section."})),),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"repository": "owner/repo", "issue_number": 999, "text": "New section."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.append")
         resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2343,7 +2343,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "   "})),),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"repository": "owner/repo", "issue_number": 17, "text": "   "})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.append")
         resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2361,7 +2361,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"issue_ref": "owner/repo#17", "text": "New section."})),),
+            steps=(Step(name="append-body", operation=OperationRef("gh.issue.body.append", with_={"repository": "owner/repo", "issue_number": 17, "text": "New section."})),),
         )
         operation = get_public_connector_registry().get_operation("gh.issue.body.append")
         resolved = ResolvedOperation("gh.issue.body.append", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2383,7 +2383,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo"})),),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.add")
         resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2409,7 +2409,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo"})),),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.add")
         resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2432,7 +2432,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing"})),),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.add")
         resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2454,7 +2454,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo"})),),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.add")
         resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2475,7 +2475,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo"})),),
+            steps=(Step(name="add", operation=OperationRef("gh.project.issue.add", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.add")
         resolved = ResolvedOperation("gh.project.issue.add", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2498,7 +2498,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "In progress"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
         resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2523,7 +2523,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "In progress"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
         resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2545,7 +2545,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "status": "Done"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "Done"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
         resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2567,7 +2567,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "status": "In progress"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
         resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2589,7 +2589,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "status": "In progress"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
         resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2610,7 +2610,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "In progress"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
         resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2633,7 +2633,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
         resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2658,7 +2658,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
         resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2680,7 +2680,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 13"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 13"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
         resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2702,7 +2702,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "iteration": "Sprint 12"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
         resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2724,7 +2724,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
         resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2745,7 +2745,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
         resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2768,7 +2768,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P1"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
         resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2793,7 +2793,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P1"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
         resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2815,7 +2815,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "priority": "P0"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P0"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
         resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2837,7 +2837,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "priority": "P1"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
         resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2859,7 +2859,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "priority": "P1"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
         resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2880,7 +2880,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P1"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
         resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2903,7 +2903,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Bug"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Bug"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
         resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2928,7 +2928,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Task"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Task"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
         resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2950,7 +2950,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Story"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Story"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
         resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2972,7 +2972,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "type": "Task"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "type": "Task"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
         resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -2994,7 +2994,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "type": "Task"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "type": "Task"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
         resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3015,7 +3015,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "type": "Bug"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Bug"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
         resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3038,7 +3038,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "L"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "L"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
         resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3063,7 +3063,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "M"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "M"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
         resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3085,7 +3085,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "XL"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "XL"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
         resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3107,7 +3107,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "size": "M"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "size": "M"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
         resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3129,7 +3129,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "size": "M"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "size": "M"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
         resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3150,7 +3150,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "size": "L"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "L"})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
         resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3173,7 +3173,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "estimate": 5})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": 5})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
         resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3198,7 +3198,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "estimate": 3})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": 3})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
         resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3220,7 +3220,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_missing", "estimate": 3})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "estimate": 3})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
         resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3242,7 +3242,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"issue_ref": "owner/repo#999", "project_id": "PVT_demo", "estimate": 3})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "estimate": 3})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
         resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3263,7 +3263,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "estimate": True})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": True})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
         resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3281,7 +3281,7 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"issue_ref": "owner/repo#7", "project_id": "PVT_demo", "estimate": 5})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": 5})),),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
         resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
@@ -3431,16 +3431,16 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
 
     def test_gh_issue_probe_resolves_named_argument_from_workflow_inputs(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", inputs={"issue_ref": "owner/repo#1"}, guards=(), steps=())
+        workflow = Workflow(version=0, workflow="demo", inputs={"repository": "owner/repo", "issue_number": 1}, guards=(), steps=())
         operation = get_public_connector_registry().get_operation("gh.issue")
         resolved = ResolvedExpressionProbe(
             reference="gh.issue",
             connector_namespace="gh",
             operation=operation,  # type: ignore[arg-type]
             source="public",
-            expression_text="gh.issue(issue_ref=inputs.issue_ref).state",
+            expression_text="gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state",
             fields=("state",),
-            arguments=(("issue_ref", ReferenceNode(start=0, end=16, parts=("inputs", "issue_ref"))),),
+            arguments=(("repository", ReferenceNode(start=0, end=17, parts=("inputs", "repository"))), ("issue_number", ReferenceNode(start=0, end=19, parts=("inputs", "issue_number")))),
         )
 
         with patch("subprocess.run") as run:
@@ -3460,7 +3460,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["repository"]["nameWithOwner"], "owner/repo")
 
     def test_gh_issue_probe_maps_not_found_to_local_failure_mode(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#999"})),), steps=())
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 999})),), steps=())
         operation = get_public_connector_registry().get_operation("gh.issue")
         resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -3476,7 +3476,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "probe.gh_issue.not_found")
 
     def test_gh_issue_probe_reports_invalid_json(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"issue_ref": "owner/repo#1"})),), steps=())
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 1})),), steps=())
         operation = get_public_connector_registry().get_operation("gh.issue")
         resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
 
@@ -3495,7 +3495,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.project.issue", with_={"issue_ref": "owner/repo#1", "project_id": "PVT_demo"})),),
+            guards=(Guard(OperationRef("gh.project.issue", with_={"repository": "owner/repo", "issue_number": 1, "project_id": "PVT_demo"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue")
@@ -3530,7 +3530,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.project.issue", with_={"issue_ref": "owner/repo#1", "project_id": "PVT_demo"})),),
+            guards=(Guard(OperationRef("gh.project.issue", with_={"repository": "owner/repo", "issue_number": 1, "project_id": "PVT_demo"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue")
@@ -3553,7 +3553,7 @@ class OperationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="demo",
-            guards=(Guard(OperationRef("gh.project.issue", with_={"issue_ref": "owner/repo#1", "project_id": "PVT_missing"})),),
+            guards=(Guard(OperationRef("gh.project.issue", with_={"repository": "owner/repo", "issue_number": 1, "project_id": "PVT_missing"})),),
             steps=(),
         )
         operation = get_public_connector_registry().get_operation("gh.project.issue")

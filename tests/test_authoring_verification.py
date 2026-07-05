@@ -24,13 +24,13 @@ class AuthoringVerificationTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="review-issue",
-            inputs={"issue_ref": "kergma-lw/ordo-cli#1", "command": "echo review"},
+            inputs={"repository": "kergma-lw/ordo-cli", "issue_number": 1, "command": "echo review"},
             guards=(
                 Guard(OperationRef("git.worktree")),
                 Guard(expr='git.branch.value != "main"'),
             ),
             steps=(
-                Step(name="inspect-issue", operation=OperationRef("gh.issue", with_={"issue_ref": "kergma-lw/ordo-cli#1"})),
+                Step(name="inspect-issue", operation=OperationRef("gh.issue", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 1})),
                 Step(name="verify-command", operation=OperationRef("shell.command", with_={"command": "echo review"})),
             ),
         )
@@ -50,7 +50,7 @@ class AuthoringVerificationTest(unittest.TestCase):
             version=0,
             workflow="review-issue",
             guards=(Guard(OperationRef("git.worktree")),),
-            steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"issue_ref": "kergma-lw/ordo-cli#1"})),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 1})),),
         )
 
         explanation = explain_workflow(

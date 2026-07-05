@@ -132,7 +132,7 @@ class ValidationTest(unittest.TestCase):
                 version: 0
                 workflow: open-task
                 guards:
-                  - gh.issue(issue_ref=inputs.issue_ref and inputs.other).status == "Open"
+                  - gh.issue(repository=inputs.repository and inputs.other, issue_number=inputs.issue_number).status == "Open"
                 steps: []
                 """
             )
@@ -148,7 +148,7 @@ class ValidationTest(unittest.TestCase):
                 version: 0
                 workflow: open-task
                 guards:
-                  - gh.issue(issue_ref=inputs.issue_ref, issue_ref="repo#2").status == "Open"
+                  - gh.issue(repository=inputs.repository, repository="repo#2", issue_number=inputs.issue_number).status == "Open"
                 steps: []
                 """
             )
@@ -164,7 +164,7 @@ class ValidationTest(unittest.TestCase):
                 version: 0
                 workflow: open-task
                 guards:
-                  - gh.issue(issue_ref=inputs.issue_ref).state != "CLOSED"
+                  - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"
                 steps: []
                 """
             )
@@ -179,10 +179,11 @@ class ValidationTest(unittest.TestCase):
                 version: 0
                 workflow: open-task
                 inputs:
-                  issue_ref: owner/repo#1
+                  repository: owner/repo
+                  issue_number: 1
                   project_id: PVT_demo
                 guards:
-                  - gh.project.issue(issue_ref=inputs.issue_ref, project_id=inputs.project_id).exists
+                  - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
                 steps: []
                 """
             )

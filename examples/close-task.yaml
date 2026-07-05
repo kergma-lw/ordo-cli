@@ -2,9 +2,9 @@ version: 0
 workflow: close-task
 
 inputs:
-  issue_ref: kergma-lw/checklist-backend#16
   repository: kergma-lw/checklist-backend
   issue_number: 16
+  task_key: checklist-backend-16
   ship: true
 
 state_needs:
@@ -24,7 +24,7 @@ steps:
   - name: merge-main
     uses: git.integrate.merge_ff_only
     with:
-      ref: ${state.task_memory[inputs.issue_ref].branch}
+      ref: ${state.task_memory[inputs.task_key].branch}
 
   - name: close-issue
     uses: gh.issue.close
@@ -33,4 +33,4 @@ steps:
       issue_number: ${inputs.issue_number}
 
   - name: forget-task-branch
-    state_delete: state.task_memory[inputs.issue_ref].branch
+    state_delete: state.task_memory[inputs.task_key].branch
