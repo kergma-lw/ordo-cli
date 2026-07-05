@@ -53,6 +53,7 @@ class Step:
 
     name: str
     operation: OperationRef | None = None
+    value: JSONValue | None = None
     state_set: JSONObject | None = None
     state_delete: str | None = None
     if_: str | None = field(default=None, metadata={"contract_name": "if"})
@@ -61,17 +62,25 @@ class Step:
     def __post_init__(self) -> None:
         forms = (
             self.operation is not None,
+            self.value is not None,
             self.state_set is not None,
             self.state_delete is not None,
         )
         if sum(forms) != 1:
-            raise ValueError("Step must define exactly one of operation, state_set, or state_delete")
+            raise ValueError("Step must define exactly one of operation, value, state_set, or state_delete")
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped contract form."""
 
         if self.operation is not None:
             contract = {"name": self.name, **self.operation.to_contract()}
+            if self.if_ is not None:
+                contract["if"] = self.if_
+            if self.register is not None:
+                contract["register"] = self.register
+            return contract
+        if self.value is not None:
+            contract = {"name": self.name, "value": self.value}
             if self.if_ is not None:
                 contract["if"] = self.if_
             if self.register is not None:

@@ -167,7 +167,7 @@ def _collect_declared_registers_from_step_list(value: JSONValue | None, *, path:
         item["register"]: path + (str(index), "register")
         for index, item in enumerate(value)
         if isinstance(item, dict)
-        and "uses" in item
+        and ("uses" in item or "value" in item)
         and isinstance(item.get("register"), str)
         and REGISTER_PATTERN.fullmatch(item["register"])
     }
@@ -240,9 +240,10 @@ def _validate_step_list(
         diagnostics.extend(_validate_unknown_fields(item, STEP_ALLOWED_FIELDS, path=item_path, source=source))
         diagnostics.extend(_require_non_empty_string(item, "name", path=item_path + ("name",), source=source))
         has_uses = "uses" in item
+        has_value = "value" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
-        form_count = sum((has_uses, has_state_set, has_state_delete))
+        form_count = sum((has_uses, has_value, has_state_set, has_state_delete))
 
         prior_registers = {name: register_path for name, register_path in seen_registers.items()}
 
@@ -250,7 +251,7 @@ def _validate_step_list(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.form",
-                    "Step must define exactly one of 'uses', 'state_set', or 'state_delete'",
+                    "Step must define exactly one of 'uses', 'value', 'state_set', or 'state_delete'",
                     item_path,
                     source,
                 )
@@ -262,6 +263,16 @@ def _validate_step_list(
                     path=item_path,
                     source=source,
                     allowed_fields=STEP_ALLOWED_FIELDS,
+                    prior_registers=prior_registers,
+                    declared_registers=effective_declared_registers,
+                )
+            )
+        elif has_value:
+            diagnostics.extend(
+                _validate_runtime_value_surface(
+                    item.get("value"),
+                    path=item_path + ("value",),
+                    source=source,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
                 )
@@ -285,7 +296,7 @@ def _validate_step_list(
                 declared_registers=effective_declared_registers,
             )
         )
-        diagnostics.extend(_validate_step_register(item, path=item_path, source=source, has_uses=has_uses))
+        diagnostics.extend(_validate_step_register(item, path=item_path, source=source, can_register=has_uses or has_value))
 
         if has_state_set:
             diagnostics.extend(_require_object_field(item, "state_set", path=item_path + ("state_set",), source=source, required=True))
@@ -310,7 +321,7 @@ def _validate_step_list(
                 seen_names[name] = item_path + ("name",)
 
         register = item.get("register")
-        if isinstance(register, str) and register and has_uses and REGISTER_PATTERN.fullmatch(register):
+        if isinstance(register, str) and register and (has_uses or has_value) and REGISTER_PATTERN.fullmatch(register):
             if register in seen_registers:
                 diagnostics.append(
                     _diagnostic(
@@ -389,16 +400,16 @@ def _validate_step_condition(
     return diagnostics
 
 
-def _validate_step_register(value: JSONObject, *, path: tuple[str, ...], source: str, has_uses: bool) -> list[Diagnostic]:
+def _validate_step_register(value: JSONObject, *, path: tuple[str, ...], source: str, can_register: bool) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     register = value.get("register")
     if register is None:
         return diagnostics
-    if not has_uses:
+    if not can_register:
         diagnostics.append(
             _diagnostic(
                 "validation.workflow.step.register_without_uses",
-                "Step field 'register' is allowed only together with 'uses'",
+                "Step field 'register' is allowed only together with 'uses' or 'value'",
                 path + ("register",),
                 source,
             )

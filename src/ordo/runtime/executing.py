@@ -185,7 +185,7 @@ def execute_workflow(
                     continue
                 step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed"})
             if isinstance(resolved_step, ResolvedBuiltinStep):
-                result = _execute_builtin_state_step(step, effective_workflow)
+                result = _execute_builtin_step(step, effective_workflow)
             else:
                 result = executor(resolved_step, effective_workflow)
             if step.register is not None:
@@ -290,8 +290,10 @@ def _default_step_executor(*, provider: ConnectorProvider | None):
     return execute
 
 
-def _execute_builtin_state_step(step, workflow: Workflow) -> OperationResult:
+def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
     try:
+        if step.value is not None:
+            return _execute_value_step(step.name, step.value, workflow)
         if step.state_set is not None:
             return _execute_state_set(step.name, step.state_set, workflow)
         if step.state_delete is not None:
@@ -301,6 +303,15 @@ def _execute_builtin_state_step(step, workflow: Workflow) -> OperationResult:
     except ValueResolutionError as exc:
         return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
     return OperationResult(status="state_error", summary="Unknown builtin step form")
+
+
+def _execute_value_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
+    value = resolve_runtime_value(raw_value, workflow)
+    return OperationResult(
+        status="ok",
+        summary=f"Materialized derived value for step '{step_name}'",
+        outputs={"value": value},
+    )
 
 
 def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow: Workflow) -> OperationResult:

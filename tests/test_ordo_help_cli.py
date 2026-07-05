@@ -118,6 +118,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
 
+    def test_model_publishes_value_step_form(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        step_forms = {item["name"]: item for item in model["workflow"]["step_forms"]}
+
+        self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
+        self.assertIn("register", step_forms["value"]["optional_fields"])
+
     def test_capabilities_publish_explicit_non_inference_metadata(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")

@@ -166,6 +166,9 @@ def resolve_workflow_references(
 
         resolved_steps: list[ResolvedStep] = []
         for step_index, step in enumerate(block.steps):
+            if step.value is not None:
+                resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="value"))
+                continue
             if step.state_set is not None:
                 resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_set"))
                 continue

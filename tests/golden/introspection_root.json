@@ -50,14 +50,25 @@
         },
         {
           "must_not_infer": [],
+          "name": "workflow.step.value",
+          "related_capabilities": [],
+          "related_model_nodes": [],
+          "related_negative_rules": [],
+          "scope": "workflow.step",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
           "name": "workflow.step.condition",
           "related_capabilities": [
-            "workflow.step.register"
+            "workflow.step.register",
+            "workflow.step.value"
           ],
           "related_model_nodes": [
             "workflow.step.if",
             "workflow.step.register",
-            "workflow.step_forms.operation_call"
+            "workflow.step_forms.operation_call",
+            "workflow.step_forms.value"
           ],
           "related_negative_rules": [
             "workflow_step.if_conflicts_with_register"
@@ -70,12 +81,15 @@
           "name": "workflow.step.register",
           "related_capabilities": [
             "workflow.step.condition",
-            "workflow.step.outputs"
+            "workflow.step.outputs",
+            "workflow.step.value"
           ],
           "related_model_nodes": [
             "workflow.step.register",
             "workflow.step.uses",
-            "workflow.step_forms.operation_call"
+            "workflow.step.value",
+            "workflow.step_forms.operation_call",
+            "workflow.step_forms.value"
           ],
           "related_negative_rules": [
             "workflow_step.register_requires_uses",
@@ -101,12 +115,14 @@
           "name": "workflow.branching",
           "related_capabilities": [
             "workflow.step.condition",
-            "workflow.step.register"
+            "workflow.step.register",
+            "workflow.step.value"
           ],
           "related_model_nodes": [
             "workflow.step.if",
             "workflow.step.register",
-            "workflow.step_forms.operation_call"
+            "workflow.step_forms.operation_call",
+            "workflow.step_forms.value"
           ],
           "related_negative_rules": [
             "workflow_step.if_conflicts_with_register"
@@ -228,7 +244,7 @@
             "validation.workflow.step.form"
           ],
           "related_model_nodes": [],
-          "rule": "A workflow step must define exactly one of uses, state_set, or state_delete",
+          "rule": "A workflow step must define exactly one of uses, value, state_set, or state_delete",
           "surface": "workflow_step"
         },
         {
@@ -248,9 +264,10 @@
         },
         {
           "name": "workflow_step.register_requires_uses",
-          "reason": "the MVP publishes registered step results only for operation-call steps",
+          "reason": "the MVP publishes registered step results only for operation-call steps and pure value steps",
           "related_capabilities": [
-            "workflow.step.register"
+            "workflow.step.register",
+            "workflow.step.value"
           ],
           "related_codes": [
             "validation.workflow.step.register_without_uses"
@@ -258,9 +275,11 @@
           "related_model_nodes": [
             "workflow.step.register",
             "workflow.step.uses",
-            "workflow.step_forms.operation_call"
+            "workflow.step.value",
+            "workflow.step_forms.operation_call",
+            "workflow.step_forms.value"
           ],
-          "rule": "The register field is allowed only together with uses",
+          "rule": "The register field is allowed only together with uses or value",
           "surface": "workflow_step"
         },
         {
@@ -269,6 +288,7 @@
           "related_capabilities": [
             "workflow.step.condition",
             "workflow.step.register",
+            "workflow.step.value",
             "workflow.branching"
           ],
           "related_codes": [
@@ -277,7 +297,8 @@
           "related_model_nodes": [
             "workflow.step.if",
             "workflow.step.register",
-            "workflow.step_forms.operation_call"
+            "workflow.step_forms.operation_call",
+            "workflow.step_forms.value"
           ],
           "rule": "The if and register fields cannot be used together in the MVP",
           "surface": "workflow_step"
@@ -2409,11 +2430,12 @@
         {
           "fields": [
             "uses",
+            "value",
             "state_set",
             "state_delete"
           ],
           "kind": "exclusive_choice",
-          "message": "A workflow step must define exactly one of uses, state_set, or state_delete",
+          "message": "A workflow step must define exactly one of uses, value, state_set, or state_delete",
           "name": "exactly_one_step_form"
         },
         {
@@ -2437,6 +2459,17 @@
           "required_fields": [
             "name",
             "uses"
+          ]
+        },
+        {
+          "name": "value",
+          "optional_fields": [
+            "if",
+            "register"
+          ],
+          "required_fields": [
+            "name",
+            "value"
           ]
         },
         {

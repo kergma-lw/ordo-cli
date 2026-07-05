@@ -11,6 +11,7 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         self.assertEqual(capabilities["workflow.value_expressions"]["status"], "supported")
         self.assertEqual(capabilities["workflow.step.condition"]["status"], "supported")
         self.assertEqual(capabilities["workflow.step.register"]["status"], "supported")
+        self.assertEqual(capabilities["workflow.step.value"]["status"], "supported")
 
     def test_describe_capabilities_publishes_expression_roots_and_surfaces(self) -> None:
         payload = describe_capabilities()

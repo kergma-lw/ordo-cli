@@ -182,6 +182,39 @@ blocks:
         self.assertEqual(result.operation_results[0].outputs.get("stdout"), "hello")
         self.assertEqual(result.operation_results[1].outputs.get("stdout"), "hello")
 
+    def test_execute_materializes_value_step_output_for_later_step(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  type: Task
+  issue_number: 7
+  title: Hello World
+blocks:
+  - guards: []
+  - steps:
+      - name: compute-branch
+        value:
+          format: "{}/{}-{}"
+          args:
+            - ${inputs.type | lower}
+            - ${inputs.issue_number}
+            - ${inputs.title | slug}
+        register: branch
+      - name: replay
+        uses: shell.command
+        with:
+          command: ${format("printf {}", step.branch.outputs.value)}
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.operation_results[0].outputs.get("value"), "task/7-hello-world")
+        self.assertEqual(result.operation_results[1].outputs.get("stdout"), "task/7-hello-world")
+
     def test_execute_resolves_registered_step_output_in_later_step_block(self) -> None:
         workflow = load_workflow_text(
             """

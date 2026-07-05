@@ -279,6 +279,48 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.register_without_uses")
 
+    def test_register_with_value_step_is_allowed(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: remember
+                        value:
+                          format: "{}/{}"
+                          args:
+                            - ${inputs.kind | lower}
+                            - ${inputs.number}
+                        register: branch
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_value_step_shape_accepts_runtime_value_surface(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: remember
+                        value:
+                          format: "{}"
+                          args:
+                            - ${inputs.kind | lower}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_duplicate_register_names_fail(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -484,6 +526,26 @@ class ValidationTest(unittest.TestCase):
                           branch:
                             format: "{}/{}"
                             args: nope
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.format.args_type")
+
+    def test_invalid_yaml_format_args_type_in_value_step_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: remember
+                        value:
+                          format: "{}"
+                          args: nope
                 """
             )
         )

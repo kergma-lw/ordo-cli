@@ -60,6 +60,29 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "${inputs.enabled}")
         self.assertEqual(workflow.steps[1].if_, "${inputs.enabled}")
 
+    def test_loads_value_step_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: compute-branch
+                        value:
+                          format: "{}/{}"
+                          args:
+                            - ${inputs.type | lower}
+                            - ${inputs.issue_number}
+                        register: branch
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].value, {"format": "{}/{}", "args": ["${inputs.type | lower}", "${inputs.issue_number}"]})
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["register"], "branch")
+
     def test_loads_expr_guard_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(

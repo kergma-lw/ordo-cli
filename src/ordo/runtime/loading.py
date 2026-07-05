@@ -143,12 +143,13 @@ def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:
 def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str) -> Step:
     data = _require_object(payload, path=path, source=source)
     has_uses = "uses" in data
+    has_value = "value" in data
     has_state_set = "state_set" in data
     has_state_delete = "state_delete" in data
-    if sum((has_uses, has_state_set, has_state_delete)) != 1:
+    if sum((has_uses, has_value, has_state_set, has_state_delete)) != 1:
         raise _load_error(
             code="load.step.form",
-            message="Step must define exactly one of 'uses', 'state_set', or 'state_delete'",
+            message="Step must define exactly one of 'uses', 'value', 'state_set', or 'state_delete'",
             path=path,
             details={"source": source},
         )
@@ -164,6 +165,7 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
     return Step(
         name=_require_string(data, "name", path=path + ("name",), source=source),
         operation=_load_operation_ref(data, path=path, source=source) if has_uses else None,
+        value=data.get("value") if has_value else None,
         state_set=state_set,
         state_delete=state_delete,
         if_=_optional_string(data, "if", path=path + ("if",), source=source),

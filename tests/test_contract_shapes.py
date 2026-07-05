@@ -83,6 +83,18 @@ class ContractShapeTest(unittest.TestCase):
             },
         )
 
+    def test_step_contract_allows_value_form(self) -> None:
+        value_step = Step(name="compute-branch", value={"format": "{}/{}", "args": ["${inputs.type | lower}", "${inputs.issue_number}"]}, register="branch")
+
+        self.assertEqual(
+            value_step.to_contract(),
+            {
+                "name": "compute-branch",
+                "value": {"format": "{}/{}", "args": ["${inputs.type | lower}", "${inputs.issue_number}"]},
+                "register": "branch",
+            },
+        )
+
     def test_step_contract_preserves_optional_if_field(self) -> None:
         operation_step = Step(name="inspect", operation=OperationRef("gh.issue"), if_='${inputs.enabled}')
         state_step = Step(name="remember", state_set={"state.task_memory[inputs.issue_ref].branch": "${inputs.branch}"}, if_='${inputs.persist}')
