@@ -12,6 +12,7 @@ from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target, resolve_workflow_input_reference
+from .boolean_composition import parse_boolean_and, parse_boolean_not, parse_boolean_or
 from .value_expression_registry import (
     ValueExpressionBuiltinSpec,
     ValueExpressionFilterSpec,
@@ -196,25 +197,18 @@ class _Parser:
         return node
 
     def _parse_or(self) -> ValueExpressionNode:
-        node = self._parse_and()
-        while self._match_keyword("or") is not None:
-            right = self._parse_and()
-            node = BinaryNode(start=node.start, end=right.end, operator="or", left=node, right=right)
-        return node
+        return parse_boolean_or(parse_and=self._parse_and, match_keyword=self._match_keyword, make_binary=self._make_boolean_binary)
 
     def _parse_and(self) -> ValueExpressionNode:
-        node = self._parse_not()
-        while self._match_keyword("and") is not None:
-            right = self._parse_not()
-            node = BinaryNode(start=node.start, end=right.end, operator="and", left=node, right=right)
-        return node
+        return parse_boolean_and(parse_not=self._parse_not, match_keyword=self._match_keyword, make_binary=self._make_boolean_binary)
 
     def _parse_not(self) -> ValueExpressionNode:
-        if self._match_keyword("not") is not None:
-            operator = self._previous()
-            operand = self._parse_not()
-            return UnaryNode(start=operator.start, end=operand.end, operator="not", operand=operand)
-        return self._parse_pipeline()
+        return parse_boolean_not(
+            match_not=lambda: self._match_keyword("not"),
+            parse_not=self._parse_not,
+            parse_fallback=self._parse_pipeline,
+            make_unary=self._make_boolean_unary,
+        )
 
     def _parse_pipeline(self) -> ValueExpressionNode:
         source = self._parse_primary()
@@ -364,6 +358,12 @@ class _Parser:
         if token.kind != "IDENT" or token.text != keyword:
             return None
         return self._advance()
+
+    def _make_boolean_binary(self, operator: str, left: ValueExpressionNode, right: ValueExpressionNode) -> BinaryNode:
+        return BinaryNode(start=left.start, end=right.end, operator=operator, left=left, right=right)
+
+    def _make_boolean_unary(self, operator: str, token: _Token, operand: ValueExpressionNode) -> UnaryNode:
+        return UnaryNode(start=token.start, end=operand.end, operator=operator, operand=operand)
 
 
 def _tokenize(text: str) -> tuple[_Token, ...]:

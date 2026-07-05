@@ -7,6 +7,8 @@ from typing import Literal
 
 from ordo.model.diagnostic import Diagnostic
 
+from .boolean_composition import parse_boolean_and, parse_boolean_not, parse_boolean_or
+
 
 ExpressionOperator = Literal["and", "or", "==", "!=", "in", "not in"]
 
@@ -155,26 +157,18 @@ class _Parser:
         return node
 
     def _parse_or(self) -> GuardExpressionNode:
-        node = self._parse_and()
-        while self._match_keyword("or") is not None:
-            operator = self._previous()
-            right = self._parse_and()
-            node = BinaryNode(start=node.start, end=right.end, operator="or", left=node, right=right)
-        return node
+        return parse_boolean_or(parse_and=self._parse_and, match_keyword=self._match_keyword, make_binary=self._make_boolean_binary)
 
     def _parse_and(self) -> GuardExpressionNode:
-        node = self._parse_not()
-        while self._match_keyword("and") is not None:
-            right = self._parse_not()
-            node = BinaryNode(start=node.start, end=right.end, operator="and", left=node, right=right)
-        return node
+        return parse_boolean_and(parse_not=self._parse_not, match_keyword=self._match_keyword, make_binary=self._make_boolean_binary)
 
     def _parse_not(self) -> GuardExpressionNode:
-        if self._peek_keyword("not") and not self._peek_keyword("not", offset=1, expected_text="in"):
-            operator = self._advance()
-            operand = self._parse_not()
-            return UnaryNode(start=operator.start, end=operand.end, operator="not", operand=operand)
-        return self._parse_comparison()
+        return parse_boolean_not(
+            match_not=self._match_boolean_not,
+            parse_not=self._parse_not,
+            parse_fallback=self._parse_comparison,
+            make_unary=self._make_boolean_unary,
+        )
 
     def _parse_comparison(self) -> GuardExpressionNode:
         node = self._parse_primary()
@@ -275,6 +269,17 @@ class _Parser:
             fields.append(consumed.text)
             end = consumed.end
         return CallNode(start=reference.start, end=end, target=reference, arguments=tuple(arguments), fields=tuple(fields))
+
+    def _match_boolean_not(self) -> _Token | None:
+        if self._peek_keyword("not") and not self._peek_keyword("not", offset=1, expected_text="in"):
+            return self._advance()
+        return None
+
+    def _make_boolean_binary(self, operator: str, left: GuardExpressionNode, right: GuardExpressionNode) -> BinaryNode:
+        return BinaryNode(start=left.start, end=right.end, operator=operator, left=left, right=right)
+
+    def _make_boolean_unary(self, operator: str, token: _Token, operand: GuardExpressionNode) -> UnaryNode:
+        return UnaryNode(start=token.start, end=operand.end, operator=operator, operand=operand)
 
     def _peek(self, *, offset: int = 0) -> _Token:
         index = self._index + offset
