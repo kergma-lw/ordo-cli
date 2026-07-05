@@ -16,6 +16,7 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "overview", "summary": "Start with the Ordo world map"},
     {"name": "capabilities", "summary": "Inspect supported and unsupported surfaces"},
     {"name": "model", "summary": "Inspect the main authoring contracts"},
+    {"name": "command-line", "summary": "Inspect the public command-line launch surface"},
     {"name": "operations", "summary": "Inspect the public connector catalog"},
     {"name": "examples", "summary": "Inspect verified repository examples"},
     {"name": "operation", "summary": "Inspect one public operation by reference"},
@@ -23,12 +24,13 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "search", "summary": "Search topics, contract facts, and operation references"},
 )
 
-DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "capabilities", "model", "operations", "examples")
+DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "capabilities", "model", "command-line", "operations", "examples")
 
 RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
     {"command": "ordo-help overview --json", "purpose": "Get the Ordo world map"},
     {"command": "ordo-help capabilities --json", "purpose": "Learn capability boundaries"},
     {"command": "ordo-help model --json", "purpose": "Learn the main DSL surfaces"},
+    {"command": "ordo-help command-line --json", "purpose": "Inspect public launch commands and flags"},
     {"command": "ordo-help operations --json", "purpose": "Inspect the public operation catalog"},
     {"command": "ordo-help examples --json", "purpose": "Inspect verified repository examples"},
 )
@@ -49,6 +51,7 @@ def build_root_response() -> JSONObject:
             "ordo-help overview --json",
             "ordo-help capabilities --json",
             "ordo-help model --json",
+            "ordo-help command-line --json",
             "ordo-help operations --json",
             "ordo-help examples --json",
         ],
@@ -95,6 +98,44 @@ def build_model_response() -> JSONObject:
         "profile": describe_profile_contract(),
         "playbook": describe_playbook_contract(),
         "state": describe_state_contract(),
+    }
+
+
+def build_command_line_response() -> JSONObject:
+    """Return the aggregated command-line discovery response."""
+
+    playbook_flags = [
+        {"name": "--file", "value_shape": "PATH", "required": False, "effect": "override_playbook_discovery", "summary": "Use one explicit playbook file path"},
+        {"name": "--workflow", "value_shape": "NAME", "required": True, "effect": "select_workflow_entry", "summary": "Select one named workflow from the playbook"},
+        {"name": "--profile", "value_shape": "NAME", "required": False, "effect": "select_active_profile", "summary": "Select one named profile for this run"},
+        {"name": "--input", "value_shape": "KEY=VALUE", "required": False, "repeatable": True, "effect": "override_input_inline", "summary": "Add or override one top-level workflow input from an inline YAML value"},
+        {"name": "--input-file", "value_shape": "KEY=PATH", "required": False, "repeatable": True, "effect": "override_input_from_file", "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"},
+        {"name": "--json", "required": False, "effect": "emit_json", "summary": "Emit JSON without extra decoration"},
+    ]
+    return {
+        "document_kind": "command_line",
+        "commands": [
+            {
+                "name": "ordo-playbook",
+                "purpose": "Launch one named workflow from the project playbook into one runtime mode",
+                "usage": "ordo-playbook [--file PATH] --workflow NAME [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <mode>",
+                "modes": ["check", "plan", "explain", "run", "next"],
+                "flags": playbook_flags,
+                "input_override_precedence": [
+                    "workflow.inputs provide the base values",
+                    "profile.inputs may fill only missing workflow inputs",
+                    "--input overrides workflow and profile-provided values for one run",
+                    "--input-file overrides workflow and profile-provided values for one run",
+                    "when both --input and --input-file set the same key, --input-file wins",
+                ],
+                "examples": [
+                    "ordo-playbook --workflow inspect-issue plan",
+                    "ordo-playbook --workflow inspect-issue --profile review plan",
+                    "ordo-playbook --workflow inspect-issue --input enabled=true plan",
+                    "ordo-playbook --workflow inspect-issue --input-file body=./prompt.md plan",
+                ],
+            }
+        ],
     }
 
 
@@ -213,6 +254,31 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     return lookup
 
 
+def _build_command_line_node_lookup() -> dict[str, JSONObject]:
+    payload = build_command_line_response()
+    lookup: dict[str, JSONObject] = {}
+
+    for command in payload["commands"]:
+        command_name = command["name"]
+        lookup[f"command-line.{command_name}"] = {
+            "document_kind": "command_line_node",
+            "node_kind": "command",
+            "name": f"command-line.{command_name}",
+            "summary": "Published command-line command metadata",
+            "metadata": command,
+        }
+        for flag in command.get("flags", []):
+            normalized = flag["name"].lstrip("-").replace("-", "_")
+            lookup[f"command-line.{command_name}.flag.{normalized}"] = {
+                "document_kind": "command_line_node",
+                "node_kind": "flag",
+                "name": f"command-line.{command_name}.flag.{normalized}",
+                "summary": "Published command-line flag metadata",
+                "metadata": flag,
+            }
+    return lookup
+
+
 def build_search_response(query: str) -> JSONObject:
     """Return search results across public topics and operation references."""
 
@@ -298,6 +364,19 @@ def build_search_response(query: str) -> JSONObject:
                 }
             )
 
+    for node_name, node in _build_command_line_node_lookup().items():
+        searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
+        if lowered_query in searchable:
+            fact_results.append(
+                {
+                    "kind": "command_line_field",
+                    "name": node_name,
+                    "summary": node["summary"],
+                    "topic": "command-line",
+                    "command": f"ordo-help describe {node_name} --json",
+                }
+            )
+
     for example in describe_examples_catalog()["examples"]:
         searchable = " ".join([example["name"], example["path"], *example["shows"], *example["related_topics"]]).lower()
         if lowered_query in searchable:
@@ -342,13 +421,15 @@ def render_root_text() -> str:
             "1. ordo-help overview --json",
             "2. ordo-help capabilities --json",
             "3. ordo-help model --json",
-            "4. ordo-help operations --json",
-            "5. ordo-help examples --json",
+            "4. ordo-help command-line --json",
+            "5. ordo-help operations --json",
+            "6. ordo-help examples --json",
             "",
             "Next command examples:",
             "- ordo-help overview --json",
             "- ordo-help capabilities --json",
             "- ordo-help model --json",
+            "- ordo-help command-line --json",
             "- ordo-help operations --json",
             "- ordo-help examples --json",
         ]
@@ -413,6 +494,20 @@ def render_model_text(payload: JSONObject) -> str:
     return "\n".join(lines)
 
 
+def render_command_line_text(payload: JSONObject) -> str:
+    """Return the text command-line surface."""
+
+    lines = ["command-line", "Public launch commands and stable flags.", ""]
+    for command in payload["commands"]:
+        lines.extend([command["name"], command["purpose"], f"usage: {command['usage']}", f"modes: {', '.join(command['modes'])}", "", "flags:"])
+        for flag in command["flags"]:
+            suffix = f" {flag.get('value_shape', '')}".rstrip()
+            lines.append(f"- {flag['name']}{suffix}: {flag['summary']}")
+        lines.extend(["", "input override precedence:"])
+        lines.extend(f"- {item}" for item in command["input_override_precedence"])
+    return "\n".join(lines)
+
+
 def render_operations_text(payload: JSONObject) -> str:
     """Return the text operations surface."""
 
@@ -464,6 +559,12 @@ def render_model_node_text(payload: JSONObject) -> str:
 
     lines = [payload["name"], payload["summary"], "", f"contract: {payload['contract']}", f"node kind: {payload['node_kind']}"]
     return "\n".join(lines)
+
+
+def render_command_line_node_text(payload: JSONObject) -> str:
+    """Return the text command-line-node surface."""
+
+    return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
 
 
 def render_search_text(payload: JSONObject) -> str:
@@ -547,6 +648,8 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
         return describe_capabilities(), render_capabilities_text
     if topic == "model":
         return build_model_response(), render_model_text
+    if topic == "command-line":
+        return build_command_line_response(), render_command_line_text
     if topic == "operations":
         return describe_operations(), render_operations_text
     if topic == "examples":
@@ -557,6 +660,9 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
     model_node = _build_model_node_lookup().get(topic)
     if model_node is not None:
         return model_node, render_model_node_text
+    command_line_node = _build_command_line_node_lookup().get(topic)
+    if command_line_node is not None:
+        return command_line_node, render_command_line_node_text
     return None
 
 
@@ -576,6 +682,9 @@ def main(argv: list[str] | None = None) -> int:
 
     model_parser = subparsers.add_parser("model", add_help=False)
     model_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    command_line_parser = subparsers.add_parser("command-line", add_help=False)
+    command_line_parser.add_argument("--json", action="store_true", dest="as_json")
 
     operations_parser = subparsers.add_parser("operations", add_help=False)
     operations_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -614,6 +723,8 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_payload(describe_capabilities(), as_json=as_json, renderer=render_capabilities_text)
     if parsed.command == "model":
         return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text)
+    if parsed.command == "command-line":
+        return _emit_payload(build_command_line_response(), as_json=as_json, renderer=render_command_line_text)
     if parsed.command == "operations":
         return _emit_payload(describe_operations(), as_json=as_json, renderer=render_operations_text)
     if parsed.command == "examples":

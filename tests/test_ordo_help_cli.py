@@ -58,11 +58,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         expected = json.loads((GOLDEN_DIR / "ordo_help_examples.json").read_text(encoding="utf-8"))
         self.assertEqual(actual, expected)
 
+    def test_command_line_json_matches_golden(self) -> None:
+        result = self.run_help("command-line", "--json")
+
+        self.assertEqual(result.returncode, 0)
+        actual = json.loads(result.stdout)
+        expected = json.loads((GOLDEN_DIR / "ordo_help_command_line.json").read_text(encoding="utf-8"))
+        self.assertEqual(actual, expected)
+
     def test_bootstrap_flow_commands_succeed(self) -> None:
         root = json.loads(self.run_help("--json").stdout)
         overview = json.loads(self.run_help("overview", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         model = json.loads(self.run_help("model", "--json").stdout)
+        command_line = json.loads(self.run_help("command-line", "--json").stdout)
         operations = json.loads(self.run_help("operations", "--json").stdout)
         examples = json.loads(self.run_help("examples", "--json").stdout)
 
@@ -70,6 +79,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(overview["document_kind"], "overview")
         self.assertIn("capabilities", capabilities)
         self.assertEqual(model["document_kind"], "model")
+        self.assertEqual(command_line["document_kind"], "command_line")
         self.assertIn("connectors", operations)
         self.assertEqual(examples["document_kind"], "examples_catalog")
 
@@ -78,11 +88,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         branching_result = json.loads(self.run_help("search", "branching", "--json").stdout)
         override_result = json.loads(self.run_help("search", "override", "--json").stdout)
         example_result = json.loads(self.run_help("search", "open-task", "--json").stdout)
+        input_file_result = json.loads(self.run_help("search", "input-file", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in profile_result["facts"]))
         self.assertTrue(any(item["kind"] == "capability" and item["name"] == "workflow.branching" for item in branching_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in override_result["facts"]))
         self.assertTrue(any(item["kind"] == "example" and item["name"] == "open-task-from-gitx" for item in example_result["facts"]))
+        self.assertTrue(any(item["kind"] == "command_line_field" and item["name"] == "command-line.ordo-playbook.flag.input_file" for item in input_file_result["facts"]))
 
     def test_capabilities_publish_cross_links_for_branching(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -116,6 +128,7 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_describe_resolves_capability_and_model_nodes(self) -> None:
         capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
         model_node = json.loads(self.run_help("describe", "profile.inputs", "--json").stdout)
+        command_line_node = json.loads(self.run_help("describe", "command-line.ordo-playbook.flag.input_file", "--json").stdout)
         missing = self.run_help("describe", "missing.node", "--json")
 
         self.assertEqual(capability_node["document_kind"], "capability_node")
@@ -124,8 +137,28 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(model_node["document_kind"], "model_node")
         self.assertEqual(model_node["name"], "profile.inputs")
         self.assertEqual(model_node["metadata"]["runtime_effect"], "applies_missing_workflow_inputs")
+        self.assertEqual(command_line_node["document_kind"], "command_line_node")
+        self.assertEqual(command_line_node["name"], "command-line.ordo-playbook.flag.input_file")
+        self.assertEqual(command_line_node["metadata"]["effect"], "override_input_from_file")
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
+
+    def test_command_line_topic_publishes_playbook_flags_and_precedence(self) -> None:
+        payload = json.loads(self.run_help("command-line", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "command_line")
+        playbook = next(item for item in payload["commands"] if item["name"] == "ordo-playbook")
+        flags = {item["name"]: item for item in playbook["flags"]}
+        self.assertEqual(flags["--input-file"]["effect"], "override_input_from_file")
+        self.assertEqual(flags["--input-file"]["value_shape"], "KEY=PATH")
+        self.assertIn("when both --input and --input-file set the same key, --input-file wins", playbook["input_override_precedence"])
+
+    def test_operation_topic_publishes_structured_gh_issue_inputs(self) -> None:
+        payload = json.loads(self.run_help("operation", "gh.issue", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "operation")
+        self.assertEqual(payload["operation"]["inputs"]["repository"], "string")
+        self.assertEqual(payload["operation"]["inputs"]["issue_number"], "integer")
 
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

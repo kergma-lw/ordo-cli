@@ -1,226 +1,6 @@
 {
   "introspection_version": 1,
   "sections": {
-    "capabilities": {
-      "capabilities": [
-        {
-          "name": "workflow.value_expressions",
-          "scope": "workflow",
-          "status": "supported"
-        },
-        {
-          "name": "workflow.state_needs",
-          "scope": "workflow",
-          "status": "supported"
-        },
-        {
-          "name": "workflow.state_bindings",
-          "scope": "workflow",
-          "status": "supported"
-        },
-        {
-          "name": "workflow.step.state_set",
-          "scope": "workflow.step",
-          "status": "supported"
-        },
-        {
-          "name": "workflow.step.state_delete",
-          "scope": "workflow.step",
-          "status": "supported"
-        },
-        {
-          "name": "workflow.step.condition",
-          "scope": "workflow.step",
-          "status": "unsupported"
-        },
-        {
-          "name": "workflow.step.register",
-          "scope": "workflow.step",
-          "status": "supported"
-        },
-        {
-          "name": "workflow.step.outputs",
-          "scope": "workflow.step",
-          "status": "supported"
-        },
-        {
-          "name": "workflow.branching",
-          "scope": "workflow",
-          "status": "unsupported"
-        }
-      ],
-      "expression_roots": [
-        {
-          "name": "inputs",
-          "surfaces": [
-            "guard_expression",
-            "state_key_reference",
-            "value_expression"
-          ]
-        },
-        {
-          "name": "probe",
-          "surfaces": [
-            "guard_expression"
-          ]
-        },
-        {
-          "name": "state",
-          "surfaces": [
-            "value_expression"
-          ]
-        },
-        {
-          "name": "step",
-          "surfaces": [
-            "value_expression"
-          ]
-        }
-      ],
-      "expression_surfaces": [
-        {
-          "builtins": [],
-          "filters": [],
-          "name": "guard_expression",
-          "roots": [
-            "inputs",
-            "probe"
-          ]
-        },
-        {
-          "builtins": [
-            "format"
-          ],
-          "filters": [
-            "lower",
-            "trim",
-            "slug"
-          ],
-          "name": "value_expression",
-          "roots": [
-            "inputs",
-            "state",
-            "step"
-          ]
-        },
-        {
-          "builtins": [],
-          "filters": [],
-          "name": "state_key_reference",
-          "roots": [
-            "inputs"
-          ]
-        }
-      ],
-      "negative_rules": [
-        {
-          "name": "guard_expression.no_state_root",
-          "reason": "guards run before steps and only support input references and public probe references",
-          "related_codes": [],
-          "rule": "State references are not allowed in guard expressions",
-          "surface": "guard_expression"
-        },
-        {
-          "name": "guard_expression.no_step_root",
-          "reason": "guards run before effectful step execution and therefore cannot depend on registered step results",
-          "related_codes": [
-            "validation.workflow.guard_expr.step_ref"
-          ],
-          "rule": "Registered step references are not allowed in guard expressions",
-          "surface": "guard_expression"
-        },
-        {
-          "name": "guard_expression.no_filters",
-          "reason": "guard expressions are a distinct probe/input language and do not evaluate value-expression filter pipelines",
-          "related_codes": [],
-          "rule": "Value-expression filters are not allowed in guard expressions",
-          "surface": "guard_expression"
-        },
-        {
-          "name": "guard_expression.no_format_builtin",
-          "reason": "guard expressions do not evaluate value-expression builtins",
-          "related_codes": [],
-          "rule": "The format builtin is not allowed in guard expressions",
-          "surface": "guard_expression"
-        },
-        {
-          "name": "workflow_step.exactly_one_form",
-          "reason": "step forms are mutually exclusive in the workflow contract",
-          "related_codes": [
-            "validation.workflow.step.form"
-          ],
-          "rule": "A workflow step must define exactly one of uses, state_set, or state_delete",
-          "surface": "workflow_step"
-        },
-        {
-          "name": "workflow_step.with_requires_uses",
-          "reason": "runtime value inputs belong to operation-call step form only",
-          "related_codes": [
-            "validation.workflow.step.with_without_uses"
-          ],
-          "rule": "The with field is allowed only together with uses",
-          "surface": "workflow_step"
-        },
-        {
-          "name": "workflow_step.register_requires_uses",
-          "reason": "the MVP publishes registered step results only for operation-call steps",
-          "related_codes": [
-            "validation.workflow.step.register_without_uses"
-          ],
-          "rule": "The register field is allowed only together with uses",
-          "surface": "workflow_step"
-        },
-        {
-          "name": "value_expression.step_refs_must_be_backward",
-          "reason": "step-result reads are order-sensitive execution-local data flow rather than random access workflow state",
-          "related_codes": [
-            "validation.workflow.step_ref.forward"
-          ],
-          "rule": "Registered step references may target only earlier steps in the same workflow",
-          "surface": "value_expression"
-        },
-        {
-          "name": "state_set.single_target_entry",
-          "reason": "each state-set step writes one resolved state target at a time",
-          "related_codes": [
-            "validation.workflow.state_set.entry_count"
-          ],
-          "rule": "state_set must contain exactly one target entry",
-          "surface": "state_set"
-        },
-        {
-          "name": "format_value.args_must_be_list",
-          "reason": "format object arguments are evaluated positionally",
-          "related_codes": [
-            "validation.workflow.value_expr.format.args_type"
-          ],
-          "rule": "format-object args must be a list when provided",
-          "surface": "value_expression.format_object"
-        }
-      ],
-      "value_expression_builtins": [
-        {
-          "name": "format"
-        }
-      ],
-      "value_expression_filters": [
-        {
-          "input_type": "string",
-          "name": "lower",
-          "output_type": "string"
-        },
-        {
-          "input_type": "string",
-          "name": "trim",
-          "output_type": "string"
-        },
-        {
-          "input_type": "string",
-          "name": "slug",
-          "output_type": "string"
-        }
-      ]
-    },
     "discovery": {
       "entrypoint": "describe_system",
       "sections": {
@@ -230,6 +10,10 @@
         },
         "errors": {
           "producer": "describe_errors",
+          "published": true
+        },
+        "examples_catalog": {
+          "producer": "describe_examples_catalog",
           "published": true
         },
         "operations": {
@@ -262,10 +46,367 @@
         }
       }
     },
+    "capabilities": {
+      "capabilities": [
+        {
+          "name": "workflow.value_expressions",
+          "status": "supported",
+          "scope": "workflow",
+          "related_capabilities": [],
+          "related_negative_rules": [],
+          "related_model_nodes": [],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.state_needs",
+          "status": "supported",
+          "scope": "workflow",
+          "related_capabilities": [],
+          "related_negative_rules": [],
+          "related_model_nodes": [],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.state_bindings",
+          "status": "supported",
+          "scope": "workflow",
+          "related_capabilities": [],
+          "related_negative_rules": [],
+          "related_model_nodes": [],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.step.state_set",
+          "status": "supported",
+          "scope": "workflow.step",
+          "related_capabilities": [],
+          "related_negative_rules": [],
+          "related_model_nodes": [],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.step.state_delete",
+          "status": "supported",
+          "scope": "workflow.step",
+          "related_capabilities": [],
+          "related_negative_rules": [],
+          "related_model_nodes": [],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.step.condition",
+          "status": "supported",
+          "scope": "workflow.step",
+          "related_capabilities": [
+            "workflow.step.register"
+          ],
+          "related_negative_rules": [
+            "workflow_step.if_conflicts_with_register"
+          ],
+          "related_model_nodes": [
+            "workflow.step.if",
+            "workflow.step.register",
+            "workflow.step_forms.operation_call"
+          ],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.step.register",
+          "status": "supported",
+          "scope": "workflow.step",
+          "related_capabilities": [
+            "workflow.step.condition",
+            "workflow.step.outputs"
+          ],
+          "related_negative_rules": [
+            "workflow_step.register_requires_uses",
+            "workflow_step.if_conflicts_with_register"
+          ],
+          "related_model_nodes": [
+            "workflow.step.register",
+            "workflow.step.uses",
+            "workflow.step_forms.operation_call"
+          ],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.step.outputs",
+          "status": "supported",
+          "scope": "workflow.step",
+          "related_capabilities": [],
+          "related_negative_rules": [],
+          "related_model_nodes": [],
+          "must_not_infer": []
+        },
+        {
+          "name": "workflow.branching",
+          "status": "unsupported",
+          "scope": "workflow",
+          "related_capabilities": [
+            "workflow.step.condition",
+            "workflow.step.register"
+          ],
+          "related_negative_rules": [
+            "workflow_step.if_conflicts_with_register"
+          ],
+          "related_model_nodes": [
+            "workflow.step.if",
+            "workflow.step.register",
+            "workflow.step_forms.operation_call"
+          ],
+          "must_not_infer": [
+            "workflow.step.condition is unsupported",
+            "workflow.step.register is unsupported"
+          ]
+        }
+      ],
+      "expression_roots": [
+        {
+          "name": "inputs",
+          "surfaces": [
+            "guard_expression",
+            "state_key_reference",
+            "value_expression"
+          ]
+        },
+        {
+          "name": "probe",
+          "surfaces": [
+            "guard_expression"
+          ]
+        },
+        {
+          "name": "state",
+          "surfaces": [
+            "value_expression"
+          ]
+        },
+        {
+          "name": "step",
+          "surfaces": [
+            "value_expression"
+          ]
+        }
+      ],
+      "expression_surfaces": [
+        {
+          "name": "guard_expression",
+          "roots": [
+            "inputs",
+            "probe"
+          ],
+          "filters": [],
+          "builtins": []
+        },
+        {
+          "name": "value_expression",
+          "roots": [
+            "inputs",
+            "state",
+            "step"
+          ],
+          "filters": [
+            "lower",
+            "trim",
+            "slug",
+            "eq",
+            "ne",
+            "not"
+          ],
+          "builtins": [
+            "format"
+          ]
+        },
+        {
+          "name": "state_key_reference",
+          "roots": [
+            "inputs"
+          ],
+          "filters": [],
+          "builtins": []
+        }
+      ],
+      "value_expression_filters": [
+        {
+          "name": "lower",
+          "input_type": "string",
+          "output_type": "string"
+        },
+        {
+          "name": "trim",
+          "input_type": "string",
+          "output_type": "string"
+        },
+        {
+          "name": "slug",
+          "input_type": "string",
+          "output_type": "string"
+        },
+        {
+          "name": "eq",
+          "input_type": "json",
+          "output_type": "boolean"
+        },
+        {
+          "name": "ne",
+          "input_type": "json",
+          "output_type": "boolean"
+        },
+        {
+          "name": "not",
+          "input_type": "boolean",
+          "output_type": "boolean"
+        }
+      ],
+      "value_expression_builtins": [
+        {
+          "name": "format"
+        }
+      ],
+      "negative_rules": [
+        {
+          "name": "guard_expression.no_state_root",
+          "surface": "guard_expression",
+          "rule": "State references are not allowed in guard expressions",
+          "reason": "guards run before steps and only support input references and public probe references",
+          "related_codes": [],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        },
+        {
+          "name": "guard_expression.no_step_root",
+          "surface": "guard_expression",
+          "rule": "Registered step references are not allowed in guard expressions",
+          "reason": "guards run before effectful step execution and therefore cannot depend on registered step results",
+          "related_codes": [
+            "validation.workflow.guard_expr.step_ref"
+          ],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        },
+        {
+          "name": "guard_expression.no_filters",
+          "surface": "guard_expression",
+          "rule": "Value-expression filters are not allowed in guard expressions",
+          "reason": "guard expressions are a distinct probe/input language and do not evaluate value-expression filter pipelines",
+          "related_codes": [],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        },
+        {
+          "name": "guard_expression.no_format_builtin",
+          "surface": "guard_expression",
+          "rule": "The format builtin is not allowed in guard expressions",
+          "reason": "guard expressions do not evaluate value-expression builtins",
+          "related_codes": [],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        },
+        {
+          "name": "workflow_step.exactly_one_form",
+          "surface": "workflow_step",
+          "rule": "A workflow step must define exactly one of uses, state_set, or state_delete",
+          "reason": "step forms are mutually exclusive in the workflow contract",
+          "related_codes": [
+            "validation.workflow.step.form"
+          ],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        },
+        {
+          "name": "workflow_step.with_requires_uses",
+          "surface": "workflow_step",
+          "rule": "The with field is allowed only together with uses",
+          "reason": "runtime value inputs belong to operation-call step form only",
+          "related_codes": [
+            "validation.workflow.step.with_without_uses"
+          ],
+          "related_capabilities": [],
+          "related_model_nodes": [
+            "workflow.step.with",
+            "workflow.step.uses",
+            "workflow.step_forms.operation_call"
+          ]
+        },
+        {
+          "name": "workflow_step.register_requires_uses",
+          "surface": "workflow_step",
+          "rule": "The register field is allowed only together with uses",
+          "reason": "the MVP publishes registered step results only for operation-call steps",
+          "related_codes": [
+            "validation.workflow.step.register_without_uses"
+          ],
+          "related_capabilities": [
+            "workflow.step.register"
+          ],
+          "related_model_nodes": [
+            "workflow.step.register",
+            "workflow.step.uses",
+            "workflow.step_forms.operation_call"
+          ]
+        },
+        {
+          "name": "workflow_step.if_conflicts_with_register",
+          "surface": "workflow_step",
+          "rule": "The if and register fields cannot be used together in the MVP",
+          "reason": "the MVP avoids publishing synthetic registered step results for skipped conditional steps",
+          "related_codes": [
+            "validation.workflow.step.if_with_register"
+          ],
+          "related_capabilities": [
+            "workflow.step.condition",
+            "workflow.step.register",
+            "workflow.branching"
+          ],
+          "related_model_nodes": [
+            "workflow.step.if",
+            "workflow.step.register",
+            "workflow.step_forms.operation_call"
+          ]
+        },
+        {
+          "name": "value_expression.step_refs_must_be_backward",
+          "surface": "value_expression",
+          "rule": "Registered step references may target only earlier steps in the same workflow",
+          "reason": "step-result reads are order-sensitive execution-local data flow rather than random access workflow state",
+          "related_codes": [
+            "validation.workflow.step_ref.forward"
+          ],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        },
+        {
+          "name": "state_set.single_target_entry",
+          "surface": "state_set",
+          "rule": "state_set must contain exactly one target entry",
+          "reason": "each state-set step writes one resolved state target at a time",
+          "related_codes": [
+            "validation.workflow.state_set.entry_count"
+          ],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        },
+        {
+          "name": "format_value.args_must_be_list",
+          "surface": "value_expression.format_object",
+          "rule": "format-object args must be a list when provided",
+          "reason": "format object arguments are evaluated positionally",
+          "related_codes": [
+            "validation.workflow.value_expr.format.args_type"
+          ],
+          "related_capabilities": [],
+          "related_model_nodes": []
+        }
+      ]
+    },
     "errors": {
       "document_kind": "error_taxonomy",
       "failure_classes": [
         {
+          "name": "validation",
+          "runtime_statuses": [
+            "validation_error"
+          ],
           "code_prefixes": [
             "validation."
           ],
@@ -273,13 +414,13 @@
             "validation.unknown_field",
             "validation.workflow.step.form",
             "validation.workflow.guard_expr.syntax"
-          ],
-          "name": "validation",
-          "runtime_statuses": [
-            "validation_error"
           ]
         },
         {
+          "name": "composition_conflict",
+          "runtime_statuses": [
+            "validation_error"
+          ],
           "code_prefixes": [
             "composition.profile.",
             "composition.workflow."
@@ -288,13 +429,14 @@
             "composition.profile.input_conflict",
             "composition.profile.override_conflict",
             "composition.workflow.input_conflict"
-          ],
-          "name": "composition_conflict",
-          "runtime_statuses": [
-            "validation_error"
           ]
         },
         {
+          "name": "input_or_reference",
+          "runtime_statuses": [
+            "validation_error",
+            "resolution_error"
+          ],
           "code_prefixes": [
             "runtime.value.input_",
             "runtime.state.input_",
@@ -306,14 +448,14 @@
             "runtime.state.input_missing",
             "runtime.state.binding_missing",
             "runtime.state.key_invalid"
-          ],
-          "name": "input_or_reference",
-          "runtime_statuses": [
-            "validation_error",
-            "resolution_error"
           ]
         },
         {
+          "name": "unsupported_feature",
+          "runtime_statuses": [
+            "validation_error",
+            "resolution_error"
+          ],
           "code_prefixes": [
             "runtime.value.expression_builtin_unsupported",
             "runtime.state.unsupported_"
@@ -321,14 +463,15 @@
           "example_codes": [
             "runtime.value.expression_builtin_unsupported",
             "runtime.state.unsupported_version"
-          ],
-          "name": "unsupported_feature",
-          "runtime_statuses": [
-            "validation_error",
-            "resolution_error"
           ]
         },
         {
+          "name": "blocked_or_precondition",
+          "runtime_statuses": [
+            "guard_failed",
+            "resolution_error",
+            "execution_error"
+          ],
           "code_prefixes": [
             "runtime.state.declaration_",
             "runtime.state.path_",
@@ -338,15 +481,13 @@
             "runtime.state.declaration_missing",
             "runtime.state.path_invalid",
             "runtime.value.state_missing"
-          ],
-          "name": "blocked_or_precondition",
-          "runtime_statuses": [
-            "guard_failed",
-            "resolution_error",
-            "execution_error"
           ]
         },
         {
+          "name": "execution_or_io",
+          "runtime_statuses": [
+            "execution_error"
+          ],
           "code_prefixes": [
             "runtime.state.read_",
             "runtime.state.write_",
@@ -358,110 +499,155 @@
             "runtime.state.write_failed",
             "runtime.state.invalid_json",
             "runtime.value.format_template_invalid"
-          ],
-          "name": "execution_or_io",
-          "runtime_statuses": [
-            "execution_error"
           ]
+        }
+      ]
+    },
+    "examples_catalog": {
+      "document_kind": "examples_catalog",
+      "examples": [
+        {
+          "name": "minimal",
+          "path": "examples/minimal.yaml",
+          "shows": [
+            "minimal_workflow",
+            "public_operation_composition"
+          ],
+          "related_topics": [
+            "overview",
+            "model",
+            "operations"
+          ],
+          "verified": true
+        },
+        {
+          "name": "inspect-issue",
+          "path": "examples/inspect-issue.yaml",
+          "shows": [
+            "guard_probe_usage",
+            "blocked_before_execution"
+          ],
+          "related_topics": [
+            "capabilities",
+            "model",
+            "operations"
+          ],
+          "verified": true
+        },
+        {
+          "name": "open-task-from-gitx",
+          "path": "examples/open-task-from-gitx.yaml",
+          "shows": [
+            "multi_step_workflow",
+            "state_updates",
+            "shell_fallback"
+          ],
+          "related_topics": [
+            "capabilities",
+            "model",
+            "operations"
+          ],
+          "verified": true
         }
       ]
     },
     "operations": {
       "connectors": [
         {
+          "namespace": "git",
           "bootstrap": {
-            "context_fields": [
-              "repository_root"
-            ],
             "prerequisites": [
               "git binary available",
               "inside git repository"
+            ],
+            "context_fields": [
+              "repository_root"
             ]
           },
-          "namespace": "git",
           "operations": [
             {
-              "deprecated": false,
+              "name": "branch",
+              "kind": "probe",
+              "summary": "Probe operation 'git.branch'",
+              "inputs": {},
+              "prerequisites": [],
               "effects": [],
-              "examples": [
-                {
-                  "inputs": {},
-                  "reference": "git.branch"
-                }
-              ],
+              "outputs": {
+                "value": "string | null",
+                "ref": "string | null",
+                "detached": "boolean",
+                "repository_root": "string"
+              },
               "failure_modes": [
                 "probe_failed"
               ],
-              "inputs": {},
-              "kind": "probe",
-              "maturity": "stable",
-              "name": "branch",
-              "outputs": {
-                "detached": "boolean",
-                "ref": "string | null",
-                "repository_root": "string",
-                "value": "string | null"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.branch'",
               "tags": [
                 "git",
                 "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "create a new local branch"
               ],
               "examples": [
                 {
-                  "inputs": {
-                    "branch": "string",
-                    "start_point": "string | null"
-                  },
-                  "reference": "git.branch.create"
+                  "reference": "git.branch",
+                  "inputs": {}
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "branch.create",
+              "kind": "action",
+              "summary": "Action operation 'git.branch.create'",
+              "inputs": {
+                "branch": "string",
+                "start_point": "string | null"
+              },
+              "prerequisites": [],
+              "effects": [
+                "create a new local branch"
+              ],
+              "outputs": {
+                "branch": "string",
+                "start_point": "string"
+              },
               "failure_modes": [
                 "invalid_branch",
                 "branch_exists",
                 "start_point_not_found",
                 "create_blocked"
               ],
-              "inputs": {
-                "branch": "string",
-                "start_point": "string | null"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "branch.create",
-              "outputs": {
-                "branch": "string",
-                "start_point": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.branch.create'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "delete a local non-default branch"
               ],
               "examples": [
                 {
+                  "reference": "git.branch.create",
                   "inputs": {
-                    "branch": "string"
-                  },
-                  "reference": "git.branch.delete"
+                    "branch": "string",
+                    "start_point": "string | null"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "branch.delete",
+              "kind": "action",
+              "summary": "Action operation 'git.branch.delete'",
+              "inputs": {
+                "branch": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "delete a local non-default branch"
+              ],
+              "outputs": {
+                "branch": "string"
+              },
               "failure_modes": [
                 "branch_not_found",
                 "branch_checked_out",
@@ -469,335 +655,337 @@
                 "branch_not_merged",
                 "delete_blocked"
               ],
-              "inputs": {
-                "branch": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "branch.delete",
-              "outputs": {
-                "branch": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.branch.delete'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "switch current checkout to a local branch"
               ],
               "examples": [
                 {
+                  "reference": "git.branch.delete",
                   "inputs": {
                     "branch": "string"
-                  },
-                  "reference": "git.branch.switch"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "branch.switch",
+              "kind": "action",
+              "summary": "Action operation 'git.branch.switch'",
+              "inputs": {
+                "branch": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "switch current checkout to a local branch"
+              ],
+              "outputs": {
+                "branch": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "branch_not_found",
                 "worktree_change_conflict",
                 "unresolved_state",
                 "switch_blocked"
               ],
-              "inputs": {
-                "branch": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "branch.switch",
-              "outputs": {
-                "branch": "string",
-                "changed": "boolean"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.branch.switch'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
+              ],
               "examples": [
                 {
-                  "inputs": {},
-                  "reference": "git.branches"
+                  "reference": "git.branch.switch",
+                  "inputs": {
+                    "branch": "string"
+                  }
                 }
               ],
-              "failure_modes": [
-                "probe_failed"
-              ],
-              "inputs": {},
-              "kind": "probe",
               "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
               "name": "branches",
+              "kind": "probe",
+              "summary": "Probe operation 'git.branches'",
+              "inputs": {},
+              "prerequisites": [],
+              "effects": [],
               "outputs": {
                 "count": "integer",
                 "current": "string | null",
                 "items": [
                   {
-                    "current": "boolean",
-                    "kind": "string",
                     "name": "string",
-                    "ref": "string"
+                    "ref": "string",
+                    "kind": "string",
+                    "current": "boolean"
                   }
                 ],
                 "repository_root": "string"
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.branches'",
+              "failure_modes": [
+                "probe_failed"
+              ],
               "tags": [
                 "git",
                 "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "rewrite the current HEAD commit"
               ],
               "examples": [
                 {
-                  "inputs": {
-                    "message": "string | null"
-                  },
-                  "reference": "git.commit.amend"
+                  "reference": "git.branches",
+                  "inputs": {}
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "commit.amend",
+              "kind": "action",
+              "summary": "Action operation 'git.commit.amend'",
+              "inputs": {
+                "message": "string | null"
+              },
+              "prerequisites": [],
+              "effects": [
+                "rewrite the current HEAD commit"
+              ],
+              "outputs": {
+                "commit": "string",
+                "previous_commit": "string",
+                "branch": "string | null"
+              },
               "failure_modes": [
                 "message_invalid",
                 "nothing_to_amend",
                 "amend_blocked"
               ],
-              "inputs": {
-                "message": "string | null"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "commit.amend",
-              "outputs": {
-                "branch": "string | null",
-                "commit": "string",
-                "previous_commit": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.commit.amend'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "create a new commit from the current index"
               ],
               "examples": [
                 {
+                  "reference": "git.commit.amend",
                   "inputs": {
-                    "message": "string"
-                  },
-                  "reference": "git.commit.create"
+                    "message": "string | null"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "commit.create",
+              "kind": "action",
+              "summary": "Action operation 'git.commit.create'",
+              "inputs": {
+                "message": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "create a new commit from the current index"
+              ],
+              "outputs": {
+                "commit": "string",
+                "branch": "string | null"
+              },
               "failure_modes": [
                 "message_invalid",
                 "nothing_to_commit",
                 "commit_blocked"
               ],
-              "inputs": {
-                "message": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "commit.create",
-              "outputs": {
-                "branch": "string | null",
-                "commit": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.commit.create'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "create a new commit that reverts a target commit"
               ],
               "examples": [
                 {
+                  "reference": "git.commit.create",
                   "inputs": {
-                    "commit": "string"
-                  },
-                  "reference": "git.commit.revert"
+                    "message": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "commit.revert",
+              "kind": "action",
+              "summary": "Action operation 'git.commit.revert'",
+              "inputs": {
+                "commit": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "create a new commit that reverts a target commit"
+              ],
+              "outputs": {
+                "reverted_commit": "string",
+                "revert_commit": "string",
+                "branch": "string | null"
+              },
               "failure_modes": [
                 "commit_not_found",
                 "merge_commit_not_supported",
                 "revert_conflict",
                 "revert_blocked"
               ],
-              "inputs": {
-                "commit": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "commit.revert",
-              "outputs": {
-                "branch": "string | null",
-                "revert_commit": "string",
-                "reverted_commit": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.commit.revert'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "apply a target commit onto the current checkout as a new commit"
               ],
               "examples": [
                 {
+                  "reference": "git.commit.revert",
                   "inputs": {
                     "commit": "string"
-                  },
-                  "reference": "git.integrate.cherry_pick"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "integrate.cherry_pick",
+              "kind": "action",
+              "summary": "Action operation 'git.integrate.cherry_pick'",
+              "inputs": {
+                "commit": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "apply a target commit onto the current checkout as a new commit"
+              ],
+              "outputs": {
+                "picked_commit": "string",
+                "head_commit": "string",
+                "branch": "string | null"
+              },
               "failure_modes": [
                 "commit_not_found",
                 "merge_commit_not_supported",
                 "cherry_pick_conflict",
                 "cherry_pick_blocked"
               ],
-              "inputs": {
-                "commit": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "integrate.cherry_pick",
-              "outputs": {
-                "branch": "string | null",
-                "head_commit": "string",
-                "picked_commit": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.integrate.cherry_pick'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "integrate a target ref into the current checkout using merge semantics"
               ],
               "examples": [
                 {
+                  "reference": "git.integrate.cherry_pick",
                   "inputs": {
-                    "ref": "string"
-                  },
-                  "reference": "git.integrate.merge"
+                    "commit": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "integrate.merge",
+              "kind": "action",
+              "summary": "Action operation 'git.integrate.merge'",
+              "inputs": {
+                "ref": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "integrate a target ref into the current checkout using merge semantics"
+              ],
+              "outputs": {
+                "merged_ref": "string",
+                "head_commit": "string",
+                "branch": "string | null"
+              },
               "failure_modes": [
                 "ref_not_found",
                 "merge_conflict",
                 "merge_blocked"
               ],
-              "inputs": {
-                "ref": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "integrate.merge",
-              "outputs": {
-                "branch": "string | null",
-                "head_commit": "string",
-                "merged_ref": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.integrate.merge'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "integrate a target ref into the current checkout using fast-forward-only semantics"
               ],
               "examples": [
                 {
+                  "reference": "git.integrate.merge",
                   "inputs": {
                     "ref": "string"
-                  },
-                  "reference": "git.integrate.merge_ff_only"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "integrate.merge_ff_only",
+              "kind": "action",
+              "summary": "Action operation 'git.integrate.merge_ff_only'",
+              "inputs": {
+                "ref": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "integrate a target ref into the current checkout using fast-forward-only semantics"
+              ],
+              "outputs": {
+                "merged_ref": "string",
+                "head_commit": "string",
+                "branch": "string | null"
+              },
               "failure_modes": [
                 "ref_not_found",
                 "non_fast_forward",
                 "merge_blocked"
               ],
-              "inputs": {
-                "ref": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "integrate.merge_ff_only",
-              "outputs": {
-                "branch": "string | null",
-                "head_commit": "string",
-                "merged_ref": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.integrate.merge_ff_only'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "rebase a non-default branch range onto a new base using rebase --onto semantics"
               ],
               "examples": [
                 {
+                  "reference": "git.integrate.merge_ff_only",
                   "inputs": {
-                    "branch": "string",
-                    "onto": "string",
-                    "upstream": "string"
-                  },
-                  "reference": "git.integrate.rebase_onto"
+                    "ref": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "integrate.rebase_onto",
+              "kind": "action",
+              "summary": "Action operation 'git.integrate.rebase_onto'",
+              "inputs": {
+                "onto": "string",
+                "upstream": "string",
+                "branch": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "rebase a non-default branch range onto a new base using rebase --onto semantics"
+              ],
+              "outputs": {
+                "branch": "string",
+                "onto": "string",
+                "head_commit": "string"
+              },
               "failure_modes": [
                 "onto_not_found",
                 "upstream_not_found",
@@ -806,153 +994,141 @@
                 "rebase_conflict",
                 "rebase_blocked"
               ],
-              "inputs": {
-                "branch": "string",
-                "onto": "string",
-                "upstream": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "integrate.rebase_onto",
-              "outputs": {
-                "branch": "string",
-                "head_commit": "string",
-                "onto": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.integrate.rebase_onto'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
+              ],
               "examples": [
                 {
+                  "reference": "git.integrate.rebase_onto",
                   "inputs": {
-                    "base": "string",
-                    "head": "string"
-                  },
-                  "reference": "git.range"
+                    "onto": "string",
+                    "upstream": "string",
+                    "branch": "string"
+                  }
                 }
               ],
-              "failure_modes": [
-                "probe_failed"
-              ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "range",
+              "kind": "probe",
+              "summary": "Probe operation 'git.range'",
               "inputs": {
                 "base": "string",
                 "head": "string"
               },
-              "kind": "probe",
-              "maturity": "stable",
-              "name": "range",
+              "prerequisites": [],
+              "effects": [],
               "outputs": {
-                "ahead_count": "integer",
                 "base": "string",
-                "base_oid": "string",
-                "behind_count": "integer",
                 "head": "string",
+                "base_oid": "string",
                 "head_oid": "string",
                 "merge_base_oid": "string | null",
+                "ahead_count": "integer",
+                "behind_count": "integer",
                 "repository_root": "string"
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.range'",
-              "tags": [
-                "git",
-                "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
-              "examples": [
-                {
-                  "inputs": {
-                    "ref": "string"
-                  },
-                  "reference": "git.ref"
-                }
-              ],
               "failure_modes": [
                 "probe_failed"
               ],
+              "tags": [
+                "git",
+                "probe"
+              ],
+              "examples": [
+                {
+                  "reference": "git.range",
+                  "inputs": {
+                    "base": "string",
+                    "head": "string"
+                  }
+                }
+              ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "ref",
+              "kind": "probe",
+              "summary": "Probe operation 'git.ref'",
               "inputs": {
                 "ref": "string"
               },
-              "kind": "probe",
-              "maturity": "stable",
-              "name": "ref",
+              "prerequisites": [],
+              "effects": [],
               "outputs": {
-                "exists": "boolean",
                 "name": "string",
+                "exists": "boolean",
                 "oid": "string | null",
-                "repository_root": "string",
                 "symbolic": "boolean",
-                "symbolic_target": "string | null"
+                "symbolic_target": "string | null",
+                "repository_root": "string"
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.ref'",
-              "tags": [
-                "git",
-                "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
-              "examples": [
-                {
-                  "inputs": {},
-                  "reference": "git.repo"
-                }
-              ],
               "failure_modes": [
                 "probe_failed"
               ],
-              "inputs": {},
-              "kind": "probe",
+              "tags": [
+                "git",
+                "probe"
+              ],
+              "examples": [
+                {
+                  "reference": "git.ref",
+                  "inputs": {
+                    "ref": "string"
+                  }
+                }
+              ],
               "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
               "name": "repo",
-              "outputs": {
-                "bare": "boolean",
-                "common_dir": "string",
-                "default_branch": "string | null",
-                "git_dir": "string",
-                "head_ref": "string | null",
-                "inside_work_tree": "boolean",
-                "root": "string",
-                "worktree_path": "string | null"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
+              "kind": "probe",
               "summary": "Probe operation 'git.repo'",
-              "tags": [
-                "git",
-                "probe"
-              ]
-            },
-            {
-              "deprecated": false,
+              "inputs": {},
+              "prerequisites": [],
               "effects": [],
-              "examples": [
-                {
-                  "inputs": {},
-                  "reference": "git.stash"
-                }
-              ],
+              "outputs": {
+                "root": "string",
+                "git_dir": "string",
+                "inside_work_tree": "boolean",
+                "bare": "boolean",
+                "head_ref": "string | null",
+                "worktree_path": "string | null",
+                "common_dir": "string",
+                "default_branch": "string | null"
+              },
               "failure_modes": [
                 "probe_failed"
               ],
-              "inputs": {},
-              "kind": "probe",
+              "tags": [
+                "git",
+                "probe"
+              ],
+              "examples": [
+                {
+                  "reference": "git.repo",
+                  "inputs": {}
+                }
+              ],
               "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
               "name": "stash",
+              "kind": "probe",
+              "summary": "Probe operation 'git.stash'",
+              "inputs": {},
+              "prerequisites": [],
+              "effects": [],
               "outputs": {
                 "count": "integer",
                 "items": [
@@ -964,97 +1140,108 @@
                 ],
                 "repository_root": "string"
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.stash'",
-              "tags": [
-                "git",
-                "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
-              "examples": [
-                {
-                  "inputs": {},
-                  "reference": "git.state"
-                }
-              ],
               "failure_modes": [
                 "probe_failed"
               ],
-              "inputs": {},
-              "kind": "probe",
-              "maturity": "stable",
-              "name": "state",
-              "outputs": {
-                "branch": "string | null",
-                "detached": "boolean",
-                "has_staged_changes": "boolean",
-                "has_unstaged_changes": "boolean",
-                "has_untracked": "boolean",
-                "repository_root": "string",
-                "stash_count": "integer",
-                "worktree_clean": "boolean"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.state'",
               "tags": [
                 "git",
                 "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "fetch refs from a remote into the local repository"
               ],
               "examples": [
                 {
-                  "inputs": {
-                    "remote": "string"
-                  },
-                  "reference": "git.sync.fetch"
+                  "reference": "git.stash",
+                  "inputs": {}
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "state",
+              "kind": "probe",
+              "summary": "Probe operation 'git.state'",
+              "inputs": {},
+              "prerequisites": [],
+              "effects": [],
+              "outputs": {
+                "branch": "string | null",
+                "detached": "boolean",
+                "worktree_clean": "boolean",
+                "has_untracked": "boolean",
+                "has_staged_changes": "boolean",
+                "has_unstaged_changes": "boolean",
+                "stash_count": "integer",
+                "repository_root": "string"
+              },
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "tags": [
+                "git",
+                "probe"
+              ],
+              "examples": [
+                {
+                  "reference": "git.state",
+                  "inputs": {}
+                }
+              ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "sync.fetch",
+              "kind": "action",
+              "summary": "Action operation 'git.sync.fetch'",
+              "inputs": {
+                "remote": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "fetch refs from a remote into the local repository"
+              ],
+              "outputs": {
+                "remote": "string",
+                "fetched": "boolean"
+              },
               "failure_modes": [
                 "remote_not_found",
                 "fetch_blocked"
               ],
-              "inputs": {
-                "remote": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "sync.fetch",
-              "outputs": {
-                "fetched": "boolean",
-                "remote": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.sync.fetch'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "push a local branch to a remote"
               ],
               "examples": [
                 {
+                  "reference": "git.sync.fetch",
                   "inputs": {
-                    "branch": "string",
-                    "remote": "string | null"
-                  },
-                  "reference": "git.sync.push"
+                    "remote": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "sync.push",
+              "kind": "action",
+              "summary": "Action operation 'git.sync.push'",
+              "inputs": {
+                "branch": "string",
+                "remote": "string | null"
+              },
+              "prerequisites": [],
+              "effects": [
+                "push a local branch to a remote"
+              ],
+              "outputs": {
+                "remote": "string",
+                "branch": "string"
+              },
               "failure_modes": [
                 "branch_not_found",
                 "remote_not_found",
@@ -1062,800 +1249,824 @@
                 "non_fast_forward",
                 "push_blocked"
               ],
-              "inputs": {
-                "branch": "string",
-                "remote": "string | null"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "sync.push",
-              "outputs": {
-                "branch": "string",
-                "remote": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'git.sync.push'",
               "tags": [
                 "git",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
+              ],
               "examples": [
                 {
-                  "inputs": {},
-                  "reference": "git.upstream"
+                  "reference": "git.sync.push",
+                  "inputs": {
+                    "branch": "string",
+                    "remote": "string | null"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "upstream",
+              "kind": "probe",
+              "summary": "Probe operation 'git.upstream'",
+              "inputs": {},
+              "prerequisites": [],
+              "effects": [],
+              "outputs": {
+                "configured": "boolean",
+                "branch": "string | null",
+                "upstream_ref": "string | null",
+                "remote": "string | null",
+                "remote_branch": "string | null",
+                "repository_root": "string"
+              },
               "failure_modes": [
                 "probe_failed"
               ],
-              "inputs": {},
-              "kind": "probe",
-              "maturity": "stable",
-              "name": "upstream",
-              "outputs": {
-                "branch": "string | null",
-                "configured": "boolean",
-                "remote": "string | null",
-                "remote_branch": "string | null",
-                "repository_root": "string",
-                "upstream_ref": "string | null"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.upstream'",
               "tags": [
                 "git",
                 "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
+              ],
               "examples": [
                 {
-                  "inputs": {},
-                  "reference": "git.worktree"
+                  "reference": "git.upstream",
+                  "inputs": {}
                 }
               ],
-              "failure_modes": [
-                "probe_failed"
-              ],
-              "inputs": {},
-              "kind": "probe",
               "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
               "name": "worktree",
+              "kind": "probe",
+              "summary": "Probe operation 'git.worktree'",
+              "inputs": {},
+              "prerequisites": [],
+              "effects": [],
               "outputs": {
                 "clean": "boolean",
                 "dirty_paths": [
                   "string"
                 ],
+                "has_untracked": "boolean",
                 "has_staged_changes": "boolean",
                 "has_unstaged_changes": "boolean",
-                "has_untracked": "boolean",
                 "repository_root": "string"
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.worktree'",
-              "tags": [
-                "git",
-                "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
-              "examples": [
-                {
-                  "inputs": {},
-                  "reference": "git.worktrees"
-                }
-              ],
               "failure_modes": [
                 "probe_failed"
               ],
-              "inputs": {},
-              "kind": "probe",
+              "tags": [
+                "git",
+                "probe"
+              ],
+              "examples": [
+                {
+                  "reference": "git.worktree",
+                  "inputs": {}
+                }
+              ],
               "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
               "name": "worktrees",
+              "kind": "probe",
+              "summary": "Probe operation 'git.worktrees'",
+              "inputs": {},
+              "prerequisites": [],
+              "effects": [],
               "outputs": {
                 "count": "integer",
                 "current_path": "string | null",
                 "items": [
                   {
-                    "bare": "boolean",
-                    "branch": "string | null",
-                    "current": "boolean",
-                    "detached": "boolean",
+                    "path": "string",
                     "head": "string",
-                    "path": "string"
+                    "branch": "string | null",
+                    "bare": "boolean",
+                    "current": "boolean",
+                    "detached": "boolean"
                   }
                 ],
                 "repository_root": "string"
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'git.worktrees'",
+              "failure_modes": [
+                "probe_failed"
+              ],
               "tags": [
                 "git",
                 "probe"
-              ]
+              ],
+              "examples": [
+                {
+                  "reference": "git.worktrees",
+                  "inputs": {}
+                }
+              ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
             }
           ]
         },
         {
+          "namespace": "gh",
           "bootstrap": {
+            "prerequisites": [
+              "gh binary available",
+              "GitHub auth available"
+            ],
             "context_fields": [
               "host",
               "viewer",
               "scopes"
-            ],
-            "prerequisites": [
-              "gh binary available",
-              "GitHub auth available"
             ]
           },
-          "namespace": "gh",
           "operations": [
             {
-              "deprecated": false,
-              "effects": [],
-              "examples": [
-                {
-                  "inputs": {
-                    "issue_ref": "string"
-                  },
-                  "reference": "gh.issue"
-                }
-              ],
-              "failure_modes": [
-                "issue_not_found",
-                "probe_failed"
-              ],
-              "inputs": {
-                "issue_ref": "string"
-              },
-              "kind": "probe",
-              "maturity": "stable",
               "name": "issue",
+              "kind": "probe",
+              "summary": "Probe operation 'gh.issue'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer"
+              },
+              "prerequisites": [],
+              "effects": [],
               "outputs": {
-                "assignees": [
-                  "object"
-                ],
-                "author": "object",
-                "body": "string",
-                "closed": "boolean",
-                "closed_at": "string",
-                "comments": "object",
-                "created_at": "string",
                 "id": "string",
+                "number": "number",
+                "title": "string",
+                "state": "string",
+                "closed": "boolean",
+                "url": "string",
+                "body": "string",
+                "author": "object",
                 "labels": [
                   "object"
                 ],
-                "milestone": "object",
-                "number": "number",
-                "project_items": [
+                "assignees": [
                   "object"
                 ],
+                "milestone": "object",
+                "created_at": "string",
+                "updated_at": "string",
+                "closed_at": "string",
+                "comments": "object",
                 "reaction_groups": [
                   "object"
                 ],
                 "repository": "object",
-                "state": "string",
                 "state_reason": "string",
-                "title": "string",
-                "updated_at": "string",
-                "url": "string"
+                "project_items": [
+                  "object"
+                ]
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'gh.issue'",
+              "failure_modes": [
+                "issue_not_found",
+                "probe_failed"
+              ],
               "tags": [
                 "gh",
                 "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "append text to GitHub issue body"
               ],
               "examples": [
                 {
+                  "reference": "gh.issue",
                   "inputs": {
-                    "issue_ref": "string",
-                    "separator": "string | null",
-                    "text": "string"
-                  },
-                  "reference": "gh.issue.body.append"
+                    "repository": "string",
+                    "issue_number": "integer"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "issue.body.append",
+              "kind": "action",
+              "summary": "Action operation 'gh.issue.body.append'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "text": "string",
+                "separator": "string | null"
+              },
+              "prerequisites": [],
+              "effects": [
+                "append text to GitHub issue body"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "url": "string",
+                "body": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "text_invalid",
                 "append_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "separator": "string | null",
-                "text": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "issue.body.append",
-              "outputs": {
-                "body": "string",
-                "changed": "boolean",
-                "issue_ref": "string",
-                "url": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.issue.body.append'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "replace GitHub issue body"
               ],
               "examples": [
                 {
+                  "reference": "gh.issue.body.append",
                   "inputs": {
-                    "body": "string",
-                    "issue_ref": "string"
-                  },
-                  "reference": "gh.issue.body.replace"
+                    "repository": "string",
+                    "issue_number": "integer",
+                    "text": "string",
+                    "separator": "string | null"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "issue.body.replace",
+              "kind": "action",
+              "summary": "Action operation 'gh.issue.body.replace'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "body": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "replace GitHub issue body"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "url": "string",
+                "body": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "body_invalid",
                 "replace_blocked"
               ],
-              "inputs": {
-                "body": "string",
-                "issue_ref": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "issue.body.replace",
-              "outputs": {
-                "body": "string",
-                "changed": "boolean",
-                "issue_ref": "string",
-                "url": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.issue.body.replace'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "close GitHub issue"
               ],
               "examples": [
                 {
+                  "reference": "gh.issue.body.replace",
                   "inputs": {
-                    "issue_ref": "string"
-                  },
-                  "reference": "gh.issue.close"
+                    "repository": "string",
+                    "issue_number": "integer",
+                    "body": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "issue.close",
+              "kind": "action",
+              "summary": "Action operation 'gh.issue.close'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer"
+              },
+              "prerequisites": [],
+              "effects": [
+                "close GitHub issue"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "state": "string",
+                "closed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "close_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "issue.close",
-              "outputs": {
-                "closed": "boolean",
-                "issue_ref": "string",
-                "state": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.issue.close'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "add GitHub issue comment"
               ],
               "examples": [
                 {
+                  "reference": "gh.issue.close",
                   "inputs": {
-                    "body": "string",
-                    "issue_ref": "string"
-                  },
-                  "reference": "gh.issue.comment.add"
+                    "repository": "string",
+                    "issue_number": "integer"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "issue.comment.add",
+              "kind": "action",
+              "summary": "Action operation 'gh.issue.comment.add'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "body": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "add GitHub issue comment"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "comment_id": "string",
+                "url": "string",
+                "body": "string"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "body_invalid",
                 "comment_blocked"
               ],
-              "inputs": {
-                "body": "string",
-                "issue_ref": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "issue.comment.add",
-              "outputs": {
-                "body": "string",
-                "comment_id": "string",
-                "issue_ref": "string",
-                "url": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.issue.comment.add'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "create GitHub issue"
               ],
               "examples": [
                 {
+                  "reference": "gh.issue.comment.add",
                   "inputs": {
-                    "body": "string | null",
                     "repository": "string",
-                    "title": "string"
-                  },
-                  "reference": "gh.issue.create"
+                    "issue_number": "integer",
+                    "body": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "issue.create",
+              "kind": "action",
+              "summary": "Action operation 'gh.issue.create'",
+              "inputs": {
+                "repository": "string",
+                "title": "string",
+                "body": "string | null"
+              },
+              "prerequisites": [],
+              "effects": [
+                "create GitHub issue"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "repository": "string",
+                "number": "integer",
+                "url": "string",
+                "title": "string"
+              },
               "failure_modes": [
                 "repository_not_found",
                 "title_invalid",
                 "create_blocked"
               ],
-              "inputs": {
-                "body": "string | null",
-                "repository": "string",
-                "title": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "issue.create",
-              "outputs": {
-                "issue_ref": "string",
-                "number": "integer",
-                "repository": "string",
-                "title": "string",
-                "url": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.issue.create'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [],
+              ],
               "examples": [
                 {
+                  "reference": "gh.issue.create",
                   "inputs": {
-                    "issue_ref": "string",
-                    "project_id": "string"
-                  },
-                  "reference": "gh.project.issue"
+                    "repository": "string",
+                    "title": "string",
+                    "body": "string | null"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue",
+              "kind": "probe",
+              "summary": "Probe operation 'gh.project.issue'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string"
+              },
+              "prerequisites": [],
+              "effects": [],
+              "outputs": {
+                "exists": "boolean",
+                "item_id": "string",
+                "status": "string",
+                "type": "string",
+                "priority": "string",
+                "iteration": "string",
+                "size": "string",
+                "estimate": "number"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "probe_failed"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "project_id": "string"
-              },
-              "kind": "probe",
-              "maturity": "stable",
-              "name": "project.issue",
-              "outputs": {
-                "estimate": "number",
-                "exists": "boolean",
-                "item_id": "string",
-                "iteration": "string",
-                "priority": "string",
-                "size": "string",
-                "status": "string",
-                "type": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Probe operation 'gh.project.issue'",
               "tags": [
                 "gh",
                 "probe"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "add GitHub issue to project"
               ],
               "examples": [
                 {
+                  "reference": "gh.project.issue",
                   "inputs": {
-                    "issue_ref": "string",
+                    "repository": "string",
+                    "issue_number": "integer",
                     "project_id": "string"
-                  },
-                  "reference": "gh.project.issue.add"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue.add",
+              "kind": "action",
+              "summary": "Action operation 'gh.project.issue.add'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "add GitHub issue to project"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "item_id": "string",
+                "added": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "add_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "project_id": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.add",
-              "outputs": {
-                "added": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.add'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue estimate"
               ],
               "examples": [
                 {
+                  "reference": "gh.project.issue.add",
                   "inputs": {
-                    "estimate": "number",
-                    "issue_ref": "string",
+                    "repository": "string",
+                    "issue_number": "integer",
                     "project_id": "string"
-                  },
-                  "reference": "gh.project.issue.estimate.set"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue.estimate.set",
+              "kind": "action",
+              "summary": "Action operation 'gh.project.issue.estimate.set'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string",
+                "estimate": "number"
+              },
+              "prerequisites": [],
+              "effects": [
+                "set GitHub project issue estimate"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "item_id": "string",
+                "estimate": "number",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "estimate_invalid",
                 "estimate_blocked"
               ],
-              "inputs": {
-                "estimate": "number",
-                "issue_ref": "string",
-                "project_id": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.estimate.set",
-              "outputs": {
-                "changed": "boolean",
-                "estimate": "number",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.estimate.set'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue iteration"
               ],
               "examples": [
                 {
+                  "reference": "gh.project.issue.estimate.set",
                   "inputs": {
-                    "issue_ref": "string",
-                    "iteration": "string",
-                    "project_id": "string"
-                  },
-                  "reference": "gh.project.issue.iteration.set"
+                    "repository": "string",
+                    "issue_number": "integer",
+                    "project_id": "string",
+                    "estimate": "number"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue.iteration.set",
+              "kind": "action",
+              "summary": "Action operation 'gh.project.issue.iteration.set'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string",
+                "iteration": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "set GitHub project issue iteration"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "item_id": "string",
+                "iteration": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "iteration_not_found",
                 "iteration_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "iteration": "string",
-                "project_id": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.iteration.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "iteration": "string",
-                "project_id": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.iteration.set'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue priority"
               ],
               "examples": [
                 {
+                  "reference": "gh.project.issue.iteration.set",
                   "inputs": {
-                    "issue_ref": "string",
-                    "priority": "string",
-                    "project_id": "string"
-                  },
-                  "reference": "gh.project.issue.priority.set"
+                    "repository": "string",
+                    "issue_number": "integer",
+                    "project_id": "string",
+                    "iteration": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue.priority.set",
+              "kind": "action",
+              "summary": "Action operation 'gh.project.issue.priority.set'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string",
+                "priority": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "set GitHub project issue priority"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "item_id": "string",
+                "priority": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "priority_not_found",
                 "priority_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "priority": "string",
-                "project_id": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.priority.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "priority": "string",
-                "project_id": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.priority.set'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue size"
               ],
               "examples": [
                 {
+                  "reference": "gh.project.issue.priority.set",
                   "inputs": {
-                    "issue_ref": "string",
+                    "repository": "string",
+                    "issue_number": "integer",
                     "project_id": "string",
-                    "size": "string"
-                  },
-                  "reference": "gh.project.issue.size.set"
+                    "priority": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue.size.set",
+              "kind": "action",
+              "summary": "Action operation 'gh.project.issue.size.set'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string",
+                "size": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "set GitHub project issue size"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "item_id": "string",
+                "size": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "size_not_found",
                 "size_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "project_id": "string",
-                "size": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.size.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string",
-                "size": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.size.set'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue status"
               ],
               "examples": [
                 {
+                  "reference": "gh.project.issue.size.set",
                   "inputs": {
-                    "issue_ref": "string",
+                    "repository": "string",
+                    "issue_number": "integer",
                     "project_id": "string",
-                    "status": "string"
-                  },
-                  "reference": "gh.project.issue.status.set"
+                    "size": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue.status.set",
+              "kind": "action",
+              "summary": "Action operation 'gh.project.issue.status.set'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string",
+                "status": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "set GitHub project issue status"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "item_id": "string",
+                "status": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "status_not_found",
                 "status_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "project_id": "string",
-                "status": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.status.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string",
-                "status": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.status.set'",
               "tags": [
                 "gh",
                 "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue type"
               ],
               "examples": [
                 {
+                  "reference": "gh.project.issue.status.set",
                   "inputs": {
-                    "issue_ref": "string",
+                    "repository": "string",
+                    "issue_number": "integer",
                     "project_id": "string",
-                    "type": "string"
-                  },
-                  "reference": "gh.project.issue.type.set"
+                    "status": "string"
+                  }
                 }
               ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
+            },
+            {
+              "name": "project.issue.type.set",
+              "kind": "action",
+              "summary": "Action operation 'gh.project.issue.type.set'",
+              "inputs": {
+                "repository": "string",
+                "issue_number": "integer",
+                "project_id": "string",
+                "type": "string"
+              },
+              "prerequisites": [],
+              "effects": [
+                "set GitHub project issue type"
+              ],
+              "outputs": {
+                "issue_ref": "string",
+                "project_id": "string",
+                "item_id": "string",
+                "type": "string",
+                "changed": "boolean"
+              },
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
                 "type_not_found",
                 "type_blocked"
               ],
-              "inputs": {
-                "issue_ref": "string",
-                "project_id": "string",
-                "type": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.type.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string",
-                "type": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.type.set'",
               "tags": [
                 "gh",
                 "action"
-              ]
+              ],
+              "examples": [
+                {
+                  "reference": "gh.project.issue.type.set",
+                  "inputs": {
+                    "repository": "string",
+                    "issue_number": "integer",
+                    "project_id": "string",
+                    "type": "string"
+                  }
+                }
+              ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
             }
           ]
         },
         {
+          "namespace": "shell",
           "bootstrap": {
+            "prerequisites": [
+              "supported shell available"
+            ],
             "context_fields": [
               "shell",
               "working_directory"
-            ],
-            "prerequisites": [
-              "supported shell available"
             ]
           },
-          "namespace": "shell",
           "operations": [
             {
-              "deprecated": false,
+              "name": "command",
+              "kind": "action",
+              "summary": "Action operation 'shell.command'",
+              "inputs": {
+                "command": "string"
+              },
+              "prerequisites": [],
               "effects": [
                 "execute shell command"
               ],
-              "examples": [
-                {
-                  "inputs": {
-                    "command": "string"
-                  },
-                  "reference": "shell.command"
-                }
-              ],
+              "outputs": {
+                "exit_code": "integer",
+                "stdout": "string",
+                "stderr": "string"
+              },
               "failure_modes": [
                 "command_failed",
                 "action_failed"
               ],
-              "inputs": {
-                "command": "string"
-              },
-              "kind": "action",
-              "maturity": "stable",
-              "name": "command",
-              "outputs": {
-                "exit_code": "integer",
-                "stderr": "string",
-                "stdout": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'shell.command'",
               "tags": [
                 "shell",
                 "action"
-              ]
+              ],
+              "examples": [
+                {
+                  "reference": "shell.command",
+                  "inputs": {
+                    "command": "string"
+                  }
+                }
+              ],
+              "maturity": "stable",
+              "deprecated": false,
+              "replaced_by": []
             }
           ]
         }
@@ -1865,87 +2076,42 @@
       "document_kind": "pattern_hints",
       "hints": [
         {
-          "because": "Profiles separate environment-specific inputs and checks from the canonical workflow shape",
-          "category": "authoring_strategy",
           "name": "profiles.prefer_for_environment_differences",
+          "category": "authoring_strategy",
+          "when": "A workflow needs backend/frontend or environment-specific defaults without changing its core step graph",
           "prefer": [
             "profile_contract"
           ],
-          "when": "A workflow needs backend/frontend or environment-specific defaults without changing its core step graph"
+          "because": "Profiles separate environment-specific inputs and checks from the canonical workflow shape"
         },
         {
-          "because": "State bindings plus state_set/state_delete provide the runtime-owned persistent memory surface",
-          "category": "authoring_strategy",
           "name": "state.use_for_persistent_memory",
+          "category": "authoring_strategy",
+          "when": "A workflow needs persistent memory across runs keyed by workflow inputs",
           "prefer": [
             "workflow_contract.state_needs",
             "state_contract",
             "workflow_step.state_set"
           ],
-          "when": "A workflow needs persistent memory across runs keyed by workflow inputs"
+          "because": "State bindings plus state_set/state_delete provide the runtime-owned persistent memory surface"
         },
         {
-          "because": "shell.command is the explicit low-level fallback when no higher-level connector operation exists",
-          "category": "fallback_strategy",
           "name": "shell_command.use_as_capability_fallback",
+          "category": "fallback_strategy",
+          "when": "A needed runtime action is not published as a dedicated connector capability",
           "prefer": [
             "shell.command"
           ],
-          "when": "A needed runtime action is not published as a dedicated connector capability"
+          "because": "shell.command is the explicit low-level fallback when no higher-level connector operation exists"
         }
       ]
     },
     "playbook_contract": {
-      "activation_semantics": {
-        "discovery": {
-          "missing": "playbook.discovery.missing",
-          "path": ".ordo/playbook.yml",
-          "strategy": "cwd_relative_single_path"
-        },
-        "profile_entries": {
-          "requires": [
-            "file"
-          ]
-        },
-        "state_entries": {
-          "requires": [
-            "path"
-          ]
-        },
-        "workflow_entries": {
-          "optional": [
-            "state_bindings"
-          ],
-          "requires": [
-            "file"
-          ]
-        }
-      },
-      "defaults_fields": [
-        {
-          "name": "profile",
-          "required": false,
-          "type": "string"
-        }
-      ],
+      "document_kind": "playbook",
+      "version": 1,
       "discovery": {
         "path": ".ordo/playbook.yml"
       },
-      "document_kind": "playbook",
-      "profile_entry_fields": [
-        {
-          "name": "file",
-          "required": true,
-          "type": "string"
-        }
-      ],
-      "state_entry_fields": [
-        {
-          "name": "path",
-          "required": true,
-          "type": "string"
-        }
-      ],
       "top_level_fields": [
         {
           "name": "version",
@@ -1973,7 +2139,6 @@
           "type": "object"
         }
       ],
-      "version": 1,
       "workflow_entry_fields": [
         {
           "name": "file",
@@ -1985,16 +2150,57 @@
           "required": false,
           "type": "object"
         }
-      ]
+      ],
+      "profile_entry_fields": [
+        {
+          "name": "file",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "state_entry_fields": [
+        {
+          "name": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "defaults_fields": [
+        {
+          "name": "profile",
+          "required": false,
+          "type": "string",
+          "runtime_effect": "selects_active_profile"
+        }
+      ],
+      "activation_semantics": {
+        "discovery": {
+          "strategy": "cwd_relative_single_path",
+          "path": ".ordo/playbook.yml",
+          "missing": "playbook.discovery.missing"
+        },
+        "workflow_entries": {
+          "requires": [
+            "file"
+          ],
+          "optional": [
+            "state_bindings"
+          ]
+        },
+        "profile_entries": {
+          "requires": [
+            "file"
+          ]
+        },
+        "state_entries": {
+          "requires": [
+            "path"
+          ]
+        }
+      }
     },
     "plugin_surface_contract": {
-      "bootstrap_requirements": {
-        "optional_fields": [],
-        "required_fields": [
-          "prerequisites",
-          "context_fields"
-        ]
-      },
+      "document_kind": "plugin_surface_contract",
       "connector_requirements": {
         "required_fields": [
           "namespace",
@@ -2003,12 +2209,14 @@
         ],
         "shared_registry": "public_connector_registry"
       },
-      "document_kind": "plugin_surface_contract",
-      "operation_requirements": {
-        "kind_values": [
-          "probe",
-          "action"
+      "bootstrap_requirements": {
+        "required_fields": [
+          "prerequisites",
+          "context_fields"
         ],
+        "optional_fields": []
+      },
+      "operation_requirements": {
         "required_fields": [
           "name",
           "kind",
@@ -2023,32 +2231,47 @@
           "maturity",
           "deprecated",
           "replaced_by"
+        ],
+        "kind_values": [
+          "probe",
+          "action"
         ]
       },
       "participation_rules": {
-        "publication_model": "plugin metadata must enter introspection through the same public connector registry contract as built-in families",
         "shared_introspection_sections": [
           "operations"
         ],
-        "special_case_help_logic_required": false
+        "special_case_help_logic_required": false,
+        "publication_model": "plugin metadata must enter introspection through the same public connector registry contract as built-in families"
       }
     },
     "profile_contract": {
-      "compose_semantics": {
-        "checks": {
-          "order": "left_to_right",
-          "strategy": "deduplicated_union"
-        },
-        "inputs": {
-          "conflict": "validation_error",
-          "strategy": "first_writer_wins"
-        },
-        "overrides": {
-          "conflict": "validation_error",
-          "conflict_key": "target"
-        }
-      },
       "document_kind": "profile",
+      "top_level_fields": [
+        {
+          "name": "name",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "inputs",
+          "required": false,
+          "type": "object",
+          "runtime_effect": "applies_missing_workflow_inputs"
+        },
+        {
+          "name": "checks",
+          "required": false,
+          "type": "array",
+          "runtime_effect": "published_metadata_only"
+        },
+        {
+          "name": "overrides",
+          "required": false,
+          "type": "array",
+          "runtime_effect": "published_metadata_only"
+        }
+      ],
       "override_fields": [
         {
           "name": "target",
@@ -2066,36 +2289,28 @@
           "type": "string"
         }
       ],
-      "top_level_fields": [
-        {
-          "name": "name",
-          "required": true,
-          "type": "string"
+      "compose_semantics": {
+        "inputs": {
+          "strategy": "first_writer_wins",
+          "conflict": "validation_error"
         },
-        {
-          "name": "inputs",
-          "required": false,
-          "type": "object"
+        "checks": {
+          "strategy": "deduplicated_union",
+          "order": "left_to_right"
         },
-        {
-          "name": "checks",
-          "required": false,
-          "type": "array"
-        },
-        {
-          "name": "overrides",
-          "required": false,
-          "type": "array"
+        "overrides": {
+          "conflict_key": "target",
+          "conflict": "validation_error"
         }
-      ],
+      },
       "workflow_apply_semantics": {
+        "inputs": {
+          "may_add_missing": true,
+          "may_override_explicit_workflow_values": false,
+          "conflict": "validation_error"
+        },
         "checks": {
           "mutates_workflow_contract": false
-        },
-        "inputs": {
-          "conflict": "validation_error",
-          "may_add_missing": true,
-          "may_override_explicit_workflow_values": false
         },
         "overrides": {
           "mutates_workflow_steps": false,
@@ -2105,153 +2320,63 @@
     },
     "state_contract": {
       "document_kind": "state_contract",
-      "invalid_path_rules": [
-        {
-          "message": "state path must start with 'state'",
-          "name": "root_must_be_state"
-        },
-        {
-          "message": "state path key reference must use dotted inputs form such as 'inputs.issue_ref'",
-          "name": "key_reference_must_use_dotted_inputs"
-        },
-        {
-          "message": "state path must not contain trailing content",
-          "name": "no_trailing_content"
-        }
-      ],
+      "workflow_surface": {
+        "state_needs_field": "state_needs",
+        "state_binding_field": "state_bindings",
+        "storage_targets_field": "states",
+        "step_state_set_field": "state_set",
+        "step_state_delete_field": "state_delete"
+      },
       "path_forms": {
         "root": "state",
-        "root_reference": "inputs",
         "shape": "state.<role>[inputs.<key>][.<field>...]",
-        "supports_hyphenated_roles": true,
-        "supports_nested_fields": true
+        "root_reference": "inputs",
+        "supports_nested_fields": true,
+        "supports_hyphenated_roles": true
       },
-      "runtime_rules": [
+      "invalid_path_rules": [
         {
-          "error_code": "runtime.state.binding_missing",
-          "message": "state role must be bound before runtime access",
-          "name": "bound_role_required"
+          "name": "root_must_be_state",
+          "message": "state path must start with 'state'"
         },
         {
-          "error_code": "runtime.state.key_invalid",
-          "message": "state key reference must resolve to a scalar value",
-          "name": "scalar_key_required"
+          "name": "key_reference_must_use_dotted_inputs",
+          "message": "state path key reference must use dotted inputs form such as 'inputs.issue_ref'"
         },
         {
-          "error_code": "runtime.state.declaration_missing",
-          "message": "undeclared state locations are runtime errors",
-          "name": "declared_location_required"
+          "name": "no_trailing_content",
+          "message": "state path must not contain trailing content"
         }
       ],
       "storage_document": {
+        "version": 1,
         "required_fields": [
           "version",
           "values"
         ],
-        "values_type": "object",
-        "version": 1
+        "values_type": "object"
       },
-      "workflow_surface": {
-        "state_binding_field": "state_bindings",
-        "state_needs_field": "state_needs",
-        "step_state_delete_field": "state_delete",
-        "step_state_set_field": "state_set",
-        "storage_targets_field": "states"
-      }
+      "runtime_rules": [
+        {
+          "name": "bound_role_required",
+          "message": "state role must be bound before runtime access",
+          "error_code": "runtime.state.binding_missing"
+        },
+        {
+          "name": "scalar_key_required",
+          "message": "state key reference must resolve to a scalar value",
+          "error_code": "runtime.state.key_invalid"
+        },
+        {
+          "name": "declared_location_required",
+          "message": "undeclared state locations are runtime errors",
+          "error_code": "runtime.state.declaration_missing"
+        }
+      ]
     },
     "workflow_contract": {
       "document_kind": "workflow",
-      "guard_forms": [
-        {
-          "name": "operation_call",
-          "shape": {
-            "uses": "string",
-            "with": "object"
-          }
-        },
-        {
-          "name": "expression",
-          "shape": "string"
-        }
-      ],
-      "step_form_rules": [
-        {
-          "fields": [
-            "uses",
-            "state_set",
-            "state_delete"
-          ],
-          "kind": "exclusive_choice",
-          "message": "A workflow step must define exactly one of uses, state_set, or state_delete",
-          "name": "exactly_one_step_form"
-        },
-        {
-          "field": "with",
-          "kind": "dependency",
-          "message": "The with field is allowed only together with uses",
-          "name": "with_requires_uses",
-          "requires": [
-            "uses"
-          ]
-        }
-      ],
-      "step_forms": [
-        {
-          "name": "operation_call",
-          "optional_fields": [
-            "with",
-            "register"
-          ],
-          "required_fields": [
-            "name",
-            "uses"
-          ]
-        },
-        {
-          "name": "state_set",
-          "optional_fields": [],
-          "required_fields": [
-            "name",
-            "state_set"
-          ]
-        },
-        {
-          "name": "state_delete",
-          "optional_fields": [],
-          "required_fields": [
-            "name",
-            "state_delete"
-          ]
-        }
-      ],
-      "surface_constraints": {
-        "guard_expression": {
-          "allowed_roots": [
-            "inputs",
-            "probe"
-          ],
-          "forbidden_features": [
-            "value_expression_filters",
-            "value_expression_builtins",
-            "state_references"
-          ]
-        },
-        "runtime_value_surface": {
-          "allowed_builtins": [
-            "format"
-          ],
-          "allowed_filters": [
-            "lower",
-            "trim",
-            "slug"
-          ],
-          "allowed_roots": [
-            "inputs",
-            "state",
-            "step"
-          ]
-        }
-      },
+      "version": 0,
       "top_level_fields": [
         {
           "name": "version",
@@ -2284,7 +2409,105 @@
           "type": "array"
         }
       ],
-      "version": 0
+      "guard_forms": [
+        {
+          "name": "operation_call",
+          "shape": {
+            "uses": "string",
+            "with": "object"
+          }
+        },
+        {
+          "name": "expression",
+          "shape": "string"
+        }
+      ],
+      "step_form_rules": [
+        {
+          "name": "exactly_one_step_form",
+          "kind": "exclusive_choice",
+          "fields": [
+            "uses",
+            "state_set",
+            "state_delete"
+          ],
+          "message": "A workflow step must define exactly one of uses, state_set, or state_delete"
+        },
+        {
+          "name": "with_requires_uses",
+          "kind": "dependency",
+          "field": "with",
+          "requires": [
+            "uses"
+          ],
+          "message": "The with field is allowed only together with uses"
+        }
+      ],
+      "step_forms": [
+        {
+          "name": "operation_call",
+          "required_fields": [
+            "name",
+            "uses"
+          ],
+          "optional_fields": [
+            "if",
+            "with",
+            "register"
+          ]
+        },
+        {
+          "name": "state_set",
+          "required_fields": [
+            "name",
+            "state_set"
+          ],
+          "optional_fields": [
+            "if"
+          ]
+        },
+        {
+          "name": "state_delete",
+          "required_fields": [
+            "name",
+            "state_delete"
+          ],
+          "optional_fields": [
+            "if"
+          ]
+        }
+      ],
+      "surface_constraints": {
+        "guard_expression": {
+          "allowed_roots": [
+            "inputs",
+            "probe"
+          ],
+          "forbidden_features": [
+            "value_expression_filters",
+            "value_expression_builtins",
+            "state_references"
+          ]
+        },
+        "runtime_value_surface": {
+          "allowed_roots": [
+            "inputs",
+            "state",
+            "step"
+          ],
+          "allowed_builtins": [
+            "format"
+          ],
+          "allowed_filters": [
+            "lower",
+            "trim",
+            "slug",
+            "eq",
+            "ne",
+            "not"
+          ]
+        }
+      }
     }
   }
 }
