@@ -42,9 +42,80 @@
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
+    "block_items": [
+      {
+        "block_index": 0,
+        "blockers": [],
+        "guard_details": [
+          {
+            "failed_subcondition": null,
+            "failure_kind": null,
+            "reference": "git.worktree.clean",
+            "status": "ok",
+            "summary": "Guard expression evaluated successfully",
+            "trace": [
+              {
+                "expr": "git.worktree.clean",
+                "kind": "probe",
+                "reference": "git.worktree",
+                "status": "ok",
+                "value": true
+              }
+            ]
+          }
+        ],
+        "guard_references": [
+          "git.worktree.clean"
+        ],
+        "status": "ok",
+        "type": "guards"
+      },
+      {
+        "block_index": 1,
+        "conditional_steps": [],
+        "status": "pending",
+        "step_names": [
+          "inspect-issue"
+        ],
+        "type": "steps"
+      },
+      {
+        "block_index": 1,
+        "executed_steps": [
+          "inspect-issue"
+        ],
+        "skipped_steps": [],
+        "status": "ok",
+        "step_names": [
+          "inspect-issue"
+        ],
+        "type": "steps"
+      }
+    ],
     "can_execute": true,
+    "checked_guards": [
+      "git.worktree.clean"
+    ],
     "executed_steps": [
       "inspect-issue"
+    ],
+    "guard_details": [
+      {
+        "failed_subcondition": null,
+        "failure_kind": null,
+        "reference": "git.worktree.clean",
+        "status": "ok",
+        "summary": "Guard expression evaluated successfully",
+        "trace": [
+          {
+            "expr": "git.worktree.clean",
+            "kind": "probe",
+            "reference": "git.worktree",
+            "status": "ok",
+            "value": true
+          }
+        ]
+      }
     ],
     "skipped_steps": [],
     "step_condition_details": []

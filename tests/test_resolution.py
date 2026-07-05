@@ -41,7 +41,7 @@ class ResolutionTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.unknown_operation")
-        self.assertEqual(result.diagnostics[0].path, ("steps", "0", "uses"))
+        self.assertEqual(result.diagnostics[0].path, ("blocks", "1", "steps", "0", "uses"))
 
     def test_public_namespace_shadowing_is_rejected(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(), steps=())

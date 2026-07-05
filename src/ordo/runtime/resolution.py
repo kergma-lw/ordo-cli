@@ -9,7 +9,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
-from ordo.model.workflow import Workflow
+from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, UnaryNode, parse_guard_expression
 from .providers import ConnectorProvider, get_default_connector_provider
@@ -71,18 +71,44 @@ ResolvedStep = ResolvedOperation | ResolvedBuiltinStep
 
 
 @dataclass(frozen=True, slots=True)
+class ResolvedGuardBlock:
+    """Resolved workflow block containing only guards."""
+
+    block_index: int
+    guards: tuple[ResolvedGuard, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedStepBlock:
+    """Resolved workflow block containing only steps."""
+
+    block_index: int
+    steps: tuple[ResolvedStep, ...] = ()
+
+
+ResolvedWorkflowBlock = ResolvedGuardBlock | ResolvedStepBlock
+
+
+@dataclass(frozen=True, slots=True)
 class WorkflowResolution:
     """Structured workflow resolution result."""
 
     status: RuntimeStatus
     diagnostics: tuple[Diagnostic, ...] = ()
-    resolved_guards: tuple[ResolvedGuard, ...] = ()
-    resolved_steps: tuple[ResolvedStep, ...] = ()
+    blocks: tuple[ResolvedWorkflowBlock, ...] = ()
     active_overrides: tuple[Override, ...] = ()
 
     @property
     def ok(self) -> bool:
         return self.status is RuntimeStatus.OK
+
+    @property
+    def resolved_guards(self) -> tuple[ResolvedGuard, ...]:
+        return tuple(guard for block in self.blocks if isinstance(block, ResolvedGuardBlock) for guard in block.guards)
+
+    @property
+    def resolved_steps(self) -> tuple[ResolvedStep, ...]:
+        return tuple(step for block in self.blocks if isinstance(block, ResolvedStepBlock) for step in block.steps)
 
 
 def resolve_workflow_references(
@@ -106,67 +132,71 @@ def resolve_workflow_references(
             active_overrides=active_overrides,
         )
 
-    resolved_guards: list[ResolvedGuard] = []
-    resolved_steps: list[ResolvedStep] = []
+    resolved_blocks: list[ResolvedWorkflowBlock] = []
 
-    for index, guard in enumerate(workflow.guards):
-        if guard.operation is None:
-            resolved = _resolve_guard_expression(
-                guard.expr or "",
-                path=("guards", str(index)),
+    for block_index, block in enumerate(workflow.blocks):
+        if isinstance(block, GuardBlock):
+            resolved_guards: list[ResolvedGuard] = []
+            for guard_index, guard in enumerate(block.guards):
+                if guard.operation is None:
+                    resolved = _resolve_guard_expression(
+                        guard.expr or "",
+                        path=("blocks", str(block_index), "guards", str(guard_index)),
+                        public_registry=public_registry,
+                        local_registry=local_registry,
+                    )
+                    if isinstance(resolved, Diagnostic):
+                        diagnostics.append(resolved)
+                    else:
+                        resolved_guards.append(resolved)
+                    continue
+                resolved = _resolve_reference(
+                    guard.operation.uses,
+                    path=("blocks", str(block_index), "guards", str(guard_index), "uses"),
+                    public_registry=public_registry,
+                    local_registry=local_registry,
+                    declared_with=guard.operation.with_,
+                )
+                if isinstance(resolved, Diagnostic):
+                    diagnostics.append(resolved)
+                else:
+                    resolved_guards.append(resolved)
+            resolved_blocks.append(ResolvedGuardBlock(block_index=block_index, guards=tuple(resolved_guards)))
+            continue
+
+        resolved_steps: list[ResolvedStep] = []
+        for step_index, step in enumerate(block.steps):
+            if step.state_set is not None:
+                resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_set"))
+                continue
+            if step.state_delete is not None:
+                resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_delete"))
+                continue
+            resolved = _resolve_reference(
+                step.operation.uses,
+                path=("blocks", str(block_index), "steps", str(step_index), "uses"),
                 public_registry=public_registry,
                 local_registry=local_registry,
+                declared_with=step.operation.with_,
             )
             if isinstance(resolved, Diagnostic):
                 diagnostics.append(resolved)
             else:
-                resolved_guards.append(resolved)
-            continue
-        resolved = _resolve_reference(
-            guard.operation.uses,
-            path=("guards", str(index), "uses"),
-            public_registry=public_registry,
-            local_registry=local_registry,
-            declared_with=guard.operation.with_,
-        )
-        if isinstance(resolved, Diagnostic):
-            diagnostics.append(resolved)
-        else:
-            resolved_guards.append(resolved)
-
-    for index, step in enumerate(workflow.steps):
-        if step.state_set is not None:
-            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_set"))
-            continue
-        if step.state_delete is not None:
-            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_delete"))
-            continue
-        resolved = _resolve_reference(
-            step.operation.uses,
-            path=("steps", str(index), "uses"),
-            public_registry=public_registry,
-            local_registry=local_registry,
-            declared_with=step.operation.with_,
-        )
-        if isinstance(resolved, Diagnostic):
-            diagnostics.append(resolved)
-        else:
-            resolved_steps.append(resolved)
+                resolved_steps.append(resolved)
+        resolved_blocks.append(ResolvedStepBlock(block_index=block_index, steps=tuple(resolved_steps)))
 
     if diagnostics:
         return WorkflowResolution(
             status=RuntimeStatus.RESOLUTION_ERROR,
             diagnostics=tuple(diagnostics),
-            resolved_guards=tuple(resolved_guards),
-            resolved_steps=tuple(resolved_steps),
+            blocks=tuple(resolved_blocks),
             active_overrides=active_overrides,
         )
 
     return WorkflowResolution(
         status=RuntimeStatus.OK,
         diagnostics=(),
-        resolved_guards=tuple(resolved_guards),
-        resolved_steps=tuple(resolved_steps),
+        blocks=tuple(resolved_blocks),
         active_overrides=active_overrides,
     )
 

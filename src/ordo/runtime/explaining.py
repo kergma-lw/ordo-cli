@@ -91,6 +91,7 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
     if result.status is RuntimeStatus.GUARD_FAILED:
         guard_details = [detail for detail in result.outputs.get("guard_details", []) if isinstance(detail, dict)]
         bootstrap_details = [detail for detail in result.outputs.get("bootstrap_details", []) if isinstance(detail, dict)]
+        executed_steps = [name for name in result.outputs.get("executed_steps", []) if isinstance(name, str)]
         if any(detail.get("status") != "ok" for detail in bootstrap_details):
             return {
                 "category": "bootstrap",
@@ -102,9 +103,14 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         return {
             "category": "guard",
             "allowed": False,
-            "why": "One or more guards blocked execution before any business step could run",
+            "why": (
+                "One or more guards blocked execution before a later step block could run"
+                if executed_steps
+                else "One or more guards blocked execution before any business step could run"
+            ),
             "blockers": list(result.outputs.get("blockers", [])),
             "guard_details": guard_details,
+            "executed_steps": executed_steps,
         }
 
     if result.status is RuntimeStatus.EXECUTION_ERROR:

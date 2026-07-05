@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import Workflow
+from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .checking import check_workflow
 from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
-from .resolution import ResolvedBuiltinStep, ResolvedGuardExpression, WorkflowResolution, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
 
 
@@ -42,6 +42,7 @@ def plan_workflow(
 
     guard_items = _build_guard_items(check_result, resolution)
     step_items = _build_step_items(check_result, resolution, effective_workflow)
+    block_items = _build_block_items(check_result, resolution, effective_workflow)
 
     blockers = list(base_outputs.get("blockers", []))
     can_execute = bool(base_outputs.get("can_execute", False))
@@ -58,6 +59,7 @@ def plan_workflow(
         "execution_allowed": can_execute,
         "guard_items": guard_items,
         "step_items": step_items,
+        "block_items": block_items,
     }
 
     return RuntimeResult(
@@ -165,3 +167,61 @@ def _build_step_items(
             }
         )
     return step_items
+
+
+def _build_block_items(
+    check_result: RuntimeResult,
+    resolution: WorkflowResolution | None,
+    workflow: Workflow,
+) -> list[dict[str, object]]:
+    existing = [dict(item) for item in check_result.outputs.get("block_items", []) if isinstance(item, dict)]
+    if resolution is None:
+        return existing
+
+    existing_by_index = {item.get("block_index"): item for item in existing if isinstance(item.get("block_index"), int)}
+    block_items: list[dict[str, object]] = []
+
+    first_reachable_step_found = False
+    for block_index, (declared_block, resolved_block) in enumerate(zip(workflow.blocks, resolution.blocks, strict=False)):
+        current = existing_by_index.get(block_index)
+        if isinstance(declared_block, GuardBlock):
+            if current is not None:
+                block_items.append(current)
+                continue
+            assert isinstance(resolved_block, ResolvedGuardBlock)
+            block_items.append(
+                {
+                    "block_index": block_index,
+                    "type": "guards",
+                    "status": "pending",
+                    "guard_references": [guard.reference for guard in resolved_block.guards],
+                    "blockers": [],
+                    "guard_details": [],
+                }
+            )
+            continue
+
+        assert isinstance(declared_block, StepBlock)
+        if current is not None:
+            item = dict(current)
+            if item.get("status") == "pending":
+                item["eligibility"] = "eligible" if not first_reachable_step_found and not check_result.outputs.get("blockers") else "pending"
+            block_items.append(item)
+            first_reachable_step_found = True
+            continue
+
+        assert isinstance(resolved_block, ResolvedStepBlock)
+        step_names = [step.name for step in declared_block.steps]
+        block_items.append(
+            {
+                "block_index": block_index,
+                "type": "steps",
+                "status": "pending",
+                "eligibility": "eligible" if not first_reachable_step_found and not check_result.outputs.get("blockers") else "pending",
+                "step_names": step_names,
+                "conditional_steps": [step.name for step in declared_block.steps if step.if_ is not None],
+            }
+        )
+        first_reachable_step_found = True
+
+    return block_items

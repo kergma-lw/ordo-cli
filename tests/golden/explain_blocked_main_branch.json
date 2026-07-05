@@ -46,6 +46,61 @@
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
+    "block_items": [
+      {
+        "block_index": 0,
+        "blockers": [
+          "git.branch.value != \"main\""
+        ],
+        "guard_details": [
+          {
+            "failed_subcondition": "git.branch.value != \"main\"",
+            "failure_kind": "guard_failed",
+            "reference": "git.branch.value != \"main\"",
+            "status": "guard_failed",
+            "summary": "Guard expression evaluated false",
+            "trace": [
+              {
+                "expr": "git.branch.value",
+                "kind": "probe",
+                "reference": "git.branch",
+                "status": "ok",
+                "value": "main"
+              },
+              {
+                "expr": "\"main\"",
+                "kind": "literal",
+                "status": "ok",
+                "value": "main"
+              },
+              {
+                "expr": "git.branch.value != \"main\"",
+                "kind": "binary",
+                "left": "main",
+                "operator": "!=",
+                "right": "main",
+                "status": "ok",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "guard_references": [
+          "git.branch.value != \"main\""
+        ],
+        "status": "blocked",
+        "type": "guards"
+      },
+      {
+        "block_index": 1,
+        "conditional_steps": [],
+        "status": "blocked",
+        "step_names": [
+          "verify-command"
+        ],
+        "type": "steps"
+      }
+    ],
     "blockers": [
       "git.branch.value != \"main\""
     ],
@@ -60,6 +115,7 @@
         "git.branch.value != \"main\""
       ],
       "category": "guard",
+      "executed_steps": [],
       "guard_details": [
         {
           "failed_subcondition": "git.branch.value != \"main\"",

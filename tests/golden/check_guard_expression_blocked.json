@@ -64,6 +64,79 @@
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
+    "block_items": [
+      {
+        "block_index": 0,
+        "blockers": [
+          "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
+        ],
+        "guard_details": [
+          {
+            "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
+            "failure_kind": "guard_failed",
+            "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
+            "status": "guard_failed",
+            "summary": "Guard expression evaluated false",
+            "trace": [
+              {
+                "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state",
+                "kind": "probe",
+                "reference": "gh.issue",
+                "status": "ok",
+                "value": "DONE"
+              },
+              {
+                "expr": "\"DONE\"",
+                "kind": "literal",
+                "status": "ok",
+                "value": "DONE"
+              },
+              {
+                "expr": "\"CLOSED\"",
+                "kind": "literal",
+                "status": "ok",
+                "value": "CLOSED"
+              },
+              {
+                "expr": "[\"DONE\", \"CLOSED\"]",
+                "kind": "list",
+                "status": "ok",
+                "value": [
+                  "DONE",
+                  "CLOSED"
+                ]
+              },
+              {
+                "expr": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
+                "kind": "binary",
+                "left": "DONE",
+                "operator": "not in",
+                "right": [
+                  "DONE",
+                  "CLOSED"
+                ],
+                "status": "ok",
+                "value": false
+              }
+            ]
+          }
+        ],
+        "guard_references": [
+          "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
+        ],
+        "status": "blocked",
+        "type": "guards"
+      },
+      {
+        "block_index": 1,
+        "conditional_steps": [],
+        "status": "blocked",
+        "step_names": [
+          "verify-command"
+        ],
+        "type": "steps"
+      }
+    ],
     "blockers": [
       "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],

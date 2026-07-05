@@ -6,12 +6,12 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import Workflow
+from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
-from .checking import GuardProbe, check_workflow
+from .checking import GuardProbe, _build_guard_detail, _default_guard_probe, _evaluate_guard_expression, check_workflow
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
-from .resolution import ResolvedBuiltinStep, ResolvedOperation, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
 from .state import RuntimeStateError, delete_state_value, read_state_document, resolve_state_target, write_state_document, write_state_value
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -36,7 +36,7 @@ def execute_workflow(
             outputs={
                 **dict(check_result.outputs),
                 "executed_steps": [],
-                "skipped_steps": [step.name for step in workflow.steps],
+                "skipped_steps": _all_step_names(workflow),
                 "step_condition_details": [],
             },
             operation_results=check_result.operation_results,
@@ -61,22 +61,155 @@ def execute_workflow(
     executed_steps: list[str] = []
     skipped_steps: list[str] = []
     step_condition_details: list[dict[str, object]] = []
+    block_items: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("block_items", []) if isinstance(item, dict)]
+    guard_details: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("guard_details", []) if isinstance(item, dict)]
+    checked_guards: list[str] = list(check_result.outputs.get("checked_guards", []))
     effective_workflow.step_results.clear()
 
-    for step, resolved_step in zip(effective_workflow.steps, resolution.resolved_steps, strict=False):
-        if step.if_ is not None:
-            condition_result = _evaluate_step_condition(step, effective_workflow)
-            if isinstance(condition_result, Diagnostic):
-                step_condition_details.append(
+    start_block_index = _initial_checked_block_count(effective_workflow)
+
+    for block_index, (declared_block, resolved_block) in enumerate(zip(effective_workflow.blocks, resolution.blocks, strict=False)):
+        if block_index < start_block_index:
+            continue
+
+        if isinstance(declared_block, GuardBlock):
+            assert isinstance(resolved_block, ResolvedGuardBlock)
+            block_blockers: list[str] = []
+            block_guard_details: list[dict[str, object]] = []
+            for resolved_guard in resolved_block.guards:
+                if isinstance(resolved_guard, ResolvedGuardExpression):
+                    result = _evaluate_guard_expression(resolved_guard, effective_workflow, guard_probe or _default_guard_probe(provider=connector_provider))
+                else:
+                    result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_guard, effective_workflow)
+                operation_results.append(result)
+                diagnostics.extend(result.diagnostics)
+                detail = _build_guard_detail(resolved_guard.reference, result)
+                guard_details.append(detail)
+                block_guard_details.append(detail)
+                checked_guards.append(resolved_guard.reference)
+                if result.status != "ok":
+                    block_blockers.append(resolved_guard.reference)
+            block_items.append(
+                {
+                    "block_index": block_index,
+                    "type": "guards",
+                    "status": "blocked" if block_blockers else "ok",
+                    "guard_references": [guard.reference for guard in declared_block.guards],
+                    "blockers": block_blockers,
+                    "guard_details": block_guard_details,
+                }
+            )
+            if block_blockers:
+                skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index + 1))
+                return RuntimeResult(
+                    mode=Mode.EXECUTE,
+                    status=RuntimeStatus.GUARD_FAILED,
+                    diagnostics=tuple(diagnostics),
+                    plan=check_result.plan,
+                    outputs={
+                        "can_execute": False,
+                        "blockers": block_blockers,
+                        "checked_guards": checked_guards,
+                        "guard_details": guard_details,
+                        "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                        "active_profile": active_profile,
+                        "active_overrides": [override.to_contract() for override in active_overrides],
+                        "executed_steps": executed_steps,
+                        "skipped_steps": skipped_steps,
+                        "step_condition_details": step_condition_details,
+                    },
+                    operation_results=tuple(operation_results),
+                    failed_guard=block_blockers[0],
+                )
+            continue
+
+        assert isinstance(declared_block, StepBlock)
+        assert isinstance(resolved_block, ResolvedStepBlock)
+        block_executed: list[str] = []
+        block_skipped: list[str] = []
+        for step_index, (step, resolved_step) in enumerate(zip(declared_block.steps, resolved_block.steps, strict=False)):
+            if step.if_ is not None:
+                condition_result = _evaluate_step_condition(step, effective_workflow)
+                if isinstance(condition_result, Diagnostic):
+                    step_condition_details.append(
+                        {
+                            "name": step.name,
+                            "condition": step.if_,
+                            "outcome": "error",
+                            "reason": "condition_evaluation_failed",
+                        }
+                    )
+                    skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                    diagnostics.append(condition_result)
+                    block_items.append(
+                        {
+                            "block_index": block_index,
+                            "type": "steps",
+                            "status": "execution_error",
+                            "step_names": [candidate.name for candidate in declared_block.steps],
+                            "executed_steps": block_executed,
+                            "skipped_steps": block_skipped + [step.name],
+                            "failed_step": step.name,
+                        }
+                    )
+                    return RuntimeResult(
+                        mode=Mode.EXECUTE,
+                        status=RuntimeStatus.EXECUTION_ERROR,
+                        diagnostics=tuple(diagnostics),
+                        plan=check_result.plan,
+                        outputs={
+                            "can_execute": False,
+                            "active_profile": active_profile,
+                            "active_overrides": [override.to_contract() for override in active_overrides],
+                            "executed_steps": executed_steps,
+                            "skipped_steps": skipped_steps,
+                            "step_condition_details": step_condition_details,
+                            "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                            "checked_guards": checked_guards,
+                            "guard_details": guard_details,
+                        },
+                        operation_results=tuple(operation_results),
+                        failed_step=step.name,
+                    )
+                if condition_result is False:
+                    step_condition_details.append(
+                        {
+                            "name": step.name,
+                            "condition": step.if_,
+                            "outcome": "skipped",
+                            "reason": "condition_false",
+                        }
+                    )
+                    skipped_steps.append(step.name)
+                    block_skipped.append(step.name)
+                    continue
+                step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed"})
+            if isinstance(resolved_step, ResolvedBuiltinStep):
+                result = _execute_builtin_state_step(step, effective_workflow)
+            else:
+                result = executor(resolved_step, effective_workflow)
+            if step.register is not None:
+                effective_workflow.step_results[step.register] = {
+                    "status": result.status,
+                    "summary": result.summary,
+                    "outputs": dict(result.outputs),
+                }
+            operation_results.append(result)
+            diagnostics.extend(result.diagnostics)
+
+            if result.status != "ok":
+                skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                block_items.append(
                     {
-                        "name": step.name,
-                        "condition": step.if_,
-                        "outcome": "error",
-                        "reason": "condition_evaluation_failed",
+                        "block_index": block_index,
+                        "type": "steps",
+                        "status": "execution_error",
+                        "step_names": [candidate.name for candidate in declared_block.steps],
+                        "executed_steps": block_executed,
+                        "skipped_steps": block_skipped,
+                        "failed_step": step.name,
                     }
                 )
-                skipped_steps.extend(remaining.name for remaining in effective_workflow.steps[len(executed_steps) + len(skipped_steps) + 1 :])
-                diagnostics.append(condition_result)
                 return RuntimeResult(
                     mode=Mode.EXECUTE,
                     status=RuntimeStatus.EXECUTION_ERROR,
@@ -89,55 +222,27 @@ def execute_workflow(
                         "executed_steps": executed_steps,
                         "skipped_steps": skipped_steps,
                         "step_condition_details": step_condition_details,
+                        "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                        "checked_guards": checked_guards,
+                        "guard_details": guard_details,
                     },
                     operation_results=tuple(operation_results),
                     failed_step=step.name,
                 )
-            if condition_result is False:
-                step_condition_details.append(
-                    {
-                        "name": step.name,
-                        "condition": step.if_,
-                        "outcome": "skipped",
-                        "reason": "condition_false",
-                    }
-                )
-                skipped_steps.append(step.name)
-                continue
-            step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed"})
-        if isinstance(resolved_step, ResolvedBuiltinStep):
-            result = _execute_builtin_state_step(step, effective_workflow)
-        else:
-            result = executor(resolved_step, effective_workflow)
-        if step.register is not None:
-            effective_workflow.step_results[step.register] = {
-                "status": result.status,
-                "summary": result.summary,
-                "outputs": dict(result.outputs),
+
+            executed_steps.append(step.name)
+            block_executed.append(step.name)
+
+        block_items.append(
+            {
+                "block_index": block_index,
+                "type": "steps",
+                "status": "ok",
+                "step_names": [candidate.name for candidate in declared_block.steps],
+                "executed_steps": block_executed,
+                "skipped_steps": block_skipped,
             }
-        operation_results.append(result)
-        diagnostics.extend(result.diagnostics)
-
-        if result.status != "ok":
-            skipped_steps.extend(remaining.name for remaining in effective_workflow.steps[len(executed_steps) + 1 :])
-            return RuntimeResult(
-                mode=Mode.EXECUTE,
-                status=RuntimeStatus.EXECUTION_ERROR,
-                diagnostics=tuple(diagnostics),
-                plan=check_result.plan,
-                outputs={
-                    "can_execute": False,
-                    "active_profile": active_profile,
-                    "active_overrides": [override.to_contract() for override in active_overrides],
-                    "executed_steps": executed_steps,
-                    "skipped_steps": skipped_steps,
-                    "step_condition_details": step_condition_details,
-                },
-                operation_results=tuple(operation_results),
-                failed_step=step.name,
-            )
-
-        executed_steps.append(step.name)
+        )
 
     return RuntimeResult(
         mode=Mode.EXECUTE,
@@ -151,6 +256,9 @@ def execute_workflow(
             "executed_steps": executed_steps,
             "skipped_steps": skipped_steps,
             "step_condition_details": step_condition_details,
+            "checked_guards": checked_guards,
+            "guard_details": guard_details,
+            "block_items": block_items,
         },
         operation_results=tuple(operation_results),
     )
@@ -233,3 +341,55 @@ def _execute_state_delete(step_name: str, target_expr: str, workflow: Workflow) 
             "deleted": deleted,
         },
     )
+
+
+def _all_step_names(workflow: Workflow) -> list[str]:
+    return [step.name for block in workflow.blocks if isinstance(block, StepBlock) for step in block.steps]
+
+
+def _initial_checked_block_count(workflow: Workflow) -> int:
+    count = 0
+    for block in workflow.blocks:
+        if isinstance(block, GuardBlock):
+            count += 1
+            continue
+        break
+    return count
+
+
+def _remaining_step_names(workflow: Workflow, *, start_block_index: int, current_step_index: int | None = None) -> list[str]:
+    remaining: list[str] = []
+    for block_index, block in enumerate(workflow.blocks[start_block_index:], start=start_block_index):
+        if not isinstance(block, StepBlock):
+            continue
+        start_step = current_step_index if block_index == start_block_index and current_step_index is not None else 0
+        remaining.extend(step.name for step in block.steps[start_step:])
+    return remaining
+
+
+def _pending_execution_block_items(workflow: Workflow, *, start_block_index: int, blocked: bool) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for block_index, block in enumerate(workflow.blocks[start_block_index:], start=start_block_index):
+        if isinstance(block, GuardBlock):
+            items.append(
+                {
+                    "block_index": block_index,
+                    "type": "guards",
+                    "status": "pending",
+                    "guard_references": [guard.reference for guard in block.guards],
+                    "blockers": [],
+                    "guard_details": [],
+                }
+            )
+        else:
+            items.append(
+                {
+                    "block_index": block_index,
+                    "type": "steps",
+                    "status": "blocked" if blocked else "pending",
+                    "step_names": [step.name for step in block.steps],
+                    "executed_steps": [],
+                    "skipped_steps": [],
+                }
+            )
+    return items

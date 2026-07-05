@@ -8,12 +8,12 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import Workflow
+from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, UnaryNode
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
-from .resolution import ResolvedExpressionProbe, ResolvedGuardExpression, ResolvedOperation, resolve_workflow_references
+from .resolution import ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
 from .validation import validate_workflow_document
 
 
@@ -33,7 +33,7 @@ def check_workflow(
             status=RuntimeStatus.VALIDATION_ERROR,
             diagnostics=validation_report.diagnostics,
             plan=ExecutionPlan(),
-            outputs={"can_execute": False, "blockers": [], "checked_guards": []},
+            outputs={"can_execute": False, "blockers": [], "checked_guards": [], "block_items": []},
         )
 
     active_profile = None
@@ -54,6 +54,7 @@ def check_workflow(
                     "can_execute": False,
                     "blockers": [],
                     "checked_guards": [],
+                    "block_items": [],
                     "active_profile": active_profile,
                     "active_overrides": [override.to_contract() for override in active_overrides],
                 },
@@ -71,14 +72,15 @@ def check_workflow(
             status=RuntimeStatus.RESOLUTION_ERROR,
             diagnostics=resolution.diagnostics,
             plan=ExecutionPlan(
-                guard_checks=tuple(guard.reference for guard in effective_workflow.guards),
-                step_names=tuple(step.name for step in effective_workflow.steps),
+                guard_checks=tuple(_initial_guard_references(effective_workflow)),
+                step_names=tuple(_all_step_names(effective_workflow)),
                 blockers=(),
             ),
             outputs={
                     "can_execute": False,
                     "blockers": [],
-                    "checked_guards": [guard.reference for guard in effective_workflow.guards],
+                    "checked_guards": list(_initial_guard_references(effective_workflow)),
+                    "block_items": _build_pending_block_items(effective_workflow, blocked=False),
                     "active_profile": active_profile,
                     "active_overrides": [override.to_contract() for override in active_overrides],
                 },
@@ -88,30 +90,67 @@ def check_workflow(
     diagnostics: list[Diagnostic] = []
     operation_results: list[OperationResult] = []
     blockers: list[str] = []
+    checked_guards: list[str] = []
     guard_details: list[dict[str, object]] = []
+    block_items: list[dict[str, object]] = []
     bootstrap_details: list[dict[str, object]] = []
     failed_guard: str | None = None
 
-    for resolved_guard in resolution.resolved_guards:
-        if isinstance(resolved_guard, ResolvedGuardExpression):
-            result = _evaluate_guard_expression(resolved_guard, effective_workflow, probe)
-        else:
-            result = probe(resolved_guard, effective_workflow)
-        operation_results.append(result)
-        diagnostics.extend(result.diagnostics)
-        guard_details.append(_build_guard_detail(resolved_guard.reference, result))
-        bootstrap_details = _collect_bootstrap_details(operation_results)
-        if result.status != "ok":
-            blockers.append(resolved_guard.reference)
-            if failed_guard is None:
-                failed_guard = resolved_guard.reference
+    halted = False
+    for block in resolution.blocks:
+        if isinstance(block, ResolvedGuardBlock):
+            if halted:
+                block_items.append(_pending_guard_block_item(block, effective_workflow))
+                continue
+            block_blockers: list[str] = []
+            block_guard_details: list[dict[str, object]] = []
+            for resolved_guard in block.guards:
+                if isinstance(resolved_guard, ResolvedGuardExpression):
+                    result = _evaluate_guard_expression(resolved_guard, effective_workflow, probe)
+                else:
+                    result = probe(resolved_guard, effective_workflow)
+                operation_results.append(result)
+                diagnostics.extend(result.diagnostics)
+                detail = _build_guard_detail(resolved_guard.reference, result)
+                guard_details.append(detail)
+                block_guard_details.append(detail)
+                checked_guards.append(resolved_guard.reference)
+                bootstrap_details = _collect_bootstrap_details(operation_results)
+                if result.status != "ok":
+                    blockers.append(resolved_guard.reference)
+                    block_blockers.append(resolved_guard.reference)
+                    if failed_guard is None:
+                        failed_guard = resolved_guard.reference
+            block_items.append(
+                {
+                    "block_index": block.block_index,
+                    "type": "guards",
+                    "status": "blocked" if block_blockers else "ok",
+                    "guard_references": [guard.reference for guard in block.guards],
+                    "blockers": block_blockers,
+                    "guard_details": block_guard_details,
+                }
+            )
+            if block_blockers:
+                halted = True
+            continue
+
+        if halted:
+            block_items.append(_pending_step_block_item(block, effective_workflow, blocked=True))
+            continue
+        block_items.append(_pending_step_block_item(block, effective_workflow, blocked=False))
+        halted = True
+
+    if halted and len(block_items) < len(effective_workflow.blocks):
+        block_items.extend(_build_pending_block_items(effective_workflow, blocked=bool(blockers), start_index=len(block_items)))
 
     if blockers:
         outputs = {
             "can_execute": False,
             "blockers": blockers,
-            "checked_guards": [result.reference for result in resolution.resolved_guards],
+            "checked_guards": checked_guards,
             "guard_details": guard_details,
+            "block_items": block_items,
             "active_profile": active_profile,
             "active_overrides": [override.to_contract() for override in active_overrides],
         }
@@ -122,8 +161,8 @@ def check_workflow(
             status=RuntimeStatus.GUARD_FAILED,
             diagnostics=tuple(diagnostics),
             plan=ExecutionPlan(
-                guard_checks=tuple(result.reference for result in resolution.resolved_guards),
-                step_names=tuple(step.name for step in effective_workflow.steps),
+                guard_checks=tuple(checked_guards),
+                step_names=tuple(_all_step_names(effective_workflow)),
                 blockers=tuple(blockers),
             ),
             outputs=outputs,
@@ -134,8 +173,9 @@ def check_workflow(
     outputs = {
         "can_execute": True,
         "blockers": [],
-        "checked_guards": [result.reference for result in resolution.resolved_guards],
+        "checked_guards": checked_guards,
         "guard_details": guard_details,
+        "block_items": block_items,
         "active_profile": active_profile,
         "active_overrides": [override.to_contract() for override in active_overrides],
     }
@@ -147,8 +187,8 @@ def check_workflow(
         status=RuntimeStatus.OK,
         diagnostics=tuple(diagnostics),
         plan=ExecutionPlan(
-            guard_checks=tuple(result.reference for result in resolution.resolved_guards),
-            step_names=tuple(step.name for step in effective_workflow.steps),
+            guard_checks=tuple(checked_guards),
+            step_names=tuple(_all_step_names(effective_workflow)),
             blockers=(),
         ),
         outputs=outputs,
@@ -175,6 +215,71 @@ def _collect_bootstrap_details(operation_results: list[OperationResult]) -> list
             }
         )
     return details
+
+
+def _all_step_names(workflow: Workflow) -> list[str]:
+    return [step.name for block in workflow.blocks if isinstance(block, StepBlock) for step in block.steps]
+
+
+def _initial_guard_references(workflow: Workflow) -> list[str]:
+    references: list[str] = []
+    for block in workflow.blocks:
+        if isinstance(block, StepBlock):
+            break
+        references.extend(guard.reference for guard in block.guards)
+    return references
+
+
+def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index: int = 0) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for block_index, block in enumerate(workflow.blocks[start_index:], start=start_index):
+        if isinstance(block, GuardBlock):
+            items.append(
+                {
+                    "block_index": block_index,
+                    "type": "guards",
+                    "status": "pending",
+                    "guard_references": [guard.reference for guard in block.guards],
+                    "blockers": [],
+                    "guard_details": [],
+                }
+            )
+        else:
+            items.append(
+                {
+                    "block_index": block_index,
+                    "type": "steps",
+                    "status": "blocked" if blocked else "pending",
+                    "step_names": [step.name for step in block.steps],
+                    "conditional_steps": [step.name for step in block.steps if step.if_ is not None],
+                }
+            )
+    return items
+
+
+def _pending_guard_block_item(block: ResolvedGuardBlock, workflow: Workflow) -> dict[str, object]:
+    declared = workflow.blocks[block.block_index]
+    assert isinstance(declared, GuardBlock)
+    return {
+        "block_index": block.block_index,
+        "type": "guards",
+        "status": "pending",
+        "guard_references": [guard.reference for guard in declared.guards],
+        "blockers": [],
+        "guard_details": [],
+    }
+
+
+def _pending_step_block_item(block: ResolvedStepBlock, workflow: Workflow, *, blocked: bool) -> dict[str, object]:
+    declared = workflow.blocks[block.block_index]
+    assert isinstance(declared, StepBlock)
+    return {
+        "block_index": block.block_index,
+        "type": "steps",
+        "status": "blocked" if blocked else "pending",
+        "step_names": [step.name for step in declared.steps],
+        "conditional_steps": [step.name for step in declared.steps if step.if_ is not None],
+    }
 
 
 def _default_guard_probe(*, provider: ConnectorProvider | None):
