@@ -1,6 +1,8 @@
 import unittest
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.launcher import Launcher
+from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import execute_workflow
@@ -145,6 +147,42 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["executed_steps"], [])
         self.assertEqual(result.outputs["skipped_steps"], ["second-step"])
         self.assertEqual(result.diagnostics[-1].code, "runtime.value.input_missing")
+
+    def test_execute_applies_launcher_to_shell_command(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command", with_={"command": "echo hi"}), launcher="shell_frontend"),),
+        )
+        profile = Profile(name="frontend", launchers={"shell_frontend": Launcher(connector="shell.command", before="nvm use", after="true")})
+        seen_commands: list[object] = []
+
+        def executor(resolved_step, _workflow):
+            seen_commands.append(resolved_step.declared_with["command"])
+            return OperationResult(status="ok", summary="Executed")
+
+        result = execute_workflow(workflow, profile=profile, step_executor=executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(len(seen_commands), 1)
+        self.assertIn("nvm use", seen_commands[0])
+        self.assertIn("echo hi", seen_commands[0])
+        self.assertEqual(result.outputs["launcher_details"][0]["launcher"], "shell_frontend")
+
+    def test_execute_reports_unknown_launcher_as_validation_error(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command", with_={"command": "echo hi"}), launcher="missing"),),
+        )
+        profile = Profile(name="frontend")
+
+        result = execute_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "validation.workflow.step.launcher.unknown")
 
 
 if __name__ == "__main__":

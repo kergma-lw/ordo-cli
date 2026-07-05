@@ -11,6 +11,7 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResu
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, UnaryNode
+from .launchers import validate_step_launchers
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
@@ -60,6 +61,23 @@ def check_workflow(
                 },
             )
         effective_workflow = applied.workflow
+
+    launcher_diagnostics = validate_step_launchers(effective_workflow, active_profile, {} if profile is None else profile.launchers)
+    if launcher_diagnostics:
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.VALIDATION_ERROR,
+            diagnostics=launcher_diagnostics,
+            plan=ExecutionPlan(),
+            outputs={
+                "can_execute": False,
+                "blockers": [],
+                "checked_guards": [],
+                "block_items": _build_pending_block_items(effective_workflow, blocked=False),
+                "active_profile": active_profile,
+                "active_overrides": [override.to_contract() for override in active_overrides],
+            },
+        )
 
     resolution = resolve_workflow_references(
         effective_workflow,

@@ -9,6 +9,7 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStat
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .checking import GuardProbe, _build_guard_detail, _default_guard_probe, _evaluate_guard_expression, check_workflow
+from .launchers import apply_launcher_to_step
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
@@ -38,6 +39,7 @@ def execute_workflow(
                 "executed_steps": [],
                 "skipped_steps": _all_step_names(workflow),
                 "step_condition_details": [],
+                "launcher_details": [],
             },
             operation_results=check_result.operation_results,
             failed_guard=check_result.failed_guard,
@@ -61,6 +63,7 @@ def execute_workflow(
     executed_steps: list[str] = []
     skipped_steps: list[str] = []
     step_condition_details: list[dict[str, object]] = []
+    launcher_details: list[dict[str, object]] = []
     block_items: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("block_items", []) if isinstance(item, dict)]
     guard_details: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("guard_details", []) if isinstance(item, dict)]
     checked_guards: list[str] = list(check_result.outputs.get("checked_guards", []))
@@ -166,6 +169,7 @@ def execute_workflow(
                             "executed_steps": executed_steps,
                             "skipped_steps": skipped_steps,
                             "step_condition_details": step_condition_details,
+                            "launcher_details": launcher_details,
                             "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
                             "checked_guards": checked_guards,
                             "guard_details": guard_details,
@@ -190,7 +194,25 @@ def execute_workflow(
             if isinstance(resolved_step, ResolvedBuiltinStep):
                 result = _execute_builtin_step(step, effective_workflow)
             else:
-                result = executor(resolved_step, effective_workflow)
+                executed_step = resolved_step
+                applied_launcher = None
+                if profile is not None:
+                    executed_step, applied_launcher, launcher_error = apply_launcher_to_step(step, resolved_step, effective_workflow, profile.launchers)
+                    if launcher_error is not None:
+                        result = launcher_error
+                    else:
+                        result = executor(executed_step, effective_workflow)
+                else:
+                    result = executor(executed_step, effective_workflow)
+                if applied_launcher is not None:
+                    launcher_details.append(
+                        {
+                            "step": step.name,
+                            "launcher": applied_launcher.name,
+                            "connector": applied_launcher.definition.connector,
+                            "status": result.status,
+                        }
+                    )
             if step.register is not None:
                 effective_workflow.step_results[step.register] = {
                     "status": result.status,
@@ -225,6 +247,7 @@ def execute_workflow(
                         "executed_steps": executed_steps,
                         "skipped_steps": skipped_steps,
                         "step_condition_details": step_condition_details,
+                        "launcher_details": launcher_details,
                         "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
                         "checked_guards": checked_guards,
                         "guard_details": guard_details,
@@ -259,6 +282,7 @@ def execute_workflow(
             "executed_steps": executed_steps,
             "skipped_steps": skipped_steps,
             "step_condition_details": step_condition_details,
+            "launcher_details": launcher_details,
             "checked_guards": checked_guards,
             "guard_details": guard_details,
             "block_items": block_items,

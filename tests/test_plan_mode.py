@@ -124,6 +124,18 @@ class PlanModeTest(unittest.TestCase):
         self.assertTrue(result.outputs["step_items"][0]["conditional"])
         self.assertEqual(result.outputs["step_items"][0]["condition"], "${inputs.enabled}")
 
+    def test_plan_surfaces_step_launcher_selection(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="inspect", operation=OperationRef("shell.command"), launcher="shell_frontend"),),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["step_items"][0]["launcher"], "shell_frontend")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -138,6 +138,7 @@ def _build_step_items(
                         "eligibility": "blocked" if blocked else "eligible",
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
+                        "launcher": step.launcher,
                     }
                 )
                 continue
@@ -150,6 +151,7 @@ def _build_step_items(
                     "eligibility": "blocked" if blocked else "eligible",
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
+                    "launcher": step.launcher,
                 }
             )
         return step_items
@@ -164,6 +166,7 @@ def _build_step_items(
                 "eligibility": "blocked" if blocked else "unknown",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
+                "launcher": step.launcher,
             }
         )
     return step_items
