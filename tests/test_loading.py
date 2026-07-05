@@ -60,6 +60,25 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "${inputs.enabled}")
         self.assertEqual(workflow.steps[1].if_, "${inputs.enabled}")
 
+    def test_loads_step_launcher_field_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        uses: shell.command
+                        launcher: shell_frontend
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].launcher, "shell_frontend")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["launcher"], "shell_frontend")
+
     def test_loads_value_step_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(
@@ -120,6 +139,50 @@ class LoadingTest(unittest.TestCase):
 
         self.assertIsInstance(profile, Profile)
         self.assertEqual(profile.to_contract()["overrides"][0]["target"], "shell.command")
+
+    def test_loads_profile_launchers_into_typed_model(self) -> None:
+        profile = load_profile_text(
+            textwrap.dedent(
+                """
+                name: backend-default
+                launchers:
+                  shell_frontend:
+                    connector: shell.command
+                    before: export NVM_DIR="$HOME/.nvm"
+                    after: "true"
+                """
+            )
+        )
+
+        self.assertEqual(profile.launchers["shell_frontend"].connector, "shell.command")
+        self.assertEqual(profile.to_contract()["launchers"]["shell_frontend"]["before"], 'export NVM_DIR="$HOME/.nvm"')
+
+    def test_loads_profile_launcher_from_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            profile_path = root / "frontend.yml"
+            launcher_dir = root / "launchers"
+            launcher_dir.mkdir()
+            (launcher_dir / "shell-front.yml").write_text(
+                "connector: shell.command\nbefore: nvm use\nafter: \"true\"\n",
+                encoding="utf-8",
+            )
+            profile_path.write_text(
+                textwrap.dedent(
+                    """
+                    name: frontend
+                    launchers:
+                      shell_frontend:
+                        file: launchers/shell-front.yml
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            profile = load_profile_file(profile_path)
+
+        self.assertEqual(profile.launchers["shell_frontend"].before, "nvm use")
 
     def test_loader_normalizes_yaml_merge_without_distinct_runtime_semantics(self) -> None:
         merged = load_yaml_document(

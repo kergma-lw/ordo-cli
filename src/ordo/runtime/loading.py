@@ -10,6 +10,7 @@ import yaml
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
+from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 
@@ -91,6 +92,7 @@ def load_profile_text(text: str, *, source: str = "<memory>") -> Profile:
         inputs=_optional_object(payload, "inputs", source=source),
         checks=tuple(_require_string_item(item, path=("checks", str(index)), source=source) for index, item in enumerate(checks_data)),
         overrides=tuple(_load_override(item, index=index, source=source) for index, item in enumerate(overrides_data)),
+        launchers=_load_launchers(payload.get("launchers"), source=source),
     )
 
 
@@ -170,6 +172,7 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
         state_delete=state_delete,
         if_=_optional_string(data, "if", path=path + ("if",), source=source),
         register=_optional_string(data, "register", path=path + ("register",), source=source),
+        launcher=_optional_string(data, "launcher", path=path + ("launcher",), source=source),
     )
 
 
@@ -239,6 +242,69 @@ def _load_override(payload: JSONValue, *, index: int, source: str) -> Override:
         with_=_optional_object(data, "with", path=("overrides", str(index), "with"), source=source),
         reason=reason,
     )
+
+
+def _load_launchers(payload: JSONValue | None, *, source: str) -> dict[str, Launcher]:
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise _load_error(
+            code="load.profile.launchers_type",
+            message="Profile launchers must be a mapping",
+            path=("launchers",),
+            details={"source": source, "actual_type": type(payload).__name__},
+        )
+
+    base_dir = _source_directory(source)
+    loaded: dict[str, Launcher] = {}
+    for name, item in payload.items():
+        path = ("launchers", str(name))
+        if not isinstance(name, str) or not name:
+            raise _load_error(
+                code="load.profile.launcher.name",
+                message="Launcher names must be non-empty strings",
+                path=path,
+                details={"source": source},
+            )
+        if not isinstance(item, dict):
+            raise _load_error(
+                code="load.profile.launcher.type",
+                message="Launcher definition must be a mapping",
+                path=path,
+                details={"source": source, "actual_type": type(item).__name__},
+            )
+        data = item
+        if "file" in data:
+            file_ref = _require_string(data, "file", path=path + ("file",), source=source)
+            if base_dir is None:
+                raise _load_error(
+                    code="load.profile.launcher.file_requires_file_source",
+                    message="Launcher file references require a file-backed profile source",
+                    path=path + ("file",),
+                    details={"source": source},
+                )
+            launcher_path = (base_dir / file_ref).resolve()
+            launcher_payload = load_yaml_document(launcher_path.read_text(encoding="utf-8"), source=str(launcher_path))
+            if not isinstance(launcher_payload, dict):
+                raise _load_error(
+                    code="load.profile.launcher.file_root_type",
+                    message="Launcher file root must be a mapping",
+                    path=path + ("file",),
+                    details={"source": str(launcher_path), "actual_type": type(launcher_payload).__name__},
+                )
+            data = launcher_payload
+        loaded[name] = Launcher(
+            connector=_optional_string(data, "connector", path=path + ("connector",), source=source),
+            before=_optional_string(data, "before", path=path + ("before",), source=source),
+            after=_optional_string(data, "after", path=path + ("after",), source=source),
+        )
+    return loaded
+
+
+def _source_directory(source: str) -> Path | None:
+    if source == "<memory>":
+        return None
+    return Path(source).resolve().parent
 
 
 def _load_operation_ref(data: JSONObject, *, path: tuple[str, ...], source: str) -> OperationRef:

@@ -116,6 +116,56 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.profile.name if activated.profile else None, "review")
         self.assertEqual(activated.profile.inputs["source"], "explicit")
 
+    def test_activate_playbook_loads_profile_launchers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "launchers").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      frontend:
+                        file: frontend.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "launchers" / "shell-front.yml").write_text(
+                "connector: shell.command\nbefore: nvm use\nafter: \"true\"\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "frontend.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: frontend
+                    inputs: {}
+                    checks: []
+                    overrides: []
+                    launchers:
+                      shell_frontend:
+                        file: ../launchers/shell-front.yml
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", profile_name="frontend", cwd=root)
+
+        self.assertEqual(activated.profile.launchers["shell_frontend"].connector, "shell.command")
+
     def test_activate_playbook_applies_launch_time_input_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

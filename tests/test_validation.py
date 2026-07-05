@@ -115,6 +115,58 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.input_ref")
 
+    def test_step_launcher_requires_uses(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: compute
+                        value: x
+                        launcher: shell_frontend
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.launcher_without_uses")
+
+    def test_valid_profile_launchers_pass(self) -> None:
+        report = validate_profile_text(
+            textwrap.dedent(
+                """
+                name: frontend
+                launchers:
+                  shell_frontend:
+                    connector: shell.command
+                    before: nvm use
+                  shell_shared:
+                    file: launchers/shell-shared.yml
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_profile_launcher_rejects_mixed_file_and_inline_fields(self) -> None:
+        report = validate_profile_text(
+            textwrap.dedent(
+                """
+                name: frontend
+                launchers:
+                  shell_frontend:
+                    file: launchers/shell-front.yml
+                    before: nvm use
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.profile.launcher.ambiguous_source")
+
     def test_guard_expression_rejects_calling_inputs_like_probe(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

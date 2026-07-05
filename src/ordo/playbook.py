@@ -228,6 +228,7 @@ def _apply_input_overrides(
         inputs=remaining_profile_inputs,
         checks=profile.checks,
         overrides=profile.overrides,
+        launchers=profile.launchers,
     )
     return overridden_workflow, overridden_profile
 

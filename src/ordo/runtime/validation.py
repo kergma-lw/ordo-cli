@@ -32,6 +32,7 @@ from .value_expressions import (
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 REGISTER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+LAUNCHER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
 
 
 def _field_names(items: list[JSONObject]) -> frozenset[str]:
@@ -50,6 +51,7 @@ STEP_ALLOWED_FIELDS = frozenset().union(
 )
 PROFILE_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["top_level_fields"])
 OVERRIDE_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["override_fields"])
+LAUNCHER_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["launcher_fields"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +191,7 @@ def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
     diagnostics.extend(_validate_checks(payload.get("checks"), source=source))
     diagnostics.extend(_validate_overrides(payload.get("overrides"), source=source))
+    diagnostics.extend(_validate_launchers(payload.get("launchers"), source=source))
 
     return _report("profile", diagnostics)
 
@@ -298,6 +301,7 @@ def _validate_step_list(
                 declared_registers=effective_declared_registers,
             )
         )
+        diagnostics.extend(_validate_step_launcher(item, path=item_path, source=source, can_use_launcher=has_uses))
         diagnostics.extend(_validate_step_register(item, path=item_path, source=source, can_register=has_uses or has_value))
 
         if has_state_set:
@@ -959,6 +963,60 @@ def _validate_overrides(value: JSONValue | None, *, source: str) -> list[Diagnos
             else:
                 seen_targets[target] = path + ("target",)
 
+    return diagnostics
+
+
+def _validate_launchers(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if value is None:
+        return diagnostics
+    if not isinstance(value, dict):
+        diagnostics.append(_diagnostic("validation.profile.launchers.type", "Field 'launchers' must be an object", ("launchers",), source, actual_type=type(value).__name__))
+        return diagnostics
+
+    for name, item in value.items():
+        path = ("launchers", str(name))
+        if not isinstance(name, str) or not name:
+            diagnostics.append(_diagnostic("validation.profile.launcher.name", "Launcher names must be non-empty strings", path, source))
+        elif LAUNCHER_NAME_PATTERN.fullmatch(name) is None:
+            diagnostics.append(_diagnostic("validation.profile.launcher.name_pattern", "Launcher names must match the stable launcher name pattern", path, source, pattern=LAUNCHER_NAME_PATTERN.pattern))
+        if not isinstance(item, dict):
+            diagnostics.append(_diagnostic("validation.profile.launcher.type", "Launcher definition must be an object", path, source, actual_type=type(item).__name__))
+            continue
+        diagnostics.extend(_validate_unknown_fields(item, LAUNCHER_ALLOWED_FIELDS, path=path, source=source))
+        has_file = "file" in item
+        has_inline_fields = any(field in item for field in ("connector", "before", "after"))
+        if has_file and has_inline_fields:
+            diagnostics.append(_diagnostic("validation.profile.launcher.ambiguous_source", "Launcher definition cannot mix 'file' with inline fields", path, source))
+        if not has_file and not has_inline_fields:
+            diagnostics.append(_diagnostic("validation.profile.launcher.empty", "Launcher definition must declare 'file' or at least one inline field", path, source))
+        if "file" in item:
+            diagnostics.extend(_require_non_empty_string(item, "file", path=path + ("file",), source=source))
+        if "connector" in item:
+            diagnostics.extend(_require_non_empty_string(item, "connector", path=path + ("connector",), source=source, pattern=USES_PATTERN, pattern_message="Launcher connector must match the stable operation reference pattern"))
+        if "before" in item:
+            diagnostics.extend(_require_non_empty_string(item, "before", path=path + ("before",), source=source))
+        if "after" in item:
+            diagnostics.extend(_require_non_empty_string(item, "after", path=path + ("after",), source=source))
+    return diagnostics
+
+
+def _validate_step_launcher(value: JSONObject, *, path: tuple[str, ...], source: str, can_use_launcher: bool) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    launcher = value.get("launcher")
+    if launcher is None:
+        return diagnostics
+    if not can_use_launcher:
+        diagnostics.append(_diagnostic("validation.workflow.step.launcher_without_uses", "Step field 'launcher' is allowed only together with 'uses'", path + ("launcher",), source))
+        return diagnostics
+    if not isinstance(launcher, str):
+        diagnostics.append(_diagnostic("validation.workflow.step.launcher.type", "Step field 'launcher' must be a string", path + ("launcher",), source, actual_type=type(launcher).__name__))
+        return diagnostics
+    if not launcher:
+        diagnostics.append(_diagnostic("validation.workflow.step.launcher.empty", "Step field 'launcher' must not be empty", path + ("launcher",), source))
+        return diagnostics
+    if LAUNCHER_NAME_PATTERN.fullmatch(launcher) is None:
+        diagnostics.append(_diagnostic("validation.workflow.step.launcher.pattern", "Step field 'launcher' must match the stable launcher name pattern", path + ("launcher",), source, pattern=LAUNCHER_NAME_PATTERN.pattern))
     return diagnostics
 
 

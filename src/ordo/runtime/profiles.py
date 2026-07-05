@@ -47,8 +47,10 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
     merged_inputs: dict[str, object] = {}
     merged_checks: list[str] = []
     merged_overrides: list[Override] = []
+    merged_launchers = {}
     input_sources: dict[str, str] = {}
     override_sources: dict[str, str] = {}
+    launcher_sources: dict[str, str] = {}
 
     for profile in profiles:
         for key, value in profile.inputs.items():
@@ -88,6 +90,22 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
             override_sources[override.target] = profile.name
             merged_overrides.append(override)
 
+        for name, launcher in profile.launchers.items():
+            if name in merged_launchers and merged_launchers[name] != launcher:
+                diagnostics.append(
+                    _diagnostic(
+                        code="composition.profile.launcher_conflict",
+                        message=f"Launcher '{name}' conflicts with an earlier profile definition",
+                        path=("launchers", name),
+                        profile=profile.name,
+                        first_profile=launcher_sources[name],
+                    )
+                )
+                continue
+            if name not in merged_launchers:
+                merged_launchers[name] = launcher
+                launcher_sources[name] = profile.name
+
     if diagnostics:
         return ProfileCompositionResult(
             status=RuntimeStatus.VALIDATION_ERROR,
@@ -105,6 +123,7 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
             inputs=merged_inputs,
             checks=tuple(merged_checks),
             overrides=tuple(merged_overrides),
+            launchers=merged_launchers,
         ),
         active_profiles=tuple(profile.name for profile in profiles),
         active_overrides=tuple(merged_overrides),

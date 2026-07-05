@@ -1,5 +1,6 @@
 import unittest
 
+from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
@@ -42,6 +43,15 @@ class ProfileCompositionTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "composition.profile.override_conflict")
 
+    def test_profile_composition_rejects_conflicting_launcher_definition(self) -> None:
+        first = Profile(name="repo-a", launchers={"shell_frontend": Launcher(connector="shell.command", before="nvm use")})
+        second = Profile(name="repo-b", launchers={"shell_frontend": Launcher(connector="shell.command", before="fnm use")})
+
+        result = compose_profiles(first, second)
+
+        self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "composition.profile.launcher_conflict")
+
     def test_profile_applies_defaults_without_overriding_workflow_inputs(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", inputs={"issue_ref": "repo#1"})
         profile = Profile(name="repo-defaults", inputs={"branch": "keep"})
@@ -61,6 +71,15 @@ class ProfileCompositionTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "composition.workflow.input_conflict")
+
+    def test_profile_composition_preserves_launchers_when_non_conflicting(self) -> None:
+        first = Profile(name="repo-a", launchers={"shell_frontend": Launcher(connector="shell.command", before="nvm use")})
+        second = Profile(name="repo-b", inputs={"branch": "keep"})
+
+        result = compose_profiles(first, second)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertIn("shell_frontend", result.profile.launchers)
 
 
 if __name__ == "__main__":

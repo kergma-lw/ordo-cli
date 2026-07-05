@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .launcher import Launcher
 from .json import JSONObject
 
 
@@ -32,6 +33,7 @@ class Profile:
     inputs: JSONObject = field(default_factory=dict)
     checks: tuple[str, ...] = ()
     overrides: tuple[Override, ...] = ()
+    launchers: dict[str, Launcher] = field(default_factory=dict)
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped profile form."""
@@ -41,4 +43,5 @@ class Profile:
             "inputs": dict(self.inputs),
             "checks": list(self.checks),
             "overrides": [override.to_contract() for override in self.overrides],
+            "launchers": {name: launcher.to_contract() for name, launcher in self.launchers.items()},
         }

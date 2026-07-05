@@ -67,8 +67,16 @@ The initial important default is:
 
 A profile entry gives a stable project-local name to a profile file.
 
-It does not create a new profile semantic layer;
-it only makes project-local launch selection explicit and reviewable.
+The profile file contributes runtime activation context for one playbook run.
+
+That context may include:
+
+- input bindings;
+- approved overrides;
+- future runtime-facing execution selectors that remain declarative and reviewable.
+
+Profiles do not create a second orchestration language.
+They make project-local launch context explicit and reviewable.
 
 ## State entry role
 

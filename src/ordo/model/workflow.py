@@ -58,6 +58,7 @@ class Step:
     state_delete: str | None = None
     if_: str | None = field(default=None, metadata={"contract_name": "if"})
     register: str | None = None
+    launcher: str | None = None
 
     def __post_init__(self) -> None:
         forms = (
@@ -78,6 +79,8 @@ class Step:
                 contract["if"] = self.if_
             if self.register is not None:
                 contract["register"] = self.register
+            if self.launcher is not None:
+                contract["launcher"] = self.launcher
             return contract
         if self.value is not None:
             contract = {"name": self.name, "value": self.value}
