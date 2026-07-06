@@ -12,7 +12,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
 from ordo.model.workflow import Workflow
-from ordo.runtime import LoadError, load_profile_file, load_workflow_text, load_yaml_document
+from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document
 from ordo.runtime.value_expressions import (
     BuiltinCallNode,
     FilterApplicationNode,
@@ -158,7 +158,7 @@ def activate_playbook(
         except LoadError as exc:
             raise PlaybookError(exc.diagnostics) from exc
 
-    raw_workflow = _load_workflow_payload(workflow_path)
+    raw_workflow = _load_workflow_payload(workflow_path, launch_dir=Path.cwd() if cwd is None else Path(cwd))
     compiled_workflow = _compile_workflow_payload(
         raw_workflow,
         workflow_name=workflow_name,
@@ -254,9 +254,9 @@ def _load_playbook_document(path: Path) -> dict[str, object]:
     return payload
 
 
-def _load_workflow_payload(path: Path) -> dict[str, object]:
+def _load_workflow_payload(path: Path, *, launch_dir: Path) -> dict[str, object]:
     try:
-        payload = load_yaml_document(path.read_text(encoding="utf-8"), source=str(path))
+        payload = load_workflow_document_file(path, launch_dir=launch_dir)
     except FileNotFoundError as exc:
         raise _playbook_error(
             "playbook.workflow.file_missing",

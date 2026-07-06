@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ordo.model.profile import Profile
 from ordo.model.workflow import Workflow
-from ordo.runtime import LoadError, load_profile_file, load_profile_text, load_workflow_text, load_yaml_document
+from ordo.runtime import LoadError, load_profile_file, load_profile_text, load_workflow_file, load_workflow_text, load_yaml_document
 
 
 class LoadingTest(unittest.TestCase):
@@ -228,6 +228,206 @@ class LoadingTest(unittest.TestCase):
             profile = load_profile_file(path)
 
         self.assertEqual(profile.name, "demo")
+
+    def test_load_workflow_file_expands_includes_relative_to_including_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            blocks_dir = root / "blocks"
+            blocks_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: blocks/guard-block
+                      - include: blocks/step-block
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (blocks_dir / "guard-block.yaml").write_text("guards: []\n", encoding="utf-8")
+            (blocks_dir / "step-block.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: inspect
+                        uses: gh.issue
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            workflow = load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(len(workflow.blocks), 2)
+        self.assertEqual(workflow.steps[0].name, "inspect")
+
+    def test_load_workflow_file_stops_on_first_matching_include_location(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            launch_dir = root / "launch"
+            workflow_dir = root / "workflows"
+            launch_dir.mkdir()
+            workflow_dir.mkdir()
+            workflow_path = workflow_dir / "workflow.yaml"
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: shared/block
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (workflow_dir / "shared").mkdir()
+            (launch_dir / "shared").mkdir()
+            (workflow_dir / "shared" / "block.yaml").write_text("guards: []\n", encoding="utf-8")
+            (launch_dir / "shared" / "block.yaml").write_text("steps: []\n", encoding="utf-8")
+
+            workflow = load_workflow_file(workflow_path, launch_dir=launch_dir)
+
+        self.assertEqual(len(workflow.guards), 0)
+        self.assertEqual(len(workflow.steps), 0)
+        self.assertEqual(workflow.to_contract()["blocks"][0], {"guards": []})
+
+    def test_load_workflow_file_rejects_include_cycles_with_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: shared/a
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "shared").mkdir()
+            (root / "shared" / "a.yaml").write_text("include: b\n", encoding="utf-8")
+            (root / "shared" / "b.yaml").write_text("include: a\n", encoding="utf-8")
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        diagnostic = context.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "load.workflow.include.cycle")
+        self.assertEqual(
+            [Path(item).name for item in diagnostic.details["include_chain"]],
+            ["workflow.yaml", "a.yaml", "b.yaml", "a.yaml"],
+        )
+
+    def test_load_workflow_file_rejects_upward_include_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: ../outside
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        diagnostic = context.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "load.workflow.include.forbidden_path")
+
+    def test_load_workflow_file_rejects_non_file_include_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: shared/block
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "shared").mkdir()
+            (root / "shared" / "block.yaml").mkdir()
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        diagnostic = context.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "load.workflow.include.not_file")
+
+    def test_load_workflow_file_rejects_include_depth_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: shared/0
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            shared = root / "shared"
+            shared.mkdir()
+            for index in range(33):
+                target = f"{index + 1}" if index < 32 else "end"
+                (shared / f"{index}.yaml").write_text(f'include: "{target}"\n', encoding="utf-8")
+            (shared / "end.yaml").write_text("guards: []\n", encoding="utf-8")
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        diagnostic = context.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "load.workflow.include.depth")
+
+    def test_load_workflow_file_allows_repeated_includes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: shared/guard-block
+                      - include: shared/guard-block
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "shared").mkdir()
+            (root / "shared" / "guard-block.yaml").write_text("guards: []\n", encoding="utf-8")
+
+            workflow = load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(len(workflow.blocks), 2)
+        self.assertEqual(workflow.to_contract()["blocks"], [{"guards": []}, {"guards": []}])
 
 
 if __name__ == "__main__":

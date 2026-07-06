@@ -3,7 +3,7 @@
 from .checking import check_workflow
 from .executing import execute_workflow
 from .explaining import explain_execution_result, explain_runtime_result, explain_workflow
-from .loading import LoadError, load_profile_file, load_profile_text, load_workflow_file, load_workflow_text, load_yaml_document
+from .loading import LoadError, load_profile_file, load_profile_text, load_workflow_document_file, load_workflow_file, load_workflow_text, load_yaml_document
 from .planning import plan_workflow
 from .profiles import ProfileCompositionResult, WorkflowProfileApplicationResult, apply_profile_to_workflow, compose_profiles
 from .providers import ConnectorProvider, GuardProbe, StepExecutor, clear_default_connector_provider, get_default_connector_provider, set_default_connector_provider
@@ -31,6 +31,7 @@ __all__ = [
     "compose_profiles",
     "load_profile_file",
     "load_profile_text",
+    "load_workflow_document_file",
     "load_workflow_file",
     "load_workflow_text",
     "load_yaml_document",

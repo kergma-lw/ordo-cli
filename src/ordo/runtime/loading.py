@@ -50,11 +50,30 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
     )
 
 
-def load_workflow_file(path: str | Path) -> Workflow:
+def load_workflow_file(path: str | Path, *, launch_dir: str | Path | None = None) -> Workflow:
     """Load workflow YAML from a file path."""
 
-    source = str(path)
-    return load_workflow_text(Path(path).read_text(encoding="utf-8"), source=source)
+    workflow_path = Path(path)
+    source = str(workflow_path)
+    payload = load_workflow_document_file(workflow_path, launch_dir=launch_dir)
+    blocks = _load_workflow_blocks(payload, source=source)
+    return Workflow(
+        version=_require_int(payload, "version", source=source),
+        workflow=_require_string(payload, "workflow", source=source),
+        inputs=_optional_object(payload, "inputs", source=source),
+        state_needs=_optional_object(payload, "state_needs", source=source),
+        state_bindings=_optional_object(payload, "state_bindings", source=source),
+        states=_optional_object(payload, "states", source=source),
+        blocks=blocks,
+    )
+
+
+def load_workflow_document_file(path: str | Path, *, launch_dir: str | Path | None = None) -> JSONObject:
+    """Load one workflow document and expand include directives."""
+
+    workflow_path = Path(path).resolve()
+    entry_launch_dir = _resolve_launch_directory(launch_dir)
+    return _expand_workflow_includes(workflow_path, launch_dir=entry_launch_dir, stack=(), depth=0)
 
 
 def load_profile_text(text: str, *, source: str = "<memory>") -> Profile:
@@ -122,6 +141,210 @@ def load_yaml_document(text: str, *, source: str = "<memory>") -> JSONValue:
         ) from exc
 
     return _normalize_json_value(loaded, source=source, path=())
+
+
+MAX_WORKFLOW_INCLUDE_DEPTH = 32
+WORKFLOW_INCLUDE_BUILTIN_DIR = Path(__file__).resolve().parents[1] / "includes"
+
+
+def _expand_workflow_includes(
+    path: Path,
+    *,
+    launch_dir: Path,
+    stack: tuple[Path, ...],
+    depth: int,
+) -> JSONObject:
+    resolved_path = path.resolve()
+    if resolved_path in stack:
+        raise _workflow_include_error(
+            code="load.workflow.include.cycle",
+            message="Workflow include cycle detected",
+            include_path=("include",),
+            include_chain=stack + (resolved_path,),
+            source=str(resolved_path),
+        )
+    if depth >= MAX_WORKFLOW_INCLUDE_DEPTH:
+        raise _workflow_include_error(
+            code="load.workflow.include.depth",
+            message="Workflow include depth limit exceeded",
+            include_path=("include",),
+            include_chain=stack + (resolved_path,),
+            source=str(resolved_path),
+            max_depth=MAX_WORKFLOW_INCLUDE_DEPTH,
+        )
+
+    try:
+        payload = load_yaml_document(resolved_path.read_text(encoding="utf-8"), source=str(resolved_path))
+    except FileNotFoundError as exc:
+        raise _workflow_include_error(
+            code="load.workflow.include.not_found",
+            message="Workflow include file does not exist",
+            include_path=("include",),
+            include_chain=stack + (resolved_path,),
+            source=str(resolved_path),
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise _workflow_include_error(
+            code="load.workflow.root_type",
+            message="Workflow root must be a mapping",
+            include_path=(),
+            include_chain=stack + (resolved_path,),
+            source=str(resolved_path),
+            actual_type=type(payload).__name__,
+        )
+
+    return _expand_include_nodes(payload, current_file=resolved_path, launch_dir=launch_dir, stack=stack + (resolved_path,), depth=depth)
+
+
+def _expand_include_nodes(
+    value: JSONValue,
+    *,
+    current_file: Path,
+    launch_dir: Path,
+    stack: tuple[Path, ...],
+    depth: int,
+    current_path: tuple[str, ...] = (),
+) -> JSONValue:
+    if isinstance(value, list):
+        return [
+            _expand_include_nodes(item, current_file=current_file, launch_dir=launch_dir, stack=stack, depth=depth, current_path=current_path + (str(index),))
+            for index, item in enumerate(value)
+        ]
+    if not isinstance(value, dict):
+        return value
+    if "include" in value:
+        if len(value) != 1:
+            raise _workflow_include_error(
+                code="load.workflow.include.form",
+                message="Include node must contain only the 'include' field",
+                include_path=current_path,
+                include_chain=stack,
+                source=str(current_file),
+            )
+        include_ref = value.get("include")
+        if not isinstance(include_ref, str) or not include_ref:
+            raise _workflow_include_error(
+                code="load.workflow.include.type",
+                message="Include reference must be a non-empty string",
+                include_path=current_path + ("include",),
+                include_chain=stack,
+                source=str(current_file),
+                actual_type=type(include_ref).__name__,
+            )
+        include_path = _resolve_include_path(include_ref, current_file=current_file, launch_dir=launch_dir, include_path=current_path + ("include",), stack=stack)
+        included_payload = _expand_workflow_includes(include_path, launch_dir=launch_dir, stack=stack, depth=depth + 1)
+        return included_payload
+
+    return {
+        key: _expand_include_nodes(item, current_file=current_file, launch_dir=launch_dir, stack=stack, depth=depth, current_path=current_path + (key,))
+        for key, item in value.items()
+    }
+
+
+def _resolve_include_path(
+    include_ref: str,
+    *,
+    current_file: Path,
+    launch_dir: Path,
+    include_path: tuple[str, ...],
+    stack: tuple[Path, ...],
+) -> Path:
+    include_candidate = Path(include_ref)
+    if include_candidate.is_absolute() or _looks_like_windows_absolute_path(include_ref):
+        raise _workflow_include_error(
+            code="load.workflow.include.forbidden_path",
+            message="Workflow include path must be relative",
+            include_path=include_path,
+            include_chain=stack,
+            source=str(current_file),
+            include=include_ref,
+        )
+    if any(part == ".." for part in include_candidate.parts):
+        raise _workflow_include_error(
+            code="load.workflow.include.forbidden_path",
+            message="Workflow include path must not traverse upward",
+            include_path=include_path,
+            include_chain=stack,
+            source=str(current_file),
+            include=include_ref,
+        )
+
+    for root in _workflow_include_search_roots(current_file=current_file, launch_dir=launch_dir):
+        for candidate in _workflow_include_candidates(root, include_candidate):
+            if not candidate.exists():
+                continue
+            if not candidate.is_file():
+                raise _workflow_include_error(
+                    code="load.workflow.include.not_file",
+                    message="Workflow include target must be a file",
+                    include_path=include_path,
+                    include_chain=stack,
+                    source=str(current_file),
+                    include=include_ref,
+                    resolved_path=str(candidate.resolve()),
+                )
+            return candidate.resolve()
+    raise _workflow_include_error(
+        code="load.workflow.include.not_found",
+        message="Workflow include target was not found in the configured search locations",
+        include_path=include_path,
+        include_chain=stack,
+        source=str(current_file),
+        include=include_ref,
+    )
+
+
+def _workflow_include_search_roots(*, current_file: Path, launch_dir: Path) -> tuple[Path, ...]:
+    roots = [
+        current_file.parent.resolve(),
+        launch_dir.resolve(),
+        (launch_dir / ".ordo").resolve(),
+        (Path.home() / ".ordo").resolve(),
+        WORKFLOW_INCLUDE_BUILTIN_DIR.resolve(),
+    ]
+    unique: list[Path] = []
+    for root in roots:
+        if root not in unique:
+            unique.append(root)
+    return tuple(unique)
+
+
+def _workflow_include_candidates(root: Path, include_path: Path) -> tuple[Path, ...]:
+    if include_path.suffix:
+        return (root / include_path,)
+    return (root / include_path.with_suffix(".yaml"), root / include_path.with_suffix(".yml"))
+
+
+def _resolve_launch_directory(launch_dir: str | Path | None) -> Path:
+    if launch_dir is None:
+        return Path.cwd().resolve()
+    return Path(launch_dir).resolve()
+
+
+def _looks_like_windows_absolute_path(raw: str) -> bool:
+    if len(raw) >= 2 and raw[1] == ":" and raw[0].isalpha():
+        return True
+    return raw.startswith("\\\\")
+
+
+def _workflow_include_error(
+    *,
+    code: str,
+    message: str,
+    include_path: tuple[str, ...],
+    include_chain: tuple[Path, ...],
+    source: str,
+    **details: object,
+) -> LoadError:
+    diagnostic_details: JSONObject = {
+        "source": source,
+        "include_chain": [str(item) for item in include_chain],
+    }
+    for key, value in details.items():
+        if value is None or isinstance(value, (str, bool, int, float)):
+            diagnostic_details[key] = value
+    return _load_error(code=code, message=message, path=include_path, details=diagnostic_details)
 
 
 def _load_guard(payload: JSONValue, *, index: int, source: str) -> Guard:
