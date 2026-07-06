@@ -359,6 +359,108 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.workflow.inputs["body"], "")
         self.assertIsNone(activated.workflow.inputs["assignee"])
 
+    def test_activate_playbook_validates_assembled_workflow_after_include_expansion(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      repository:
+                        description: repo
+                    blocks:
+                      - include: fragments/inspect
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "fragments").mkdir()
+            (root / ".ordo" / "workflows" / "fragments" / "inspect.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: inspect
+                        uses: gh.issue
+                        with:
+                          repository: ${inputs.repository}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", input_overrides={"repository": "owner/repo"}, cwd=root)
+
+        self.assertEqual(activated.workflow.steps[0].operation.with_["repository"], "${inputs.repository}")
+
+    def test_activate_playbook_reports_validation_errors_after_include_expansion(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    blocks:
+                      - include: fragments/inspect
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "fragments").mkdir()
+            (root / ".ordo" / "workflows" / "fragments" / "inspect.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: inspect
+                        uses: gh.issue
+                        unexpected: true
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+        self.assertEqual(ctx.exception.diagnostics[0].code, "validation.unknown_field")
+        self.assertEqual(ctx.exception.diagnostics[0].path, ("blocks", "0", "steps", "0", "unexpected"))
+
     def test_activate_playbook_resolves_working_directory_relative_to_playbook(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

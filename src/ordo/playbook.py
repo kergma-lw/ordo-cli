@@ -12,7 +12,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
 from ordo.model.workflow import Workflow
-from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document
+from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document, validate_workflow_document
 from ordo.runtime.value_expressions import (
     BuiltinCallNode,
     FilterApplicationNode,
@@ -159,6 +159,9 @@ def activate_playbook(
             raise PlaybookError(exc.diagnostics) from exc
 
     raw_workflow = _load_workflow_payload(workflow_path, launch_dir=Path.cwd() if cwd is None else Path(cwd))
+    validation_report = validate_workflow_document(raw_workflow, source=str(workflow_path))
+    if not validation_report.ok:
+        raise PlaybookError(validation_report.diagnostics)
     compiled_workflow = _compile_workflow_payload(
         raw_workflow,
         workflow_name=workflow_name,
