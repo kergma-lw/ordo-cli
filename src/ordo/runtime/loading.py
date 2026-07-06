@@ -38,11 +38,13 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
         )
 
     blocks = _load_workflow_blocks(payload, source=source)
+    workflow_inputs, declared_inputs = _load_workflow_inputs(payload, source=source)
 
     return Workflow(
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
-        inputs=_optional_object(payload, "inputs", source=source),
+        inputs=workflow_inputs,
+        declared_inputs=declared_inputs,
         state_needs=_optional_object(payload, "state_needs", source=source),
         state_bindings=_optional_object(payload, "state_bindings", source=source),
         states=_optional_object(payload, "states", source=source),
@@ -57,10 +59,12 @@ def load_workflow_file(path: str | Path, *, launch_dir: str | Path | None = None
     source = str(workflow_path)
     payload = load_workflow_document_file(workflow_path, launch_dir=launch_dir)
     blocks = _load_workflow_blocks(payload, source=source)
+    workflow_inputs, declared_inputs = _load_workflow_inputs(payload, source=source)
     return Workflow(
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
-        inputs=_optional_object(payload, "inputs", source=source),
+        inputs=workflow_inputs,
+        declared_inputs=declared_inputs,
         state_needs=_optional_object(payload, "state_needs", source=source),
         state_bindings=_optional_object(payload, "state_bindings", source=source),
         states=_optional_object(payload, "states", source=source),
@@ -350,6 +354,19 @@ def _workflow_include_error(
 def _load_guard(payload: JSONValue, *, index: int, source: str) -> Guard:
     path = ("guards", str(index))
     return _load_guard_at_path(payload, path=path, source=source)
+
+
+def _load_workflow_inputs(payload: JSONObject, *, source: str) -> tuple[JSONObject, JSONObject]:
+    declared_inputs = _optional_object(payload, "inputs", source=source)
+    runtime_inputs: JSONObject = {}
+    normalized_declarations: JSONObject = {}
+    for key, value in declared_inputs.items():
+        if isinstance(value, dict):
+            normalized_declarations[key] = dict(value)
+            continue
+        normalized_declarations[key] = {}
+        runtime_inputs[key] = value
+    return runtime_inputs, normalized_declarations
 
 
 def _load_guard_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str) -> Guard:

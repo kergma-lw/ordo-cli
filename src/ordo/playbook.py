@@ -200,15 +200,20 @@ def _apply_input_overrides(
     *,
     input_overrides: dict[str, object] | None,
 ) -> tuple[Workflow, Profile | None]:
-    if not input_overrides:
-        return workflow, profile
-
     merged_workflow_inputs = dict(workflow.inputs)
-    merged_workflow_inputs.update(input_overrides)
+    if profile is not None:
+        for key, value in profile.inputs.items():
+            merged_workflow_inputs.setdefault(key, value)
+    if input_overrides:
+        merged_workflow_inputs.update(input_overrides)
+
+    _validate_activation_inputs(workflow, merged_workflow_inputs)
+
     overridden_workflow = Workflow(
         version=workflow.version,
         workflow=workflow.workflow,
         inputs=merged_workflow_inputs,
+        declared_inputs=workflow.declared_inputs,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
         states=workflow.states,
@@ -219,7 +224,8 @@ def _apply_input_overrides(
     if profile is None:
         return overridden_workflow, None
 
-    remaining_profile_inputs = {key: value for key, value in profile.inputs.items() if key not in input_overrides}
+    override_keys = set(input_overrides or {})
+    remaining_profile_inputs = {key: value for key, value in profile.inputs.items() if key not in override_keys}
     if remaining_profile_inputs == profile.inputs:
         return overridden_workflow, profile
 
@@ -231,6 +237,35 @@ def _apply_input_overrides(
         launchers=profile.launchers,
     )
     return overridden_workflow, overridden_profile
+
+
+def _validate_activation_inputs(workflow: Workflow, inputs: dict[str, object]) -> None:
+    declared_keys = set(workflow.declared_inputs)
+    missing = sorted(key for key in declared_keys if key not in inputs)
+    unknown = sorted(key for key in inputs if key not in declared_keys)
+    diagnostics: list[Diagnostic] = []
+    for key in missing:
+        diagnostics.append(
+            Diagnostic(
+                code="playbook.workflow.input_missing",
+                level="error",
+                message=f"Workflow input '{key}' is required at activation time",
+                path=("inputs", key),
+                details={"workflow": workflow.workflow, "input": key},
+            )
+        )
+    for key in unknown:
+        diagnostics.append(
+            Diagnostic(
+                code="playbook.workflow.input_unknown",
+                level="error",
+                message=f"Workflow input '{key}' is not declared by the workflow",
+                path=("inputs", key),
+                details={"workflow": workflow.workflow, "input": key},
+            )
+        )
+    if diagnostics:
+        raise PlaybookError(tuple(diagnostics))
 
 
 def _load_playbook_document(path: Path) -> dict[str, object]:
@@ -550,6 +585,7 @@ def _working_directory_activation_workflow(
         version=template.version,
         workflow=template.workflow,
         inputs=merged_inputs,
+        declared_inputs=template.declared_inputs,
         state_needs=template.state_needs,
         state_bindings=template.state_bindings,
         states=template.states,

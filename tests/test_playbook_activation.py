@@ -61,7 +61,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  source: {}\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
 
@@ -99,7 +99,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  source: {}\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "backend-default.yml").write_text(
@@ -195,6 +195,8 @@ class PlaybookActivationTest(unittest.TestCase):
                     inputs:
                       source: workflow
                       keep: true
+                      region: {}
+                      enabled: {}
                     blocks:
                       - guards: []
                       - steps: []
@@ -230,6 +232,132 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.workflow.inputs["keep"], True)
         self.assertNotIn("source", activated.profile.inputs if activated.profile is not None else {})
         self.assertEqual(activated.profile.inputs["region"], "us")
+
+    def test_activate_playbook_requires_all_declared_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      repository:
+                        description: repo
+                    blocks:
+                      - guards: []
+                      - steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+        self.assertEqual(ctx.exception.diagnostics[0].code, "playbook.workflow.input_missing")
+
+    def test_activate_playbook_rejects_unknown_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      repository:
+                        description: repo
+                    blocks:
+                      - guards: []
+                      - steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", input_overrides={"repository": "owner/repo", "extra": True}, cwd=root)
+
+        self.assertEqual(ctx.exception.diagnostics[0].code, "playbook.workflow.input_unknown")
+
+    def test_activate_playbook_accepts_empty_string_and_null_as_present_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      body:
+                        description: body text
+                      assignee:
+                        description: nullable owner
+                    blocks:
+                      - guards: []
+                      - steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(
+                workflow_name="inspect-issue",
+                input_overrides={"body": "", "assignee": None},
+                cwd=root,
+            )
+
+        self.assertEqual(activated.workflow.inputs["body"], "")
+        self.assertIsNone(activated.workflow.inputs["assignee"])
 
     def test_activate_playbook_resolves_working_directory_relative_to_playbook(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -345,7 +473,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\ninputs: {}\nblocks:\n  - guards: []\n  - steps: []\n",
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  repo_dir: {}\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "review.yml").write_text(
@@ -378,7 +506,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\ninputs: {}\nblocks:\n  - guards: []\n  - steps: []\n",
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  repo_dir: {}\nblocks:\n  - guards: []\n  - steps: []\n",
                 encoding="utf-8",
             )
 

@@ -166,6 +166,7 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
             version=workflow.version,
             workflow=workflow.workflow,
             inputs=merged_inputs,
+            declared_inputs=workflow.declared_inputs,
             state_needs=workflow.state_needs,
             state_bindings=workflow.state_bindings,
             states=workflow.states,

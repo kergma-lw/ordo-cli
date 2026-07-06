@@ -60,6 +60,28 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "${inputs.enabled}")
         self.assertEqual(workflow.steps[1].if_, "${inputs.enabled}")
 
+    def test_loads_declared_workflow_inputs_without_runtime_values(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  repository:
+                    description: GitHub repository
+                  issue_number:
+                    description: Numeric issue id
+                blocks:
+                  - guards: []
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(workflow.inputs, {})
+        self.assertEqual(workflow.declared_inputs["repository"], {"description": "GitHub repository"})
+        self.assertEqual(workflow.to_contract()["inputs"]["issue_number"], {"description": "Numeric issue id"})
+
     def test_loads_step_launcher_field_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(
