@@ -104,6 +104,8 @@ def build_model_response() -> JSONObject:
 def build_command_line_response() -> JSONObject:
     """Return the aggregated command-line discovery response."""
 
+    workflow_contract = describe_workflow_contract()
+    input_contract = workflow_contract["inputs_contract"]
     playbook_flags = [
         {"name": "--file", "value_shape": "PATH", "required": False, "effect": "override_playbook_discovery", "summary": "Use one explicit playbook file path"},
         {"name": "--workflow", "value_shape": "NAME", "required": True, "effect": "select_workflow_entry", "summary": "Select one named workflow from the playbook"},
@@ -122,10 +124,11 @@ def build_command_line_response() -> JSONObject:
                 "modes": ["check", "plan", "explain", "run", "next"],
                 "flags": playbook_flags,
                 "input_override_precedence": [
-                    "workflow.inputs provide the base values",
-                    "profile.inputs may fill only missing workflow inputs",
+                    f"workflow.inputs declares the allowed activation keys; declared keys are required at activation={str(input_contract['declared_keys_required_at_activation']).lower()}",
+                    "profile.inputs may supply values for declared workflow inputs",
                     "--input overrides workflow and profile-provided values for one run",
                     "--input-file overrides workflow and profile-provided values for one run",
+                    f"unknown activation inputs are rejected={str(input_contract['rejects_unknown_activation_inputs']).lower()}",
                     "when both --input and --input-file set the same key, --input-file wins",
                 ],
                 "examples": [
@@ -200,6 +203,20 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
 
     for field in model["workflow"]["top_level_fields"]:
         add_node(f"workflow.{field['name']}", contract="workflow", node_category="field", summary="Published workflow field metadata", metadata=field)
+    add_node(
+        "workflow.inputs_contract",
+        contract="workflow",
+        node_category="input_contract",
+        summary="Published workflow activation-input contract metadata",
+        metadata=model["workflow"]["inputs_contract"],
+    )
+    add_node(
+        "workflow.include_contract",
+        contract="workflow",
+        node_category="include_contract",
+        summary="Published workflow include-resolution contract metadata",
+        metadata=model["workflow"]["include_contract"],
+    )
     for form in model["workflow"]["step_forms"]:
         add_node(
             f"workflow.step_forms.{form['name']}",

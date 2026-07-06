@@ -58,10 +58,11 @@
         }
       ],
       "input_override_precedence": [
-        "workflow.inputs provide the base values",
-        "profile.inputs may fill only missing workflow inputs",
+        "workflow.inputs declares the allowed activation keys; declared keys are required at activation=true",
+        "profile.inputs may supply values for declared workflow inputs",
         "--input overrides workflow and profile-provided values for one run",
         "--input-file overrides workflow and profile-provided values for one run",
+        "unknown activation inputs are rejected=true",
         "when both --input and --input-file set the same key, --input-file wins"
       ],
       "examples": [

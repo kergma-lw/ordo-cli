@@ -118,12 +118,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         profile_fields = {item["name"]: item for item in model["profile"]["top_level_fields"]}
         defaults_fields = {item["name"]: item for item in model["playbook"]["defaults_fields"]}
         workflow_entry_fields = {item["name"]: item for item in model["playbook"]["workflow_entry_fields"]}
+        workflow_inputs = next(item for item in model["workflow"]["top_level_fields"] if item["name"] == "inputs")
 
         self.assertEqual(profile_fields["inputs"]["runtime_effect"], "applies_missing_workflow_inputs")
         self.assertEqual(profile_fields["checks"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["launchers"]["runtime_effect"], "publishes_profile_scoped_launchers")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
+        self.assertEqual(workflow_inputs["authoring_role"], "declares_global_activation_inputs")
         self.assertEqual(workflow_entry_fields["working_directory"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(workflow_entry_fields["working_directory"]["resolution_base"], "playbook_dir")
         self.assertEqual(workflow_entry_fields["working_directory"]["expression_syntax"], "${...}")
@@ -152,6 +154,7 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_describe_resolves_capability_and_model_nodes(self) -> None:
         capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
         model_node = json.loads(self.run_help("describe", "profile.inputs", "--json").stdout)
+        input_contract_node = json.loads(self.run_help("describe", "workflow.inputs_contract", "--json").stdout)
         command_line_node = json.loads(self.run_help("describe", "command-line.ordo-playbook.flag.input_file", "--json").stdout)
         working_directory_node = json.loads(self.run_help("describe", "playbook.workflows.working_directory", "--json").stdout)
         launcher_node = json.loads(self.run_help("describe", "profile.launchers", "--json").stdout)
@@ -163,6 +166,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(model_node["document_kind"], "model_node")
         self.assertEqual(model_node["name"], "profile.inputs")
         self.assertEqual(model_node["metadata"]["runtime_effect"], "applies_missing_workflow_inputs")
+        self.assertEqual(input_contract_node["document_kind"], "model_node")
+        self.assertEqual(input_contract_node["name"], "workflow.inputs_contract")
+        self.assertTrue(input_contract_node["metadata"]["declared_keys_required_at_activation"])
         self.assertEqual(command_line_node["document_kind"], "command_line_node")
         self.assertEqual(command_line_node["name"], "command-line.ordo-playbook.flag.input_file")
         self.assertEqual(command_line_node["metadata"]["effect"], "override_input_from_file")
@@ -184,6 +190,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         flags = {item["name"]: item for item in playbook["flags"]}
         self.assertEqual(flags["--input-file"]["effect"], "override_input_from_file")
         self.assertEqual(flags["--input-file"]["value_shape"], "KEY=PATH")
+        self.assertIn("workflow.inputs declares the allowed activation keys", playbook["input_override_precedence"][0])
+        self.assertIn("unknown activation inputs are rejected=true", playbook["input_override_precedence"])
         self.assertIn("when both --input and --input-file set the same key, --input-file wins", playbook["input_override_precedence"])
 
     def test_operation_topic_publishes_structured_gh_issue_inputs(self) -> None:

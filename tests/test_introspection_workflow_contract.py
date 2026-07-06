@@ -17,6 +17,8 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(step_forms["state_delete"]["required_fields"], ["name", "state_delete"])
         self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "value", "state_set", "state_delete"])
         self.assertIn("state_references", payload["surface_constraints"]["guard_expression"]["forbidden_features"])
+        self.assertTrue(payload["inputs_contract"]["declared_keys_required_at_activation"])
+        self.assertEqual(payload["include_contract"]["search_order"][0], "including_file_dir")
 
     def test_workflow_contract_stays_aligned_with_validator_field_sets(self) -> None:
         payload = describe_workflow_contract()

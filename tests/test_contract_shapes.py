@@ -32,7 +32,7 @@ class ContractShapeTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "open-task",
-                "inputs": {"repository": "repo/name", "issue_number": 1},
+                "inputs": {"repository": {}, "issue_number": {}},
                 "state_needs": {"task_memory": {}},
                 "blocks": [
                     {"guards": [{"uses": "git.worktree", "with": {}}]},
