@@ -98,6 +98,8 @@ class OperationTest(unittest.TestCase):
             commit_create.failure_modes,
             ("message_invalid", "nothing_to_commit", "commit_blocked"),
         )
+        index_add_all = registry.get_operation("git.index.add_all")
+        self.assertEqual(index_add_all.failure_modes, ("stage_blocked",))
         commit_amend = registry.get_operation("git.commit.amend")
         self.assertEqual(
             commit_amend.failure_modes,
@@ -151,6 +153,7 @@ class OperationTest(unittest.TestCase):
             "git.commit.create",
             "git.commit.amend",
             "git.commit.revert",
+            "git.index.add_all",
             "git.integrate.merge",
             "git.integrate.merge_ff_only",
             "git.integrate.rebase_onto",
@@ -964,6 +967,48 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "nothing_to_commit")
+
+    def test_git_index_add_all_returns_structured_action_result(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="stage", operation=OperationRef("git.index.add_all")),),
+        )
+        operation = get_public_connector_registry().get_operation("git.index.add_all")
+        resolved = ResolvedOperation("git.index.add_all", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["staged"], True)
+
+    def test_git_index_add_all_reports_stage_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="stage", operation=OperationRef("git.index.add_all")),),
+        )
+        operation = get_public_connector_registry().get_operation("git.index.add_all")
+        resolved = ResolvedOperation("git.index.add_all", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="fatal: could not stage\n"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "stage_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.git.index_add_all_blocked")
 
     def test_git_commit_amend_returns_structured_action_result(self) -> None:
         workflow = Workflow(

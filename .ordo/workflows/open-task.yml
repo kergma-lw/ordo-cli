@@ -65,19 +65,96 @@ blocks:
             - ${step.issue.outputs.title | slug}
         register: branch
 
-      - name: prepare-task-branch
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: shell.command
+      - name: probe-local-main-ref
+        uses: git.ref
         with:
-          command:
-            format: >-
-              bash -lc 'branch="%s"; base_ref=""; if git show-ref --verify --quiet refs/heads/main; then if git switch main >/dev/null 2>&1; then git pull --ff-only; base_ref="main"; else git fetch origin main; base_ref="origin/main"; fi; else git fetch origin main; base_ref="origin/main"; fi; if git show-ref --verify --quiet "refs/heads/$branch"; then git switch "$branch"; else git switch -c "$branch" "$base_ref"; fi'
+          ref: refs/heads/main
+        register: local_main
+
+      - name: fetch-origin
+        if: ${inputs.repo_kind | ne("meta")}
+        uses: git.sync.fetch
+        with:
+          remote: origin
+
+      - name: probe-remote-main-ref
+        uses: git.ref
+        with:
+          ref: refs/remotes/origin/main
+        register: remote_main
+
+      - name: switch-main
+        if: ${inputs.repo_kind | ne("meta") and step.local_main.outputs.exists}
+        uses: git.branch.switch
+        with:
+          branch: main
+
+      - name: merge-origin-main-ff-only
+        if: ${inputs.repo_kind | ne("meta") and step.local_main.outputs.exists and step.remote_main.outputs.exists}
+        uses: git.integrate.merge_ff_only
+        with:
+          ref: refs/remotes/origin/main
+
+      - name: probe-target-branch-ref
+        uses: git.ref
+        with:
+          ref:
+            format: "refs/heads/%s"
             args:
               - ${step.branch.outputs.value}
+        register: target_branch
+
+      - name: switch-existing-target-branch
+        if: ${inputs.repo_kind | ne("meta") and step.target_branch.outputs.exists}
+        uses: git.branch.switch
+        with:
+          branch: ${step.branch.outputs.value}
+
+      - name: create-target-branch-from-local-main
+        if: ${inputs.repo_kind | ne("meta") and not step.target_branch.outputs.exists and step.local_main.outputs.exists}
+        uses: git.branch.create
+        with:
+          branch: ${step.branch.outputs.value}
+          start_point: refs/heads/main
+
+      - name: create-target-branch-from-remote-main
+        if: ${inputs.repo_kind | ne("meta") and not step.target_branch.outputs.exists and not step.local_main.outputs.exists}
+        uses: git.branch.create
+        with:
+          branch: ${step.branch.outputs.value}
+          start_point: refs/remotes/origin/main
+
+      - name: switch-created-target-branch
+        if: ${inputs.repo_kind | ne("meta") and not step.target_branch.outputs.exists}
+        uses: git.branch.switch
+        with:
+          branch: ${step.branch.outputs.value}
 
       - name: refresh-frontend-generated-artifacts
         if: ${inputs.repo_kind | eq("frontend")}
         uses: shell.command
+        launcher: shell_frontend
         with:
           command: >-
-            bash -lc 'set -euo pipefail; export NVM_DIR=${NVM_DIR:-$HOME/.nvm}; if [[ -s "$NVM_DIR/nvm.sh" ]]; then source "$NVM_DIR/nvm.sh" --no-use; fi; if ! type nvm >/dev/null 2>&1; then echo "error: nvm is required for frontend open-task" >&2; exit 1; fi; nvm use >/dev/null; if ! (npm run openapi || npx --yes openapi-typescript ../backend/openapi.snapshot.json -o src/api/types.gen.ts --root-types --root-types-no-schema-prefix); then echo "error: openapi refresh failed" >&2; exit 1; fi; npm run errors:sync; gen_out=$(git status --porcelain=v1 -- src/api/types.gen.ts src/api/error-codes.gen.ts || true); if [[ -n "$gen_out" ]]; then git add src/api/types.gen.ts src/api/error-codes.gen.ts; git commit -m "chore(openapi): regenerate api types"; else npm run check; fi'
+            set -euo pipefail; npm run openapi; npm run errors:sync
+
+      - name: probe-frontend-generated-worktree
+        uses: git.worktree
+        register: frontend_worktree
+
+      - name: stage-frontend-generated-artifacts
+        if: ${inputs.repo_kind | eq("frontend") and not step.frontend_worktree.outputs.clean}
+        uses: git.index.add_all
+
+      - name: commit-frontend-generated-artifacts
+        if: ${inputs.repo_kind | eq("frontend") and not step.frontend_worktree.outputs.clean}
+        uses: git.commit.create
+        with:
+          message: "chore(openapi): regenerate api types"
+
+      - name: check-frontend-clean-generation
+        if: ${inputs.repo_kind | eq("frontend") and step.frontend_worktree.outputs.clean}
+        uses: shell.command
+        launcher: shell_frontend
+        with:
+          command: npm run check
