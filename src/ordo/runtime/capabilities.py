@@ -93,6 +93,20 @@ class NegativeRuleSpec:
 
 RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.value_expressions", status="supported", scope="workflow"),
+    CapabilitySpec(
+        name="workflow.include_fragments",
+        status="supported",
+        scope="workflow",
+        related_capabilities=("workflow.value_expressions", "workflow.step.register"),
+        related_model_nodes=(
+            "workflow.include_contract",
+            "workflow.include",
+            "workflow.include.with",
+            "workflow.fragment.description",
+            "workflow.fragment.args",
+            "workflow.value_expression_root.args",
+        ),
+    ),
     CapabilitySpec(name="workflow.state_needs", status="supported", scope="workflow"),
     CapabilitySpec(name="workflow.state_bindings", status="supported", scope="workflow"),
     CapabilitySpec(name="workflow.step.state_set", status="supported", scope="workflow.step"),
@@ -144,6 +158,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
 EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
     ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "value_expression")),
     ExpressionRootSpec(name="probe", surfaces=("guard_expression",)),
+    ExpressionRootSpec(name="args", surfaces=("value_expression",)),
     ExpressionRootSpec(name="state", surfaces=("value_expression",)),
     ExpressionRootSpec(name="step", surfaces=("value_expression",)),
 )
@@ -152,7 +167,7 @@ EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
     ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe"), boolean_operators=("and", "or", "not", "parentheses")),
     ExpressionSurfaceSpec(
         name="value_expression",
-        roots=("inputs", "state", "step"),
+        roots=("inputs", "args", "state", "step"),
         filters=tuple(VALUE_EXPRESSION_FILTERS),
         builtins=tuple(VALUE_EXPRESSION_BUILTINS),
         boolean_operators=("and", "or", "not", "parentheses"),

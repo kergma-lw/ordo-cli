@@ -217,6 +217,35 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         summary="Published workflow include-resolution contract metadata",
         metadata=model["workflow"]["include_contract"],
     )
+    for field in model["workflow"]["include_contract"].get("call_fields", []):
+        add_node(
+            f"workflow.include.{field['name']}",
+            contract="workflow",
+            node_category="include_field",
+            summary="Published included-fragment call field metadata",
+            metadata=field,
+        )
+    for field in model["workflow"]["include_contract"].get("fragment_metadata_fields", []):
+        add_node(
+            f"workflow.fragment.{field['name']}",
+            contract="workflow",
+            node_category="fragment_metadata_field",
+            summary="Published included-fragment metadata field",
+            metadata=field,
+        )
+    add_node(
+        "workflow.value_expression_root.args",
+        contract="workflow",
+        node_category="expression_root",
+        summary="Published included-fragment argument expression root metadata",
+        metadata={
+            "name": "args",
+            "surface": "value_expression",
+            "access_surface": model["workflow"]["include_contract"].get("fragment_argument_access_surface"),
+            "state_scope": model["workflow"]["include_contract"].get("state_scope"),
+            "step_scope": model["workflow"]["include_contract"].get("step_scope"),
+        },
+    )
     for form in model["workflow"]["step_forms"]:
         add_node(
             f"workflow.step_forms.{form['name']}",
