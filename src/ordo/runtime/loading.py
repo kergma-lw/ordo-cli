@@ -566,6 +566,13 @@ def _rewrite_fragment_step_scope(
 ) -> JSONValue:
     local_registers = _collect_fragment_declared_registers(value)
     if not local_registers:
+        _ensure_fragment_has_no_external_step_references(
+            value,
+            register_map={},
+            source=source,
+            include_chain=include_chain,
+            include_node_path=include_node_path,
+        )
         return value
     scope_token = _fragment_scope_token(include_chain, include_node_path)
     register_map = {name: f"{scope_token}_{name}" for name in local_registers}
@@ -665,6 +672,45 @@ def _rewrite_fragment_step_reference_string(
         return value
     rebound_expression = _apply_expression_replacements(expression, replacements)
     return "${" + rebound_expression + "}"
+
+
+def _ensure_fragment_has_no_external_step_references(
+    value: JSONValue,
+    *,
+    register_map: dict[str, str],
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> None:
+    if isinstance(value, list):
+        for item in value:
+            _ensure_fragment_has_no_external_step_references(
+                item,
+                register_map=register_map,
+                source=source,
+                include_chain=include_chain,
+                include_node_path=include_node_path,
+            )
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            _ensure_fragment_has_no_external_step_references(
+                item,
+                register_map=register_map,
+                source=source,
+                include_chain=include_chain,
+                include_node_path=include_node_path,
+            )
+        return
+    if not isinstance(value, str):
+        return
+    _rewrite_fragment_step_reference_string(
+        value,
+        register_map=register_map,
+        source=source,
+        include_chain=include_chain,
+        include_node_path=include_node_path,
+    )
 
 
 def _walk_value_expression_nodes(node: ValueExpressionNode) -> list[ValueExpressionNode]:

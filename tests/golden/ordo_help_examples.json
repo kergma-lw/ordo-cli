@@ -58,6 +58,34 @@
         "shell_wrapper_example"
       ],
       "verified": true
+    },
+    {
+      "name": "include-plain",
+      "path": "examples/include-plain.yaml",
+      "related_topics": [
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "workflow_include",
+        "plain_fragment_reuse"
+      ],
+      "verified": true
+    },
+    {
+      "name": "include-args",
+      "path": "examples/include-args.yaml",
+      "related_topics": [
+        "capabilities",
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "workflow_include",
+        "fragment_args",
+        "ordo_help_aligned_fragment_contract"
+      ],
+      "verified": true
     }
   ]
 }

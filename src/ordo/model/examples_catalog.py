@@ -34,6 +34,18 @@ EXAMPLES_CATALOG: JSONObject = {
             "shows": ["step_launcher_selection", "profile_scoped_launchers", "shell_wrapper_example"],
             "related_topics": ["capabilities", "model", "examples"],
         },
+        {
+            "name": "include-plain",
+            "path": "examples/include-plain.yaml",
+            "shows": ["workflow_include", "plain_fragment_reuse"],
+            "related_topics": ["model", "examples"],
+        },
+        {
+            "name": "include-args",
+            "path": "examples/include-args.yaml",
+            "shows": ["workflow_include", "fragment_args", "ordo_help_aligned_fragment_contract"],
+            "related_topics": ["capabilities", "model", "examples"],
+        },
     ],
 }
 

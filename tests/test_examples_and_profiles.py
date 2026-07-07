@@ -18,6 +18,14 @@ class ExampleSurfaceTest(unittest.TestCase):
             report = validate_workflow_text(path.read_text(encoding="utf-8"), source=str(path))
             self.assertTrue(report.ok, path.as_posix())
 
+    def test_included_example_workflows_load(self) -> None:
+        for path in (
+            Path("examples/include-plain.yaml"),
+            Path("examples/include-args.yaml"),
+        ):
+            workflow = load_workflow_file(path)
+            self.assertTrue(workflow.blocks, path.as_posix())
+
     def test_example_profiles_validate(self) -> None:
         for path in (
             Path("profiles/backend-default.yaml"),

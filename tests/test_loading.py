@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ordo.model.profile import Profile
 from ordo.model.workflow import Workflow
-from ordo.runtime import LoadError, load_profile_file, load_profile_text, load_workflow_file, load_workflow_text, load_yaml_document
+from ordo.runtime import LoadError, load_profile_file, load_profile_text, load_workflow_document_file, load_workflow_file, load_workflow_text, load_yaml_document, validate_workflow_document
 
 
 class LoadingTest(unittest.TestCase):
@@ -450,6 +450,196 @@ class LoadingTest(unittest.TestCase):
 
         self.assertEqual(len(workflow.blocks), 2)
         self.assertEqual(workflow.to_contract()["blocks"], [{"guards": []}, {"guards": []}])
+
+    def test_load_workflow_file_binds_fragment_args_and_flattens_fragment_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    inputs:
+                      repository: {}
+                      issue_number: {}
+                    blocks:
+                      - include: fragments/check-issue
+                        with:
+                          repository: ${inputs.repository}
+                          issue_number: 7
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    description: Check issue fragment
+                    args:
+                      repository: string
+                      issue_number: integer
+
+                    blocks:
+                      - steps:
+                          - name: inspect
+                            uses: gh.issue
+                            with:
+                              repository: ${args.repository}
+                              issue_number: ${args.issue_number}
+                            register: issue
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            workflow = load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(len(workflow.blocks), 1)
+        self.assertEqual(workflow.steps[0].operation.with_["repository"], "${inputs.repository}")
+        self.assertEqual(workflow.steps[0].operation.with_["issue_number"], 7)
+        self.assertTrue(workflow.steps[0].register.startswith("inc_check_issue_0_issue"))
+
+    def test_load_workflow_file_rejects_missing_fragment_args(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                "version: 0\nworkflow: demo\nblocks:\n  - include: fragments/check-issue\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text("args:\n  repository: string\nsteps: []\n", encoding="utf-8")
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.args.missing")
+
+    def test_load_workflow_file_rejects_unknown_fragment_args(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                "version: 0\nworkflow: demo\nblocks:\n  - include: fragments/check-issue\n    with:\n      repository: repo/name\n      extra: true\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text("args:\n  repository: string\nsteps: []\n", encoding="utf-8")
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.args.unknown")
+
+    def test_load_workflow_file_rejects_invalid_fragment_args_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                "version: 0\nworkflow: demo\nblocks:\n  - include: fragments/check-issue\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text("args: nope\nsteps: []\n", encoding="utf-8")
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.args.invalid_declaration")
+
+    def test_load_workflow_file_rejects_fragment_reference_to_caller_step_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - steps:
+                          - name: outer
+                            uses: gh.issue
+                            register: outer_issue
+                      - include: fragments/check-issue
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                "steps:\n  - name: comment\n    uses: gh.issue.comment\n    with:\n      issue_id: ${step.outer_issue.outputs.id}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.step_scope")
+
+    def test_validation_rejects_caller_reference_to_fragment_local_register(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    inputs:
+                      repository: {}
+                      issue_number: {}
+                    blocks:
+                      - include: fragments/check-issue
+                        with:
+                          repository: ${inputs.repository}
+                          issue_number: ${inputs.issue_number}
+                      - steps:
+                          - name: comment
+                            uses: gh.issue.comment
+                            with:
+                              issue_id: ${step.issue.outputs.id}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      repository: string
+                      issue_number: integer
+                    steps:
+                      - name: inspect
+                        uses: gh.issue
+                        with:
+                          repository: ${args.repository}
+                          issue_number: ${args.issue_number}
+                        register: issue
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = load_workflow_document_file(workflow_path, launch_dir=root)
+            report = validate_workflow_document(payload, source=str(workflow_path))
+
+        self.assertFalse(report.ok)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.unknown")
 
 
 if __name__ == "__main__":
