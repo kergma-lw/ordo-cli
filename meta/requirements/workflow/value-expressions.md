@@ -9,6 +9,7 @@
 ## Allowed capability
 
 - A value expression may read declared workflow inputs.
+- A value expression may read declared included-fragment arguments through `args...` when evaluated inside a fragment that declares them.
 - A value expression may read runtime state through the documented `state...` read surface.
 - A value expression may read prior registered step results through the documented `step...` read surface.
 - A value expression may combine multiple local values into one derived value.

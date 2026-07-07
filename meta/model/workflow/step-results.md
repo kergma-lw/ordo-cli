@@ -72,9 +72,12 @@ Registered step results are not:
 ## Order discipline
 
 - A `step.<register>...` reference may target only an earlier step in the same workflow.
+- A `step.<register>...` reference may target only an earlier step in the same workflow or in the same included-fragment expansion scope.
 - Forward references are invalid.
 - Register names must be unique within the workflow.
 - Missing register references are invalid.
+- Included fragments must not read caller-local registered step results across the fragment boundary in the MVP.
+- Callers must not read registered step results declared inside an included fragment across the fragment boundary in the MVP.
 
 ## Step-form restrictions
 

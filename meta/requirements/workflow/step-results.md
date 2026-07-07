@@ -15,6 +15,7 @@
 - Register identifiers must be unique within one workflow.
 - A reference to a register that does not exist must fail validation.
 - A reference to a later step must fail validation.
+- A reference to a register outside the current included-fragment boundary must fail validation in the MVP.
 
 ## Boundary discipline
 

@@ -35,8 +35,20 @@ WORKFLOW_CONTRACT: JSONObject = {
     },
     "include_contract": {
         "directive_field": "include",
-        "expansion_semantics": "whole_node_replacement",
+        "authoring_role": "workflow_fragment_reuse",
+        "expansion_semantics": "resolve_bind_expand_whole_node_replacement",
         "targets": "files_only",
+        "call_fields": [
+            {"name": "include", "required": True, "type": "string"},
+            {"name": "with", "required": False, "type": "object", "authoring_role": "fragment_argument_bindings"},
+        ],
+        "fragment_metadata_fields": [
+            {"name": "description", "required": False, "type": "string"},
+            {"name": "args", "required": False, "type": "object", "authoring_role": "declares_fragment_local_inputs"},
+        ],
+        "fragment_argument_access_surface": "args.name",
+        "state_scope": "global_across_assembled_workflow",
+        "step_scope": "local_to_workflow_or_fragment_expansion_scope",
         "search_order": [
             "including_file_dir",
             "launch_dir",
@@ -48,18 +60,24 @@ WORKFLOW_CONTRACT: JSONObject = {
         "stops_on_first_match": True,
         "cycle_detection": "current_expansion_stack",
         "max_depth": 32,
-        "validation_boundary": "assembled_workflow_after_include_expansion",
+        "validation_boundary": "assembled_workflow_after_include_expansion_and_argument_binding",
         "error_codes": [
             "load.workflow.include.not_found",
             "load.workflow.include.cycle",
             "load.workflow.include.depth",
             "load.workflow.include.forbidden_path",
             "load.workflow.include.not_file",
+            "load.workflow.include.with.type",
+            "load.workflow.include.args.invalid_declaration",
+            "load.workflow.include.args.missing",
+            "load.workflow.include.args.unknown",
+            "load.workflow.include.args.type",
         ],
     },
     "block_forms": [
         {"name": "guard_block", "required_fields": ["guards"], "optional_fields": []},
         {"name": "step_block", "required_fields": ["steps"], "optional_fields": []},
+        {"name": "include_block", "required_fields": ["include"], "optional_fields": ["with"]},
     ],
     "guard_forms": [
         {"name": "operation_call", "shape": {"uses": "string", "with": "object"}},
@@ -109,7 +127,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "forbidden_features": ["value_expression_filters", "value_expression_builtins", "state_references"],
         },
         "runtime_value_surface": {
-            "allowed_roots": ["inputs", "state", "step"],
+            "allowed_roots": ["inputs", "args", "state", "step"],
             "allowed_builtins": ["format"],
             "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not"],
             "boolean_operators": ["and", "or", "not", "parentheses"],

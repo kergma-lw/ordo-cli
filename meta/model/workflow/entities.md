@@ -4,6 +4,8 @@
 
 - `Playbook`
 - `Workflow`
+- `WorkflowFragment`
+- `FragmentArg`
 - `StateNeed`
 - `OperationRef`
 - `Guard`
@@ -22,6 +24,8 @@
 
 - A `Playbook` names project-local workflow entries, profile entries, and runtime state declarations.
 - A `Workflow` contains ordered `Guard` and `Step` entries.
+- A `Workflow` may include reusable `WorkflowFragment` instances through ordered include items inside its block structure.
+- A `WorkflowFragment` may declare local `FragmentArg` entries and workflow payload content.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` references an `OperationRef`.
 - A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.
@@ -43,6 +47,8 @@
 - Step conditions express per-step eligibility, not first-class branch topology.
 - Built-in runtime step forms may be effectful, such as state mutation, or pure, such as value materialization.
 - Registered step results express execution-local data flow, not persistent workflow state.
+- Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
+- Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.

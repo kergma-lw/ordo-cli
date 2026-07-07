@@ -18,6 +18,7 @@ Step conditions may also reuse the `${...}` envelope for local boolean evaluatio
 The initial model supports three author-facing forms inside `${...}`:
 
 - direct references such as `inputs.name`;
+- direct references to included-fragment arguments such as `args.repository`;
 - direct references to prior registered step results such as `step.issue.outputs.id`;
 - left-to-right filter pipelines using `|`;
 - root built-in calls such as `format(...)`.
@@ -26,6 +27,7 @@ Illustrative examples:
 
 ```yaml
 ${inputs.repository}
+${args.repository}
 ${state.task_state[inputs.task_key].branch}
 ${step.issue.outputs.id}
 ${inputs.title | slug}
@@ -38,10 +40,13 @@ ${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | sl
 The workflow-facing value-expression roots are:
 
 - `inputs...` for declared workflow inputs;
+- `args...` for declared included-fragment arguments local to the current fragment instance;
 - `state...` for persistent runtime state reads;
 - `step...` for prior registered step results.
 
 The `step...` root is execution-local and order-sensitive.
+
+It must not cross included-fragment boundaries in the MVP.
 
 It is not a persistent storage surface.
 
@@ -79,7 +84,7 @@ ${format("{}/{}#{}", inputs.owner, inputs.repo, inputs.number)}
 
 When a value expression appears in a workflow step condition, it may participate in limited boolean composition through `and`, `or`, `not`, and parentheses.
 
-This boolean layer exists for local workflow-owned condition evaluation over `inputs...`, `state...`, and prior `step...` results.
+This boolean layer exists for local workflow-owned condition evaluation over `inputs...`, `args...`, `state...`, and prior `step...` results.
 
 It may combine direct boolean references and boolean-producing predicate expressions, including existing pipeline forms that end in a boolean result.
 

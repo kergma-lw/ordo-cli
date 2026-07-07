@@ -174,6 +174,7 @@
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
+- Reusable workflow fragments should support explicit local argument contracts without forcing a separate reuse primitive when arguments are present.
 
 ## Product boundary
 
@@ -195,6 +196,7 @@
 ## Allowed capability
 
 - A value expression may read declared workflow inputs.
+- A value expression may read declared included-fragment arguments through `args...` when evaluated inside a fragment that declares them.
 - A value expression may read runtime state through the documented `state...` read surface.
 - A value expression may read prior registered step results through the documented `step...` read surface.
 - A value expression may combine multiple local values into one derived value.
@@ -795,6 +797,7 @@ It must not answer the question:
 ## What is acceptable in a workflow
 
 - ordered guard and step blocks;
+- reusable included workflow fragments;
 - guard lists inside `guards` blocks;
 - ordered steps inside `steps` blocks;
 - compact references and parameters that remain workflow-semantic;
@@ -812,6 +815,23 @@ Each block declares exactly one of:
 Top-level `guards` and `steps` may remain as compatibility-only authoring sugar when they normalize to the same block structure.
 
 Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
+
+Included fragment reuse still belongs to the workflow domain when it remains declarative and workflow-semantic.
+
+The author-facing reuse surface may stay as one `include` primitive whether or not the included fragment binds arguments through `with`.
+
+That user-facing unity is preferable to forcing authors to learn separate reuse verbs for non-parameterized and parameterized inclusion.
+
+## Inclusion boundaries
+
+Included fragments may declare local argument contracts.
+
+Within an assembled workflow:
+
+- `inputs...` remains global workflow input surface;
+- `state...` remains global workflow state surface;
+- `args...` is local to the included fragment instance that declared it;
+- `step...` remains execution-local and must not cross included-fragment boundaries unless a later explicit export model is introduced.
 
 ## What is undesirable
 
@@ -1142,6 +1162,8 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 
 - `Playbook`
 - `Workflow`
+- `WorkflowFragment`
+- `FragmentArg`
 - `StateNeed`
 - `OperationRef`
 - `Guard`
@@ -1160,6 +1182,8 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 
 - A `Playbook` names project-local workflow entries, profile entries, and runtime state declarations.
 - A `Workflow` contains ordered `Guard` and `Step` entries.
+- A `Workflow` may include reusable `WorkflowFragment` instances through ordered include items inside its block structure.
+- A `WorkflowFragment` may declare local `FragmentArg` entries and workflow payload content.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` references an `OperationRef`.
 - A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.
@@ -1181,6 +1205,8 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - Step conditions express per-step eligibility, not first-class branch topology.
 - Built-in runtime step forms may be effectful, such as state mutation, or pure, such as value materialization.
 - Registered step results express execution-local data flow, not persistent workflow state.
+- Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
+- Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.
@@ -1438,6 +1464,7 @@ Step conditions may also reuse the `${...}` envelope for local boolean evaluatio
 The initial model supports three author-facing forms inside `${...}`:
 
 - direct references such as `inputs.name`;
+- direct references to included-fragment arguments such as `args.repository`;
 - direct references to prior registered step results such as `step.issue.outputs.id`;
 - left-to-right filter pipelines using `|`;
 - root built-in calls such as `format(...)`.
@@ -1446,6 +1473,7 @@ Illustrative examples:
 
 ```yaml
 ${inputs.repository}
+${args.repository}
 ${state.task_state[inputs.task_key].branch}
 ${step.issue.outputs.id}
 ${inputs.title | slug}
@@ -1458,10 +1486,13 @@ ${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | sl
 The workflow-facing value-expression roots are:
 
 - `inputs...` for declared workflow inputs;
+- `args...` for declared included-fragment arguments local to the current fragment instance;
 - `state...` for persistent runtime state reads;
 - `step...` for prior registered step results.
 
 The `step...` root is execution-local and order-sensitive.
+
+It must not cross included-fragment boundaries in the MVP.
 
 It is not a persistent storage surface.
 
@@ -1499,7 +1530,7 @@ ${format("{}/{}#{}", inputs.owner, inputs.repo, inputs.number)}
 
 When a value expression appears in a workflow step condition, it may participate in limited boolean composition through `and`, `or`, `not`, and parentheses.
 
-This boolean layer exists for local workflow-owned condition evaluation over `inputs...`, `state...`, and prior `step...` results.
+This boolean layer exists for local workflow-owned condition evaluation over `inputs...`, `args...`, `state...`, and prior `step...` results.
 
 It may combine direct boolean references and boolean-producing predicate expressions, including existing pipeline forms that end in a boolean result.
 
@@ -2674,11 +2705,54 @@ blocks:
 Rules:
 
 - `blocks` is an ordered non-empty list;
-- each block item must declare exactly one of `guards` or `steps`;
+- each block item must declare exactly one of `guards`, `steps`, or `include`;
 - `guards` block value is a non-empty guard list;
 - `steps` block value is a non-empty step list;
+- an `include` block item references one included workflow fragment and may optionally bind `with` values for declared fragment `args`;
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
+
+Stable include item form:
+
+```yaml
+- include: github/check-issue
+  with:
+    repository: ${inputs.repository}
+    issue_number: ${inputs.issue_number}
+```
+
+Include item rules:
+
+- `include` is a non-empty string reference to an included workflow fragment;
+- `with` is optional and, when present, is an object;
+- `with` keys bind only declared fragment `args` keys;
+- include expansion preserves block order in the assembled workflow.
+
+## Included fragment document shape
+
+Illustrative included fragment file:
+
+```yaml
+description: Check one issue and reuse the loaded result
+args:
+  repository: string
+  issue_number: integer
+
+blocks:
+  - steps:
+      - name: inspect
+        uses: gh.issue
+        with:
+          repository: ${args.repository}
+          issue_number: ${args.issue_number}
+```
+
+Rules:
+
+- an included fragment may declare `description`;
+- an included fragment may declare `args` as a mapping of fragment-local argument names;
+- fragment-local argument reads use the `args.<name>` surface;
+- included fragment payload content must still normalize to ordinary workflow block semantics after argument binding and expansion.
 
 ## Compatibility normalization
 
@@ -3381,6 +3455,7 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - Public operations are discoverable enough for composition without reading connector implementation internals.
 - Schema, examples, and runtime diagnostics are sufficient for iterative repair of an authored workflow.
 - Routine project adaptation prefers composing workflows and profiles over introducing new connector semantics.
+- Reusable included fragments remain understandable as one author-facing `include` surface even when they declare fragment-local `args`.
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
 
 <!-- source: verification/workflow/guard-expressions.md -->

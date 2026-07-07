@@ -31,11 +31,54 @@ blocks:
 Rules:
 
 - `blocks` is an ordered non-empty list;
-- each block item must declare exactly one of `guards` or `steps`;
+- each block item must declare exactly one of `guards`, `steps`, or `include`;
 - `guards` block value is a non-empty guard list;
 - `steps` block value is a non-empty step list;
+- an `include` block item references one included workflow fragment and may optionally bind `with` values for declared fragment `args`;
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
+
+Stable include item form:
+
+```yaml
+- include: github/check-issue
+  with:
+    repository: ${inputs.repository}
+    issue_number: ${inputs.issue_number}
+```
+
+Include item rules:
+
+- `include` is a non-empty string reference to an included workflow fragment;
+- `with` is optional and, when present, is an object;
+- `with` keys bind only declared fragment `args` keys;
+- include expansion preserves block order in the assembled workflow.
+
+## Included fragment document shape
+
+Illustrative included fragment file:
+
+```yaml
+description: Check one issue and reuse the loaded result
+args:
+  repository: string
+  issue_number: integer
+
+blocks:
+  - steps:
+      - name: inspect
+        uses: gh.issue
+        with:
+          repository: ${args.repository}
+          issue_number: ${args.issue_number}
+```
+
+Rules:
+
+- an included fragment may declare `description`;
+- an included fragment may declare `args` as a mapping of fragment-local argument names;
+- fragment-local argument reads use the `args.<name>` surface;
+- included fragment payload content must still normalize to ordinary workflow block semantics after argument binding and expansion.
 
 ## Compatibility normalization
 

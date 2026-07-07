@@ -10,6 +10,7 @@
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
+- Reusable workflow fragments should support explicit local argument contracts without forcing a separate reuse primitive when arguments are present.
 
 ## Product boundary
 
