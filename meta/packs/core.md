@@ -2736,7 +2736,14 @@ Illustrative included fragment file:
 description: Check one issue and reuse the loaded result
 args:
   repository: string
-  issue_number: integer
+  issue_number:
+    type: integer
+  project_id:
+    type: string
+    default: null
+  dry_run:
+    type: boolean
+    default: false
 
 blocks:
   - steps:
@@ -2751,6 +2758,10 @@ Rules:
 
 - an included fragment may declare `description`;
 - an included fragment may declare `args` as a mapping of fragment-local argument names;
+- an `args` entry may use a short scalar declaration such as `repository: string` for a required argument;
+- an `args` entry may use an object declaration with fields such as `type`, `required`, and `default`;
+- `default` may be any JSON-shaped value, including `null`;
+- an omitted optional argument and an explicit `null` binding are distinct authoring cases;
 - fragment-local argument reads use the `args.<name>` surface;
 - included fragment payload content must still normalize to ordinary workflow block semantics after argument binding and expansion.
 

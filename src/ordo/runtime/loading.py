@@ -27,6 +27,20 @@ class LoadError(Exception):
         return "; ".join(diagnostic.message for diagnostic in self.diagnostics)
 
 
+@dataclass(frozen=True, slots=True)
+class FragmentArgSpec:
+    """Canonical included-fragment argument declaration."""
+
+    type_name: str
+    required: bool
+    has_default: bool
+    default_value: JSONValue | None = None
+
+    @property
+    def allows_null_binding(self) -> bool:
+        return self.type_name == "null" or (self.has_default and self.default_value is None)
+
+
 def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
     """Load workflow YAML into the canonical typed model."""
 
@@ -313,10 +327,16 @@ def _prepare_included_fragment_payload(
         )
     args_value = payload.get("args")
     args_contract = _load_fragment_args_contract(args_value, source=source, include_chain=include_chain, include_node_path=include_node_path)
-    _validate_fragment_arg_bindings(args_contract, include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    effective_bindings = _validate_fragment_arg_bindings(
+        args_contract,
+        include_bindings,
+        source=source,
+        include_chain=include_chain,
+        include_node_path=include_node_path,
+    )
 
     body = {key: value for key, value in payload.items() if key not in {"description", "args"}}
-    bound = _bind_fragment_args(body, args_contract=args_contract, include_bindings=include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    bound = _bind_fragment_args(body, args_contract=args_contract, include_bindings=effective_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
     scoped = _rewrite_fragment_step_scope(bound, source=source, include_chain=include_chain, include_node_path=include_node_path)
     if isinstance(scoped, dict) and "blocks" in scoped and set(scoped.keys()) == {"blocks"} and isinstance(scoped["blocks"], list):
         return scoped["blocks"]
@@ -329,7 +349,7 @@ def _load_fragment_args_contract(
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
-) -> dict[str, str]:
+) -> dict[str, FragmentArgSpec]:
     if value is None:
         return {}
     if not isinstance(value, dict):
@@ -341,7 +361,7 @@ def _load_fragment_args_contract(
             source=str(source),
             actual_type=type(value).__name__,
         )
-    contract: dict[str, str] = {}
+    contract: dict[str, FragmentArgSpec] = {}
     for name, declared in value.items():
         if not isinstance(name, str) or not name:
             raise _workflow_include_error(
@@ -352,11 +372,20 @@ def _load_fragment_args_contract(
                 source=str(source),
             )
         if isinstance(declared, str) and declared:
-            contract[name] = declared
+            contract[name] = FragmentArgSpec(type_name=declared, required=True, has_default=False)
+            continue
+        if isinstance(declared, dict):
+            contract[name] = _load_fragment_arg_object_spec(
+                name,
+                declared,
+                source=source,
+                include_chain=include_chain,
+                include_node_path=include_node_path,
+            )
             continue
         raise _workflow_include_error(
             code="load.workflow.include.args.invalid_declaration",
-            message="Included fragment argument declarations must use non-empty string type names",
+            message="Included fragment argument declarations must use a non-empty string or an object contract",
             include_path=include_node_path + ("args", name),
             include_chain=include_chain,
             source=str(source),
@@ -365,15 +394,82 @@ def _load_fragment_args_contract(
     return contract
 
 
+def _load_fragment_arg_object_spec(
+    name: str,
+    declared: JSONObject,
+    *,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> FragmentArgSpec:
+    allowed_fields = {"type", "required", "default"}
+    unknown = sorted(key for key in declared if key not in allowed_fields)
+    if unknown:
+        raise _workflow_include_error(
+            code="load.workflow.include.args.invalid_declaration",
+            message="Included fragment argument object declarations may use only type, required, and default",
+            include_path=include_node_path + ("args", name),
+            include_chain=include_chain,
+            source=str(source),
+            unknown_fields=", ".join(unknown),
+        )
+    declared_type = declared.get("type")
+    if not isinstance(declared_type, str) or not declared_type:
+        raise _workflow_include_error(
+            code="load.workflow.include.args.invalid_declaration",
+            message="Included fragment argument object declarations must provide a non-empty string type",
+            include_path=include_node_path + ("args", name, "type"),
+            include_chain=include_chain,
+            source=str(source),
+            actual_type=type(declared_type).__name__,
+        )
+    required_value = declared.get("required")
+    has_default = "default" in declared
+    if required_value is None:
+        required = not has_default
+    elif isinstance(required_value, bool):
+        required = required_value
+    else:
+        raise _workflow_include_error(
+            code="load.workflow.include.args.invalid_declaration",
+            message="Included fragment argument field 'required' must be a boolean when provided",
+            include_path=include_node_path + ("args", name, "required"),
+            include_chain=include_chain,
+            source=str(source),
+            actual_type=type(required_value).__name__,
+        )
+    if has_default and required:
+        raise _workflow_include_error(
+            code="load.workflow.include.args.invalid_declaration",
+            message="Included fragment arguments with a default must not also be required",
+            include_path=include_node_path + ("args", name),
+            include_chain=include_chain,
+            source=str(source),
+        )
+    default_value = declared.get("default")
+    spec = FragmentArgSpec(type_name=declared_type, required=required, has_default=has_default, default_value=default_value)
+    if has_default and not _fragment_arg_value_matches_spec(default_value, spec):
+        raise _workflow_include_error(
+            code="load.workflow.include.args.invalid_declaration",
+            message="Included fragment argument default does not match the declared argument type",
+            include_path=include_node_path + ("args", name, "default"),
+            include_chain=include_chain,
+            source=str(source),
+            declared_type=declared_type,
+            actual_type=type(default_value).__name__,
+        )
+    return spec
+
+
 def _validate_fragment_arg_bindings(
-    args_contract: dict[str, str],
+    args_contract: dict[str, FragmentArgSpec],
     include_bindings: JSONObject,
     *,
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
-) -> None:
-    missing = [name for name in args_contract if name not in include_bindings]
+) -> JSONObject:
+    missing = [name for name, spec in args_contract.items() if spec.required and name not in include_bindings]
     if missing:
         raise _workflow_include_error(
             code="load.workflow.include.args.missing",
@@ -393,13 +489,16 @@ def _validate_fragment_arg_bindings(
             source=str(source),
             unknown_args=", ".join(unknown),
         )
-    for name, declared_type in args_contract.items():
+    effective_bindings: JSONObject = dict(include_bindings)
+    for name, spec in args_contract.items():
         if name not in include_bindings:
+            if spec.has_default:
+                effective_bindings[name] = spec.default_value
             continue
         actual_value = include_bindings[name]
         if isinstance(actual_value, str) and _extract_runtime_expression(actual_value) is not None:
             continue
-        if _json_value_matches_declared_type(actual_value, declared_type):
+        if _fragment_arg_value_matches_spec(actual_value, spec):
             continue
         raise _workflow_include_error(
             code="load.workflow.include.args.type",
@@ -407,9 +506,16 @@ def _validate_fragment_arg_bindings(
             include_path=include_node_path + ("with", name),
             include_chain=include_chain,
             source=str(source),
-            declared_type=declared_type,
+            declared_type=spec.type_name,
             actual_type=type(actual_value).__name__,
         )
+    return effective_bindings
+
+
+def _fragment_arg_value_matches_spec(value: JSONValue, spec: FragmentArgSpec) -> bool:
+    if value is None and spec.allows_null_binding:
+        return True
+    return _json_value_matches_declared_type(value, spec.type_name)
 
 
 def _json_value_matches_declared_type(value: JSONValue, declared_type: str) -> bool:

@@ -555,6 +555,159 @@ class LoadingTest(unittest.TestCase):
 
         self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.args.invalid_declaration")
 
+    def test_load_workflow_file_materializes_fragment_default_values_including_null(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: fragments/check-issue
+                        with:
+                          repository: repo/name
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      repository: string
+                      project_id:
+                        type: string
+                        default: null
+                      dry_run:
+                        type: boolean
+                        default: false
+                    steps:
+                      - name: inspect
+                        uses: gh.issue
+                        with:
+                          repository: ${args.repository}
+                          project_id: ${args.project_id}
+                          dry_run: ${args.dry_run}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            workflow = load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(workflow.steps[0].operation.with_["repository"], "repo/name")
+        self.assertIsNone(workflow.steps[0].operation.with_["project_id"])
+        self.assertFalse(workflow.steps[0].operation.with_["dry_run"])
+
+    def test_load_workflow_file_accepts_explicit_null_binding_for_null_default_arg(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: fragments/check-issue
+                        with:
+                          repository: repo/name
+                          project_id: null
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      repository: string
+                      project_id:
+                        type: string
+                        default: null
+                    steps:
+                      - name: inspect
+                        uses: gh.issue
+                        with:
+                          repository: ${args.repository}
+                          project_id: ${args.project_id}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            workflow = load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(workflow.steps[0].operation.with_["repository"], "repo/name")
+        self.assertIsNone(workflow.steps[0].operation.with_["project_id"])
+
+    def test_load_workflow_file_allows_optional_fragment_arg_without_default_when_omitted_and_unused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                "version: 0\nworkflow: demo\nblocks:\n  - include: fragments/check-issue\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      project_id:
+                        type: string
+                        required: false
+                    steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            workflow = load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(workflow.to_contract()["blocks"], [{"steps": []}])
+
+    def test_load_workflow_file_rejects_invalid_fragment_default_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                "version: 0\nworkflow: demo\nblocks:\n  - include: fragments/check-issue\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      project_id:
+                        type: string
+                        default: false
+                    steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.args.invalid_declaration")
+
     def test_load_workflow_file_rejects_fragment_reference_to_caller_step_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

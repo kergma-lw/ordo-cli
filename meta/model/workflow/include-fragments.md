@@ -32,6 +32,31 @@ An included fragment may publish:
 - `args` for declared fragment-local inputs;
 - ordinary workflow payload content such as `guards`, `steps`, or `blocks`.
 
+The fragment-local `args` contract may use:
+
+- a short form such as `repository: string` for one required argument;
+- an object form when the fragment needs to declare `type`, `required`, or `default` explicitly.
+
+Illustrative richer `args` shape:
+
+```yaml
+args:
+  repository: string
+  project_id:
+    type: string
+    default: null
+  dry_run:
+    type: boolean
+    default: false
+```
+
+In this model:
+
+- a short-form scalar declaration remains required unless a later contract revision says otherwise;
+- `default` makes the argument optional for callers;
+- `default: null` is valid and distinct from a missing required argument;
+- an explicit caller binding of `null` remains semantically distinct from omission.
+
 Illustrative fragment file:
 
 ```yaml
@@ -68,8 +93,9 @@ Include expansion should be understood as:
 1. resolve fragment location;
 2. load fragment contract and payload;
 3. validate `with` against declared `args`;
-4. bind fragment-local `args...` values;
-5. expand the fragment payload into the assembled workflow;
-6. validate the assembled workflow.
+4. materialize omitted optional arguments from declared defaults, including `null` when declared;
+5. bind fragment-local `args...` values;
+6. expand the fragment payload into the assembled workflow;
+7. validate the assembled workflow.
 
 This keeps the authoring surface simple while preserving explicit semantics for validation and diagnostics.

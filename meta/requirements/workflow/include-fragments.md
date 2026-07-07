@@ -13,6 +13,9 @@
 - The included fragment file may declare human-facing metadata such as `description` and a fragment-local `args` contract.
 - Fragment arguments should be referenced inside the included fragment as `args.<name>`.
 - `with` keys should bind only declared fragment arguments.
+- A fragment argument may be required, optional without a default, or optional with a declared default value.
+- Declared fragment default values may include `null`.
+- Omitting an optional fragment argument must remain distinct from binding that argument explicitly to `null`.
 
 ## Validation and diagnostics
 
@@ -20,6 +23,8 @@
 - Validation must reject missing required fragment arguments.
 - Validation must reject unknown argument bindings in `with`.
 - Validation must reject malformed fragment argument declarations.
+- Validation must accept omitted optional arguments when the fragment contract declares them as optional or supplies a default.
+- Validation must preserve explicit `null` bindings rather than collapsing them into missing-argument behavior.
 - Diagnostics should distinguish file-resolution failure from argument-binding failure.
 
 ## Boundary discipline

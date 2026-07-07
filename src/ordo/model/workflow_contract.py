@@ -46,7 +46,16 @@ WORKFLOW_CONTRACT: JSONObject = {
             {"name": "description", "required": False, "type": "string"},
             {"name": "args", "required": False, "type": "object", "authoring_role": "declares_fragment_local_inputs"},
         ],
+        "fragment_argument_declaration_forms": [
+            {"name": "required_short_form", "shape": "arg_name: string_type_name"},
+            {"name": "object_form", "shape": {"type": "string", "required": "boolean_optional", "default": "json_value_optional"}},
+        ],
         "fragment_argument_access_surface": "args.name",
+        "fragment_argument_default_semantics": {
+            "default_makes_argument_optional": True,
+            "default_null_is_valid": True,
+            "omitted_argument_is_distinct_from_explicit_null_binding": True,
+        },
         "state_scope": "global_across_assembled_workflow",
         "step_scope": "local_to_workflow_or_fragment_expansion_scope",
         "search_order": [
