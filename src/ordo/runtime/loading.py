@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
+from ordo.runtime.value_expressions import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,17 +213,21 @@ def _expand_include_nodes(
     current_path: tuple[str, ...] = (),
 ) -> JSONValue:
     if isinstance(value, list):
-        return [
-            _expand_include_nodes(item, current_file=current_file, launch_dir=launch_dir, stack=stack, depth=depth, current_path=current_path + (str(index),))
-            for index, item in enumerate(value)
-        ]
+        expanded: list[JSONValue] = []
+        for index, item in enumerate(value):
+            item_value = _expand_include_nodes(item, current_file=current_file, launch_dir=launch_dir, stack=stack, depth=depth, current_path=current_path + (str(index),))
+            if isinstance(item_value, list):
+                expanded.extend(item_value)
+                continue
+            expanded.append(item_value)
+        return expanded
     if not isinstance(value, dict):
         return value
     if "include" in value:
-        if len(value) != 1:
+        if set(value.keys()) - {"include", "with"}:
             raise _workflow_include_error(
                 code="load.workflow.include.form",
-                message="Include node must contain only the 'include' field",
+                message="Include node may contain only 'include' and optional 'with' fields",
                 include_path=current_path,
                 include_chain=stack,
                 source=str(current_file),
@@ -236,14 +242,467 @@ def _expand_include_nodes(
                 source=str(current_file),
                 actual_type=type(include_ref).__name__,
             )
+        with_payload = value.get("with")
+        if with_payload is None:
+            include_bindings: JSONObject = {}
+        elif not isinstance(with_payload, dict):
+            raise _workflow_include_error(
+                code="load.workflow.include.with.type",
+                message="Include field 'with' must be an object when provided",
+                include_path=current_path + ("with",),
+                include_chain=stack,
+                source=str(current_file),
+                actual_type=type(with_payload).__name__,
+            )
+        else:
+            include_bindings = dict(with_payload)
         include_path = _resolve_include_path(include_ref, current_file=current_file, launch_dir=launch_dir, include_path=current_path + ("include",), stack=stack)
-        included_payload = _expand_workflow_includes(include_path, launch_dir=launch_dir, stack=stack, depth=depth + 1)
+        included_payload = _load_included_fragment_payload(
+            include_path,
+            launch_dir=launch_dir,
+            stack=stack,
+            depth=depth + 1,
+            include_bindings=include_bindings,
+            include_node_path=current_path,
+        )
         return included_payload
 
     return {
         key: _expand_include_nodes(item, current_file=current_file, launch_dir=launch_dir, stack=stack, depth=depth, current_path=current_path + (key,))
         for key, item in value.items()
     }
+
+
+def _load_included_fragment_payload(
+    path: Path,
+    *,
+    launch_dir: Path,
+    stack: tuple[Path, ...],
+    depth: int,
+    include_bindings: JSONObject,
+    include_node_path: tuple[str, ...],
+) -> JSONValue:
+    included_payload = _expand_workflow_includes(path, launch_dir=launch_dir, stack=stack, depth=depth)
+    fragment_payload = _prepare_included_fragment_payload(
+        included_payload,
+        source=path,
+        include_chain=stack + (path.resolve(),),
+        include_bindings=include_bindings,
+        include_node_path=include_node_path,
+    )
+    return _expand_include_nodes(fragment_payload, current_file=path.resolve(), launch_dir=launch_dir, stack=stack + (path.resolve(),), depth=depth)
+
+
+def _prepare_included_fragment_payload(
+    payload: JSONObject,
+    *,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_bindings: JSONObject,
+    include_node_path: tuple[str, ...],
+) -> JSONValue:
+    description = payload.get("description")
+    if description is not None and not isinstance(description, str):
+        raise _workflow_include_error(
+            code="load.workflow.include.fragment.description_type",
+            message="Included fragment field 'description' must be a string when provided",
+            include_path=include_node_path + ("description",),
+            include_chain=include_chain,
+            source=str(source),
+            actual_type=type(description).__name__,
+        )
+    args_value = payload.get("args")
+    args_contract = _load_fragment_args_contract(args_value, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    _validate_fragment_arg_bindings(args_contract, include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+
+    body = {key: value for key, value in payload.items() if key not in {"description", "args"}}
+    bound = _bind_fragment_args(body, args_contract=args_contract, include_bindings=include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    scoped = _rewrite_fragment_step_scope(bound, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    if isinstance(scoped, dict) and "blocks" in scoped and set(scoped.keys()) == {"blocks"} and isinstance(scoped["blocks"], list):
+        return scoped["blocks"]
+    return scoped
+
+
+def _load_fragment_args_contract(
+    value: JSONValue | None,
+    *,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> dict[str, str]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise _workflow_include_error(
+            code="load.workflow.include.args.invalid_declaration",
+            message="Included fragment field 'args' must be an object when provided",
+            include_path=include_node_path + ("args",),
+            include_chain=include_chain,
+            source=str(source),
+            actual_type=type(value).__name__,
+        )
+    contract: dict[str, str] = {}
+    for name, declared in value.items():
+        if not isinstance(name, str) or not name:
+            raise _workflow_include_error(
+                code="load.workflow.include.args.invalid_declaration",
+                message="Included fragment argument names must be non-empty strings",
+                include_path=include_node_path + ("args",),
+                include_chain=include_chain,
+                source=str(source),
+            )
+        if isinstance(declared, str) and declared:
+            contract[name] = declared
+            continue
+        raise _workflow_include_error(
+            code="load.workflow.include.args.invalid_declaration",
+            message="Included fragment argument declarations must use non-empty string type names",
+            include_path=include_node_path + ("args", name),
+            include_chain=include_chain,
+            source=str(source),
+            actual_type=type(declared).__name__,
+        )
+    return contract
+
+
+def _validate_fragment_arg_bindings(
+    args_contract: dict[str, str],
+    include_bindings: JSONObject,
+    *,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> None:
+    missing = [name for name in args_contract if name not in include_bindings]
+    if missing:
+        raise _workflow_include_error(
+            code="load.workflow.include.args.missing",
+            message="Include bindings are missing required fragment arguments",
+            include_path=include_node_path + ("with",),
+            include_chain=include_chain,
+            source=str(source),
+            missing_args=", ".join(missing),
+        )
+    unknown = [name for name in include_bindings if name not in args_contract]
+    if unknown:
+        raise _workflow_include_error(
+            code="load.workflow.include.args.unknown",
+            message="Include bindings contain unknown fragment arguments",
+            include_path=include_node_path + ("with",),
+            include_chain=include_chain,
+            source=str(source),
+            unknown_args=", ".join(unknown),
+        )
+    for name, declared_type in args_contract.items():
+        if name not in include_bindings:
+            continue
+        actual_value = include_bindings[name]
+        if isinstance(actual_value, str) and _extract_runtime_expression(actual_value) is not None:
+            continue
+        if _json_value_matches_declared_type(actual_value, declared_type):
+            continue
+        raise _workflow_include_error(
+            code="load.workflow.include.args.type",
+            message="Include binding does not match the declared fragment argument type",
+            include_path=include_node_path + ("with", name),
+            include_chain=include_chain,
+            source=str(source),
+            declared_type=declared_type,
+            actual_type=type(actual_value).__name__,
+        )
+
+
+def _json_value_matches_declared_type(value: JSONValue, declared_type: str) -> bool:
+    match declared_type:
+        case "string":
+            return isinstance(value, str)
+        case "integer":
+            return isinstance(value, int) and not isinstance(value, bool)
+        case "number":
+            return (isinstance(value, int) and not isinstance(value, bool)) or isinstance(value, float)
+        case "boolean":
+            return isinstance(value, bool)
+        case "object":
+            return isinstance(value, dict)
+        case "array":
+            return isinstance(value, list)
+        case "null":
+            return value is None
+        case _:
+            return True
+
+
+def _bind_fragment_args(
+    value: JSONValue,
+    *,
+    args_contract: dict[str, str],
+    include_bindings: JSONObject,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> JSONValue:
+    if isinstance(value, list):
+        return [
+            _bind_fragment_args(item, args_contract=args_contract, include_bindings=include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+            for item in value
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _bind_fragment_args(item, args_contract=args_contract, include_bindings=include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+            for key, item in value.items()
+        }
+    if not isinstance(value, str):
+        return value
+    return _bind_fragment_arg_string(
+        value,
+        args_contract=args_contract,
+        include_bindings=include_bindings,
+        source=source,
+        include_chain=include_chain,
+        include_node_path=include_node_path,
+    )
+
+
+def _bind_fragment_arg_string(
+    value: str,
+    *,
+    args_contract: dict[str, str],
+    include_bindings: JSONObject,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> JSONValue:
+    expression = _extract_runtime_expression(value)
+    if expression is None:
+        return value
+    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    direct_arg_name = _direct_fragment_arg_name(parsed)
+    if direct_arg_name is not None:
+        if direct_arg_name not in include_bindings:
+            raise _workflow_include_error(
+                code="load.workflow.include.args.missing",
+                message="Included fragment references an unbound fragment argument",
+                include_path=include_node_path + ("with", direct_arg_name),
+                include_chain=include_chain,
+                source=str(source),
+            )
+        return include_bindings[direct_arg_name]
+    replacements = _collect_fragment_arg_expression_replacements(parsed, include_bindings=include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    if not replacements:
+        return value
+    rebound_expression = _apply_expression_replacements(expression, replacements)
+    return "${" + rebound_expression + "}"
+
+
+def _direct_fragment_arg_name(parsed: ParsedValueExpression) -> str | None:
+    node = parsed.root
+    if isinstance(node, ReferenceNode) and len(node.parts) == 2 and node.parts[0] == "args":
+        return node.parts[1]
+    return None
+
+
+def _collect_fragment_arg_expression_replacements(
+    parsed: ParsedValueExpression,
+    *,
+    include_bindings: JSONObject,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> list[tuple[int, int, str]]:
+    replacements: list[tuple[int, int, str]] = []
+    for node in _walk_value_expression_nodes(parsed.root):
+        if not isinstance(node, ReferenceNode):
+            continue
+        if len(node.parts) != 2 or node.parts[0] != "args":
+            continue
+        arg_name = node.parts[1]
+        if arg_name not in include_bindings:
+            raise _workflow_include_error(
+                code="load.workflow.include.args.missing",
+                message="Included fragment references an unbound fragment argument",
+                include_path=include_node_path + ("with", arg_name),
+                include_chain=include_chain,
+                source=str(source),
+            )
+        replacements.append((node.start, node.end, _serialize_binding_for_expression(include_bindings[arg_name], source=source, include_chain=include_chain, include_node_path=include_node_path, arg_name=arg_name)))
+    return replacements
+
+
+def _serialize_binding_for_expression(
+    value: JSONValue,
+    *,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+    arg_name: str,
+) -> str:
+    if isinstance(value, str):
+        expression = _extract_runtime_expression(value)
+        if expression is not None:
+            return expression
+        return json.dumps(value)
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return json.dumps(value)
+    raise _workflow_include_error(
+        code="load.workflow.include.args.type",
+        message="Fragment argument bound inside an expression must resolve to a scalar or value expression",
+        include_path=include_node_path + ("with", arg_name),
+        include_chain=include_chain,
+        source=str(source),
+        actual_type=type(value).__name__,
+    )
+
+
+def _rewrite_fragment_step_scope(
+    value: JSONValue,
+    *,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> JSONValue:
+    local_registers = _collect_fragment_declared_registers(value)
+    if not local_registers:
+        return value
+    scope_token = _fragment_scope_token(include_chain, include_node_path)
+    register_map = {name: f"{scope_token}_{name}" for name in local_registers}
+    return _rewrite_fragment_scope_value(
+        value,
+        register_map=register_map,
+        source=source,
+        include_chain=include_chain,
+        include_node_path=include_node_path,
+    )
+
+
+def _collect_fragment_declared_registers(value: JSONValue) -> set[str]:
+    registers: set[str] = set()
+    if isinstance(value, list):
+        for item in value:
+            registers.update(_collect_fragment_declared_registers(item))
+        return registers
+    if not isinstance(value, dict):
+        return registers
+    register = value.get("register")
+    if isinstance(register, str) and register:
+        registers.add(register)
+    for item in value.values():
+        registers.update(_collect_fragment_declared_registers(item))
+    return registers
+
+
+def _fragment_scope_token(include_chain: tuple[Path, ...], include_node_path: tuple[str, ...]) -> str:
+    source_token = include_chain[-1].stem.replace("-", "_").replace(".", "_") or "fragment"
+    path_token = "_".join(part for part in include_node_path if part.isdigit()) or "root"
+    return f"inc_{source_token}_{path_token}"
+
+
+def _rewrite_fragment_scope_value(
+    value: JSONValue,
+    *,
+    register_map: dict[str, str],
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> JSONValue:
+    if isinstance(value, list):
+        return [
+            _rewrite_fragment_scope_value(item, register_map=register_map, source=source, include_chain=include_chain, include_node_path=include_node_path)
+            for item in value
+        ]
+    if isinstance(value, dict):
+        rewritten: JSONObject = {}
+        for key, item in value.items():
+            if key == "register" and isinstance(item, str) and item in register_map:
+                rewritten[key] = register_map[item]
+                continue
+            rewritten[key] = _rewrite_fragment_scope_value(item, register_map=register_map, source=source, include_chain=include_chain, include_node_path=include_node_path)
+        return rewritten
+    if not isinstance(value, str):
+        return value
+    return _rewrite_fragment_step_reference_string(
+        value,
+        register_map=register_map,
+        source=source,
+        include_chain=include_chain,
+        include_node_path=include_node_path,
+    )
+
+
+def _rewrite_fragment_step_reference_string(
+    value: str,
+    *,
+    register_map: dict[str, str],
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> str:
+    expression = _extract_runtime_expression(value)
+    if expression is None:
+        return value
+    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    replacements: list[tuple[int, int, str]] = []
+    for node in _walk_value_expression_nodes(parsed.root):
+        if not isinstance(node, StepReferenceNode):
+            continue
+        if node.register not in register_map:
+            raise _workflow_include_error(
+                code="load.workflow.include.step_scope",
+                message="Included fragments must not reference caller-local step registers",
+                include_path=include_node_path,
+                include_chain=include_chain,
+                source=str(source),
+                register=node.register,
+            )
+        rewritten = "step." + register_map[node.register]
+        if node.fields:
+            rewritten += "." + ".".join(node.fields)
+        replacements.append((node.start, node.end, rewritten))
+    if not replacements:
+        return value
+    rebound_expression = _apply_expression_replacements(expression, replacements)
+    return "${" + rebound_expression + "}"
+
+
+def _walk_value_expression_nodes(node: ValueExpressionNode) -> list[ValueExpressionNode]:
+    nodes = [node]
+    if isinstance(node, PipelineNode):
+        nodes.extend(_walk_value_expression_nodes(node.source))
+        for item in node.filters:
+            nodes.extend(_walk_value_expression_nodes(item))
+        return nodes
+    if isinstance(node, FilterApplicationNode):
+        for item in node.arguments:
+            nodes.extend(_walk_value_expression_nodes(item))
+        return nodes
+    if isinstance(node, BuiltinCallNode):
+        for item in node.arguments:
+            nodes.extend(_walk_value_expression_nodes(item))
+        return nodes
+    if isinstance(node, UnaryNode):
+        nodes.extend(_walk_value_expression_nodes(node.operand))
+        return nodes
+    if isinstance(node, BinaryNode):
+        nodes.extend(_walk_value_expression_nodes(node.left))
+        nodes.extend(_walk_value_expression_nodes(node.right))
+        return nodes
+    return nodes
+
+
+def _apply_expression_replacements(expression: str, replacements: list[tuple[int, int, str]]) -> str:
+    rewritten = expression
+    for start, end, replacement in sorted(replacements, key=lambda item: item[0], reverse=True):
+        rewritten = rewritten[:start] + replacement + rewritten[end:]
+    return rewritten
+
+
+def _extract_runtime_expression(value: str) -> str | None:
+    if value.startswith("${") and value.endswith("}") and len(value) >= 4:
+        return value[2:-1]
+    return None
 
 
 def _resolve_include_path(
