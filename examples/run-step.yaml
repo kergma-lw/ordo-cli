@@ -1,0 +1,11 @@
+version: 0
+workflow: run-step
+inputs:
+  close_comment: {}
+blocks:
+  - steps:
+      - name: comment-and-set-status
+        run: includes/github/comment-and-set-status
+        with:
+          comment: ${inputs.close_comment}
+          status: Done

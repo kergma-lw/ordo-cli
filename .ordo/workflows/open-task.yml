@@ -26,18 +26,22 @@ blocks:
           project_id: ${inputs.project_id}
           status: In progress
 
-  - run: includes/github/prepare-task-branch
-    with:
-      project_type: ${step.project.outputs.type}
-      issue_number: ${step.issue.outputs.number}
-      issue_title: ${step.issue.outputs.title}
+  - steps:
+      - name: prepare-task-branch
+        run: includes/github/prepare-task-branch
+        with:
+          project_type: ${step.project.outputs.type}
+          issue_number: ${step.issue.outputs.number}
+          issue_title: ${step.issue.outputs.title}
 
-  - run: includes/git/run-and-commit-generated-changes
-    if: ${inputs.repo_kind | eq("frontend")}
-    with:
-      command: set -euo pipefail; npm run openapi; npm run errors:sync
-      launcher: shell_frontend
-      commit_message: "chore(openapi): regenerate api types"
+  - steps:
+      - name: refresh-generated-artifacts
+        run: includes/git/run-and-commit-generated-changes
+        if: ${inputs.repo_kind | eq("frontend")}
+        with:
+          command: set -euo pipefail; npm run openapi; npm run errors:sync
+          launcher: shell_frontend
+          commit_message: "chore(openapi): regenerate api types"
 
   - steps:
       - name: check-frontend-clean-generation

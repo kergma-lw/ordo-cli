@@ -35,7 +35,9 @@ blocks:
           repository: ${inputs.repository}
           issue_number: ${inputs.issue_number}
 
-  - run: includes/github/comment-and-set-status
-    with:
-      comment: ${inputs.close_comment}
-      status: Done
+  - steps:
+      - name: comment-and-set-status
+        run: includes/github/comment-and-set-status
+        with:
+          comment: ${inputs.close_comment}
+          status: Done

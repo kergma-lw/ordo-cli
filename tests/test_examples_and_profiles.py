@@ -14,6 +14,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/inspect-issue.yaml"),
             Path("examples/blocked-main-branch.yaml"),
             Path("examples/launcher-step.yaml"),
+            Path("examples/run-step.yaml"),
         ):
             report = validate_workflow_text(path.read_text(encoding="utf-8"), source=str(path))
             self.assertTrue(report.ok, path.as_posix())
