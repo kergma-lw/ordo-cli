@@ -10,7 +10,7 @@ from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class FragmentRunTest(unittest.TestCase):
-    def test_check_workflow_preserves_run_block_as_distinct_node(self) -> None:
+    def test_check_workflow_preserves_run_step_as_distinct_node(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             workflow_path = root / "workflow.yaml"
@@ -23,7 +23,9 @@ class FragmentRunTest(unittest.TestCase):
                     workflow: demo
                     blocks:
                       - guards: []
-                      - run: fragments/comment
+                      - steps:
+                          - name: comment-fragment
+                            run: fragments/comment
                     """
                 ).strip()
                 + "\n",
@@ -36,8 +38,8 @@ class FragmentRunTest(unittest.TestCase):
         result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["block_items"][1]["type"], "run")
-        self.assertEqual(result.outputs["block_items"][1]["reference"], "fragments/comment")
+        self.assertEqual(result.outputs["block_items"][1]["type"], "steps")
+        self.assertEqual(result.outputs["block_items"][1]["step_names"], ["comment-fragment"])
 
     def test_plan_workflow_reports_run_items(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -52,8 +54,10 @@ class FragmentRunTest(unittest.TestCase):
                     workflow: demo
                     blocks:
                       - guards: []
-                      - run: fragments/comment
-                        if: ${inputs.enabled}
+                      - steps:
+                          - name: comment-fragment
+                            run: fragments/comment
+                            if: ${inputs.enabled}
                     """
                 ).strip()
                 + "\n",
@@ -86,10 +90,11 @@ class FragmentRunTest(unittest.TestCase):
                           - name: derive-message
                             value: hello
                             register: message
-                      - run: fragments/comment
-                        if: ${step.message.outputs.value | eq("hello")}
-                        with:
-                          comment: ${step.message.outputs.value}
+                          - name: comment-fragment
+                            run: fragments/comment
+                            if: ${step.message.outputs.value | eq("hello")}
+                            with:
+                              comment: ${step.message.outputs.value}
                     """
                 ).strip()
                 + "\n",
@@ -114,11 +119,11 @@ class FragmentRunTest(unittest.TestCase):
             result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
             self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertIn("comment-fragment", result.outputs["executed_steps"])
             self.assertIn("derive-message", result.outputs["executed_steps"])
             self.assertIn("remember-comment", result.outputs["executed_steps"])
-            run_items = [item for item in result.outputs["block_items"] if item.get("type") == "run"]
-            self.assertTrue(run_items)
-            self.assertEqual(run_items[-1]["status"], "ok")
+            self.assertEqual(result.outputs["block_items"][0]["type"], "steps")
+            self.assertEqual(result.outputs["block_items"][-1]["status"], "ok")
 
 
 if __name__ == "__main__":

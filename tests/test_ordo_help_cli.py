@@ -91,6 +91,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         input_file_result = json.loads(self.run_help("search", "input-file", "--json").stdout)
         working_directory_result = json.loads(self.run_help("search", "working_directory", "--json").stdout)
         launcher_result = json.loads(self.run_help("search", "launcher", "--json").stdout)
+        run_result = json.loads(self.run_help("search", "run", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in profile_result["facts"]))
         self.assertTrue(any(item["kind"] == "capability" and item["name"] == "workflow.branching" for item in branching_result["facts"]))
@@ -100,6 +101,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.workflows.working_directory" for item in working_directory_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "profile.launchers" for item in launcher_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.step.launcher" for item in launcher_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.run_contract" for item in run_result["facts"]))
 
     def test_capabilities_publish_cross_links_for_branching(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -155,6 +157,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
         model_node = json.loads(self.run_help("describe", "profile.inputs", "--json").stdout)
         input_contract_node = json.loads(self.run_help("describe", "workflow.inputs_contract", "--json").stdout)
+        run_contract_node = json.loads(self.run_help("describe", "workflow.run_contract", "--json").stdout)
         command_line_node = json.loads(self.run_help("describe", "command-line.ordo-playbook.flag.input_file", "--json").stdout)
         working_directory_node = json.loads(self.run_help("describe", "playbook.workflows.working_directory", "--json").stdout)
         launcher_node = json.loads(self.run_help("describe", "profile.launchers", "--json").stdout)
@@ -169,6 +172,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(input_contract_node["document_kind"], "model_node")
         self.assertEqual(input_contract_node["name"], "workflow.inputs_contract")
         self.assertTrue(input_contract_node["metadata"]["declared_keys_required_at_activation"])
+        self.assertEqual(run_contract_node["document_kind"], "model_node")
+        self.assertEqual(run_contract_node["name"], "workflow.run_contract")
+        self.assertEqual(run_contract_node["metadata"]["directive_field"], "run")
         self.assertEqual(command_line_node["document_kind"], "command_line_node")
         self.assertEqual(command_line_node["name"], "command-line.ordo-playbook.flag.input_file")
         self.assertEqual(command_line_node["metadata"]["effect"], "override_input_from_file")

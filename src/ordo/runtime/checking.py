@@ -8,13 +8,13 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import GuardBlock, RunBlock, StepBlock, Workflow
+from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, UnaryNode
 from .launchers import validate_step_launchers
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
-from .resolution import ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedRunBlock, ResolvedStepBlock, resolve_workflow_references
+from .resolution import ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
 from .validation import validate_workflow_document
 
 
@@ -153,14 +153,6 @@ def check_workflow(
                 halted = True
             continue
 
-        if isinstance(block, ResolvedRunBlock):
-            if halted:
-                block_items.append(_pending_run_block_item(block, effective_workflow, blocked=True))
-                continue
-            block_items.append(_pending_run_block_item(block, effective_workflow, blocked=False))
-            halted = True
-            continue
-
         if halted:
             block_items.append(_pending_step_block_item(block, effective_workflow, blocked=True))
             continue
@@ -270,7 +262,8 @@ def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index
                     "guard_details": [],
                 }
             )
-        elif isinstance(block, StepBlock):
+        else:
+            assert isinstance(block, StepBlock)
             items.append(
                 {
                     "block_index": block_index,
@@ -278,19 +271,6 @@ def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index
                     "status": "blocked" if blocked else "pending",
                     "step_names": [step.name for step in block.steps],
                     "conditional_steps": [step.name for step in block.steps if step.if_ is not None],
-                }
-            )
-        else:
-            assert isinstance(block, RunBlock)
-            items.append(
-                {
-                    "block_index": block_index,
-                    "type": "run",
-                    "status": "blocked" if blocked else "pending",
-                    "eligibility": "blocked" if blocked else "eligible",
-                    "reference": block.run,
-                    "conditional": block.if_ is not None,
-                    "condition": block.if_,
                 }
             )
     return items
@@ -318,20 +298,6 @@ def _pending_step_block_item(block: ResolvedStepBlock, workflow: Workflow, *, bl
         "status": "blocked" if blocked else "pending",
         "step_names": [step.name for step in declared.steps],
         "conditional_steps": [step.name for step in declared.steps if step.if_ is not None],
-    }
-
-
-def _pending_run_block_item(block: ResolvedRunBlock, workflow: Workflow, *, blocked: bool) -> dict[str, object]:
-    declared = workflow.blocks[block.block_index]
-    assert isinstance(declared, RunBlock)
-    return {
-        "block_index": block.block_index,
-        "type": "run",
-        "status": "blocked" if blocked else "pending",
-        "eligibility": "blocked" if blocked else "eligible",
-        "reference": declared.run,
-        "conditional": declared.if_ is not None,
-        "condition": declared.if_,
     }
 
 

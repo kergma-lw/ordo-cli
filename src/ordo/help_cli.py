@@ -234,6 +234,21 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             metadata=field,
         )
     add_node(
+        "workflow.run_contract",
+        contract="workflow",
+        node_category="run_contract",
+        summary="Published workflow fragment-run contract metadata",
+        metadata=model["workflow"]["run_contract"],
+    )
+    for field in model["workflow"]["run_contract"].get("call_fields", []):
+        add_node(
+            f"workflow.run.{field['name']}",
+            contract="workflow",
+            node_category="run_field",
+            summary="Published workflow fragment-run call field metadata",
+            metadata=field,
+        )
+    add_node(
         "workflow.value_expression_root.args",
         contract="workflow",
         node_category="expression_root",

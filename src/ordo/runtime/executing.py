@@ -6,14 +6,14 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import GuardBlock, RunBlock, Step, StepBlock, Workflow
+from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .checking import GuardProbe, _build_guard_detail, _default_guard_probe, _evaluate_guard_expression, check_workflow
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
 from .launchers import apply_launcher_to_step
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
-from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedRunBlock, ResolvedStepBlock, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
 from .state import RuntimeStateError, delete_state_value, read_state_document, resolve_state_target, write_state_document, write_state_value
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -127,135 +127,6 @@ def execute_workflow(
                 )
             continue
 
-        if isinstance(declared_block, RunBlock):
-            assert isinstance(resolved_block, ResolvedRunBlock)
-            condition_result = evaluate_run_condition(declared_block, effective_workflow, block_index=block_index)
-            if isinstance(condition_result, Diagnostic):
-                diagnostics.append(condition_result)
-                block_items.append(
-                    {
-                        "block_index": block_index,
-                        "type": "run",
-                        "status": "execution_error",
-                        "reference": declared_block.run,
-                        "failed_run": declared_block.run,
-                    }
-                )
-                skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index + 1))
-                return RuntimeResult(
-                    mode=Mode.EXECUTE,
-                    status=RuntimeStatus.EXECUTION_ERROR,
-                    diagnostics=tuple(diagnostics),
-                    plan=check_result.plan,
-                    outputs={
-                        "can_execute": False,
-                        "active_profile": active_profile,
-                        "active_overrides": [override.to_contract() for override in active_overrides],
-                        "executed_steps": executed_steps,
-                        "skipped_steps": skipped_steps,
-                        "step_condition_details": step_condition_details,
-                        "launcher_details": launcher_details,
-                        "checked_guards": checked_guards,
-                        "guard_details": guard_details,
-                        "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
-                    },
-                    operation_results=tuple(operation_results),
-                    failed_step=declared_block.run,
-                )
-            if condition_result is False:
-                block_items.append(
-                    {
-                        "block_index": block_index,
-                        "type": "run",
-                        "status": "skipped",
-                        "reference": declared_block.run,
-                        "condition": declared_block.if_,
-                    }
-                )
-                continue
-
-            run_workflow = materialize_run_workflow(declared_block, effective_workflow, block_index=block_index)
-            if isinstance(run_workflow, Diagnostic):
-                diagnostics.append(run_workflow)
-                block_items.append(
-                    {
-                        "block_index": block_index,
-                        "type": "run",
-                        "status": "execution_error",
-                        "reference": declared_block.run,
-                        "failed_run": declared_block.run,
-                    }
-                )
-                skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index + 1))
-                return RuntimeResult(
-                    mode=Mode.EXECUTE,
-                    status=RuntimeStatus.EXECUTION_ERROR,
-                    diagnostics=tuple(diagnostics),
-                    plan=check_result.plan,
-                    outputs={
-                        "can_execute": False,
-                        "active_profile": active_profile,
-                        "active_overrides": [override.to_contract() for override in active_overrides],
-                        "executed_steps": executed_steps,
-                        "skipped_steps": skipped_steps,
-                        "step_condition_details": step_condition_details,
-                        "launcher_details": launcher_details,
-                        "checked_guards": checked_guards,
-                        "guard_details": guard_details,
-                        "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
-                    },
-                    operation_results=tuple(operation_results),
-                    failed_step=declared_block.run,
-                )
-
-            run_result = execute_workflow(
-                run_workflow,
-                profile=profile,
-                guard_probe=guard_probe,
-                step_executor=step_executor,
-                connector_provider=connector_provider,
-            )
-            diagnostics.extend(run_result.diagnostics)
-            operation_results.extend(run_result.operation_results)
-            executed_steps.extend([name for name in run_result.outputs.get("executed_steps", []) if isinstance(name, str)])
-            skipped_steps.extend([name for name in run_result.outputs.get("skipped_steps", []) if isinstance(name, str)])
-            step_condition_details.extend([detail for detail in run_result.outputs.get("step_condition_details", []) if isinstance(detail, dict)])
-            launcher_details.extend([detail for detail in run_result.outputs.get("launcher_details", []) if isinstance(detail, dict)])
-            checked_guards.extend([name for name in run_result.outputs.get("checked_guards", []) if isinstance(name, str)])
-            guard_details.extend([detail for detail in run_result.outputs.get("guard_details", []) if isinstance(detail, dict)])
-            block_items.append(
-                {
-                    "block_index": block_index,
-                    "type": "run",
-                    "status": "ok" if run_result.status is RuntimeStatus.OK else run_result.status.value,
-                    "reference": declared_block.run,
-                    "nested_block_items": [item for item in run_result.outputs.get("block_items", []) if isinstance(item, dict)],
-                }
-            )
-            if run_result.status is not RuntimeStatus.OK:
-                return RuntimeResult(
-                    mode=Mode.EXECUTE,
-                    status=run_result.status,
-                    diagnostics=tuple(diagnostics),
-                    plan=check_result.plan,
-                    outputs={
-                        "can_execute": False,
-                        "active_profile": active_profile,
-                        "active_overrides": [override.to_contract() for override in active_overrides],
-                        "executed_steps": executed_steps,
-                        "skipped_steps": skipped_steps,
-                        "step_condition_details": step_condition_details,
-                        "launcher_details": launcher_details,
-                        "checked_guards": checked_guards,
-                        "guard_details": guard_details,
-                        "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
-                    },
-                    operation_results=tuple(operation_results),
-                    failed_guard=run_result.failed_guard,
-                    failed_step=run_result.failed_step,
-                )
-            continue
-
         assert isinstance(declared_block, StepBlock)
         assert isinstance(resolved_block, ResolvedStepBlock)
         block_executed: list[str] = []
@@ -321,6 +192,96 @@ def execute_workflow(
                     block_skipped.append(step.name)
                     continue
                 step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True})
+            if isinstance(resolved_step, ResolvedRunStep):
+                run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
+                if isinstance(run_workflow, Diagnostic):
+                    skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                    diagnostics.append(run_workflow)
+                    block_items.append(
+                        {
+                            "block_index": block_index,
+                            "type": "steps",
+                            "status": "execution_error",
+                            "step_names": [candidate.name for candidate in declared_block.steps],
+                            "executed_steps": block_executed,
+                            "skipped_steps": block_skipped,
+                            "failed_step": step.name,
+                        }
+                    )
+                    return RuntimeResult(
+                        mode=Mode.EXECUTE,
+                        status=RuntimeStatus.EXECUTION_ERROR,
+                        diagnostics=tuple(diagnostics),
+                        plan=check_result.plan,
+                        outputs={
+                            "can_execute": False,
+                            "active_profile": active_profile,
+                            "active_overrides": [override.to_contract() for override in active_overrides],
+                            "executed_steps": executed_steps,
+                            "skipped_steps": skipped_steps,
+                            "step_condition_details": step_condition_details,
+                            "launcher_details": launcher_details,
+                            "checked_guards": checked_guards,
+                            "guard_details": guard_details,
+                            "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                        },
+                        operation_results=tuple(operation_results),
+                        failed_step=step.name,
+                    )
+
+                run_result = execute_workflow(
+                    run_workflow,
+                    profile=profile,
+                    guard_probe=guard_probe,
+                    step_executor=step_executor,
+                    connector_provider=connector_provider,
+                )
+                diagnostics.extend(run_result.diagnostics)
+                operation_results.extend(run_result.operation_results)
+                executed_steps.append(step.name)
+                block_executed.append(step.name)
+                executed_steps.extend([name for name in run_result.outputs.get("executed_steps", []) if isinstance(name, str)])
+                skipped_steps.extend([name for name in run_result.outputs.get("skipped_steps", []) if isinstance(name, str)])
+                step_condition_details.extend([detail for detail in run_result.outputs.get("step_condition_details", []) if isinstance(detail, dict)])
+                launcher_details.extend([detail for detail in run_result.outputs.get("launcher_details", []) if isinstance(detail, dict)])
+                checked_guards.extend([name for name in run_result.outputs.get("checked_guards", []) if isinstance(name, str)])
+                guard_details.extend([detail for detail in run_result.outputs.get("guard_details", []) if isinstance(detail, dict)])
+                if run_result.status is not RuntimeStatus.OK:
+                    skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                    block_items.append(
+                        {
+                            "block_index": block_index,
+                            "type": "steps",
+                            "status": "execution_error",
+                            "step_names": [candidate.name for candidate in declared_block.steps],
+                            "executed_steps": block_executed,
+                            "skipped_steps": block_skipped,
+                            "failed_step": step.name,
+                            "failed_run": step.run,
+                        }
+                    )
+                    return RuntimeResult(
+                        mode=Mode.EXECUTE,
+                        status=run_result.status,
+                        diagnostics=tuple(diagnostics),
+                        plan=check_result.plan,
+                        outputs={
+                            "can_execute": False,
+                            "active_profile": active_profile,
+                            "active_overrides": [override.to_contract() for override in active_overrides],
+                            "executed_steps": executed_steps,
+                            "skipped_steps": skipped_steps,
+                            "step_condition_details": step_condition_details,
+                            "launcher_details": launcher_details,
+                            "checked_guards": checked_guards,
+                            "guard_details": guard_details,
+                            "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                        },
+                        operation_results=tuple(operation_results),
+                        failed_guard=run_result.failed_guard,
+                        failed_step=run_result.failed_step or step.name,
+                    )
+                continue
             if isinstance(resolved_step, ResolvedBuiltinStep):
                 result = _execute_builtin_step(step, effective_workflow)
             else:

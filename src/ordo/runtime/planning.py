@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import GuardBlock, RunBlock, StepBlock, Workflow
+from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .checking import check_workflow
 from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
-from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedRunBlock, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedRunStep, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
 
 
@@ -144,6 +144,20 @@ def _build_step_items(
                     }
                 )
                 continue
+            if isinstance(resolved_step, ResolvedRunStep):
+                step_items.append(
+                    {
+                        "name": step.name,
+                        "reference": resolved_step.reference,
+                        "kind": "run",
+                        "effect": "effectful",
+                        "eligibility": "blocked" if blocked else "eligible",
+                        "conditional": step.if_ is not None,
+                        "condition": step.if_,
+                        "launcher": None,
+                    }
+                )
+                continue
             step_items.append(
                 {
                     "name": step.name,
@@ -162,13 +176,13 @@ def _build_step_items(
         step_items.append(
             {
                 "name": step.name,
-                "reference": step.operation.uses if step.operation is not None else "builtin",
-                "kind": "unknown" if step.operation is not None else "builtin",
-                "effect": "unknown" if step.operation is not None else "effectful",
+                "reference": step.operation.uses if step.operation is not None else step.run if step.run is not None else "builtin",
+                "kind": "unknown" if step.operation is not None or step.run is not None else "builtin",
+                "effect": "unknown" if step.operation is not None or step.run is not None else "effectful",
                 "eligibility": "blocked" if blocked else "unknown",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
-                "launcher": step.launcher,
+                "launcher": step.launcher if step.operation is not None else None,
             }
         )
     return step_items
@@ -206,29 +220,6 @@ def _build_block_items(
             )
             continue
 
-        if isinstance(declared_block, RunBlock):
-            assert isinstance(resolved_block, ResolvedRunBlock)
-            if current is not None:
-                item = dict(current)
-                if item.get("status") == "pending":
-                    item["eligibility"] = "eligible" if not first_reachable_step_found and not check_result.outputs.get("blockers") else "pending"
-                block_items.append(item)
-                first_reachable_step_found = True
-                continue
-            block_items.append(
-                {
-                    "block_index": block_index,
-                    "type": "run",
-                    "status": "pending",
-                    "eligibility": "eligible" if not first_reachable_step_found and not check_result.outputs.get("blockers") else "pending",
-                    "reference": declared_block.run,
-                    "conditional": declared_block.if_ is not None,
-                    "condition": declared_block.if_,
-                }
-            )
-            first_reachable_step_found = True
-            continue
-
         assert isinstance(declared_block, StepBlock)
         if current is not None:
             item = dict(current)
@@ -262,15 +253,16 @@ def _build_run_items(
 ) -> list[dict[str, object]]:
     blocked = bool(check_result.outputs.get("blockers"))
     run_items: list[dict[str, object]] = []
-    for block in workflow.blocks:
-        if not isinstance(block, RunBlock):
+    for step in workflow.steps:
+        if step.run is None:
             continue
         run_items.append(
             {
-                "reference": block.run,
+                "name": step.name,
+                "reference": step.run,
                 "eligibility": "blocked" if blocked else "eligible",
-                "conditional": block.if_ is not None,
-                "condition": block.if_,
+                "conditional": step.if_ is not None,
+                "condition": step.if_,
             }
         )
         blocked = True
