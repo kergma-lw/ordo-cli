@@ -18,9 +18,9 @@ Typical pressure for `run` includes:
 
 ## Concept
 
-A `run` item invokes one reusable workflow fragment as a runtime-scoped workflow node.
+A `run` step invokes one reusable workflow fragment as a runtime-scoped workflow node.
 
-Unlike `include`, a `run` item does not merely disappear into static assembled structure before all runtime meaning is decided.
+Unlike `include`, a `run` step does not merely disappear into static assembled structure before all runtime meaning is decided.
 
 It owns an explicit caller/callee boundary.
 
@@ -29,16 +29,18 @@ It owns an explicit caller/callee boundary.
 Illustrative future form:
 
 ```yaml
-- run: github/comment-and-set-status
-  if: ${step.issue.outputs.open}
-  with:
-    comment: "Issue is open."
-    status: "In Progress"
+- steps:
+    - name: comment-and-status
+      run: github/comment-and-set-status
+      if: ${step.issue.outputs.open}
+      with:
+        comment: "Issue is open."
+        status: "In Progress"
 ```
 
 This future shape should be read as:
 
-1. select one reusable fragment reference;
+1. declare one author-facing step that selects one reusable fragment reference;
 2. optionally decide invocation eligibility in caller scope;
 3. bind fragment `args` from caller-scoped values;
 4. execute the fragment body within its own fragment-local execution scope.

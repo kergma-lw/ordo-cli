@@ -13,7 +13,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
-from ordo.model.workflow import Guard, GuardBlock, OperationRef, RunBlock, Step, StepBlock, Workflow, WorkflowBlock
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 from ordo.runtime.value_expressions import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
 
 
@@ -1087,13 +1087,14 @@ def _load_step(payload: JSONValue, *, index: int, source: str) -> Step:
 def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str) -> Step:
     data = _require_object(payload, path=path, source=source)
     has_uses = "uses" in data
+    has_run = "run" in data
     has_value = "value" in data
     has_state_set = "state_set" in data
     has_state_delete = "state_delete" in data
-    if sum((has_uses, has_value, has_state_set, has_state_delete)) != 1:
+    if sum((has_uses, has_run, has_value, has_state_set, has_state_delete)) != 1:
         raise _load_error(
             code="load.step.form",
-            message="Step must define exactly one of 'uses', 'value', 'state_set', or 'state_delete'",
+            message="Step must define exactly one of 'uses', 'run', 'value', 'state_set', or 'state_delete'",
             path=path,
             details={"source": source},
         )
@@ -1106,15 +1107,27 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
     if has_state_delete:
         state_delete = _require_string(data, "state_delete", path=path + ("state_delete",), source=source)
 
+    run_with_payload = data.get("with", {}) if has_run else {}
+    if has_run and not isinstance(run_with_payload, dict):
+        raise _load_error(
+            code="load.workflow.run.with_type",
+            message="Run field 'with' must be an object when provided",
+            path=path + ("with",),
+            details={"source": source, "actual_type": type(run_with_payload).__name__},
+        )
+
     return Step(
         name=_require_string(data, "name", path=path + ("name",), source=source),
         operation=_load_operation_ref(data, path=path, source=source) if has_uses else None,
+        run=_require_string(data, "run", path=path + ("run",), source=source) if has_run else None,
+        run_with=dict(run_with_payload) if has_run else {},
         value=data.get("value") if has_value else None,
         state_set=state_set,
         state_delete=state_delete,
         if_=_optional_string(data, "if", path=path + ("if",), source=source),
         register=_optional_string(data, "register", path=path + ("register",), source=source),
         launcher=_optional_string(data, "launcher", path=path + ("launcher",), source=source),
+        resolved_run_path=_optional_string(data, "__run_path__", path=path + ("__run_path__",), source=source),
     )
 
 
@@ -1135,11 +1148,10 @@ def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock
     data = _require_object(payload, path=path, source=source)
     has_guards = "guards" in data
     has_steps = "steps" in data
-    has_run = "run" in data
-    if sum((has_guards, has_steps, has_run)) != 1:
+    if has_guards == has_steps:
         raise _load_error(
             code="load.workflow.block.form",
-            message="Block must define exactly one of 'guards', 'steps', or 'run'",
+            message="Block must define exactly one of 'guards' or 'steps'",
             path=path,
             details={"source": source},
         )
@@ -1169,20 +1181,7 @@ def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock
             steps=tuple(_load_step_at_path(item, path=path + ("steps", str(item_index)), source=source) for item_index, item in enumerate(steps_payload))
         )
 
-    with_payload = data.get("with", {})
-    if not isinstance(with_payload, dict):
-        raise _load_error(
-            code="load.workflow.run.with_type",
-            message="Run field 'with' must be an object when provided",
-            path=path + ("with",),
-            details={"source": source, "actual_type": type(with_payload).__name__},
-        )
-    return RunBlock(
-        run=_require_string(data, "run", path=path + ("run",), source=source),
-        with_=dict(with_payload),
-        if_=_optional_string(data, "if", path=path + ("if",), source=source),
-        resolved_path=_optional_string(data, "__run_path__", path=path + ("__run_path__",), source=source),
-    )
+    raise AssertionError("unreachable")
 
 
 def _load_override(payload: JSONValue, *, index: int, source: str) -> Override:

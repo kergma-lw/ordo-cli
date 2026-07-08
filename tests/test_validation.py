@@ -134,7 +134,7 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.launcher_without_uses")
 
-    def test_valid_run_block_passes(self) -> None:
+    def test_valid_run_step_passes(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
@@ -145,25 +145,28 @@ class ValidationTest(unittest.TestCase):
                       - name: inspect
                         uses: gh.issue
                         register: issue
-                  - run: github/comment-and-set-status
-                    if: ${step.issue.outputs.open}
-                    with:
-                      comment: hello
+                      - name: comment-and-status
+                        run: github/comment-and-set-status
+                        if: ${step.issue.outputs.open}
+                        with:
+                          comment: hello
                 """
             )
         )
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
-    def test_run_block_rejects_non_object_with(self) -> None:
+    def test_run_step_rejects_non_object_with(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
                 version: 0
                 workflow: open-task
                 blocks:
-                  - run: github/comment-and-set-status
-                    with: nope
+                  - steps:
+                      - name: comment-and-status
+                        run: github/comment-and-set-status
+                        with: nope
                 """
             )
         )
@@ -171,21 +174,41 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.with.type")
 
-    def test_run_block_if_requires_value_expression_envelope(self) -> None:
+    def test_run_step_if_requires_value_expression_envelope(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
                 version: 0
                 workflow: open-task
                 blocks:
-                  - run: github/comment-and-set-status
-                    if: inputs.enabled
+                  - steps:
+                      - name: comment-and-status
+                        run: github/comment-and-set-status
+                        if: inputs.enabled
                 """
             )
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.if.expression")
+
+    def test_run_step_rejects_register_in_mvp(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - steps:
+                      - name: comment-and-status
+                        run: github/comment-and-set-status
+                        register: comment_run
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.register_unsupported")
 
     def test_valid_profile_launchers_pass(self) -> None:
         report = validate_profile_text(

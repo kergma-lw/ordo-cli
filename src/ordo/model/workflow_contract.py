@@ -87,6 +87,7 @@ WORKFLOW_CONTRACT: JSONObject = {
         "directive_field": "run",
         "authoring_role": "workflow_fragment_invocation",
         "execution_semantics": "runtime_scoped_fragment_invocation",
+        "surface_kind": "step_form",
         "call_fields": [
             {"name": "run", "required": True, "type": "string"},
             {"name": "if", "required": False, "type": "string", "authoring_role": "caller_scoped_invocation_condition"},
@@ -100,7 +101,6 @@ WORKFLOW_CONTRACT: JSONObject = {
         {"name": "guard_block", "required_fields": ["guards"], "optional_fields": []},
         {"name": "step_block", "required_fields": ["steps"], "optional_fields": []},
         {"name": "include_block", "required_fields": ["include"], "optional_fields": ["with"]},
-        {"name": "run_block", "required_fields": ["run"], "optional_fields": ["if", "with"]},
     ],
     "guard_forms": [
         {"name": "operation_call", "shape": {"uses": "string", "with": "object"}},
@@ -110,15 +110,15 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "exactly_one_step_form",
             "kind": "exclusive_choice",
-            "fields": ["uses", "value", "state_set", "state_delete"],
-            "message": "A workflow step must define exactly one of uses, value, state_set, or state_delete",
+            "fields": ["uses", "run", "value", "state_set", "state_delete"],
+            "message": "A workflow step must define exactly one of uses, run, value, state_set, or state_delete",
         },
         {
             "name": "with_requires_uses",
             "kind": "dependency",
             "field": "with",
-            "requires": ["uses"],
-            "message": "The with field is allowed only together with uses",
+            "requires": ["uses", "run"],
+            "message": "The with field is allowed only together with uses or run",
         },
     ],
     "step_forms": [
@@ -126,6 +126,11 @@ WORKFLOW_CONTRACT: JSONObject = {
             "name": "operation_call",
             "required_fields": ["name", "uses"],
             "optional_fields": ["if", "with", "register", "launcher"],
+        },
+        {
+            "name": "run_invocation",
+            "required_fields": ["name", "run"],
+            "optional_fields": ["if", "with"],
         },
         {
             "name": "value",

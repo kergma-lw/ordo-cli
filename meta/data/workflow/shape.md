@@ -41,7 +41,7 @@ Rules:
 Current stable shape note:
 
 - `run` is not part of the current stable block shape.
-- A future invocation-oriented block item may add `run` alongside `include` rather than changing the meaning of existing `include` items.
+- A future invocation-oriented step form may add `run` under `steps:` rather than changing the meaning of existing `include` items.
 
 Stable include item form:
 
@@ -59,21 +59,24 @@ Include item rules:
 - `with` keys bind only declared fragment `args` keys;
 - include expansion preserves block order in the assembled workflow.
 
-## Planned fragment run item shape
+## Planned fragment run step shape
 
 Illustrative future form:
 
 ```yaml
-- run: github/comment-and-set-status
-  if: ${step.issue.outputs.open}
-  with:
-    comment: "Issue is open."
-    status: "In Progress"
+- steps:
+    - name: comment-and-status
+      run: github/comment-and-set-status
+      if: ${step.issue.outputs.open}
+      with:
+        comment: "Issue is open."
+        status: "In Progress"
 ```
 
-Planned run item rules:
+Planned run step rules:
 
-- `run` would be a non-empty reusable-fragment reference;
+- `run` would be a non-empty reusable-fragment reference on one step entry;
+- `name` would remain required because the author-facing surface still treats the invocation as one step;
 - `with` would remain the explicit fragment-argument binding object;
 - `if` would be evaluated in caller scope rather than in fragment-body scope;
 - the invoked fragment would execute with its own fragment-local `args...` and `step...` scope.

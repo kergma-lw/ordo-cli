@@ -101,7 +101,7 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.steps[0].launcher, "shell_frontend")
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["launcher"], "shell_frontend")
 
-    def test_loads_run_block_into_typed_model(self) -> None:
+    def test_loads_run_step_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(
                 """
@@ -109,17 +109,20 @@ class LoadingTest(unittest.TestCase):
                 workflow: open-task
                 blocks:
                   - guards: []
-                  - run: github/comment-and-set-status
-                    if: ${step.issue.outputs.open}
-                    with:
-                      comment: hello
+                  - steps:
+                      - name: comment-and-status
+                        run: github/comment-and-set-status
+                        if: ${step.issue.outputs.open}
+                        with:
+                          comment: hello
                 """
             )
         )
 
-        self.assertEqual(workflow.to_contract()["blocks"][1]["run"], "github/comment-and-set-status")
-        self.assertEqual(workflow.to_contract()["blocks"][1]["if"], "${step.issue.outputs.open}")
-        self.assertEqual(workflow.to_contract()["blocks"][1]["with"], {"comment": "hello"})
+        self.assertEqual(workflow.steps[0].run, "github/comment-and-set-status")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["run"], "github/comment-and-set-status")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "${step.issue.outputs.open}")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["with"], {"comment": "hello"})
 
     def test_loads_value_step_into_typed_model(self) -> None:
         workflow = load_workflow_text(

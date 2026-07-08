@@ -26,9 +26,9 @@
 - A `Playbook` names project-local workflow entries, profile entries, and runtime state declarations.
 - A `Workflow` contains ordered `Guard` and `Step` entries.
 - A `Workflow` may include reusable `WorkflowFragment` instances through ordered include items inside its block structure.
-- A future `Workflow` surface may invoke reusable `WorkflowFragment` instances through ordered `run` items inside its block structure.
+- A future `Workflow` surface may invoke reusable `WorkflowFragment` instances through ordered `run` step forms inside `steps` blocks.
 - A `WorkflowFragment` may declare local `FragmentArg` entries and workflow payload content.
-- A planned `FragmentRun` would express runtime-scoped invocation of one reusable `WorkflowFragment` with an explicit caller/callee boundary.
+- A planned `FragmentRun` would express runtime-scoped invocation of one reusable `WorkflowFragment` with an explicit caller/callee boundary while still reading like one workflow step.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` references an `OperationRef`.
 - A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.

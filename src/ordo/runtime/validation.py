@@ -40,7 +40,7 @@ def _field_names(items: list[JSONObject]) -> frozenset[str]:
 
 
 WORKFLOW_ALLOWED_FIELDS = _field_names(WORKFLOW_CONTRACT["top_level_fields"])
-BLOCK_ALLOWED_FIELDS = frozenset({"guards", "steps", "include", "run", "with", "if", "__run_path__"})
+BLOCK_ALLOWED_FIELDS = frozenset({"guards", "steps", "include", "with"})
 CALL_ALLOWED_FIELDS = frozenset({"uses", "with"})
 STEP_ALLOWED_FIELDS = frozenset().union(
     *(
@@ -48,7 +48,7 @@ STEP_ALLOWED_FIELDS = frozenset().union(
         for form in WORKFLOW_CONTRACT["step_forms"]
         if isinstance(form, dict)
     )
-)
+) | frozenset({"__run_path__"})
 PROFILE_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["top_level_fields"])
 OVERRIDE_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["override_fields"])
 LAUNCHER_ALLOWED_FIELDS = _field_names(PROFILE_CONTRACT["launcher_fields"])
@@ -129,12 +129,11 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
         has_guards = "guards" in item
         has_steps = "steps" in item
         has_include = "include" in item
-        has_run = "run" in item
-        if sum((has_guards, has_steps, has_include, has_run)) != 1:
+        if sum((has_guards, has_steps, has_include)) != 1:
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.block.form",
-                    "Block must define exactly one of 'guards', 'steps', 'include', or 'run'",
+                    "Block must define exactly one of 'guards', 'steps', or 'include'",
                     path,
                     source,
                 )
@@ -158,8 +157,6 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
             seen_registers.update(_collect_declared_registers_from_step_list(item.get("steps"), path=step_path))
         elif has_include:
             diagnostics.extend(_validate_include_block(item, source=source, path=path))
-        else:
-            diagnostics.extend(_validate_run_block(item, source=source, path=path, prior_registers=seen_registers, declared_registers=declared_registers))
     return diagnostics
 
 
@@ -178,45 +175,6 @@ def _validate_include_block(value: JSONObject, *, source: str, path: tuple[str, 
                 actual_type=type(with_value).__name__,
             )
         )
-    return diagnostics
-
-
-def _validate_run_block(
-    value: JSONObject,
-    *,
-    source: str,
-    path: tuple[str, ...],
-    prior_registers: dict[str, tuple[str, ...]],
-    declared_registers: dict[str, tuple[str, ...]],
-) -> list[Diagnostic]:
-    diagnostics: list[Diagnostic] = []
-    diagnostics.extend(_validate_unknown_fields(value, frozenset({"run", "if", "with", "__run_path__"}), path=path, source=source))
-    diagnostics.extend(_require_non_empty_string(value, "run", path=path + ("run",), source=source))
-    with_value = value.get("with")
-    if with_value is not None and not isinstance(with_value, dict):
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.run.with.type",
-                "Run field 'with' must be an object when provided",
-                path + ("with",),
-                source,
-                actual_type=type(with_value).__name__,
-            )
-        )
-    diagnostics.extend(
-        _validate_invocation_condition(
-            value,
-            path=path,
-            source=source,
-            prior_registers=prior_registers,
-            declared_registers=declared_registers,
-            field_name="if",
-            type_code="validation.workflow.run.if.type",
-            expression_code="validation.workflow.run.if.expression",
-            type_message="Run field 'if' must be a string-form value expression",
-            expression_message="Run field 'if' must use the '${...}' value-expression form",
-        )
-    )
     return diagnostics
 
 
@@ -310,10 +268,11 @@ def _validate_step_list(
         diagnostics.extend(_validate_unknown_fields(item, STEP_ALLOWED_FIELDS, path=item_path, source=source))
         diagnostics.extend(_require_non_empty_string(item, "name", path=item_path + ("name",), source=source))
         has_uses = "uses" in item
+        has_run = "run" in item
         has_value = "value" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
-        form_count = sum((has_uses, has_value, has_state_set, has_state_delete))
+        form_count = sum((has_uses, has_run, has_value, has_state_set, has_state_delete))
 
         prior_registers = {name: register_path for name, register_path in seen_registers.items()}
 
@@ -321,7 +280,7 @@ def _validate_step_list(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.form",
-                    "Step must define exactly one of 'uses', 'value', 'state_set', or 'state_delete'",
+                    "Step must define exactly one of 'uses', 'run', 'value', 'state_set', or 'state_delete'",
                     item_path,
                     source,
                 )
@@ -337,6 +296,8 @@ def _validate_step_list(
                     declared_registers=effective_declared_registers,
                 )
             )
+        elif has_run:
+            diagnostics.extend(_validate_run_step(item, source=source, path=item_path, prior_registers=prior_registers, declared_registers=effective_declared_registers))
         elif has_value:
             diagnostics.extend(
                 _validate_runtime_value_surface(
@@ -534,6 +495,62 @@ def _validate_step_register(value: JSONObject, *, path: tuple[str, ...], source:
                 path + ("register",),
                 source,
                 pattern=REGISTER_PATTERN.pattern,
+            )
+        )
+    return diagnostics
+
+
+def _validate_run_step(
+    value: JSONObject,
+    *,
+    source: str,
+    path: tuple[str, ...],
+    prior_registers: dict[str, tuple[str, ...]],
+    declared_registers: dict[str, tuple[str, ...]],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(_require_non_empty_string(value, "run", path=path + ("run",), source=source))
+    with_value = value.get("with")
+    if with_value is not None and not isinstance(with_value, dict):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.run.with.type",
+                "Run field 'with' must be an object when provided",
+                path + ("with",),
+                source,
+                actual_type=type(with_value).__name__,
+            )
+        )
+    diagnostics.extend(
+        _validate_invocation_condition(
+            value,
+            path=path,
+            source=source,
+            prior_registers=prior_registers,
+            declared_registers=declared_registers,
+            field_name="if",
+            type_code="validation.workflow.run.if.type",
+            expression_code="validation.workflow.run.if.expression",
+            type_message="Run field 'if' must be a string-form value expression",
+            expression_message="Run field 'if' must use the '${...}' value-expression form",
+        )
+    )
+    if value.get("register") is not None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.run.register_unsupported",
+                "Run steps do not support 'register' in the MVP",
+                path + ("register",),
+                source,
+            )
+        )
+    if value.get("launcher") is not None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.run.launcher_unsupported",
+                "Run steps do not support 'launcher' in the MVP",
+                path + ("launcher",),
+                source,
             )
         )
     return diagnostics

@@ -11,10 +11,11 @@
 
 ## Authoring surface
 
-- A future workflow block item may invoke one reusable fragment through `run`.
+- A future workflow step form may invoke one reusable fragment through `run`.
 - A future `run` item should support `with` for explicit fragment-argument binding.
 - A future `run` item should support caller-scoped eligibility modifiers such as `if`.
 - `run` should reuse the existing fragment `args` contract rather than inventing a second argument language.
+- The author-facing `run` surface should remain step-shaped so reusable fragment invocation still reads like one workflow action.
 
 ## Scope and data flow
 

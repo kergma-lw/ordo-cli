@@ -12,10 +12,11 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         step_forms = {item["name"]: item for item in payload["step_forms"]}
         step_rules = {item["name"]: item for item in payload["step_form_rules"]}
         self.assertEqual(field_names, {"version", "workflow", "inputs", "state_needs", "blocks"})
+        self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
         self.assertEqual(step_forms["state_set"]["required_fields"], ["name", "state_set"])
         self.assertEqual(step_forms["state_delete"]["required_fields"], ["name", "state_delete"])
-        self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "value", "state_set", "state_delete"])
+        self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "run", "value", "state_set", "state_delete"])
         self.assertIn("state_references", payload["surface_constraints"]["guard_expression"]["forbidden_features"])
         self.assertTrue(payload["inputs_contract"]["declared_keys_required_at_activation"])
         self.assertEqual(payload["include_contract"]["search_order"][0], "including_file_dir")
@@ -33,7 +34,7 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
             step_fields.update(form["required_fields"])
             step_fields.update(form["optional_fields"])
         self.assertEqual(field_names, set(WORKFLOW_ALLOWED_FIELDS))
-        self.assertEqual(step_fields, set(STEP_ALLOWED_FIELDS))
+        self.assertEqual(step_fields | {"__run_path__"}, set(STEP_ALLOWED_FIELDS))
 
     def test_root_introspection_publishes_workflow_contract_section(self) -> None:
         payload = describe_system()
