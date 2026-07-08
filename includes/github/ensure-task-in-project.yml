@@ -1,0 +1,31 @@
+steps:
+  - name: load-issue
+    uses: gh.issue
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+    register: issue
+
+  - name: probe-project-membership
+    uses: gh.project.issue
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+    register: project_probe
+
+  - name: add-issue-to-project
+    if: ${step.project_probe.outputs.exists | not}
+    uses: gh.project.issue.add
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+
+  - name: load-project-fields
+    uses: gh.project.issue
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+    register: project

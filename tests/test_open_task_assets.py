@@ -1,7 +1,7 @@
 from pathlib import Path
 import unittest
 
-from ordo.runtime import validate_profile_text, validate_workflow_text
+from ordo.runtime import load_workflow_file, validate_profile_text, validate_workflow_text
 from ordo.model.runtime import RuntimeStatus
 
 
@@ -23,6 +23,14 @@ class OpenTaskAssetTest(unittest.TestCase):
             report = validate_profile_text(path.read_text(encoding="utf-8"), source=str(path))
 
             self.assertEqual(report.status, RuntimeStatus.OK, name)
+
+    def test_bundled_ordo_workflows_load_with_fragment_assets(self) -> None:
+        for name in ("open-task.yml", "close-task.yml"):
+            path = ROOT / ".ordo" / "workflows" / name
+
+            workflow = load_workflow_file(path)
+
+            self.assertTrue(workflow.blocks, name)
 
 
 if __name__ == "__main__":

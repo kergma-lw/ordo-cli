@@ -1,0 +1,22 @@
+description: Run a generator-like command, then stage and commit any repository changes it produces
+args:
+  command: string
+  launcher: string
+  commit_message: string
+
+steps:
+  - name: run-generator-command
+    uses: shell.command
+    launcher: ${args.launcher}
+    with:
+      command: ${args.command}
+
+  - name: stage-generated-artifacts
+    if: ${not git.worktree.clean}
+    uses: git.index.add_all
+
+  - name: commit-generated-artifacts
+    if: ${not git.worktree.clean}
+    uses: git.commit.create
+    with:
+      message: ${args.commit_message}

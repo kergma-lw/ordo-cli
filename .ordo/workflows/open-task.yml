@@ -7,37 +7,7 @@ blocks:
       - uses: git.repo
       - inputs.repo_kind == "meta" or git.worktree.clean == true
       - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
-  - steps:
-      - name: load-issue
-        uses: gh.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-        register: issue
-
-      - name: probe-project-membership
-        uses: gh.project.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-        register: project_probe
-
-      - name: add-issue-to-project
-        if: ${step.project_probe.outputs.exists | not}
-        uses: gh.project.issue.add
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-
-      - name: load-project-fields
-        uses: gh.project.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-        register: project
+  - include: includes/github/ensure-task-in-project
 
   - guards:
       - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
@@ -56,104 +26,22 @@ blocks:
           project_id: ${inputs.project_id}
           status: In progress
 
-      - name: compute-branch-name
-        value:
-          format: "%s/%s-%s"
-          args:
-            - ${step.project.outputs.type | lower}
-            - ${step.issue.outputs.number}
-            - ${step.issue.outputs.title | slug}
-        register: branch
+  - run: includes/github/prepare-task-branch
+    with:
+      project_type: ${step.project.outputs.type}
+      issue_number: ${step.issue.outputs.number}
+      issue_title: ${step.issue.outputs.title}
 
-      - name: probe-local-main-ref
-        uses: git.ref
-        with:
-          ref: refs/heads/main
-        register: local_main
+  - run: includes/git/run-and-commit-generated-changes
+    if: ${inputs.repo_kind | eq("frontend")}
+    with:
+      command: set -euo pipefail; npm run openapi; npm run errors:sync
+      launcher: shell_frontend
+      commit_message: "chore(openapi): regenerate api types"
 
-      - name: fetch-origin
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: git.sync.fetch
-        with:
-          remote: origin
-
-      - name: probe-remote-main-ref
-        uses: git.ref
-        with:
-          ref: refs/remotes/origin/main
-        register: remote_main
-
-      - name: switch-main
-        if: ${inputs.repo_kind | ne("meta") and step.local_main.outputs.exists}
-        uses: git.branch.switch
-        with:
-          branch: main
-
-      - name: merge-origin-main-ff-only
-        if: ${inputs.repo_kind | ne("meta") and step.local_main.outputs.exists and step.remote_main.outputs.exists}
-        uses: git.integrate.merge_ff_only
-        with:
-          ref: refs/remotes/origin/main
-
-      - name: probe-target-branch-ref
-        uses: git.ref
-        with:
-          ref:
-            format: "refs/heads/%s"
-            args:
-              - ${step.branch.outputs.value}
-        register: target_branch
-
-      - name: switch-existing-target-branch
-        if: ${inputs.repo_kind | ne("meta") and step.target_branch.outputs.exists}
-        uses: git.branch.switch
-        with:
-          branch: ${step.branch.outputs.value}
-
-      - name: create-target-branch-from-local-main
-        if: ${inputs.repo_kind | ne("meta") and not step.target_branch.outputs.exists and step.local_main.outputs.exists}
-        uses: git.branch.create
-        with:
-          branch: ${step.branch.outputs.value}
-          start_point: refs/heads/main
-
-      - name: create-target-branch-from-remote-main
-        if: ${inputs.repo_kind | ne("meta") and not step.target_branch.outputs.exists and not step.local_main.outputs.exists}
-        uses: git.branch.create
-        with:
-          branch: ${step.branch.outputs.value}
-          start_point: refs/remotes/origin/main
-
-      - name: switch-created-target-branch
-        if: ${inputs.repo_kind | ne("meta") and not step.target_branch.outputs.exists}
-        uses: git.branch.switch
-        with:
-          branch: ${step.branch.outputs.value}
-
-      - name: refresh-frontend-generated-artifacts
-        if: ${inputs.repo_kind | eq("frontend")}
-        uses: shell.command
-        launcher: shell_frontend
-        with:
-          command: >-
-            set -euo pipefail; npm run openapi; npm run errors:sync
-
-      - name: probe-frontend-generated-worktree
-        uses: git.worktree
-        register: frontend_worktree
-
-      - name: stage-frontend-generated-artifacts
-        if: ${inputs.repo_kind | eq("frontend") and not step.frontend_worktree.outputs.clean}
-        uses: git.index.add_all
-
-      - name: commit-frontend-generated-artifacts
-        if: ${inputs.repo_kind | eq("frontend") and not step.frontend_worktree.outputs.clean}
-        uses: git.commit.create
-        with:
-          message: "chore(openapi): regenerate api types"
-
+  - steps:
       - name: check-frontend-clean-generation
-        if: ${inputs.repo_kind | eq("frontend") and step.frontend_worktree.outputs.clean}
+        if: ${inputs.repo_kind | eq("frontend")}
         uses: shell.command
         launcher: shell_frontend
         with:

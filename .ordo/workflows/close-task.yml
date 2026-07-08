@@ -24,101 +24,18 @@ blocks:
 
   - guards:
       - git.worktree.clean
-      - inputs.repo_kind == "meta" or git.branch.value != "main"
+      - git.branch.value != "main"
+
+  - include: includes/git/merge-task-branch-into-main
 
   - steps:
-      - name: probe-current-branch
-        uses: git.branch
-        register: current_branch
-
-      - name: push-meta-branch
-        if: ${inputs.repo_kind | eq("meta")}
-        uses: git.sync.push
-        with:
-          branch: ${step.current_branch.outputs.value}
-          remote: origin
-
-      - name: fetch-origin
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: git.sync.fetch
-        with:
-          remote: origin
-
-      - name: push-task-branch
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: git.sync.push
-        with:
-          branch: ${step.current_branch.outputs.value}
-          remote: origin
-
-      - name: probe-local-main-ref
-        uses: git.ref
-        with:
-          ref: refs/heads/main
-        register: local_main
-
-      - name: probe-remote-main-ref
-        uses: git.ref
-        with:
-          ref: refs/remotes/origin/main
-        register: remote_main
-
-      - name: create-local-main-from-remote
-        if: ${inputs.repo_kind | ne("meta") and not step.local_main.outputs.exists and step.remote_main.outputs.exists}
-        uses: git.branch.create
-        with:
-          branch: main
-          start_point: refs/remotes/origin/main
-
-      - name: switch-main
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: git.branch.switch
-        with:
-          branch: main
-
-      - name: merge-origin-main-ff-only
-        if: ${inputs.repo_kind | ne("meta") and step.remote_main.outputs.exists}
-        uses: git.integrate.merge_ff_only
-        with:
-          ref: refs/remotes/origin/main
-
-      - name: merge-task-branch-ff-only
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: git.integrate.merge_ff_only
-        with:
-          ref: ${step.current_branch.outputs.value}
-
-      - name: push-main
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: git.sync.push
-        with:
-          branch: main
-          remote: origin
-
-      - name: delete-task-branch
-        if: ${inputs.repo_kind | ne("meta")}
-        uses: git.branch.delete
-        with:
-          branch: ${step.current_branch.outputs.value}
-
-      - name: add-close-comment
-        if: ${inputs.close_comment | ne("")}
-        uses: gh.issue.comment.add
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          body: ${inputs.close_comment}
-
       - name: close-issue
         uses: gh.issue.close
         with:
           repository: ${inputs.repository}
           issue_number: ${inputs.issue_number}
 
-      - name: set-status-done
-        uses: gh.project.issue.status.set
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-          status: Done
+  - run: includes/github/comment-and-set-status
+    with:
+      comment: ${inputs.close_comment}
+      status: Done

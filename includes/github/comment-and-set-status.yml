@@ -1,0 +1,26 @@
+description: Optionally comment on an issue and optionally set its project status
+args:
+  comment:
+    type: string
+    default: ""
+  status:
+    type: string
+    default: ""
+
+steps:
+  - name: add-comment
+    if: ${args.comment | ne("")}
+    uses: gh.issue.comment.add
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      body: ${args.comment}
+
+  - name: set-task-status
+    if: ${args.status | ne("")}
+    uses: gh.project.issue.status.set
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.issue_number}
+      project_id: ${inputs.project_id}
+      status: ${args.status}
