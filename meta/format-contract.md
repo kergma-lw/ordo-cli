@@ -29,7 +29,8 @@ Compatibility note:
 - explicit > implicit;
 - a small set of connector families and operations is better than a broad but fuzzy model;
 - every field must have clear runtime semantics;
-- reusable fragment inclusion may unify plain inclusion and parameter binding under one `include` surface when the distinction remains contractually explicit;
+- reusable fragment inclusion may support parameter binding while remaining a static-composition surface;
+- if reusable fragments later require runtime-scoped invocation semantics, a separate invocation surface such as `run` is preferable to silently overloading `include`;
 - if the semantics cannot be explained briefly, they are probably too complex for the format.
 
 ## Serialization model

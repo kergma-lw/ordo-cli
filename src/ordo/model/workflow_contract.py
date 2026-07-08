@@ -83,10 +83,24 @@ WORKFLOW_CONTRACT: JSONObject = {
             "load.workflow.include.args.type",
         ],
     },
+    "run_contract": {
+        "directive_field": "run",
+        "authoring_role": "workflow_fragment_invocation",
+        "execution_semantics": "runtime_scoped_fragment_invocation",
+        "call_fields": [
+            {"name": "run", "required": True, "type": "string"},
+            {"name": "if", "required": False, "type": "string", "authoring_role": "caller_scoped_invocation_condition"},
+            {"name": "with", "required": False, "type": "object", "authoring_role": "fragment_argument_bindings"},
+        ],
+        "fragment_argument_access_surface": "args.name",
+        "caller_scoped_condition_surface": ["inputs", "state", "step"],
+        "caller_scoped_binding_surface": ["inputs", "state", "step"],
+    },
     "block_forms": [
         {"name": "guard_block", "required_fields": ["guards"], "optional_fields": []},
         {"name": "step_block", "required_fields": ["steps"], "optional_fields": []},
         {"name": "include_block", "required_fields": ["include"], "optional_fields": ["with"]},
+        {"name": "run_block", "required_fields": ["run"], "optional_fields": ["if", "with"]},
     ],
     "guard_forms": [
         {"name": "operation_call", "shape": {"uses": "string", "with": "object"}},

@@ -120,7 +120,24 @@ class StepBlock:
         return {"steps": [step.to_contract() for step in self.steps]}
 
 
-WorkflowBlock = GuardBlock | StepBlock
+@dataclass(frozen=True, slots=True)
+class RunBlock:
+    """Ordered workflow block containing one reusable fragment run."""
+
+    run: str
+    with_: JSONObject = field(default_factory=dict, kw_only=True)
+    if_: str | None = field(default=None, metadata={"contract_name": "if"})
+
+    def to_contract(self) -> JSONObject:
+        contract: JSONObject = {"run": self.run}
+        if self.if_ is not None:
+            contract["if"] = self.if_
+        if self.with_:
+            contract["with"] = dict(self.with_)
+        return contract
+
+
+WorkflowBlock = GuardBlock | StepBlock | RunBlock
 
 
 @dataclass(frozen=True, slots=True, init=False)

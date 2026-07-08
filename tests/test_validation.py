@@ -134,6 +134,59 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.launcher_without_uses")
 
+    def test_valid_run_block_passes(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - steps:
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
+                  - run: github/comment-and-set-status
+                    if: ${step.issue.outputs.open}
+                    with:
+                      comment: hello
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_run_block_rejects_non_object_with(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - run: github/comment-and-set-status
+                    with: nope
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.with.type")
+
+    def test_run_block_if_requires_value_expression_envelope(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - run: github/comment-and-set-status
+                    if: inputs.enabled
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.if.expression")
+
     def test_valid_profile_launchers_pass(self) -> None:
         report = validate_profile_text(
             textwrap.dedent(

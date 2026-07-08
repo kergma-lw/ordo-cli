@@ -6,6 +6,10 @@ An included workflow fragment is a reusable workflow-owned document that may be 
 
 It is more than raw file splicing because the fragment may publish a local argument contract, but it remains part of workflow authoring rather than a separate connector-like abstraction.
 
+This model describes the static-composition role of `include`.
+
+If workflow reuse later needs caller-scoped runtime conditions, loops, or other invocation semantics, that pressure should be modeled as a separate invocation surface such as `run` rather than silently widening `include` beyond static composition.
+
 ## Authoring shape
 
 An include call has two author-facing concerns:
@@ -13,7 +17,7 @@ An include call has two author-facing concerns:
 1. resolve the fragment file through workflow include search rules;
 2. optionally bind declared fragment arguments through `with`.
 
-These are different internal concerns but together they still form one user-facing reuse primitive.
+These are different internal concerns but they still belong to one static-composition primitive.
 
 Illustrative include call:
 
@@ -23,6 +27,12 @@ Illustrative include call:
     repository: inputs.repository
     issue_number: inputs.issue_number
 ```
+
+The `with` object belongs to the caller-side include site.
+
+Its value expressions are authored in caller scope even though they are later bound into fragment-local `args...` references.
+
+That binding model does not imply that `include` owns a general runtime invocation boundary.
 
 ## Fragment metadata
 
@@ -84,6 +94,10 @@ Within an included fragment instance:
 - `state...` still reads shared workflow state;
 - `step...` reads only registered step results inside the same fragment-expanded execution scope.
 
+An include-site `with` binding may therefore capture caller-local references, including caller `step...` results, as explicit argument inputs.
+
+That capture does not make caller `step...` part of the fragment's own direct lookup surface.
+
 The `step...` surface therefore remains local to its containing workflow or fragment execution scope rather than becoming a cross-fragment namespace.
 
 ## Expansion semantics
@@ -94,7 +108,7 @@ Include expansion should be understood as:
 2. load fragment contract and payload;
 3. validate `with` against declared `args`;
 4. materialize omitted optional arguments from declared defaults, including `null` when declared;
-5. bind fragment-local `args...` values;
+5. bind fragment-local `args...` values from caller-scoped include bindings;
 6. expand the fragment payload into the assembled workflow;
 7. validate the assembled workflow.
 

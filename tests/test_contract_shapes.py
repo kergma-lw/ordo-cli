@@ -3,7 +3,7 @@ import unittest
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, RunBlock, Step, StepBlock, Workflow
 
 
 class ContractShapeTest(unittest.TestCase):
@@ -101,6 +101,18 @@ class ContractShapeTest(unittest.TestCase):
 
         self.assertEqual(operation_step.to_contract()["if"], '${inputs.enabled}')
         self.assertEqual(state_step.to_contract()["if"], '${inputs.persist}')
+
+    def test_run_block_contract_preserves_if_and_with(self) -> None:
+        run_block = RunBlock(run="github/comment-and-set-status", if_="${step.issue.outputs.open}", with_={"comment": "hello"})
+
+        self.assertEqual(
+            run_block.to_contract(),
+            {
+                "run": "github/comment-and-set-status",
+                "if": "${step.issue.outputs.open}",
+                "with": {"comment": "hello"},
+            },
+        )
 
     def test_runtime_result_contract_is_json_serializable(self) -> None:
         result = RuntimeResult(

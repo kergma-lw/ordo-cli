@@ -101,6 +101,26 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.steps[0].launcher, "shell_frontend")
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["launcher"], "shell_frontend")
 
+    def test_loads_run_block_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - run: github/comment-and-set-status
+                    if: ${step.issue.outputs.open}
+                    with:
+                      comment: hello
+                """
+            )
+        )
+
+        self.assertEqual(workflow.to_contract()["blocks"][1]["run"], "github/comment-and-set-status")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["if"], "${step.issue.outputs.open}")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["with"], {"comment": "hello"})
+
     def test_loads_value_step_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(
@@ -503,6 +523,52 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.steps[0].operation.with_["repository"], "${inputs.repository}")
         self.assertEqual(workflow.steps[0].operation.with_["issue_number"], 7)
         self.assertTrue(workflow.steps[0].register.startswith("inc_check_issue_0_issue"))
+
+    def test_load_workflow_file_allows_include_with_to_capture_caller_step_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - steps:
+                          - name: outer
+                            uses: gh.issue
+                            register: outer_issue
+                      - include: fragments/comment
+                        with:
+                          issue_id: ${step.outer_issue.outputs.id}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "comment.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      issue_id: string
+                    steps:
+                      - name: comment
+                        uses: gh.issue.comment
+                        with:
+                          issue_id: ${args.issue_id}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = load_workflow_document_file(workflow_path, launch_dir=root)
+            report = validate_workflow_document(payload, source=str(workflow_path))
+
+        self.assertTrue(report.ok)
+        self.assertEqual(payload["blocks"][1]["steps"][0]["with"]["issue_id"], "${step.outer_issue.outputs.id}")
 
     def test_load_workflow_file_rejects_missing_fragment_args(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -40,7 +40,7 @@ def _field_names(items: list[JSONObject]) -> frozenset[str]:
 
 
 WORKFLOW_ALLOWED_FIELDS = _field_names(WORKFLOW_CONTRACT["top_level_fields"])
-BLOCK_ALLOWED_FIELDS = frozenset({"guards", "steps"})
+BLOCK_ALLOWED_FIELDS = frozenset({"guards", "steps", "include", "run", "with", "if"})
 CALL_ALLOWED_FIELDS = frozenset({"uses", "with"})
 STEP_ALLOWED_FIELDS = frozenset().union(
     *(
@@ -128,19 +128,23 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
         diagnostics.extend(_validate_unknown_fields(item, BLOCK_ALLOWED_FIELDS, path=path, source=source))
         has_guards = "guards" in item
         has_steps = "steps" in item
-        if has_guards == has_steps:
+        has_include = "include" in item
+        has_run = "run" in item
+        if sum((has_guards, has_steps, has_include, has_run)) != 1:
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.block.form",
-                    "Block must define exactly one of 'guards' or 'steps'",
+                    "Block must define exactly one of 'guards', 'steps', 'include', or 'run'",
                     path,
                     source,
                 )
             )
             continue
         if has_guards:
+            diagnostics.extend(_validate_unknown_fields(item, frozenset({"guards"}), path=path, source=source))
             diagnostics.extend(_validate_guard_list(item.get("guards"), source=source, path=path + ("guards",)))
-        else:
+        elif has_steps:
+            diagnostics.extend(_validate_unknown_fields(item, frozenset({"steps"}), path=path, source=source))
             step_path = path + ("steps",)
             diagnostics.extend(
                 _validate_step_list(
@@ -152,6 +156,67 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
                 )
             )
             seen_registers.update(_collect_declared_registers_from_step_list(item.get("steps"), path=step_path))
+        elif has_include:
+            diagnostics.extend(_validate_include_block(item, source=source, path=path))
+        else:
+            diagnostics.extend(_validate_run_block(item, source=source, path=path, prior_registers=seen_registers, declared_registers=declared_registers))
+    return diagnostics
+
+
+def _validate_include_block(value: JSONObject, *, source: str, path: tuple[str, ...]) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(_validate_unknown_fields(value, frozenset({"include", "with"}), path=path, source=source))
+    diagnostics.extend(_require_non_empty_string(value, "include", path=path + ("include",), source=source))
+    with_value = value.get("with")
+    if with_value is not None and not isinstance(with_value, dict):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.include.with.type",
+                "Include field 'with' must be an object when provided",
+                path + ("with",),
+                source,
+                actual_type=type(with_value).__name__,
+            )
+        )
+    return diagnostics
+
+
+def _validate_run_block(
+    value: JSONObject,
+    *,
+    source: str,
+    path: tuple[str, ...],
+    prior_registers: dict[str, tuple[str, ...]],
+    declared_registers: dict[str, tuple[str, ...]],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(_validate_unknown_fields(value, frozenset({"run", "if", "with"}), path=path, source=source))
+    diagnostics.extend(_require_non_empty_string(value, "run", path=path + ("run",), source=source))
+    with_value = value.get("with")
+    if with_value is not None and not isinstance(with_value, dict):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.run.with.type",
+                "Run field 'with' must be an object when provided",
+                path + ("with",),
+                source,
+                actual_type=type(with_value).__name__,
+            )
+        )
+    diagnostics.extend(
+        _validate_invocation_condition(
+            value,
+            path=path,
+            source=source,
+            prior_registers=prior_registers,
+            declared_registers=declared_registers,
+            field_name="if",
+            type_code="validation.workflow.run.if.type",
+            expression_code="validation.workflow.run.if.expression",
+            type_message="Run field 'if' must be a string-form value expression",
+            expression_message="Run field 'if' must use the '${...}' value-expression form",
+        )
+    )
     return diagnostics
 
 
@@ -352,32 +417,23 @@ def _validate_step_condition(
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
-    diagnostics: list[Diagnostic] = []
+    diagnostics = _validate_invocation_condition(
+        value,
+        path=path,
+        source=source,
+        prior_registers={} if prior_registers is None else prior_registers,
+        declared_registers={} if declared_registers is None else declared_registers,
+        field_name="if",
+        type_code="validation.workflow.step.if.type",
+        expression_code="validation.workflow.step.if.expression",
+        type_message="Step field 'if' must be a string-form value expression",
+        expression_message="Step field 'if' must use the '${...}' value-expression form",
+    )
     condition = value.get("if")
     if condition is None:
         return diagnostics
     condition_path = path + ("if",)
     if not isinstance(condition, str):
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.step.if.type",
-                "Step field 'if' must be a string-form value expression",
-                condition_path,
-                source,
-                actual_type=type(condition).__name__,
-            )
-        )
-        return diagnostics
-    expression = _extract_runtime_value_expression(condition)
-    if expression is None:
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.step.if.expression",
-                "Step field 'if' must use the '${...}' value-expression form",
-                condition_path,
-                source,
-            )
-        )
         return diagnostics
     if value.get("register") is not None:
         diagnostics.append(
@@ -388,6 +444,34 @@ def _validate_step_condition(
                 source,
             )
         )
+    return diagnostics
+
+
+def _validate_invocation_condition(
+    value: JSONObject,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    prior_registers: dict[str, tuple[str, ...]],
+    declared_registers: dict[str, tuple[str, ...]],
+    field_name: str,
+    type_code: str,
+    expression_code: str,
+    type_message: str,
+    expression_message: str,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    condition = value.get(field_name)
+    if condition is None:
+        return diagnostics
+    condition_path = path + (field_name,)
+    if not isinstance(condition, str):
+        diagnostics.append(_diagnostic(type_code, type_message, condition_path, source, actual_type=type(condition).__name__))
+        return diagnostics
+    expression = _extract_runtime_value_expression(condition)
+    if expression is None:
+        diagnostics.append(_diagnostic(expression_code, expression_message, condition_path, source))
+        return diagnostics
     try:
         parsed = parse_value_expression(expression, allow_boolean_composition=True)
     except ValueExpressionParseError as exc:
@@ -398,8 +482,8 @@ def _validate_step_condition(
             collect_step_references(parsed.root),
             path=condition_path,
             source=source,
-            prior_registers={} if prior_registers is None else prior_registers,
-            declared_registers={} if declared_registers is None else declared_registers,
+            prior_registers=prior_registers,
+            declared_registers=declared_registers,
         )
     )
     diagnostics.extend(_validate_step_condition_type(parsed.root, path=condition_path, source=source))

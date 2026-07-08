@@ -14,6 +14,7 @@ It must not answer the question:
 
 - ordered guard and step blocks;
 - reusable included workflow fragments;
+- future invocation-oriented reusable fragment runs when static composition is insufficient;
 - guard lists inside `guards` blocks;
 - ordered steps inside `steps` blocks;
 - compact references and parameters that remain workflow-semantic;
@@ -34,9 +35,14 @@ Named launch-time profile selection and project-local state declaration belong t
 
 Included fragment reuse still belongs to the workflow domain when it remains declarative and workflow-semantic.
 
-The author-facing reuse surface may stay as one `include` primitive whether or not the included fragment binds arguments through `with`.
+`include` specifically belongs to the static-composition side of that workflow reuse story.
 
-That user-facing unity is preferable to forcing authors to learn separate reuse verbs for non-parameterized and parameterized inclusion.
+If reusable fragments later need caller-scoped runtime modifiers or other invocation semantics, that pressure should be handled by a separate invocation surface such as `run` rather than by widening `include` until it stops being static composition.
+
+That future distinction is acceptable inside the workflow domain because it separates two different jobs:
+
+- `include` for static composition;
+- `run` for runtime-scoped reusable-fragment invocation.
 
 ## Inclusion boundaries
 

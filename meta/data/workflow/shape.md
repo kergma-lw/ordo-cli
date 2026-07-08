@@ -38,6 +38,11 @@ Rules:
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
 
+Current stable shape note:
+
+- `run` is not part of the current stable block shape.
+- A future invocation-oriented block item may add `run` alongside `include` rather than changing the meaning of existing `include` items.
+
 Stable include item form:
 
 ```yaml
@@ -53,6 +58,25 @@ Include item rules:
 - `with` is optional and, when present, is an object;
 - `with` keys bind only declared fragment `args` keys;
 - include expansion preserves block order in the assembled workflow.
+
+## Planned fragment run item shape
+
+Illustrative future form:
+
+```yaml
+- run: github/comment-and-set-status
+  if: ${step.issue.outputs.open}
+  with:
+    comment: "Issue is open."
+    status: "In Progress"
+```
+
+Planned run item rules:
+
+- `run` would be a non-empty reusable-fragment reference;
+- `with` would remain the explicit fragment-argument binding object;
+- `if` would be evaluated in caller scope rather than in fragment-body scope;
+- the invoked fragment would execute with its own fragment-local `args...` and `step...` scope.
 
 ## Included fragment document shape
 

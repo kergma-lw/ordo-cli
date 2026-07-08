@@ -21,6 +21,8 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(payload["include_contract"]["search_order"][0], "including_file_dir")
         self.assertEqual(payload["include_contract"]["fragment_argument_declaration_forms"][0]["name"], "required_short_form")
         self.assertTrue(payload["include_contract"]["fragment_argument_default_semantics"]["default_null_is_valid"])
+        self.assertEqual(payload["run_contract"]["directive_field"], "run")
+        self.assertIn("step", payload["run_contract"]["caller_scoped_condition_surface"])
 
     def test_workflow_contract_stays_aligned_with_validator_field_sets(self) -> None:
         payload = describe_workflow_contract()

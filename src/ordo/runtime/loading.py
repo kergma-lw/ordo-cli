@@ -13,7 +13,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
-from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, RunBlock, Step, StepBlock, Workflow, WorkflowBlock
 from ordo.runtime.value_expressions import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
 
 
@@ -39,6 +39,14 @@ class FragmentArgSpec:
     @property
     def allows_null_binding(self) -> bool:
         return self.type_name == "null" or (self.has_default and self.default_value is None)
+
+
+@dataclass(frozen=True, slots=True)
+class _BoundFragmentExpression:
+    """Internal string value that preserves caller-side step-binding provenance."""
+
+    text: str
+    allowed_caller_step_refs: frozenset[str] = frozenset()
 
 
 def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
@@ -546,7 +554,7 @@ def _bind_fragment_args(
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
-) -> JSONValue:
+) -> JSONValue | _BoundFragmentExpression:
     if isinstance(value, list):
         return [
             _bind_fragment_args(item, args_contract=args_contract, include_bindings=include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
@@ -577,7 +585,7 @@ def _bind_fragment_arg_string(
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
-) -> JSONValue:
+) -> JSONValue | _BoundFragmentExpression:
     expression = _extract_runtime_expression(value)
     if expression is None:
         return value
@@ -592,12 +600,21 @@ def _bind_fragment_arg_string(
                 include_chain=include_chain,
                 source=str(source),
             )
-        return include_bindings[direct_arg_name]
-    replacements = _collect_fragment_arg_expression_replacements(parsed, include_bindings=include_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
+        return _preserve_fragment_binding_provenance(include_bindings[direct_arg_name])
+    replacements, allowed_caller_step_refs = _collect_fragment_arg_expression_replacements(
+        parsed,
+        include_bindings=include_bindings,
+        source=source,
+        include_chain=include_chain,
+        include_node_path=include_node_path,
+    )
     if not replacements:
         return value
     rebound_expression = _apply_expression_replacements(expression, replacements)
-    return "${" + rebound_expression + "}"
+    rebound_value = "${" + rebound_expression + "}"
+    if allowed_caller_step_refs:
+        return _BoundFragmentExpression(text=rebound_value, allowed_caller_step_refs=allowed_caller_step_refs)
+    return rebound_value
 
 
 def _direct_fragment_arg_name(parsed: ParsedValueExpression) -> str | None:
@@ -614,8 +631,9 @@ def _collect_fragment_arg_expression_replacements(
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
-) -> list[tuple[int, int, str]]:
+) -> tuple[list[tuple[int, int, str]], frozenset[str]]:
     replacements: list[tuple[int, int, str]] = []
+    allowed_caller_step_refs: set[str] = set()
     for node in _walk_value_expression_nodes(parsed.root):
         if not isinstance(node, ReferenceNode):
             continue
@@ -630,8 +648,33 @@ def _collect_fragment_arg_expression_replacements(
                 include_chain=include_chain,
                 source=str(source),
             )
-        replacements.append((node.start, node.end, _serialize_binding_for_expression(include_bindings[arg_name], source=source, include_chain=include_chain, include_node_path=include_node_path, arg_name=arg_name)))
-    return replacements
+        binding_value = include_bindings[arg_name]
+        replacements.append((node.start, node.end, _serialize_binding_for_expression(binding_value, source=source, include_chain=include_chain, include_node_path=include_node_path, arg_name=arg_name)))
+        allowed_caller_step_refs.update(_collect_caller_step_reference_registers(binding_value))
+    return replacements, frozenset(allowed_caller_step_refs)
+
+
+def _preserve_fragment_binding_provenance(value: JSONValue) -> JSONValue | _BoundFragmentExpression:
+    if not isinstance(value, str):
+        return value
+    allowed_caller_step_refs = _collect_caller_step_reference_registers(value)
+    if not allowed_caller_step_refs:
+        return value
+    return _BoundFragmentExpression(text=value, allowed_caller_step_refs=allowed_caller_step_refs)
+
+
+def _collect_caller_step_reference_registers(value: JSONValue) -> frozenset[str]:
+    if not isinstance(value, str):
+        return frozenset()
+    expression = _extract_runtime_expression(value)
+    if expression is None:
+        return frozenset()
+    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    return frozenset(
+        node.register
+        for node in _walk_value_expression_nodes(parsed.root)
+        if isinstance(node, StepReferenceNode)
+    )
 
 
 def _serialize_binding_for_expression(
@@ -679,7 +722,7 @@ def _rewrite_fragment_step_scope(
             include_chain=include_chain,
             include_node_path=include_node_path,
         )
-        return value
+        return _materialize_bound_fragment_values(value)
     scope_token = _fragment_scope_token(include_chain, include_node_path)
     register_map = {name: f"{scope_token}_{name}" for name in local_registers}
     return _rewrite_fragment_scope_value(
@@ -689,6 +732,16 @@ def _rewrite_fragment_step_scope(
         include_chain=include_chain,
         include_node_path=include_node_path,
     )
+
+
+def _materialize_bound_fragment_values(value: JSONValue | _BoundFragmentExpression) -> JSONValue:
+    if isinstance(value, list):
+        return [_materialize_bound_fragment_values(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _materialize_bound_fragment_values(item) for key, item in value.items()}
+    if isinstance(value, _BoundFragmentExpression):
+        return value.text
+    return value
 
 
 def _collect_fragment_declared_registers(value: JSONValue) -> set[str]:
@@ -714,7 +767,7 @@ def _fragment_scope_token(include_chain: tuple[Path, ...], include_node_path: tu
 
 
 def _rewrite_fragment_scope_value(
-    value: JSONValue,
+    value: JSONValue | _BoundFragmentExpression,
     *,
     register_map: dict[str, str],
     source: Path,
@@ -734,11 +787,21 @@ def _rewrite_fragment_scope_value(
                 continue
             rewritten[key] = _rewrite_fragment_scope_value(item, register_map=register_map, source=source, include_chain=include_chain, include_node_path=include_node_path)
         return rewritten
+    if isinstance(value, _BoundFragmentExpression):
+        return _rewrite_fragment_step_reference_string(
+            value.text,
+            register_map=register_map,
+            allowed_caller_step_refs=value.allowed_caller_step_refs,
+            source=source,
+            include_chain=include_chain,
+            include_node_path=include_node_path,
+        )
     if not isinstance(value, str):
         return value
     return _rewrite_fragment_step_reference_string(
         value,
         register_map=register_map,
+        allowed_caller_step_refs=frozenset(),
         source=source,
         include_chain=include_chain,
         include_node_path=include_node_path,
@@ -749,6 +812,7 @@ def _rewrite_fragment_step_reference_string(
     value: str,
     *,
     register_map: dict[str, str],
+    allowed_caller_step_refs: frozenset[str],
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
@@ -760,6 +824,8 @@ def _rewrite_fragment_step_reference_string(
     replacements: list[tuple[int, int, str]] = []
     for node in _walk_value_expression_nodes(parsed.root):
         if not isinstance(node, StepReferenceNode):
+            continue
+        if node.register in allowed_caller_step_refs:
             continue
         if node.register not in register_map:
             raise _workflow_include_error(
@@ -781,7 +847,7 @@ def _rewrite_fragment_step_reference_string(
 
 
 def _ensure_fragment_has_no_external_step_references(
-    value: JSONValue,
+    value: JSONValue | _BoundFragmentExpression,
     *,
     register_map: dict[str, str],
     source: Path,
@@ -808,11 +874,22 @@ def _ensure_fragment_has_no_external_step_references(
                 include_node_path=include_node_path,
             )
         return
+    if isinstance(value, _BoundFragmentExpression):
+        _rewrite_fragment_step_reference_string(
+            value.text,
+            register_map=register_map,
+            allowed_caller_step_refs=value.allowed_caller_step_refs,
+            source=source,
+            include_chain=include_chain,
+            include_node_path=include_node_path,
+        )
+        return
     if not isinstance(value, str):
         return
     _rewrite_fragment_step_reference_string(
         value,
         register_map=register_map,
+        allowed_caller_step_refs=frozenset(),
         source=source,
         include_chain=include_chain,
         include_node_path=include_node_path,
@@ -1044,10 +1121,11 @@ def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock
     data = _require_object(payload, path=path, source=source)
     has_guards = "guards" in data
     has_steps = "steps" in data
-    if has_guards == has_steps:
+    has_run = "run" in data
+    if sum((has_guards, has_steps, has_run)) != 1:
         raise _load_error(
             code="load.workflow.block.form",
-            message="Block must define exactly one of 'guards' or 'steps'",
+            message="Block must define exactly one of 'guards', 'steps', or 'run'",
             path=path,
             details={"source": source},
         )
@@ -1064,16 +1142,31 @@ def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock
             guards=tuple(_load_guard_at_path(item, path=path + ("guards", str(item_index)), source=source) for item_index, item in enumerate(guards_payload))
         )
 
-    steps_payload = data.get("steps")
-    if not isinstance(steps_payload, list):
-        raise _load_error(
-            code="load.workflow.block.steps_type",
-            message="Block field 'steps' must be a list",
-            path=path + ("steps",),
-            details={"source": source, "actual_type": type(steps_payload).__name__},
+    if has_steps:
+        steps_payload = data.get("steps")
+        if not isinstance(steps_payload, list):
+            raise _load_error(
+                code="load.workflow.block.steps_type",
+                message="Block field 'steps' must be a list",
+                path=path + ("steps",),
+                details={"source": source, "actual_type": type(steps_payload).__name__},
+            )
+        return StepBlock(
+            steps=tuple(_load_step_at_path(item, path=path + ("steps", str(item_index)), source=source) for item_index, item in enumerate(steps_payload))
         )
-    return StepBlock(
-        steps=tuple(_load_step_at_path(item, path=path + ("steps", str(item_index)), source=source) for item_index, item in enumerate(steps_payload))
+
+    with_payload = data.get("with", {})
+    if not isinstance(with_payload, dict):
+        raise _load_error(
+            code="load.workflow.run.with_type",
+            message="Run field 'with' must be an object when provided",
+            path=path + ("with",),
+            details={"source": source, "actual_type": type(with_payload).__name__},
+        )
+    return RunBlock(
+        run=_require_string(data, "run", path=path + ("run",), source=source),
+        with_=dict(with_payload),
+        if_=_optional_string(data, "if", path=path + ("if",), source=source),
     )
 
 

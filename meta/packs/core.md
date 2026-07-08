@@ -174,7 +174,9 @@
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
-- Reusable workflow fragments should support explicit local argument contracts without forcing a separate reuse primitive when arguments are present.
+- Reusable workflow fragments should support explicit local argument contracts.
+- Explicit fragment argument contracts must not by themselves force static composition and runtime-scoped invocation to collapse into one reuse primitive when their semantics diverge materially.
+- If the product later introduces both `include` and `run`, the distinction must remain brief enough for humans and agents to predict from contract docs and examples.
 
 ## Product boundary
 
@@ -798,6 +800,7 @@ It must not answer the question:
 
 - ordered guard and step blocks;
 - reusable included workflow fragments;
+- future invocation-oriented reusable fragment runs when static composition is insufficient;
 - guard lists inside `guards` blocks;
 - ordered steps inside `steps` blocks;
 - compact references and parameters that remain workflow-semantic;
@@ -818,9 +821,14 @@ Named launch-time profile selection and project-local state declaration belong t
 
 Included fragment reuse still belongs to the workflow domain when it remains declarative and workflow-semantic.
 
-The author-facing reuse surface may stay as one `include` primitive whether or not the included fragment binds arguments through `with`.
+`include` specifically belongs to the static-composition side of that workflow reuse story.
 
-That user-facing unity is preferable to forcing authors to learn separate reuse verbs for non-parameterized and parameterized inclusion.
+If reusable fragments later need caller-scoped runtime modifiers or other invocation semantics, that pressure should be handled by a separate invocation surface such as `run` rather than by widening `include` until it stops being static composition.
+
+That future distinction is acceptable inside the workflow domain because it separates two different jobs:
+
+- `include` for static composition;
+- `run` for runtime-scoped reusable-fragment invocation.
 
 ## Inclusion boundaries
 
@@ -1164,6 +1172,7 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - `Workflow`
 - `WorkflowFragment`
 - `FragmentArg`
+- `FragmentRun` (planned)
 - `StateNeed`
 - `OperationRef`
 - `Guard`
@@ -1183,7 +1192,9 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - A `Playbook` names project-local workflow entries, profile entries, and runtime state declarations.
 - A `Workflow` contains ordered `Guard` and `Step` entries.
 - A `Workflow` may include reusable `WorkflowFragment` instances through ordered include items inside its block structure.
+- A future `Workflow` surface may invoke reusable `WorkflowFragment` instances through ordered `run` items inside its block structure.
 - A `WorkflowFragment` may declare local `FragmentArg` entries and workflow payload content.
+- A planned `FragmentRun` would express runtime-scoped invocation of one reusable `WorkflowFragment` with an explicit caller/callee boundary.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` references an `OperationRef`.
 - A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.
@@ -1207,6 +1218,7 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - Registered step results express execution-local data flow, not persistent workflow state.
 - Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
 - Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
+- A future fragment-run boundary should keep caller-local `step...` data explicit at the call site rather than treating it as implicit fragment-body scope.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.
@@ -2712,6 +2724,11 @@ Rules:
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
 
+Current stable shape note:
+
+- `run` is not part of the current stable block shape.
+- A future invocation-oriented block item may add `run` alongside `include` rather than changing the meaning of existing `include` items.
+
 Stable include item form:
 
 ```yaml
@@ -2727,6 +2744,25 @@ Include item rules:
 - `with` is optional and, when present, is an object;
 - `with` keys bind only declared fragment `args` keys;
 - include expansion preserves block order in the assembled workflow.
+
+## Planned fragment run item shape
+
+Illustrative future form:
+
+```yaml
+- run: github/comment-and-set-status
+  if: ${step.issue.outputs.open}
+  with:
+    comment: "Issue is open."
+    status: "In Progress"
+```
+
+Planned run item rules:
+
+- `run` would be a non-empty reusable-fragment reference;
+- `with` would remain the explicit fragment-argument binding object;
+- `if` would be evaluated in caller scope rather than in fragment-body scope;
+- the invoked fragment would execute with its own fragment-local `args...` and `step...` scope.
 
 ## Included fragment document shape
 
@@ -3466,7 +3502,9 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - Public operations are discoverable enough for composition without reading connector implementation internals.
 - Schema, examples, and runtime diagnostics are sufficient for iterative repair of an authored workflow.
 - Routine project adaptation prefers composing workflows and profiles over introducing new connector semantics.
-- Reusable included fragments remain understandable as one author-facing `include` surface even when they declare fragment-local `args`.
+- Reusable included fragments remain understandable as a static-composition `include` surface even when they declare fragment-local `args`.
+- Authoring verification should not require all reusable-fragment semantics to collapse into `include` when a later runtime-scoped invocation surface would be clearer.
+- If a future `run` surface is introduced, authoring verification should preserve a short explainable distinction between static composition and runtime-scoped fragment invocation.
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
 
 <!-- source: verification/workflow/guard-expressions.md -->
