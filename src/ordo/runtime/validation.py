@@ -40,7 +40,7 @@ def _field_names(items: list[JSONObject]) -> frozenset[str]:
 
 
 WORKFLOW_ALLOWED_FIELDS = _field_names(WORKFLOW_CONTRACT["top_level_fields"])
-BLOCK_ALLOWED_FIELDS = frozenset({"guards", "steps", "include", "run", "with", "if"})
+BLOCK_ALLOWED_FIELDS = frozenset({"guards", "steps", "include", "run", "with", "if", "__run_path__"})
 CALL_ALLOWED_FIELDS = frozenset({"uses", "with"})
 STEP_ALLOWED_FIELDS = frozenset().union(
     *(
@@ -190,7 +190,7 @@ def _validate_run_block(
     declared_registers: dict[str, tuple[str, ...]],
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
-    diagnostics.extend(_validate_unknown_fields(value, frozenset({"run", "if", "with"}), path=path, source=source))
+    diagnostics.extend(_validate_unknown_fields(value, frozenset({"run", "if", "with", "__run_path__"}), path=path, source=source))
     diagnostics.extend(_require_non_empty_string(value, "run", path=path + ("run",), source=source))
     with_value = value.get("with")
     if with_value is not None and not isinstance(with_value, dict):

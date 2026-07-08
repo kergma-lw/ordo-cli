@@ -127,6 +127,7 @@ class RunBlock:
     run: str
     with_: JSONObject = field(default_factory=dict, kw_only=True)
     if_: str | None = field(default=None, metadata={"contract_name": "if"})
+    resolved_path: str | None = field(default=None, kw_only=True)
 
     def to_contract(self) -> JSONObject:
         contract: JSONObject = {"run": self.run}
@@ -153,6 +154,8 @@ class Workflow:
     states: JSONObject = field(default_factory=dict)
     step_results: JSONObject = field(default_factory=dict)
     blocks: tuple[WorkflowBlock, ...] = ()
+    source_path: str | None = None
+    launch_dir: str | None = None
 
     def __init__(
         self,
@@ -166,6 +169,8 @@ class Workflow:
         states: JSONObject | None = None,
         step_results: JSONObject | None = None,
         blocks: tuple[WorkflowBlock, ...] = (),
+        source_path: str | None = None,
+        launch_dir: str | None = None,
         guards: tuple[Guard, ...] | None = None,
         steps: tuple[Step, ...] | None = None,
     ) -> None:
@@ -192,6 +197,8 @@ class Workflow:
         object.__setattr__(self, "states", {} if states is None else dict(states))
         object.__setattr__(self, "step_results", {} if step_results is None else dict(step_results))
         object.__setattr__(self, "blocks", normalized_blocks)
+        object.__setattr__(self, "source_path", source_path)
+        object.__setattr__(self, "launch_dir", launch_dir)
 
     @property
     def guards(self) -> tuple[Guard, ...]:

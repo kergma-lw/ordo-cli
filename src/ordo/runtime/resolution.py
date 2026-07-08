@@ -9,7 +9,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
-from ordo.model.workflow import GuardBlock, StepBlock, Workflow
+from ordo.model.workflow import GuardBlock, RunBlock, StepBlock, Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, UnaryNode, parse_guard_expression
 from .providers import ConnectorProvider, get_default_connector_provider
@@ -86,7 +86,15 @@ class ResolvedStepBlock:
     steps: tuple[ResolvedStep, ...] = ()
 
 
-ResolvedWorkflowBlock = ResolvedGuardBlock | ResolvedStepBlock
+@dataclass(frozen=True, slots=True)
+class ResolvedRunBlock:
+    """Resolved workflow block containing one reusable fragment run."""
+
+    block_index: int
+    run: str
+
+
+ResolvedWorkflowBlock = ResolvedGuardBlock | ResolvedStepBlock | ResolvedRunBlock
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +170,9 @@ def resolve_workflow_references(
                 else:
                     resolved_guards.append(resolved)
             resolved_blocks.append(ResolvedGuardBlock(block_index=block_index, guards=tuple(resolved_guards)))
+            continue
+        if isinstance(block, RunBlock):
+            resolved_blocks.append(ResolvedRunBlock(block_index=block_index, run=block.run))
             continue
 
         resolved_steps: list[ResolvedStep] = []

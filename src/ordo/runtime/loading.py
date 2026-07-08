@@ -73,6 +73,7 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
         state_bindings=_optional_object(payload, "state_bindings", source=source),
         states=_optional_object(payload, "states", source=source),
         blocks=blocks,
+        source_path=None if source == "<memory>" else source,
     )
 
 
@@ -84,6 +85,7 @@ def load_workflow_file(path: str | Path, *, launch_dir: str | Path | None = None
     payload = load_workflow_document_file(workflow_path, launch_dir=launch_dir)
     blocks = _load_workflow_blocks(payload, source=source)
     workflow_inputs, declared_inputs = _load_workflow_inputs(payload, source=source)
+    resolved_launch_dir = _resolve_launch_directory(launch_dir)
     return Workflow(
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
@@ -93,6 +95,8 @@ def load_workflow_file(path: str | Path, *, launch_dir: str | Path | None = None
         state_bindings=_optional_object(payload, "state_bindings", source=source),
         states=_optional_object(payload, "states", source=source),
         blocks=blocks,
+        source_path=source,
+        launch_dir=str(resolved_launch_dir),
     )
 
 
@@ -288,6 +292,16 @@ def _expand_include_nodes(
             include_node_path=current_path,
         )
         return included_payload
+    if "run" in value:
+        rewritten = {
+            key: _expand_include_nodes(item, current_file=current_file, launch_dir=launch_dir, stack=stack, depth=depth, current_path=current_path + (key,))
+            for key, item in value.items()
+        }
+        run_ref = rewritten.get("run")
+        if isinstance(run_ref, str) and run_ref:
+            resolved_run_path = _resolve_include_path(run_ref, current_file=current_file, launch_dir=launch_dir, include_path=current_path + ("run",), stack=stack)
+            rewritten["__run_path__"] = str(resolved_run_path)
+        return rewritten
 
     return {
         key: _expand_include_nodes(item, current_file=current_file, launch_dir=launch_dir, stack=stack, depth=depth, current_path=current_path + (key,))
@@ -1167,6 +1181,7 @@ def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock
         run=_require_string(data, "run", path=path + ("run",), source=source),
         with_=dict(with_payload),
         if_=_optional_string(data, "if", path=path + ("if",), source=source),
+        resolved_path=_optional_string(data, "__run_path__", path=path + ("__run_path__",), source=source),
     )
 
 
