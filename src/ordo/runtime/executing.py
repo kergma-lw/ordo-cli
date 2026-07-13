@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
+from pathlib import Path
+
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
@@ -11,7 +15,7 @@ from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 from .checking import GuardProbe, _build_guard_detail, _default_guard_probe, _evaluate_guard_expression, check_workflow
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
 from .launchers import apply_launcher_to_step
-from .profiles import apply_profile_to_workflow
+from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
 from .state import RuntimeStateError, delete_state_value, read_state_document, resolve_state_target, write_state_document, write_state_value
@@ -22,6 +26,8 @@ def execute_workflow(
     workflow: Workflow,
     *,
     profile: Profile | None = None,
+    available_profiles: dict[str, Profile] | None = None,
+    profile_working_directories: dict[str, Path | None] | None = None,
     guard_probe: GuardProbe | None = None,
     step_executor: StepExecutor | None = None,
     connector_provider: ConnectorProvider | None = None,
@@ -57,6 +63,10 @@ def execute_workflow(
             active_profile = applied.active_profile
             active_overrides = applied.active_overrides
 
+    current_profile = profile
+    current_profile_name = None if profile is None else profile.name
+    current_working_directory = None if current_profile_name is None or profile_working_directories is None else profile_working_directories.get(current_profile_name)
+
     resolution = resolve_workflow_references(effective_workflow, connector_provider=connector_provider, active_overrides=active_overrides)
     executor = step_executor or _default_step_executor(provider=connector_provider)
     diagnostics: list[Diagnostic] = list(check_result.diagnostics)
@@ -82,9 +92,11 @@ def execute_workflow(
             block_guard_details: list[dict[str, object]] = []
             for resolved_guard in resolved_block.guards:
                 if isinstance(resolved_guard, ResolvedGuardExpression):
-                    result = _evaluate_guard_expression(resolved_guard, effective_workflow, guard_probe or _default_guard_probe(provider=connector_provider))
+                    with _execution_working_directory(current_working_directory):
+                        result = _evaluate_guard_expression(resolved_guard, effective_workflow, guard_probe or _default_guard_probe(provider=connector_provider))
                 else:
-                    result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_guard, effective_workflow)
+                    with _execution_working_directory(current_working_directory):
+                        result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_guard, effective_workflow)
                 operation_results.append(result)
                 diagnostics.extend(result.diagnostics)
                 detail = _build_guard_detail(resolved_guard.reference, result)
@@ -231,13 +243,22 @@ def execute_workflow(
 
                 run_result = execute_workflow(
                     run_workflow,
-                    profile=profile,
+                    profile=current_profile,
+                    available_profiles=available_profiles,
+                    profile_working_directories=profile_working_directories,
                     guard_probe=guard_probe,
                     step_executor=step_executor,
                     connector_provider=connector_provider,
                 )
                 diagnostics.extend(run_result.diagnostics)
                 operation_results.extend(run_result.operation_results)
+                propagated_profile = run_result.outputs.get("active_profile")
+                if isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
+                    current_profile = available_profiles[propagated_profile]
+                    current_profile_name = propagated_profile
+                    current_working_directory = None if profile_working_directories is None else profile_working_directories.get(propagated_profile)
+                    active_profile = propagated_profile
+                    active_overrides = current_profile.overrides
                 executed_steps.append(step.name)
                 block_executed.append(step.name)
                 executed_steps.extend([name for name in run_result.outputs.get("executed_steps", []) if isinstance(name, str)])
@@ -283,18 +304,113 @@ def execute_workflow(
                     )
                 continue
             if isinstance(resolved_step, ResolvedBuiltinStep):
-                result = _execute_builtin_step(step, effective_workflow)
+                if resolved_step.builtin == "profile_switch":
+                    result, current_profile, current_profile_name, active_profile, active_overrides, current_working_directory, effective_workflow = _execute_profile_switch_step(
+                        step,
+                        effective_workflow,
+                        current_profile=current_profile,
+                        available_profiles=available_profiles,
+                        profile_working_directories=profile_working_directories,
+                    )
+                    operation_results.append(result)
+                    diagnostics.extend(result.diagnostics)
+                    if result.status != "ok":
+                        skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                        block_items.append(
+                            {
+                                "block_index": block_index,
+                                "type": "steps",
+                                "status": "execution_error",
+                                "step_names": [candidate.name for candidate in declared_block.steps],
+                                "executed_steps": block_executed,
+                                "skipped_steps": block_skipped,
+                                "failed_step": step.name,
+                            }
+                        )
+                        return RuntimeResult(
+                            mode=Mode.EXECUTE,
+                            status=RuntimeStatus.EXECUTION_ERROR,
+                            diagnostics=tuple(diagnostics),
+                            plan=check_result.plan,
+                            outputs={
+                                "can_execute": False,
+                                "active_profile": active_profile,
+                                "active_overrides": [override.to_contract() for override in active_overrides],
+                                "executed_steps": executed_steps,
+                                "skipped_steps": skipped_steps,
+                                "step_condition_details": step_condition_details,
+                                "launcher_details": launcher_details,
+                                "checked_guards": checked_guards,
+                                "guard_details": guard_details,
+                                "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                            },
+                            operation_results=tuple(operation_results),
+                            failed_step=step.name,
+                        )
+                    executed_steps.append(step.name)
+                    block_executed.append(step.name)
+                    continue
+                with _execution_working_directory(current_working_directory):
+                    result = _execute_builtin_step(step, effective_workflow)
             else:
+                if resolved_step.reference == "runtime.profile.use":
+                    result, current_profile, current_profile_name, active_profile, active_overrides, current_working_directory, effective_workflow = _execute_profile_switch_step(
+                        step,
+                        effective_workflow,
+                        current_profile=current_profile,
+                        available_profiles=available_profiles,
+                        profile_working_directories=profile_working_directories,
+                    )
+                    operation_results.append(result)
+                    diagnostics.extend(result.diagnostics)
+                    if result.status != "ok":
+                        skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                        block_items.append(
+                            {
+                                "block_index": block_index,
+                                "type": "steps",
+                                "status": "execution_error",
+                                "step_names": [candidate.name for candidate in declared_block.steps],
+                                "executed_steps": block_executed,
+                                "skipped_steps": block_skipped,
+                                "failed_step": step.name,
+                            }
+                        )
+                        return RuntimeResult(
+                            mode=Mode.EXECUTE,
+                            status=RuntimeStatus.EXECUTION_ERROR,
+                            diagnostics=tuple(diagnostics),
+                            plan=check_result.plan,
+                            outputs={
+                                "can_execute": False,
+                                "active_profile": active_profile,
+                                "active_overrides": [override.to_contract() for override in active_overrides],
+                                "executed_steps": executed_steps,
+                                "skipped_steps": skipped_steps,
+                                "step_condition_details": step_condition_details,
+                                "launcher_details": launcher_details,
+                                "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                                "checked_guards": checked_guards,
+                                "guard_details": guard_details,
+                            },
+                            operation_results=tuple(operation_results),
+                            failed_step=step.name,
+                        )
+                    executed_steps.append(step.name)
+                    block_executed.append(step.name)
+                    continue
                 executed_step = resolved_step
                 applied_launcher = None
-                if profile is not None:
-                    executed_step, applied_launcher, launcher_error = apply_launcher_to_step(step, resolved_step, effective_workflow, profile.launchers)
+                if current_profile is not None:
+                    executed_step, applied_launcher, launcher_error = apply_launcher_to_step(step, resolved_step, effective_workflow, current_profile.launchers)
                     if launcher_error is not None:
                         result = launcher_error
                     else:
-                        result = executor(executed_step, effective_workflow)
+                        with _execution_working_directory(current_working_directory):
+                            result = executor(executed_step, effective_workflow)
                 else:
-                    result = executor(executed_step, effective_workflow)
+                    with _execution_working_directory(current_working_directory):
+                        result = executor(executed_step, effective_workflow)
                 if applied_launcher is not None:
                     launcher_details.append(
                         {
@@ -406,6 +522,98 @@ def _default_step_executor(*, provider: ConnectorProvider | None):
         return resolved_provider.step_executor(resolved_step, workflow)
 
     return execute
+
+
+def _execute_profile_switch_step(
+    step: Step,
+    workflow: Workflow,
+    *,
+    current_profile: Profile | None,
+    available_profiles: dict[str, Profile] | None,
+    profile_working_directories: dict[str, Path | None] | None,
+) -> tuple[OperationResult, Profile | None, str | None, str | None, tuple, Path | None, Workflow]:
+    raw_profile = step.profile_switch
+    if raw_profile is None:
+        declared_inputs = {} if step.operation is None else step.operation.with_
+        raw_profile = declared_inputs.get("profile")
+    if raw_profile is None:
+        return (
+            OperationResult(status="input_error", summary="Required input 'profile' is missing"),
+            current_profile,
+            None if current_profile is None else current_profile.name,
+            None if current_profile is None else current_profile.name,
+            () if current_profile is None else current_profile.overrides,
+            None if current_profile is None or profile_working_directories is None else profile_working_directories.get(current_profile.name),
+            workflow,
+        )
+    try:
+        profile_name = resolve_runtime_value(raw_profile, workflow)
+    except ValueResolutionError as exc:
+        return (
+            OperationResult(status="input_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),)),
+            current_profile,
+            None if current_profile is None else current_profile.name,
+            None if current_profile is None else current_profile.name,
+            () if current_profile is None else current_profile.overrides,
+            None if current_profile is None or profile_working_directories is None else profile_working_directories.get(current_profile.name),
+            workflow,
+        )
+    if not isinstance(profile_name, str) or not profile_name:
+        return (
+            OperationResult(status="input_error", summary="Runtime profile switch requires a non-empty string profile name"),
+            current_profile,
+            None if current_profile is None else current_profile.name,
+            None if current_profile is None else current_profile.name,
+            () if current_profile is None else current_profile.overrides,
+            None if current_profile is None or profile_working_directories is None else profile_working_directories.get(current_profile.name),
+            workflow,
+        )
+    if available_profiles is None or profile_name not in available_profiles:
+        return (
+            OperationResult(status="execution_error", summary=f"Runtime profile '{profile_name}' is not available in this execution context"),
+            current_profile,
+            None if current_profile is None else current_profile.name,
+            None if current_profile is None else current_profile.name,
+            () if current_profile is None else current_profile.overrides,
+            None if current_profile is None or profile_working_directories is None else profile_working_directories.get(current_profile.name),
+            workflow,
+        )
+    target_profile = available_profiles[profile_name]
+    target_working_directory = None if profile_working_directories is None else profile_working_directories.get(profile_name)
+    previous = None if current_profile is None else current_profile.name
+    applied = apply_profile_defaults_to_subsequent_steps(workflow, target_profile)
+    switched_workflow = workflow if applied.workflow is None else applied.workflow
+    return (
+        OperationResult(
+            status="ok",
+            summary="Runtime profile switched",
+            outputs={
+                "profile": profile_name,
+                "previous_profile": previous,
+                "changed": previous != profile_name,
+                "applied_inputs": dict(switched_workflow.inputs),
+            },
+        ),
+        target_profile,
+        profile_name,
+        profile_name,
+        target_profile.overrides,
+        target_working_directory,
+        switched_workflow,
+    )
+
+
+@contextlib.contextmanager
+def _execution_working_directory(target: Path | None):
+    if target is None:
+        yield
+        return
+    previous = Path.cwd()
+    os.chdir(target)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
