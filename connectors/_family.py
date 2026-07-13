@@ -150,6 +150,7 @@ def _contract_from_published(published: "PublishedOperation", *, package_name: s
         maturity=published.maturity,
         deprecated=published.deprecated,
         replaced_by=published.replaced_by,
+        invalidates_observations=published.invalidates_observations,
     )
 
 

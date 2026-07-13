@@ -62,6 +62,7 @@ class PublishedOperation:
     maturity: str = "stable"
     deprecated: bool = False
     replaced_by: tuple[str, ...] = ()
+    invalidates_observations: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +205,7 @@ def action(
     maturity: str = "stable",
     deprecated: bool = False,
     replaced_by: tuple[str, ...] = (),
+    invalidates_observations: tuple[str, ...] = (),
 ) -> PublishedOperation:
     return PublishedOperation(
         name=name,
@@ -220,6 +222,7 @@ def action(
         maturity=maturity,
         deprecated=deprecated,
         replaced_by=replaced_by,
+        invalidates_observations=invalidates_observations,
     )
 
 

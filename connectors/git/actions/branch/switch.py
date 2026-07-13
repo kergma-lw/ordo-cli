@@ -13,6 +13,7 @@ def info():
         effects=("switch current checkout to a local branch",),
         outputs={"branch": "string", "changed": "boolean"},
         failure_modes=("branch_not_found", "worktree_change_conflict", "unresolved_state", "switch_blocked"),
+        invalidates_observations=("git.branch", "git.worktree", "git.ref.*"),
         handler=run,
     )
 

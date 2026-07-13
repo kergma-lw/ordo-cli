@@ -43,6 +43,7 @@ class OperationContract:
     maturity: str = "stable"
     deprecated: bool = False
     replaced_by: tuple[str, ...] = ()
+    invalidates_observations: tuple[str, ...] = ()
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped operation contract."""
@@ -61,6 +62,7 @@ class OperationContract:
             "maturity": self.maturity,
             "deprecated": self.deprecated,
             "replaced_by": list(self.replaced_by),
+            "invalidates_observations": list(self.invalidates_observations),
         }
 
 

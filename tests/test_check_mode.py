@@ -133,6 +133,43 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.preflight_decision.guard_nodes[0].reference, "git.worktree")
         self.assertEqual(result.preflight_decision.block_nodes[0].block_type, "guards")
 
+    def test_check_marks_verdict_basis_weakened_when_later_action_invalidates_used_observation(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(expr='git.branch.value == "main"'),),
+            steps=(Step(name="switch", operation=OperationRef("git.branch.switch", with_={"branch": "feature/demo"})),),
+        )
+
+        def probe(resolved_guard, _workflow):
+            return OperationResult(status="ok", outputs={"value": "main"})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertTrue(result.outputs["verdict_basis_weakened"])
+        self.assertIn("git.branch", result.outputs["used_observation_scopes"])
+        self.assertIn("git.branch", result.outputs["weakened_observation_scopes"])
+        self.assertIn("git.branch", result.outputs["potential_invalidation_scopes"])
+
+    def test_check_uses_family_wide_invalidation_fallback_when_action_has_no_narrow_metadata(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(OperationRef("gh.issue", with_={"repository": "acme/repo", "issue_number": 1})),),
+            steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"repository": "acme/repo", "issue_number": 1})),),
+        )
+
+        def probe(resolved_guard, _workflow):
+            self.assertEqual(resolved_guard.reference, "gh.issue")
+            return OperationResult(status="ok", outputs={"state": "OPEN"})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertTrue(result.outputs["verdict_basis_weakened"])
+        self.assertIn("gh.issue", result.outputs["used_observation_scopes"])
+        self.assertIn("gh.*", result.outputs["potential_invalidation_scopes"])
+
     def test_check_evaluates_expr_guard_with_custom_probe(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
 

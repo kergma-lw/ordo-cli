@@ -263,7 +263,7 @@ def check_workflow(
                     result = probe(resolved_guard, effective_workflow)
                 operation_results.append(result)
                 diagnostics.extend(result.diagnostics)
-                detail = _build_guard_detail(resolved_guard.reference, result)
+                detail = _build_guard_detail(resolved_guard.reference, result, observation_scopes=_guard_observation_scopes(resolved_guard))
                 guard_details.append(detail)
                 block_guard_details.append(detail)
                 checked_guards.append(resolved_guard.reference)
@@ -302,11 +302,13 @@ def check_workflow(
         block_items.extend(_build_pending_block_items(effective_workflow, blocked=bool(blockers), start_index=len(block_items)))
 
     if blockers:
+        observation_basis = _build_observation_basis_outputs(effective_workflow, resolution, guard_details)
         outputs = {
             **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
             "blockers": blockers,
             "checked_guards": checked_guards,
             **_guard_coverage_outputs(effective_workflow, checked_guards=checked_guards, blockers=blockers),
+            **observation_basis,
             "guard_details": guard_details,
             "block_items": block_items,
             "active_profile": active_profile,
@@ -339,6 +341,7 @@ def check_workflow(
         "blockers": [],
         "checked_guards": checked_guards,
         **_guard_coverage_outputs(effective_workflow, checked_guards=checked_guards, blockers=[]),
+        **_build_observation_basis_outputs(effective_workflow, resolution, guard_details),
         "guard_details": guard_details,
         "block_items": block_items,
         "active_profile": active_profile,
@@ -464,6 +467,58 @@ def _has_pre_run_before_pending_guards(block_items: list[dict[str, object]]) -> 
         if saw_pre_run and item.get("type") == "guards" and item.get("status") == "pending":
             return True
     return False
+
+
+def _build_observation_basis_outputs(
+    workflow: Workflow,
+    resolution,
+    guard_details: list[dict[str, object]],
+) -> dict[str, object]:
+    used_scopes = sorted(
+        {
+            scope
+            for detail in guard_details
+            if isinstance(detail, dict)
+            for scope in detail.get("observation_scopes", [])
+            if isinstance(scope, str)
+        }
+    )
+    invalidation_scopes = sorted(_collect_potential_invalidation_scopes(workflow, resolution))
+    weakened_scopes = sorted(
+        {
+            scope
+            for scope in used_scopes
+            if any(_scope_invalidated(scope, invalidation) for invalidation in invalidation_scopes)
+        }
+    )
+    return {
+        "used_observation_scopes": used_scopes,
+        "potential_invalidation_scopes": invalidation_scopes,
+        "weakened_observation_scopes": weakened_scopes,
+        "verdict_basis_weakened": bool(weakened_scopes),
+    }
+
+
+def _collect_potential_invalidation_scopes(workflow: Workflow, resolution) -> set[str]:
+    scopes: set[str] = set()
+    for block in resolution.blocks:
+        if not isinstance(block, ResolvedStepBlock):
+            continue
+        declared = workflow.blocks[block.block_index]
+        assert isinstance(declared, StepBlock)
+        for step, resolved_step in zip(declared.steps, block.steps, strict=False):
+            if not isinstance(resolved_step, ResolvedOperation) or resolved_step.operation.kind != "action":
+                continue
+            invalidation = resolved_step.operation.invalidates_observations or (f"{resolved_step.connector_namespace}.*",)
+            scopes.update(scope for scope in invalidation if isinstance(scope, str))
+    return scopes
+
+
+def _scope_invalidated(scope: str, invalidation: str) -> bool:
+    if invalidation.endswith(".*"):
+        prefix = invalidation[:-2]
+        return scope == prefix or scope.startswith(f"{prefix}.")
+    return scope == invalidation
 
 
 def _default_guard_probe(*, provider: ConnectorProvider | None):
@@ -707,7 +762,15 @@ def _extract_probe_value(outputs: dict[str, JSONValue], fields: tuple[str, ...])
     return current
 
 
-def _build_guard_detail(reference: str, result: OperationResult) -> dict[str, object]:
+def _guard_observation_scopes(resolved_guard: ResolvedOperation | ResolvedGuardExpression) -> list[str]:
+    if isinstance(resolved_guard, ResolvedOperation):
+        return [resolved_guard.reference]
+    if isinstance(resolved_guard, ResolvedGuardExpression):
+        return [probe.reference for probe in resolved_guard.probes]
+    return []
+
+
+def _build_guard_detail(reference: str, result: OperationResult, *, observation_scopes: list[str] | None = None) -> dict[str, object]:
     return {
         "reference": reference,
         "status": result.status,
@@ -715,4 +778,5 @@ def _build_guard_detail(reference: str, result: OperationResult) -> dict[str, ob
         "failed_subcondition": result.outputs.get("failed_subcondition"),
         "failure_kind": result.raw.get("failure_kind"),
         "trace": result.raw.get("trace", []),
+        "observation_scopes": [] if observation_scopes is None else list(observation_scopes),
     }
