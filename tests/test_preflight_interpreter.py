@@ -3,7 +3,7 @@ import unittest
 from ordo.model.connector import OperationContract
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import OperationRef, Step, Workflow
-from ordo.runtime.preflight_interpreter import evaluate_preflight_probe_step, evaluate_preflight_value_step, store_preflight_register_output
+from ordo.runtime.preflight_interpreter import evaluate_preflight_probe_step, evaluate_preflight_value_step, resolve_preflight_value, store_preflight_register_output
 from ordo.runtime.resolution import ResolvedOperation
 
 
@@ -69,6 +69,33 @@ class PreflightInterpreterTest(unittest.TestCase):
         result = evaluate_preflight_probe_step(step, resolved, workflow, guard_probe=lambda *_args: OperationResult(status="ok"))
 
         self.assertEqual(result.status, "state_error")
+
+    def test_resolves_value_expressions_from_registered_preflight_value_outputs(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", steps=())
+        first = Step(name="branch", value="main", register="branch")
+        second = Step(name="copy", value="${step.branch.outputs.value}", register="copy")
+
+        first_result = evaluate_preflight_value_step(first, workflow)
+        step_results = {}
+        store_preflight_register_output("branch", first_result, step_results=step_results)
+        second_result = evaluate_preflight_value_step(second, workflow, step_results=step_results)
+
+        self.assertEqual(second_result.status, "ok")
+        self.assertEqual(second_result.outputs["value"], "main")
+
+    def test_resolves_value_expressions_from_registered_probe_outputs(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", steps=())
+        step_results = {
+            "issue": {
+                "status": "ok",
+                "summary": "Loaded issue",
+                "outputs": {"exists": True, "number": 42},
+            }
+        }
+
+        value = resolve_preflight_value("${step.issue.outputs.number}", workflow, step_results=step_results)
+
+        self.assertEqual(value, 42)
 
 
 if __name__ == "__main__":

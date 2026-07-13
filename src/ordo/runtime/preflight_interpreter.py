@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
-from ordo.model.json import JSONObject
+from ordo.model.json import JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Step, Workflow
 
 from .providers import GuardProbe
 from .resolution import ResolvedOperation
 from .value_resolution import ValueResolutionError, resolve_runtime_value
+
+
+def resolve_preflight_value(
+    value: JSONValue,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+) -> JSONValue:
+    """Resolve one preflight value against current workflow and stored step results."""
+
+    return resolve_runtime_value(value, workflow, step_results=step_results)
 
 
 def evaluate_preflight_value_step(
@@ -22,7 +33,7 @@ def evaluate_preflight_value_step(
     if step.value is None:
         return OperationResult(status="state_error", summary=f"Step '{step.name}' is not a value step")
     try:
-        value = resolve_runtime_value(step.value, workflow, step_results=step_results)
+        value = resolve_preflight_value(step.value, workflow, step_results=step_results)
     except ValueResolutionError as exc:
         return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
     return OperationResult(
