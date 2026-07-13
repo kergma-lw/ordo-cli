@@ -28,6 +28,7 @@ class PreflightBlockNode:
     block_index: int
     block_type: str
     status: str
+    active_profile: str | None = None
     guard_references: tuple[str, ...] = ()
     step_names: tuple[str, ...] = ()
 

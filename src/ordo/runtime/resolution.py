@@ -11,7 +11,7 @@ from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
-from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, UnaryNode, parse_guard_expression
+from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, StateReferenceNode, UnaryNode, parse_guard_expression
 from .providers import ConnectorProvider, get_default_connector_provider
 
 
@@ -183,6 +183,9 @@ def resolve_workflow_references(
             if step.run is not None:
                 resolved_steps.append(ResolvedRunStep(name=step.name, run=step.run))
                 continue
+            if step.profile_switch is not None:
+                resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="profile_switch"))
+                continue
             if step.state_set is not None:
                 resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_set"))
                 continue
@@ -284,6 +287,8 @@ def _resolve_guard_expression(
                     fields=fields,
                 )
             )
+            return
+        if isinstance(node, StateReferenceNode):
             return
         if isinstance(node, CallNode):
             resolved = _resolve_reference(

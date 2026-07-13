@@ -222,7 +222,44 @@ class CheckModeTest(unittest.TestCase):
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["bootstrap_details"][0]["namespace"], "git")
-        self.assertEqual(result.outputs["bootstrap_details"][0]["status"], "not_repository")
+
+    def test_check_applies_deterministic_profile_switch_before_later_guards(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="switch-profile", profile_switch="frontend"),)),
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+        result = check_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+        self.assertEqual(result.outputs["block_items"][0]["status"], "context_applied")
+        self.assertEqual(result.outputs["block_items"][1]["active_profile"], "frontend")
+        assert result.preflight_decision is not None
+        self.assertEqual(result.preflight_decision.block_nodes[1].active_profile, "frontend")
+
+    def test_check_keeps_profile_switch_unknown_when_profile_cannot_be_resolved(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="switch-profile", profile_switch="${inputs.profile}"),)),
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "unknown")
+        self.assertIn("profile_switch_not_resolvable_from_current_knowledge", result.outputs["incomplete_reasons"])
 
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())

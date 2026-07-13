@@ -13,9 +13,10 @@ from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode, UnaryNode
 from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
 from .launchers import validate_step_launchers
-from .profiles import apply_profile_to_workflow
+from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
+from .value_resolution import ValueResolutionError, resolve_runtime_value
 from .validation import validate_workflow_document
 
 
@@ -112,13 +113,14 @@ def _build_preflight_decision_model(workflow: Workflow, outputs: dict[str, objec
         )
         step_names = tuple(name for name in item.get("step_names", []) if isinstance(name, str))
         block_nodes.append(
-            PreflightBlockNode(
-                block_index=block_index,
-                block_type=block_type,
-                status=status,
-                guard_references=guard_references,
-                step_names=step_names,
-            )
+                PreflightBlockNode(
+                    block_index=block_index,
+                    block_type=block_type,
+                    status=status,
+                    active_profile=cast(str | None, item.get("active_profile")),
+                    guard_references=guard_references,
+                    step_names=step_names,
+                )
         )
 
     return PreflightDecisionModel(
@@ -134,6 +136,7 @@ def check_workflow(
     workflow: Workflow,
     *,
     profile: Profile | None = None,
+    available_profiles: dict[str, Profile] | None = None,
     guard_probe: GuardProbe | None = None,
     connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
@@ -162,11 +165,14 @@ def check_workflow(
     active_profile = None
     active_overrides = ()
     effective_workflow = workflow
+    current_profile = profile
+    current_profile_name = None if profile is None else profile.name
 
     if profile is not None:
         applied = apply_profile_to_workflow(workflow, profile)
         active_profile = applied.active_profile
         active_overrides = applied.active_overrides
+        current_profile_name = applied.active_profile
         if not applied.ok or applied.workflow is None:
             return RuntimeResult(
                 mode=Mode.CHECK,
@@ -188,6 +194,7 @@ def check_workflow(
                 },
             )
         effective_workflow = applied.workflow
+        current_profile = profile
 
     launcher_diagnostics = validate_step_launchers(effective_workflow, active_profile, {} if profile is None else profile.launchers)
     if launcher_diagnostics:
@@ -207,16 +214,16 @@ def check_workflow(
             },
         )
 
-    resolution = resolve_workflow_references(
+    initial_resolution = resolve_workflow_references(
         effective_workflow,
         connector_provider=connector_provider,
         active_overrides=active_overrides,
     )
-    if not resolution.ok:
+    if not initial_resolution.ok:
         return RuntimeResult(
             mode=Mode.CHECK,
             status=RuntimeStatus.RESOLUTION_ERROR,
-            diagnostics=resolution.diagnostics,
+            diagnostics=initial_resolution.diagnostics,
             plan=ExecutionPlan(
                 guard_checks=tuple(_initial_guard_references(effective_workflow)),
                 step_names=tuple(_all_step_names(effective_workflow)),
@@ -249,14 +256,22 @@ def check_workflow(
     incomplete_reasons: list[str] = []
 
     halted = False
-    for block in resolution.blocks:
-        if isinstance(block, ResolvedGuardBlock):
+    for block_index, declared_block in enumerate(effective_workflow.blocks):
+        if isinstance(declared_block, GuardBlock):
             if halted:
-                block_items.append(_pending_guard_block_item(block, effective_workflow))
+                block_items.append(_pending_guard_block_item_from_declared(block_index, declared_block, current_profile_name))
                 continue
+            resolved_block = _resolve_guard_block(
+                effective_workflow,
+                block_index=block_index,
+                connector_provider=connector_provider,
+                active_overrides=active_overrides,
+            )
+            if isinstance(resolved_block, RuntimeResult):
+                return resolved_block
             block_blockers: list[str] = []
             block_guard_details: list[dict[str, object]] = []
-            for resolved_guard in block.guards:
+            for resolved_guard in resolved_block.guards:
                 if isinstance(resolved_guard, ResolvedGuardExpression):
                     result = _evaluate_guard_expression(resolved_guard, effective_workflow, probe)
                 else:
@@ -275,22 +290,51 @@ def check_workflow(
                         failed_guard = resolved_guard.reference
             block_items.append(
                 {
-                    "block_index": block.block_index,
+                    "block_index": block_index,
                     "type": "guards",
                     "status": "blocked" if block_blockers else "ok",
-                    "guard_references": [guard.reference for guard in block.guards],
+                    "guard_references": [guard.reference for guard in resolved_block.guards],
                     "blockers": block_blockers,
                     "guard_details": block_guard_details,
+                    "active_profile": current_profile_name,
                 }
             )
             if block_blockers:
                 halted = True
             continue
 
-        if halted:
-            block_items.append(_pending_step_block_item(block, effective_workflow, blocked=True))
+        if _is_static_profile_switch_block(declared_block):
+            if halted:
+                block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
+                continue
+            transition = _apply_static_profile_switch_block(
+                declared_block,
+                workflow=effective_workflow,
+                available_profiles=available_profiles,
+            )
+            if transition is None:
+                block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=False, active_profile=current_profile_name))
+                halted = True
+                incomplete_reasons.append("profile_switch_not_resolvable_from_current_knowledge")
+                continue
+            current_profile_name, current_profile, active_overrides, effective_workflow = transition
+            active_profile = current_profile_name
+            block_items.append(
+                {
+                    "block_index": block_index,
+                    "type": "steps",
+                    "status": "context_applied",
+                    "step_names": [step.name for step in declared_block.steps],
+                    "conditional_steps": [step.name for step in declared_block.steps if step.if_ is not None],
+                    "active_profile": current_profile_name,
+                }
+            )
             continue
-        block_items.append(_pending_step_block_item(block, effective_workflow, blocked=False))
+
+        if halted:
+            block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
+            continue
+        block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=False, active_profile=current_profile_name))
         halted = True
 
     if not blockers and any(item.get("type") == "guards" and item.get("status") == "pending" for item in block_items):
@@ -299,10 +343,10 @@ def check_workflow(
             incomplete_reasons.append("pre_run_precedes_main_guard_coverage")
 
     if halted and len(block_items) < len(effective_workflow.blocks):
-        block_items.extend(_build_pending_block_items(effective_workflow, blocked=bool(blockers), start_index=len(block_items)))
+        block_items.extend(_build_pending_block_items(effective_workflow, blocked=bool(blockers), start_index=len(block_items), active_profile=current_profile_name))
 
     if blockers:
-        observation_basis = _build_observation_basis_outputs(effective_workflow, resolution, guard_details)
+        observation_basis = _build_observation_basis_outputs(effective_workflow, initial_resolution, guard_details)
         outputs = {
             **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
             "blockers": blockers,
@@ -341,7 +385,7 @@ def check_workflow(
         "blockers": [],
         "checked_guards": checked_guards,
         **_guard_coverage_outputs(effective_workflow, checked_guards=checked_guards, blockers=[]),
-        **_build_observation_basis_outputs(effective_workflow, resolution, guard_details),
+        **_build_observation_basis_outputs(effective_workflow, initial_resolution, guard_details),
         "guard_details": guard_details,
         "block_items": block_items,
         "active_profile": active_profile,
@@ -403,7 +447,87 @@ def _initial_guard_references(workflow: Workflow) -> list[str]:
     return references
 
 
-def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index: int = 0) -> list[dict[str, object]]:
+def _resolve_guard_block(
+    workflow: Workflow,
+    *,
+    block_index: int,
+    connector_provider: ConnectorProvider | None,
+    active_overrides,
+) -> ResolvedGuardBlock | RuntimeResult:
+    block = workflow.blocks[block_index]
+    assert isinstance(block, GuardBlock)
+    resolution = resolve_workflow_references(
+        Workflow(
+            version=workflow.version,
+            workflow=workflow.workflow,
+            inputs=workflow.inputs,
+            declared_inputs=workflow.declared_inputs,
+            state_needs=workflow.state_needs,
+            state_bindings=workflow.state_bindings,
+            states=workflow.states,
+            step_results=workflow.step_results,
+            blocks=(block,),
+            source_path=workflow.source_path,
+            launch_dir=workflow.launch_dir,
+        ),
+        connector_provider=connector_provider,
+        active_overrides=active_overrides,
+    )
+    if not resolution.ok or not resolution.blocks or not isinstance(resolution.blocks[0], ResolvedGuardBlock):
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.RESOLUTION_ERROR,
+            diagnostics=resolution.diagnostics,
+            plan=ExecutionPlan(
+                guard_checks=tuple(_initial_guard_references(workflow)),
+                step_names=tuple(_all_step_names(workflow)),
+                blockers=(),
+            ),
+            outputs={
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+                "blockers": [],
+                "checked_guards": list(_initial_guard_references(workflow)),
+                **_guard_coverage_outputs(workflow, checked_guards=list(_initial_guard_references(workflow)), blockers=[]),
+                "block_items": _build_pending_block_items(workflow, blocked=False),
+            },
+        )
+    return ResolvedGuardBlock(block_index=block_index, guards=resolution.blocks[0].guards)
+
+
+def _is_static_profile_switch_block(block: StepBlock) -> bool:
+    return bool(block.steps) and all(step.profile_switch is not None for step in block.steps)
+
+
+def _apply_static_profile_switch_block(
+    block: StepBlock,
+    *,
+    workflow: Workflow,
+    available_profiles: dict[str, Profile] | None,
+) -> tuple[str, Profile, tuple, Workflow] | None:
+    current_workflow = workflow
+    current_profile_name: str | None = None
+    current_profile: Profile | None = None
+    current_overrides = ()
+    for step in block.steps:
+        if step.profile_switch is None or step.if_ is not None:
+            return None
+        try:
+            profile_name = resolve_runtime_value(step.profile_switch, current_workflow)
+        except ValueResolutionError:
+            return None
+        if not isinstance(profile_name, str) or not profile_name or available_profiles is None or profile_name not in available_profiles:
+            return None
+        current_profile = available_profiles[profile_name]
+        current_profile_name = profile_name
+        applied = apply_profile_defaults_to_subsequent_steps(current_workflow, current_profile)
+        current_workflow = current_workflow if applied.workflow is None else applied.workflow
+        current_overrides = current_profile.overrides
+    if current_profile_name is None or current_profile is None:
+        return None
+    return current_profile_name, current_profile, current_overrides, current_workflow
+
+
+def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index: int = 0, active_profile: str | None = None) -> list[dict[str, object]]:
     items: list[dict[str, object]] = []
     for block_index, block in enumerate(workflow.blocks[start_index:], start=start_index):
         if isinstance(block, GuardBlock):
@@ -415,6 +539,7 @@ def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index
                     "guard_references": [guard.reference for guard in block.guards],
                     "blockers": [],
                     "guard_details": [],
+                    "active_profile": active_profile,
                 }
             )
         else:
@@ -426,33 +551,32 @@ def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index
                     "status": "blocked" if blocked else "pending",
                     "step_names": [step.name for step in block.steps],
                     "conditional_steps": [step.name for step in block.steps if step.if_ is not None],
+                    "active_profile": active_profile,
                 }
             )
     return items
 
 
-def _pending_guard_block_item(block: ResolvedGuardBlock, workflow: Workflow) -> dict[str, object]:
-    declared = workflow.blocks[block.block_index]
-    assert isinstance(declared, GuardBlock)
+def _pending_guard_block_item_from_declared(block_index: int, declared: GuardBlock, active_profile: str | None) -> dict[str, object]:
     return {
-        "block_index": block.block_index,
+        "block_index": block_index,
         "type": "guards",
         "status": "pending",
         "guard_references": [guard.reference for guard in declared.guards],
         "blockers": [],
         "guard_details": [],
+        "active_profile": active_profile,
     }
 
 
-def _pending_step_block_item(block: ResolvedStepBlock, workflow: Workflow, *, blocked: bool) -> dict[str, object]:
-    declared = workflow.blocks[block.block_index]
-    assert isinstance(declared, StepBlock)
+def _pending_step_block_item_from_declared(block_index: int, declared: StepBlock, *, blocked: bool, active_profile: str | None) -> dict[str, object]:
     return {
-        "block_index": block.block_index,
+        "block_index": block_index,
         "type": "steps",
         "status": "blocked" if blocked else "pending",
         "step_names": [step.name for step in declared.steps],
         "conditional_steps": [step.name for step in declared.steps if step.if_ is not None],
+        "active_profile": active_profile,
     }
 
 
