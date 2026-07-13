@@ -1,0 +1,45 @@
+"""Read-only helpers for preflight step interpretation."""
+
+from __future__ import annotations
+
+from ordo.model.json import JSONObject
+from ordo.model.runtime import OperationResult
+from ordo.model.workflow import Step, Workflow
+
+from .value_resolution import ValueResolutionError, resolve_runtime_value
+
+
+def evaluate_preflight_value_step(
+    step: Step,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+) -> OperationResult:
+    """Evaluate one pure value step without executing any effectful behavior."""
+
+    if step.value is None:
+        return OperationResult(status="state_error", summary=f"Step '{step.name}' is not a value step")
+    try:
+        value = resolve_runtime_value(step.value, workflow, step_results=step_results)
+    except ValueResolutionError as exc:
+        return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
+    return OperationResult(
+        status="ok",
+        summary=f"Materialized derived value for step '{step.name}'",
+        outputs={"value": value},
+    )
+
+
+def store_preflight_register_output(
+    register_name: str,
+    result: OperationResult,
+    *,
+    step_results: dict[str, OperationResult | JSONObject],
+) -> None:
+    """Store one read-only step result for later preflight dataflow."""
+
+    step_results[register_name] = {
+        "status": result.status,
+        "summary": result.summary,
+        "outputs": dict(result.outputs),
+    }

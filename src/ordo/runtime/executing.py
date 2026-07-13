@@ -15,6 +15,7 @@ from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 from .checking import GuardProbe, _build_guard_detail, _default_guard_probe, _evaluate_guard_expression, check_workflow
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
 from .launchers import apply_launcher_to_step
+from .preflight_interpreter import evaluate_preflight_value_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
@@ -638,12 +639,7 @@ def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
 
 
 def _execute_value_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
-    value = resolve_runtime_value(raw_value, workflow)
-    return OperationResult(
-        status="ok",
-        summary=f"Materialized derived value for step '{step_name}'",
-        outputs={"value": value},
-    )
+    return evaluate_preflight_value_step(Step(name=step_name, value=raw_value), workflow)
 
 
 def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow: Workflow) -> OperationResult:
