@@ -11,7 +11,7 @@ import yaml
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
-from ordo.model.workflow import Workflow
+from ordo.model.workflow import Step, StepBlock, Workflow
 from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document, validate_workflow_document
 from ordo.runtime.value_expressions import (
     BuiltinCallNode,
@@ -62,7 +62,10 @@ class ActivatedPlaybook:
     workflow_path: Path
     profile: Profile | None = None
     profile_path: Path | None = None
+    available_profiles: dict[str, Profile] | None = None
+    profile_working_directories: dict[str, Path | None] | None = None
     working_directory: Path | None = None
+    diagnostics: tuple[Diagnostic, ...] = ()
 
 
 @contextlib.contextmanager
@@ -134,6 +137,8 @@ def activate_playbook(
 
     profile = None
     resolved_profile_path: Path | None = None
+    available_profiles: dict[str, Profile] | None = None
+    profile_working_directories: dict[str, Path | None] | None = None
     if active_profile_name is not None:
         profiles = _require_mapping(payload, "profiles", playbook_path=path, required=False)
         profile_entry = profiles.get(active_profile_name)
@@ -176,7 +181,42 @@ def activate_playbook(
         raise PlaybookError(exc.diagnostics) from exc
 
     workflow, profile = _apply_input_overrides(workflow, profile, input_overrides=input_overrides)
+    workflow = _prepend_pre_run_workflows(
+        workflow,
+        playbook_payload=payload,
+        playbook_dir=playbook_dir,
+        playbook_path=path,
+    )
+    if _workflow_uses_profile_switch(workflow) or payload.get("pre_run") is not None:
+        available_profiles = {}
+        profile_working_directories = {}
+        profiles = _require_mapping(payload, "profiles", playbook_path=path, required=False)
+        for candidate_name, candidate_entry in profiles.items():
+            if not isinstance(candidate_name, str) or not isinstance(candidate_entry, dict):
+                continue
+            candidate_file = _require_string(candidate_entry, "file", playbook_path=path, path=("profiles", candidate_name, "file"))
+            candidate_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="profiles", raw=candidate_file)
+            try:
+                candidate_profile = load_profile_file(candidate_path)
+            except FileNotFoundError as exc:
+                raise _playbook_error(
+                    "playbook.profile.file_missing",
+                    "Profile file referenced by the playbook does not exist",
+                    path=("profiles", candidate_name, "file"),
+                    details={"playbook": str(path), "profile": candidate_name, "profile_file": str(candidate_path)},
+                ) from exc
+            except LoadError as exc:
+                raise PlaybookError(exc.diagnostics) from exc
+            available_profiles[candidate_name] = candidate_profile
+            profile_working_directories[candidate_name] = _resolve_profile_working_directory(
+                candidate_name,
+                candidate_profile,
+                workflow=workflow,
+                playbook_dir=playbook_dir,
+                playbook_path=path,
+            )
     working_directory = _resolve_working_directory(
+        payload,
         workflow_entry,
         workflow_name=workflow_name,
         playbook_dir=playbook_dir,
@@ -184,6 +224,14 @@ def activate_playbook(
         workflow=workflow,
         profile=profile,
         input_overrides=None,
+    )
+    workflow = _resolve_workflow_state_paths(workflow, base_dir=working_directory or playbook_dir)
+    activation_diagnostics = _activation_diagnostics(
+        workflow_entry,
+        workflow_name=workflow_name,
+        playbook_path=path,
+        workflow=workflow,
+        working_directory=working_directory,
     )
 
     return ActivatedPlaybook(
@@ -193,7 +241,10 @@ def activate_playbook(
         workflow_path=workflow_path,
         profile=profile,
         profile_path=resolved_profile_path,
+        available_profiles=available_profiles,
+        profile_working_directories=profile_working_directories,
         working_directory=working_directory,
+        diagnostics=activation_diagnostics,
     )
 
 
@@ -362,10 +413,7 @@ def _compile_workflow_payload(
                 path=("states", target_name, "path"),
                 details={"state": target_name, "playbook": str(playbook_path)},
             )
-        resolved_path = Path(raw_path)
-        if not resolved_path.is_absolute():
-            resolved_path = playbook_dir / resolved_path
-        injected_states[target_name] = str(resolved_path)
+        injected_states[target_name] = raw_path
         role_to_state_name[role_name] = target_name
 
     extra_bindings = [name for name in state_bindings if name not in state_needs]
@@ -389,6 +437,68 @@ def _resolve_catalog_file(*, playbook_dir: Path, default_subdir: str, raw: str) 
     if "/" in raw:
         return playbook_dir / candidate
     return playbook_dir / default_subdir / candidate
+
+
+def _prepend_pre_run_workflows(
+    workflow: Workflow,
+    *,
+    playbook_payload: dict[str, object],
+    playbook_dir: Path,
+    playbook_path: Path,
+) -> Workflow:
+    raw_items = playbook_payload.get("pre_run")
+    if raw_items is None:
+        return workflow
+    if not isinstance(raw_items, list):
+        raise _playbook_error(
+            "playbook.pre_run.invalid",
+            "Playbook field 'pre_run' must be a list of workflow references",
+            path=("pre_run",),
+            details={"playbook": str(playbook_path), "actual_type": type(raw_items).__name__},
+        )
+
+    pre_run_blocks: list[StepBlock] = []
+    for index, item in enumerate(raw_items):
+        if not isinstance(item, str) or not item:
+            raise _playbook_error(
+                "playbook.pre_run.item_invalid",
+                "Each playbook 'pre_run' item must be a non-empty workflow reference string",
+                path=("pre_run", str(index)),
+                details={"playbook": str(playbook_path), "actual_type": type(item).__name__},
+            )
+        resolved = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=item)
+        if not resolved.exists():
+            raise _playbook_error(
+                "playbook.pre_run.file_missing",
+                "Workflow file referenced by playbook pre_run does not exist",
+                path=("pre_run", str(index)),
+                details={"playbook": str(playbook_path), "workflow_file": str(resolved), "reference": item},
+            )
+        pre_run_blocks.append(
+            StepBlock(
+                steps=(
+                    Step(
+                        name=f"pre_run[{index}]",
+                        run=item,
+                        resolved_run_path=str(resolved),
+                    ),
+                )
+            )
+        )
+
+    return Workflow(
+        version=workflow.version,
+        workflow=workflow.workflow,
+        inputs=workflow.inputs,
+        declared_inputs=workflow.declared_inputs,
+        state_needs=workflow.state_needs,
+        state_bindings=workflow.state_bindings,
+        states=workflow.states,
+        step_results=workflow.step_results,
+        blocks=tuple(pre_run_blocks) + workflow.blocks,
+        source_path=workflow.source_path,
+        launch_dir=workflow.launch_dir,
+    )
 
 
 def _require_mapping(
@@ -448,6 +558,7 @@ def _validate_workflow_entry_fields(workflow_entry: dict[str, object], *, workfl
 
 
 def _resolve_working_directory(
+    playbook_payload: dict[str, object],
     workflow_entry: dict[str, object],
     *,
     workflow_name: str,
@@ -457,14 +568,31 @@ def _resolve_working_directory(
     profile: Profile | None = None,
     input_overrides: dict[str, object] | None = None,
 ) -> Path | None:
-    raw_value = workflow_entry.get("working_directory")
+    defaults = playbook_payload.get("defaults")
+    raw_value: object | None = None
+    scope = "workflow"
+    field_path = ("workflows", workflow_name, "working_directory")
+
+    if isinstance(defaults, dict) and defaults.get("working_directory") is not None:
+        raw_value = defaults.get("working_directory")
+        scope = "defaults"
+        field_path = ("defaults", "working_directory")
+    if profile is not None and profile.working_directory is not None:
+        raw_value = profile.working_directory
+        scope = "profile"
+        field_path = ("profiles", profile.name, "working_directory")
+    if workflow_entry.get("working_directory") is not None:
+        raw_value = workflow_entry.get("working_directory")
+        scope = "workflow"
+        field_path = ("workflows", workflow_name, "working_directory")
+
     if raw_value is None:
         return None
     if not isinstance(raw_value, str) or not raw_value:
         raise _playbook_error(
-            "playbook.workflow.working_directory_invalid",
-            "Workflow entry field 'working_directory' must be a non-empty string",
-            path=("workflows", workflow_name, "working_directory"),
+            _working_directory_code(scope, "invalid"),
+            f"{_working_directory_label(scope, workflow_name=workflow_name, profile=profile)} must be a non-empty string",
+            path=field_path,
             details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(raw_value).__name__},
         )
 
@@ -473,6 +601,8 @@ def _resolve_working_directory(
     if expression is not None:
         resolved_value = _evaluate_working_directory_expression(
             expression,
+            scope=scope,
+            field_path=field_path,
             workflow_name=workflow_name,
             playbook_path=playbook_path,
             workflow=workflow,
@@ -486,9 +616,9 @@ def _resolve_working_directory(
     resolved = resolved.resolve()
     if not resolved.exists() or not resolved.is_dir():
         raise _playbook_error(
-            "playbook.workflow.working_directory_missing",
-            "Workflow entry working_directory must resolve to an existing directory",
-            path=("workflows", workflow_name, "working_directory"),
+            _working_directory_code(scope, "missing"),
+            f"{_working_directory_label(scope, workflow_name=workflow_name, profile=profile)} must resolve to an existing directory",
+            path=field_path,
             details={
                 "playbook": str(playbook_path),
                 "workflow": workflow_name,
@@ -504,9 +634,61 @@ def _extract_value_expression(value: str) -> str | None:
     return None
 
 
+def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Workflow:
+    resolved_states: dict[str, str] = {}
+    for name, raw_location in workflow.states.items():
+        location_path = Path(raw_location)
+        if not location_path.is_absolute():
+            location_path = base_dir / location_path
+        resolved_states[name] = str(location_path.resolve())
+    if resolved_states == workflow.states:
+        return workflow
+    return Workflow(
+        version=workflow.version,
+        workflow=workflow.workflow,
+        inputs=workflow.inputs,
+        declared_inputs=workflow.declared_inputs,
+        state_needs=workflow.state_needs,
+        state_bindings=workflow.state_bindings,
+        states=resolved_states,
+        step_results=workflow.step_results,
+        blocks=workflow.blocks,
+    )
+
+
+def _activation_diagnostics(
+    workflow_entry: dict[str, object],
+    *,
+    workflow_name: str,
+    playbook_path: Path,
+    workflow: Workflow,
+    working_directory: Path | None,
+) -> tuple[Diagnostic, ...]:
+    diagnostics: list[Diagnostic] = []
+    has_state_bindings = isinstance(workflow_entry.get("state_bindings"), dict) and bool(workflow_entry.get("state_bindings"))
+    if has_state_bindings and working_directory is None:
+        diagnostics.append(
+            Diagnostic(
+                code="playbook.workflow.working_directory_recommended_for_state",
+                level="warning",
+                message="Workflow entry binds runtime state but does not declare working_directory; relative state paths resolve from the playbook directory",
+                path=("workflows", workflow_name),
+                details={
+                    "stage": "activation",
+                    "category": "working_directory",
+                    "playbook": str(playbook_path),
+                    "workflow": workflow.workflow,
+                },
+            )
+        )
+    return tuple(diagnostics)
+
+
 def _evaluate_working_directory_expression(
     expression: str,
     *,
+    scope: str,
+    field_path: tuple[str, ...],
     workflow_name: str,
     playbook_path: Path,
     workflow: Workflow | None,
@@ -517,9 +699,9 @@ def _evaluate_working_directory_expression(
         parsed = parse_value_expression(expression)
     except ValueExpressionParseError as exc:
         raise _playbook_error(
-            "playbook.workflow.working_directory_expression_syntax",
+            _working_directory_code(scope, "expression_syntax"),
             exc.message,
-            path=("workflows", workflow_name, "working_directory"),
+            path=field_path,
             details={
                 "playbook": str(playbook_path),
                 "workflow": workflow_name,
@@ -533,9 +715,9 @@ def _evaluate_working_directory_expression(
     if invalid is not None:
         code, message, details = invalid
         raise _playbook_error(
-            code,
+            _working_directory_scope_code(scope, code),
             message,
-            path=("workflows", workflow_name, "working_directory"),
+            path=field_path,
             details={"playbook": str(playbook_path), "workflow": workflow_name, "expression": expression, **details},
         )
 
@@ -544,17 +726,17 @@ def _evaluate_working_directory_expression(
         value = evaluate_value_expression(parsed, activation_workflow, step_results={})
     except ValueExpressionEvaluationError as exc:
         raise _playbook_error(
-            "playbook.workflow.working_directory_expression_invalid",
+            _working_directory_code(scope, "expression_invalid"),
             exc.message,
-            path=("workflows", workflow_name, "working_directory"),
+            path=field_path,
             details={"playbook": str(playbook_path), "workflow": workflow_name, "expression": expression, **exc.details},
         ) from exc
 
     if not isinstance(value, str) or not value:
         raise _playbook_error(
-            "playbook.workflow.working_directory_expression_type",
-            "Workflow entry working_directory expression must resolve to a non-empty string",
-            path=("workflows", workflow_name, "working_directory"),
+            _working_directory_code(scope, "expression_type"),
+            f"{_working_directory_label(scope, workflow_name=workflow_name, profile=profile)} expression must resolve to a non-empty string",
+            path=field_path,
             details={
                 "playbook": str(playbook_path),
                 "workflow": workflow_name,
@@ -602,21 +784,21 @@ def _validate_working_directory_expression(parsed: ParsedValueExpression) -> tup
         if isinstance(node, ReferenceNode):
             if len(node.parts) < 2 or node.parts[0] != "inputs":
                 return (
-                    "playbook.workflow.working_directory_expression_root",
-                    "Workflow entry working_directory expression may read only dotted inputs references",
+                    "working_directory_expression_root",
+                    "Working-directory expression may read only dotted inputs references",
                     {"reference": ".".join(node.parts)},
                 )
             return None
         if isinstance(node, StateReferenceNode):
             return (
-                "playbook.workflow.working_directory_expression_state_forbidden",
-                "Workflow entry working_directory expression must not read runtime state",
+                "working_directory_expression_state_forbidden",
+                "Working-directory expression must not read runtime state",
                 {"reference": parsed.source[node.start : node.end]},
             )
         if isinstance(node, StepReferenceNode):
             return (
-                "playbook.workflow.working_directory_expression_step_forbidden",
-                "Workflow entry working_directory expression must not read registered step results",
+                "working_directory_expression_step_forbidden",
+                "Working-directory expression must not read registered step results",
                 {"reference": parsed.source[node.start : node.end]},
             )
         if isinstance(node, PipelineNode):
@@ -652,6 +834,88 @@ def _category_for_code(code: str) -> str:
         return "workflow"
     if code.startswith("playbook.profile."):
         return "profile"
+    if code.startswith("playbook.defaults.") or code.startswith("playbook.working_directory."):
+        return "working_directory"
     if code.startswith("playbook.state_binding.") or code.startswith("playbook.state_need.") or code.startswith("playbook.state."):
         return "state_binding"
     return "shape"
+
+
+def _working_directory_label(scope: str, *, workflow_name: str, profile: Profile | None) -> str:
+    if scope == "defaults":
+        return "Playbook defaults field 'working_directory'"
+    if scope == "profile":
+        profile_name = profile.name if profile is not None else "<profile>"
+        return f"Profile '{profile_name}' field 'working_directory'"
+    return "Workflow entry field 'working_directory'"
+
+
+def _working_directory_code(scope: str, suffix: str) -> str:
+    if scope == "defaults":
+        return f"playbook.defaults.working_directory_{suffix}"
+    if scope == "profile":
+        return f"playbook.profile.working_directory_{suffix}"
+    return f"playbook.workflow.working_directory_{suffix}"
+
+
+def _working_directory_scope_code(scope: str, generic_code: str) -> str:
+    if not generic_code.startswith("working_directory_"):
+        return generic_code
+    return _working_directory_code(scope, generic_code.removeprefix("working_directory_"))
+
+
+def _resolve_profile_working_directory(
+    profile_name: str,
+    profile: Profile,
+    *,
+    workflow: Workflow,
+    playbook_dir: Path,
+    playbook_path: Path,
+) -> Path | None:
+    raw_value = profile.working_directory
+    if raw_value is None:
+        return None
+    profile_inputs = dict(workflow.inputs)
+    profile_inputs.update(profile.inputs)
+    activation_workflow = Workflow(
+        version=workflow.version,
+        workflow=workflow.workflow,
+        inputs=profile_inputs,
+        declared_inputs=workflow.declared_inputs,
+        state_needs=workflow.state_needs,
+        state_bindings=workflow.state_bindings,
+        states=workflow.states,
+        step_results=workflow.step_results,
+        blocks=workflow.blocks,
+        source_path=workflow.source_path,
+        launch_dir=workflow.launch_dir,
+    )
+    resolved_value = raw_value
+    expression = _extract_value_expression(raw_value)
+    if expression is not None:
+        resolved_value = _evaluate_working_directory_expression(
+            expression,
+            scope="profile",
+            field_path=("profiles", profile_name, "working_directory"),
+            workflow_name=workflow.workflow,
+            playbook_path=playbook_path,
+            workflow=activation_workflow,
+            profile=profile,
+            input_overrides=None,
+        )
+    resolved = Path(resolved_value)
+    if not resolved.is_absolute():
+        resolved = playbook_dir / resolved
+    resolved = resolved.resolve()
+    if not resolved.exists() or not resolved.is_dir():
+        raise _playbook_error(
+            "playbook.profile.working_directory_missing",
+            f"Profile '{profile_name}' field 'working_directory' must resolve to an existing directory",
+            path=("profiles", profile_name, "working_directory"),
+            details={"playbook": str(playbook_path), "profile": profile_name, "working_directory": str(resolved)},
+        )
+    return resolved
+
+
+def _workflow_uses_profile_switch(workflow: Workflow) -> bool:
+    return any(step.profile_switch is not None for step in workflow.steps)

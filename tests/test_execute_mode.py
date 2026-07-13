@@ -247,7 +247,7 @@ class ExecuteModeTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
-                "steps:\n  - name: switch\n    uses: runtime.profile.use\n    with:\n      profile: frontend\n",
+                "steps:\n  - name: switch\n    profile_switch: frontend\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "close-task.yml").write_text(

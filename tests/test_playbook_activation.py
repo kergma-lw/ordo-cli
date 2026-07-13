@@ -698,7 +698,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(activated.working_directory, (root / "repo-workflow").resolve())
 
-    def test_activate_playbook_loads_profile_switch_context_when_workflow_uses_runtime_profile_use(self) -> None:
+    def test_activate_playbook_loads_profile_switch_context_when_workflow_uses_profile_switch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
@@ -726,7 +726,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\ninputs:\n  repo_dir: {}\nblocks:\n  - steps:\n      - name: switch\n        uses: runtime.profile.use\n        with:\n          profile: backend\n",
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  repo_dir: {}\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: backend\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text(

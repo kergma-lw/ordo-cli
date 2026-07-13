@@ -1,0 +1,6 @@
+version: 0
+workflow: switch-active-profile
+blocks:
+  - steps:
+      - name: Switch runtime profile from shared state
+        profile_switch: ${state.shared_state[inputs.active_profile_key]}
