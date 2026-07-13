@@ -136,12 +136,14 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         }
 
     if allowed_state == "unknown" or not analysis_complete:
+        preflight_halts = [item for item in result.outputs.get("preflight_halts", []) if isinstance(item, dict)]
         return {
             "category": "incomplete",
             "allowed": False,
             "why": "Runtime has not yet established whether execution is allowed from current pre-execution knowledge",
             "blockers": [],
             "incomplete_reasons": incomplete_reasons,
+            "preflight_halts": preflight_halts,
         }
 
     return {

@@ -75,6 +75,31 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["category"], "incomplete")
         self.assertEqual(result.outputs["next_actions"][0]["action"], "complete_preflight_analysis")
 
+    def test_explain_surfaces_preflight_halts_for_incomplete_analysis(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"run_effectful": True},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),
+                        Step(name="comment", operation=OperationRef("gh.issue.close"), if_="${inputs.run_effectful}"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["explanation"]["preflight_halts"][0]["reason"], "effectful_step_encountered")
+
     def test_explain_preserves_expanded_run_reasoning(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

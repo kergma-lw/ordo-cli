@@ -254,6 +254,8 @@ def check_workflow(
     checked_guards: list[str] = []
     guard_details: list[dict[str, object]] = []
     block_items: list[dict[str, object]] = []
+    preflight_step_items: list[dict[str, object]] = []
+    preflight_halts: list[dict[str, object]] = []
     bootstrap_details: list[dict[str, object]] = []
     failed_guard: str | None = None
     incomplete_reasons: list[str] = []
@@ -392,6 +394,8 @@ def check_workflow(
                     return cast(RuntimeResult, interpreted_step_block["resolution_error"])
                 diagnostics.extend(interpreted_step_block["diagnostics"])
                 block_items.append(interpreted_step_block["block_item"])
+                preflight_step_items.extend(cast(list[dict[str, object]], interpreted_step_block["step_items"]))
+                preflight_halts.extend(cast(list[dict[str, object]], interpreted_step_block["halts"]))
                 incomplete_reasons.extend(interpreted_step_block["incomplete_reasons"])
                 if interpreted_step_block["halted"]:
                     halted = True
@@ -421,6 +425,8 @@ def check_workflow(
             **observation_basis,
             "guard_details": guard_details,
             "block_items": block_items,
+            "preflight_step_items": preflight_step_items,
+            "preflight_halts": preflight_halts,
             "active_profile": active_profile,
             "active_overrides": [override.to_contract() for override in active_overrides],
         }
@@ -454,6 +460,8 @@ def check_workflow(
         **_build_observation_basis_outputs(effective_workflow, initial_resolution, guard_details),
         "guard_details": guard_details,
         "block_items": block_items,
+        "preflight_step_items": preflight_step_items,
+        "preflight_halts": preflight_halts,
         "active_profile": active_profile,
         "active_overrides": [override.to_contract() for override in active_overrides],
     }
@@ -645,6 +653,7 @@ def _interpret_step_block_for_check(
     skipped_steps: list[str] = []
     incomplete_reasons: list[str] = []
     halt_item: dict[str, object] | None = None
+    step_items: list[dict[str, object]] = []
 
     for step_index, (step, resolved_step) in enumerate(zip(block.steps, resolved_block.steps, strict=False)):
         condition = evaluate_preflight_step_condition(step, workflow, step_results=workflow.step_results)
@@ -658,6 +667,19 @@ def _interpret_step_block_for_check(
             diagnostics.append(condition.to_diagnostic(path=("blocks", str(block_index), "steps", str(step_index), "if")))
             incomplete_reasons.append(halt.reason)
             halt_item = halt.to_contract()
+            step_items.append(
+                {
+                    "block_index": block_index,
+                    "step_index": step_index,
+                    "name": step.name,
+                    "reference": resolved_step.reference,
+                    "preflight_classification": classify_preflight_step(step, resolved_step),
+                    "status": "halted",
+                    "conditional": step.if_ is not None,
+                    "condition": step.if_,
+                    "halt_reason": halt.reason,
+                }
+            )
             break
         if condition is None:
             halt = build_preflight_halt(
@@ -677,9 +699,34 @@ def _interpret_step_block_for_check(
             )
             incomplete_reasons.append(halt.reason)
             halt_item = halt.to_contract()
+            step_items.append(
+                {
+                    "block_index": block_index,
+                    "step_index": step_index,
+                    "name": step.name,
+                    "reference": resolved_step.reference,
+                    "preflight_classification": classify_preflight_step(step, resolved_step),
+                    "status": "halted",
+                    "conditional": step.if_ is not None,
+                    "condition": step.if_,
+                    "halt_reason": halt.reason,
+                }
+            )
             break
         if condition is False:
             skipped_steps.append(step.name)
+            step_items.append(
+                {
+                    "block_index": block_index,
+                    "step_index": step_index,
+                    "name": step.name,
+                    "reference": resolved_step.reference,
+                    "preflight_classification": classify_preflight_step(step, resolved_step),
+                    "status": "skipped",
+                    "conditional": step.if_ is not None,
+                    "condition": step.if_,
+                }
+            )
             continue
 
         classification = classify_preflight_step(step, resolved_step)
@@ -694,10 +741,38 @@ def _interpret_step_block_for_check(
                 )
                 incomplete_reasons.append(halt.reason)
                 halt_item = halt.to_contract()
+                step_items.append(
+                    {
+                        "block_index": block_index,
+                        "step_index": step_index,
+                        "name": step.name,
+                        "reference": resolved_step.reference,
+                        "preflight_classification": classification,
+                        "status": "halted",
+                        "conditional": step.if_ is not None,
+                        "condition": step.if_,
+                        "halt_reason": halt.reason,
+                        "operation_status": result.status,
+                    }
+                )
                 break
             if step.register is not None:
                 store_preflight_register_output(step.register, result, step_results=workflow.step_results)
             interpreted_steps.append(step.name)
+            step_items.append(
+                {
+                    "block_index": block_index,
+                    "step_index": step_index,
+                    "name": step.name,
+                    "reference": resolved_step.reference,
+                    "preflight_classification": classification,
+                    "status": "interpreted",
+                    "conditional": step.if_ is not None,
+                    "condition": step.if_,
+                    "register": step.register,
+                    "operation_status": result.status,
+                }
+            )
             continue
 
         halt = build_preflight_halt(
@@ -712,6 +787,19 @@ def _interpret_step_block_for_check(
         )
         incomplete_reasons.append(halt.reason)
         halt_item = halt.to_contract()
+        step_items.append(
+            {
+                "block_index": block_index,
+                "step_index": step_index,
+                "name": step.name,
+                "reference": resolved_step.reference,
+                "preflight_classification": classification,
+                "status": "halted",
+                "conditional": step.if_ is not None,
+                "condition": step.if_,
+                "halt_reason": halt.reason,
+            }
+        )
         break
 
     if not interpreted_steps and not skipped_steps and halt_item is None:
@@ -721,6 +809,8 @@ def _interpret_step_block_for_check(
         "diagnostics": diagnostics,
         "incomplete_reasons": incomplete_reasons,
         "halted": halt_item is not None,
+        "step_items": step_items,
+        "halts": [] if halt_item is None else [halt_item],
         "block_item": {
             "block_index": block_index,
             "type": "steps",

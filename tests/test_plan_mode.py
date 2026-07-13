@@ -195,6 +195,33 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], "unknown")
 
+    def test_plan_preserves_preflight_interpretation_details(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"run_effectful": True},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),
+                        Step(name="comment", operation=OperationRef("gh.issue.close"), if_="${inputs.run_effectful}"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["preflight_step_items"][0]["status"], "interpreted")
+        self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "halted")
+        self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
+
     def test_plan_surfaces_step_launcher_selection(self) -> None:
         workflow = Workflow(
             version=0,
