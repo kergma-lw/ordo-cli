@@ -3,7 +3,7 @@ import unittest
 from ordo.model.connector import OperationContract
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import OperationRef, Step, Workflow
-from ordo.runtime.preflight_interpreter import evaluate_preflight_probe_step, evaluate_preflight_value_step, resolve_preflight_value, store_preflight_register_output
+from ordo.runtime.preflight_interpreter import evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, resolve_preflight_value, store_preflight_register_output
 from ordo.runtime.resolution import ResolvedOperation
 
 
@@ -96,6 +96,30 @@ class PreflightInterpreterTest(unittest.TestCase):
         value = resolve_preflight_value("${step.issue.outputs.number}", workflow, step_results=step_results)
 
         self.assertEqual(value, 42)
+
+    def test_evaluates_true_preflight_step_condition(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"enabled": True}, steps=())
+        step = Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}")
+
+        result = evaluate_preflight_step_condition(step, workflow)
+
+        self.assertEqual(result, True)
+
+    def test_evaluates_false_preflight_step_condition(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"enabled": False}, steps=())
+        step = Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}")
+
+        result = evaluate_preflight_step_condition(step, workflow)
+
+        self.assertEqual(result, False)
+
+    def test_reports_unknown_preflight_step_condition_dependencies(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", steps=())
+        step = Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}")
+
+        result = evaluate_preflight_step_condition(step, workflow)
+
+        self.assertEqual(result.code, "runtime.value.input_missing")
 
 
 if __name__ == "__main__":

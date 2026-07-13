@@ -15,7 +15,7 @@ from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 from .checking import GuardProbe, _build_guard_detail, _default_guard_probe, _evaluate_guard_expression, check_workflow
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
 from .launchers import apply_launcher_to_step
-from .preflight_interpreter import evaluate_preflight_value_step
+from .preflight_interpreter import evaluate_preflight_step_condition, evaluate_preflight_value_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
@@ -506,12 +506,11 @@ def execute_workflow(
 
 
 def _evaluate_step_condition(step, workflow: Workflow) -> bool | Diagnostic:
-    try:
-        value = resolve_runtime_value(step.if_, workflow, allow_boolean_composition=True)
-    except ValueResolutionError as exc:
-        return exc.to_diagnostic(path=("steps", step.name, "if"))
+    value = evaluate_preflight_step_condition(step, workflow)
     if isinstance(value, bool):
         return value
+    if isinstance(value, ValueResolutionError):
+        return value.to_diagnostic(path=("steps", step.name, "if"))
     return Diagnostic(
         code="runtime.step.if.result_type",
         level="error",

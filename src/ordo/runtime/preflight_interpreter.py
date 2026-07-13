@@ -22,6 +22,25 @@ def resolve_preflight_value(
     return resolve_runtime_value(value, workflow, step_results=step_results)
 
 
+def evaluate_preflight_step_condition(
+    step: Step,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+) -> bool | ValueResolutionError | None:
+    """Evaluate one step `if` condition from currently available preflight knowledge."""
+
+    if step.if_ is None:
+        return True
+    try:
+        value = resolve_runtime_value(step.if_, workflow, step_results=step_results, allow_boolean_composition=True)
+    except ValueResolutionError as exc:
+        return exc
+    if isinstance(value, bool):
+        return value
+    return None
+
+
 def evaluate_preflight_value_step(
     step: Step,
     workflow: Workflow,
