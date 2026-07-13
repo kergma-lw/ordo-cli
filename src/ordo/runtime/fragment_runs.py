@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import dataclass
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
-from ordo.model.workflow import Step, Workflow
+from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks
 from .value_resolution import ValueResolutionError, resolve_runtime_value
+
+
+@dataclass(frozen=True, slots=True)
+class CheckRunExpansionDecision:
+    admissible: bool
+    reason: str
+    workflow: Workflow | None = None
 
 
 def materialize_run_workflow(step: Step, caller_workflow: Workflow, *, block_index: int, step_index: int) -> Workflow | Diagnostic:
@@ -79,6 +87,25 @@ def materialize_run_workflow(step: Step, caller_workflow: Workflow, *, block_ind
     )
 
 
+def classify_run_for_check(step: Step, caller_workflow: Workflow, *, block_index: int, step_index: int) -> CheckRunExpansionDecision:
+    if step.run is None or step.resolved_run_path is None:
+        return CheckRunExpansionDecision(admissible=False, reason="run_target_unknown")
+    try:
+        _evaluate_run_bindings(step.run_with, caller_workflow, block_index=block_index, step_index=step_index)
+    except ValueResolutionError:
+        return CheckRunExpansionDecision(admissible=False, reason="run_args_not_known")
+    materialized = materialize_run_workflow(step, caller_workflow, block_index=block_index, step_index=step_index)
+    if isinstance(materialized, Diagnostic):
+        reason = "run_target_not_loadable"
+        if materialized.code == "runtime.run.unresolved_path":
+            reason = "run_target_unknown"
+        return CheckRunExpansionDecision(admissible=False, reason=reason)
+    analyzable_reason = _check_analyzable_run_workflow(materialized)
+    if analyzable_reason is not None:
+        return CheckRunExpansionDecision(admissible=False, reason=analyzable_reason, workflow=materialized)
+    return CheckRunExpansionDecision(admissible=True, reason="run_expandable", workflow=materialized)
+
+
 def evaluate_run_condition(step: Step, caller_workflow: Workflow, *, block_index: int, step_index: int) -> bool | Diagnostic:
     if step.if_ is None:
         return True
@@ -95,6 +122,24 @@ def evaluate_run_condition(step: Step, caller_workflow: Workflow, *, block_index
         path=("blocks", str(block_index), "steps", str(step_index), "if"),
         details={"actual_type": type(value).__name__},
     )
+
+
+def _check_analyzable_run_workflow(workflow: Workflow) -> str | None:
+    for block in workflow.blocks:
+        if isinstance(block, GuardBlock):
+            continue
+        assert isinstance(block, StepBlock)
+        for step in block.steps:
+            if step.if_ is not None:
+                return "run_subtree_not_check_analyzable"
+            if step.profile_switch is not None:
+                continue
+            if step.run is not None:
+                continue
+            if step.operation is not None or step.value is not None or step.state_set is not None or step.state_delete is not None:
+                return "run_subtree_requires_effectful_execution"
+            return "run_subtree_not_check_analyzable"
+    return None
 
 
 def _evaluate_run_bindings(bindings: JSONObject, workflow: Workflow, *, block_index: int, step_index: int) -> JSONObject:

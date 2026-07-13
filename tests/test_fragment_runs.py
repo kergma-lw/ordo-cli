@@ -1,129 +1,61 @@
 import tempfile
-import textwrap
 import unittest
 from pathlib import Path
 
-from ordo.model.runtime import RuntimeStatus
-from ordo.runtime import check_workflow, execute_workflow, load_workflow_file, plan_workflow
-
-from tests.support import STANDARD_CONNECTOR_PROVIDER
+from ordo.model.workflow import Step, Workflow
+from ordo.runtime.fragment_runs import classify_run_for_check
 
 
-class FragmentRunTest(unittest.TestCase):
-    def test_check_workflow_preserves_run_step_as_distinct_node(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            workflow_path = root / "workflow.yaml"
-            fragments_dir = root / "fragments"
-            fragments_dir.mkdir()
-            workflow_path.write_text(
-                textwrap.dedent(
-                    """
-                    version: 0
-                    workflow: demo
-                    blocks:
-                      - guards: []
-                      - steps:
-                          - name: comment-fragment
-                            run: fragments/comment
-                    """
-                ).strip()
-                + "\n",
+class FragmentRunClassificationTest(unittest.TestCase):
+    def test_classifies_profile_switch_fragment_as_check_expandable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-switch.yml"
+            fragment.write_text(
+                "steps:\n  - name: switch\n    profile_switch: frontend\n",
                 encoding="utf-8",
             )
-            (fragments_dir / "comment.yaml").write_text("steps: []\n", encoding="utf-8")
+            workflow = Workflow(version=0, workflow="root", steps=(Step(name="expand", run="profile-switch.yml", resolved_run_path=str(fragment)),))
 
-            workflow = load_workflow_file(workflow_path, launch_dir=root)
+            decision = classify_run_for_check(workflow.steps[0], workflow, block_index=0, step_index=0)
 
-        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+            self.assertTrue(decision.admissible)
+            self.assertEqual(decision.reason, "run_expandable")
+            self.assertIsNotNone(decision.workflow)
 
-        self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["block_items"][1]["type"], "steps")
-        self.assertEqual(result.outputs["block_items"][1]["step_names"], ["comment-fragment"])
-
-    def test_plan_workflow_reports_run_items(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            workflow_path = root / "workflow.yaml"
-            fragments_dir = root / "fragments"
-            fragments_dir.mkdir()
-            workflow_path.write_text(
-                textwrap.dedent(
-                    """
-                    version: 0
-                    workflow: demo
-                    blocks:
-                      - guards: []
-                      - steps:
-                          - name: comment-fragment
-                            run: fragments/comment
-                            if: ${inputs.enabled}
-                    """
-                ).strip()
-                + "\n",
+    def test_classifies_unknown_run_bindings_as_not_known(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-switch.yml"
+            fragment.write_text(
+                "steps:\n  - name: switch\n    profile_switch: frontend\n",
                 encoding="utf-8",
             )
-            (fragments_dir / "comment.yaml").write_text("steps: []\n", encoding="utf-8")
-
-            workflow = load_workflow_file(workflow_path, launch_dir=root)
-            workflow.inputs["enabled"] = True
-
-        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-
-        self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["run_items"][0]["reference"], "fragments/comment")
-        self.assertTrue(result.outputs["run_items"][0]["conditional"])
-
-    def test_execute_workflow_runs_fragment_with_caller_scoped_bindings(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            workflow_path = root / "workflow.yaml"
-            fragments_dir = root / "fragments"
-            fragments_dir.mkdir()
-            workflow_path.write_text(
-                textwrap.dedent(
-                    """
-                    version: 0
-                    workflow: demo
-                    blocks:
-                      - steps:
-                          - name: derive-message
-                            value: hello
-                            register: message
-                          - name: comment-fragment
-                            run: fragments/comment
-                            if: ${step.message.outputs.value | eq("hello")}
-                            with:
-                              comment: ${step.message.outputs.value}
-                    """
-                ).strip()
-                + "\n",
-                encoding="utf-8",
-            )
-            (fragments_dir / "comment.yaml").write_text(
-                textwrap.dedent(
-                    """
-                    args:
-                      comment: string
-                    steps:
-                      - name: remember-comment
-                        value: ${args.comment}
-                        register: remembered
-                    """
-                ).strip()
-                + "\n",
-                encoding="utf-8",
+            workflow = Workflow(
+                version=0,
+                workflow="root",
+                steps=(Step(name="expand", run="profile-switch.yml", resolved_run_path=str(fragment), run_with={"profile": "${inputs.profile}"}),),
             )
 
-            workflow = load_workflow_file(workflow_path, launch_dir=root)
-            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+            decision = classify_run_for_check(workflow.steps[0], workflow, block_index=0, step_index=0)
 
-            self.assertEqual(result.status, RuntimeStatus.OK)
-            self.assertIn("comment-fragment", result.outputs["executed_steps"])
-            self.assertIn("derive-message", result.outputs["executed_steps"])
-            self.assertIn("remember-comment", result.outputs["executed_steps"])
-            self.assertEqual(result.outputs["block_items"][0]["type"], "steps")
-            self.assertEqual(result.outputs["block_items"][-1]["status"], "ok")
+            self.assertFalse(decision.admissible)
+            self.assertEqual(decision.reason, "run_args_not_known")
+
+    def test_classifies_effectful_fragment_as_not_check_analyzable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "effectful.yml"
+            fragment.write_text(
+                "steps:\n  - name: main\n    uses: shell.command\n    with:\n      command: echo hi\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(version=0, workflow="root", steps=(Step(name="expand", run="effectful.yml", resolved_run_path=str(fragment)),))
+
+            decision = classify_run_for_check(workflow.steps[0], workflow, block_index=0, step_index=0)
+
+            self.assertFalse(decision.admissible)
+            self.assertEqual(decision.reason, "run_subtree_requires_effectful_execution")
 
 
 if __name__ == "__main__":
