@@ -37,19 +37,33 @@ def _expr_blocked_probe(resolved, _workflow):
     return OperationResult(status="ok", summary="unused")
 
 
+def _preflight_halt_probe(resolved, _workflow):
+    if resolved.reference == "gh.issue":
+        return OperationResult(
+            status="ok",
+            summary="issue fetched",
+            outputs={"exists": True, "state": "OPEN", "number": 1},
+        )
+    return OperationResult(status="ok", summary="clean", outputs={"clean": True, "dirty_paths": []})
+
+
 class GoldenOutputTest(unittest.TestCase):
     def test_runtime_mode_outputs_match_goldens(self) -> None:
         blocked = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
         expr_blocked = load_workflow_file(Path("examples/guard-expression-blocked.yaml"))
         inspect = load_workflow_file(Path("examples/inspect-issue.yaml"))
+        preflight_halt = load_workflow_file(Path("examples/preflight-halt.yaml"))
 
         cases = {
             "check_blocked_main_branch.json": check_workflow(blocked, guard_probe=_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             "check_guard_expression_blocked.json": check_workflow(expr_blocked, guard_probe=_expr_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
+            "check_preflight_halt.json": check_workflow(preflight_halt, guard_probe=_preflight_halt_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             "plan_inspect_issue.json": plan_workflow(inspect, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
+            "plan_preflight_halt.json": plan_workflow(preflight_halt, guard_probe=_preflight_halt_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             "execute_inspect_issue.json": execute_workflow(inspect, guard_probe=_ok_probe, step_executor=_ok_executor, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             "explain_blocked_main_branch.json": explain_workflow(blocked, guard_probe=_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             "explain_guard_expression_blocked.json": explain_workflow(expr_blocked, guard_probe=_expr_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
+            "explain_preflight_halt.json": explain_workflow(preflight_halt, guard_probe=_preflight_halt_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
         }
 
         for filename, actual in cases.items():

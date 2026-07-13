@@ -31,14 +31,20 @@
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
+    "allowed_state": "allowed",
+    "analysis_complete": true,
     "block_items": [
       {
+        "active_profile": null,
         "block_index": 0,
         "blockers": [],
         "guard_details": [
           {
             "failed_subcondition": null,
             "failure_kind": null,
+            "observation_scopes": [
+              "git.worktree"
+            ],
             "reference": "git.worktree.clean",
             "status": "ok",
             "summary": "Guard expression evaluated successfully",
@@ -60,6 +66,7 @@
         "type": "guards"
       },
       {
+        "active_profile": null,
         "block_index": 1,
         "conditional_steps": [],
         "eligibility": "eligible",
@@ -75,11 +82,24 @@
     "checked_guards": [
       "git.worktree.clean"
     ],
+    "evaluated_relevant_guard_count": 1,
     "execution_allowed": true,
+    "guard_coverage": [
+      {
+        "evaluated": true,
+        "reference": "git.worktree.clean",
+        "relevant": true,
+        "status": "passed",
+        "unknown_reason": null
+      }
+    ],
     "guard_details": [
       {
         "failed_subcondition": null,
         "failure_kind": null,
+        "observation_scopes": [
+          "git.worktree"
+        ],
         "reference": "git.worktree.clean",
         "status": "ok",
         "summary": "Guard expression evaluated successfully",
@@ -97,15 +117,24 @@
     "guard_items": [
       {
         "effect": "read_only",
+        "evaluated": true,
         "failed_subcondition": null,
         "failure_kind": null,
         "kind": "expression",
         "operation_status": "ok",
         "reference": "git.worktree.clean",
-        "status": "unknown"
+        "relevant": true,
+        "status": "passed",
+        "unknown_reason": null
       }
     ],
+    "incomplete_reasons": [],
     "plan_ready": true,
+    "potential_invalidation_scopes": [],
+    "preflight_halts": [],
+    "preflight_step_items": [],
+    "relevant_guard_count": 1,
+    "run_items": [],
     "step_items": [
       {
         "condition": null,
@@ -113,10 +142,19 @@
         "effect": "read_only",
         "eligibility": "eligible",
         "kind": "probe",
+        "launcher": null,
         "name": "inspect-issue",
+        "preflight_classification": "read_only_analyzable",
         "reference": "gh.issue"
       }
-    ]
+    ],
+    "unevaluated_relevant_guard_count": 0,
+    "unevaluated_relevant_guards": [],
+    "used_observation_scopes": [
+      "git.worktree"
+    ],
+    "verdict_basis_weakened": false,
+    "weakened_observation_scopes": []
   },
   "plan": {
     "blockers": [],

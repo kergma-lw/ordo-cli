@@ -46,8 +46,11 @@
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
+    "allowed_state": "blocked",
+    "analysis_complete": true,
     "block_items": [
       {
+        "active_profile": null,
         "block_index": 0,
         "blockers": [
           "git.branch.value != \"main\""
@@ -56,6 +59,9 @@
           {
             "failed_subcondition": "git.branch.value != \"main\"",
             "failure_kind": "guard_failed",
+            "observation_scopes": [
+              "git.branch"
+            ],
             "reference": "git.branch.value != \"main\"",
             "status": "guard_failed",
             "summary": "Guard expression evaluated false",
@@ -92,6 +98,7 @@
         "type": "guards"
       },
       {
+        "active_profile": null,
         "block_index": 1,
         "conditional_steps": [],
         "status": "blocked",
@@ -108,10 +115,23 @@
     "checked_guards": [
       "git.branch.value != \"main\""
     ],
+    "evaluated_relevant_guard_count": 1,
+    "guard_coverage": [
+      {
+        "evaluated": true,
+        "reference": "git.branch.value != \"main\"",
+        "relevant": true,
+        "status": "blocked",
+        "unknown_reason": null
+      }
+    ],
     "guard_details": [
       {
         "failed_subcondition": "git.branch.value != \"main\"",
         "failure_kind": "guard_failed",
+        "observation_scopes": [
+          "git.branch"
+        ],
         "reference": "git.branch.value != \"main\"",
         "status": "guard_failed",
         "summary": "Guard expression evaluated false",
@@ -140,7 +160,21 @@
           }
         ]
       }
-    ]
+    ],
+    "incomplete_reasons": [],
+    "potential_invalidation_scopes": [
+      "shell.*"
+    ],
+    "preflight_halts": [],
+    "preflight_step_items": [],
+    "relevant_guard_count": 1,
+    "unevaluated_relevant_guard_count": 0,
+    "unevaluated_relevant_guards": [],
+    "used_observation_scopes": [
+      "git.branch"
+    ],
+    "verdict_basis_weakened": false,
+    "weakened_observation_scopes": []
   },
   "plan": {
     "blockers": [

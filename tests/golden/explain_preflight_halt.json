@@ -1,0 +1,203 @@
+{
+  "diagnostics": [],
+  "failed_guard": null,
+  "failed_step": null,
+  "mode": "explain",
+  "operation_results": [],
+  "outputs": {
+    "active_overrides": [],
+    "active_profile": null,
+    "allowed_state": "unknown",
+    "analysis_complete": false,
+    "block_items": [
+      {
+        "active_profile": null,
+        "block_index": 0,
+        "conditional_steps": [
+          "close-issue"
+        ],
+        "interpreted_steps": [
+          "load-issue"
+        ],
+        "preflight_halt": {
+          "branch_condition": null,
+          "details": {
+            "block_index": 0,
+            "classification": "effectful",
+            "reference": "gh.issue.close",
+            "step_index": 1
+          },
+          "reason": "effectful_step_encountered",
+          "step_name": "close-issue"
+        },
+        "skipped_steps": [],
+        "status": "preflight_halted",
+        "step_names": [
+          "load-issue",
+          "close-issue"
+        ],
+        "type": "steps"
+      },
+      {
+        "active_profile": null,
+        "block_index": 1,
+        "blockers": [],
+        "guard_details": [],
+        "guard_references": [
+          "git.worktree.clean"
+        ],
+        "status": "pending",
+        "type": "guards"
+      }
+    ],
+    "blockers": [],
+    "can_execute": false,
+    "checked_guards": [],
+    "evaluated_relevant_guard_count": 0,
+    "execution_allowed": false,
+    "explanation": {
+      "allowed": false,
+      "blockers": [],
+      "category": "incomplete",
+      "incomplete_reasons": [
+        "effectful_step_encountered",
+        "relevant_guard_coverage_incomplete"
+      ],
+      "preflight_halts": [
+        {
+          "branch_condition": null,
+          "details": {
+            "block_index": 0,
+            "classification": "effectful",
+            "reference": "gh.issue.close",
+            "step_index": 1
+          },
+          "reason": "effectful_step_encountered",
+          "step_name": "close-issue"
+        }
+      ],
+      "why": "Runtime has not yet established whether execution is allowed from current pre-execution knowledge"
+    },
+    "guard_coverage": [
+      {
+        "evaluated": false,
+        "reference": "git.worktree.clean",
+        "relevant": true,
+        "status": "pending",
+        "unknown_reason": "guard_not_evaluated"
+      }
+    ],
+    "guard_details": [],
+    "guard_items": [
+      {
+        "effect": "read_only",
+        "evaluated": false,
+        "failed_subcondition": null,
+        "failure_kind": null,
+        "kind": "expression",
+        "operation_status": null,
+        "reference": "git.worktree.clean",
+        "relevant": true,
+        "status": "pending",
+        "unknown_reason": "guard_not_evaluated"
+      }
+    ],
+    "incomplete_reasons": [
+      "effectful_step_encountered",
+      "relevant_guard_coverage_incomplete"
+    ],
+    "next_actions": [
+      {
+        "action": "complete_preflight_analysis",
+        "reason": "Resolve incomplete preflight knowledge before treating execution as allowed"
+      }
+    ],
+    "plan_ready": true,
+    "potential_invalidation_scopes": [
+      "gh.*"
+    ],
+    "preflight_halts": [
+      {
+        "branch_condition": null,
+        "details": {
+          "block_index": 0,
+          "classification": "effectful",
+          "reference": "gh.issue.close",
+          "step_index": 1
+        },
+        "reason": "effectful_step_encountered",
+        "step_name": "close-issue"
+      }
+    ],
+    "preflight_step_items": [
+      {
+        "block_index": 0,
+        "condition": null,
+        "conditional": false,
+        "name": "load-issue",
+        "operation_status": "ok",
+        "preflight_classification": "read_only_analyzable",
+        "reference": "gh.issue",
+        "register": "issue",
+        "status": "interpreted",
+        "step_index": 0
+      },
+      {
+        "block_index": 0,
+        "condition": "${inputs.run_effectful}",
+        "conditional": true,
+        "halt_reason": "effectful_step_encountered",
+        "name": "close-issue",
+        "preflight_classification": "effectful",
+        "reference": "gh.issue.close",
+        "status": "halted",
+        "step_index": 1
+      }
+    ],
+    "reason_category": "incomplete",
+    "relevant_guard_count": 1,
+    "run_items": [],
+    "step_items": [
+      {
+        "condition": null,
+        "conditional": false,
+        "effect": "read_only",
+        "eligibility": "eligible",
+        "kind": "probe",
+        "launcher": null,
+        "name": "load-issue",
+        "preflight_classification": "read_only_analyzable",
+        "reference": "gh.issue"
+      },
+      {
+        "condition": "${inputs.run_effectful}",
+        "conditional": true,
+        "effect": "effectful",
+        "eligibility": "eligible",
+        "kind": "action",
+        "launcher": null,
+        "name": "close-issue",
+        "preflight_classification": "effectful",
+        "reference": "gh.issue.close"
+      }
+    ],
+    "unevaluated_relevant_guard_count": 1,
+    "unevaluated_relevant_guards": [
+      "git.worktree.clean"
+    ],
+    "used_observation_scopes": [],
+    "verdict_basis_weakened": false,
+    "weakened_observation_scopes": []
+  },
+  "plan": {
+    "blockers": [],
+    "guard_checks": [
+      "git.worktree.clean"
+    ],
+    "step_names": [
+      "load-issue",
+      "close-issue"
+    ]
+  },
+  "status": "ok"
+}

@@ -46,8 +46,11 @@
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
+    "allowed_state": "blocked",
+    "analysis_complete": true,
     "block_items": [
       {
+        "active_profile": null,
         "block_index": 0,
         "blockers": [
           "git.branch.value != \"main\""
@@ -56,6 +59,9 @@
           {
             "failed_subcondition": "git.branch.value != \"main\"",
             "failure_kind": "guard_failed",
+            "observation_scopes": [
+              "git.branch"
+            ],
             "reference": "git.branch.value != \"main\"",
             "status": "guard_failed",
             "summary": "Guard expression evaluated false",
@@ -92,6 +98,7 @@
         "type": "guards"
       },
       {
+        "active_profile": null,
         "block_index": 1,
         "conditional_steps": [],
         "status": "blocked",
@@ -108,6 +115,7 @@
     "checked_guards": [
       "git.branch.value != \"main\""
     ],
+    "evaluated_relevant_guard_count": 1,
     "execution_allowed": false,
     "explanation": {
       "allowed": false,
@@ -120,6 +128,9 @@
         {
           "failed_subcondition": "git.branch.value != \"main\"",
           "failure_kind": "guard_failed",
+          "observation_scopes": [
+            "git.branch"
+          ],
           "reference": "git.branch.value != \"main\"",
           "status": "guard_failed",
           "summary": "Guard expression evaluated false",
@@ -151,10 +162,22 @@
       ],
       "why": "One or more guards blocked execution before any business step could run"
     },
+    "guard_coverage": [
+      {
+        "evaluated": true,
+        "reference": "git.branch.value != \"main\"",
+        "relevant": true,
+        "status": "blocked",
+        "unknown_reason": null
+      }
+    ],
     "guard_details": [
       {
         "failed_subcondition": "git.branch.value != \"main\"",
         "failure_kind": "guard_failed",
+        "observation_scopes": [
+          "git.branch"
+        ],
         "reference": "git.branch.value != \"main\"",
         "status": "guard_failed",
         "summary": "Guard expression evaluated false",
@@ -187,14 +210,18 @@
     "guard_items": [
       {
         "effect": "read_only",
+        "evaluated": true,
         "failed_subcondition": "git.branch.value != \"main\"",
         "failure_kind": "guard_failed",
         "kind": "expression",
         "operation_status": "guard_failed",
         "reference": "git.branch.value != \"main\"",
-        "status": "blocked"
+        "relevant": true,
+        "status": "blocked",
+        "unknown_reason": null
       }
     ],
+    "incomplete_reasons": [],
     "next_actions": [
       {
         "action": "resolve_blocking_guards",
@@ -202,7 +229,14 @@
       }
     ],
     "plan_ready": true,
+    "potential_invalidation_scopes": [
+      "shell.*"
+    ],
+    "preflight_halts": [],
+    "preflight_step_items": [],
     "reason_category": "guard",
+    "relevant_guard_count": 1,
+    "run_items": [],
     "step_items": [
       {
         "condition": null,
@@ -210,10 +244,19 @@
         "effect": "effectful",
         "eligibility": "blocked",
         "kind": "action",
+        "launcher": null,
         "name": "verify-command",
+        "preflight_classification": "effectful",
         "reference": "shell.command"
       }
-    ]
+    ],
+    "unevaluated_relevant_guard_count": 0,
+    "unevaluated_relevant_guards": [],
+    "used_observation_scopes": [
+      "git.branch"
+    ],
+    "verdict_basis_weakened": false,
+    "weakened_observation_scopes": []
   },
   "plan": {
     "blockers": [

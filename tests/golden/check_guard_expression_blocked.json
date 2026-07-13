@@ -64,8 +64,11 @@
   "outputs": {
     "active_overrides": [],
     "active_profile": null,
+    "allowed_state": "blocked",
+    "analysis_complete": true,
     "block_items": [
       {
+        "active_profile": null,
         "block_index": 0,
         "blockers": [
           "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
@@ -74,6 +77,9 @@
           {
             "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
             "failure_kind": "guard_failed",
+            "observation_scopes": [
+              "gh.issue"
+            ],
             "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
             "status": "guard_failed",
             "summary": "Guard expression evaluated false",
@@ -128,6 +134,7 @@
         "type": "guards"
       },
       {
+        "active_profile": null,
         "block_index": 1,
         "conditional_steps": [],
         "status": "blocked",
@@ -144,10 +151,23 @@
     "checked_guards": [
       "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]"
     ],
+    "evaluated_relevant_guard_count": 1,
+    "guard_coverage": [
+      {
+        "evaluated": true,
+        "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
+        "relevant": true,
+        "status": "blocked",
+        "unknown_reason": null
+      }
+    ],
     "guard_details": [
       {
         "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "failure_kind": "guard_failed",
+        "observation_scopes": [
+          "gh.issue"
+        ],
         "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "status": "guard_failed",
         "summary": "Guard expression evaluated false",
@@ -194,7 +214,21 @@
           }
         ]
       }
-    ]
+    ],
+    "incomplete_reasons": [],
+    "potential_invalidation_scopes": [
+      "shell.*"
+    ],
+    "preflight_halts": [],
+    "preflight_step_items": [],
+    "relevant_guard_count": 1,
+    "unevaluated_relevant_guard_count": 0,
+    "unevaluated_relevant_guards": [],
+    "used_observation_scopes": [
+      "gh.issue"
+    ],
+    "verdict_basis_weakened": false,
+    "weakened_observation_scopes": []
   },
   "plan": {
     "blockers": [

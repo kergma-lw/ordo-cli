@@ -44,12 +44,16 @@
     "active_profile": null,
     "block_items": [
       {
+        "active_profile": null,
         "block_index": 0,
         "blockers": [],
         "guard_details": [
           {
             "failed_subcondition": null,
             "failure_kind": null,
+            "observation_scopes": [
+              "git.worktree"
+            ],
             "reference": "git.worktree.clean",
             "status": "ok",
             "summary": "Guard expression evaluated successfully",
@@ -71,6 +75,7 @@
         "type": "guards"
       },
       {
+        "active_profile": null,
         "block_index": 1,
         "conditional_steps": [],
         "status": "pending",
@@ -103,6 +108,9 @@
       {
         "failed_subcondition": null,
         "failure_kind": null,
+        "observation_scopes": [
+          "git.worktree"
+        ],
         "reference": "git.worktree.clean",
         "status": "ok",
         "summary": "Guard expression evaluated successfully",
@@ -117,6 +125,7 @@
         ]
       }
     ],
+    "launcher_details": [],
     "skipped_steps": [],
     "step_condition_details": []
   },
