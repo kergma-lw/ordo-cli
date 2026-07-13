@@ -17,12 +17,19 @@ def plan_workflow(
     workflow: Workflow,
     *,
     profile: Profile | None = None,
+    available_profiles: dict[str, Profile] | None = None,
     guard_probe: GuardProbe | None = None,
     connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
     """Build a structured plan without executing effectful business steps."""
 
-    check_result = check_workflow(workflow, profile=profile, guard_probe=guard_probe, connector_provider=connector_provider)
+    check_result = check_workflow(
+        workflow,
+        profile=profile,
+        available_profiles=available_profiles,
+        guard_probe=guard_probe,
+        connector_provider=connector_provider,
+    )
     base_outputs = dict(check_result.outputs)
     effective_workflow = workflow
 

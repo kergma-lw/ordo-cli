@@ -835,6 +835,117 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertIn("relevant_guard_coverage_incomplete", result.outputs["incomplete_reasons"])
             self.assertIn("pre_run_precedes_main_guard_coverage", result.outputs["incomplete_reasons"])
 
+    def test_check_after_activation_expands_profile_only_pre_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"version": 1, "values": {"active_profile": "backend"}}\n', encoding="utf-8")
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - workflows/switch-active-profile.yml
+                    defaults:
+                      profile: backend
+                    workflows:
+                      set-active-profile:
+                        file: set-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    profiles:
+                      frontend:
+                        file: frontend.yml
+                      backend:
+                        file: backend.yml
+                    states:
+                      shared_state:
+                        path: repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "set-active-profile.yml").write_text(
+                "version: 0\nworkflow: set-active-profile\ninputs:\n  profile: {}\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nblocks:\n  - guards:\n      - inputs.profile == \"backend\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\n", encoding="utf-8")
+            (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\n", encoding="utf-8")
+
+            activated = activate_playbook(workflow_name="set-active-profile", input_overrides={"profile": "backend"}, cwd=root)
+            result = check_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["allowed_state"], "allowed")
+            self.assertTrue(result.outputs["analysis_complete"])
+            self.assertEqual(result.outputs["evaluated_relevant_guard_count"], 1)
+
+    def test_check_after_activation_crosses_profile_only_pre_run_for_close_task(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"version": 1, "values": {"active_profile": "backend"}}\n', encoding="utf-8")
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - workflows/switch-active-profile.yml
+                    defaults:
+                      profile: backend
+                    workflows:
+                      close-task:
+                        file: close-task.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    profiles:
+                      frontend:
+                        file: frontend.yml
+                      backend:
+                        file: backend.yml
+                    states:
+                      shared_state:
+                        path: repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "close-task.yml").write_text(
+                "version: 0\nworkflow: close-task\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nstate_needs:\n  shared_state: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\ninputs:\n  repo_kind: frontend\n", encoding="utf-8")
+            (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\ninputs:\n  repo_kind: backend\n", encoding="utf-8")
+
+            activated = activate_playbook(workflow_name="close-task", cwd=root)
+            result = check_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.outputs["allowed_state"], "allowed")
+            self.assertGreater(result.outputs["evaluated_relevant_guard_count"], 0)
+            self.assertNotIn("pre_run_precedes_main_guard_coverage", result.outputs.get("incomplete_reasons", []))
+
     def test_activate_playbook_resolves_working_directory_from_input_override_expression(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1331,7 +1442,7 @@ class PlaybookActivationTest(unittest.TestCase):
         observed: dict[str, str] = {}
         original = Path.cwd()
 
-        def fake_run_mode(_mode, _workflow, _profile):
+        def fake_run_mode(_mode, _workflow, _profile, *_args):
             observed["cwd"] = os.getcwd()
             return runtime_result
 

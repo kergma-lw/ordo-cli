@@ -9,7 +9,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
-from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks
+from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
@@ -49,7 +49,12 @@ def materialize_run_workflow(step: Step, caller_workflow: Workflow, *, block_ind
             include_node_path=("blocks", str(block_index), "steps", str(step_index), "run"),
         )
     except LoadError as exc:
-        return exc.diagnostics[0]
+        if include_bindings:
+            return exc.diagnostics[0]
+        try:
+            payload = load_workflow_document_file(run_path, launch_dir=launch_dir)
+        except LoadError:
+            return exc.diagnostics[0]
 
     if isinstance(payload, list):
         blocks_payload = payload

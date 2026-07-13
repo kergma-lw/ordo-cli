@@ -34,7 +34,13 @@ def execute_workflow(
 ) -> RuntimeResult:
     """Execute steps only after validation, resolution, and guards succeed."""
 
-    check_result = check_workflow(workflow, profile=profile, guard_probe=guard_probe, connector_provider=connector_provider)
+    check_result = check_workflow(
+        workflow,
+        profile=profile,
+        available_profiles=available_profiles,
+        guard_probe=guard_probe,
+        connector_provider=connector_provider,
+    )
     if check_result.status is not RuntimeStatus.OK:
         return RuntimeResult(
             mode=Mode.EXECUTE,

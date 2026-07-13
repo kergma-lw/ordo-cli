@@ -15,12 +15,19 @@ def explain_workflow(
     workflow: Workflow,
     *,
     profile: Profile | None = None,
+    available_profiles: dict[str, Profile] | None = None,
     guard_probe: GuardProbe | None = None,
     connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
     """Explain why execution is blocked or allowed without executing business steps."""
 
-    plan_result = plan_workflow(workflow, profile=profile, guard_probe=guard_probe, connector_provider=connector_provider)
+    plan_result = plan_workflow(
+        workflow,
+        profile=profile,
+        available_profiles=available_profiles,
+        guard_probe=guard_probe,
+        connector_provider=connector_provider,
+    )
     return explain_runtime_result(plan_result)
 
 

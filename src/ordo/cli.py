@@ -73,7 +73,13 @@ def main() -> int:
                     as_json=args.json,
                 )
 
-            result = _run_mode(args.mode, activated.workflow, activated.profile)
+            result = _run_mode(
+                args.mode,
+                activated.workflow,
+                activated.profile,
+                getattr(activated, "available_profiles", None),
+                getattr(activated, "profile_working_directories", None),
+            )
         if args.mode == "next":
             payload = {
                 "mode": "next",
@@ -88,6 +94,12 @@ def main() -> int:
             }
         else:
             payload = result.to_contract()
+            activation_diagnostics = getattr(activated, "diagnostics", ())
+            if activation_diagnostics:
+                payload["diagnostics"] = [
+                    *payload.get("diagnostics", []),
+                    *[diagnostic.to_contract() for diagnostic in activation_diagnostics],
+                ]
             payload.update(
                 {
                     "workflow": activated.workflow_name,
@@ -109,14 +121,19 @@ def main() -> int:
             clear_default_connector_provider()
 
 
-def _run_mode(mode: str, workflow, profile) -> RuntimeResult:
+def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_working_directories=None) -> RuntimeResult:
     if mode == "check":
-        return check_workflow(workflow, profile=profile)
+        return check_workflow(workflow, profile=profile, available_profiles=available_profiles)
     if mode == "plan":
-        return plan_workflow(workflow, profile=profile)
+        return plan_workflow(workflow, profile=profile, available_profiles=available_profiles)
     if mode == "run":
-        return execute_workflow(workflow, profile=profile)
-    explained = explain_workflow(workflow, profile=profile)
+        return execute_workflow(
+            workflow,
+            profile=profile,
+            available_profiles=available_profiles,
+            profile_working_directories=profile_working_directories,
+        )
+    explained = explain_workflow(workflow, profile=profile, available_profiles=available_profiles)
     return explained
 
 
