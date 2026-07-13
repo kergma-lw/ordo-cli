@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Override, Profile
@@ -260,6 +262,33 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["allowed_state"], "unknown")
         self.assertIn("profile_switch_not_resolvable_from_current_knowledge", result.outputs["incomplete_reasons"])
+
+    def test_check_expands_static_run_fragment_and_continues_to_later_guards(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.enabled == true\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                inputs={"enabled": True},
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                    GuardBlock(guards=(Guard(expr='inputs.enabled == true'),)),
+                ),
+            )
+
+            result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["allowed_state"], "allowed")
+            self.assertEqual(result.outputs["evaluated_relevant_guard_count"], 2)
+            expanded = [item for item in result.outputs["block_items"] if item.get("expanded_from_run") == "profile-guard.yml"]
+            self.assertEqual(len(expanded), 1)
+            self.assertEqual(expanded[0]["type"], "guards")
 
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())

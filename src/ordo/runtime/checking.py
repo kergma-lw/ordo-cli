@@ -8,8 +8,9 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBlockNode, PreflightDecisionModel, PreflightGuardNode, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import GuardBlock, StepBlock, Workflow
+from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
+from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode, UnaryNode
 from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
 from .launchers import validate_step_launchers
@@ -331,6 +332,41 @@ def check_workflow(
             )
             continue
 
+        run_expansions = _classify_run_step_block_for_check(declared_block, effective_workflow, block_index=block_index)
+        if run_expansions is not None:
+            if halted:
+                block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
+                continue
+            block_items.append(
+                {
+                    "block_index": block_index,
+                    "type": "steps",
+                    "status": "expanded",
+                    "step_names": [step.name for step in declared_block.steps],
+                    "conditional_steps": [],
+                    "active_profile": current_profile_name,
+                }
+            )
+            expansion_outcome = _expand_run_step_block_for_check(
+                run_expansions,
+                current_profile=current_profile,
+                available_profiles=available_profiles,
+                connector_provider=connector_provider,
+            )
+            diagnostics.extend(expansion_outcome["diagnostics"])
+            operation_results.extend(expansion_outcome["operation_results"])
+            checked_guards.extend(expansion_outcome["checked_guards"])
+            guard_details.extend(expansion_outcome["guard_details"])
+            block_items.extend(expansion_outcome["block_items"])
+            blockers.extend(expansion_outcome["blockers"])
+            incomplete_reasons.extend(expansion_outcome["incomplete_reasons"])
+            bootstrap_details = _collect_bootstrap_details(operation_results)
+            if expansion_outcome["failed_guard"] is not None and failed_guard is None:
+                failed_guard = cast(str, expansion_outcome["failed_guard"])
+            if expansion_outcome["halted"]:
+                halted = True
+            continue
+
         if halted:
             block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
             continue
@@ -492,6 +528,81 @@ def _resolve_guard_block(
             },
         )
     return ResolvedGuardBlock(block_index=block_index, guards=resolution.blocks[0].guards)
+
+
+def _classify_run_step_block_for_check(block: StepBlock, workflow: Workflow, *, block_index: int) -> list[tuple[Step, CheckRunExpansionDecision]] | None:
+    decisions: list[tuple[Step, CheckRunExpansionDecision]] = []
+    if not block.steps:
+        return None
+    for step_index, step in enumerate(block.steps):
+        if step.if_ is not None or step.run is None:
+            return None
+        decision = classify_run_for_check(step, workflow, block_index=block_index, step_index=step_index)
+        if not decision.admissible:
+            return None
+        decisions.append((step, decision))
+    return decisions
+
+
+def _expand_run_step_block_for_check(
+    expansions: list[tuple[Step, CheckRunExpansionDecision]],
+    *,
+    current_profile: Profile | None,
+    available_profiles: dict[str, Profile] | None,
+    connector_provider: ConnectorProvider | None,
+) -> dict[str, object]:
+    diagnostics: list[Diagnostic] = []
+    operation_results: list[OperationResult] = []
+    checked_guards: list[str] = []
+    guard_details: list[dict[str, object]] = []
+    block_items: list[dict[str, object]] = []
+    blockers: list[str] = []
+    incomplete_reasons: list[str] = []
+    failed_guard: str | None = None
+    halted = False
+    for step, decision in expansions:
+        if decision.workflow is None:
+            halted = True
+            incomplete_reasons.append("run_expansion_missing_workflow")
+            break
+        result = check_workflow(
+            decision.workflow,
+            profile=current_profile,
+            available_profiles=available_profiles,
+            connector_provider=connector_provider,
+        )
+        diagnostics.extend(result.diagnostics)
+        operation_results.extend(result.operation_results)
+        checked_guards.extend(cast(list[str], result.outputs.get("checked_guards", [])))
+        guard_details.extend(cast(list[dict[str, object]], result.outputs.get("guard_details", [])))
+        blockers.extend(cast(list[str], result.outputs.get("blockers", [])))
+        for item in result.outputs.get("block_items", []):
+            if not isinstance(item, dict):
+                continue
+            nested = dict(item)
+            nested["expanded_from_step"] = step.name
+            nested["expanded_from_run"] = step.run
+            block_items.append(nested)
+        if result.failed_guard is not None and failed_guard is None:
+            failed_guard = result.failed_guard
+        if result.status is RuntimeStatus.GUARD_FAILED:
+            halted = True
+            break
+        if result.outputs.get("allowed_state") != "allowed":
+            halted = True
+            incomplete_reasons.extend(reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str))
+            break
+    return {
+        "diagnostics": diagnostics,
+        "operation_results": operation_results,
+        "checked_guards": checked_guards,
+        "guard_details": guard_details,
+        "block_items": block_items,
+        "blockers": blockers,
+        "incomplete_reasons": incomplete_reasons,
+        "failed_guard": failed_guard,
+        "halted": halted,
+    }
 
 
 def _is_static_profile_switch_block(block: StepBlock) -> bool:
