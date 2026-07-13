@@ -290,6 +290,31 @@ class CheckModeTest(unittest.TestCase):
             self.assertEqual(len(expanded), 1)
             self.assertEqual(expanded[0]["type"], "guards")
 
+    def test_check_propagates_profile_context_from_expanded_run_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "switch.yml"
+            fragment.write_text(
+                "steps:\n  - name: switch\n    profile_switch: frontend\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="switch.yml", resolved_run_path=str(fragment)),)),
+                    GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+                ),
+            )
+            profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+            result = check_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["allowed_state"], "allowed")
+            self.assertEqual(result.outputs["active_profile"], "frontend")
+            self.assertEqual(result.outputs["block_items"][-1]["active_profile"], "frontend")
+
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())
         seen: list[str] = []

@@ -349,7 +349,10 @@ def check_workflow(
             )
             expansion_outcome = _expand_run_step_block_for_check(
                 run_expansions,
+                current_workflow=effective_workflow,
+                current_profile_name=current_profile_name,
                 current_profile=current_profile,
+                active_overrides=active_overrides,
                 available_profiles=available_profiles,
                 connector_provider=connector_provider,
             )
@@ -361,6 +364,11 @@ def check_workflow(
             blockers.extend(expansion_outcome["blockers"])
             incomplete_reasons.extend(expansion_outcome["incomplete_reasons"])
             bootstrap_details = _collect_bootstrap_details(operation_results)
+            effective_workflow = cast(Workflow, expansion_outcome["workflow"])
+            current_profile_name = cast(str | None, expansion_outcome["current_profile_name"])
+            current_profile = cast(Profile | None, expansion_outcome["current_profile"])
+            active_overrides = cast(tuple, expansion_outcome["active_overrides"])
+            active_profile = current_profile_name
             if expansion_outcome["failed_guard"] is not None and failed_guard is None:
                 failed_guard = cast(str, expansion_outcome["failed_guard"])
             if expansion_outcome["halted"]:
@@ -547,7 +555,10 @@ def _classify_run_step_block_for_check(block: StepBlock, workflow: Workflow, *, 
 def _expand_run_step_block_for_check(
     expansions: list[tuple[Step, CheckRunExpansionDecision]],
     *,
+    current_workflow: Workflow,
+    current_profile_name: str | None,
     current_profile: Profile | None,
+    active_overrides,
     available_profiles: dict[str, Profile] | None,
     connector_provider: ConnectorProvider | None,
 ) -> dict[str, object]:
@@ -560,6 +571,10 @@ def _expand_run_step_block_for_check(
     incomplete_reasons: list[str] = []
     failed_guard: str | None = None
     halted = False
+    effective_workflow = current_workflow
+    current_overrides = active_overrides
+    effective_profile_name = current_profile_name
+    effective_profile = current_profile
     for step, decision in expansions:
         if decision.workflow is None:
             halted = True
@@ -567,7 +582,7 @@ def _expand_run_step_block_for_check(
             break
         result = check_workflow(
             decision.workflow,
-            profile=current_profile,
+            profile=effective_profile,
             available_profiles=available_profiles,
             connector_provider=connector_provider,
         )
@@ -592,6 +607,13 @@ def _expand_run_step_block_for_check(
             halted = True
             incomplete_reasons.extend(reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str))
             break
+        next_profile_name = result.outputs.get("active_profile")
+        if isinstance(next_profile_name, str) and available_profiles is not None and next_profile_name in available_profiles:
+            effective_profile_name = next_profile_name
+            effective_profile = available_profiles[next_profile_name]
+            current_overrides = effective_profile.overrides
+            applied = apply_profile_defaults_to_subsequent_steps(effective_workflow, effective_profile)
+            effective_workflow = effective_workflow if applied.workflow is None else applied.workflow
     return {
         "diagnostics": diagnostics,
         "operation_results": operation_results,
@@ -602,6 +624,10 @@ def _expand_run_step_block_for_check(
         "incomplete_reasons": incomplete_reasons,
         "failed_guard": failed_guard,
         "halted": halted,
+        "workflow": effective_workflow,
+        "current_profile_name": effective_profile_name,
+        "current_profile": effective_profile,
+        "active_overrides": current_overrides,
     }
 
 
