@@ -1,7 +1,10 @@
 import unittest
 
-from ordo.model.workflow import Step, Workflow
-from ordo.runtime.preflight_interpreter import evaluate_preflight_value_step, store_preflight_register_output
+from ordo.model.connector import OperationContract
+from ordo.model.runtime import OperationResult
+from ordo.model.workflow import OperationRef, Step, Workflow
+from ordo.runtime.preflight_interpreter import evaluate_preflight_probe_step, evaluate_preflight_value_step, store_preflight_register_output
+from ordo.runtime.resolution import ResolvedOperation
 
 
 class PreflightInterpreterTest(unittest.TestCase):
@@ -32,6 +35,40 @@ class PreflightInterpreterTest(unittest.TestCase):
         store_preflight_register_output("branch", result, step_results=step_results)
 
         self.assertEqual(step_results["branch"]["outputs"]["value"], "main")
+
+    def test_executes_read_only_probe_steps_through_guard_probe_surface(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", steps=())
+        step = Step(name="inspect", operation=OperationRef("gh.issue"))
+        resolved = ResolvedOperation(
+            reference="gh.issue",
+            connector_namespace="gh",
+            operation=OperationContract(name="issue", kind="probe"),
+            source="public",
+        )
+
+        def guard_probe(resolved_step, current_workflow):
+            self.assertEqual(resolved_step.reference, "gh.issue")
+            self.assertIs(current_workflow, workflow)
+            return OperationResult(status="ok", outputs={"exists": True})
+
+        result = evaluate_preflight_probe_step(step, resolved, workflow, guard_probe=guard_probe)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["exists"], True)
+
+    def test_rejects_effectful_steps_from_probe_interpretation(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", steps=())
+        step = Step(name="comment", operation=OperationRef("gh.issue.comment"))
+        resolved = ResolvedOperation(
+            reference="gh.issue.comment",
+            connector_namespace="gh",
+            operation=OperationContract(name="issue.comment", kind="action"),
+            source="public",
+        )
+
+        result = evaluate_preflight_probe_step(step, resolved, workflow, guard_probe=lambda *_args: OperationResult(status="ok"))
+
+        self.assertEqual(result.status, "state_error")
 
 
 if __name__ == "__main__":

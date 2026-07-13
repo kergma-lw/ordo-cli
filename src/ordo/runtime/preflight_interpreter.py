@@ -6,6 +6,8 @@ from ordo.model.json import JSONObject
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Step, Workflow
 
+from .providers import GuardProbe
+from .resolution import ResolvedOperation
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
@@ -43,3 +45,17 @@ def store_preflight_register_output(
         "summary": result.summary,
         "outputs": dict(result.outputs),
     }
+
+
+def evaluate_preflight_probe_step(
+    step: Step,
+    resolved_step: ResolvedOperation,
+    workflow: Workflow,
+    *,
+    guard_probe: GuardProbe,
+) -> OperationResult:
+    """Evaluate one read-only probe step through the runtime guard probe surface."""
+
+    if resolved_step.operation.kind != "probe":
+        return OperationResult(status="state_error", summary=f"Step '{step.name}' is not a read-only probe")
+    return guard_probe(resolved_step, workflow)
