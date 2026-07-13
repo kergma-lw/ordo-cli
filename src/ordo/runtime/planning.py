@@ -46,7 +46,8 @@ def plan_workflow(
     block_items = _build_block_items(check_result, resolution, effective_workflow)
 
     blockers = list(base_outputs.get("blockers", []))
-    can_execute = bool(base_outputs.get("can_execute", False))
+    allowed_state = str(base_outputs.get("allowed_state", "blocked"))
+    execution_allowed = allowed_state == "allowed"
 
     plan = ExecutionPlan(
         guard_checks=tuple(item["reference"] for item in guard_items),
@@ -57,7 +58,7 @@ def plan_workflow(
     outputs = {
         **base_outputs,
         "plan_ready": check_result.status is not RuntimeStatus.VALIDATION_ERROR,
-        "execution_allowed": can_execute,
+        "execution_allowed": execution_allowed,
         "guard_items": guard_items,
         "step_items": step_items,
         "run_items": run_items,

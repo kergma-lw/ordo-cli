@@ -3,7 +3,7 @@ import unittest
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
-from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import plan_workflow
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -82,6 +82,22 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertTrue(result.outputs["execution_allowed"])
+
+    def test_plan_does_not_upgrade_unknown_check_result_to_allowed(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="prepare", operation=OperationRef("gh.issue")),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(result.outputs["execution_allowed"])
+        self.assertEqual(result.outputs["allowed_state"], "unknown")
 
     def test_plan_surfaces_expr_guard_before_runtime_support_exists(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())

@@ -10,12 +10,28 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
-from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, UnaryNode
+from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode, UnaryNode
+from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
 from .launchers import validate_step_launchers
 from .profiles import apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
 from .validation import validate_workflow_document
+
+
+def _base_verdict_outputs(
+    *,
+    can_execute: bool,
+    allowed_state: str,
+    analysis_complete: bool,
+    incomplete_reasons: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "can_execute": can_execute,
+        "allowed_state": allowed_state,
+        "analysis_complete": analysis_complete,
+        "incomplete_reasons": [] if incomplete_reasons is None else list(incomplete_reasons),
+    }
 
 
 def check_workflow(
@@ -34,7 +50,12 @@ def check_workflow(
             status=RuntimeStatus.VALIDATION_ERROR,
             diagnostics=validation_report.diagnostics,
             plan=ExecutionPlan(),
-            outputs={"can_execute": False, "blockers": [], "checked_guards": [], "block_items": []},
+            outputs={
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+                "blockers": [],
+                "checked_guards": [],
+                "block_items": [],
+            },
         )
 
     active_profile = None
@@ -52,7 +73,7 @@ def check_workflow(
                 diagnostics=applied.diagnostics,
                 plan=ExecutionPlan(),
                 outputs={
-                    "can_execute": False,
+                    **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
                     "blockers": [],
                     "checked_guards": [],
                     "block_items": [],
@@ -70,7 +91,7 @@ def check_workflow(
             diagnostics=launcher_diagnostics,
             plan=ExecutionPlan(),
             outputs={
-                "can_execute": False,
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
                 "blockers": [],
                 "checked_guards": [],
                 "block_items": _build_pending_block_items(effective_workflow, blocked=False),
@@ -95,13 +116,13 @@ def check_workflow(
                 blockers=(),
             ),
             outputs={
-                    "can_execute": False,
-                    "blockers": [],
-                    "checked_guards": list(_initial_guard_references(effective_workflow)),
-                    "block_items": _build_pending_block_items(effective_workflow, blocked=False),
-                    "active_profile": active_profile,
-                    "active_overrides": [override.to_contract() for override in active_overrides],
-                },
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+                "blockers": [],
+                "checked_guards": list(_initial_guard_references(effective_workflow)),
+                "block_items": _build_pending_block_items(effective_workflow, blocked=False),
+                "active_profile": active_profile,
+                "active_overrides": [override.to_contract() for override in active_overrides],
+            },
         )
 
     probe = guard_probe or _default_guard_probe(provider=connector_provider)
@@ -113,6 +134,7 @@ def check_workflow(
     block_items: list[dict[str, object]] = []
     bootstrap_details: list[dict[str, object]] = []
     failed_guard: str | None = None
+    incomplete_reasons: list[str] = []
 
     halted = False
     for block in resolution.blocks:
@@ -159,12 +181,15 @@ def check_workflow(
         block_items.append(_pending_step_block_item(block, effective_workflow, blocked=False))
         halted = True
 
+    if not blockers and any(item.get("type") == "guards" and item.get("status") == "pending" for item in block_items):
+        incomplete_reasons.append("relevant_guard_coverage_incomplete")
+
     if halted and len(block_items) < len(effective_workflow.blocks):
         block_items.extend(_build_pending_block_items(effective_workflow, blocked=bool(blockers), start_index=len(block_items)))
 
     if blockers:
         outputs = {
-            "can_execute": False,
+            **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
             "blockers": blockers,
             "checked_guards": checked_guards,
             "guard_details": guard_details,
@@ -189,7 +214,12 @@ def check_workflow(
         )
 
     outputs = {
-        "can_execute": True,
+        **_base_verdict_outputs(
+            can_execute=not incomplete_reasons,
+            allowed_state="unknown" if incomplete_reasons else "allowed",
+            analysis_complete=not incomplete_reasons,
+            incomplete_reasons=incomplete_reasons,
+        ),
         "blockers": [],
         "checked_guards": checked_guards,
         "guard_details": guard_details,
@@ -343,6 +373,10 @@ def _evaluate_guard_expression(
             status, value = _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
             trace.append({"expr": probe_spec.expression_text, "kind": "probe", "status": status, "value": value, "reference": probe_spec.reference})
             return status, value
+        if isinstance(node, StateReferenceNode):
+            status, value = _resolve_state_reference(node, resolved_guard, workflow, diagnostics)
+            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "state", "status": status, "value": value})
+            return status, value
         if isinstance(node, CallNode):
             probe_spec = _lookup_probe_spec(resolved_guard, resolved_guard.expr[node.start : node.end], node.fields)
             status, value = _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
@@ -457,6 +491,34 @@ def _lookup_probe_spec(
         if probe.expression_text == expression_text:
             return probe
     raise ValueError(f"Resolved probe metadata missing for expression segment: {expression_text} ({fallback_fields})")
+
+
+def _resolve_state_reference(
+    node: StateReferenceNode,
+    resolved_guard: ResolvedGuardExpression,
+    workflow: Workflow,
+    diagnostics: list[Diagnostic],
+) -> tuple[str, JSONValue | None]:
+    expression = resolved_guard.expr[node.start : node.end]
+    try:
+        target = resolve_state_target(expression, workflow)
+        document = read_state_document(target.location)
+        value = read_state_value(document, key=target.key, fields=target.fields)
+    except RuntimeStateError as exc:
+        diagnostics.append(exc.to_diagnostic())
+        return "probe_failed", None
+    if value is None:
+        diagnostics.append(
+            Diagnostic(
+                code="runtime.state.read_missing",
+                level="error",
+                message="Runtime state value is missing",
+                path=(),
+                details={"expression": expression, "state": target.location.name, "key": target.key, "fields": list(target.fields)},
+            )
+        )
+        return "probe_failed", None
+    return "ok", value
 
 
 def _evaluate_probe_reference(

@@ -2,7 +2,7 @@ import unittest
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import OperationResult, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -56,6 +56,22 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["explanation"]["category"], "ok")
         self.assertEqual(result.outputs["next_actions"][0]["action"], "execute_workflow")
+
+    def test_explain_reports_incomplete_preflight_state(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="prepare", operation=OperationRef("gh.issue")),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["explanation"]["category"], "incomplete")
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "complete_preflight_analysis")
 
     def test_explain_runtime_result_covers_execution_failure(self) -> None:
         execution_result = RuntimeResult(

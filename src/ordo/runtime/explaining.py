@@ -72,6 +72,10 @@ def explain_execution_result(
 
 
 def _build_explanation(result: RuntimeResult) -> dict[str, object]:
+    allowed_state = result.outputs.get("allowed_state")
+    analysis_complete = bool(result.outputs.get("analysis_complete", True))
+    incomplete_reasons = [reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str)]
+
     if result.status is RuntimeStatus.VALIDATION_ERROR:
         return {
             "category": "validation",
@@ -123,9 +127,18 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
             "step_condition_details": step_condition_details,
         }
 
+    if allowed_state == "unknown" or not analysis_complete:
+        return {
+            "category": "incomplete",
+            "allowed": False,
+            "why": "Runtime has not yet established whether execution is allowed from current pre-execution knowledge",
+            "blockers": [],
+            "incomplete_reasons": incomplete_reasons,
+        }
+
     return {
         "category": "ok",
-        "allowed": bool(result.outputs.get("can_execute", True)),
+        "allowed": allowed_state == "allowed" if isinstance(allowed_state, str) else bool(result.outputs.get("can_execute", True)),
         "why": "No known blocker prevents execution now",
         "blockers": [],
     }
@@ -169,6 +182,14 @@ def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:
             {
                 "action": "repair_failed_step",
                 "reason": "Inspect the failed step result and correct the execution issue",
+            }
+        ]
+
+    if result.outputs.get("allowed_state") == "unknown" or not bool(result.outputs.get("analysis_complete", True)):
+        return [
+            {
+                "action": "complete_preflight_analysis",
+                "reason": "Resolve incomplete preflight knowledge before treating execution as allowed",
             }
         ]
 

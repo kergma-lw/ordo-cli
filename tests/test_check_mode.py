@@ -3,7 +3,7 @@ import unittest
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Override, Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
-from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import check_workflow
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -81,8 +81,28 @@ class CheckModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertTrue(result.outputs["can_execute"])
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertEqual(result.outputs["active_overrides"][0]["target"], "shell.command")
+
+    def test_check_reports_unknown_when_later_guard_region_remains_unchecked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="prepare", operation=OperationRef("gh.issue")),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(result.outputs["can_execute"])
+        self.assertEqual(result.outputs["allowed_state"], "unknown")
+        self.assertFalse(result.outputs["analysis_complete"])
+        self.assertIn("relevant_guard_coverage_incomplete", result.outputs["incomplete_reasons"])
 
     def test_check_evaluates_expr_guard_with_custom_probe(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
