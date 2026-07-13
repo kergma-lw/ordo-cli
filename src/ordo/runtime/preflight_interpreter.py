@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Step, Workflow
@@ -9,6 +11,24 @@ from ordo.model.workflow import Step, Workflow
 from .providers import GuardProbe
 from .resolution import ResolvedOperation
 from .value_resolution import ValueResolutionError, resolve_runtime_value
+
+
+@dataclass(frozen=True, slots=True)
+class PreflightHalt:
+    """Machine-readable reason why read-only preflight analysis stopped."""
+
+    reason: str
+    step_name: str | None = None
+    branch_condition: str | None = None
+    details: JSONObject = field(default_factory=dict)
+
+    def to_contract(self) -> JSONObject:
+        return {
+            "reason": self.reason,
+            "step_name": self.step_name,
+            "branch_condition": self.branch_condition,
+            "details": dict(self.details),
+        }
 
 
 def resolve_preflight_value(
@@ -75,6 +95,23 @@ def store_preflight_register_output(
         "summary": result.summary,
         "outputs": dict(result.outputs),
     }
+
+
+def build_preflight_halt(
+    reason: str,
+    *,
+    step: Step | None = None,
+    branch_condition: str | None = None,
+    details: JSONObject | None = None,
+) -> PreflightHalt:
+    """Create a structured preflight halt record."""
+
+    return PreflightHalt(
+        reason=reason,
+        step_name=None if step is None else step.name,
+        branch_condition=branch_condition,
+        details={} if details is None else dict(details),
+    )
 
 
 def evaluate_preflight_probe_step(

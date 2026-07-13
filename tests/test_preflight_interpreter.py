@@ -3,7 +3,7 @@ import unittest
 from ordo.model.connector import OperationContract
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import OperationRef, Step, Workflow
-from ordo.runtime.preflight_interpreter import evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, resolve_preflight_value, store_preflight_register_output
+from ordo.runtime.preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, resolve_preflight_value, store_preflight_register_output
 from ordo.runtime.resolution import ResolvedOperation
 
 
@@ -120,6 +120,35 @@ class PreflightInterpreterTest(unittest.TestCase):
         result = evaluate_preflight_step_condition(step, workflow)
 
         self.assertEqual(result.code, "runtime.value.input_missing")
+
+    def test_builds_structured_preflight_halt_for_blocked_step(self) -> None:
+        step = Step(name="inspect", operation=OperationRef("gh.issue"))
+
+        halt = build_preflight_halt("unresolved_step_argument", step=step, details={"argument": "issue_number"})
+
+        self.assertEqual(
+            halt.to_contract(),
+            {
+                "reason": "unresolved_step_argument",
+                "step_name": "inspect",
+                "branch_condition": None,
+                "details": {"argument": "issue_number"},
+            },
+        )
+
+    def test_builds_structured_preflight_halt_for_unknown_branch(self) -> None:
+        step = Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}")
+
+        halt = build_preflight_halt(
+            "condition_not_computable",
+            step=step,
+            branch_condition=step.if_,
+            details={"depends_on": "inputs.enabled"},
+        )
+
+        self.assertEqual(halt.reason, "condition_not_computable")
+        self.assertEqual(halt.step_name, "inspect")
+        self.assertEqual(halt.branch_condition, "${inputs.enabled}")
 
 
 if __name__ == "__main__":
