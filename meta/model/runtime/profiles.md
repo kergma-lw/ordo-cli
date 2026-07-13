@@ -12,7 +12,7 @@ A profile may bind runtime-facing context such as:
 
 - workflow inputs;
 - approved workflow-entry overrides;
-- execution location such as a workflow-entry `working_directory` expression input;
+- a profile-scoped execution `working_directory` default;
 - future execution modifiers such as named launchers or other runtime-scoped wrappers when standardized.
 
 Profiles may therefore act as the project-local place where launcher-relevant context is selected, as long as launcher usage remains explicit and reviewable.
@@ -36,8 +36,28 @@ That active profile contributes runtime context before workflow execution begins
 The resulting run should remain explainable in terms of:
 
 - which profile is active;
+- whether the active profile came from explicit caller choice or playbook defaults;
 - which profile-provided inputs are in force;
+- whether the profile selected the effective execution working directory or yielded to a more specific workflow-entry declaration;
 - which approved overrides are active.
+
+## Runtime profile switching
+
+Runtime profile switching belongs to engine semantics rather than to ordinary connector integration semantics.
+
+The public construct for this should be `profile_switch`.
+
+`profile_switch` should:
+
+- name the target profile explicitly;
+- behave as a runtime context transition for subsequent steps or nested workflow execution within the current run;
+- apply the target profile's missing-input defaults to subsequent steps without overriding explicit activation inputs already in force;
+- avoid silently re-activating already-executed workflow material under a different profile;
+- remain explainable in structured runtime outputs;
+- depend only on pre-execution knowledge such as `inputs.*`, `state.*`, literals, or equivalent runtime-static context;
+- reject `step.*` dependencies.
+
+Because `profile_switch` is runtime-owned context shaping rather than an ordinary business-world action, `check` may treat deterministic profile switches as static context annotations inside its decision tree rather than as opaque effect barriers.
 
 ## Reviewability expectation
 

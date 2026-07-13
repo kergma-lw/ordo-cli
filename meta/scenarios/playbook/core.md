@@ -30,7 +30,28 @@ Expected Ordo value:
 - storage location is managed in project-local orchestration context;
 - workflows do not each duplicate the same storage declaration.
 
-## Scenario 3b: launch-time input override
+## Scenario 3a: in-process profile switch
+
+One workflow run reaches a point where later steps should execute in a different declared profile context such as `frontend`.
+
+Expected Ordo value:
+
+- the context switch is explicit and reviewable;
+- subsequent execution may use the new profile without restarting the process;
+- the switch remains runtime context rather than workflow-owned business state.
+
+## Scenario 3b: runtime profile switch construct
+
+One workflow step uses an explicit engine-level construct such as `profile_switch` to select `frontend` for later steps or nested workflow execution in the current run.
+
+Expected Ordo value:
+
+- the context switch is explicit and reviewable in workflow material;
+- later execution in the same run may use the new profile without hidden shell state;
+- later execution in the same run may also observe the new profile's missing-input defaults;
+- already-completed parts of the current run are not silently reinterpreted under a different profile.
+
+## Scenario 3c: launch-time input override
 
 Caller launches a named workflow entry but needs to override one input such as `repository`, `issue_number`, or `enabled` for a single run.
 
@@ -39,6 +60,16 @@ Expected Ordo value:
 - the caller can override or add the input without editing the workflow file;
 - launch-time values win over workflow defaults and profile-provided defaults;
 - the override remains local to that one run.
+
+## Scenario 3d: playbook-level pre-run workflow set
+
+Playbook declares a shared `pre_run` workflow set that executes before the requested workflow so common preparation such as context resolution or runtime-profile switching stays centralized.
+
+Expected Ordo value:
+
+- common preparation stays explicit in one project-local orchestration surface;
+- requested workflows stay smaller and less repetitive;
+- later execution still remains explainable because pre-run orchestration is declared rather than hidden.
 
 ## Scenario 4: logical workflow state binding
 

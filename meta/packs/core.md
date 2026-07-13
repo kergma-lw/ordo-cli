@@ -132,8 +132,12 @@
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
-- A playbook workflow entry may declare an explicit execution working directory for that run.
-- A playbook workflow entry working directory may use the existing `${...}` value-expression syntax when the expression stays within an activation-time-safe subset.
+- A playbook launch surface may declare an explicit execution working directory for a run through playbook defaults, the active profile, or the active workflow entry.
+- Working-directory precedence must be deterministic and follow increasing specificity from playbook defaults to profile context to workflow-entry context.
+- Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` value-expression syntax when the expression stays within an activation-time-safe subset.
+- A playbook may declare a `pre_run` workflow set that executes before the requested workflow in the same runtime session.
+- A `pre_run` workflow set must remain explicit, project-local, and reviewable from the playbook surface.
+- Failure in any `pre_run` workflow must prevent effectful execution of the requested workflow.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -156,9 +160,9 @@
 - A playbook must remain a project-level launch surface rather than becoming a second workflow language.
 - Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
 - Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
-- A playbook execution working directory should be explicit runtime context rather than hidden shell-first behavior.
-- A playbook working-directory expression must reuse the documented value-expression syntax rather than introducing a second expression language.
-- A playbook working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.
+- Execution working directory should remain explicit runtime context rather than hidden shell-first behavior.
+- A working-directory expression must reuse the documented value-expression syntax rather than introducing a second expression language.
+- A working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.
 
 <!-- source: requirements/workflow/core.md -->
 
@@ -353,6 +357,9 @@ The runtime must be able to answer, in machine-readable form:
 - Runtime state should not be described as a broad fact or knowledge system at this stage.
 - Runtime state should not introduce a broad query language, lock model, reconciliation model, or multi-scope memory model in the MVP.
 - The MVP should prefer a narrow explicit surface over premature generalization.
+- Runtime state should remain a cross-run memory surface rather than a substitute for per-run step registers.
+- A workflow should not write or delete a logical state role before its final read of that same logical role.
+- State mutation should remain a top-level workflow concern and should not appear inside included fragments or runtime-invoked fragments.
 
 <!-- source: requirements/policy/core.md -->
 
@@ -745,8 +752,9 @@ It must not answer the question:
 - named profile catalog for playbook-run profile selection;
 - named runtime state declarations shared across project workflows;
 - bindings from workflow-level logical state roles to concrete project state declarations;
-- explicit execution working directory selection for project-local workflow entries;
-- activation-time derivation of that execution working directory from launch-known inputs only;
+- explicit execution working directory defaults and overrides for project-local launch context;
+- explicit project-local pre-run workflow orchestration before the requested workflow executes;
+- activation-time derivation of any selected execution working directory from launch-known inputs only;
 - deterministic discovery of the project orchestration root;
 - deterministic resolution of project-local workflow and profile references.
 
@@ -760,8 +768,8 @@ It must not answer the question:
 ## Relationship to adjacent domains
 
 - A workflow defines guarded operational intent.
-- A profile defines reusable parameters and explicit overrides.
-- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, logical state-role bindings, and other explicit execution context such as an entry working directory.
+- A profile defines reusable parameters, explicit overrides, and profile-scoped execution context.
+- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults and overrides.
 - Runtime still owns mode behavior and execution semantics after playbook discovery and resolution complete.
 
 ## Quality bar
@@ -864,17 +872,36 @@ A good workflow:
 
 ## Baseline modes
 
+Baseline modes are distinct runtime questions, not necessarily wholly separate evaluation pipelines.
+They may share observations, diagnostics, and blocked-state facts, but they differ in primary intent.
+
+Detailed `check` rules live in `meta/model/runtime/check-semantics.md`.
+
 ### `check`
 
-Checks guard blocks and static prerequisites.
+Answers whether execution may proceed safely.
+
+It evaluates guard blocks and static prerequisites.
 It must not execute effectful business steps.
+
+Its primary value is a safe preflight verdict:
+- whether execution is allowed or blocked;
+- which guards or prerequisites failed;
+- which immediate blockers must be resolved first.
+
+That verdict must remain honest about coverage and incompleteness as defined in `meta/model/runtime/check-semantics.md`.
 
 ### `plan`
 
-Builds an explainable plan:
+Answers what execution shape is expected.
+
+It builds an explainable plan that shows:
 - what will be checked block by block;
+- which step blocks are expected to become executable;
 - which steps are expected in each step block;
 - where execution is blocked.
+
+Its primary value is execution preview, not merely blocked-versus-allowed status.
 
 ### `execute`
 
@@ -882,11 +909,18 @@ Executes the workflow.
 
 ### `explain`
 
-Returns an explanation of the runtime decision:
+Answers why the runtime reached its current decision.
+
+It returns an explanation of the current runtime decision state, not only of completed execution:
+- why execution is blocked or allowed;
 - why a guard block failed;
-- why a particular step block or step was chosen;
+- why a particular guard, step block, or step is relevant to the current outcome;
 - which playbook-run profile is active;
-- which overrides are active.
+- whether that profile came from explicit caller choice or playbook defaults;
+- which overrides are active;
+- which next action a human or agent can take when that can be inferred safely.
+
+`explain` is a reasoning surface, not merely a verbose restatement of `check` or `plan`.
 
 ## Why this matters
 
@@ -895,12 +929,16 @@ For agent-authored workflows, `execute` alone is not enough.
 The runtime needs modes that:
 - reduce risk;
 - improve reviewability;
-- provide machine-readable reasoning.
+- provide machine-readable reasoning;
+- support both coarse-grained and specific questions from humans and agents.
 
 ## Runtime ownership of mode semantics
 
 The runtime owns `check`, `plan`, `execute`, `explain`, and future next-safe-action semantics.
 Connector operations should not each reimplement those modes locally.
+
+Runtime may derive these modes from a shared internal decision model.
+The modes are distinct query intents over runtime decision state, not necessarily fully separate computation paths.
 
 Instead, runtime should derive higher-level execution meaning from structured operation contracts and structured operation outcomes.
 
@@ -937,6 +975,8 @@ This layer may:
 A guard is a precondition check evaluated as part of policy before a later effectful step block may run.
 
 A guard is first-class and must not collapse into a hidden step convention.
+
+Detailed runtime expectations for guard coverage, incompleteness, and preflight verdict honesty live in `meta/model/runtime/check-semantics.md`.
 
 ## Policy
 
@@ -1242,12 +1282,16 @@ Canonical path in the initial model:
 ```yaml
 version: 1
 
+pre_run:
+  - workflows/resolve-context.yml
+
 states:
   repo_task_state:
     path: .ordo/state/task-state.json
 
 defaults:
   profile: backend-default
+  working_directory: repos/default-backend
 
 workflows:
   inspect-issue:
@@ -1270,7 +1314,16 @@ profiles:
 - `states` — named project-local runtime state declarations;
 - `workflows` — named launchable workflow entries;
 - `profiles` — named launchable profile entries;
+- `pre_run` — optional project-local workflow set that executes before the requested workflow;
 - `defaults` — optional playbook-run defaults such as the active profile.
+
+## Pre-run role
+
+`pre_run` is an optional ordered set of workflow references.
+
+Each referenced workflow executes in the same runtime session before the requested workflow begins its own effectful execution.
+
+The initial model treats `pre_run` as playbook-owned orchestration for shared preparation such as context resolution, environment checks, or runtime-profile switching.
 
 ## Workflow entry role
 
@@ -1286,9 +1339,10 @@ It may additionally declare:
 
 Playbook defaults apply to one playbook run.
 
-The initial important default is:
+The initial important defaults are:
 
 - `defaults.profile` — the default active profile for the run when the caller does not select one explicitly.
+- `defaults.working_directory` — the default execution working directory when neither the active profile nor the active workflow entry selects a more specific one.
 
 ## Profile entry role
 
@@ -1300,6 +1354,7 @@ That context may include:
 
 - input bindings;
 - approved overrides;
+- a profile-scoped `working_directory` default, expressed either as a literal path string or as an activation-time-safe `${...}` value expression;
 - future runtime-facing execution selectors that remain declarative and reviewable.
 
 Profiles do not create a second orchestration language.
@@ -1325,7 +1380,8 @@ while the playbook owns the concrete project binding such as `repo_task_state`.
 ## Activation rule
 
 The initial playbook model assumes one workflow per run.
-The run selects one active profile, applies that profile, and then activates one named workflow entry.
+The run selects one active profile, applies that profile, executes any declared `pre_run` workflows, and then activates one named workflow entry.
+When execution working directory is declared at multiple playbook-owned launch surfaces, the more specific declaration wins in this order: playbook defaults, then active profile, then active workflow entry.
 
 <!-- source: model/playbook/discovery.md -->
 
@@ -1389,6 +1445,15 @@ When CLI is asked to run a named workflow entry such as `close-task`, it resolve
 
 The entry must resolve to exactly one workflow file.
 
+## Pre-run workflow resolution
+
+- `pre_run` is an optional ordered list of workflow references declared directly on the playbook.
+- Each `pre_run` item resolves with the same workflow-path rules as a named workflow file reference.
+- `pre_run` workflows execute in declaration order before the requested workflow performs its own effectful execution.
+- `pre_run` workflows run in the same runtime session as the requested workflow.
+- Runtime context changes produced by `pre_run` workflows may affect later `pre_run` items and the requested workflow.
+- Failure in a `pre_run` workflow prevents effectful execution of the requested workflow.
+
 ## Workflow file resolution
 
 - A bare workflow filename such as `close-task.yml` resolves under `<playbook-dir>/workflows/`.
@@ -1409,16 +1474,18 @@ The entry must resolve to exactly one workflow file.
 - Otherwise `defaults.profile` becomes the active profile when present.
 - If no explicit profile and no default profile are present, the run proceeds without a profile.
 - Active profile resolution happens before workflow activation and step execution.
+- The profile selected by activation is the starting profile for any `pre_run` workflows and for the requested workflow.
 
 ## Execution working directory
 
-- A workflow entry may declare `working_directory` as explicit runtime context for runs of that entry.
-- `working_directory` may be either a literal path string or a `${...}` value expression that resolves to a path string.
+- Playbook `defaults.working_directory`, active-profile `working_directory`, and workflow-entry `working_directory` are the three explicit declaration surfaces for execution working directory.
+- When more than one declaration is present, the resolved working directory follows increasing specificity in this order: playbook defaults, then active profile, then active workflow entry.
+- Each `working_directory` value may be either a literal path string or a `${...}` value expression that resolves to a path string.
 - A `working_directory` expression reuses the existing value-expression syntax but with a narrower activation-time surface.
 - The activation-time surface may read only launch-known input values.
 - The activation-time surface must not read `state...`, `step...`, or any other runtime-derived value.
 - The activation-time surface must resolve fully before the first guard or step executes.
-- After expression evaluation, a relative `working_directory` path resolves relative to `<playbook-dir>/`.
+- After expression evaluation, a relative `working_directory` path resolves relative to `<playbook-dir>/`, regardless of whether it originated from playbook defaults, the active profile, or the workflow entry.
 - After expression evaluation, an absolute `working_directory` path remains absolute.
 - When present, runtime executes the workflow with that resolved working directory as the execution working directory.
 - Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.
@@ -1723,6 +1790,551 @@ It is modeled as policy over public probe results rather than as a general embed
 - guard failed
 - execution failed
 
+See `meta/model/runtime/check-semantics.md` for the normative rules that govern incomplete pre-execution verdicts and `pre_run`-related check behavior.
+
+<!-- source: model/runtime/check-semantics.md -->
+
+# Check mode semantics
+
+## Role
+
+`check` is the runtime's pre-execution verdict surface over currently available knowledge.
+It exists to answer whether execution may proceed safely without executing effectful business steps.
+
+## CHECK-MODE-001 — Pre-execution verdict over currently available knowledge
+
+`check` must report its verdict only over knowledge that is available before effectful step execution in the current run.
+
+Why this matters:
+- this keeps `check` honest about what it actually knows now rather than what later execution might reveal;
+- this preserves the difference between preflight decision support and post-execution explanation;
+- this prevents a false impression that `check` has already established facts that only later step outcomes could establish.
+
+## CHECK-MODE-002 — No effectful business step execution
+
+`check` must not execute effectful business steps in order to improve or complete its verdict.
+
+Why this matters:
+- a preflight mode that performs business effects is not safe to use routinely;
+- users and agents must be able to call `check` without risk of hidden operational change;
+- this keeps the semantic boundary between `check` and `execute` reviewable.
+
+## CHECK-MODE-003 — Workflow order remains semantically binding
+
+`check` must preserve the ordered workflow block structure in its decision model even when it evaluates many guards from one pre-execution world snapshot.
+
+Why this matters:
+- the workflow contract answers what to check and in what order;
+- guard barriers must remain attributable to the later step sequences they protect;
+- `plan` and `explain` depend on a decision model that still reflects block boundaries rather than only a flat verdict list.
+
+## CHECK-MODE-004 — Relevant guard coverage is part of the contract
+
+`check` must distinguish between guards that were relevant and actually evaluated, guards that were relevant but not yet evaluable, and guards that were outside the currently supported pre-execution decision surface.
+
+Why this matters:
+- a verdict is not trustworthy when runtime cannot say which relevant guards it actually covered;
+- this gives both humans and agents a way to tell the difference between a clean preflight and a partial one;
+- this prevents silent loss of policy coverage when workflow structure evolves.
+
+## CHECK-MODE-005 — No observed blocker is not the same as execution allowed
+
+`check` must not treat the absence of observed blockers as equivalent to an allowed verdict when relevant guard coverage is incomplete.
+
+Why this matters:
+- missing evidence is not positive evidence;
+- otherwise runtime can report `allowed` simply because it never reached or evaluated the real blocking conditions;
+- this is the core protection against falsely optimistic preflight results.
+
+## CHECK-MODE-006 — Incomplete analysis must be representable explicitly
+
+`check` must be able to report an incomplete or unknown verdict when it cannot honestly establish either allowed or blocked from currently available knowledge.
+
+Why this matters:
+- some workflows cannot be fully decided before later step outcomes exist;
+- runtime needs a truthful middle state between clean approval and explicit refusal;
+- downstream `plan`, `explain`, and agent logic need a stable way to handle partial preflight knowledge.
+
+## CHECK-MODE-007 — Pre-execution guard evaluation may be aggressive within safe bounds
+
+`check` may evaluate any guard whose truth value is determined by the current pre-execution world snapshot, workflow inputs, runtime state, profile context, overrides, and read-only probe observations, so long as no effectful business step execution is required.
+
+Why this matters:
+- this allows `check` to provide stronger safety value than a minimal first-block-only preflight;
+- many workflows benefit from broad early blocker discovery even when later guarded steps are not yet executable;
+- this keeps the mode useful without collapsing it into simulation or effectful dry-run behavior.
+
+## CHECK-MODE-008 — Later step outcomes must not be smuggled into preflight truth
+
+`check` must not claim to know the truth value of a guard when that truth depends on effectful step outcomes or step-local data that do not exist yet in the current pre-execution state.
+
+Why this matters:
+- this keeps `check` from pretending that future execution results are already available;
+- this protects the boundary between policy evaluation and control flow that depends on step outcomes;
+- this prevents fake completeness produced by hidden simulation assumptions.
+
+## CHECK-MODE-009 — `pre_run` semantics must be explicit in the verdict model
+
+When playbook-owned `pre_run` orchestration affects what `check` can know about the main workflow, runtime must represent that effect explicitly rather than silently treating the main workflow as already cleared.
+
+Why this matters:
+- playbook orchestration changes the reachable pre-execution decision surface;
+- without an explicit rule here, runtime can report optimistic verdicts before main-workflow guards were actually covered;
+- `plan` and `explain` need a stable basis for describing whether preflight knowledge is still partial because of `pre_run`.
+
+## CHECK-MODE-010 — Downstream modes inherit check honesty, not just check data
+
+Any richer mode that derives from `check` must preserve `check`'s distinction between allowed, blocked, and incomplete knowledge rather than upgrading incomplete preflight results into confident approval.
+
+Why this matters:
+- `plan` and `explain` become misleading if they narrate certainty on top of an incomplete verdict;
+- users and agents should be able to trust that richer reasoning surfaces do not silently erase uncertainty;
+- this keeps the shared internal decision model coherent across baseline modes.
+
+## CHECK-MODE-011 — Observation invalidation must default conservatively
+
+When runtime tracks action-driven invalidation of probe-derived observations during `check`, missing narrow invalidation metadata for an effectful connector action must not strengthen the verdict basis; runtime should conservatively fall back to the full observation namespace of that connector family.
+
+Why this matters:
+- `check` needs a safe default when action contracts do not yet publish precise invalidation detail;
+- a missing annotation should reduce precision rather than create false stability claims;
+- this allows incremental adoption of invalidation metadata without weakening preflight honesty.
+
+<!-- source: model/runtime/check-analysis-model.md -->
+
+# Check analysis model exploration
+
+## Status
+
+This document is exploratory rather than normative.
+It captures a possible internal runtime design direction for richer `check` behavior.
+It does not by itself define the public contract.
+Normative `check` rules live in `meta/model/runtime/check-semantics.md`.
+Verification-oriented scenario hypotheses live in `meta/verification/runtime/check-mode.md`.
+Conservative default invalidation behavior is also part of the connector contract in `meta/model/connector/contract.md`.
+
+## Why this document exists
+
+`check` now has explicit normative requirements around pre-execution honesty, incomplete verdicts, guard coverage, and `pre_run` interaction.
+Those requirements are necessary, but they do not yet determine one concrete internal runtime model.
+
+This document exists to preserve a deeper line of reasoning before it disappears into ad hoc implementation work.
+Its role is to capture:
+
+- the design pressure behind richer `check` behavior;
+- candidate internal structures that could support that behavior;
+- candidate data that runtime may need to compute and retain;
+- open questions that should remain visible during iteration.
+
+This document is intentionally more speculative than the normative runtime docs.
+
+## Problem statement
+
+The baseline `check` contract sounds simple:
+
+- answer whether execution may proceed safely;
+- evaluate guard blocks and static prerequisites;
+- avoid effectful business step execution.
+
+In practice, that simple surface quickly runs into harder questions:
+
+1. What does it mean for a verdict to be complete rather than partial?
+2. When should runtime report `allowed`, `blocked`, or `unknown`?
+3. How much guard evaluation should happen before execution?
+4. How should runtime preserve workflow order and guard barriers while still performing aggressive preflight analysis?
+5. How should playbook-owned `pre_run` orchestration affect the truth value and completeness of the main-workflow verdict?
+6. How should runtime explain not only blockers, but also the limits of what it currently knows?
+
+The purpose of this exploration is to keep those questions explicit and connected.
+
+## Core working idea
+
+One promising direction is to treat `check` not as a flat blocker scan, but as a structured preflight knowledge model.
+
+In that direction, `check` would still emit a simple public verdict surface, but internally it would maintain a richer decision model that answers questions such as:
+
+- which guards were relevant to the current verdict;
+- which of those guards were actually evaluated;
+- which were not yet evaluable and why;
+- which observations were used to evaluate those guards;
+- which later effectful steps would invalidate or weaken those observations;
+- how strong the basis of the current verdict is.
+
+This is not the same as simulating execution.
+It is closer to reasoning about what runtime currently knows, what it does not know, and how stable that knowledge is within the pre-execution phase.
+
+## Why this is not just a confidence score
+
+It is tempting to describe richer `check` behavior as a kind of confidence score.
+That language is useful up to a point, because the runtime does need some notion of stronger and weaker verdict basis.
+
+However, a naked numeric score would be misleading if it hides the reasons behind that score.
+The important design pressure is not primarily to produce a number.
+It is to preserve structural reasons such as:
+
+- relevant guards covered versus uncovered;
+- known truths versus unknown truths;
+- observations that are stable now versus observations that would be invalidated by certain step families;
+- blocks whose executability is already grounded versus blocks whose status depends on later effectful outcomes.
+
+If any summary confidence surface is added later, it should be derived from these structural reasons rather than replacing them.
+
+## Snapshot-oriented interpretation of `check`
+
+One useful framing is to treat `check` as operating over a pre-execution world snapshot.
+
+That snapshot may include:
+
+- workflow inputs;
+- runtime state;
+- active profile context;
+- explicit overrides;
+- read-only observations from public probes;
+- playbook and workflow structure.
+
+Within this framing, runtime may aggressively evaluate any guard whose truth value is determined by that current pre-execution knowledge surface.
+
+This does **not** mean:
+
+- assuming later effectful step outcomes;
+- simulating business actions;
+- pretending that future step-local data already exists;
+- flattening the workflow into a structureless bag of policy checks.
+
+Instead, it means being ambitious about what can be known from the current snapshot while remaining strict about what cannot.
+
+## Why workflow structure must remain central
+
+Even if runtime evaluates many guards from one snapshot, the workflow is still an ordered block structure.
+The design must therefore preserve:
+
+- guard barriers;
+- later step sequences protected by those barriers;
+- the order in which blocks matter to the workflow contract;
+- the difference between guards that are already relevant to the current verdict and guards that belong to later structural regions.
+
+This is important because `check`, `plan`, and `explain` all depend on more than a flat list of true and false conditions.
+They depend on a decision model that can still answer:
+
+- where execution is blocked;
+- which steps are currently reachable;
+- which later regions remain unresolved;
+- why a guard matters to the current outcome rather than merely existing somewhere in the workflow.
+
+## Candidate model: one structural decision tree or graph
+
+The current exploration direction should not create a separate abstract “confidence tree” disconnected from workflow shape.
+Instead, a better direction is to build one structural runtime decision model that mirrors workflow structure and carries analysis annotations.
+
+The central recommendation of this document is therefore:
+
+> Build one workflow-shaped preflight decision tree or graph, then store knowledge, coverage, and invalidation annotations on that structure and on the final verdict summary.
+
+This keeps reasoning localized and explainable.
+
+## Why a tree or graph rather than a flat list
+
+A flat list of blockers is too weak for the kinds of questions that richer `check` behavior needs to answer.
+
+For example, a flat list cannot easily preserve:
+
+- whether a guard belonged to an early or late barrier;
+- whether a step block became blocked because of policy or because analysis never reached a required precondition;
+- whether an unknown result was caused by missing current knowledge or by dependence on future step outcomes;
+- whether a later step would invalidate observations used by earlier guard evaluation.
+
+A structured model allows runtime to keep these relationships explicit.
+
+## Candidate node kinds
+
+An implementation does not need all of these node kinds in its first version, but the following taxonomy is useful for thinking:
+
+- `workflow` — the root node for one assembled workflow run surface;
+- `block` — one ordered workflow block;
+- `guard` — one guard item inside a guard block;
+- `step` — one step item inside a step block;
+- `observation` — one probe-derived fact used by one or more guards;
+- `verdict` — the aggregated preflight result;
+- `effect-domain` — an abstract domain that may be observed or invalidated.
+
+For an MVP, a simpler model would likely be enough:
+
+- workflow root;
+- ordered block nodes;
+- guard item nodes;
+- step item nodes;
+- verdict summary.
+
+The richer observation and effect-domain nodes can begin as attached metadata rather than first-class graph nodes.
+
+## Candidate annotations on guard nodes
+
+Each guard node may need to retain more than its expression text or reference.
+Useful annotations could include:
+
+- `reference`;
+- `block_index`;
+- `relevant_now`;
+- `evaluable_now`;
+- `evaluated`;
+- `result` with values such as `true`, `false`, or `unknown`;
+- `unknown_reason`;
+- `depends_on_future_step_outcome`;
+- `depends_on_missing_step_local_data`;
+- `observation_domains_used`;
+- `input_dependencies`;
+- `state_dependencies`;
+- `probe_dependencies`.
+
+The key point is not the exact field names.
+The key point is that `check` needs a way to express not only a truth value, but why that truth value was or was not obtainable.
+
+## Candidate annotations on step nodes
+
+Step nodes do not exist in `check` merely as future execution placeholders.
+They matter because they determine:
+
+- which effect domains might be changed later;
+- which barriers guard those later changes;
+- where current observations would stop being stable;
+- which later guards could depend on future outcomes.
+
+Useful step annotations could include:
+
+- `name`;
+- `kind` such as `probe`, `action`, `run`, or `builtin`;
+- `effect_domains`;
+- `may_invalidate_domains`;
+- `conditional`;
+- `condition_expression`;
+- `declared_effect_class`;
+- `currently_reachable_if_prior_guards_pass`.
+
+This is still preflight structure, not execution simulation.
+
+## Candidate annotations on block nodes
+
+Block-level annotations are useful because many runtime questions are really about barriers and transitions between barriers.
+
+Useful block annotations could include:
+
+- `type` such as `guards` or `steps`;
+- `status` such as `ok`, `blocked`, `pending`, or `unknown`;
+- `eligibility_now`;
+- `covered_guard_count`;
+- `uncovered_relevant_guard_count`;
+- `unknown_guard_count`;
+- `blocking_guard_references`;
+- `depends_on_pre_run_outcome`;
+- `future_dependent`.
+
+These allow runtime to explain where one guard barrier ends and what remains unresolved beyond it.
+
+## Candidate verdict-basis summary
+
+The tree or graph should not be the only place where analysis knowledge is stored.
+The final `check` result should also contain a compact verdict-basis summary derived from the structure.
+
+Possible summary fields:
+
+- `allowed_state` with values such as `allowed`, `blocked`, or `unknown`;
+- `analysis_complete`;
+- `relevant_guard_count`;
+- `evaluated_relevant_guard_count`;
+- `unevaluated_relevant_guard_count`;
+- `blocking_guard_count`;
+- `unknown_guard_count`;
+- `incomplete_reasons`;
+- `used_observation_domains`;
+- `potential_invalidation_domains`;
+- `coverage_strength` or `verdict_basis_strength`.
+
+This summary exists for quick consumption by callers.
+The tree or graph exists so that the summary remains explainable rather than magical.
+
+## Observation domains and invalidation domains
+
+One especially promising idea is to treat observations and planned effects in terms of coarse domains.
+
+Examples:
+
+- `git` domain for repository facts and git actions;
+- `gh` domain for GitHub facts and GitHub actions;
+- `state:<name>` domains for runtime-managed state locations;
+- `shell:*` or similar broad domains for shell-based actions with large or uncertain effect surfaces.
+
+This is useful because `check` often needs to answer not only “what is true now”, but also “how far should runtime trust this truth before later planned actions may invalidate it”.
+
+The idea here is not to predict the exact future state of the world.
+The idea is to model the *stability boundary* of current observations.
+
+## Conservative influence modeling
+
+If influence domains are introduced, they should begin conservatively.
+
+For a first implementation, it may be enough to say things like:
+
+- `git.*` actions invalidate `git` observations;
+- `gh.*` actions invalidate `gh` observations;
+- state-setting builtins invalidate the affected `state:<name>` observations;
+- shell-like actions may invalidate many domains unless a narrower contract exists.
+
+The purpose of this model is not to be omniscient.
+Its purpose is to avoid over-trusting earlier observations after known effect boundaries.
+
+When in doubt, the system should prefer reduced certainty over false precision.
+
+## Relevance versus existence
+
+One important design distinction is the difference between a guard that exists somewhere in the assembled workflow and a guard that is relevant to the current preflight verdict.
+
+At least three categories are useful:
+
+- `relevant_now` — this guard contributes directly to the current verdict surface;
+- `not_yet_relevant` — this guard belongs to a structurally later region but does not yet constrain the current verdict;
+- `relevant_but_not_evaluable` — this guard matters to the verdict, but runtime cannot yet honestly determine its truth from the current snapshot.
+
+Without such a distinction, `check` risks either:
+
+- becoming too shallow because it evaluates almost nothing;
+- or becoming noisy and hard to interpret because it evaluates everything without telling callers what actually matters.
+
+## `pre_run` as a first-class pressure case
+
+Playbook-owned `pre_run` orchestration is a critical test case for this model.
+
+Why:
+
+- `pre_run` is structurally earlier than the main workflow;
+- it may influence profile context, working directory, or other activation conditions;
+- it can make the main workflow verdict partial rather than final;
+- it exposes the difference between “no blocker seen yet” and “main workflow actually cleared”.
+
+Any candidate analysis model that cannot represent this honestly is probably too weak.
+
+This makes `pre_run` not just a corner case, but a useful forcing function.
+
+## Relationship to `plan` and `explain`
+
+This exploration is about `check`, but it has direct consequences for `plan` and `explain`.
+
+If runtime builds a richer structural preflight model, then:
+
+- `plan` can inherit structural reachability and barrier information without inventing false certainty;
+- `explain` can say not only why execution is blocked or allowed, but also why the current verdict remains partial;
+- downstream modes can remain honest because they derive from a decision model that already preserves incompleteness.
+
+This is one reason to prefer a shared internal model over mode-specific one-off logic.
+
+## What this direction is **not**
+
+It is important to state what this exploration does **not** propose.
+
+It does not propose:
+
+- running effectful business steps during `check`;
+- silently converting `check` into a dry-run execution engine;
+- predicting concrete future action success as if those actions had already run;
+- replacing workflow structure with a purely probabilistic system;
+- turning `check` into an opaque confidence number.
+
+The proposal is about better preflight honesty, not hidden simulation.
+
+## Suggested MVP shape
+
+A first implementation does not need a full graph engine.
+
+An MVP could keep the existing ordered block-oriented runtime shape and enrich it with additional annotations.
+
+Minimum useful additions might include:
+
+### Guard items
+
+- whether the guard is relevant;
+- whether it is evaluable now;
+- whether it was evaluated;
+- result value;
+- unknown reason;
+- observation domains used.
+
+### Step items
+
+- effect domains;
+- may-invalidate domains;
+- declared effect class.
+
+### Verdict summary
+
+- `analysis_complete`;
+- `allowed_state`;
+- `unevaluated_relevant_guards`;
+- `incomplete_reasons`;
+- a coarse `coverage_strength` or equivalent basis-strength field.
+
+This would already be enough to prevent many falsely optimistic outcomes without overcommitting to a complex architecture.
+
+## Questions that remain open
+
+This exploration intentionally leaves several questions unresolved.
+
+### 1. Public versus internal surface
+
+How much of the richer analysis model should become public result payload, and how much should remain internal runtime machinery?
+
+### 2. Domain metadata origin
+
+Where should effect-domain or invalidation metadata live?
+Possible homes include:
+
+- connector contracts;
+- operation publication metadata;
+- runtime-side heuristics;
+- a combination of explicit declarations and conservative fallback rules.
+
+### 3. How strongly to distinguish relevance categories
+
+Should runtime expose only a simple relevant/not-relevant split, or a richer distinction among relevant-now, later-relevant, and structurally present but verdict-irrelevant guards?
+
+### 4. Summary vocabulary
+
+Should the public surface say `confidence`, `coverage_strength`, `verdict_basis_strength`, `analysis_completeness`, or something else entirely?
+
+The current document leans away from pure “confidence” language because it sounds probabilistic.
+
+### 5. Treatment of shell-like actions
+
+How broad should default invalidation be for shell-driven actions or launcher-mediated commands?
+
+### 6. Relation to future `next` behavior
+
+If runtime later offers richer next-safe-action behavior, should it derive directly from this same analysis structure?
+
+The likely answer is yes, but this document does not attempt to settle that now.
+
+## Design recommendation for now
+
+Until a more concrete architecture is selected, the safest working recommendation is:
+
+1. Keep `check` grounded in currently available pre-execution knowledge.
+2. Preserve ordered workflow block structure in the internal decision model.
+3. Track relevant guard coverage explicitly.
+4. Represent incomplete verdicts explicitly.
+5. Treat observation stability and invalidation as first-class analysis concerns.
+6. Prefer structural reasons over opaque confidence numbers.
+
+This recommendation is intentionally compatible with the normative `CHECK-MODE-*` rules while leaving implementation freedom.
+
+## What a future ADR might decide
+
+If this direction proves useful, a later ADR could settle questions such as:
+
+- whether runtime should standardize effect domains across connectors;
+- whether invalidation metadata belongs in connector publication surfaces;
+- whether the internal model should remain a block list with annotations or become a more explicit graph;
+- which summary fields become part of the stable public `check` result contract.
+
+This document should therefore be read as a preserved exploration path, not as a frozen solution.
+
 <!-- source: model/runtime/state.md -->
 
 # Runtime state model
@@ -1857,6 +2469,9 @@ state_delete: state.task_memory[inputs.task_key].branch
 - The initial model should not assume multiple state scopes beyond explicitly declared named entries.
 - The initial model should not require bulk update semantics, query semantics, or concurrency semantics.
 - The initial model should not rename this capability into a larger semantic system before the runtime actually owns those broader concerns.
+- The initial model should treat runtime state as persistent handoff memory across runs, not as a second per-run scratch surface beside step registers.
+- State writes and deletes belong to the top-level workflow authoring surface rather than to include fragments or run-invoked fragments.
+- Within one workflow, a logical state role should be written or deleted only after the final read of that same role.
 
 <!-- source: model/runtime/guard-evaluation.md -->
 
@@ -1865,6 +2480,7 @@ state_delete: state.task_memory[inputs.task_key].branch
 ## Role
 
 Guard evaluation is part of the runtime decision surface, not only a hidden implementation detail.
+See also `meta/model/runtime/check-semantics.md` for the normative `check`-mode rules that constrain guard-coverage claims and incomplete preflight verdicts.
 
 ## Minimum runtime structure
 
@@ -1988,6 +2604,8 @@ Shared family prerequisites belong to connector bootstrap rather than to every o
 
 Operation contract may also expose lifecycle metadata when needed, for example whether an operation is deprecated and which canonical operations should replace it.
 
+Action contracts may also expose conservative observation-invalidation metadata for runtime `check` reasoning.
+
 ## Explainability and failure normalization
 
 Every operation must:
@@ -2012,6 +2630,19 @@ Implications:
 - actions should place their durable effect summary in `outputs` rather than in summary text alone
 - `raw` is supplementary detail and must not be the only place where contract-relevant meaning exists
 - runtime mode semantics should be derived from this structured local surface rather than pushed down into operation-specific mode logic
+
+## Observation invalidation metadata
+
+An effectful action may declare which probe-derived observation scopes it invalidates.
+
+When such metadata is present, runtime may use it to reason conservatively about the stability limits of pre-execution knowledge during `check`.
+
+If an effectful connector action does not declare narrower observation invalidation metadata, runtime should conservatively treat it as invalidating the full observation namespace of that connector family.
+
+Why this matters:
+- `check` should not over-trust probe observations across later effect boundaries;
+- missing invalidation detail must weaken confidence rather than justify optimistic approval;
+- connector authors may improve precision incrementally without requiring perfect metadata coverage before the mechanism is useful.
 
 ## Contract split
 
@@ -2079,6 +2710,7 @@ Implications:
 - the execution handler remains the operation's execution point rather than the module's publication point;
 - runtime or connector-family discovery should read the operation module through this uniform publication hook;
 - simple operation modules should not rely on ad hoc naming magic to bind contract metadata to execution behavior.
+- effectful action publication may declare conservative observation-invalidation metadata for runtime `check` reasoning.
 
 ## Minimal authoring context
 
@@ -2932,6 +3564,7 @@ Unknown top-level and nested stable fields fail validation.
 workflows:
   close-task:
     file: close-task.yml
+    working_directory: ${inputs.repo_root}
     state_bindings:
       task_memory: repo_task_state
 ```
@@ -2942,7 +3575,20 @@ Required field:
 
 Optional stable field:
 
+- `working_directory`
 - `state_bindings`
+
+## Stable pre-run shape
+
+```yaml
+pre_run:
+  - workflows/resolve-context.yml
+  - workflows/ensure-environment.yml
+```
+
+Optional stable top-level field:
+
+- `pre_run`
 
 Stable `state_bindings` shape:
 
@@ -2956,11 +3602,13 @@ state_bindings:
 ```yaml
 defaults:
   profile: backend-default
+  working_directory: repos/default-backend
 ```
 
 Optional stable field:
 
 - `profile`
+- `working_directory`
 
 ## Stable profile entry shape
 
@@ -3238,7 +3886,28 @@ Expected Ordo value:
 - storage location is managed in project-local orchestration context;
 - workflows do not each duplicate the same storage declaration.
 
-## Scenario 3b: launch-time input override
+## Scenario 3a: in-process profile switch
+
+One workflow run reaches a point where later steps should execute in a different declared profile context such as `frontend`.
+
+Expected Ordo value:
+
+- the context switch is explicit and reviewable;
+- subsequent execution may use the new profile without restarting the process;
+- the switch remains runtime context rather than workflow-owned business state.
+
+## Scenario 3b: runtime profile switch construct
+
+One workflow step uses an explicit engine-level construct such as `profile_switch` to select `frontend` for later steps or nested workflow execution in the current run.
+
+Expected Ordo value:
+
+- the context switch is explicit and reviewable in workflow material;
+- later execution in the same run may use the new profile without hidden shell state;
+- later execution in the same run may also observe the new profile's missing-input defaults;
+- already-completed parts of the current run are not silently reinterpreted under a different profile.
+
+## Scenario 3c: launch-time input override
 
 Caller launches a named workflow entry but needs to override one input such as `repository`, `issue_number`, or `enabled` for a single run.
 
@@ -3247,6 +3916,16 @@ Expected Ordo value:
 - the caller can override or add the input without editing the workflow file;
 - launch-time values win over workflow defaults and profile-provided defaults;
 - the override remains local to that one run.
+
+## Scenario 3d: playbook-level pre-run workflow set
+
+Playbook declares a shared `pre_run` workflow set that executes before the requested workflow so common preparation such as context resolution or runtime-profile switching stays centralized.
+
+Expected Ordo value:
+
+- common preparation stays explicit in one project-local orchestration surface;
+- requested workflows stay smaller and less repetitive;
+- later execution still remains explainable because pre-run orchestration is declared rather than hidden.
 
 ## Scenario 4: logical workflow state binding
 
@@ -3544,6 +4223,174 @@ Guard evaluation results must remain explainable as a machine-usable runtime sur
 - Runtime output distinguishes boolean guard failure from probe evaluation failure.
 - Guard-evaluation traces remain structured enough for `check`, `plan`, and `explain` to report consistent blocker identity.
 - Reuse of repeated identical probe references inside one expression does not weaken explainability.
+
+<!-- source: verification/runtime/check-mode.md -->
+
+# Check mode verification hypotheses
+
+## Role
+
+This document records verification-oriented hypotheses and scenario expectations for `check`.
+It is not the normative source of `check` semantics.
+
+Normative requirements live in `meta/model/runtime/check-semantics.md`.
+Exploratory internal-model discussion lives in `meta/model/runtime/check-analysis-model.md`.
+
+The purpose of this document is to preserve concrete checks that future implementation and test work should validate.
+
+## HYP-CHECK-001 — Incomplete relevant guard coverage must block optimistic approval
+
+Related normative rules:
+- `CHECK-MODE-004`
+- `CHECK-MODE-005`
+- `CHECK-MODE-006`
+- `CHECK-MODE-009`
+
+Scenario shape:
+- a playbook or workflow structure places `pre_run` or some other structurally earlier step region before main-workflow guards;
+- the runtime does not actually evaluate one or more relevant main-workflow guards;
+- no explicit blocking guard has yet been observed.
+
+Expected result:
+- `check` must not report a clean allowed verdict;
+- the result must contain an explicit incomplete or unknown signal;
+- the result should indicate that relevant guard coverage is incomplete rather than pretending that main-workflow policy has cleared.
+
+Why this matters:
+- this is the clearest protection against falsely optimistic preflight results;
+- it verifies that runtime distinguishes “no blocker found yet” from “workflow is cleared to run”;
+- it directly exercises the pressure case introduced by `pre_run`.
+
+Failure meaning:
+- a failure here means runtime is upgrading missing coverage into positive approval;
+- downstream `plan` and `explain` will likely inherit misleading certainty from the same defect.
+
+## HYP-CHECK-002 — Guard coverage must be represented structurally, not only as blockers
+
+Related normative rules:
+- `CHECK-MODE-004`
+- `CHECK-MODE-006`
+- `CHECK-MODE-010`
+
+Scenario shape:
+- a workflow contains several relevant guards;
+- at least one relevant guard evaluates true;
+- at least one relevant guard evaluates false;
+- at least one relevant guard remains unevaluable from current pre-execution knowledge.
+
+Expected result:
+- `check` should distinguish these categories explicitly rather than collapsing everything into a blocker list;
+- the runtime result should make it possible to tell which relevant guards were evaluated and which were not;
+- an unknown or incomplete region should remain visible even if a different guard already failed.
+
+Why this matters:
+- the quality of a preflight result depends not only on blockers but on coverage transparency;
+- both human readers and agents need to tell whether a verdict is fully grounded or only partially grounded;
+- this prevents a false appearance of completeness when some policy surface was never actually checked.
+
+Failure meaning:
+- a failure here means runtime is hiding important coverage distinctions;
+- later explanation quality will degrade because `explain` cannot narrate distinctions that `check` discarded.
+
+## HYP-CHECK-003 — Aggressive preflight guard evaluation is allowed within current snapshot bounds
+
+Related normative rules:
+- `CHECK-MODE-001`
+- `CHECK-MODE-003`
+- `CHECK-MODE-007`
+
+Scenario shape:
+- a workflow contains later guard regions beyond the first immediate barrier;
+- those later guards depend only on current inputs, runtime state, profile context, overrides, and read-only probe observations;
+- no later guard in this scenario depends on future effectful step outcomes.
+
+Expected result:
+- runtime may evaluate those later guards during `check`;
+- the result must still preserve block structure and guard attribution rather than flattening the workflow into one verdict list;
+- any such additional evaluation should strengthen preflight knowledge without pretending that later effectful steps have already run.
+
+Why this matters:
+- this verifies that `check` can be meaningfully strong rather than stopping at the first narrow barrier by habit;
+- it allows earlier discovery of blockers when those blockers are already decidable from the current snapshot;
+- it protects against the opposite failure mode where `check` becomes too weak to be useful.
+
+Failure meaning:
+- a failure here means runtime is unnecessarily shallow even when more knowledge is safely available;
+- this would undercut one of the main reasons to enrich `check` at all.
+
+## HYP-CHECK-004 — Future-step-dependent guards must remain unknown rather than guessed
+
+Related normative rules:
+- `CHECK-MODE-001`
+- `CHECK-MODE-006`
+- `CHECK-MODE-008`
+
+Scenario shape:
+- a later guard depends on an effectful step outcome, a step-local output, or some other future execution product that does not yet exist in the pre-execution state.
+
+Expected result:
+- `check` must not invent a truth value for that guard;
+- the runtime result should mark the guard as unknown, incomplete, or not yet evaluable;
+- the result should preserve the reason that this guard depends on future execution knowledge.
+
+Why this matters:
+- this preserves the boundary between preflight analysis and actual execution;
+- it prevents `check` from silently turning into speculative simulation;
+- it ensures that later richer modes inherit honest uncertainty rather than fabricated certainty.
+
+Failure meaning:
+- a failure here means runtime is smuggling future execution assumptions into present knowledge;
+- once that happens, the trustworthiness of `check` collapses even if the surface still looks structured.
+
+## HYP-CHECK-005 — Observation invalidation should weaken verdict basis conservatively
+
+Related normative rules:
+- `CHECK-MODE-001`
+- `CHECK-MODE-003`
+- `CHECK-MODE-007`
+- `CHECK-MODE-010`
+
+Scenario shape:
+- one or more guards are evaluated from current probe observations in some domain such as `git`;
+- later planned steps belong to effect domains that may invalidate those observations, such as `git.*` actions or broad shell-like actions.
+
+Expected result:
+- `check` may still report what is currently true from the present snapshot;
+- however, the runtime result should preserve that these observations sit before a potential invalidation boundary;
+- if the implementation exposes verdict-basis or coverage-strength metadata, that metadata should reflect reduced certainty or reduced downstream stability rather than ignoring the invalidation risk.
+
+Why this matters:
+- this is the bridge between simple guard truth evaluation and richer preflight honesty;
+- it gives runtime a way to preserve structural reasons for weaker verdict basis without faking future outcomes;
+- it supports stronger later `plan` and `explain` behavior by making observation boundaries explicit.
+
+Failure meaning:
+- a failure here means runtime is treating all observations as equally stable even when later effect surfaces obviously threaten them;
+- the result may still look correct in narrow cases while remaining conceptually unsafe in more complex workflows.
+
+## HYP-CHECK-006 — Missing narrow invalidation metadata must fall back conservatively
+
+Related normative rules:
+- `CHECK-MODE-011`
+
+Scenario shape:
+- an effectful connector action appears in the workflow;
+- runtime tracks observation invalidation during `check`;
+- that action does not declare narrower invalidation metadata.
+
+Expected result:
+- runtime should not treat the action as preserving prior observations by default;
+- runtime should conservatively fall back to invalidating the full observation namespace of that connector family;
+- any verdict-basis reasoning should therefore become weaker rather than stronger in the face of missing narrow metadata.
+
+Why this matters:
+- a safe default is necessary if invalidation metadata is adopted incrementally;
+- otherwise missing metadata would silently behave like proof of stability;
+- this preserves honesty while allowing connector contracts to become more precise over time.
+
+Failure meaning:
+- a failure here means the system is optimistic exactly where it should be conservative;
+- partial metadata rollout would then make `check` less trustworthy instead of more useful.
 
 <!-- source: verification/runtime/introspection-drift.md -->
 

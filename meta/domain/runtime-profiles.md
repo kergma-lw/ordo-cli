@@ -10,6 +10,10 @@ They exist to answer questions such as:
 
 This makes profiles the natural project-local place to bind execution-facing context such as launcher selection inputs, while still keeping launcher usage explicit at the step level.
 
+It also makes profile switching a plausible runtime-owned context surface, as long as switching remains explicit, inspectable, and separate from workflow-owned business state.
+
+That switching should be modeled as an engine-level construct such as `profile_switch`, not as an ordinary connector action.
+
 Profiles should stay declarative and reviewable.
 
 They are not meant to become a shadow workflow language or a place to hide unrelated business policy.
