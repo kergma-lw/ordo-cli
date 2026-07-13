@@ -57,6 +57,14 @@ class FragmentRunClassificationTest(unittest.TestCase):
             self.assertFalse(decision.admissible)
             self.assertEqual(decision.reason, "run_subtree_requires_effectful_execution")
 
+    def test_classifies_missing_fragment_as_not_loadable(self) -> None:
+        workflow = Workflow(version=0, workflow="root", steps=(Step(name="expand", run="missing.yml", resolved_run_path="/tmp/does-not-exist.yml"),))
+
+        decision = classify_run_for_check(workflow.steps[0], workflow, block_index=0, step_index=0)
+
+        self.assertFalse(decision.admissible)
+        self.assertEqual(decision.reason, "run_target_not_loadable")
+
 
 if __name__ == "__main__":
     unittest.main()

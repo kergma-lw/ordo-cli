@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import OperationResult, RuntimeResult, RuntimeStatus
@@ -72,6 +74,30 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["explanation"]["category"], "incomplete")
         self.assertEqual(result.outputs["next_actions"][0]["action"], "complete_preflight_analysis")
+
+    def test_explain_preserves_expanded_run_reasoning(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.enabled == true\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                inputs={"enabled": True},
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                    GuardBlock(guards=(Guard(expr='inputs.enabled == true'),)),
+                ),
+            )
+
+            result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.outputs["explanation"]["category"], "ok")
+            expanded = [item for item in result.outputs["block_items"] if item.get("expanded_from_run") == "profile-guard.yml"]
+            self.assertEqual(len(expanded), 1)
 
     def test_explain_runtime_result_covers_execution_failure(self) -> None:
         execution_result = RuntimeResult(

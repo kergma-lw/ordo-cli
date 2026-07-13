@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
@@ -101,6 +103,30 @@ class PlanModeTest(unittest.TestCase):
         self.assertFalse(result.outputs["guard_items"][0]["evaluated"])
         self.assertEqual(result.outputs["guard_items"][0]["unknown_reason"], "guard_not_evaluated")
         self.assertIsNotNone(result.preflight_decision)
+
+    def test_plan_preserves_expanded_run_structure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.enabled == true\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                inputs={"enabled": True},
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                    GuardBlock(guards=(Guard(expr='inputs.enabled == true'),)),
+                ),
+            )
+
+            result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            expanded = [item for item in result.outputs["block_items"] if item.get("expanded_from_run") == "profile-guard.yml"]
+            self.assertEqual(result.outputs["execution_allowed"], True)
+            self.assertEqual(len(expanded), 1)
 
     def test_plan_surfaces_expr_guard_before_runtime_support_exists(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
