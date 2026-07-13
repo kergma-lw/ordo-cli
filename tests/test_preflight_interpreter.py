@@ -1,9 +1,11 @@
 import unittest
+from pathlib import Path
+import tempfile
 
 from ordo.model.connector import OperationContract
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import OperationRef, Step, Workflow
-from ordo.runtime.preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, resolve_preflight_value, store_preflight_register_output
+from ordo.runtime.preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, expand_preflight_run_step, resolve_preflight_value, store_preflight_register_output
 from ordo.runtime.resolution import ResolvedOperation
 
 
@@ -149,6 +151,31 @@ class PreflightInterpreterTest(unittest.TestCase):
         self.assertEqual(halt.reason, "condition_not_computable")
         self.assertEqual(halt.step_name, "inspect")
         self.assertEqual(halt.branch_condition, "${inputs.enabled}")
+
+    def test_expands_nested_preflight_analyzable_run_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fragment = Path(temp_dir) / "fragment.yml"
+            fragment.write_text("steps:\n  - name: switch\n    profile_switch: frontend\n", encoding="utf-8")
+            workflow = Workflow(version=0, workflow="demo", blocks=())
+            step = Step(name="expand", run="fragment.yml", resolved_run_path=str(fragment))
+
+            expanded = expand_preflight_run_step(step, workflow, block_index=0, step_index=0)
+
+            self.assertIsNotNone(expanded.workflow)
+            self.assertIsNone(expanded.halt)
+            self.assertEqual(expanded.workflow.workflow, "demo::fragment.yml")
+
+    def test_records_halt_for_unanalyzable_nested_run_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fragment = Path(temp_dir) / "fragment.yml"
+            fragment.write_text("steps:\n  - name: comment\n    uses: gh.issue.comment\n", encoding="utf-8")
+            workflow = Workflow(version=0, workflow="demo", blocks=())
+            step = Step(name="expand", run="fragment.yml", resolved_run_path=str(fragment))
+
+            expanded = expand_preflight_run_step(step, workflow, block_index=0, step_index=0)
+
+            self.assertIsNone(expanded.workflow)
+            self.assertEqual(expanded.halt.reason, "run_subtree_requires_effectful_execution")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from ordo.model.json import JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Step, Workflow
 
+from .fragment_runs import classify_run_for_check
 from .providers import GuardProbe
 from .resolution import ResolvedOperation
 from .value_resolution import ValueResolutionError, resolve_runtime_value
@@ -29,6 +30,16 @@ class PreflightHalt:
             "branch_condition": self.branch_condition,
             "details": dict(self.details),
         }
+
+
+@dataclass(frozen=True, slots=True)
+class PreflightRunExpansion:
+    """Structured result for one nested preflight-analyzable run step."""
+
+    step_name: str
+    run_reference: str
+    workflow: Workflow | None = None
+    halt: PreflightHalt | None = None
 
 
 def resolve_preflight_value(
@@ -111,6 +122,29 @@ def build_preflight_halt(
         step_name=None if step is None else step.name,
         branch_condition=branch_condition,
         details={} if details is None else dict(details),
+    )
+
+
+def expand_preflight_run_step(
+    step: Step,
+    workflow: Workflow,
+    *,
+    block_index: int,
+    step_index: int,
+) -> PreflightRunExpansion:
+    """Expand one nested run step when it is analyzable from current preflight knowledge."""
+
+    decision = classify_run_for_check(step, workflow, block_index=block_index, step_index=step_index)
+    if decision.admissible and decision.workflow is not None:
+        return PreflightRunExpansion(step_name=step.name, run_reference=step.run or "", workflow=decision.workflow)
+    return PreflightRunExpansion(
+        step_name=step.name,
+        run_reference=step.run or "",
+        halt=build_preflight_halt(
+            decision.reason,
+            step=step,
+            details={"run": step.run or "", "block_index": block_index, "step_index": step_index},
+        ),
     )
 
 
