@@ -32,6 +32,9 @@ sources = [
   "model/workflow/value-expressions.md",
   "model/workflow/guard-expressions.md",
   "model/runtime/lifecycle.md",
+  "model/runtime/check-semantics.md",
+  "model/runtime/check-analysis-model.md",
+  "model/runtime/preflight-step-interpreter.md",
   "model/runtime/state.md",
   "model/runtime/guard-evaluation.md",
   "model/runtime/package-layout.md",
@@ -58,6 +61,7 @@ sources = [
   "verification/workflow/authoring.md",
   "verification/workflow/guard-expressions.md",
   "verification/runtime/guard-evaluation.md",
+  "verification/runtime/check-mode.md",
   "verification/runtime/introspection-drift.md",
   "verification/runtime/invariants.md",
   "verification/meta/packs.md"

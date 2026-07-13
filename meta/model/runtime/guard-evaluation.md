@@ -3,6 +3,8 @@
 ## Role
 
 Guard evaluation is part of the runtime decision surface, not only a hidden implementation detail.
+See also `meta/model/runtime/check-semantics.md` for the normative `check`-mode rules that constrain guard-coverage claims and incomplete preflight verdicts.
+Step-derived read-only knowledge used by guard evaluation must follow the contract in `meta/model/runtime/preflight-step-interpreter.md`.
 
 ## Minimum runtime structure
 
