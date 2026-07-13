@@ -11,7 +11,7 @@ from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
-from .guard_expressions import GuardExpressionParseError, parse_guard_expression, validate_parsed_guard_expression
+from .guard_expressions import GuardExpressionParseError, StateReferenceNode as GuardStateReferenceNode, parse_guard_expression, validate_parsed_guard_expression
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .value_expressions import (
@@ -21,7 +21,7 @@ from .value_expressions import (
     LiteralNode,
     PipelineNode,
     ReferenceNode,
-    StateReferenceNode,
+    StateReferenceNode as ValueStateReferenceNode,
     StepReferenceNode,
     UnaryNode,
     ValueExpressionNode,
@@ -104,12 +104,67 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
     diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
     diagnostics.extend(_validate_workflow_blocks(payload, source=source))
+    diagnostics.extend(_validate_state_role_write_order(payload, source=source))
 
     return _report("workflow", diagnostics)
 
 
 def _validate_workflow_blocks(payload: JSONObject, *, source: str) -> list[Diagnostic]:
     return _validate_block_list(payload.get("blocks"), source=source)
+
+
+def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> list[Diagnostic]:
+    blocks = payload.get("blocks")
+    if not isinstance(blocks, list):
+        return []
+
+    events: list[tuple[int, str, str, tuple[str, ...]]] = []
+    position = 0
+    for block_index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            continue
+        if isinstance(block.get("guards"), list):
+            for guard_index, guard in enumerate(block["guards"]):
+                for role in _collect_state_roles_from_guard_item(guard):
+                    events.append((position, role, "read", ("blocks", str(block_index), "guards", str(guard_index))))
+                position += 1
+            continue
+        if not isinstance(block.get("steps"), list):
+            continue
+        for step_index, step in enumerate(block["steps"]):
+            if not isinstance(step, dict):
+                position += 1
+                continue
+            step_path = ("blocks", str(block_index), "steps", str(step_index))
+            for role in _collect_state_roles_from_step_item(step):
+                events.append((position, role, "read", step_path))
+            target_role = _state_target_role_from_step_item(step)
+            if target_role is not None:
+                events.append((position, target_role, "write", step_path))
+            position += 1
+
+    last_reads: dict[str, int] = {}
+    for event_index, role, kind, _ in events:
+        if kind == "read":
+            last_reads[role] = event_index
+
+    diagnostics: list[Diagnostic] = []
+    for event_index, role, kind, path in events:
+        if kind != "write":
+            continue
+        last_read = last_reads.get(role)
+        if last_read is None or event_index >= last_read:
+            continue
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.state_role.write_before_last_read",
+                "Logical state role writes and deletes are allowed only after the final read of that same role",
+                path,
+                source,
+                state_role=role,
+            )
+        )
+    return diagnostics
 
 
 def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
@@ -212,6 +267,8 @@ def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -
     diagnostics.extend(_validate_unknown_fields(payload, PROFILE_ALLOWED_FIELDS, path=(), source=source))
     diagnostics.extend(_require_non_empty_string(payload, "name", source=source))
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
+    if "working_directory" in payload:
+        diagnostics.extend(_require_non_empty_string(payload, "working_directory", source=source, path=("working_directory",)))
     diagnostics.extend(_validate_checks(payload.get("checks"), source=source))
     diagnostics.extend(_validate_overrides(payload.get("overrides"), source=source))
     diagnostics.extend(_validate_launchers(payload.get("launchers"), source=source))
@@ -269,10 +326,11 @@ def _validate_step_list(
         diagnostics.extend(_require_non_empty_string(item, "name", path=item_path + ("name",), source=source))
         has_uses = "uses" in item
         has_run = "run" in item
+        has_profile_switch = "profile_switch" in item
         has_value = "value" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
-        form_count = sum((has_uses, has_run, has_value, has_state_set, has_state_delete))
+        form_count = sum((has_uses, has_run, has_profile_switch, has_value, has_state_set, has_state_delete))
 
         prior_registers = {name: register_path for name, register_path in seen_registers.items()}
 
@@ -280,7 +338,7 @@ def _validate_step_list(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.form",
-                    "Step must define exactly one of 'uses', 'run', 'value', 'state_set', or 'state_delete'",
+                    "Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'state_set', or 'state_delete'",
                     item_path,
                     source,
                 )
@@ -298,6 +356,16 @@ def _validate_step_list(
             )
         elif has_run:
             diagnostics.extend(_validate_run_step(item, source=source, path=item_path, prior_registers=prior_registers, declared_registers=effective_declared_registers))
+        elif has_profile_switch:
+            diagnostics.extend(
+                _validate_profile_switch_step(
+                    item,
+                    source=source,
+                    path=item_path,
+                    prior_registers=prior_registers,
+                    declared_registers=effective_declared_registers,
+                )
+            )
         elif has_value:
             diagnostics.extend(
                 _validate_runtime_value_surface(
@@ -556,6 +624,54 @@ def _validate_run_step(
     return diagnostics
 
 
+def _validate_profile_switch_step(
+    value: JSONObject,
+    *,
+    source: str,
+    path: tuple[str, ...],
+    prior_registers: dict[str, tuple[str, ...]],
+    declared_registers: dict[str, tuple[str, ...]],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(
+        _validate_profile_switch_value(
+            value.get("profile_switch"),
+            path=path + ("profile_switch",),
+            source=source,
+            prior_registers=prior_registers,
+            declared_registers=declared_registers,
+        )
+    )
+    if value.get("register") is not None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.profile_switch.register_unsupported",
+                "profile_switch steps do not support 'register'",
+                path + ("register",),
+                source,
+            )
+        )
+    if value.get("launcher") is not None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.profile_switch.launcher_unsupported",
+                "profile_switch steps do not support 'launcher'",
+                path + ("launcher",),
+                source,
+            )
+        )
+    if value.get("with") is not None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.profile_switch.with_unsupported",
+                "profile_switch steps do not support 'with'",
+                path + ("with",),
+                source,
+            )
+        )
+    return diagnostics
+
+
 def _validate_call(
     value: JSONValue,
     *,
@@ -703,6 +819,68 @@ def _validate_runtime_value_surface(
     return diagnostics
 
 
+def _validate_profile_switch_value(
+    value: JSONValue | None,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    prior_registers: dict[str, tuple[str, ...]],
+    declared_registers: dict[str, tuple[str, ...]],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if not isinstance(value, str):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.profile_switch.type",
+                "profile_switch must be a string literal or a ${...} value expression",
+                path,
+                source,
+                actual_type=type(value).__name__,
+            )
+        )
+        return diagnostics
+    if not value:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.profile_switch.empty",
+                "profile_switch must not be empty",
+                path,
+                source,
+            )
+        )
+        return diagnostics
+    expression = _extract_runtime_value_expression(value)
+    if expression is None:
+        return diagnostics
+    try:
+        parsed = parse_value_expression(expression)
+    except ValueExpressionParseError as exc:
+        diagnostics.append(exc.to_diagnostic(path=path, source=source, expression=expression))
+        return diagnostics
+    references = collect_step_references(parsed.root)
+    if references:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.profile_switch.step_ref_forbidden",
+                "profile_switch must not depend on step.* references",
+                path,
+                source,
+                references=[f"step.{reference.register}" + ("." + ".".join(reference.fields) if reference.fields else "") for reference in references],
+            )
+        )
+        return diagnostics
+    diagnostics.extend(
+        _validate_runtime_value_surface(
+            value,
+            path=path,
+            source=source,
+            prior_registers=prior_registers,
+            declared_registers=declared_registers,
+        )
+    )
+    return diagnostics
+
+
 def _extract_runtime_value_expression(value: str) -> str | None:
     if value.startswith("${") and value.endswith("}") and len(value) >= 4:
         return value[2:-1]
@@ -754,7 +932,7 @@ def _infer_value_expression_type(
                 )
             )
         return "unknown", diagnostics
-    if isinstance(node, (StateReferenceNode, StepReferenceNode)):
+    if isinstance(node, (ValueStateReferenceNode, StepReferenceNode)):
         return "unknown", diagnostics
     if isinstance(node, BuiltinCallNode):
         if node.name == "format":
@@ -960,6 +1138,142 @@ def _validate_format_value_object(
             )
         )
     return diagnostics
+
+
+def _collect_state_roles_from_guard_item(item: JSONValue) -> set[str]:
+    if isinstance(item, str):
+        try:
+            parsed = parse_guard_expression(item)
+        except GuardExpressionParseError:
+            return set()
+        return _collect_guard_state_references(parsed.root)
+    if isinstance(item, dict):
+        return _collect_state_roles_from_runtime_value_surface(item.get("with"))
+    return set()
+
+
+def _collect_state_roles_from_step_item(step: JSONObject) -> set[str]:
+    roles: set[str] = set()
+    condition = step.get("if")
+    if isinstance(condition, str):
+        expression = _extract_runtime_value_expression(condition)
+        if expression is not None:
+            try:
+                parsed = parse_value_expression(expression, allow_boolean_composition=True)
+            except ValueExpressionParseError:
+                parsed = None
+            if parsed is not None:
+                roles.update(_collect_value_state_references(parsed.root))
+    if "uses" in step or "run" in step:
+        roles.update(_collect_state_roles_from_runtime_value_surface(step.get("with")))
+    if "value" in step:
+        roles.update(_collect_state_roles_from_runtime_value_surface(step.get("value")))
+    if "state_set" in step and isinstance(step.get("state_set"), dict):
+        target_expr, raw_value = next(iter(step["state_set"].items()))
+        if isinstance(raw_value, (dict, list, str)):
+            roles.update(_collect_state_roles_from_runtime_value_surface(raw_value))
+    return roles
+
+
+def _state_target_role_from_step_item(step: JSONObject) -> str | None:
+    if isinstance(step.get("state_set"), dict) and step["state_set"]:
+        target_expr = next(iter(step["state_set"].keys()))
+        if isinstance(target_expr, str):
+            try:
+                return parse_state_path(target_expr).state_role
+            except StatePathParseError:
+                return None
+    target_expr = step.get("state_delete")
+    if isinstance(target_expr, str):
+        try:
+            return parse_state_path(target_expr).state_role
+        except StatePathParseError:
+            return None
+    return None
+
+
+def _collect_state_roles_from_runtime_value_surface(value: JSONValue | None) -> set[str]:
+    roles: set[str] = set()
+    if _is_format_value_object(value):
+        for arg in value.get("args", []):
+            roles.update(_collect_state_roles_from_runtime_value_surface(arg))
+        return roles
+    if isinstance(value, list):
+        for item in value:
+            roles.update(_collect_state_roles_from_runtime_value_surface(item))
+        return roles
+    if isinstance(value, dict):
+        for item in value.values():
+            roles.update(_collect_state_roles_from_runtime_value_surface(item))
+        return roles
+    if not isinstance(value, str):
+        return roles
+    expression = _extract_runtime_value_expression(value)
+    if expression is None:
+        return roles
+    try:
+        parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    except ValueExpressionParseError:
+        return roles
+    return _collect_value_state_references(parsed.root)
+
+
+def _collect_guard_state_references(node) -> set[str]:
+    roles: set[str] = set()
+    from .guard_expressions import BinaryNode as GuardBinaryNode, CallArgumentNode as GuardCallArgumentNode, CallNode as GuardCallNode, ListNode as GuardListNode, UnaryNode as GuardUnaryNode
+
+    def visit(current) -> None:
+        if isinstance(current, GuardStateReferenceNode):
+            roles.add(current.state_role)
+            return
+        if isinstance(current, GuardListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, GuardCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, GuardCallArgumentNode):
+            visit(current.value)
+            return
+        if isinstance(current, GuardUnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, GuardBinaryNode):
+            visit(current.left)
+            visit(current.right)
+
+    visit(node)
+    return roles
+
+
+def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
+    roles: set[str] = set()
+
+    def visit(current: ValueExpressionNode) -> None:
+        if isinstance(current, ValueStateReferenceNode):
+            roles.add(current.state_role)
+            return
+        if isinstance(current, PipelineNode):
+            visit(current.source)
+            for filter_node in current.filters:
+                for argument in filter_node.arguments:
+                    visit(argument)
+            return
+        if isinstance(current, BuiltinCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, UnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, BinaryNode):
+            visit(current.left)
+            visit(current.right)
+
+    visit(node)
+    return roles
 
 
 def _validate_step_references(

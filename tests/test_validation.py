@@ -156,6 +156,44 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_valid_profile_switch_step_passes(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  profile: {}
+                blocks:
+                  - steps:
+                      - name: switch-profile
+                        profile_switch: ${inputs.profile}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_profile_switch_rejects_step_references(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - steps:
+                      - name: prepare
+                        value: backend
+                        register: selected
+                      - name: switch-profile
+                        profile_switch: ${step.selected.value}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.profile_switch.step_ref_forbidden")
+
     def test_run_step_rejects_non_object_with(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -226,6 +264,33 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_valid_profile_working_directory_passes(self) -> None:
+        report = validate_profile_text(
+            textwrap.dedent(
+                """
+                name: frontend
+                inputs:
+                  repo_dir: ../frontend
+                working_directory: ${inputs.repo_dir}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_profile_working_directory_must_be_non_empty_string(self) -> None:
+        report = validate_profile_text(
+            textwrap.dedent(
+                """
+                name: frontend
+                working_directory: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.working_directory.type")
 
     def test_profile_launcher_rejects_mixed_file_and_inline_fields(self) -> None:
         report = validate_profile_text(
@@ -324,6 +389,97 @@ class ValidationTest(unittest.TestCase):
                   - guards:
                       - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
                   - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_guard_expression_allows_state_reference(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: close-task
+                inputs:
+                  repository: owner/repo
+                state_needs:
+                  task_memory: {}
+                blocks:
+                  - guards:
+                      - state.task_memory[inputs.repository].branch == "task/1-demo"
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_guard_expression_allows_state_reference_in_probe_arguments(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: close-task
+                inputs:
+                  repository: owner/repo
+                  project_id: PVT_demo
+                state_needs:
+                  task_memory: {}
+                blocks:
+                  - guards:
+                      - gh.project.issue(repository=inputs.repository, issue_number=state.task_memory[inputs.repository].issue_number, project_id=inputs.project_id).exists
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_state_role_write_before_last_read_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: demo
+                inputs:
+                  repository: owner/repo
+                state_needs:
+                  task_memory: {}
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: remember-branch
+                        state_set:
+                          state.task_memory[inputs.repository].branch: branch-1
+                      - name: use-branch-later
+                        uses: shell.command
+                        with:
+                          command: ${state.task_memory[inputs.repository].branch}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.state_role.write_before_last_read")
+
+    def test_state_role_write_after_last_read_passes_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: demo
+                inputs:
+                  repository: owner/repo
+                state_needs:
+                  task_memory: {}
+                blocks:
+                  - guards:
+                      - state.task_memory[inputs.repository].branch == "main"
+                  - steps:
+                      - name: remember-branch
+                        state_set:
+                          state.task_memory[inputs.repository].branch: branch-1
                 """
             )
         )

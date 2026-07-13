@@ -110,8 +110,8 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "exactly_one_step_form",
             "kind": "exclusive_choice",
-            "fields": ["uses", "run", "value", "state_set", "state_delete"],
-            "message": "A workflow step must define exactly one of uses, run, value, state_set, or state_delete",
+            "fields": ["uses", "run", "profile_switch", "value", "state_set", "state_delete"],
+            "message": "A workflow step must define exactly one of uses, run, profile_switch, value, state_set, or state_delete",
         },
         {
             "name": "with_requires_uses",
@@ -133,6 +133,11 @@ WORKFLOW_CONTRACT: JSONObject = {
             "optional_fields": ["if", "with"],
         },
         {
+            "name": "profile_switch",
+            "required_fields": ["name", "profile_switch"],
+            "optional_fields": ["if"],
+        },
+        {
             "name": "value",
             "required_fields": ["name", "value"],
             "optional_fields": ["if", "register"],
@@ -150,9 +155,9 @@ WORKFLOW_CONTRACT: JSONObject = {
     ],
     "surface_constraints": {
         "guard_expression": {
-            "allowed_roots": ["inputs", "probe"],
+            "allowed_roots": ["inputs", "probe", "state"],
             "boolean_operators": ["and", "or", "not", "parentheses"],
-            "forbidden_features": ["value_expression_filters", "value_expression_builtins", "state_references"],
+            "forbidden_features": ["value_expression_filters", "value_expression_builtins"],
         },
         "runtime_value_surface": {
             "allowed_roots": ["inputs", "args", "state", "step"],

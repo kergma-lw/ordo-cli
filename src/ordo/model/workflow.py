@@ -55,6 +55,7 @@ class Step:
     operation: OperationRef | None = None
     run: str | None = None
     run_with: JSONObject = field(default_factory=dict, kw_only=True)
+    profile_switch: JSONValue | None = None
     value: JSONValue | None = None
     state_set: JSONObject | None = None
     state_delete: str | None = None
@@ -67,12 +68,13 @@ class Step:
         forms = (
             self.operation is not None,
             self.run is not None,
+            self.profile_switch is not None,
             self.value is not None,
             self.state_set is not None,
             self.state_delete is not None,
         )
         if sum(forms) != 1:
-            raise ValueError("Step must define exactly one of operation, run, value, state_set, or state_delete")
+            raise ValueError("Step must define exactly one of operation, run, profile_switch, value, state_set, or state_delete")
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped contract form."""
@@ -92,6 +94,11 @@ class Step:
                 contract["if"] = self.if_
             if self.run_with:
                 contract["with"] = dict(self.run_with)
+            return contract
+        if self.profile_switch is not None:
+            contract = {"name": self.name, "profile_switch": self.profile_switch}
+            if self.if_ is not None:
+                contract["if"] = self.if_
             return contract
         if self.value is not None:
             contract = {"name": self.name, "value": self.value}

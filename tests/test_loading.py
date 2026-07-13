@@ -147,6 +147,26 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.steps[0].value, {"format": "{}/{}", "args": ["${inputs.type | lower}", "${inputs.issue_number}"]})
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["register"], "branch")
 
+    def test_loads_profile_switch_step_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  profile: {}
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: switch-profile
+                        profile_switch: ${inputs.profile}
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].profile_switch, "${inputs.profile}")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["profile_switch"], "${inputs.profile}")
+
     def test_loads_expr_guard_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(
@@ -201,6 +221,21 @@ class LoadingTest(unittest.TestCase):
 
         self.assertEqual(profile.launchers["shell_frontend"].connector, "shell.command")
         self.assertEqual(profile.to_contract()["launchers"]["shell_frontend"]["before"], 'export NVM_DIR="$HOME/.nvm"')
+
+    def test_loads_profile_working_directory_into_typed_model(self) -> None:
+        profile = load_profile_text(
+            textwrap.dedent(
+                """
+                name: frontend
+                inputs:
+                  repo_dir: ../frontend
+                working_directory: ${inputs.repo_dir}
+                """
+            )
+        )
+
+        self.assertEqual(profile.working_directory, "${inputs.repo_dir}")
+        self.assertEqual(profile.to_contract()["working_directory"], "${inputs.repo_dir}")
 
     def test_loads_profile_launcher_from_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -862,6 +897,62 @@ class LoadingTest(unittest.TestCase):
 
         self.assertFalse(report.ok)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.unknown")
+
+    def test_load_workflow_file_rejects_fragment_state_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path = root / "workflow.yaml"
+            workflow_path.write_text(
+                "version: 0\nworkflow: demo\nblocks:\n  - include: fragments/check-issue\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: remember
+                        state_set:
+                          state.task_memory[inputs.issue_ref].branch: demo
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.state_forbidden")
+
+    def test_load_workflow_file_rejects_fragment_state_read(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path = root / "workflow.yaml"
+            workflow_path.write_text(
+                "version: 0\nworkflow: demo\nblocks:\n  - include: fragments/check-issue\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: inspect
+                        value: ${state.task_memory[inputs.issue_ref].branch}
+                        register: branch
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(LoadError) as context:
+                load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.state_forbidden")
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
-from ordo.runtime.value_expressions import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
+from ordo.runtime.value_expressions import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +141,7 @@ def load_profile_text(text: str, *, source: str = "<memory>") -> Profile:
     return Profile(
         name=_require_string(payload, "name", source=source),
         inputs=_optional_object(payload, "inputs", source=source),
+        working_directory=_optional_string(payload, "working_directory", source=source),
         checks=tuple(_require_string_item(item, path=("checks", str(index)), source=source) for index, item in enumerate(checks_data)),
         overrides=tuple(_load_override(item, index=index, source=source) for index, item in enumerate(overrides_data)),
         launchers=_load_launchers(payload.get("launchers"), source=source),
@@ -360,6 +361,7 @@ def _prepare_included_fragment_payload(
     body = {key: value for key, value in payload.items() if key not in {"description", "args"}}
     bound = _bind_fragment_args(body, args_contract=args_contract, include_bindings=effective_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
     scoped = _rewrite_fragment_step_scope(bound, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    _ensure_fragment_has_no_state_surface(scoped, source=source, include_chain=include_chain, include_node_path=include_node_path)
     if isinstance(scoped, dict) and "blocks" in scoped and set(scoped.keys()) == {"blocks"} and isinstance(scoped["blocks"], list):
         return scoped["blocks"]
     return scoped
@@ -748,6 +750,62 @@ def _rewrite_fragment_step_scope(
     )
 
 
+def _ensure_fragment_has_no_state_surface(
+    value: JSONValue,
+    *,
+    source: Path,
+    include_chain: tuple[Path, ...],
+    include_node_path: tuple[str, ...],
+) -> None:
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _ensure_fragment_has_no_state_surface(item, source=source, include_chain=include_chain, include_node_path=include_node_path + (str(index),))
+        return
+    if isinstance(value, dict):
+        for key in ("state_needs", "state_bindings", "states", "state_set", "state_delete"):
+            if key in value:
+                raise _workflow_include_error(
+                    code="load.workflow.include.state_forbidden",
+                    message="Included fragments must not read, declare, or mutate runtime state",
+                    include_path=include_node_path + (key,),
+                    include_chain=include_chain,
+                    source=str(source),
+                )
+        for key, item in value.items():
+            _ensure_fragment_has_no_state_surface(item, source=source, include_chain=include_chain, include_node_path=include_node_path + (str(key),))
+        return
+    if not isinstance(value, str):
+        return
+    expression = _extract_runtime_expression(value)
+    if expression is None:
+        return
+    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    if _value_expression_uses_state(parsed.root):
+        raise _workflow_include_error(
+            code="load.workflow.include.state_forbidden",
+            message="Included fragments must not read, declare, or mutate runtime state",
+            include_path=include_node_path,
+            include_chain=include_chain,
+            source=str(source),
+        )
+
+
+def _value_expression_uses_state(node: ValueExpressionNode) -> bool:
+    if isinstance(node, StateReferenceNode):
+        return True
+    if isinstance(node, PipelineNode):
+        if _value_expression_uses_state(node.source):
+            return True
+        return any(_value_expression_uses_state(argument) for filter_node in node.filters for argument in filter_node.arguments)
+    if isinstance(node, BuiltinCallNode):
+        return any(_value_expression_uses_state(argument) for argument in node.arguments)
+    if isinstance(node, UnaryNode):
+        return _value_expression_uses_state(node.operand)
+    if isinstance(node, BinaryNode):
+        return _value_expression_uses_state(node.left) or _value_expression_uses_state(node.right)
+    return False
+
+
 def _materialize_bound_fragment_values(value: JSONValue | _BoundFragmentExpression) -> JSONValue:
     if isinstance(value, list):
         return [_materialize_bound_fragment_values(item) for item in value]
@@ -1088,13 +1146,14 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
     data = _require_object(payload, path=path, source=source)
     has_uses = "uses" in data
     has_run = "run" in data
+    has_profile_switch = "profile_switch" in data
     has_value = "value" in data
     has_state_set = "state_set" in data
     has_state_delete = "state_delete" in data
-    if sum((has_uses, has_run, has_value, has_state_set, has_state_delete)) != 1:
+    if sum((has_uses, has_run, has_profile_switch, has_value, has_state_set, has_state_delete)) != 1:
         raise _load_error(
             code="load.step.form",
-            message="Step must define exactly one of 'uses', 'run', 'value', 'state_set', or 'state_delete'",
+            message="Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'state_set', or 'state_delete'",
             path=path,
             details={"source": source},
         )
@@ -1121,6 +1180,7 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
         operation=_load_operation_ref(data, path=path, source=source) if has_uses else None,
         run=_require_string(data, "run", path=path + ("run",), source=source) if has_run else None,
         run_with=dict(run_with_payload) if has_run else {},
+        profile_switch=data.get("profile_switch") if has_profile_switch else None,
         value=data.get("value") if has_value else None,
         state_set=state_set,
         state_delete=state_delete,
