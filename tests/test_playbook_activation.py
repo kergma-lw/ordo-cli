@@ -11,7 +11,10 @@ from unittest.mock import patch
 
 from ordo.cli import main as cli_main
 from ordo.model.runtime import ExecutionPlan, Mode, RuntimeResult, RuntimeStatus
+from ordo.runtime import check_workflow
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, discover_playbook_path
+
+from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class PlaybookActivationTest(unittest.TestCase):
@@ -587,6 +590,251 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(activated.working_directory, (root / "repo-b").resolve())
 
+    def test_activate_playbook_uses_defaults_working_directory_when_more_specific_levels_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / "repo-default").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    defaults:
+                      working_directory: ../repo-default
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            self.assertEqual(activated.working_directory, (root / "repo-default").resolve())
+
+    def test_activate_playbook_profile_working_directory_overrides_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / "repo-default").mkdir()
+            (root / "repo-profile").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    defaults:
+                      profile: review
+                      working_directory: ../repo-default
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      review:
+                        file: review.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "review.yml").write_text(
+                "name: review\nworking_directory: ../repo-profile\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            self.assertEqual(activated.working_directory, (root / "repo-profile").resolve())
+
+    def test_activate_playbook_workflow_working_directory_overrides_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / "repo-profile").mkdir()
+            (root / "repo-workflow").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    defaults:
+                      profile: review
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        working_directory: ../repo-workflow
+                    profiles:
+                      review:
+                        file: review.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "review.yml").write_text(
+                "name: review\nworking_directory: ../repo-profile\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            self.assertEqual(activated.working_directory, (root / "repo-workflow").resolve())
+
+    def test_activate_playbook_loads_profile_switch_context_when_workflow_uses_runtime_profile_use(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / "repo-a").mkdir()
+            (root / "repo-b").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    defaults:
+                      profile: frontend
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      frontend:
+                        file: frontend.yml
+                      backend:
+                        file: backend.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  repo_dir: {}\nblocks:\n  - steps:\n      - name: switch\n        uses: runtime.profile.use\n        with:\n          profile: backend\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "frontend.yml").write_text(
+                "name: frontend\ninputs:\n  repo_dir: ../repo-a\nworking_directory: ${inputs.repo_dir}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                "name: backend\ninputs:\n  repo_dir: ../repo-b\nworking_directory: ${inputs.repo_dir}\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            assert activated.available_profiles is not None
+            assert activated.profile_working_directories is not None
+            self.assertIn("frontend", activated.available_profiles)
+            self.assertIn("backend", activated.available_profiles)
+            self.assertEqual(activated.profile_working_directories["frontend"], (root / "repo-a").resolve())
+            self.assertEqual(activated.profile_working_directories["backend"], (root / "repo-b").resolve())
+
+    def test_activate_playbook_prepends_pre_run_workflows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - workflows/resolve-context.yml
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
+                "steps:\n  - name: prepare\n    value: ok\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: main\n        value: done\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+            first_step = activated.workflow.steps[0]
+            self.assertEqual(first_step.name, "pre_run[0]")
+            self.assertEqual(first_step.run, "workflows/resolve-context.yml")
+            self.assertEqual(first_step.resolved_run_path, str((root / ".ordo" / "workflows" / "resolve-context.yml").resolve()))
+
+    def test_check_after_activation_marks_pre_run_main_guard_gap_as_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - workflows/resolve-context.yml
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
+                "steps:\n  - name: prepare\n    value: ok\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      enabled: {}
+                    blocks:
+                      - guards:
+                          - inputs.enabled == true
+                      - steps:
+                          - name: main
+                            value: done
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", input_overrides={"enabled": True}, cwd=root)
+            result = check_workflow(activated.workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["allowed_state"], "unknown")
+            self.assertFalse(result.outputs["analysis_complete"])
+            self.assertIn("relevant_guard_coverage_incomplete", result.outputs["incomplete_reasons"])
+            self.assertIn("pre_run_precedes_main_guard_coverage", result.outputs["incomplete_reasons"])
+
     def test_activate_playbook_resolves_working_directory_from_input_override_expression(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -960,12 +1208,64 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertTrue(str(state_path).endswith(os.path.join(".ordo", "state", "task-state.json")))
             self.assertEqual(activated.workflow.state_bindings, {"task_memory": "repo_task_state"})
             self.assertEqual(
+                [diagnostic.code for diagnostic in activated.diagnostics],
+                ["playbook.workflow.working_directory_recommended_for_state"],
+            )
+            self.assertEqual(
                 activated.workflow.steps[0].state_set,
                 {"state.task_memory[inputs.issue_ref].branch": "${inputs.branch}"},
             )
             self.assertEqual(
                 activated.workflow.steps[1].state_delete,
                 "state.task_memory[inputs.issue_ref].branch",
+            )
+
+    def test_activate_playbook_resolves_relative_state_paths_from_working_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / "repo").mkdir()
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    states:
+                      repo_task_state:
+                        path: .ordo/state/task-state.json
+                    workflows:
+                      close-task:
+                        file: close-task.yml
+                        working_directory: ../repo
+                        state_bindings:
+                          task_memory: repo_task_state
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "close-task.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: close-task
+                    state_needs:
+                      task_memory: {}
+                    blocks:
+                      - guards: []
+                      - steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="close-task", cwd=root)
+
+            self.assertEqual(activated.working_directory, (root / "repo").resolve())
+            self.assertEqual(activated.diagnostics, ())
+            self.assertEqual(
+                activated.workflow.states["repo_task_state"],
+                str((root / "repo" / ".ordo" / "state" / "task-state.json").resolve()),
             )
 
     def test_cli_plan_mode_runs_through_playbook_activation_surface(self) -> None:

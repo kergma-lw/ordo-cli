@@ -240,6 +240,8 @@ def check_workflow(
 
     if not blockers and any(item.get("type") == "guards" and item.get("status") == "pending" for item in block_items):
         incomplete_reasons.append("relevant_guard_coverage_incomplete")
+        if _has_pre_run_before_pending_guards(block_items):
+            incomplete_reasons.append("pre_run_precedes_main_guard_coverage")
 
     if halted and len(block_items) < len(effective_workflow.blocks):
         block_items.extend(_build_pending_block_items(effective_workflow, blocked=bool(blockers), start_index=len(block_items)))
@@ -392,6 +394,19 @@ def _pending_step_block_item(block: ResolvedStepBlock, workflow: Workflow, *, bl
         "step_names": [step.name for step in declared.steps],
         "conditional_steps": [step.name for step in declared.steps if step.if_ is not None],
     }
+
+
+def _has_pre_run_before_pending_guards(block_items: list[dict[str, object]]) -> bool:
+    saw_pre_run = False
+    for item in block_items:
+        if item.get("type") == "steps":
+            step_names = item.get("step_names")
+            if isinstance(step_names, list) and any(isinstance(name, str) and name.startswith("pre_run[") for name in step_names):
+                saw_pre_run = True
+                continue
+        if saw_pre_run and item.get("type") == "guards" and item.get("status") == "pending":
+            return True
+    return False
 
 
 def _default_guard_probe(*, provider: ConnectorProvider | None):
