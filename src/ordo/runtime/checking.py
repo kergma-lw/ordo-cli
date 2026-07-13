@@ -14,9 +14,11 @@ from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode, UnaryNode
 from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
 from .launchers import validate_step_launchers
+from .preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, store_preflight_register_output
+from .preflight_steps import classify_preflight_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
-from .resolution import ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStepBlock, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 from .validation import validate_workflow_document
 
@@ -375,6 +377,26 @@ def check_workflow(
                 halted = True
             continue
 
+        if _has_later_guard_block(effective_workflow, block_index=block_index):
+            interpreted_step_block = _interpret_step_block_for_check(
+                declared_block,
+                effective_workflow,
+                block_index=block_index,
+                current_profile_name=current_profile_name,
+                connector_provider=connector_provider,
+                probe=probe,
+                active_overrides=active_overrides,
+            )
+            if interpreted_step_block is not None:
+                if interpreted_step_block.get("resolution_error") is not None:
+                    return cast(RuntimeResult, interpreted_step_block["resolution_error"])
+                diagnostics.extend(interpreted_step_block["diagnostics"])
+                block_items.append(interpreted_step_block["block_item"])
+                incomplete_reasons.extend(interpreted_step_block["incomplete_reasons"])
+                if interpreted_step_block["halted"]:
+                    halted = True
+                continue
+
         if halted:
             block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
             continue
@@ -552,6 +574,181 @@ def _classify_run_step_block_for_check(block: StepBlock, workflow: Workflow, *, 
     return decisions
 
 
+def _resolve_step_block(
+    workflow: Workflow,
+    *,
+    block_index: int,
+    connector_provider: ConnectorProvider | None,
+    active_overrides,
+) -> ResolvedStepBlock | RuntimeResult:
+    block = workflow.blocks[block_index]
+    assert isinstance(block, StepBlock)
+    resolution = resolve_workflow_references(
+        Workflow(
+            version=workflow.version,
+            workflow=workflow.workflow,
+            inputs=workflow.inputs,
+            declared_inputs=workflow.declared_inputs,
+            state_needs=workflow.state_needs,
+            state_bindings=workflow.state_bindings,
+            states=workflow.states,
+            step_results=workflow.step_results,
+            blocks=(block,),
+            source_path=workflow.source_path,
+            launch_dir=workflow.launch_dir,
+        ),
+        connector_provider=connector_provider,
+        active_overrides=active_overrides,
+    )
+    if not resolution.ok or not resolution.blocks or not isinstance(resolution.blocks[0], ResolvedStepBlock):
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.RESOLUTION_ERROR,
+            diagnostics=resolution.diagnostics,
+            plan=ExecutionPlan(
+                guard_checks=tuple(_initial_guard_references(workflow)),
+                step_names=tuple(_all_step_names(workflow)),
+                blockers=(),
+            ),
+            outputs={
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+                "blockers": [],
+                "checked_guards": list(_initial_guard_references(workflow)),
+                **_guard_coverage_outputs(workflow, checked_guards=list(_initial_guard_references(workflow)), blockers=[]),
+                "block_items": _build_pending_block_items(workflow, blocked=False),
+            },
+        )
+    return ResolvedStepBlock(block_index=block_index, steps=resolution.blocks[0].steps)
+
+
+def _interpret_step_block_for_check(
+    block: StepBlock,
+    workflow: Workflow,
+    *,
+    block_index: int,
+    current_profile_name: str | None,
+    connector_provider: ConnectorProvider | None,
+    probe: GuardProbe,
+    active_overrides,
+) -> dict[str, object] | None:
+    resolved_block = _resolve_step_block(
+        workflow,
+        block_index=block_index,
+        connector_provider=connector_provider,
+        active_overrides=active_overrides,
+    )
+    if isinstance(resolved_block, RuntimeResult):
+        return {"resolution_error": resolved_block}
+
+    diagnostics: list[Diagnostic] = []
+    interpreted_steps: list[str] = []
+    skipped_steps: list[str] = []
+    incomplete_reasons: list[str] = []
+    halt_item: dict[str, object] | None = None
+
+    for step_index, (step, resolved_step) in enumerate(zip(block.steps, resolved_block.steps, strict=False)):
+        condition = evaluate_preflight_step_condition(step, workflow, step_results=workflow.step_results)
+        if isinstance(condition, ValueResolutionError):
+            halt = build_preflight_halt(
+                "condition_not_computable",
+                step=step,
+                branch_condition=step.if_,
+                details={"block_index": block_index, "step_index": step_index},
+            )
+            diagnostics.append(condition.to_diagnostic(path=("blocks", str(block_index), "steps", str(step_index), "if")))
+            incomplete_reasons.append(halt.reason)
+            halt_item = halt.to_contract()
+            break
+        if condition is None:
+            halt = build_preflight_halt(
+                "condition_not_boolean",
+                step=step,
+                branch_condition=step.if_,
+                details={"block_index": block_index, "step_index": step_index},
+            )
+            diagnostics.append(
+                Diagnostic(
+                    code="runtime.step.if.result_type",
+                    level="error",
+                    message="Step condition must evaluate to a boolean value",
+                    path=("blocks", str(block_index), "steps", str(step_index), "if"),
+                    details={"actual_type": type(condition).__name__},
+                )
+            )
+            incomplete_reasons.append(halt.reason)
+            halt_item = halt.to_contract()
+            break
+        if condition is False:
+            skipped_steps.append(step.name)
+            continue
+
+        classification = classify_preflight_step(step, resolved_step)
+        if classification == "read_only_analyzable":
+            result = _evaluate_analyzable_preflight_step(step, resolved_step, workflow, probe=probe)
+            diagnostics.extend(result.diagnostics)
+            if result.status != "ok":
+                halt = build_preflight_halt(
+                    "read_only_step_failed",
+                    step=step,
+                    details={"block_index": block_index, "step_index": step_index, "status": result.status},
+                )
+                incomplete_reasons.append(halt.reason)
+                halt_item = halt.to_contract()
+                break
+            if step.register is not None:
+                store_preflight_register_output(step.register, result, step_results=workflow.step_results)
+            interpreted_steps.append(step.name)
+            continue
+
+        halt = build_preflight_halt(
+            "effectful_step_encountered" if classification == "effectful" else "preflight_step_not_analyzable",
+            step=step,
+            details={
+                "block_index": block_index,
+                "step_index": step_index,
+                "classification": classification,
+                "reference": resolved_step.reference,
+            },
+        )
+        incomplete_reasons.append(halt.reason)
+        halt_item = halt.to_contract()
+        break
+
+    if not interpreted_steps and not skipped_steps and halt_item is None:
+        return None
+
+    return {
+        "diagnostics": diagnostics,
+        "incomplete_reasons": incomplete_reasons,
+        "halted": halt_item is not None,
+        "block_item": {
+            "block_index": block_index,
+            "type": "steps",
+            "status": "preflight_halted" if halt_item is not None else "preflight_interpreted",
+            "step_names": [step.name for step in block.steps],
+            "conditional_steps": [step.name for step in block.steps if step.if_ is not None],
+            "interpreted_steps": interpreted_steps,
+            "skipped_steps": skipped_steps,
+            "active_profile": current_profile_name,
+            "preflight_halt": halt_item,
+        },
+    }
+
+
+def _evaluate_analyzable_preflight_step(
+    step: Step,
+    resolved_step: ResolvedStep,
+    workflow: Workflow,
+    *,
+    probe: GuardProbe,
+) -> OperationResult:
+    if isinstance(resolved_step, ResolvedOperation):
+        return evaluate_preflight_probe_step(step, resolved_step, workflow, guard_probe=probe)
+    if isinstance(resolved_step, ResolvedBuiltinStep) and resolved_step.builtin == "value":
+        return evaluate_preflight_value_step(step, workflow, step_results=workflow.step_results)
+    return OperationResult(status="state_error", summary=f"Step '{step.name}' is not a supported preflight step")
+
+
 def _expand_run_step_block_for_check(
     expansions: list[tuple[Step, CheckRunExpansionDecision]],
     *,
@@ -715,6 +912,10 @@ def _pending_step_block_item_from_declared(block_index: int, declared: StepBlock
         "conditional_steps": [step.name for step in declared.steps if step.if_ is not None],
         "active_profile": active_profile,
     }
+
+
+def _has_later_guard_block(workflow: Workflow, *, block_index: int) -> bool:
+    return any(isinstance(block, GuardBlock) for block in workflow.blocks[block_index + 1 :])
 
 
 def _has_pre_run_before_pending_guards(block_items: list[dict[str, object]]) -> bool:

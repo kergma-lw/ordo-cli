@@ -315,6 +315,69 @@ class CheckModeTest(unittest.TestCase):
             self.assertEqual(result.outputs["active_profile"], "frontend")
             self.assertEqual(result.outputs["block_items"][-1]["active_profile"], "frontend")
 
+    def test_check_uses_read_only_preflight_steps_to_reach_later_guards(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"run_effectful": False},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),
+                        Step(name="copy-flag", value="${step.issue.outputs.exists}", register="issue_exists"),
+                        Step(name="comment", operation=OperationRef("gh.issue.close"), if_="${inputs.run_effectful}"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+        seen: list[str] = []
+
+        def probe(resolved_guard, _workflow):
+            seen.append(resolved_guard.reference)
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertEqual(seen, ["gh.issue", "git.worktree"])
+        self.assertEqual(result.outputs["block_items"][0]["status"], "preflight_interpreted")
+        self.assertEqual(result.outputs["block_items"][0]["interpreted_steps"], ["load-issue", "copy-flag"])
+        self.assertEqual(result.outputs["block_items"][0]["skipped_steps"], ["comment"])
+
+    def test_check_halts_when_effectful_step_is_reachable_during_preflight(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"run_effectful": True},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),
+                        Step(name="comment", operation=OperationRef("gh.issue.close"), if_="${inputs.run_effectful}"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            self.assertEqual(resolved_guard.reference, "gh.issue")
+            return OperationResult(status="ok", outputs={"exists": True})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "unknown")
+        self.assertIn("effectful_step_encountered", result.outputs["incomplete_reasons"])
+        self.assertEqual(result.outputs["block_items"][0]["status"], "preflight_halted")
+        self.assertEqual(result.outputs["block_items"][0]["preflight_halt"]["reason"], "effectful_step_encountered")
+        self.assertEqual(result.outputs["unevaluated_relevant_guards"], ["git.worktree"])
+
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())
         seen: list[str] = []
