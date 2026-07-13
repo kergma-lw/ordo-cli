@@ -34,6 +34,47 @@ def _base_verdict_outputs(
     }
 
 
+def _guard_coverage_outputs(
+    workflow: Workflow,
+    *,
+    checked_guards: list[str],
+    blockers: list[str],
+) -> dict[str, object]:
+    checked = set(checked_guards)
+    blocked = set(blockers)
+    coverage: list[dict[str, object]] = []
+    unevaluated: list[str] = []
+    for reference in _all_guard_references(workflow):
+        if reference in checked:
+            coverage.append(
+                {
+                    "reference": reference,
+                    "relevant": True,
+                    "evaluated": True,
+                    "status": "blocked" if reference in blocked else "passed",
+                    "unknown_reason": None,
+                }
+            )
+            continue
+        unevaluated.append(reference)
+        coverage.append(
+            {
+                "reference": reference,
+                "relevant": True,
+                "evaluated": False,
+                "status": "pending",
+                "unknown_reason": "guard_not_evaluated",
+            }
+        )
+    return {
+        "guard_coverage": coverage,
+        "relevant_guard_count": len(coverage),
+        "evaluated_relevant_guard_count": len(checked_guards),
+        "unevaluated_relevant_guard_count": len(unevaluated),
+        "unevaluated_relevant_guards": unevaluated,
+    }
+
+
 def check_workflow(
     workflow: Workflow,
     *,
@@ -54,6 +95,11 @@ def check_workflow(
                 **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
                 "blockers": [],
                 "checked_guards": [],
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guards": [],
                 "block_items": [],
             },
         )
@@ -76,6 +122,11 @@ def check_workflow(
                     **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
                     "blockers": [],
                     "checked_guards": [],
+                    "guard_coverage": [],
+                    "relevant_guard_count": 0,
+                    "evaluated_relevant_guard_count": 0,
+                    "unevaluated_relevant_guard_count": 0,
+                    "unevaluated_relevant_guards": [],
                     "block_items": [],
                     "active_profile": active_profile,
                     "active_overrides": [override.to_contract() for override in active_overrides],
@@ -94,6 +145,7 @@ def check_workflow(
                 **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
                 "blockers": [],
                 "checked_guards": [],
+                **_guard_coverage_outputs(effective_workflow, checked_guards=[], blockers=[]),
                 "block_items": _build_pending_block_items(effective_workflow, blocked=False),
                 "active_profile": active_profile,
                 "active_overrides": [override.to_contract() for override in active_overrides],
@@ -119,6 +171,11 @@ def check_workflow(
                 **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
                 "blockers": [],
                 "checked_guards": list(_initial_guard_references(effective_workflow)),
+                **_guard_coverage_outputs(
+                    effective_workflow,
+                    checked_guards=list(_initial_guard_references(effective_workflow)),
+                    blockers=[],
+                ),
                 "block_items": _build_pending_block_items(effective_workflow, blocked=False),
                 "active_profile": active_profile,
                 "active_overrides": [override.to_contract() for override in active_overrides],
@@ -192,6 +249,7 @@ def check_workflow(
             **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
             "blockers": blockers,
             "checked_guards": checked_guards,
+            **_guard_coverage_outputs(effective_workflow, checked_guards=checked_guards, blockers=blockers),
             "guard_details": guard_details,
             "block_items": block_items,
             "active_profile": active_profile,
@@ -222,6 +280,7 @@ def check_workflow(
         ),
         "blockers": [],
         "checked_guards": checked_guards,
+        **_guard_coverage_outputs(effective_workflow, checked_guards=checked_guards, blockers=[]),
         "guard_details": guard_details,
         "block_items": block_items,
         "active_profile": active_profile,
@@ -267,6 +326,10 @@ def _collect_bootstrap_details(operation_results: list[OperationResult]) -> list
 
 def _all_step_names(workflow: Workflow) -> list[str]:
     return [step.name for block in workflow.blocks if isinstance(block, StepBlock) for step in block.steps]
+
+
+def _all_guard_references(workflow: Workflow) -> list[str]:
+    return [guard.reference for block in workflow.blocks if isinstance(block, GuardBlock) for guard in block.guards]
 
 
 def _initial_guard_references(workflow: Workflow) -> list[str]:

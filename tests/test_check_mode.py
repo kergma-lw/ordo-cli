@@ -103,6 +103,31 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["allowed_state"], "unknown")
         self.assertFalse(result.outputs["analysis_complete"])
         self.assertIn("relevant_guard_coverage_incomplete", result.outputs["incomplete_reasons"])
+        self.assertEqual(result.outputs["relevant_guard_count"], 1)
+        self.assertEqual(result.outputs["evaluated_relevant_guard_count"], 0)
+        self.assertEqual(result.outputs["unevaluated_relevant_guards"], ["git.worktree"])
+
+    def test_check_surfaces_relevant_guard_coverage(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(OperationRef("git.worktree")), Guard(expr='git.branch.value != "main"')),
+            steps=(),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "git.worktree":
+                return OperationResult(status="ok", outputs={"clean": True})
+            return OperationResult(status="ok", outputs={"value": "main"})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.outputs["relevant_guard_count"], 2)
+        self.assertEqual(result.outputs["evaluated_relevant_guard_count"], 2)
+        self.assertEqual(result.outputs["unevaluated_relevant_guard_count"], 0)
+        self.assertEqual(result.outputs["guard_coverage"][0]["status"], "passed")
+        self.assertEqual(result.outputs["guard_coverage"][1]["status"], "blocked")
 
     def test_check_evaluates_expr_guard_with_custom_probe(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())

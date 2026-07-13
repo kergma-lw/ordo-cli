@@ -79,10 +79,13 @@ def plan_workflow(
 
 def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResolution | None) -> list[dict[str, object]]:
     guard_items: list[dict[str, object]] = []
+    coverage_items = [item for item in check_result.outputs.get("guard_coverage", []) if isinstance(item, dict)]
+    coverage_by_reference = {item.get("reference"): item for item in coverage_items if isinstance(item.get("reference"), str)}
 
     if resolution is not None and resolution.resolved_guards:
         for index, resolved_guard in enumerate(resolution.resolved_guards):
             operation_result = check_result.operation_results[index] if index < len(check_result.operation_results) else None
+            coverage = coverage_by_reference.get(resolved_guard.reference, {})
             if isinstance(resolved_guard, ResolvedGuardExpression):
                 detail = check_result.outputs.get("guard_details", [])[index] if index < len(check_result.outputs.get("guard_details", [])) else {}
                 guard_items.append(
@@ -90,7 +93,10 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
                         "reference": resolved_guard.reference,
                         "kind": "expression",
                         "effect": "read_only",
-                        "status": "blocked" if resolved_guard.reference in check_result.outputs.get("blockers", []) else "unknown",
+                        "status": coverage.get("status", "unknown"),
+                        "relevant": bool(coverage.get("relevant", True)),
+                        "evaluated": bool(coverage.get("evaluated", False)),
+                        "unknown_reason": coverage.get("unknown_reason"),
                         "operation_status": None if operation_result is None else operation_result.status,
                         "failed_subcondition": detail.get("failed_subcondition") if isinstance(detail, dict) else None,
                         "failure_kind": detail.get("failure_kind") if isinstance(detail, dict) else None,
@@ -98,23 +104,29 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
                 )
                 continue
             guard_items.append(
-                {
-                    "reference": resolved_guard.reference,
-                    "kind": resolved_guard.operation.kind,
-                    "effect": "read_only" if resolved_guard.operation.kind == "probe" else "effectful",
-                    "status": "blocked" if resolved_guard.reference in check_result.outputs.get("blockers", []) else "ok",
-                    "operation_status": None if operation_result is None else operation_result.status,
-                }
-            )
+                    {
+                        "reference": resolved_guard.reference,
+                        "kind": resolved_guard.operation.kind,
+                        "effect": "read_only" if resolved_guard.operation.kind == "probe" else "effectful",
+                        "status": coverage.get("status", "unknown"),
+                        "relevant": bool(coverage.get("relevant", True)),
+                        "evaluated": bool(coverage.get("evaluated", False)),
+                        "unknown_reason": coverage.get("unknown_reason"),
+                        "operation_status": None if operation_result is None else operation_result.status,
+                    }
+                )
         return guard_items
 
-    for reference in check_result.outputs.get("checked_guards", []):
+    for reference, coverage in coverage_by_reference.items():
         guard_items.append(
             {
                 "reference": reference,
                 "kind": "probe_or_expr",
                 "effect": "read_only",
-                "status": "blocked" if reference in check_result.outputs.get("blockers", []) else "unknown",
+                "status": coverage.get("status", "unknown"),
+                "relevant": bool(coverage.get("relevant", True)),
+                "evaluated": bool(coverage.get("evaluated", False)),
+                "unknown_reason": coverage.get("unknown_reason"),
                 "operation_status": None,
             }
         )
