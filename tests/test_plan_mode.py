@@ -169,6 +169,32 @@ class PlanModeTest(unittest.TestCase):
         self.assertTrue(result.outputs["step_items"][0]["conditional"])
         self.assertEqual(result.outputs["step_items"][0]["condition"], "${inputs.enabled}")
 
+    def test_plan_surfaces_preflight_step_classification(self) -> None:
+        cases = [
+            (Step(name="probe", operation=OperationRef("gh.issue")), "read_only_analyzable"),
+            (Step(name="value", value=True, register="enabled"), "read_only_analyzable"),
+            (Step(name="switch", profile_switch="frontend"), "context_only"),
+            (Step(name="run-fragment", run="fragment.yml"), "read_only_unanalyzable"),
+            (Step(name="write-state", state_set={"state.shared_state.flag": True}), "effectful"),
+        ]
+
+        for step, expected in cases:
+            workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(step,))
+            result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+            self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], expected)
+
+    def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue.missing")),),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], "unknown")
+
     def test_plan_surfaces_step_launcher_selection(self) -> None:
         workflow = Workflow(
             version=0,

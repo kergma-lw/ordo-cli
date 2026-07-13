@@ -7,6 +7,7 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResu
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .checking import check_workflow
+from .preflight_steps import classify_preflight_step
 from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
 from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedRunStep, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
@@ -152,12 +153,14 @@ def _build_step_items(
     if resolution is not None and resolution.resolved_steps:
         for step, resolved_step in zip(workflow.steps, resolution.resolved_steps, strict=False):
             if isinstance(resolved_step, ResolvedBuiltinStep):
+                classification = classify_preflight_step(step, resolved_step)
                 step_items.append(
                     {
                         "name": step.name,
                         "reference": resolved_step.reference,
                         "kind": "builtin",
                         "effect": "effectful",
+                        "preflight_classification": classification,
                         "eligibility": "blocked" if blocked else "eligible",
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
@@ -166,12 +169,14 @@ def _build_step_items(
                 )
                 continue
             if isinstance(resolved_step, ResolvedRunStep):
+                classification = classify_preflight_step(step, resolved_step)
                 step_items.append(
                     {
                         "name": step.name,
                         "reference": resolved_step.reference,
                         "kind": "run",
                         "effect": "effectful",
+                        "preflight_classification": classification,
                         "eligibility": "blocked" if blocked else "eligible",
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
@@ -179,12 +184,14 @@ def _build_step_items(
                     }
                 )
                 continue
+            classification = classify_preflight_step(step, resolved_step)
             step_items.append(
                 {
                     "name": step.name,
                     "reference": resolved_step.reference,
                     "kind": resolved_step.operation.kind,
                     "effect": "read_only" if resolved_step.operation.kind == "probe" else "effectful",
+                    "preflight_classification": classification,
                     "eligibility": "blocked" if blocked else "eligible",
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
@@ -194,12 +201,14 @@ def _build_step_items(
         return step_items
 
     for step in workflow.steps:
+        classification = classify_preflight_step(step)
         step_items.append(
             {
                 "name": step.name,
                 "reference": step.operation.uses if step.operation is not None else step.run if step.run is not None else "builtin",
                 "kind": "unknown" if step.operation is not None or step.run is not None else "builtin",
                 "effect": "unknown" if step.operation is not None or step.run is not None else "effectful",
+                "preflight_classification": classification,
                 "eligibility": "blocked" if blocked else "unknown",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
