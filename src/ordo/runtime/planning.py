@@ -74,6 +74,7 @@ def plan_workflow(
         operation_results=check_result.operation_results,
         failed_guard=check_result.failed_guard,
         failed_step=check_result.failed_step,
+        preflight_decision=check_result.preflight_decision,
     )
 
 

@@ -48,6 +48,7 @@ def explain_runtime_result(result: RuntimeResult) -> RuntimeResult:
         operation_results=result.operation_results,
         failed_guard=result.failed_guard,
         failed_step=result.failed_step,
+        preflight_decision=result.preflight_decision,
     )
 
 

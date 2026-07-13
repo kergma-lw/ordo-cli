@@ -9,6 +9,40 @@ from .diagnostic import Diagnostic
 from .json import JSONObject
 
 
+@dataclass(frozen=True, slots=True)
+class PreflightGuardNode:
+    """Internal structured guard coverage node for preflight reasoning."""
+
+    reference: str
+    block_index: int
+    relevant: bool
+    evaluated: bool
+    status: str
+    unknown_reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PreflightBlockNode:
+    """Internal structured block node for preflight reasoning."""
+
+    block_index: int
+    block_type: str
+    status: str
+    guard_references: tuple[str, ...] = ()
+    step_names: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PreflightDecisionModel:
+    """Internal reusable workflow-shaped preflight model."""
+
+    allowed_state: str
+    analysis_complete: bool
+    incomplete_reasons: tuple[str, ...] = ()
+    guard_nodes: tuple[PreflightGuardNode, ...] = ()
+    block_nodes: tuple[PreflightBlockNode, ...] = ()
+
+
 class Mode(StrEnum):
     """Baseline runtime modes promised by the v0 contract."""
 
@@ -80,6 +114,7 @@ class RuntimeResult:
     operation_results: tuple[OperationResult, ...] = ()
     failed_guard: str | None = None
     failed_step: str | None = None
+    preflight_decision: PreflightDecisionModel | None = None
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped runtime result contract."""

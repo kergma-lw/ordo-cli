@@ -128,6 +128,10 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["unevaluated_relevant_guard_count"], 0)
         self.assertEqual(result.outputs["guard_coverage"][0]["status"], "passed")
         self.assertEqual(result.outputs["guard_coverage"][1]["status"], "blocked")
+        self.assertIsNotNone(result.preflight_decision)
+        assert result.preflight_decision is not None
+        self.assertEqual(result.preflight_decision.guard_nodes[0].reference, "git.worktree")
+        self.assertEqual(result.preflight_decision.block_nodes[0].block_type, "guards")
 
     def test_check_evaluates_expr_guard_with_custom_probe(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())

@@ -100,6 +100,7 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["allowed_state"], "unknown")
         self.assertFalse(result.outputs["guard_items"][0]["evaluated"])
         self.assertEqual(result.outputs["guard_items"][0]["unknown_reason"], "guard_not_evaluated")
+        self.assertIsNotNone(result.preflight_decision)
 
     def test_plan_surfaces_expr_guard_before_runtime_support_exists(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())

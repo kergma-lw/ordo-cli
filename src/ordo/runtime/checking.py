@@ -7,7 +7,7 @@ from typing import cast
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
-from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
+from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBlockNode, PreflightDecisionModel, PreflightGuardNode, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode, UnaryNode
@@ -73,6 +73,61 @@ def _guard_coverage_outputs(
         "unevaluated_relevant_guard_count": len(unevaluated),
         "unevaluated_relevant_guards": unevaluated,
     }
+
+
+def _build_preflight_decision_model(workflow: Workflow, outputs: dict[str, object]) -> PreflightDecisionModel:
+    coverage_by_reference = {
+        item["reference"]: item
+        for item in outputs.get("guard_coverage", [])
+        if isinstance(item, dict) and isinstance(item.get("reference"), str)
+    }
+    guard_nodes: list[PreflightGuardNode] = []
+    for block_index, block in enumerate(workflow.blocks):
+        if not isinstance(block, GuardBlock):
+            continue
+        for guard in block.guards:
+            coverage = coverage_by_reference.get(guard.reference, {})
+            guard_nodes.append(
+                PreflightGuardNode(
+                    reference=guard.reference,
+                    block_index=block_index,
+                    relevant=bool(coverage.get("relevant", True)),
+                    evaluated=bool(coverage.get("evaluated", False)),
+                    status=str(coverage.get("status", "pending")),
+                    unknown_reason=cast(str | None, coverage.get("unknown_reason")),
+                )
+            )
+
+    block_nodes: list[PreflightBlockNode] = []
+    for item in outputs.get("block_items", []):
+        if not isinstance(item, dict):
+            continue
+        block_index = item.get("block_index")
+        block_type = item.get("type")
+        status = item.get("status")
+        if not isinstance(block_index, int) or not isinstance(block_type, str) or not isinstance(status, str):
+            continue
+        guard_references = tuple(
+            reference for reference in item.get("guard_references", []) if isinstance(reference, str)
+        )
+        step_names = tuple(name for name in item.get("step_names", []) if isinstance(name, str))
+        block_nodes.append(
+            PreflightBlockNode(
+                block_index=block_index,
+                block_type=block_type,
+                status=status,
+                guard_references=guard_references,
+                step_names=step_names,
+            )
+        )
+
+    return PreflightDecisionModel(
+        allowed_state=str(outputs.get("allowed_state", "blocked")),
+        analysis_complete=bool(outputs.get("analysis_complete", False)),
+        incomplete_reasons=tuple(reason for reason in outputs.get("incomplete_reasons", []) if isinstance(reason, str)),
+        guard_nodes=tuple(guard_nodes),
+        block_nodes=tuple(block_nodes),
+    )
 
 
 def check_workflow(
@@ -271,6 +326,7 @@ def check_workflow(
             outputs=outputs,
             operation_results=tuple(operation_results),
             failed_guard=failed_guard,
+            preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
         )
 
     outputs = {
@@ -302,6 +358,7 @@ def check_workflow(
         ),
         outputs=outputs,
         operation_results=tuple(operation_results),
+        preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
     )
 
 
