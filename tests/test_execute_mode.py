@@ -10,6 +10,8 @@ from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock
 from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, plan_workflow
 from ordo.runtime.executing import (
+    _append_execution_error_block_item,
+    _append_execution_ok_block_item,
     _is_execute_probe_step,
     _is_execute_profile_switch_builtin,
     _is_execute_profile_switch_operation,
@@ -96,6 +98,29 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertTrue(_is_execute_run_step(run_step))
         self.assertTrue(_is_execute_profile_switch_builtin(builtin))
         self.assertTrue(_is_execute_profile_switch_operation(action))
+
+    def test_execution_block_item_helpers_replace_inline_traversal_fragments(self) -> None:
+        block = StepBlock(steps=(Step(name="a", operation=OperationRef("shell.command")), Step(name="b", operation=OperationRef("shell.command"))))
+        items: list[dict[str, object]] = []
+
+        _append_execution_error_block_item(
+            items,
+            block_index=0,
+            declared_block=block,
+            executed_steps=["a"],
+            skipped_steps=["b"],
+            failed_step="b",
+        )
+        _append_execution_ok_block_item(
+            items,
+            block_index=1,
+            declared_block=block,
+            executed_steps=["a", "b"],
+            skipped_steps=[],
+        )
+
+        self.assertEqual(items[0]["status"], "execution_error")
+        self.assertEqual(items[1]["status"], "ok")
     def test_execute_preserves_blocked_before_execution(self) -> None:
         workflow = Workflow(
             version=0,

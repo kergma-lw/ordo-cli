@@ -212,16 +212,13 @@ def execute_workflow(
                     )
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
                     diagnostics.append(condition_result)
-                    block_items.append(
-                        {
-                            "block_index": block_index,
-                            "type": "steps",
-                            "status": "execution_error",
-                            "step_names": [candidate.name for candidate in declared_block.steps],
-                            "executed_steps": block_executed,
-                            "skipped_steps": block_skipped + [step.name],
-                            "failed_step": step.name,
-                        }
+                    _append_execution_error_block_item(
+                        block_items,
+                        block_index=block_index,
+                        declared_block=declared_block,
+                        executed_steps=block_executed,
+                        skipped_steps=block_skipped + [step.name],
+                        failed_step=step.name,
                     )
                     return RuntimeResult(
                         mode=Mode.EXECUTE,
@@ -283,16 +280,13 @@ def execute_workflow(
                 _mark_execution_tree_probe_revalidated(execution_tree_output, step.name, result)
                 if result.status != "ok":
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
-                    block_items.append(
-                        {
-                            "block_index": block_index,
-                            "type": "steps",
-                            "status": "execution_error",
-                            "step_names": [candidate.name for candidate in declared_block.steps],
-                            "executed_steps": block_executed,
-                            "skipped_steps": block_skipped,
-                            "failed_step": step.name,
-                        }
+                    _append_execution_error_block_item(
+                        block_items,
+                        block_index=block_index,
+                        declared_block=declared_block,
+                        executed_steps=block_executed,
+                        skipped_steps=block_skipped,
+                        failed_step=step.name,
                     )
                     return RuntimeResult(
                         mode=Mode.EXECUTE,
@@ -327,16 +321,13 @@ def execute_workflow(
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
                     diagnostics.append(run_workflow)
-                    block_items.append(
-                        {
-                            "block_index": block_index,
-                            "type": "steps",
-                            "status": "execution_error",
-                            "step_names": [candidate.name for candidate in declared_block.steps],
-                            "executed_steps": block_executed,
-                            "skipped_steps": block_skipped,
-                            "failed_step": step.name,
-                        }
+                    _append_execution_error_block_item(
+                        block_items,
+                        block_index=block_index,
+                        declared_block=declared_block,
+                        executed_steps=block_executed,
+                        skipped_steps=block_skipped,
+                        failed_step=step.name,
                     )
                     return RuntimeResult(
                         mode=Mode.EXECUTE,
@@ -392,17 +383,14 @@ def execute_workflow(
                 if run_result.status is not RuntimeStatus.OK:
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
-                    block_items.append(
-                        {
-                            "block_index": block_index,
-                            "type": "steps",
-                            "status": "execution_error",
-                            "step_names": [candidate.name for candidate in declared_block.steps],
-                            "executed_steps": block_executed,
-                            "skipped_steps": block_skipped,
-                            "failed_step": step.name,
-                            "failed_run": step.run,
-                        }
+                    _append_execution_error_block_item(
+                        block_items,
+                        block_index=block_index,
+                        declared_block=declared_block,
+                        executed_steps=block_executed,
+                        skipped_steps=block_skipped,
+                        failed_step=step.name,
+                        failed_run=step.run,
                     )
                     return RuntimeResult(
                         mode=Mode.EXECUTE,
@@ -445,16 +433,13 @@ def execute_workflow(
                     if result.status != "ok":
                         _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                         skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
-                        block_items.append(
-                            {
-                                "block_index": block_index,
-                                "type": "steps",
-                                "status": "execution_error",
-                                "step_names": [candidate.name for candidate in declared_block.steps],
-                                "executed_steps": block_executed,
-                                "skipped_steps": block_skipped,
-                                "failed_step": step.name,
-                            }
+                        _append_execution_error_block_item(
+                            block_items,
+                            block_index=block_index,
+                            declared_block=declared_block,
+                            executed_steps=block_executed,
+                            skipped_steps=block_skipped,
+                            failed_step=step.name,
                         )
                         return RuntimeResult(
                             mode=Mode.EXECUTE,
@@ -500,16 +485,13 @@ def execute_workflow(
                     if result.status != "ok":
                         _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                         skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
-                        block_items.append(
-                            {
-                                "block_index": block_index,
-                                "type": "steps",
-                                "status": "execution_error",
-                                "step_names": [candidate.name for candidate in declared_block.steps],
-                                "executed_steps": block_executed,
-                                "skipped_steps": block_skipped,
-                                "failed_step": step.name,
-                            }
+                        _append_execution_error_block_item(
+                            block_items,
+                            block_index=block_index,
+                            declared_block=declared_block,
+                            executed_steps=block_executed,
+                            skipped_steps=block_skipped,
+                            failed_step=step.name,
                         )
                         return RuntimeResult(
                             mode=Mode.EXECUTE,
@@ -571,16 +553,13 @@ def execute_workflow(
             if result.status != "ok":
                 _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                 skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
-                block_items.append(
-                    {
-                        "block_index": block_index,
-                        "type": "steps",
-                        "status": "execution_error",
-                        "step_names": [candidate.name for candidate in declared_block.steps],
-                        "executed_steps": block_executed,
-                        "skipped_steps": block_skipped,
-                        "failed_step": step.name,
-                    }
+                _append_execution_error_block_item(
+                    block_items,
+                    block_index=block_index,
+                    declared_block=declared_block,
+                    executed_steps=block_executed,
+                    skipped_steps=block_skipped,
+                    failed_step=step.name,
                 )
                 return RuntimeResult(
                     mode=Mode.EXECUTE,
@@ -611,15 +590,12 @@ def execute_workflow(
             block_executed.append(step.name)
             _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done", result=result)
 
-        block_items.append(
-            {
-                "block_index": block_index,
-                "type": "steps",
-                "status": "ok",
-                "step_names": [candidate.name for candidate in declared_block.steps],
-                "executed_steps": block_executed,
-                "skipped_steps": block_skipped,
-            }
+        _append_execution_ok_block_item(
+            block_items,
+            block_index=block_index,
+            declared_block=declared_block,
+            executed_steps=block_executed,
+            skipped_steps=block_skipped,
         )
 
     return RuntimeResult(
@@ -688,6 +664,50 @@ def _record_step_runtime_result(
         }
     operation_results.append(result)
     diagnostics.extend(result.diagnostics)
+
+
+def _append_execution_error_block_item(
+    block_items: list[dict[str, object]],
+    *,
+    block_index: int,
+    declared_block: StepBlock,
+    executed_steps: list[str],
+    skipped_steps: list[str],
+    failed_step: str,
+    failed_run: str | None = None,
+) -> None:
+    payload = {
+        "block_index": block_index,
+        "type": "steps",
+        "status": "execution_error",
+        "step_names": [candidate.name for candidate in declared_block.steps],
+        "executed_steps": executed_steps,
+        "skipped_steps": skipped_steps,
+        "failed_step": failed_step,
+    }
+    if failed_run is not None:
+        payload["failed_run"] = failed_run
+    block_items.append(payload)
+
+
+def _append_execution_ok_block_item(
+    block_items: list[dict[str, object]],
+    *,
+    block_index: int,
+    declared_block: StepBlock,
+    executed_steps: list[str],
+    skipped_steps: list[str],
+) -> None:
+    block_items.append(
+        {
+            "block_index": block_index,
+            "type": "steps",
+            "status": "ok",
+            "step_names": [candidate.name for candidate in declared_block.steps],
+            "executed_steps": executed_steps,
+            "skipped_steps": skipped_steps,
+        }
+    )
 
 
 def _execute_profile_switch_step(
