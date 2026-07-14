@@ -35,6 +35,8 @@ def _base_verdict_outputs(
         "allowed_state": allowed_state,
         "analysis_complete": analysis_complete,
         "incomplete_reasons": [] if incomplete_reasons is None else list(incomplete_reasons),
+        "preflight_registers": {},
+        "preflight_step_results": {},
     }
 
 
@@ -427,6 +429,8 @@ def check_workflow(
             "block_items": block_items,
             "preflight_step_items": preflight_step_items,
             "preflight_halts": preflight_halts,
+            "preflight_registers": dict(effective_workflow.step_results),
+            "preflight_step_results": dict(effective_workflow.step_results),
             "active_profile": active_profile,
             "active_overrides": [override.to_contract() for override in active_overrides],
         }
@@ -462,6 +466,8 @@ def check_workflow(
         "block_items": block_items,
         "preflight_step_items": preflight_step_items,
         "preflight_halts": preflight_halts,
+        "preflight_registers": dict(effective_workflow.step_results),
+        "preflight_step_results": dict(effective_workflow.step_results),
         "active_profile": active_profile,
         "active_overrides": [override.to_contract() for override in active_overrides],
     }

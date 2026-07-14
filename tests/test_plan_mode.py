@@ -224,6 +224,17 @@ class PlanModeTest(unittest.TestCase):
         self.assertIn("Loaded", result.outputs["preflight_step_items"][0]["summary"])
         self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "halted")
         self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
+        self.assertEqual(
+            result.outputs["preflight_registers"],
+            {
+                "issue": {
+                    "status": "ok",
+                    "summary": "Loaded issue",
+                    "outputs": {"exists": True},
+                }
+            },
+        )
+        self.assertEqual(result.outputs["preflight_step_results"], result.outputs["preflight_registers"])
 
     def test_plan_surfaces_step_launcher_selection(self) -> None:
         workflow = Workflow(
