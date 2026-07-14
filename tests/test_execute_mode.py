@@ -12,6 +12,7 @@ from ordo.runtime import execute_workflow, plan_workflow
 from ordo.runtime.executing import (
     _append_execution_error_block_item,
     _append_execution_ok_block_item,
+    _initialize_execute_context,
     _is_execute_probe_step,
     _is_execute_profile_switch_builtin,
     _is_execute_profile_switch_operation,
@@ -121,6 +122,16 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(items[0]["status"], "execution_error")
         self.assertEqual(items[1]["status"], "ok")
+
+    def test_initialize_execute_context_applies_profile_cleanly(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),))
+        profile = Profile(name="frontend", inputs={"repo": "frontend"})
+
+        context = _initialize_execute_context(workflow, profile=profile, profile_working_directories={"frontend": Path("/tmp")})
+
+        self.assertEqual(context["active_profile"], "frontend")
+        self.assertEqual(context["current_profile_name"], "frontend")
+        self.assertEqual(context["current_working_directory"], Path("/tmp"))
     def test_execute_preserves_blocked_before_execution(self) -> None:
         workflow = Workflow(
             version=0,

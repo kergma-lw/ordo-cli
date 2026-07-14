@@ -75,19 +75,17 @@ def execute_workflow(
             failed_step=check_result.failed_step,
         )
 
-    effective_workflow = workflow
-    active_profile = None
-    active_overrides = ()
-    if profile is not None:
-        applied = apply_profile_to_workflow(workflow, profile)
-        if applied.ok and applied.workflow is not None:
-            effective_workflow = applied.workflow
-            active_profile = applied.active_profile
-            active_overrides = applied.active_overrides
-
-    current_profile = profile
-    current_profile_name = None if profile is None else profile.name
-    current_working_directory = None if current_profile_name is None or profile_working_directories is None else profile_working_directories.get(current_profile_name)
+    context = _initialize_execute_context(
+        workflow,
+        profile=profile,
+        profile_working_directories=profile_working_directories,
+    )
+    effective_workflow = context["workflow"]
+    active_profile = context["active_profile"]
+    active_overrides = context["active_overrides"]
+    current_profile = context["current_profile"]
+    current_profile_name = context["current_profile_name"]
+    current_working_directory = context["current_working_directory"]
 
     resolution = resolve_workflow_references(effective_workflow, connector_provider=connector_provider, active_overrides=active_overrides)
     executor = step_executor or _default_step_executor(provider=connector_provider)
@@ -646,6 +644,33 @@ def _default_step_executor(*, provider: ConnectorProvider | None):
         return resolved_provider.step_executor(resolved_step, workflow)
 
     return execute
+
+
+def _initialize_execute_context(
+    workflow: Workflow,
+    *,
+    profile: Profile | None,
+    profile_working_directories: dict[str, Path | None] | None,
+) -> dict[str, object]:
+    effective_workflow = workflow
+    active_profile = None
+    active_overrides = ()
+    if profile is not None:
+        applied = apply_profile_to_workflow(workflow, profile)
+        if applied.ok and applied.workflow is not None:
+            effective_workflow = applied.workflow
+            active_profile = applied.active_profile
+            active_overrides = applied.active_overrides
+    current_profile_name = None if profile is None else profile.name
+    current_working_directory = None if current_profile_name is None or profile_working_directories is None else profile_working_directories.get(current_profile_name)
+    return {
+        "workflow": effective_workflow,
+        "active_profile": active_profile,
+        "active_overrides": active_overrides,
+        "current_profile": profile,
+        "current_profile_name": current_profile_name,
+        "current_working_directory": current_working_directory,
+    }
 
 
 def _record_step_runtime_result(
