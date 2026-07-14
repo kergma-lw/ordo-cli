@@ -683,6 +683,7 @@ def _interpret_step_block_for_check(
                     "status": "halted",
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
+                    "condition_status": "unknown",
                     "halt_reason": halt.reason,
                 }
             )
@@ -715,6 +716,7 @@ def _interpret_step_block_for_check(
                     "status": "halted",
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
+                    "condition_status": "unknown",
                     "halt_reason": halt.reason,
                 }
             )
@@ -731,6 +733,7 @@ def _interpret_step_block_for_check(
                     "status": "skipped",
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
+                    "condition_status": "false",
                 }
             )
             continue
@@ -757,6 +760,7 @@ def _interpret_step_block_for_check(
                         "status": "halted",
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
+                        "condition_status": "true" if step.if_ is not None else None,
                         "halt_reason": halt.reason,
                         "operation_status": result.status,
                     }
@@ -775,6 +779,7 @@ def _interpret_step_block_for_check(
                     "status": "interpreted",
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
+                    "condition_status": "true" if step.if_ is not None else None,
                     "register": step.register,
                     "operation_status": result.status,
                     "summary": result.summary,
@@ -806,6 +811,7 @@ def _interpret_step_block_for_check(
                 "status": "halted",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
+                "condition_status": "true" if step.if_ is not None else None,
                 "halt_reason": halt.reason,
             }
         )

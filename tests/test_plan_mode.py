@@ -168,6 +168,7 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertTrue(result.outputs["step_items"][0]["conditional"])
         self.assertEqual(result.outputs["step_items"][0]["condition"], "${inputs.enabled}")
+        self.assertEqual(result.outputs["step_items"][0]["condition_status"], "unknown")
 
     def test_plan_surfaces_preflight_step_classification(self) -> None:
         cases = [
@@ -235,6 +236,35 @@ class PlanModeTest(unittest.TestCase):
             },
         )
         self.assertEqual(result.outputs["preflight_step_results"], result.outputs["preflight_registers"])
+        self.assertEqual(result.outputs["preflight_step_items"][0]["condition_status"], None)
+        self.assertEqual(result.outputs["preflight_step_items"][1]["condition_status"], "true")
+        self.assertEqual(result.outputs["step_items"][1]["condition_status"], "true")
+
+    def test_plan_reports_false_condition_status_for_skipped_preflight_step(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"run_effectful": False},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),
+                        Step(name="comment", operation=OperationRef("gh.issue.close"), if_="${inputs.run_effectful}"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "skipped")
+        self.assertEqual(result.outputs["preflight_step_items"][1]["condition_status"], "false")
 
     def test_plan_surfaces_step_launcher_selection(self) -> None:
         workflow = Workflow(

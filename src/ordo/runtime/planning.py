@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
@@ -12,6 +14,13 @@ from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
 from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedRunStep, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
+
+
+def _condition_status_for_step(step, preflight_item: dict[str, object]) -> str | None:
+    if step.if_ is None:
+        return None
+    status = preflight_item.get("condition_status")
+    return cast(str, status) if isinstance(status, str) else "unknown"
 
 
 def plan_workflow(
@@ -149,9 +158,15 @@ def _build_step_items(
 ) -> list[dict[str, object]]:
     blocked = bool(check_result.outputs.get("blockers"))
     step_items: list[dict[str, object]] = []
+    preflight_by_name = {
+        item.get("name"): item
+        for item in check_result.outputs.get("preflight_step_items", [])
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
 
     if resolution is not None and resolution.resolved_steps:
         for step, resolved_step in zip(workflow.steps, resolution.resolved_steps, strict=False):
+            preflight_item = preflight_by_name.get(step.name, {})
             if isinstance(resolved_step, ResolvedBuiltinStep):
                 classification = classify_preflight_step(step, resolved_step)
                 step_items.append(
@@ -164,6 +179,7 @@ def _build_step_items(
                         "eligibility": "blocked" if blocked else "eligible",
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
+                        "condition_status": _condition_status_for_step(step, preflight_item),
                         "launcher": step.launcher,
                     }
                 )
@@ -180,6 +196,7 @@ def _build_step_items(
                         "eligibility": "blocked" if blocked else "eligible",
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
+                        "condition_status": _condition_status_for_step(step, preflight_item),
                         "launcher": None,
                     }
                 )
@@ -195,6 +212,7 @@ def _build_step_items(
                     "eligibility": "blocked" if blocked else "eligible",
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
+                    "condition_status": _condition_status_for_step(step, preflight_item),
                     "launcher": step.launcher,
                 }
             )
@@ -212,6 +230,7 @@ def _build_step_items(
                 "eligibility": "blocked" if blocked else "unknown",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
+                "condition_status": None if step.if_ is None else "unknown",
                 "launcher": step.launcher if step.operation is not None else None,
             }
         )

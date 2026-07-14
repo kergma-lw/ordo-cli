@@ -99,6 +99,7 @@ class ExplainModeTest(unittest.TestCase):
         result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["explanation"]["preflight_halts"][0]["reason"], "effectful_step_encountered")
+        self.assertEqual(result.outputs["preflight_step_items"][1]["condition_status"], "true")
 
     def test_explain_preserves_expanded_run_reasoning(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
