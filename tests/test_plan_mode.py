@@ -333,6 +333,45 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["freshness_state"], "stale")
         self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], ["gh.*"])
 
+    def test_plan_builds_ready_to_run_frontier(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="ship", operation=OperationRef("shell.command")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        frontier = result.outputs["ready_to_run_frontier"]
+        self.assertEqual(frontier["allowed_state"], "allowed")
+        self.assertIn("block:0:step:0", frontier["prepared_node_ids"])
+        self.assertIn("block:2:step:0", frontier["requires_runtime_node_ids"])
+
+    def test_plan_frontier_reports_blocked_nodes(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(expr='git.branch.value != "main"'),),
+            steps=(Step(name="ship", operation=OperationRef("shell.command")),),
+        )
+
+        def probe(_resolved_guard, _workflow):
+            return OperationResult(status="ok", outputs={"value": "main"})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        frontier = result.outputs["ready_to_run_frontier"]
+        self.assertIn("block:0:guard:0", frontier["blocked_node_ids"])
+
     def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
         workflow = Workflow(
             version=0,

@@ -185,6 +185,7 @@ def plan_workflow(
         block_items=block_items,
         preflight_step_items=preflight_step_items,
     )
+    ready_to_run_frontier = _build_ready_to_run_frontier(execution_tree)
 
     blockers = list(base_outputs.get("blockers", []))
     allowed_state = str(base_outputs.get("allowed_state", "blocked"))
@@ -206,6 +207,7 @@ def plan_workflow(
         "block_items": block_items,
         "preflight_step_items": preflight_step_items,
         "execution_tree": execution_tree,
+        "ready_to_run_frontier": ready_to_run_frontier,
     }
 
     return RuntimeResult(
@@ -557,4 +559,40 @@ def _build_execution_tree(
         "allowed_state": check_result.outputs.get("allowed_state"),
         "analysis_complete": check_result.outputs.get("analysis_complete"),
         "blocks": blocks,
+    }
+
+
+def _build_ready_to_run_frontier(execution_tree: dict[str, object]) -> dict[str, object]:
+    prepared_node_ids: list[str] = []
+    requires_runtime_node_ids: list[str] = []
+    blocked_node_ids: list[str] = []
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict):
+                continue
+            node_id = child.get("id")
+            if not isinstance(node_id, str):
+                continue
+            status = child.get("status")
+            eligibility = child.get("eligibility")
+            preflight = child.get("preflight")
+            if status in {"passed", "blocked"}:
+                prepared_node_ids.append(node_id)
+                if status == "blocked":
+                    blocked_node_ids.append(node_id)
+                continue
+            if isinstance(preflight, dict) and preflight.get("status") in {"interpreted", "skipped"}:
+                prepared_node_ids.append(node_id)
+                continue
+            if eligibility == "blocked":
+                blocked_node_ids.append(node_id)
+                continue
+            requires_runtime_node_ids.append(node_id)
+    return {
+        "allowed_state": execution_tree.get("allowed_state"),
+        "prepared_node_ids": prepared_node_ids,
+        "requires_runtime_node_ids": requires_runtime_node_ids,
+        "blocked_node_ids": blocked_node_ids,
     }
