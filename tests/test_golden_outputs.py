@@ -138,6 +138,37 @@ class RuntimeInvariantTest(unittest.TestCase):
         self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "reused_preflight")
         json.dumps(execute_result.to_contract())
 
+    def test_tree_driven_runtime_handles_revalidation_and_divergence_end_to_end(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="inspect", operation=OperationRef("gh.issue"), register="issue"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="ship", operation=OperationRef("shell.command"), if_="${step.issue.outputs.exists}"),)),
+            ),
+        )
+
+        plan_result = plan_workflow(
+            workflow,
+            guard_probe=lambda resolved_guard, _workflow: OperationResult(status="ok", outputs={"exists": True} if resolved_guard.reference == "gh.issue" else {"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+        execute_result = execute_workflow(
+            workflow,
+            guard_probe=lambda resolved_guard, _workflow: OperationResult(status="ok", outputs={"exists": False} if resolved_guard.reference == "gh.issue" else {"clean": True}),
+            step_executor=lambda _resolved_step, _workflow: OperationResult(status="ok", summary="ran"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(execute_result.status, RuntimeStatus.OK)
+        self.assertEqual(execute_result.outputs["execution_tree_mode"], "tree_assisted")
+        self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "revalidated")
+        self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_status"], "diverged")
+        self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][2]["children"][0]["runtime_status"], "skipped_at_run")
+        json.dumps(execute_result.to_contract())
+
 
 if __name__ == "__main__":
     unittest.main()
