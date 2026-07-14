@@ -65,6 +65,14 @@ def _reuse_policy_for_step_item(item: dict[str, object], weakened_scopes: set[st
     return "not_reusable"
 
 
+def _freshness_state_for_scopes(scopes: list[str], weakened_scopes: set[str]) -> str:
+    if not scopes:
+        return "not_applicable"
+    if any(scope in weakened_scopes for scope in scopes):
+        return "stale"
+    return "fresh"
+
+
 def _build_preflight_step_items(check_result: RuntimeResult) -> list[dict[str, object]]:
     weakened_scopes = {
         scope for scope in check_result.outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)
@@ -77,6 +85,15 @@ def _build_preflight_step_items(check_result: RuntimeResult) -> list[dict[str, o
         item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
         register = item.get("register")
         item["produced_registers"] = [] if not isinstance(register, str) else [register]
+        item["freshness_state"] = _freshness_state_for_scopes(
+            [scope for scope in item.get("observation_scopes", []) if isinstance(scope, str)],
+            weakened_scopes,
+        )
+        item["invalidated_by_scopes"] = [
+            scope
+            for scope in item.get("observation_scopes", [])
+            if isinstance(scope, str) and scope in weakened_scopes
+        ]
         items.append(item)
     return items
 
@@ -144,13 +161,22 @@ def plan_workflow(
 
     preflight_step_items = _build_preflight_step_items(check_result)
     supporting_steps_by_scope = _supporting_step_names_by_scope(preflight_step_items)
-    guard_items = _build_guard_items(check_result, resolution, supporting_steps_by_scope)
+    weakened_scopes = {scope for scope in base_outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)}
+    guard_items = _build_guard_items(check_result, resolution, supporting_steps_by_scope, weakened_scopes)
     step_items = _build_step_items(check_result, resolution, effective_workflow)
     run_items = _build_run_items(check_result, resolution, effective_workflow)
     block_items = _build_block_items(check_result, resolution, effective_workflow)
-    weakened_scopes = {scope for scope in base_outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)}
     for item in step_items:
         item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
+        item["freshness_state"] = _freshness_state_for_scopes(
+            [scope for scope in item.get("observation_scopes", []) if isinstance(scope, str)],
+            weakened_scopes,
+        )
+        item["invalidated_by_scopes"] = [
+            scope
+            for scope in item.get("observation_scopes", [])
+            if isinstance(scope, str) and scope in weakened_scopes
+        ]
     execution_tree = _build_execution_tree(
         check_result,
         effective_workflow,
@@ -199,6 +225,7 @@ def _build_guard_items(
     check_result: RuntimeResult,
     resolution: WorkflowResolution | None,
     supporting_steps_by_scope: dict[str, list[str]],
+    weakened_scopes: set[str],
 ) -> list[dict[str, object]]:
     guard_items: list[dict[str, object]] = []
     coverage_items = [item for item in check_result.outputs.get("guard_coverage", []) if isinstance(item, dict)]
@@ -223,6 +250,10 @@ def _build_guard_items(
                         "failed_subcondition": detail.get("failed_subcondition") if isinstance(detail, dict) else None,
                         "failure_kind": detail.get("failure_kind") if isinstance(detail, dict) else None,
                         "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
+                        "freshness_state": _freshness_state_for_scopes(
+                            [scope for scope in detail.get("observation_scopes", []) if isinstance(scope, str)] if isinstance(detail, dict) else [],
+                            weakened_scopes,
+                        ),
                     }
                 )
                 continue
@@ -237,6 +268,7 @@ def _build_guard_items(
                         "unknown_reason": coverage.get("unknown_reason"),
                         "operation_status": None if operation_result is None else operation_result.status,
                         "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
+                        "freshness_state": _freshness_state_for_scopes([resolved_guard.reference], weakened_scopes),
                     }
                 )
         return guard_items
@@ -253,6 +285,7 @@ def _build_guard_items(
                 "unknown_reason": coverage.get("unknown_reason"),
                 "operation_status": None,
                 "supporting_step_names": _supporting_step_names_for_guard(cast(str, reference), supporting_steps_by_scope),
+                "freshness_state": _freshness_state_for_scopes([cast(str, reference)], weakened_scopes),
             }
         )
     return guard_items
@@ -473,6 +506,7 @@ def _build_execution_tree(
             "type": block_item.get("type", "guards" if isinstance(declared_block, GuardBlock) else "steps"),
             "status": block_item.get("status", "pending"),
             "runtime_status": "not_started",
+            "freshness_state": "not_applicable",
             "active_profile": block_item.get("active_profile"),
             "children": [],
         }
@@ -497,6 +531,15 @@ def _build_execution_tree(
                 }
                 for step_index, step in enumerate(declared_block.steps)
             ]
+        child_freshness = {
+            child.get("freshness_state")
+            for child in block_node["children"]
+            if isinstance(child, dict) and isinstance(child.get("freshness_state"), str)
+        }
+        if "stale" in child_freshness:
+            block_node["freshness_state"] = "stale"
+        elif "fresh" in child_freshness:
+            block_node["freshness_state"] = "fresh"
         blocks.append(block_node)
 
     return {

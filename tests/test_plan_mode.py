@@ -306,6 +306,30 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(tree["blocks"][1]["children"][0]["id"], "block:1:guard:0")
         self.assertEqual(tree["blocks"][1]["children"][0]["runtime_status"], "not_started")
 
+    def test_plan_marks_freshness_and_invalidation_state_on_tree_nodes(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "acme/repo", "issue_number": 1},
+            guards=(Guard(OperationRef("gh.issue", with_={"repository": "${inputs.repository}", "issue_number": "${inputs.issue_number}"})),),
+            steps=(
+                Step(
+                    name="close",
+                    operation=OperationRef("gh.issue.close", with_={"repository": "${inputs.repository}", "issue_number": "${inputs.issue_number}"}),
+                ),
+            ),
+        )
+
+        def probe(_resolved_guard, _workflow):
+            return OperationResult(status="ok", outputs={"state": "OPEN"})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["guard_items"][0]["freshness_state"], "stale")
+        self.assertEqual(result.outputs["step_items"][0]["freshness_state"], "not_applicable")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["freshness_state"], "stale")
+        self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], ["gh.*"])
+
     def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
         workflow = Workflow(
             version=0,
