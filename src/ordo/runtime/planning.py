@@ -137,6 +137,14 @@ def plan_workflow(
     weakened_scopes = {scope for scope in base_outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)}
     for item in step_items:
         item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
+    execution_tree = _build_execution_tree(
+        check_result,
+        effective_workflow,
+        guard_items=guard_items,
+        step_items=step_items,
+        block_items=block_items,
+        preflight_step_items=preflight_step_items,
+    )
 
     blockers = list(base_outputs.get("blockers", []))
     allowed_state = str(base_outputs.get("allowed_state", "blocked"))
@@ -157,6 +165,7 @@ def plan_workflow(
         "run_items": run_items,
         "block_items": block_items,
         "preflight_step_items": preflight_step_items,
+        "execution_tree": execution_tree,
     }
 
     return RuntimeResult(
@@ -408,3 +417,66 @@ def _build_run_items(
         )
         blocked = True
     return run_items
+
+
+def _build_execution_tree(
+    check_result: RuntimeResult,
+    workflow: Workflow,
+    *,
+    guard_items: list[dict[str, object]],
+    step_items: list[dict[str, object]],
+    block_items: list[dict[str, object]],
+    preflight_step_items: list[dict[str, object]],
+) -> dict[str, object]:
+    guard_by_reference = {
+        item.get("reference"): item
+        for item in guard_items
+        if isinstance(item, dict) and isinstance(item.get("reference"), str)
+    }
+    step_by_name = {
+        item.get("name"): item for item in step_items if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
+    preflight_by_name = {
+        item.get("name"): item
+        for item in preflight_step_items
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
+    blocks: list[dict[str, object]] = []
+    for block_index, declared_block in enumerate(workflow.blocks):
+        block_item = next(
+            (item for item in block_items if isinstance(item, dict) and item.get("block_index") == block_index),
+            {},
+        )
+        block_node = {
+            "id": f"block:{block_index}",
+            "block_index": block_index,
+            "type": block_item.get("type", "guards" if isinstance(declared_block, GuardBlock) else "steps"),
+            "status": block_item.get("status", "pending"),
+            "active_profile": block_item.get("active_profile"),
+            "children": [],
+        }
+        if isinstance(declared_block, GuardBlock):
+            block_node["children"] = [
+                {
+                    "id": f"block:{block_index}:guard:{guard_index}",
+                    **dict(guard_by_reference.get(guard.reference, {"reference": guard.reference})),
+                }
+                for guard_index, guard in enumerate(declared_block.guards)
+            ]
+        else:
+            block_node["children"] = [
+                {
+                    "id": f"block:{block_index}:step:{step_index}",
+                    **dict(step_by_name.get(step.name, {"name": step.name})),
+                    "preflight": dict(preflight_by_name[step.name]) if step.name in preflight_by_name else None,
+                }
+                for step_index, step in enumerate(declared_block.steps)
+            ]
+        blocks.append(block_node)
+
+    return {
+        "workflow": workflow.workflow,
+        "allowed_state": check_result.outputs.get("allowed_state"),
+        "analysis_complete": check_result.outputs.get("analysis_complete"),
+        "blocks": blocks,
+    }

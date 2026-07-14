@@ -256,6 +256,30 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_items"][0]["supporting_step_names"], ["load-issue"])
         self.assertEqual(result.outputs["preflight_step_items"][0]["produced_registers"], ["issue"])
 
+    def test_plan_assembles_execution_oriented_tree_artifact(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        tree = result.outputs["execution_tree"]
+        self.assertEqual(tree["workflow"], "open-task")
+        self.assertEqual(tree["blocks"][0]["id"], "block:0")
+        self.assertEqual(tree["blocks"][0]["children"][0]["id"], "block:0:step:0")
+        self.assertEqual(tree["blocks"][0]["children"][0]["preflight"]["register"], "issue")
+        self.assertEqual(tree["blocks"][1]["children"][0]["id"], "block:1:guard:0")
+
     def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
         workflow = Workflow(
             version=0,
