@@ -104,6 +104,43 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["executed_steps"], [])
         self.assertEqual(result.outputs["skipped_steps"], ["effectful-step"])
 
+    def test_execute_output_assembly_stays_consistent_across_blocked_and_success_paths(self) -> None:
+        blocked_workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(OperationRef("git.worktree")),),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+        success_workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+
+        blocked = execute_workflow(
+            blocked_workflow,
+            guard_probe=lambda *_args: OperationResult(status="guard_failed", summary="blocked"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+        success = execute_workflow(
+            success_workflow,
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        for key in [
+            "executed_steps",
+            "reused_steps",
+            "skipped_steps",
+            "step_condition_details",
+            "launcher_details",
+            "execution_tree",
+            "execution_tree_mode",
+            "execution_tree_fallback_reason",
+        ]:
+            self.assertIn(key, blocked.outputs)
+            self.assertIn(key, success.outputs)
+
     def test_execute_runs_steps_on_success(self) -> None:
         workflow = Workflow(
             version=0,
