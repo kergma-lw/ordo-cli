@@ -264,13 +264,14 @@ def execute_workflow(
                 with _execution_working_directory(current_working_directory):
                     result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_step, effective_workflow)
                 if step.register is not None:
-                    effective_workflow.step_results[step.register] = {
-                        "status": result.status,
-                        "summary": result.summary,
-                        "outputs": dict(result.outputs),
-                    }
-                operation_results.append(result)
-                diagnostics.extend(result.diagnostics)
+                    pass
+                _record_step_runtime_result(
+                    workflow=effective_workflow,
+                    step=step,
+                    result=result,
+                    operation_results=operation_results,
+                    diagnostics=diagnostics,
+                )
                 _mark_execution_tree_probe_revalidated(execution_tree_output, step.name, result)
                 if result.status != "ok":
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
@@ -551,14 +552,13 @@ def execute_workflow(
                             "status": result.status,
                         }
                     )
-            if step.register is not None:
-                effective_workflow.step_results[step.register] = {
-                    "status": result.status,
-                    "summary": result.summary,
-                    "outputs": dict(result.outputs),
-                }
-            operation_results.append(result)
-            diagnostics.extend(result.diagnostics)
+            _record_step_runtime_result(
+                workflow=effective_workflow,
+                step=step,
+                result=result,
+                operation_results=operation_results,
+                diagnostics=diagnostics,
+            )
 
             if result.status != "ok":
                 _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
@@ -662,6 +662,24 @@ def _default_step_executor(*, provider: ConnectorProvider | None):
         return resolved_provider.step_executor(resolved_step, workflow)
 
     return execute
+
+
+def _record_step_runtime_result(
+    *,
+    workflow: Workflow,
+    step: Step,
+    result: OperationResult,
+    operation_results: list[OperationResult],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if step.register is not None:
+        workflow.step_results[step.register] = {
+            "status": result.status,
+            "summary": result.summary,
+            "outputs": dict(result.outputs),
+        }
+    operation_results.append(result)
+    diagnostics.extend(result.diagnostics)
 
 
 def _execute_profile_switch_step(

@@ -9,7 +9,7 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, plan_workflow
-from ordo.runtime.executing import _prepare_tree_driven_step_context
+from ordo.runtime.executing import _prepare_tree_driven_step_context, _record_step_runtime_result
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -55,6 +55,26 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(context["should_execute"], True)
         self.assertEqual(context["condition_source"], "execution_tree_state")
+
+    def test_record_step_runtime_result_updates_registers_and_diagnostics(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="flag", value=True, register="flag"),))
+        step = workflow.steps[0]
+        diagnostic = Diagnostic(code="runtime.test", level="info", message="ok")
+        result = OperationResult(status="ok", summary="derived", outputs={"value": True}, diagnostics=(diagnostic,))
+        operation_results: list[OperationResult] = []
+        diagnostics: list[Diagnostic] = []
+
+        _record_step_runtime_result(
+            workflow=workflow,
+            step=step,
+            result=result,
+            operation_results=operation_results,
+            diagnostics=diagnostics,
+        )
+
+        self.assertEqual(workflow.step_results["flag"]["outputs"]["value"], True)
+        self.assertEqual(operation_results, [result])
+        self.assertEqual(diagnostics, [diagnostic])
     def test_execute_preserves_blocked_before_execution(self) -> None:
         workflow = Workflow(
             version=0,
