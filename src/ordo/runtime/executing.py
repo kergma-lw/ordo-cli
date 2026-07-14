@@ -166,6 +166,7 @@ def execute_workflow(
         block_skipped: list[str] = []
         for step_index, (step, resolved_step) in enumerate(zip(declared_block.steps, resolved_block.steps, strict=False)):
             reused_preflight = preflight_reuse.get(step.name)
+            condition_source = _condition_source_from_tree_state(step, effective_workflow, execution_tree_output)
             if step.if_ is not None:
                 condition_result = _evaluate_step_condition(step, effective_workflow)
                 if isinstance(condition_result, Diagnostic):
@@ -177,6 +178,7 @@ def execute_workflow(
                             "reason": "condition_evaluation_failed",
                             "result": None,
                             "error_code": condition_result.code,
+                            "source": condition_source,
                         }
                     )
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
@@ -222,13 +224,14 @@ def execute_workflow(
                             "outcome": "skipped",
                             "reason": "condition_false",
                             "result": False,
+                            "source": condition_source,
                         }
                     )
                     skipped_steps.append(step.name)
                     block_skipped.append(step.name)
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="skipped_at_run")
                     continue
-                step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True})
+                step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True, "source": condition_source})
             if reused_preflight is not None:
                 reused_steps.append(step.name)
                 block_executed.append(step.name)
@@ -870,6 +873,14 @@ def _mark_execution_tree_probe_revalidated(execution_tree: dict[str, object] | N
             child["runtime_observation"] = dict(result.outputs)
             _refresh_execution_tree_block_runtime(block)
             return
+
+
+def _condition_source_from_tree_state(step: Step, workflow: Workflow, execution_tree: dict[str, object] | None) -> str:
+    if step.if_ is None or not isinstance(execution_tree, dict):
+        return "runtime"
+    if "step." not in step.if_:
+        return "runtime"
+    return "execution_tree_state" if bool(workflow.step_results) else "runtime"
 
 
 def _refresh_execution_tree_block_runtime(block: dict[str, object]) -> None:

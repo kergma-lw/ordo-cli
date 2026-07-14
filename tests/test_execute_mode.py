@@ -133,6 +133,7 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(seen_steps, ["shell.command"])
         self.assertEqual(result.outputs["reused_steps"], ["flag"])
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "reused_preflight")
+        self.assertEqual(result.outputs["step_condition_details"][0]["source"], "execution_tree_state")
 
     def test_execute_mirrors_runtime_status_into_execution_tree_nodes(self) -> None:
         workflow = Workflow(
@@ -194,6 +195,7 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "revalidated")
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["revalidated"], True)
         self.assertEqual(seen_steps, ["shell.command"])
+        self.assertEqual(result.outputs["step_condition_details"][0]["source"], "execution_tree_state")
 
     def test_execute_marks_skipped_runtime_status_in_execution_tree(self) -> None:
         workflow = Workflow(
