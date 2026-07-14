@@ -308,6 +308,7 @@ def execute_workflow(
             if isinstance(resolved_step, ResolvedRunStep):
                 run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
                 if isinstance(run_workflow, Diagnostic):
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
                     diagnostics.append(run_workflow)
                     block_items.append(
@@ -373,6 +374,7 @@ def execute_workflow(
                 checked_guards.extend([name for name in run_result.outputs.get("checked_guards", []) if isinstance(name, str)])
                 guard_details.extend([detail for detail in run_result.outputs.get("guard_details", []) if isinstance(detail, dict)])
                 if run_result.status is not RuntimeStatus.OK:
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
                     block_items.append(
                         {
@@ -411,6 +413,7 @@ def execute_workflow(
                         failed_guard=run_result.failed_guard,
                         failed_step=run_result.failed_step or step.name,
                     )
+                _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
                 continue
             if isinstance(resolved_step, ResolvedBuiltinStep):
                 if resolved_step.builtin == "profile_switch":
@@ -424,6 +427,7 @@ def execute_workflow(
                     operation_results.append(result)
                     diagnostics.extend(result.diagnostics)
                     if result.status != "ok":
+                        _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                         skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
                         block_items.append(
                             {
@@ -478,6 +482,7 @@ def execute_workflow(
                     operation_results.append(result)
                     diagnostics.extend(result.diagnostics)
                     if result.status != "ok":
+                        _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                         skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
                         block_items.append(
                             {
@@ -549,6 +554,7 @@ def execute_workflow(
             diagnostics.extend(result.diagnostics)
 
             if result.status != "ok":
+                _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                 skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
                 block_items.append(
                     {

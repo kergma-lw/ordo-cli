@@ -446,6 +446,60 @@ class ExecuteModeTest(unittest.TestCase):
             self.assertEqual(seen[0][1], frontend_dir)
             self.assertIn("nvm use", seen[0][2])
 
+    def test_execute_marks_nested_run_and_profile_switch_statuses_in_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "fragment.yml"
+            fragment.write_text(
+                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: echo hi\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                source_path=str(root / "root.yml"),
+                launch_dir=str(root),
+                steps=(
+                    Step(name="switch", profile_switch="frontend"),
+                    Step(name="nested", run="fragment.yml", resolved_run_path=str(fragment)),
+                ),
+            )
+            frontend = Profile(name="frontend")
+            plan_result = plan_workflow(
+                workflow,
+                available_profiles={"frontend": frontend},
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            result = execute_workflow(
+                workflow,
+                available_profiles={"frontend": frontend},
+                step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+                execution_tree=plan_result.outputs["execution_tree"],
+            )
+
+            self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "done")
+            self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][1]["runtime_status"], "done")
+
+    def test_execute_marks_failed_step_status_in_tree(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda *_args: OperationResult(status="execution_error", summary="boom"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "failed")
+
     def test_execute_pre_run_workflow_can_switch_profile_for_main_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
