@@ -466,7 +466,7 @@ def execute_workflow(
                         )
                     executed_steps.append(step.name)
                     block_executed.append(step.name)
-                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done", result=result)
                     continue
                 with _execution_working_directory(current_working_directory):
                     result = _execute_builtin_step(step, effective_workflow)
@@ -521,7 +521,7 @@ def execute_workflow(
                         )
                     executed_steps.append(step.name)
                     block_executed.append(step.name)
-                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done", result=result)
                     continue
                 executed_step = resolved_step
                 applied_launcher = None
@@ -594,7 +594,7 @@ def execute_workflow(
 
             executed_steps.append(step.name)
             block_executed.append(step.name)
-            _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
+            _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done", result=result)
 
         block_items.append(
             {
@@ -857,6 +857,7 @@ def _mark_execution_tree_step_reused(execution_tree: dict[str, object] | None, s
             child["revalidated"] = False
             child["runtime_observation"] = child.get("planned_observation")
             child["divergence_status"] = "matched"
+            child["divergence_reason"] = None
             _refresh_execution_tree_block_runtime(block)
             return
 
@@ -866,6 +867,7 @@ def _mark_execution_tree_step_runtime(
     step_name: str,
     *,
     runtime_status: str,
+    result: OperationResult | None = None,
 ) -> None:
     if not isinstance(execution_tree, dict):
         return
@@ -875,6 +877,12 @@ def _mark_execution_tree_step_runtime(
         for child in block.get("children", []):
             if not isinstance(child, dict) or child.get("name") != step_name:
                 continue
+            if result is not None:
+                runtime = dict(result.outputs)
+                child["runtime_observation"] = runtime
+                planned = child.get("planned_observation")
+                child["divergence_status"] = "matched" if planned in (None, runtime) else "diverged"
+                child["divergence_reason"] = None if planned in (None, runtime) else "runtime_observation_mismatch"
             child["runtime_status"] = runtime_status
             _refresh_execution_tree_block_runtime(block)
             return
@@ -891,6 +899,8 @@ def _mark_execution_tree_guard_runtime(execution_tree: dict[str, object] | None,
                 continue
             child["runtime_status"] = "done" if result.status == "ok" else "failed"
             child["runtime_observation"] = dict(result.outputs)
+            child["divergence_status"] = "matched"
+            child["divergence_reason"] = None
             _refresh_execution_tree_block_runtime(block)
             return
 

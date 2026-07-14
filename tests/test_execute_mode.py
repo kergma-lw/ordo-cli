@@ -230,6 +230,23 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_status"], "diverged")
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_reason"], "runtime_observation_mismatch")
 
+    def test_execute_records_divergence_for_runtime_value_outputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            steps=(Step(name="flag", value=True, register="flag"),),
+        )
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        result = execute_workflow(
+            workflow,
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_status"], "matched")
+
     def test_execute_marks_skipped_runtime_status_in_execution_tree(self) -> None:
         workflow = Workflow(
             version=0,
