@@ -61,8 +61,37 @@ def _build_preflight_step_items(check_result: RuntimeResult) -> list[dict[str, o
             continue
         item = dict(raw_item)
         item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
+        register = item.get("register")
+        item["produced_registers"] = [] if not isinstance(register, str) else [register]
         items.append(item)
     return items
+
+
+def _supporting_step_names_by_scope(preflight_step_items: list[dict[str, object]]) -> dict[str, list[str]]:
+    by_scope: dict[str, list[str]] = {}
+    for item in preflight_step_items:
+        step_name = item.get("name")
+        if not isinstance(step_name, str):
+            continue
+        for scope in item.get("observation_scopes", []):
+            if not isinstance(scope, str):
+                continue
+            by_scope.setdefault(scope, []).append(step_name)
+    return by_scope
+
+
+def _supporting_step_names_for_guard(guard_reference: str, supporting_steps_by_scope: dict[str, list[str]]) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for scope, step_names in supporting_steps_by_scope.items():
+        if scope != guard_reference and scope not in guard_reference:
+            continue
+        for step_name in step_names:
+            if step_name in seen:
+                continue
+            seen.add(step_name)
+            names.append(step_name)
+    return names
 
 
 def plan_workflow(
@@ -99,11 +128,12 @@ def plan_workflow(
             active_overrides=tuple(profile.overrides) if profile is not None else (),
         )
 
-    guard_items = _build_guard_items(check_result, resolution)
+    preflight_step_items = _build_preflight_step_items(check_result)
+    supporting_steps_by_scope = _supporting_step_names_by_scope(preflight_step_items)
+    guard_items = _build_guard_items(check_result, resolution, supporting_steps_by_scope)
     step_items = _build_step_items(check_result, resolution, effective_workflow)
     run_items = _build_run_items(check_result, resolution, effective_workflow)
     block_items = _build_block_items(check_result, resolution, effective_workflow)
-    preflight_step_items = _build_preflight_step_items(check_result)
     weakened_scopes = {scope for scope in base_outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)}
     for item in step_items:
         item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
@@ -142,7 +172,11 @@ def plan_workflow(
     )
 
 
-def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResolution | None) -> list[dict[str, object]]:
+def _build_guard_items(
+    check_result: RuntimeResult,
+    resolution: WorkflowResolution | None,
+    supporting_steps_by_scope: dict[str, list[str]],
+) -> list[dict[str, object]]:
     guard_items: list[dict[str, object]] = []
     coverage_items = [item for item in check_result.outputs.get("guard_coverage", []) if isinstance(item, dict)]
     coverage_by_reference = {item.get("reference"): item for item in coverage_items if isinstance(item.get("reference"), str)}
@@ -165,6 +199,7 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
                         "operation_status": None if operation_result is None else operation_result.status,
                         "failed_subcondition": detail.get("failed_subcondition") if isinstance(detail, dict) else None,
                         "failure_kind": detail.get("failure_kind") if isinstance(detail, dict) else None,
+                        "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
                     }
                 )
                 continue
@@ -178,6 +213,7 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
                         "evaluated": bool(coverage.get("evaluated", False)),
                         "unknown_reason": coverage.get("unknown_reason"),
                         "operation_status": None if operation_result is None else operation_result.status,
+                        "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
                     }
                 )
         return guard_items
@@ -193,6 +229,7 @@ def _build_guard_items(check_result: RuntimeResult, resolution: WorkflowResoluti
                 "evaluated": bool(coverage.get("evaluated", False)),
                 "unknown_reason": coverage.get("unknown_reason"),
                 "operation_status": None,
+                "supporting_step_names": _supporting_step_names_for_guard(cast(str, reference), supporting_steps_by_scope),
             }
         )
     return guard_items

@@ -220,6 +220,42 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["preflight_step_items"][1]["reuse_policy"], "reusable")
         self.assertEqual(result.outputs["step_items"][2]["reuse_policy"], "not_reusable")
 
+    def test_plan_links_guards_to_supporting_preflight_steps(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "acme/repo", "issue_number": 1},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="load-issue",
+                            operation=OperationRef(
+                                "gh.issue",
+                                with_={"repository": "${inputs.repository}", "issue_number": "${inputs.issue_number}"},
+                            ),
+                            register="issue",
+                        ),
+                    )
+                ),
+                GuardBlock(
+                    guards=(
+                        Guard(
+                            expr='gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).number == 1'
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            return OperationResult(status="ok", outputs={"number": 1})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["guard_items"][0]["supporting_step_names"], ["load-issue"])
+        self.assertEqual(result.outputs["preflight_step_items"][0]["produced_registers"], ["issue"])
+
     def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
         workflow = Workflow(
             version=0,
