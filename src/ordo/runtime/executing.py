@@ -96,6 +96,7 @@ def execute_workflow(
         register = reused_result.get("register")
         if isinstance(register, str):
             effective_workflow.step_results[register] = reused_result["step_result"]
+    _prime_execution_tree_with_checked_guards(execution_tree_output, guard_details)
 
     start_block_index = _initial_checked_block_count(effective_workflow)
 
@@ -120,6 +121,7 @@ def execute_workflow(
                 guard_details.append(detail)
                 block_guard_details.append(detail)
                 checked_guards.append(resolved_guard.reference)
+                _mark_execution_tree_guard_runtime(execution_tree_output, resolved_guard.reference, result)
                 if result.status != "ok":
                     block_blockers.append(resolved_guard.reference)
             block_items.append(
@@ -224,6 +226,7 @@ def execute_workflow(
                     )
                     skipped_steps.append(step.name)
                     block_skipped.append(step.name)
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="skipped_at_run")
                     continue
                 step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True})
             if reused_preflight is not None:
@@ -382,6 +385,7 @@ def execute_workflow(
                         )
                     executed_steps.append(step.name)
                     block_executed.append(step.name)
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
                     continue
                 with _execution_working_directory(current_working_directory):
                     result = _execute_builtin_step(step, effective_workflow)
@@ -433,6 +437,7 @@ def execute_workflow(
                         )
                     executed_steps.append(step.name)
                     block_executed.append(step.name)
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
                     continue
                 executed_step = resolved_step
                 applied_launcher = None
@@ -502,6 +507,7 @@ def execute_workflow(
 
             executed_steps.append(step.name)
             block_executed.append(step.name)
+            _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
 
         block_items.append(
             {
@@ -762,7 +768,82 @@ def _mark_execution_tree_step_reused(execution_tree: dict[str, object] | None, s
             child["revalidated"] = False
             child["runtime_observation"] = child.get("planned_observation")
             child["divergence_status"] = "matched"
+            _refresh_execution_tree_block_runtime(block)
             return
+
+
+def _mark_execution_tree_step_runtime(
+    execution_tree: dict[str, object] | None,
+    step_name: str,
+    *,
+    runtime_status: str,
+) -> None:
+    if not isinstance(execution_tree, dict):
+        return
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict) or child.get("name") != step_name:
+                continue
+            child["runtime_status"] = runtime_status
+            _refresh_execution_tree_block_runtime(block)
+            return
+
+
+def _mark_execution_tree_guard_runtime(execution_tree: dict[str, object] | None, guard_reference: str, result: OperationResult) -> None:
+    if not isinstance(execution_tree, dict):
+        return
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict) or child.get("reference") != guard_reference:
+                continue
+            child["runtime_status"] = "done" if result.status == "ok" else "failed"
+            child["runtime_observation"] = dict(result.outputs)
+            _refresh_execution_tree_block_runtime(block)
+            return
+
+
+def _refresh_execution_tree_block_runtime(block: dict[str, object]) -> None:
+    statuses = {
+        child.get("runtime_status")
+        for child in block.get("children", [])
+        if isinstance(child, dict) and isinstance(child.get("runtime_status"), str)
+    }
+    if not statuses or statuses == {"not_started"}:
+        block["runtime_status"] = "not_started"
+        return
+    if "failed" in statuses:
+        block["runtime_status"] = "failed"
+        return
+    if statuses.issubset({"done", "reused_preflight", "skipped_at_run"}):
+        block["runtime_status"] = "done"
+        return
+    block["runtime_status"] = "in_progress"
+
+
+def _prime_execution_tree_with_checked_guards(execution_tree: dict[str, object] | None, guard_details: list[dict[str, object]]) -> None:
+    if not isinstance(execution_tree, dict):
+        return
+    detail_by_reference = {
+        detail.get("reference"): detail
+        for detail in guard_details
+        if isinstance(detail, dict) and isinstance(detail.get("reference"), str)
+    }
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict):
+                continue
+            reference = child.get("reference")
+            if not isinstance(reference, str) or reference not in detail_by_reference:
+                continue
+            detail = detail_by_reference[reference]
+            child["runtime_status"] = "done" if detail.get("status") == "ok" else "failed"
+            _refresh_execution_tree_block_runtime(block)
 
 
 def _initial_checked_block_count(workflow: Workflow) -> int:

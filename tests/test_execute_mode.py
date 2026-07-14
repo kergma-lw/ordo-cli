@@ -62,6 +62,7 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(seen_steps, ["shell.command"])
         self.assertEqual(result.outputs["executed_steps"], ["effectful-step"])
         self.assertEqual(result.outputs["skipped_steps"], [])
+        self.assertEqual(result.outputs["execution_tree"], None)
 
     def test_execute_accepts_plan_derived_execution_tree_input(self) -> None:
         workflow = Workflow(
@@ -132,6 +133,51 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(seen_steps, ["shell.command"])
         self.assertEqual(result.outputs["reused_steps"], ["flag"])
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "reused_preflight")
+
+    def test_execute_mirrors_runtime_status_into_execution_tree_nodes(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),)),
+            ),
+        )
+        plan_result = plan_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        result = execute_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "done")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][1]["children"][0]["runtime_status"], "done")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][1]["runtime_status"], "done")
+
+    def test_execute_marks_skipped_runtime_status_in_execution_tree(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"enabled": False},
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command"), if_="${inputs.enabled}"),),
+        )
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "skipped_at_run")
 
     def test_execute_normalizes_step_failure(self) -> None:
         workflow = Workflow(
