@@ -84,22 +84,44 @@
         "step_name": "close-issue"
       }
     ],
+    "preflight_registers": {
+      "issue": {
+        "outputs": {
+          "exists": true,
+          "number": 1,
+          "state": "OPEN"
+        },
+        "status": "ok",
+        "summary": "issue fetched"
+      }
+    },
     "preflight_step_items": [
       {
         "block_index": 0,
         "condition": null,
+        "condition_status": null,
         "conditional": false,
         "name": "load-issue",
+        "observation_scopes": [
+          "gh.issue"
+        ],
         "operation_status": "ok",
+        "outputs": {
+          "exists": true,
+          "number": 1,
+          "state": "OPEN"
+        },
         "preflight_classification": "read_only_analyzable",
         "reference": "gh.issue",
         "register": "issue",
         "status": "interpreted",
-        "step_index": 0
+        "step_index": 0,
+        "summary": "issue fetched"
       },
       {
         "block_index": 0,
         "condition": "${inputs.run_effectful}",
+        "condition_status": "true",
         "conditional": true,
         "halt_reason": "effectful_step_encountered",
         "name": "close-issue",
@@ -109,6 +131,17 @@
         "step_index": 1
       }
     ],
+    "preflight_step_results": {
+      "issue": {
+        "outputs": {
+          "exists": true,
+          "number": 1,
+          "state": "OPEN"
+        },
+        "status": "ok",
+        "summary": "issue fetched"
+      }
+    },
     "relevant_guard_count": 1,
     "unevaluated_relevant_guard_count": 1,
     "unevaluated_relevant_guards": [

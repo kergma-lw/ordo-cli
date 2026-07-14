@@ -84,6 +84,84 @@
     ],
     "evaluated_relevant_guard_count": 1,
     "execution_allowed": true,
+    "execution_tree": {
+      "allowed_state": "allowed",
+      "analysis_complete": true,
+      "blocks": [
+        {
+          "active_profile": null,
+          "block_index": 0,
+          "children": [
+            {
+              "divergence_reason": null,
+              "divergence_status": "not_applicable",
+              "effect": "read_only",
+              "evaluated": true,
+              "failed_subcondition": null,
+              "failure_kind": null,
+              "freshness_state": "fresh",
+              "id": "block:0:guard:0",
+              "kind": "expression",
+              "operation_status": "ok",
+              "planned_observation": null,
+              "reference": "git.worktree.clean",
+              "relevant": true,
+              "revalidated": false,
+              "runtime_observation": null,
+              "runtime_status": "not_started",
+              "status": "passed",
+              "supporting_step_names": [],
+              "supporting_value_paths": [],
+              "unknown_reason": null
+            }
+          ],
+          "freshness_state": "fresh",
+          "id": "block:0",
+          "runtime_status": "not_started",
+          "status": "ok",
+          "type": "guards"
+        },
+        {
+          "active_profile": null,
+          "block_index": 1,
+          "children": [
+            {
+              "condition": null,
+              "condition_status": null,
+              "conditional": false,
+              "divergence_reason": null,
+              "divergence_status": "not_applicable",
+              "effect": "read_only",
+              "eligibility": "eligible",
+              "freshness_state": "fresh",
+              "id": "block:1:step:0",
+              "invalidated_by_scopes": [],
+              "invalidates_scopes": [],
+              "kind": "probe",
+              "launcher": null,
+              "name": "inspect-issue",
+              "observation_scopes": [
+                "gh.issue"
+              ],
+              "planned_observation": null,
+              "preflight": null,
+              "preflight_classification": "read_only_analyzable",
+              "reference": "gh.issue",
+              "reuse_policy": "revalidate",
+              "revalidated": false,
+              "runtime_observation": null,
+              "runtime_status": "not_started"
+            }
+          ],
+          "freshness_state": "fresh",
+          "id": "block:1",
+          "runtime_status": "not_started",
+          "status": "pending",
+          "type": "steps"
+        }
+      ],
+      "workflow": "inspect-issue"
+    },
     "guard_coverage": [
       {
         "evaluated": true,
@@ -120,11 +198,14 @@
         "evaluated": true,
         "failed_subcondition": null,
         "failure_kind": null,
+        "freshness_state": "fresh",
         "kind": "expression",
         "operation_status": "ok",
         "reference": "git.worktree.clean",
         "relevant": true,
         "status": "passed",
+        "supporting_step_names": [],
+        "supporting_value_paths": [],
         "unknown_reason": null
       }
     ],
@@ -132,20 +213,40 @@
     "plan_ready": true,
     "potential_invalidation_scopes": [],
     "preflight_halts": [],
+    "preflight_registers": {},
     "preflight_step_items": [],
+    "preflight_step_results": {},
+    "ready_to_run_frontier": {
+      "allowed_state": "allowed",
+      "blocked_node_ids": [],
+      "prepared_node_ids": [
+        "block:0:guard:0"
+      ],
+      "requires_runtime_node_ids": [
+        "block:1:step:0"
+      ]
+    },
     "relevant_guard_count": 1,
     "run_items": [],
     "step_items": [
       {
         "condition": null,
+        "condition_status": null,
         "conditional": false,
         "effect": "read_only",
         "eligibility": "eligible",
+        "freshness_state": "fresh",
+        "invalidated_by_scopes": [],
+        "invalidates_scopes": [],
         "kind": "probe",
         "launcher": null,
         "name": "inspect-issue",
+        "observation_scopes": [
+          "gh.issue"
+        ],
         "preflight_classification": "read_only_analyzable",
-        "reference": "gh.issue"
+        "reference": "gh.issue",
+        "reuse_policy": "revalidate"
       }
     ],
     "unevaluated_relevant_guard_count": 0,

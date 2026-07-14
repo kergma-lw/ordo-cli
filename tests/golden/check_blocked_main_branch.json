@@ -166,7 +166,9 @@
       "shell.*"
     ],
     "preflight_halts": [],
+    "preflight_registers": {},
     "preflight_step_items": [],
+    "preflight_step_results": {},
     "relevant_guard_count": 1,
     "unevaluated_relevant_guard_count": 0,
     "unevaluated_relevant_guards": [],

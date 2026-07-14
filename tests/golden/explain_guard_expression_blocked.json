@@ -153,6 +153,84 @@
     ],
     "evaluated_relevant_guard_count": 1,
     "execution_allowed": false,
+    "execution_tree": {
+      "allowed_state": "blocked",
+      "analysis_complete": true,
+      "blocks": [
+        {
+          "active_profile": null,
+          "block_index": 0,
+          "children": [
+            {
+              "divergence_reason": null,
+              "divergence_status": "not_applicable",
+              "effect": "read_only",
+              "evaluated": true,
+              "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
+              "failure_kind": "guard_failed",
+              "freshness_state": "fresh",
+              "id": "block:0:guard:0",
+              "kind": "expression",
+              "operation_status": "guard_failed",
+              "planned_observation": null,
+              "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
+              "relevant": true,
+              "revalidated": false,
+              "runtime_observation": null,
+              "runtime_status": "not_started",
+              "status": "blocked",
+              "supporting_step_names": [],
+              "supporting_value_paths": [],
+              "unknown_reason": null
+            }
+          ],
+          "freshness_state": "fresh",
+          "id": "block:0",
+          "runtime_status": "not_started",
+          "status": "blocked",
+          "type": "guards"
+        },
+        {
+          "active_profile": null,
+          "block_index": 1,
+          "children": [
+            {
+              "condition": null,
+              "condition_status": null,
+              "conditional": false,
+              "divergence_reason": null,
+              "divergence_status": "not_applicable",
+              "effect": "effectful",
+              "eligibility": "blocked",
+              "freshness_state": "not_applicable",
+              "id": "block:1:step:0",
+              "invalidated_by_scopes": [],
+              "invalidates_scopes": [
+                "shell.*"
+              ],
+              "kind": "action",
+              "launcher": null,
+              "name": "verify-command",
+              "observation_scopes": [],
+              "planned_observation": null,
+              "preflight": null,
+              "preflight_classification": "effectful",
+              "reference": "shell.command",
+              "reuse_policy": "not_reusable",
+              "revalidated": false,
+              "runtime_observation": null,
+              "runtime_status": "not_started"
+            }
+          ],
+          "freshness_state": "not_applicable",
+          "id": "block:1",
+          "runtime_status": "not_started",
+          "status": "blocked",
+          "type": "steps"
+        }
+      ],
+      "workflow": "guard-expression-blocked"
+    },
     "explanation": {
       "allowed": false,
       "blockers": [
@@ -285,11 +363,14 @@
         "evaluated": true,
         "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "failure_kind": "guard_failed",
+        "freshness_state": "fresh",
         "kind": "expression",
         "operation_status": "guard_failed",
         "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "relevant": true,
         "status": "blocked",
+        "supporting_step_names": [],
+        "supporting_value_paths": [],
         "unknown_reason": null
       }
     ],
@@ -305,21 +386,42 @@
       "shell.*"
     ],
     "preflight_halts": [],
+    "preflight_registers": {},
     "preflight_step_items": [],
+    "preflight_step_results": {},
+    "ready_to_run_frontier": {
+      "allowed_state": "blocked",
+      "blocked_node_ids": [
+        "block:0:guard:0",
+        "block:1:step:0"
+      ],
+      "prepared_node_ids": [
+        "block:0:guard:0"
+      ],
+      "requires_runtime_node_ids": []
+    },
     "reason_category": "guard",
     "relevant_guard_count": 1,
     "run_items": [],
     "step_items": [
       {
         "condition": null,
+        "condition_status": null,
         "conditional": false,
         "effect": "effectful",
         "eligibility": "blocked",
+        "freshness_state": "not_applicable",
+        "invalidated_by_scopes": [],
+        "invalidates_scopes": [
+          "shell.*"
+        ],
         "kind": "action",
         "launcher": null,
         "name": "verify-command",
+        "observation_scopes": [],
         "preflight_classification": "effectful",
-        "reference": "shell.command"
+        "reference": "shell.command",
+        "reuse_policy": "not_reusable"
       }
     ],
     "unevaluated_relevant_guard_count": 0,

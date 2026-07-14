@@ -104,6 +104,7 @@
     "executed_steps": [
       "inspect-issue"
     ],
+    "execution_tree": null,
     "guard_details": [
       {
         "failed_subcondition": null,
@@ -126,6 +127,7 @@
       }
     ],
     "launcher_details": [],
+    "reused_steps": [],
     "skipped_steps": [],
     "step_condition_details": []
   },

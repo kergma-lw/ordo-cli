@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from ordo.model.runtime import OperationResult, RuntimeStatus
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import check_workflow, execute_workflow, explain_workflow, load_workflow_file, plan_workflow, resolve_workflow_references, validate_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -107,6 +108,35 @@ class RuntimeInvariantTest(unittest.TestCase):
 
         self.assertEqual(blocked_result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(failed_result.status, RuntimeStatus.EXECUTION_ERROR)
+
+    def test_execution_tree_handoff_reuses_value_state_end_to_end(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="flag", value=True, register="flag"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="ship", operation=OperationRef("shell.command"), if_="${step.flag.outputs.value}"),)),
+            ),
+        )
+
+        plan_result = plan_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+        execute_result = execute_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            step_executor=lambda _resolved_step, _workflow: OperationResult(status="ok", summary="ran"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(execute_result.status, RuntimeStatus.OK)
+        self.assertEqual(execute_result.outputs["reused_steps"], ["flag"])
+        self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "reused_preflight")
+        json.dumps(execute_result.to_contract())
 
 
 if __name__ == "__main__":

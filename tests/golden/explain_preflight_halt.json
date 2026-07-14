@@ -55,6 +55,163 @@
     "checked_guards": [],
     "evaluated_relevant_guard_count": 0,
     "execution_allowed": false,
+    "execution_tree": {
+      "allowed_state": "unknown",
+      "analysis_complete": false,
+      "blocks": [
+        {
+          "active_profile": null,
+          "block_index": 0,
+          "children": [
+            {
+              "condition": null,
+              "condition_status": null,
+              "conditional": false,
+              "divergence_reason": null,
+              "divergence_status": "not_checked",
+              "effect": "read_only",
+              "eligibility": "eligible",
+              "freshness_state": "fresh",
+              "id": "block:0:step:0",
+              "invalidated_by_scopes": [],
+              "invalidates_scopes": [],
+              "kind": "probe",
+              "launcher": null,
+              "name": "load-issue",
+              "observation_scopes": [
+                "gh.issue"
+              ],
+              "planned_observation": {
+                "exists": true,
+                "number": 1,
+                "state": "OPEN"
+              },
+              "preflight": {
+                "block_index": 0,
+                "condition": null,
+                "condition_status": null,
+                "conditional": false,
+                "freshness_state": "fresh",
+                "invalidated_by_scopes": [],
+                "name": "load-issue",
+                "observation_scopes": [
+                  "gh.issue"
+                ],
+                "operation_status": "ok",
+                "outputs": {
+                  "exists": true,
+                  "number": 1,
+                  "state": "OPEN"
+                },
+                "preflight_classification": "read_only_analyzable",
+                "produced_registers": [
+                  "issue"
+                ],
+                "produced_value_paths": [
+                  "step.issue.outputs.exists",
+                  "step.issue.outputs.state",
+                  "step.issue.outputs.number"
+                ],
+                "reference": "gh.issue",
+                "register": "issue",
+                "reuse_policy": "revalidate",
+                "status": "interpreted",
+                "step_index": 0,
+                "summary": "issue fetched"
+              },
+              "preflight_classification": "read_only_analyzable",
+              "reference": "gh.issue",
+              "reuse_policy": "revalidate",
+              "revalidated": false,
+              "runtime_observation": null,
+              "runtime_status": "not_started"
+            },
+            {
+              "condition": "${inputs.run_effectful}",
+              "condition_status": "true",
+              "conditional": true,
+              "divergence_reason": null,
+              "divergence_status": "not_checked",
+              "effect": "effectful",
+              "eligibility": "eligible",
+              "freshness_state": "not_applicable",
+              "id": "block:0:step:1",
+              "invalidated_by_scopes": [],
+              "invalidates_scopes": [
+                "gh.*"
+              ],
+              "kind": "action",
+              "launcher": null,
+              "name": "close-issue",
+              "observation_scopes": [],
+              "planned_observation": {},
+              "preflight": {
+                "block_index": 0,
+                "condition": "${inputs.run_effectful}",
+                "condition_status": "true",
+                "conditional": true,
+                "freshness_state": "not_applicable",
+                "halt_reason": "effectful_step_encountered",
+                "invalidated_by_scopes": [],
+                "name": "close-issue",
+                "preflight_classification": "effectful",
+                "produced_registers": [],
+                "produced_value_paths": [],
+                "reference": "gh.issue.close",
+                "reuse_policy": "not_reusable",
+                "status": "halted",
+                "step_index": 1
+              },
+              "preflight_classification": "effectful",
+              "reference": "gh.issue.close",
+              "reuse_policy": "not_reusable",
+              "revalidated": false,
+              "runtime_observation": null,
+              "runtime_status": "not_started"
+            }
+          ],
+          "freshness_state": "fresh",
+          "id": "block:0",
+          "runtime_status": "not_started",
+          "status": "preflight_halted",
+          "type": "steps"
+        },
+        {
+          "active_profile": null,
+          "block_index": 1,
+          "children": [
+            {
+              "divergence_reason": null,
+              "divergence_status": "not_applicable",
+              "effect": "read_only",
+              "evaluated": false,
+              "failed_subcondition": null,
+              "failure_kind": null,
+              "freshness_state": "not_applicable",
+              "id": "block:1:guard:0",
+              "kind": "expression",
+              "operation_status": null,
+              "planned_observation": null,
+              "reference": "git.worktree.clean",
+              "relevant": true,
+              "revalidated": false,
+              "runtime_observation": null,
+              "runtime_status": "not_started",
+              "status": "pending",
+              "supporting_step_names": [],
+              "supporting_value_paths": [],
+              "unknown_reason": "guard_not_evaluated"
+            }
+          ],
+          "freshness_state": "not_applicable",
+          "id": "block:1",
+          "runtime_status": "not_started",
+          "status": "pending",
+          "type": "guards"
+        }
+      ],
+      "workflow": "preflight-halt"
+    },
     "explanation": {
       "allowed": false,
       "blockers": [],
@@ -94,11 +251,14 @@
         "evaluated": false,
         "failed_subcondition": null,
         "failure_kind": null,
+        "freshness_state": "not_applicable",
         "kind": "expression",
         "operation_status": null,
         "reference": "git.worktree.clean",
         "relevant": true,
         "status": "pending",
+        "supporting_step_names": [],
+        "supporting_value_paths": [],
         "unknown_reason": "guard_not_evaluated"
       }
     ],
@@ -129,56 +289,132 @@
         "step_name": "close-issue"
       }
     ],
+    "preflight_registers": {
+      "issue": {
+        "outputs": {
+          "exists": true,
+          "number": 1,
+          "state": "OPEN"
+        },
+        "status": "ok",
+        "summary": "issue fetched"
+      }
+    },
     "preflight_step_items": [
       {
         "block_index": 0,
         "condition": null,
+        "condition_status": null,
         "conditional": false,
+        "freshness_state": "fresh",
+        "invalidated_by_scopes": [],
         "name": "load-issue",
+        "observation_scopes": [
+          "gh.issue"
+        ],
         "operation_status": "ok",
+        "outputs": {
+          "exists": true,
+          "number": 1,
+          "state": "OPEN"
+        },
         "preflight_classification": "read_only_analyzable",
+        "produced_registers": [
+          "issue"
+        ],
+        "produced_value_paths": [
+          "step.issue.outputs.exists",
+          "step.issue.outputs.state",
+          "step.issue.outputs.number"
+        ],
         "reference": "gh.issue",
         "register": "issue",
+        "reuse_policy": "revalidate",
         "status": "interpreted",
-        "step_index": 0
+        "step_index": 0,
+        "summary": "issue fetched"
       },
       {
         "block_index": 0,
         "condition": "${inputs.run_effectful}",
+        "condition_status": "true",
         "conditional": true,
+        "freshness_state": "not_applicable",
         "halt_reason": "effectful_step_encountered",
+        "invalidated_by_scopes": [],
         "name": "close-issue",
         "preflight_classification": "effectful",
+        "produced_registers": [],
+        "produced_value_paths": [],
         "reference": "gh.issue.close",
+        "reuse_policy": "not_reusable",
         "status": "halted",
         "step_index": 1
       }
     ],
+    "preflight_step_results": {
+      "issue": {
+        "outputs": {
+          "exists": true,
+          "number": 1,
+          "state": "OPEN"
+        },
+        "status": "ok",
+        "summary": "issue fetched"
+      }
+    },
+    "ready_to_run_frontier": {
+      "allowed_state": "unknown",
+      "blocked_node_ids": [],
+      "prepared_node_ids": [
+        "block:0:step:0"
+      ],
+      "requires_runtime_node_ids": [
+        "block:0:step:1",
+        "block:1:guard:0"
+      ]
+    },
     "reason_category": "incomplete",
     "relevant_guard_count": 1,
     "run_items": [],
     "step_items": [
       {
         "condition": null,
+        "condition_status": null,
         "conditional": false,
         "effect": "read_only",
         "eligibility": "eligible",
+        "freshness_state": "fresh",
+        "invalidated_by_scopes": [],
+        "invalidates_scopes": [],
         "kind": "probe",
         "launcher": null,
         "name": "load-issue",
+        "observation_scopes": [
+          "gh.issue"
+        ],
         "preflight_classification": "read_only_analyzable",
-        "reference": "gh.issue"
+        "reference": "gh.issue",
+        "reuse_policy": "revalidate"
       },
       {
         "condition": "${inputs.run_effectful}",
+        "condition_status": "true",
         "conditional": true,
         "effect": "effectful",
         "eligibility": "eligible",
+        "freshness_state": "not_applicable",
+        "invalidated_by_scopes": [],
+        "invalidates_scopes": [
+          "gh.*"
+        ],
         "kind": "action",
         "launcher": null,
         "name": "close-issue",
+        "observation_scopes": [],
         "preflight_classification": "effectful",
-        "reference": "gh.issue.close"
+        "reference": "gh.issue.close",
+        "reuse_policy": "not_reusable"
       }
     ],
     "unevaluated_relevant_guard_count": 1,
