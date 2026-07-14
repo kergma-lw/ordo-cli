@@ -268,7 +268,7 @@ def execute_workflow(
                 block_executed.append(step.name)
                 _mark_execution_tree_step_reused(execution_tree_output, step.name)
                 continue
-            if execution_tree_output is not None and isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe":
+            if _is_execute_probe_step(execution_tree_output, resolved_step):
                 with _execution_working_directory(current_working_directory):
                     result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_step, effective_workflow)
                 if step.register is not None:
@@ -321,7 +321,7 @@ def execute_workflow(
                 executed_steps.append(step.name)
                 block_executed.append(step.name)
                 continue
-            if isinstance(resolved_step, ResolvedRunStep):
+            if _is_execute_run_step(resolved_step):
                 run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
                 if isinstance(run_workflow, Diagnostic):
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
@@ -432,7 +432,7 @@ def execute_workflow(
                 _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
                 continue
             if isinstance(resolved_step, ResolvedBuiltinStep):
-                if resolved_step.builtin == "profile_switch":
+                if _is_execute_profile_switch_builtin(resolved_step):
                     result, current_profile, current_profile_name, active_profile, active_overrides, current_working_directory, effective_workflow = _execute_profile_switch_step(
                         step,
                         effective_workflow,
@@ -487,7 +487,7 @@ def execute_workflow(
                 with _execution_working_directory(current_working_directory):
                     result = _execute_builtin_step(step, effective_workflow)
             else:
-                if resolved_step.reference == "runtime.profile.use":
+                if _is_execute_profile_switch_operation(resolved_step):
                     result, current_profile, current_profile_name, active_profile, active_overrides, current_working_directory, effective_workflow = _execute_profile_switch_step(
                         step,
                         effective_workflow,
@@ -1113,6 +1113,22 @@ def _prepare_tree_driven_step_context(
         "reused_preflight": preflight_reuse.get(step.name),
         "condition_source": _condition_source_from_tree_state(step, workflow, execution_tree),
     }
+
+
+def _is_execute_probe_step(execution_tree: dict[str, object] | None, resolved_step: object) -> bool:
+    return execution_tree is not None and isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe"
+
+
+def _is_execute_run_step(resolved_step: object) -> bool:
+    return isinstance(resolved_step, ResolvedRunStep)
+
+
+def _is_execute_profile_switch_builtin(resolved_step: ResolvedBuiltinStep) -> bool:
+    return resolved_step.builtin == "profile_switch"
+
+
+def _is_execute_profile_switch_operation(resolved_step: ResolvedOperation) -> bool:
+    return resolved_step.reference == "runtime.profile.use"
 
 
 def _remaining_step_names(workflow: Workflow, *, start_block_index: int, current_step_index: int | None = None) -> list[str]:

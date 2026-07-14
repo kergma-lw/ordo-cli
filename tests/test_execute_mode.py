@@ -9,7 +9,16 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, plan_workflow
-from ordo.runtime.executing import _prepare_tree_driven_step_context, _record_step_runtime_result
+from ordo.runtime.executing import (
+    _is_execute_probe_step,
+    _is_execute_profile_switch_builtin,
+    _is_execute_profile_switch_operation,
+    _is_execute_run_step,
+    _prepare_tree_driven_step_context,
+    _record_step_runtime_result,
+)
+from ordo.runtime.resolution import ResolvedBuiltinStep, ResolvedOperation, ResolvedRunStep
+from ordo.model.connector import OperationContract
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -75,6 +84,18 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(workflow.step_results["flag"]["outputs"]["value"], True)
         self.assertEqual(operation_results, [result])
         self.assertEqual(diagnostics, [diagnostic])
+
+    def test_execute_branch_classifiers_isolate_legacy_shaped_paths(self) -> None:
+        probe = ResolvedOperation(reference="gh.issue", connector_namespace="gh", operation=OperationContract(name="issue", kind="probe"), source="public")
+        action = ResolvedOperation(reference="runtime.profile.use", connector_namespace="runtime", operation=OperationContract(name="profile.use", kind="action"), source="public")
+        run_step = ResolvedRunStep(name="nested", run="fragment.yml")
+        builtin = ResolvedBuiltinStep(name="switch", builtin="profile_switch")
+
+        self.assertTrue(_is_execute_probe_step({}, probe))
+        self.assertFalse(_is_execute_probe_step(None, probe))
+        self.assertTrue(_is_execute_run_step(run_step))
+        self.assertTrue(_is_execute_profile_switch_builtin(builtin))
+        self.assertTrue(_is_execute_profile_switch_operation(action))
     def test_execute_preserves_blocked_before_execution(self) -> None:
         workflow = Workflow(
             version=0,
