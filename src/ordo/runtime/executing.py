@@ -590,9 +590,7 @@ def execute_workflow(
             "can_execute": True,
             "active_profile": active_profile,
             "active_overrides": [override.to_contract() for override in active_overrides],
-            "executed_steps": executed_steps,
-            "reused_steps": reused_steps,
-            "skipped_steps": skipped_steps,
+            **_execution_step_summaries_from_tree(execution_tree_output, executed_steps=executed_steps, reused_steps=reused_steps, skipped_steps=skipped_steps),
             "step_condition_details": step_condition_details,
             "launcher_details": launcher_details,
             "checked_guards": checked_guards,
@@ -987,6 +985,45 @@ def _remaining_step_names(workflow: Workflow, *, start_block_index: int, current
         start_step = current_step_index if block_index == start_block_index and current_step_index is not None else 0
         remaining.extend(step.name for step in block.steps[start_step:])
     return remaining
+
+
+def _execution_step_summaries_from_tree(
+    execution_tree: dict[str, object] | None,
+    *,
+    executed_steps: list[str],
+    reused_steps: list[str],
+    skipped_steps: list[str],
+) -> dict[str, list[str]]:
+    if not isinstance(execution_tree, dict):
+        return {
+            "executed_steps": executed_steps,
+            "reused_steps": reused_steps,
+            "skipped_steps": skipped_steps,
+        }
+    derived_executed: list[str] = []
+    derived_reused: list[str] = []
+    derived_skipped: list[str] = []
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict):
+                continue
+            step_name = child.get("name")
+            if not isinstance(step_name, str):
+                continue
+            runtime_status = child.get("runtime_status")
+            if runtime_status == "reused_preflight":
+                derived_reused.append(step_name)
+            elif runtime_status == "done":
+                derived_executed.append(step_name)
+            elif runtime_status == "skipped_at_run":
+                derived_skipped.append(step_name)
+    return {
+        "executed_steps": derived_executed or executed_steps,
+        "reused_steps": derived_reused or reused_steps,
+        "skipped_steps": derived_skipped or skipped_steps,
+    }
 
 
 def _pending_execution_block_items(workflow: Workflow, *, start_block_index: int, blocked: bool) -> list[dict[str, object]]:

@@ -132,6 +132,7 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(seen_steps, ["shell.command"])
         self.assertEqual(result.outputs["reused_steps"], ["flag"])
+        self.assertEqual(result.outputs["executed_steps"], ["effectful-step"])
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "reused_preflight")
         self.assertEqual(result.outputs["step_condition_details"][0]["source"], "execution_tree_state")
 
