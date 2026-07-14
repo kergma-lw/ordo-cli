@@ -229,6 +229,17 @@
           "type": "steps"
         }
       ],
+      "ready_to_run_frontier": {
+        "allowed_state": "blocked",
+        "blocked_node_ids": [
+          "block:0:guard:0",
+          "block:1:step:0"
+        ],
+        "prepared_node_ids": [
+          "block:0:guard:0"
+        ],
+        "requires_runtime_node_ids": []
+      },
       "workflow": "guard-expression-blocked"
     },
     "explanation": {

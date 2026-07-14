@@ -160,6 +160,16 @@
           "type": "steps"
         }
       ],
+      "ready_to_run_frontier": {
+        "allowed_state": "allowed",
+        "blocked_node_ids": [],
+        "prepared_node_ids": [
+          "block:0:guard:0"
+        ],
+        "requires_runtime_node_ids": [
+          "block:1:step:0"
+        ]
+      },
       "workflow": "inspect-issue"
     },
     "guard_coverage": [

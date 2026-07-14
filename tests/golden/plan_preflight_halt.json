@@ -210,6 +210,16 @@
           "type": "guards"
         }
       ],
+      "ready_to_run_frontier": {
+        "allowed_state": "unknown",
+        "blocked_node_ids": [],
+        "prepared_node_ids": [],
+        "requires_runtime_node_ids": [
+          "block:0:step:0",
+          "block:0:step:1",
+          "block:1:guard:0"
+        ]
+      },
       "workflow": "preflight-halt"
     },
     "guard_coverage": [
@@ -337,10 +347,9 @@
     "ready_to_run_frontier": {
       "allowed_state": "unknown",
       "blocked_node_ids": [],
-      "prepared_node_ids": [
-        "block:0:step:0"
-      ],
+      "prepared_node_ids": [],
       "requires_runtime_node_ids": [
+        "block:0:step:0",
         "block:0:step:1",
         "block:1:guard:0"
       ]

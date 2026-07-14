@@ -105,6 +105,8 @@
       "inspect-issue"
     ],
     "execution_tree": null,
+    "execution_tree_fallback_reason": "missing_execution_tree",
+    "execution_tree_mode": "legacy_fallback",
     "guard_details": [
       {
         "failed_subcondition": null,
