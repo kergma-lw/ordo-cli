@@ -98,7 +98,15 @@ def execute_workflow(
             effective_workflow.step_results[register] = reused_result["step_result"]
     _prime_execution_tree_with_checked_guards(execution_tree_output, guard_details)
 
-    start_block_index = _initial_checked_block_count(effective_workflow)
+    start_block_index = max(
+        _initial_checked_block_count(effective_workflow),
+        _frontier_start_block_index(execution_tree_output),
+    )
+    for step_name in list(preflight_reuse):
+        block_index = _execution_tree_step_block_index(execution_tree_output, step_name)
+        if block_index is not None and block_index < start_block_index:
+            reused_steps.append(step_name)
+            _mark_execution_tree_step_reused(execution_tree_output, step_name)
 
     for block_index, (declared_block, resolved_block) in enumerate(zip(effective_workflow.blocks, resolution.blocks, strict=False)):
         if block_index < start_block_index:
@@ -935,6 +943,40 @@ def _initial_checked_block_count(workflow: Workflow) -> int:
             continue
         break
     return count
+
+
+def _frontier_start_block_index(execution_tree: dict[str, object] | None) -> int:
+    if not isinstance(execution_tree, dict):
+        return 0
+    frontier = execution_tree.get("ready_to_run_frontier")
+    if not isinstance(frontier, dict):
+        return 0
+    required = [node_id for node_id in frontier.get("requires_runtime_node_ids", []) if isinstance(node_id, str)]
+    block_indexes: list[int] = []
+    for node_id in required:
+        parts = node_id.split(":")
+        if len(parts) < 2 or parts[0] != "block":
+            continue
+        try:
+            block_indexes.append(int(parts[1]))
+        except ValueError:
+            continue
+    return 0 if not block_indexes else min(block_indexes)
+
+
+def _execution_tree_step_block_index(execution_tree: dict[str, object] | None, step_name: str) -> int | None:
+    if not isinstance(execution_tree, dict):
+        return None
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        block_index = block.get("block_index")
+        if not isinstance(block_index, int):
+            continue
+        for child in block.get("children", []):
+            if isinstance(child, dict) and child.get("name") == step_name:
+                return block_index
+    return None
 
 
 def _remaining_step_names(workflow: Workflow, *, start_block_index: int, current_step_index: int | None = None) -> list[str]:

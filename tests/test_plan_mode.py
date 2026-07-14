@@ -340,7 +340,7 @@ class PlanModeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             blocks=(
-                StepBlock(steps=(Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),)),
+                StepBlock(steps=(Step(name="flag", value=True, register="flag"),)),
                 GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
                 StepBlock(steps=(Step(name="ship", operation=OperationRef("shell.command")),)),
             ),

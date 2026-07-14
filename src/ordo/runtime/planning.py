@@ -219,6 +219,7 @@ def plan_workflow(
         preflight_step_items=preflight_step_items,
     )
     ready_to_run_frontier = _build_ready_to_run_frontier(execution_tree)
+    execution_tree["ready_to_run_frontier"] = dict(ready_to_run_frontier)
 
     blockers = list(base_outputs.get("blockers", []))
     allowed_state = str(base_outputs.get("allowed_state", "blocked"))
@@ -620,7 +621,7 @@ def _build_ready_to_run_frontier(execution_tree: dict[str, object]) -> dict[str,
                 if status == "blocked":
                     blocked_node_ids.append(node_id)
                 continue
-            if isinstance(preflight, dict) and preflight.get("status") in {"interpreted", "skipped"}:
+            if isinstance(preflight, dict) and preflight.get("status") in {"interpreted", "skipped"} and child.get("reuse_policy") == "reusable":
                 prepared_node_ids.append(node_id)
                 continue
             if eligibility == "blocked":

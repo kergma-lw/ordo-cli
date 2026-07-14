@@ -243,6 +243,34 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "skipped_at_run")
 
+    def test_execute_starts_from_ready_to_run_frontier(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="flag", value=True, register="flag"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),)),
+            ),
+        )
+        plan_result = plan_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+        seen_steps: list[str] = []
+
+        result = execute_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            step_executor=lambda resolved_step, _workflow: seen_steps.append(resolved_step.reference) or OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen_steps, ["shell.command"])
+
     def test_execute_normalizes_step_failure(self) -> None:
         workflow = Workflow(
             version=0,
