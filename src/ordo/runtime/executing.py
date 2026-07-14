@@ -234,6 +234,56 @@ def execute_workflow(
                 block_executed.append(step.name)
                 _mark_execution_tree_step_reused(execution_tree_output, step.name)
                 continue
+            if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe":
+                with _execution_working_directory(current_working_directory):
+                    result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_step, effective_workflow)
+                if step.register is not None:
+                    effective_workflow.step_results[step.register] = {
+                        "status": result.status,
+                        "summary": result.summary,
+                        "outputs": dict(result.outputs),
+                    }
+                operation_results.append(result)
+                diagnostics.extend(result.diagnostics)
+                _mark_execution_tree_probe_revalidated(execution_tree_output, step.name, result)
+                if result.status != "ok":
+                    skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                    block_items.append(
+                        {
+                            "block_index": block_index,
+                            "type": "steps",
+                            "status": "execution_error",
+                            "step_names": [candidate.name for candidate in declared_block.steps],
+                            "executed_steps": block_executed,
+                            "skipped_steps": block_skipped,
+                            "failed_step": step.name,
+                        }
+                    )
+                    return RuntimeResult(
+                        mode=Mode.EXECUTE,
+                        status=RuntimeStatus.EXECUTION_ERROR,
+                        diagnostics=tuple(diagnostics),
+                        plan=check_result.plan,
+                        outputs={
+                            "can_execute": False,
+                            "active_profile": active_profile,
+                            "active_overrides": [override.to_contract() for override in active_overrides],
+                            "executed_steps": executed_steps,
+                            "reused_steps": reused_steps,
+                            "skipped_steps": skipped_steps,
+                            "step_condition_details": step_condition_details,
+                            "launcher_details": launcher_details,
+                            "execution_tree": execution_tree_output,
+                            "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                            "checked_guards": checked_guards,
+                            "guard_details": guard_details,
+                        },
+                        operation_results=tuple(operation_results),
+                        failed_step=step.name,
+                    )
+                executed_steps.append(step.name)
+                block_executed.append(step.name)
+                continue
             if isinstance(resolved_step, ResolvedRunStep):
                 run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
                 if isinstance(run_workflow, Diagnostic):
@@ -801,6 +851,22 @@ def _mark_execution_tree_guard_runtime(execution_tree: dict[str, object] | None,
             if not isinstance(child, dict) or child.get("reference") != guard_reference:
                 continue
             child["runtime_status"] = "done" if result.status == "ok" else "failed"
+            child["runtime_observation"] = dict(result.outputs)
+            _refresh_execution_tree_block_runtime(block)
+            return
+
+
+def _mark_execution_tree_probe_revalidated(execution_tree: dict[str, object] | None, step_name: str, result: OperationResult) -> None:
+    if not isinstance(execution_tree, dict):
+        return
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict) or child.get("name") != step_name:
+                continue
+            child["runtime_status"] = "revalidated"
+            child["revalidated"] = True
             child["runtime_observation"] = dict(result.outputs)
             _refresh_execution_tree_block_runtime(block)
             return
