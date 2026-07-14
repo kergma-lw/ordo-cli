@@ -39,6 +39,32 @@ def _invalidates_scopes_for_step(resolved_step) -> list[str]:
     return [scope for scope in invalidation if isinstance(scope, str)]
 
 
+def _reuse_policy_for_step_item(item: dict[str, object], weakened_scopes: set[str]) -> str:
+    classification = item.get("preflight_classification")
+    if classification == "read_only_analyzable":
+        scopes = [scope for scope in item.get("observation_scopes", []) if isinstance(scope, str)]
+        if not scopes:
+            return "reusable"
+        if any(scope in weakened_scopes for scope in scopes):
+            return "revalidate"
+        return "revalidate"
+    return "not_reusable"
+
+
+def _build_preflight_step_items(check_result: RuntimeResult) -> list[dict[str, object]]:
+    weakened_scopes = {
+        scope for scope in check_result.outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)
+    }
+    items: list[dict[str, object]] = []
+    for raw_item in check_result.outputs.get("preflight_step_items", []):
+        if not isinstance(raw_item, dict):
+            continue
+        item = dict(raw_item)
+        item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
+        items.append(item)
+    return items
+
+
 def plan_workflow(
     workflow: Workflow,
     *,
@@ -77,6 +103,10 @@ def plan_workflow(
     step_items = _build_step_items(check_result, resolution, effective_workflow)
     run_items = _build_run_items(check_result, resolution, effective_workflow)
     block_items = _build_block_items(check_result, resolution, effective_workflow)
+    preflight_step_items = _build_preflight_step_items(check_result)
+    weakened_scopes = {scope for scope in base_outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)}
+    for item in step_items:
+        item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
 
     blockers = list(base_outputs.get("blockers", []))
     allowed_state = str(base_outputs.get("allowed_state", "blocked"))
@@ -96,6 +126,7 @@ def plan_workflow(
         "step_items": step_items,
         "run_items": run_items,
         "block_items": block_items,
+        "preflight_step_items": preflight_step_items,
     }
 
     return RuntimeResult(

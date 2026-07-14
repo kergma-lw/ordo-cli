@@ -784,7 +784,7 @@ def _interpret_step_block_for_check(
                     "operation_status": result.status,
                     "summary": result.summary,
                     "outputs": dict(result.outputs),
-                    "observation_scopes": [resolved_step.reference],
+                    "observation_scopes": [resolved_step.reference] if isinstance(resolved_step, ResolvedOperation) else [],
                 }
             )
             continue

@@ -193,6 +193,33 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["step_items"][0]["observation_scopes"], ["gh.issue"])
         self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], [])
 
+    def test_plan_derives_reuse_policy_for_preflight_knowledge(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),
+                        Step(name="derive-flag", value=True, register="flag"),
+                        Step(name="close-issue", operation=OperationRef("gh.issue.close")),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["preflight_step_items"][0]["reuse_policy"], "revalidate")
+        self.assertEqual(result.outputs["preflight_step_items"][1]["reuse_policy"], "reusable")
+        self.assertEqual(result.outputs["step_items"][2]["reuse_policy"], "not_reusable")
+
     def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
         workflow = Workflow(
             version=0,
