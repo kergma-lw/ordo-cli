@@ -213,12 +213,15 @@ class PlanModeTest(unittest.TestCase):
 
         def probe(resolved_guard, _workflow):
             if resolved_guard.reference == "gh.issue":
-                return OperationResult(status="ok", outputs={"exists": True})
+                return OperationResult(status="ok", summary="Loaded issue", outputs={"exists": True})
             return OperationResult(status="ok", outputs={"clean": True})
 
         result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["preflight_step_items"][0]["status"], "interpreted")
+        self.assertEqual(result.outputs["preflight_step_items"][0]["outputs"], {"exists": True})
+        self.assertEqual(result.outputs["preflight_step_items"][0]["observation_scopes"], ["gh.issue"])
+        self.assertIn("Loaded", result.outputs["preflight_step_items"][0]["summary"])
         self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "halted")
         self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
 
