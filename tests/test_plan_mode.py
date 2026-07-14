@@ -276,7 +276,9 @@ class PlanModeTest(unittest.TestCase):
         result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["guard_items"][0]["supporting_step_names"], ["load-issue"])
+        self.assertEqual(result.outputs["guard_items"][0]["supporting_value_paths"], ["step.issue.outputs.number"])
         self.assertEqual(result.outputs["preflight_step_items"][0]["produced_registers"], ["issue"])
+        self.assertEqual(result.outputs["preflight_step_items"][0]["produced_value_paths"], ["step.issue.outputs.number"])
 
     def test_plan_assembles_execution_oriented_tree_artifact(self) -> None:
         workflow = Workflow(
