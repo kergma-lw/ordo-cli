@@ -23,6 +23,22 @@ def _condition_status_for_step(step, preflight_item: dict[str, object]) -> str |
     return cast(str, status) if isinstance(status, str) else "unknown"
 
 
+def _observation_scopes_for_step(step, resolved_step, preflight_item: dict[str, object]) -> list[str]:
+    scopes = preflight_item.get("observation_scopes")
+    if isinstance(scopes, list):
+        return [scope for scope in scopes if isinstance(scope, str)]
+    if hasattr(resolved_step, "operation") and getattr(resolved_step.operation, "kind", None) == "probe":
+        return [resolved_step.reference]
+    return []
+
+
+def _invalidates_scopes_for_step(resolved_step) -> list[str]:
+    if not hasattr(resolved_step, "operation") or getattr(resolved_step.operation, "kind", None) != "action":
+        return []
+    invalidation = resolved_step.operation.invalidates_observations or (f"{resolved_step.connector_namespace}.*",)
+    return [scope for scope in invalidation if isinstance(scope, str)]
+
+
 def plan_workflow(
     workflow: Workflow,
     *,
@@ -180,6 +196,8 @@ def _build_step_items(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": _condition_status_for_step(step, preflight_item),
+                        "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
+                        "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "launcher": step.launcher,
                     }
                 )
@@ -197,6 +215,8 @@ def _build_step_items(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": _condition_status_for_step(step, preflight_item),
+                        "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
+                        "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "launcher": None,
                     }
                 )
@@ -213,6 +233,8 @@ def _build_step_items(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": _condition_status_for_step(step, preflight_item),
+                    "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
+                    "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                     "launcher": step.launcher,
                 }
             )
@@ -231,6 +253,8 @@ def _build_step_items(
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
                 "condition_status": None if step.if_ is None else "unknown",
+                "observation_scopes": [],
+                "invalidates_scopes": [],
                 "launcher": step.launcher if step.operation is not None else None,
             }
         )

@@ -27,6 +27,7 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.plan.guard_checks, ("git.worktree",))
         self.assertEqual(result.outputs["step_items"][0]["effect"], "effectful")
         self.assertEqual(result.outputs["step_items"][0]["eligibility"], "eligible")
+        self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], ["gh.*"])
 
     def test_plan_reports_known_blockers(self) -> None:
         workflow = Workflow(
@@ -183,6 +184,14 @@ class PlanModeTest(unittest.TestCase):
             workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(step,))
             result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
             self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], expected)
+
+    def test_plan_attaches_observation_scopes_to_read_only_steps(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(Step(name="inspect", operation=OperationRef("gh.issue")),))
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["step_items"][0]["observation_scopes"], ["gh.issue"])
+        self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], [])
 
     def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
         workflow = Workflow(
