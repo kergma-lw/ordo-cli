@@ -516,6 +516,10 @@ def _build_execution_tree(
                     "id": f"block:{block_index}:guard:{guard_index}",
                     "runtime_status": "not_started",
                     "revalidated": False,
+                    "planned_observation": None,
+                    "runtime_observation": None,
+                    "divergence_status": "not_applicable",
+                    "divergence_reason": None,
                     **dict(guard_by_reference.get(guard.reference, {"reference": guard.reference})),
                 }
                 for guard_index, guard in enumerate(declared_block.guards)
@@ -526,6 +530,12 @@ def _build_execution_tree(
                     "id": f"block:{block_index}:step:{step_index}",
                     "runtime_status": "not_started",
                     "revalidated": False,
+                    "planned_observation": None
+                    if step.name not in preflight_by_name
+                    else dict(preflight_by_name[step.name].get("outputs", {})),
+                    "runtime_observation": None,
+                    "divergence_status": "not_checked" if step.name in preflight_by_name else "not_applicable",
+                    "divergence_reason": None,
                     **dict(step_by_name.get(step.name, {"name": step.name})),
                     "preflight": dict(preflight_by_name[step.name]) if step.name in preflight_by_name else None,
                 }

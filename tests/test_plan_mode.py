@@ -303,8 +303,11 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(tree["blocks"][0]["children"][0]["runtime_status"], "not_started")
         self.assertEqual(tree["blocks"][0]["children"][0]["revalidated"], False)
         self.assertEqual(tree["blocks"][0]["children"][0]["preflight"]["register"], "issue")
+        self.assertEqual(tree["blocks"][0]["children"][0]["divergence_status"], "not_checked")
+        self.assertEqual(tree["blocks"][0]["children"][0]["runtime_observation"], None)
         self.assertEqual(tree["blocks"][1]["children"][0]["id"], "block:1:guard:0")
         self.assertEqual(tree["blocks"][1]["children"][0]["runtime_status"], "not_started")
+        self.assertEqual(tree["blocks"][1]["children"][0]["divergence_status"], "not_applicable")
 
     def test_plan_marks_freshness_and_invalidation_state_on_tree_nodes(self) -> None:
         workflow = Workflow(
