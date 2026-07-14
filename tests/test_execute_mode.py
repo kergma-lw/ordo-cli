@@ -296,6 +296,50 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["execution_tree_mode"], "legacy_fallback")
         self.assertEqual(result.outputs["execution_tree_fallback_reason"], "missing_execution_tree")
 
+    def test_execute_derives_skipped_summary_from_tree_state(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"enabled": False},
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command"), if_="${inputs.enabled}"),),
+        )
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.outputs["skipped_steps"], ["effectful-step"])
+
+    def test_execute_derives_reused_summary_from_tree_state(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="flag", value=True, register="flag"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="effectful-step", operation=OperationRef("shell.command"), if_="${step.flag.outputs.value}"),)),
+            ),
+        )
+        plan_result = plan_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        result = execute_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.outputs["reused_steps"], ["flag"])
+
     def test_execute_starts_from_ready_to_run_frontier(self) -> None:
         workflow = Workflow(
             version=0,
@@ -547,6 +591,8 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "failed")
+        self.assertEqual(result.outputs["executed_steps"], [])
+        self.assertEqual(result.outputs["skipped_steps"], [])
 
     def test_execute_pre_run_workflow_can_switch_profile_for_main_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
