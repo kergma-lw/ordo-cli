@@ -368,6 +368,25 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(seen_steps, ["shell.command"])
 
+    def test_execute_without_tree_uses_legacy_checked_guard_start(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(Guard(OperationRef("git.worktree")),),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+        seen_steps: list[str] = []
+
+        result = execute_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            step_executor=lambda resolved_step, _workflow: seen_steps.append(resolved_step.reference) or OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen_steps, ["shell.command"])
+
     def test_execute_uses_frontier_to_skip_non_required_steps_in_same_block(self) -> None:
         workflow = Workflow(
             version=0,

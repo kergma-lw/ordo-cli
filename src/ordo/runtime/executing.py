@@ -101,10 +101,7 @@ def execute_workflow(
             effective_workflow.step_results[register] = reused_result["step_result"]
     _prime_execution_tree_with_checked_guards(execution_tree_output, guard_details)
 
-    start_block_index = max(
-        _initial_checked_block_count(effective_workflow),
-        _frontier_start_block_index(execution_tree_output),
-    )
+    start_block_index = _execution_start_block_index(effective_workflow, execution_tree_output)
     for step_name in list(preflight_reuse):
         block_index = _execution_tree_step_block_index(execution_tree_output, step_name)
         if block_index is not None and block_index < start_block_index:
@@ -983,6 +980,12 @@ def _initial_checked_block_count(workflow: Workflow) -> int:
             continue
         break
     return count
+
+
+def _execution_start_block_index(workflow: Workflow, execution_tree: dict[str, object] | None) -> int:
+    if isinstance(execution_tree, dict):
+        return _frontier_start_block_index(execution_tree)
+    return _initial_checked_block_count(workflow)
 
 
 def _frontier_start_block_index(execution_tree: dict[str, object] | None) -> int:
