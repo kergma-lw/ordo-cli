@@ -1,7 +1,9 @@
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
+from ordo.model.profile import Profile
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import check_workflow, execute_workflow, explain_workflow, load_workflow_file, plan_workflow, resolve_workflow_references, validate_workflow_text
@@ -168,6 +170,43 @@ class RuntimeInvariantTest(unittest.TestCase):
         self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_status"], "diverged")
         self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][2]["children"][0]["runtime_status"], "skipped_at_run")
         json.dumps(execute_result.to_contract())
+
+    def test_tree_driven_runtime_handles_nested_run_and_profile_switch_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "fragment.yml"
+            fragment.write_text(
+                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: echo hi\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                source_path=str(root / "root.yml"),
+                launch_dir=str(root),
+                steps=(
+                    Step(name="switch", profile_switch="frontend"),
+                    Step(name="nested", run="fragment.yml", resolved_run_path=str(fragment)),
+                ),
+            )
+            frontend = Profile(name="frontend")
+            plan_result = plan_workflow(
+                workflow,
+                available_profiles={"frontend": frontend},
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+            execute_result = execute_workflow(
+                workflow,
+                available_profiles={"frontend": frontend},
+                step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+                execution_tree=plan_result.outputs["execution_tree"],
+            )
+
+            self.assertEqual(execute_result.status, RuntimeStatus.OK)
+            self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "done")
+            self.assertEqual(execute_result.outputs["execution_tree"]["blocks"][0]["children"][1]["runtime_status"], "done")
+            json.dumps(execute_result.to_contract())
 
 
 if __name__ == "__main__":
