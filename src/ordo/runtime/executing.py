@@ -179,6 +179,8 @@ def execute_workflow(
         block_executed: list[str] = []
         block_skipped: list[str] = []
         for step_index, (step, resolved_step) in enumerate(zip(declared_block.steps, resolved_block.steps, strict=False)):
+            if not _should_execute_step_from_tree(execution_tree_output, block_index=block_index, step_index=step_index, step_name=step.name):
+                continue
             reused_preflight = preflight_reuse.get(step.name)
             condition_source = _condition_source_from_tree_state(step, effective_workflow, execution_tree_output)
             if step.if_ is not None:
@@ -1014,6 +1016,44 @@ def _execution_tree_step_block_index(execution_tree: dict[str, object] | None, s
         for child in block.get("children", []):
             if isinstance(child, dict) and child.get("name") == step_name:
                 return block_index
+    return None
+
+
+def _required_runtime_node_ids(execution_tree: dict[str, object] | None) -> set[str]:
+    if not isinstance(execution_tree, dict):
+        return set()
+    frontier = execution_tree.get("ready_to_run_frontier")
+    if not isinstance(frontier, dict):
+        return set()
+    return {node_id for node_id in frontier.get("requires_runtime_node_ids", []) if isinstance(node_id, str)}
+
+
+def _should_execute_step_from_tree(
+    execution_tree: dict[str, object] | None,
+    *,
+    block_index: int,
+    step_index: int,
+    step_name: str,
+) -> bool:
+    if not isinstance(execution_tree, dict):
+        return True
+    node_id = f"block:{block_index}:step:{step_index}"
+    required = _required_runtime_node_ids(execution_tree)
+    if required:
+        return node_id in required
+    runtime_status = _execution_tree_step_runtime_status(execution_tree, step_name)
+    return runtime_status == "not_started"
+
+
+def _execution_tree_step_runtime_status(execution_tree: dict[str, object] | None, step_name: str) -> str | None:
+    if not isinstance(execution_tree, dict):
+        return None
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if isinstance(child, dict) and child.get("name") == step_name and isinstance(child.get("runtime_status"), str):
+                return child["runtime_status"]
     return None
 
 

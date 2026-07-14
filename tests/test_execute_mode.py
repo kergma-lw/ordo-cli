@@ -368,6 +368,33 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(seen_steps, ["shell.command"])
 
+    def test_execute_uses_frontier_to_skip_non_required_steps_in_same_block(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="flag", value=True, register="flag"),
+                        Step(name="effectful-step", operation=OperationRef("shell.command")),
+                    )
+                ),
+            ),
+        )
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        plan_result.outputs["execution_tree"]["ready_to_run_frontier"]["requires_runtime_node_ids"] = ["block:0:step:1"]
+        seen_steps: list[str] = []
+
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda resolved_step, _workflow: seen_steps.append(resolved_step.reference) or OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen_steps, ["shell.command"])
+
     def test_execute_normalizes_step_failure(self) -> None:
         workflow = Workflow(
             version=0,
