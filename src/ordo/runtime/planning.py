@@ -23,6 +23,20 @@ def _condition_status_for_step(step, preflight_item: dict[str, object]) -> str |
     return cast(str, status) if isinstance(status, str) else "unknown"
 
 
+def _effective_preflight_classification(
+    step,
+    resolved_step,
+    *,
+    block_item: dict[str, object] | None,
+) -> str:
+    classification = classify_preflight_step(step, resolved_step)
+    if isinstance(resolved_step, ResolvedRunStep) and isinstance(block_item, dict):
+        status = block_item.get("status")
+        if status == "context_applied":
+            return "context_only"
+    return classification
+
+
 def _observation_scopes_for_step(step, resolved_step, preflight_item: dict[str, object]) -> list[str]:
     scopes = preflight_item.get("observation_scopes")
     if isinstance(scopes, list):
@@ -256,12 +270,18 @@ def _build_step_items(
         for item in check_result.outputs.get("preflight_step_items", [])
         if isinstance(item, dict) and isinstance(item.get("name"), str)
     }
+    block_by_index = {
+        item.get("block_index"): item
+        for item in check_result.outputs.get("block_items", [])
+        if isinstance(item, dict) and isinstance(item.get("block_index"), int)
+    }
 
     if resolution is not None and resolution.resolved_steps:
-        for step, resolved_step in zip(workflow.steps, resolution.resolved_steps, strict=False):
+        for step_index, (step, resolved_step) in enumerate(zip(workflow.steps, resolution.resolved_steps, strict=False)):
             preflight_item = preflight_by_name.get(step.name, {})
+            block_item = block_by_index.get(step_index)
             if isinstance(resolved_step, ResolvedBuiltinStep):
-                classification = classify_preflight_step(step, resolved_step)
+                classification = _effective_preflight_classification(step, resolved_step, block_item=block_item)
                 step_items.append(
                     {
                         "name": step.name,
@@ -280,7 +300,7 @@ def _build_step_items(
                 )
                 continue
             if isinstance(resolved_step, ResolvedRunStep):
-                classification = classify_preflight_step(step, resolved_step)
+                classification = _effective_preflight_classification(step, resolved_step, block_item=block_item)
                 step_items.append(
                     {
                         "name": step.name,
@@ -298,7 +318,7 @@ def _build_step_items(
                     }
                 )
                 continue
-            classification = classify_preflight_step(step, resolved_step)
+            classification = _effective_preflight_classification(step, resolved_step, block_item=block_item)
             step_items.append(
                 {
                     "name": step.name,
@@ -452,6 +472,7 @@ def _build_execution_tree(
             "block_index": block_index,
             "type": block_item.get("type", "guards" if isinstance(declared_block, GuardBlock) else "steps"),
             "status": block_item.get("status", "pending"),
+            "runtime_status": "not_started",
             "active_profile": block_item.get("active_profile"),
             "children": [],
         }
@@ -459,6 +480,8 @@ def _build_execution_tree(
             block_node["children"] = [
                 {
                     "id": f"block:{block_index}:guard:{guard_index}",
+                    "runtime_status": "not_started",
+                    "revalidated": False,
                     **dict(guard_by_reference.get(guard.reference, {"reference": guard.reference})),
                 }
                 for guard_index, guard in enumerate(declared_block.guards)
@@ -467,6 +490,8 @@ def _build_execution_tree(
             block_node["children"] = [
                 {
                     "id": f"block:{block_index}:step:{step_index}",
+                    "runtime_status": "not_started",
+                    "revalidated": False,
                     **dict(step_by_name.get(step.name, {"name": step.name})),
                     "preflight": dict(preflight_by_name[step.name]) if step.name in preflight_by_name else None,
                 }

@@ -129,6 +129,28 @@ class PlanModeTest(unittest.TestCase):
             self.assertEqual(result.outputs["execution_allowed"], True)
             self.assertEqual(len(expanded), 1)
 
+    def test_plan_marks_context_applied_run_as_context_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "switch-profile.yml"
+            fragment.write_text(
+                "steps:\n  - name: switch\n    profile_switch: frontend\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="switch-profile.yml", resolved_run_path=str(fragment)),)),
+                    GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+                ),
+            )
+            profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+            result = plan_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], "context_only")
+
     def test_plan_surfaces_expr_guard_before_runtime_support_exists(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
 
@@ -276,9 +298,13 @@ class PlanModeTest(unittest.TestCase):
         tree = result.outputs["execution_tree"]
         self.assertEqual(tree["workflow"], "open-task")
         self.assertEqual(tree["blocks"][0]["id"], "block:0")
+        self.assertEqual(tree["blocks"][0]["runtime_status"], "not_started")
         self.assertEqual(tree["blocks"][0]["children"][0]["id"], "block:0:step:0")
+        self.assertEqual(tree["blocks"][0]["children"][0]["runtime_status"], "not_started")
+        self.assertEqual(tree["blocks"][0]["children"][0]["revalidated"], False)
         self.assertEqual(tree["blocks"][0]["children"][0]["preflight"]["register"], "issue")
         self.assertEqual(tree["blocks"][1]["children"][0]["id"], "block:1:guard:0")
+        self.assertEqual(tree["blocks"][1]["children"][0]["runtime_status"], "not_started")
 
     def test_plan_keeps_unknown_preflight_classification_for_unresolved_operations(self) -> None:
         workflow = Workflow(
