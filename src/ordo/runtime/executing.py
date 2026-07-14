@@ -176,10 +176,18 @@ def execute_workflow(
         block_executed: list[str] = []
         block_skipped: list[str] = []
         for step_index, (step, resolved_step) in enumerate(zip(declared_block.steps, resolved_block.steps, strict=False)):
-            if not _should_execute_step_from_tree(execution_tree_output, block_index=block_index, step_index=step_index, step_name=step.name):
+            step_context = _prepare_tree_driven_step_context(
+                step=step,
+                workflow=effective_workflow,
+                execution_tree=execution_tree_output,
+                preflight_reuse=preflight_reuse,
+                block_index=block_index,
+                step_index=step_index,
+            )
+            if not step_context["should_execute"]:
                 continue
-            reused_preflight = preflight_reuse.get(step.name)
-            condition_source = _condition_source_from_tree_state(step, effective_workflow, execution_tree_output)
+            reused_preflight = step_context["reused_preflight"]
+            condition_source = step_context["condition_source"]
             if step.if_ is not None:
                 condition_result = _evaluate_step_condition(step, effective_workflow)
                 if isinstance(condition_result, Diagnostic):
@@ -1058,6 +1066,27 @@ def _execution_tree_step_runtime_status(execution_tree: dict[str, object] | None
             if isinstance(child, dict) and child.get("name") == step_name and isinstance(child.get("runtime_status"), str):
                 return child["runtime_status"]
     return None
+
+
+def _prepare_tree_driven_step_context(
+    *,
+    step: Step,
+    workflow: Workflow,
+    execution_tree: dict[str, object] | None,
+    preflight_reuse: dict[str, dict[str, object]],
+    block_index: int,
+    step_index: int,
+) -> dict[str, object]:
+    return {
+        "should_execute": _should_execute_step_from_tree(
+            execution_tree,
+            block_index=block_index,
+            step_index=step_index,
+            step_name=step.name,
+        ),
+        "reused_preflight": preflight_reuse.get(step.name),
+        "condition_source": _condition_source_from_tree_state(step, workflow, execution_tree),
+    }
 
 
 def _remaining_step_names(workflow: Workflow, *, start_block_index: int, current_step_index: int | None = None) -> list[str]:

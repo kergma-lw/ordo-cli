@@ -9,11 +9,52 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, plan_workflow
+from ordo.runtime.executing import _prepare_tree_driven_step_context
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class ExecuteModeTest(unittest.TestCase):
+    def test_prepare_tree_driven_step_context_marks_reusable_value_step(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="flag", value=True, register="flag"),))
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        context = _prepare_tree_driven_step_context(
+            step=workflow.steps[0],
+            workflow=workflow,
+            execution_tree=plan_result.outputs["execution_tree"],
+            preflight_reuse={"flag": {"register": "flag", "step_result": {"status": "ok", "summary": "derived", "outputs": {"value": True}}}},
+            block_index=0,
+            step_index=0,
+        )
+
+        self.assertEqual(context["should_execute"], True)
+        self.assertIsNotNone(context["reused_preflight"])
+        self.assertEqual(context["condition_source"], "runtime")
+
+    def test_prepare_tree_driven_step_context_uses_tree_state_for_conditions(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="flag", value=True, register="flag"),)),
+                StepBlock(steps=(Step(name="ship", operation=OperationRef("shell.command"), if_="${step.flag.outputs.value}"),)),
+            ),
+        )
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        workflow.step_results["flag"] = {"status": "ok", "summary": "derived", "outputs": {"value": True}}
+
+        context = _prepare_tree_driven_step_context(
+            step=workflow.blocks[1].steps[0],
+            workflow=workflow,
+            execution_tree=plan_result.outputs["execution_tree"],
+            preflight_reuse={},
+            block_index=1,
+            step_index=0,
+        )
+
+        self.assertEqual(context["should_execute"], True)
+        self.assertEqual(context["condition_source"], "execution_tree_state")
     def test_execute_preserves_blocked_before_execution(self) -> None:
         workflow = Workflow(
             version=0,
