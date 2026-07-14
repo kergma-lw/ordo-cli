@@ -82,6 +82,8 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["execution_tree"]["workflow"], "open-task")
+        self.assertEqual(result.outputs["execution_tree_mode"], "tree_assisted")
+        self.assertEqual(result.outputs["execution_tree_fallback_reason"], None)
 
     def test_execute_falls_back_when_no_execution_tree_is_supplied(self) -> None:
         workflow = Workflow(
@@ -99,6 +101,8 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["execution_tree"], None)
+        self.assertEqual(result.outputs["execution_tree_mode"], "legacy_fallback")
+        self.assertEqual(result.outputs["execution_tree_fallback_reason"], "missing_execution_tree")
 
     def test_execute_reuses_reusable_preflight_value_step_results(self) -> None:
         workflow = Workflow(
