@@ -53,6 +53,7 @@ def execute_workflow(
             outputs={
                 **dict(check_result.outputs),
                 "executed_steps": [],
+                "reused_steps": [],
                 "skipped_steps": _all_step_names(workflow),
                 "step_condition_details": [],
                 "launcher_details": [],
@@ -82,13 +83,19 @@ def execute_workflow(
     diagnostics: list[Diagnostic] = list(check_result.diagnostics)
     operation_results: list[OperationResult] = list(check_result.operation_results)
     executed_steps: list[str] = []
+    reused_steps: list[str] = []
     skipped_steps: list[str] = []
     step_condition_details: list[dict[str, object]] = []
     launcher_details: list[dict[str, object]] = []
     block_items: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("block_items", []) if isinstance(item, dict)]
     guard_details: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("guard_details", []) if isinstance(item, dict)]
     checked_guards: list[str] = list(check_result.outputs.get("checked_guards", []))
+    preflight_reuse = _build_reusable_preflight_step_map(execution_tree_output)
     effective_workflow.step_results.clear()
+    for reused_result in preflight_reuse.values():
+        register = reused_result.get("register")
+        if isinstance(register, str):
+            effective_workflow.step_results[register] = reused_result["step_result"]
 
     start_block_index = _initial_checked_block_count(effective_workflow)
 
@@ -141,6 +148,7 @@ def execute_workflow(
                         "active_profile": active_profile,
                         "active_overrides": [override.to_contract() for override in active_overrides],
                         "executed_steps": executed_steps,
+                        "reused_steps": reused_steps,
                         "skipped_steps": skipped_steps,
                         "step_condition_details": step_condition_details,
                         "execution_tree": execution_tree_output,
@@ -155,6 +163,7 @@ def execute_workflow(
         block_executed: list[str] = []
         block_skipped: list[str] = []
         for step_index, (step, resolved_step) in enumerate(zip(declared_block.steps, resolved_block.steps, strict=False)):
+            reused_preflight = preflight_reuse.get(step.name)
             if step.if_ is not None:
                 condition_result = _evaluate_step_condition(step, effective_workflow)
                 if isinstance(condition_result, Diagnostic):
@@ -191,6 +200,7 @@ def execute_workflow(
                             "active_profile": active_profile,
                             "active_overrides": [override.to_contract() for override in active_overrides],
                             "executed_steps": executed_steps,
+                            "reused_steps": reused_steps,
                             "skipped_steps": skipped_steps,
                             "step_condition_details": step_condition_details,
                             "launcher_details": launcher_details,
@@ -216,6 +226,11 @@ def execute_workflow(
                     block_skipped.append(step.name)
                     continue
                 step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True})
+            if reused_preflight is not None:
+                reused_steps.append(step.name)
+                block_executed.append(step.name)
+                _mark_execution_tree_step_reused(execution_tree_output, step.name)
+                continue
             if isinstance(resolved_step, ResolvedRunStep):
                 run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
                 if isinstance(run_workflow, Diagnostic):
@@ -242,6 +257,7 @@ def execute_workflow(
                             "active_profile": active_profile,
                             "active_overrides": [override.to_contract() for override in active_overrides],
                             "executed_steps": executed_steps,
+                            "reused_steps": reused_steps,
                             "skipped_steps": skipped_steps,
                             "step_condition_details": step_condition_details,
                             "launcher_details": launcher_details,
@@ -304,6 +320,7 @@ def execute_workflow(
                             "active_profile": active_profile,
                             "active_overrides": [override.to_contract() for override in active_overrides],
                             "executed_steps": executed_steps,
+                            "reused_steps": reused_steps,
                             "skipped_steps": skipped_steps,
                             "step_condition_details": step_condition_details,
                             "launcher_details": launcher_details,
@@ -351,6 +368,7 @@ def execute_workflow(
                                 "active_profile": active_profile,
                                 "active_overrides": [override.to_contract() for override in active_overrides],
                                 "executed_steps": executed_steps,
+                                "reused_steps": reused_steps,
                                 "skipped_steps": skipped_steps,
                                 "step_condition_details": step_condition_details,
                                 "launcher_details": launcher_details,
@@ -401,6 +419,7 @@ def execute_workflow(
                                 "active_profile": active_profile,
                                 "active_overrides": [override.to_contract() for override in active_overrides],
                                 "executed_steps": executed_steps,
+                                "reused_steps": reused_steps,
                                 "skipped_steps": skipped_steps,
                                 "step_condition_details": step_condition_details,
                                 "launcher_details": launcher_details,
@@ -468,6 +487,7 @@ def execute_workflow(
                         "active_profile": active_profile,
                         "active_overrides": [override.to_contract() for override in active_overrides],
                         "executed_steps": executed_steps,
+                        "reused_steps": reused_steps,
                         "skipped_steps": skipped_steps,
                         "step_condition_details": step_condition_details,
                         "launcher_details": launcher_details,
@@ -504,6 +524,7 @@ def execute_workflow(
             "active_profile": active_profile,
             "active_overrides": [override.to_contract() for override in active_overrides],
             "executed_steps": executed_steps,
+            "reused_steps": reused_steps,
             "skipped_steps": skipped_steps,
             "step_condition_details": step_condition_details,
             "launcher_details": launcher_details,
@@ -694,6 +715,54 @@ def _execute_state_delete(step_name: str, target_expr: str, workflow: Workflow) 
 
 def _all_step_names(workflow: Workflow) -> list[str]:
     return [step.name for block in workflow.blocks if isinstance(block, StepBlock) for step in block.steps]
+
+
+def _build_reusable_preflight_step_map(execution_tree: dict[str, object] | None) -> dict[str, dict[str, object]]:
+    if not isinstance(execution_tree, dict):
+        return {}
+    reusable: dict[str, dict[str, object]] = {}
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict):
+                continue
+            preflight = child.get("preflight")
+            if not isinstance(preflight, dict):
+                continue
+            if child.get("reuse_policy") != "reusable" or preflight.get("status") != "interpreted":
+                continue
+            register = preflight.get("register")
+            outputs = preflight.get("outputs")
+            if not isinstance(register, str) or not isinstance(outputs, dict):
+                continue
+            reusable_name = child.get("name")
+            if isinstance(reusable_name, str):
+                reusable[reusable_name] = {
+                    "register": register,
+                    "step_result": {
+                        "status": preflight.get("operation_status", "ok"),
+                        "summary": preflight.get("summary", "Reused preflight result"),
+                        "outputs": dict(outputs),
+                    },
+                }
+    return reusable
+
+
+def _mark_execution_tree_step_reused(execution_tree: dict[str, object] | None, step_name: str) -> None:
+    if not isinstance(execution_tree, dict):
+        return
+    for block in execution_tree.get("blocks", []):
+        if not isinstance(block, dict):
+            continue
+        for child in block.get("children", []):
+            if not isinstance(child, dict) or child.get("name") != step_name:
+                continue
+            child["runtime_status"] = "reused_preflight"
+            child["revalidated"] = False
+            child["runtime_observation"] = child.get("planned_observation")
+            child["divergence_status"] = "matched"
+            return
 
 
 def _initial_checked_block_count(workflow: Workflow) -> int:

@@ -6,7 +6,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
-from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, plan_workflow
 
@@ -98,6 +98,40 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["execution_tree"], None)
+
+    def test_execute_reuses_reusable_preflight_value_step_results(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="flag", value=True, register="flag"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+                StepBlock(steps=(Step(name="effectful-step", operation=OperationRef("shell.command"), if_="${step.flag.outputs.value}"),)),
+            ),
+        )
+        plan_result = plan_workflow(
+            workflow,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+        seen_steps: list[str] = []
+
+        def executor(resolved_step, _workflow):
+            seen_steps.append(resolved_step.reference)
+            return OperationResult(status="ok", summary="Executed")
+
+        result = execute_workflow(
+            workflow,
+            step_executor=executor,
+            guard_probe=lambda _resolved_guard, _workflow: OperationResult(status="ok", outputs={"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen_steps, ["shell.command"])
+        self.assertEqual(result.outputs["reused_steps"], ["flag"])
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "reused_preflight")
 
     def test_execute_normalizes_step_failure(self) -> None:
         workflow = Workflow(
