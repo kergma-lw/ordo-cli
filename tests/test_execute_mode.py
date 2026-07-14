@@ -194,8 +194,36 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "revalidated")
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["revalidated"], True)
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_status"], "matched")
         self.assertEqual(seen_steps, ["shell.command"])
         self.assertEqual(result.outputs["step_condition_details"][0]["source"], "execution_tree_state")
+
+    def test_execute_records_divergence_for_revalidated_probe_steps(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="inspect", operation=OperationRef("gh.issue"), register="issue"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+        plan_result = plan_workflow(
+            workflow,
+            guard_probe=lambda resolved_guard, _workflow: OperationResult(status="ok", outputs={"exists": True} if resolved_guard.reference == "gh.issue" else {"clean": True}),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        result = execute_workflow(
+            workflow,
+            guard_probe=lambda resolved_guard, _workflow: OperationResult(status="ok", outputs={"exists": False} if resolved_guard.reference == "gh.issue" else {"clean": True}),
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_status"], "diverged")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_reason"], "runtime_observation_mismatch")
 
     def test_execute_marks_skipped_runtime_status_in_execution_tree(self) -> None:
         workflow = Workflow(

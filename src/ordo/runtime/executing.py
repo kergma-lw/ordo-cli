@@ -868,9 +868,13 @@ def _mark_execution_tree_probe_revalidated(execution_tree: dict[str, object] | N
         for child in block.get("children", []):
             if not isinstance(child, dict) or child.get("name") != step_name:
                 continue
+            planned = child.get("planned_observation")
+            runtime = dict(result.outputs)
             child["runtime_status"] = "revalidated"
             child["revalidated"] = True
-            child["runtime_observation"] = dict(result.outputs)
+            child["runtime_observation"] = runtime
+            child["divergence_status"] = "matched" if planned == runtime else "diverged"
+            child["divergence_reason"] = None if planned == runtime else "runtime_observation_mismatch"
             _refresh_execution_tree_block_runtime(block)
             return
 
