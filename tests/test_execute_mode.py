@@ -265,6 +265,37 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["runtime_status"], "skipped_at_run")
 
+    def test_execution_tree_exposes_canonical_runtime_fields(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),))
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        node = result.outputs["execution_tree"]["blocks"][0]["children"][0]
+        self.assertIn("runtime_status", node)
+        self.assertIn("revalidated", node)
+        self.assertIn("planned_observation", node)
+        self.assertIn("runtime_observation", node)
+        self.assertIn("divergence_status", node)
+        self.assertIn("divergence_reason", node)
+
+    def test_execute_compatibility_layer_reports_explicit_fallback(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),))
+
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        self.assertEqual(result.outputs["execution_tree_mode"], "legacy_fallback")
+        self.assertEqual(result.outputs["execution_tree_fallback_reason"], "missing_execution_tree")
+
     def test_execute_starts_from_ready_to_run_frontier(self) -> None:
         workflow = Workflow(
             version=0,
