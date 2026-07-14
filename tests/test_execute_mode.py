@@ -8,7 +8,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.playbook import activate_playbook
-from ordo.runtime import execute_workflow
+from ordo.runtime import execute_workflow, plan_workflow
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -62,6 +62,42 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(seen_steps, ["shell.command"])
         self.assertEqual(result.outputs["executed_steps"], ["effectful-step"])
         self.assertEqual(result.outputs["skipped_steps"], [])
+
+    def test_execute_accepts_plan_derived_execution_tree_input(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+
+        plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["execution_tree"]["workflow"], "open-task")
+
+    def test_execute_falls_back_when_no_execution_tree_is_supplied(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+
+        result = execute_workflow(
+            workflow,
+            step_executor=lambda *_args: OperationResult(status="ok", summary="Executed"),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["execution_tree"], None)
 
     def test_execute_normalizes_step_failure(self) -> None:
         workflow = Workflow(

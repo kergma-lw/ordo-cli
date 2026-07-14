@@ -32,6 +32,7 @@ def execute_workflow(
     guard_probe: GuardProbe | None = None,
     step_executor: StepExecutor | None = None,
     connector_provider: ConnectorProvider | None = None,
+    execution_tree: dict[str, object] | None = None,
 ) -> RuntimeResult:
     """Execute steps only after validation, resolution, and guards succeed."""
 
@@ -42,6 +43,7 @@ def execute_workflow(
         guard_probe=guard_probe,
         connector_provider=connector_provider,
     )
+    execution_tree_output = dict(execution_tree) if isinstance(execution_tree, dict) else None
     if check_result.status is not RuntimeStatus.OK:
         return RuntimeResult(
             mode=Mode.EXECUTE,
@@ -54,6 +56,7 @@ def execute_workflow(
                 "skipped_steps": _all_step_names(workflow),
                 "step_condition_details": [],
                 "launcher_details": [],
+                "execution_tree": execution_tree_output,
             },
             operation_results=check_result.operation_results,
             failed_guard=check_result.failed_guard,
@@ -140,6 +143,7 @@ def execute_workflow(
                         "executed_steps": executed_steps,
                         "skipped_steps": skipped_steps,
                         "step_condition_details": step_condition_details,
+                        "execution_tree": execution_tree_output,
                     },
                     operation_results=tuple(operation_results),
                     failed_guard=block_blockers[0],
@@ -190,6 +194,7 @@ def execute_workflow(
                             "skipped_steps": skipped_steps,
                             "step_condition_details": step_condition_details,
                             "launcher_details": launcher_details,
+                            "execution_tree": execution_tree_output,
                             "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
                             "checked_guards": checked_guards,
                             "guard_details": guard_details,
@@ -240,6 +245,7 @@ def execute_workflow(
                             "skipped_steps": skipped_steps,
                             "step_condition_details": step_condition_details,
                             "launcher_details": launcher_details,
+                            "execution_tree": execution_tree_output,
                             "checked_guards": checked_guards,
                             "guard_details": guard_details,
                             "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
@@ -301,6 +307,7 @@ def execute_workflow(
                             "skipped_steps": skipped_steps,
                             "step_condition_details": step_condition_details,
                             "launcher_details": launcher_details,
+                            "execution_tree": execution_tree_output,
                             "checked_guards": checked_guards,
                             "guard_details": guard_details,
                             "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
@@ -347,6 +354,7 @@ def execute_workflow(
                                 "skipped_steps": skipped_steps,
                                 "step_condition_details": step_condition_details,
                                 "launcher_details": launcher_details,
+                                "execution_tree": execution_tree_output,
                                 "checked_guards": checked_guards,
                                 "guard_details": guard_details,
                                 "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
@@ -396,6 +404,7 @@ def execute_workflow(
                                 "skipped_steps": skipped_steps,
                                 "step_condition_details": step_condition_details,
                                 "launcher_details": launcher_details,
+                                "execution_tree": execution_tree_output,
                                 "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
                                 "checked_guards": checked_guards,
                                 "guard_details": guard_details,
@@ -462,6 +471,7 @@ def execute_workflow(
                         "skipped_steps": skipped_steps,
                         "step_condition_details": step_condition_details,
                         "launcher_details": launcher_details,
+                        "execution_tree": execution_tree_output,
                         "block_items": block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
                         "checked_guards": checked_guards,
                         "guard_details": guard_details,
@@ -500,6 +510,7 @@ def execute_workflow(
             "checked_guards": checked_guards,
             "guard_details": guard_details,
             "block_items": block_items,
+            "execution_tree": execution_tree_output,
         },
         operation_results=tuple(operation_results),
     )
