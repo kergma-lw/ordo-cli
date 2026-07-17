@@ -9,8 +9,8 @@
 ## Authoring shape
 
 - Any workflow step form may declare an optional `if` field.
-- The MVP `if` field should use the existing string-form value-expression envelope `if: ${...}`.
-- Bare guard-style condition strings are not part of this MVP step-condition surface.
+- The preferred `if` field should use a native bare step-condition expression.
+- The older embedded form `if: ${...}` may remain supported as deprecated compatibility surface.
 - YAML-native boolean literals are not part of this MVP `if` surface.
 
 ## Expression boundary

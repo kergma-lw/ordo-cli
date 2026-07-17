@@ -60,6 +60,27 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "${inputs.enabled}")
         self.assertEqual(workflow.steps[1].if_, "${inputs.enabled}")
 
+    def test_loads_bare_step_if_field_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: inputs.enabled
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].if_, "inputs.enabled")
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "inputs.enabled")
+
     def test_loads_declared_workflow_inputs_without_runtime_values(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(

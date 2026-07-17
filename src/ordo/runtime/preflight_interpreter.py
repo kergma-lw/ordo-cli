@@ -10,7 +10,7 @@ from ordo.model.workflow import Step, Workflow
 
 from .fragment_runs import classify_run_for_check
 from .local_expression_contexts import LocalExpressionContext
-from .local_expressions import resolve_embedded_local_expression
+from .local_expressions import resolve_condition_local_expression
 from .providers import GuardProbe
 from .resolution import ResolvedOperation
 from .value_resolution import ValueResolutionError, resolve_runtime_value
@@ -66,7 +66,7 @@ def evaluate_preflight_step_condition(
     if step.if_ is None:
         return True
     try:
-        value = resolve_embedded_local_expression(
+        value = resolve_condition_local_expression(
             step.if_,
             workflow,
             context=LocalExpressionContext.STEP_CONDITION,

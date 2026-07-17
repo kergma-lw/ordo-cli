@@ -17,6 +17,7 @@ from .local_expressions import (
     LOCAL_EXPRESSION_PARSE_ERRORS,
     build_local_expression_parse_diagnostic,
     build_local_expression_validation_diagnostic,
+    parse_condition_local_expression,
     parse_embedded_local_expression,
     parse_local_expression,
     validate_parsed_local_expression,
@@ -510,9 +511,9 @@ def _validate_step_condition(
         declared_registers={} if declared_registers is None else declared_registers,
         field_name="if",
         type_code="validation.workflow.step.if.type",
-        expression_code="validation.workflow.step.if.expression",
+        expression_code="validation.workflow.local_expression.step_condition.syntax",
         type_message="Step field 'if' must be a string-form value expression",
-        expression_message="Step field 'if' must use the '${...}' value-expression form",
+        expression_message="Step field 'if' must be a valid step-condition expression",
     )
     condition = value.get("if")
     if condition is None:
@@ -554,7 +555,7 @@ def _validate_invocation_condition(
         diagnostics.append(_diagnostic(type_code, type_message, condition_path, source, actual_type=type(condition).__name__))
         return diagnostics
     try:
-        parsed = parse_embedded_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
+        parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
     except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
         expression = _extract_runtime_value_expression(condition)
         diagnostics.append(
@@ -563,12 +564,9 @@ def _validate_invocation_condition(
                 context=LocalExpressionContext.STEP_CONDITION,
                 path=condition_path,
                 source=source,
-                expression="" if expression is None else expression,
+                expression=condition if expression is None else expression,
             )
         )
-        return diagnostics
-    if parsed is None:
-        diagnostics.append(_diagnostic(expression_code, expression_message, condition_path, source))
         return diagnostics
     diagnostics.extend(
         _validate_step_references(
@@ -1220,14 +1218,12 @@ def _collect_state_roles_from_step_item(step: JSONObject) -> set[str]:
     roles: set[str] = set()
     condition = step.get("if")
     if isinstance(condition, str):
-        expression = _extract_runtime_value_expression(condition)
-        if expression is not None:
-            try:
-                parsed = parse_value_expression(expression, allow_boolean_composition=True)
-            except ValueExpressionParseError:
-                parsed = None
-            if parsed is not None:
-                roles.update(_collect_value_state_references(parsed.root))
+        try:
+            parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            parsed = None
+        if parsed is not None and parsed.value is not None:
+            roles.update(_collect_value_state_references(parsed.value.root))
     if "uses" in step or "run" in step:
         roles.update(_collect_state_roles_from_runtime_value_surface(step.get("with")))
     if "value" in step:

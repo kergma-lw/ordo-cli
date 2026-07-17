@@ -13,8 +13,10 @@ from .local_expression_contexts import (
 from .local_expressions import (
     ParsedLocalExpression,
     extract_embedded_local_expression,
+    parse_condition_local_expression,
     parse_embedded_local_expression,
     parse_local_expression,
+    resolve_condition_local_expression,
     resolve_embedded_local_expression,
     validate_parsed_local_expression,
 )
@@ -48,6 +50,7 @@ __all__ = [
     "explain_execution_result",
     "explain_runtime_result",
     "explain_workflow",
+    "parse_condition_local_expression",
     "parse_embedded_local_expression",
     "parse_local_expression",
     "plan_workflow",
@@ -60,6 +63,7 @@ __all__ = [
     "load_workflow_text",
     "load_yaml_document",
     "resolve_workflow_references",
+    "resolve_condition_local_expression",
     "resolve_embedded_local_expression",
     "get_default_connector_provider",
     "set_default_connector_provider",

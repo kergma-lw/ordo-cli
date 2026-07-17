@@ -212,7 +212,7 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.with.type")
 
-    def test_run_step_if_requires_value_expression_envelope(self) -> None:
+    def test_run_step_if_accepts_bare_condition(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
@@ -227,8 +227,7 @@ class ValidationTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.if.expression")
+        self.assertEqual(report.status, RuntimeStatus.OK)
 
     def test_run_step_rejects_register_in_mvp(self) -> None:
         report = validate_workflow_text(
@@ -837,7 +836,7 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.format.args_type")
 
-    def test_step_if_must_use_expression_envelope(self) -> None:
+    def test_step_if_accepts_bare_condition(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
@@ -853,8 +852,7 @@ class ValidationTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if.expression")
+        self.assertEqual(report.status, RuntimeStatus.OK)
 
     def test_step_if_rejects_yaml_boolean(self) -> None:
         report = validate_workflow_text(

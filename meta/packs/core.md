@@ -153,7 +153,8 @@
 - Step-condition context expresses step-local conditional execution.
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
-- The current stable authored form for step `if` remains the embedded `${...}` surface until a later native condition form is explicitly accepted.
+- Native bare `if` conditions are the preferred step-condition surface.
+- Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
 
 ## Include-binding context
 
@@ -3649,7 +3650,8 @@ Native-condition rules:
 ## Current context-specific notes
 
 - guard items are native condition entries;
-- step `if` remains a condition-bearing field whose current stable authored form is the embedded `${...}` surface;
+- step `if` is a condition-bearing field whose preferred stable authored form is the native bare-expression surface;
+- step `if: ${...}` remains supported as a deprecated compatibility form during migration;
 - include-site `with` values are embedded value entries evaluated in caller scope;
 - embedded value forms may appear in other workflow fields that reuse local-expression evaluation.
 
@@ -3672,7 +3674,8 @@ Current compatibility decisions:
 
 - object-form guard items using `uses` remain compatibility-only guard authoring surface;
 - string-form native guard entries are the preferred stable guard form;
-- step `if` remains stable in the embedded `${...}` form until a later native condition decision is made explicitly.
+- step `if` prefers native bare condition entries;
+- step `if: ${...}` remains a deprecated compatibility form.
 
 Those compatibility forms do not change the higher-level local-expression model or the context restrictions that define which dependencies are allowed.
 
@@ -3762,7 +3765,7 @@ Illustrative future form:
 - steps:
     - name: comment-and-status
       run: github/comment-and-set-status
-      if: ${step.issue.outputs.open}
+      if: step.issue.outputs.open
       with:
         comment: "Issue is open."
         status: "In Progress"

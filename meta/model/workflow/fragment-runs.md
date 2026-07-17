@@ -32,7 +32,7 @@ Illustrative future form:
 - steps:
     - name: comment-and-status
       run: github/comment-and-set-status
-      if: ${step.issue.outputs.open}
+      if: step.issue.outputs.open
       with:
         comment: "Issue is open."
         status: "In Progress"

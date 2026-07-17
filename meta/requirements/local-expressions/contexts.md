@@ -26,7 +26,8 @@
 - Step-condition context expresses step-local conditional execution.
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
-- The current stable authored form for step `if` remains the embedded `${...}` surface until a later native condition form is explicitly accepted.
+- Native bare `if` conditions are the preferred step-condition surface.
+- Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
 
 ## Include-binding context
 

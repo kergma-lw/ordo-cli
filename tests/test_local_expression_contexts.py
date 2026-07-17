@@ -10,6 +10,7 @@ from ordo.runtime.local_expression_contexts import (
 )
 from ordo.runtime.local_expressions import (
     extract_embedded_local_expression,
+    parse_condition_local_expression,
     parse_embedded_local_expression,
     parse_local_expression,
     validate_parsed_local_expression,
@@ -68,6 +69,12 @@ class LocalExpressionContextsTest(unittest.TestCase):
         self.assertIsNotNone(parsed.value)
         self.assertEqual(extract_embedded_local_expression("${inputs.enabled}"), "inputs.enabled")
 
+    def test_step_condition_accepts_bare_condition_entrypoint(self) -> None:
+        parsed = parse_condition_local_expression("step.issue.outputs.open and inputs.enabled", context=LocalExpressionContext.STEP_CONDITION)
+
+        self.assertEqual(parsed.context, LocalExpressionContext.STEP_CONDITION)
+        self.assertIsNotNone(parsed.value)
+
     def test_include_binding_uses_shared_embedded_local_expression_entrypoint(self) -> None:
         parsed = parse_embedded_local_expression("${step.issue.outputs.id}", context=LocalExpressionContext.INCLUDE_BINDING)
 
@@ -79,6 +86,7 @@ class LocalExpressionContextsTest(unittest.TestCase):
         self.assertIs(runtime.LocalExpressionContext, LocalExpressionContext)
         self.assertIs(runtime.parse_local_expression, parse_local_expression)
         self.assertIs(runtime.parse_embedded_local_expression, parse_embedded_local_expression)
+        self.assertIs(runtime.parse_condition_local_expression, parse_condition_local_expression)
 
     def test_guard_context_rejects_nested_step_dependency(self) -> None:
         parsed = parse_local_expression(

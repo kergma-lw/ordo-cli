@@ -143,6 +143,19 @@ def parse_embedded_local_expression(value: str, *, context: LocalExpressionConte
     return parse_local_expression(expression, context=context)
 
 
+def parse_condition_local_expression(value: str, *, context: LocalExpressionContext) -> ParsedLocalExpression:
+    """Parse one condition-oriented local-expression surface.
+
+    Condition contexts accept native bare expressions and, for compatibility,
+    the older embedded `${...}` surface.
+    """
+
+    expression = extract_embedded_local_expression(value)
+    if expression is not None:
+        return parse_local_expression(expression, context=context)
+    return parse_local_expression(value, context=context, allow_boolean_composition=True)
+
+
 def evaluate_parsed_local_expression(
     parsed: ParsedLocalExpression,
     workflow: Workflow,
@@ -185,6 +198,37 @@ def resolve_embedded_local_expression(
             message=f"Local-expression context '{context.value}' requires the current embedded '${{...}}' surface",
             details={"context": context.value},
         )
+    try:
+        return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
+    except ValueExpressionEvaluationError as exc:
+        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
+
+
+def resolve_condition_local_expression(
+    value: str,
+    workflow: Workflow,
+    *,
+    context: LocalExpressionContext,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+) -> JSONValue:
+    """Resolve one condition-oriented local-expression surface.
+
+    Condition contexts accept native bare expressions and the embedded `${...}`
+    compatibility form.
+    """
+
+    from .value_resolution import ValueResolutionError
+
+    try:
+        parsed = parse_condition_local_expression(value, context=context)
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        expression = extract_embedded_local_expression(value)
+        visible = value if expression is None else expression
+        raise ValueResolutionError(
+            code="runtime.local_expression.syntax",
+            message=exc.message,
+            details={"context": context.value, "position": exc.position, "end": exc.end if exc.end is not None else exc.position, "expression": visible},
+        ) from exc
     try:
         return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
     except ValueExpressionEvaluationError as exc:

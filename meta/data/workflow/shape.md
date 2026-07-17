@@ -1,6 +1,6 @@
 # Workflow data shape
 
-## Stable top-level fields
+## Stable assembled top-level fields
 
 - `version`
 - `workflow`
@@ -13,10 +13,20 @@ Compatibility-only top-level fields:
 - `guards`
 - `steps`
 
-The stable execution shape is block-based.
+The stable assembled execution shape is block-based.
 Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
 
-## Stable block shape
+## Source workflow shape
+
+Source workflow material may additionally use assembly instructions.
+
+An assembly instruction is a source-level workflow construct that shapes workflow assembly rather than surviving as a block kind in the assembled execution model.
+
+`include` is the initial assembly instruction for static workflow composition.
+
+Assembly may still carry caller-scoped bindings into expanded material. In particular, `include.with` may bind caller-scoped expressions before the expanded fragment payload is validated as assembled workflow material.
+
+## Stable assembled block shape
 
 ```yaml
 blocks:
@@ -31,19 +41,22 @@ blocks:
 Rules:
 
 - `blocks` is an ordered non-empty list;
-- each block item must declare exactly one of `guards`, `steps`, or `include`;
+- each assembled block item must declare exactly one of `guards` or `steps`;
 - `guards` block value is a non-empty guard list;
 - `steps` block value is a non-empty step list;
-- an `include` block item references one included workflow fragment and may optionally bind `with` values for declared fragment `args`;
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
 
-Current stable shape note:
+Current stable assembled shape note:
 
 - `run` is not part of the current stable block shape.
 - A future invocation-oriented step form may add `run` under `steps:` rather than changing the meaning of existing `include` items.
 
-Stable include item form:
+## Stable source assembly instruction form
+
+Source workflow material may contain `include` as an assembly instruction.
+
+Stable `include` instruction form:
 
 ```yaml
 - include: github/check-issue
@@ -57,7 +70,9 @@ Include item rules:
 - `include` is a non-empty string reference to an included workflow fragment;
 - `with` is optional and, when present, is an object;
 - `with` keys bind only declared fragment `args` keys;
-- include expansion preserves block order in the assembled workflow.
+- include expansion preserves block order in the assembled workflow;
+- `include` participates in source assembly and does not survive as an assembled execution block kind;
+- `with` bindings may carry caller-scoped expressions into the expanded fragment material without making `include` itself an assembled block kind.
 
 ## Planned fragment run step shape
 
@@ -67,7 +82,7 @@ Illustrative future form:
 - steps:
     - name: comment-and-status
       run: github/comment-and-set-status
-      if: ${step.issue.outputs.open}
+      if: step.issue.outputs.open
       with:
         comment: "Issue is open."
         status: "In Progress"

@@ -24,19 +24,21 @@ steps:
     register: issue
 
   - name: comment-open
-    if: ${step.issue.outputs.open}
+    if: step.issue.outputs.open
     uses: gh.issue.comment
     with:
       issue_id: ${step.issue.outputs.id}
       body: "Issue is open."
 
   - name: remember-branch
-    if: ${inputs.persist_branch}
+    if: inputs.persist_branch
     state_set:
       state.task_memory[inputs.task_key].branch: ${inputs.branch}
 ```
 
-The initial `if` surface uses the existing string-form value-expression envelope `if: ${...}`.
+The preferred `if` surface is a native bare condition expression.
+
+The older embedded form `if: ${...}` remains available only as deprecated compatibility surface.
 
 Within that envelope, step conditions may use limited boolean composition such as `and`, `or`, `not`, and grouped subexpressions.
 
