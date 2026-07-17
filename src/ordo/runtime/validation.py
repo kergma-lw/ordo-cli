@@ -568,6 +568,7 @@ def _validate_invocation_condition(
             )
         )
         return diagnostics
+    expression = _extract_runtime_value_expression(condition)
     diagnostics.extend(
         _validate_step_references(
             collect_step_references(parsed.root),
@@ -578,6 +579,15 @@ def _validate_invocation_condition(
         )
     )
     diagnostics.extend(_validate_step_condition_type(parsed.root, path=condition_path, source=source))
+    if expression is not None and not any(diagnostic.level == "error" for diagnostic in diagnostics):
+        diagnostics.append(
+            _warning(
+                "validation.workflow.local_expression.step_condition.embedded_if_deprecated",
+                "Embedded step 'if: ${...}' is deprecated; prefer a bare step-condition expression",
+                condition_path,
+                source,
+            )
+        )
     return diagnostics
 
 
@@ -1553,7 +1563,12 @@ def _diagnostic(code: str, message: str, path: tuple[str, ...], source: str, **d
     return Diagnostic(code=code, level="error", message=message, path=path, details=payload)
 
 
+def _warning(code: str, message: str, path: tuple[str, ...], source: str, **details: object) -> Diagnostic:
+    payload = {"source": source, **details}
+    return Diagnostic(code=code, level="warning", message=message, path=path, details=payload)
+
+
 def _report(document_kind: str, diagnostics: list[Diagnostic]) -> ValidationReport:
-    if diagnostics:
+    if any(diagnostic.level == "error" for diagnostic in diagnostics):
         return ValidationReport(document_kind=document_kind, status=RuntimeStatus.VALIDATION_ERROR, diagnostics=tuple(diagnostics))
-    return ValidationReport(document_kind=document_kind, status=RuntimeStatus.OK, diagnostics=())
+    return ValidationReport(document_kind=document_kind, status=RuntimeStatus.OK, diagnostics=tuple(diagnostics))

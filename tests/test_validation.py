@@ -229,6 +229,25 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_run_step_if_embedded_form_is_deprecated_but_valid(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - steps:
+                      - name: comment-and-status
+                        run: github/comment-and-set-status
+                        if: ${inputs.enabled}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+        self.assertEqual(report.diagnostics[0].level, "warning")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.step_condition.embedded_if_deprecated")
+
     def test_run_step_rejects_register_in_mvp(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -854,6 +873,28 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_step_if_embedded_form_is_deprecated_but_valid(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.enabled}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+        self.assertEqual(report.diagnostics[0].level, "warning")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.step_condition.embedded_if_deprecated")
+
     def test_step_if_rejects_yaml_boolean(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -891,7 +932,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_with_register")
+        self.assertIn("validation.workflow.step.if_with_register", [diagnostic.code for diagnostic in report.diagnostics])
 
     def test_forward_step_register_reference_in_if_fails(self) -> None:
         report = validate_workflow_text(
