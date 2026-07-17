@@ -93,6 +93,7 @@ Connector code may implement checks, but the workflow/runtime contract must pres
 
 - playbook semantics: `domain/playbook.md`
 - connector semantics: `domain/connector.md`
+- local-expression semantics: `domain/local-expressions.md`
 - workflow semantics: `domain/workflow.md`
 - runtime semantics: `domain/runtime.md`
 - policy semantics: `domain/policy.md`

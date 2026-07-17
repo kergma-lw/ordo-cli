@@ -103,8 +103,8 @@ WORKFLOW_CONTRACT: JSONObject = {
         {"name": "include_block", "required_fields": ["include"], "optional_fields": ["with"]},
     ],
     "guard_forms": [
-        {"name": "operation_call", "shape": {"uses": "string", "with": "object"}},
-        {"name": "expression", "shape": "string"},
+        {"name": "operation_call", "shape": {"uses": "string", "with": "object"}, "status": "compatibility_only"},
+        {"name": "expression", "shape": "string", "status": "stable_preferred"},
     ],
     "step_form_rules": [
         {
@@ -126,31 +126,37 @@ WORKFLOW_CONTRACT: JSONObject = {
             "name": "operation_call",
             "required_fields": ["name", "uses"],
             "optional_fields": ["if", "with", "register", "launcher"],
+            "if_expression_surface": "embedded_local_expression",
         },
         {
             "name": "run_invocation",
             "required_fields": ["name", "run"],
             "optional_fields": ["if", "with"],
+            "if_expression_surface": "embedded_local_expression",
         },
         {
             "name": "profile_switch",
             "required_fields": ["name", "profile_switch"],
             "optional_fields": ["if"],
+            "if_expression_surface": "embedded_local_expression",
         },
         {
             "name": "value",
             "required_fields": ["name", "value"],
             "optional_fields": ["if", "register"],
+            "if_expression_surface": "embedded_local_expression",
         },
         {
             "name": "state_set",
             "required_fields": ["name", "state_set"],
             "optional_fields": ["if"],
+            "if_expression_surface": "embedded_local_expression",
         },
         {
             "name": "state_delete",
             "required_fields": ["name", "state_delete"],
             "optional_fields": ["if"],
+            "if_expression_surface": "embedded_local_expression",
         },
     ],
     "surface_constraints": {

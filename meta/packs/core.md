@@ -25,40 +25,6 @@
 - The system must help an agent distinguish at least validity, resolution, likely executability, and authoring-quality concerns.
 - Validation and explanation surfaces must be structured enough for an agent to iteratively repair an authored workflow without guessing from logs.
 
-<!-- source: requirements/authoring/guard-expressions.md -->
-
-# Authoring requirements for guard expressions
-
-## Compactness
-
-- Guard authoring must support compact declaration of execution conditions.
-- Routine policy should usually be readable in a short guard list without requiring a screen of repetitive structural boilerplate.
-- A compact guard surface is a core product quality because Ordo exists in part to replace difficult-to-review shell guard logic.
-
-## Discoverability
-
-- An author must be able to tell which parts of a guard expression are public probe invocations and which parts are comparisons over probe results.
-- A plain string item in `guards` should be the preferred compact authoring form for expression guards.
-- The object form with `uses` should remain available where an explicit operation call is clearer or needed for compatibility.
-- Zero-argument probe references should not require empty call syntax when no arguments are being passed.
-- Parameterized probe references should remain visually distinct enough that an author can tell inputs are being supplied.
-- Workflow input references should be readable as `inputs.name` rather than requiring a template interpolation surface.
-- Named arguments should be the preferred authoring form for parameterized probe calls.
-- Boolean-valued probe fields should be usable directly as conditions without requiring redundant `== true` boilerplate.
-
-## Preferred authoring surface
-
-- A zero-argument boolean probe fact should read like a compact fact, for example `git.worktree.clean`.
-- A zero-argument non-boolean probe value should remain readable through explicit documented field access, for example `git.branch.value`.
-- A parameterized probe reference should prefer a compact meta-style call surface, for example `gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state`.
-- The authoring surface should prefer a minimal and orthogonal public probe vocabulary over many specialized policy-encoded probe names.
-
-## Checkability
-
-- Guard expressions must remain machine-checkable and agent-checkable before execution.
-- Validation and diagnostics should point to the failing expression segment rather than only reporting a generic guard failure.
-- Expression syntax should remain small enough that an agent can learn it from contract docs and examples without treating the workflow format as a hidden programming language.
-
 <!-- source: requirements/connector/core.md -->
 
 # Connector requirements
@@ -115,6 +81,97 @@
   - `git.range(base=..., head=...)`
 - This set should be preferred over adding many narrower git probes for local rituals.
 - Older specialized policy-shaped probes should not be used as the preferred long-term public surface when the same intent can be expressed through canonical git facts and guard composition.
+
+<!-- source: requirements/local-expressions/core.md -->
+
+# Local expression requirements
+
+## Role
+
+- Local expressions are a workflow-owned declarative surface for deriving local values and conditions.
+- They must not become a second orchestration language, a connector-execution surface, or a hidden scripting layer.
+- Local expressions may appear in multiple contexts while remaining one product-owned expression family.
+
+## Common obligations
+
+- Every expression-bearing context must define which local roots are allowed there.
+- Every expression-bearing context must define whether the expression is value-producing or condition-producing.
+- Every expression-bearing context must preserve reviewability and explainability.
+- Validation and diagnostics must identify invalid references or unsupported context use before effectful execution begins whenever the surrounding context permits that analysis.
+
+## Context families
+
+- The contract must distinguish condition-oriented contexts from value-oriented contexts.
+- A condition-oriented context must not silently inherit the dependency rules of a value-oriented context, or vice versa.
+
+## Common local roots
+
+- `inputs...` is the common workflow input surface.
+- `args...` is the fragment-local argument surface.
+- `state...` is the runtime-state read surface when the context explicitly allows state reads.
+- `step...` is the execution-local registered-step-result surface when the context explicitly allows step-result reads.
+
+## Permanent exclusions
+
+- Local expressions must never perform effectful connector work by themselves.
+- Local expressions must never smuggle hidden workflow control structures such as looping or open-ended branching.
+- Local expressions must never rely on project-defined syntax whose meaning is outside the stable product contract.
+- Local expressions must never become a user-extensible language with workflow-defined functions, macros, or operators.
+
+## Product discipline
+
+- The product should prefer one local-expression family with context-specific restrictions over multiple independent expression languages for nearby workflow surfaces.
+- Syntax and evaluation detail may differ by authored context, but those differences must not silently fragment the conceptual model into unrelated expression systems.
+
+<!-- source: requirements/local-expressions/contexts.md -->
+
+# Local expression context requirements
+
+## Embedded value context
+
+- Embedded value contexts may use local expressions to derive one value for a surrounding field.
+- Embedded value contexts may read `inputs...`.
+- Embedded value contexts may read `args...` when evaluated inside a fragment instance that declared those arguments.
+- Embedded value contexts may read `state...` only where the surrounding contract allows runtime-state reads.
+- Embedded value contexts may read `step...` only where the surrounding contract allows execution-local step-result reads.
+- Embedded value contexts must remain free of connector invocation semantics.
+- Embedded value contexts must remain free of hidden workflow-control semantics.
+
+## Guard context
+
+- Guard context expresses pre-execution policy conditions.
+- Guard context is limited to dependencies known at launch time.
+- Guard context must remain compatible with read-only, pre-execution analysis.
+- Guard context may use workflow-visible inputs and other roots that are safe and meaningful before effectful business steps run.
+- Guard context must not depend on `step...`.
+- Guard context must not require action execution in order to determine whether execution may proceed.
+- Guard context should keep routine execution policy visible in the workflow declaration rather than encoding that policy in many bespoke probe names.
+- Object-form guard items using `uses` may remain available for compatibility, but they should not displace native guard expressions as the preferred stable guard surface.
+
+## Step-condition context
+
+- Step-condition context expresses step-local conditional execution.
+- Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
+- Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
+- The current stable authored form for step `if` remains the embedded `${...}` surface until a later native condition form is explicitly accepted.
+
+## Include-binding context
+
+- Include-binding context evaluates caller-scoped bindings for included fragment arguments.
+- Include-binding context may read caller-local roots that are valid at the include site.
+- Include-binding context must preserve the distinction between caller scope and fragment-local `args...` scope.
+- Include bindings must not implicitly grant the fragment body direct caller-local `step...` scope.
+
+## Whole-tree rule
+
+- Context restrictions apply to the entire local-expression tree.
+- A forbidden dependency class must remain forbidden even when nested inside a call argument, list item, comparison, or other subexpression.
+
+## Native versus embedded surfaces
+
+- A native condition context may expose expressions without an interpolation envelope.
+- An embedded value context may use a distinct authored embedding form for local expressions.
+- Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.
 
 <!-- source: requirements/playbook/core.md -->
 
@@ -188,61 +245,6 @@
 - The format must prefer explicit fields over implicit behavior.
 - Drift between docs, schema, examples, and runtime must be detectable.
 - Workflow and profile authoring must remain easier and more common than connector authoring in early product stages.
-
-<!-- source: requirements/workflow/value-expressions.md -->
-
-# Workflow requirements for value expressions
-
-## Role
-
-- Workflows may use value expressions for pure local computation of derived values.
-- Value expressions exist to keep common normalization and formatting inside workflow authoring without pushing those concerns into connector operations.
-- Value expressions are part of workflow authoring surface, not a second orchestration or integration language.
-
-## Allowed capability
-
-- A value expression may read declared workflow inputs.
-- A value expression may read declared included-fragment arguments through `args...` when evaluated inside a fragment that declares them.
-- A value expression may read runtime state through the documented `state...` read surface.
-- A value expression may read prior registered step results through the documented `step...` read surface.
-- A value expression may combine multiple local values into one derived value.
-- A value expression may apply a closed set of deterministic built-in transforms.
-- Inline composition should use the pipe form `|` as the canonical compact authoring surface.
-- String formatting may be expressed as a root built-in form.
-- A workflow may materialize one derived value through a dedicated pure `value` step form when later steps need to reuse that value through the registered-step read surface.
-
-## Permanent exclusions
-
-- A value expression must never cause side effects.
-- A value expression must never call connector operations, whether action or probe.
-- A value expression must never read future step results.
-- A value expression may evaluate predicates and return boolean values.
-- A value expression must never embed control-flow constructs such as conditional branch selection, looping, or step selection.
-- A value expression must never choose between alternative values or subexpressions based on a runtime condition, whether through ternary syntax, `if(...)`, `select(...)`, `case(...)`, or equivalent forms.
-- A value expression must never duplicate guard or policy semantics as an open-ended boolean language.
-- A value expression must never support user-defined functions, macros, operators, or workflow-defined extension hooks.
-- A value expression must never become an open-ended collection programming or query language.
-- A value expression must never rely on project-defined syntax whose meaning is not part of the stable product contract.
-
-## Readability and reviewability
-
-- Inline value expressions should stay short enough for quick review inside workflow fields.
-- Built-in transforms should be understandable left-to-right without reconstructing hidden evaluation rules.
-- Validation and diagnostics should identify the failing segment of a value expression rather than only reporting a generic value-resolution failure.
-
-## YAML alternative policy
-
-- Some root built-in value forms may also provide a structured YAML equivalent when inline syntax becomes hard to read.
-- YAML equivalence is selective rather than universal.
-- Not every inline value expression needs or should have a YAML equivalent.
-- A YAML equivalent, when present, should represent the same semantic operation as its inline root form rather than introducing a parallel computation model.
-- A dedicated `value` step form, when present, should materialize one already-supported value-expression result rather than introducing a second expression language or a variable-programming surface.
-
-## Growth discipline
-
-- Product growth should prefer adding a small number of high-value built-in transforms over widening value expressions into a general programming language.
-- New value-expression capability is a poor fit when it would be better modeled as workflow control, guard policy, connector behavior, or runtime-owned state mutation.
-- New value-expression capability is also a poor fit when it would require open-ended semantics for iteration, branching, remote access, or user-defined evaluation.
 
 <!-- source: requirements/runtime/core.md -->
 
@@ -377,40 +379,6 @@ The runtime must be able to answer, in machine-readable form:
 - Ordo should remain meaningfully distinct from a generic pipeline/task runner by preserving its analysis-first and explain-first behavior.
 - Ordo is not required to mimic existing pipeline tools when that would weaken guards, explainability, or structured results.
 - Policy evaluation must remain an explicit runtime concern and must not be recoverable only by reading connector implementation code or shell control flow.
-
-<!-- source: requirements/policy/guard-expressions.md -->
-
-# Policy requirements for guard expressions
-
-## Purpose
-
-- Guard policy should be expressible in workflow declarations without requiring a bespoke named probe for every common predicate.
-- Policy must remain visible in the workflow rather than being recoverable only from probe implementation details or probe naming conventions.
-
-## Expression scope
-
-- Guard expressions may evaluate only public `probe` operations.
-- Guard expressions may compare probe outputs and combine boolean conditions.
-- Guard expressions must not call `action` operations.
-- Guard expressions must not require a general-purpose expression language with arbitrary functions or user-defined evaluation semantics.
-
-## List semantics
-
-- Each item in `guards` is a separate boolean guard clause.
-- The `guards` list combines with implicit `and` semantics across items.
-- `or` semantics should be expressed inside one guard expression rather than by overloading list structure.
-
-## Minimum boolean support
-
-- The policy surface should support at least `and`, `or`, `not`, and parentheses for grouping within a single guard expression.
-- The policy surface should support at least `==`, `!=`, `in`, and `not in` comparisons needed for common operational predicates.
-- Boolean-valued probe facts may appear directly as conditions without an explicit equality comparison.
-
-## Explainability
-
-- Runtime results for failed guard expressions must identify which subcondition evaluated to false or failed to evaluate.
-- When a probe inside a guard expression fails operationally, the runtime must preserve the distinction between "condition evaluated false" and "probe could not be evaluated safely".
-- Runtime results should preserve a machine-usable evaluation trace rather than only the final blocked guard identity.
 
 <!-- source: domain/authoring.md -->
 
@@ -732,6 +700,143 @@ Specialized policy-shaped names such as `git.branch_not_main` are not part of th
 - `local.*`
 - `project.*`
 
+<!-- source: domain/local-expressions.md -->
+
+# Local expressions domain
+
+## Role
+
+Local expressions are the workflow-owned declarative surface for reading local workflow-visible data and deriving local conditions or values without introducing connector execution, hidden imperative logic, or a second orchestration layer.
+
+They exist to keep small workflow-local computation and condition declaration inside the public authoring surface.
+
+## What this domain owns
+
+This domain owns:
+
+- the idea that workflows may carry expression-bearing fields;
+- the local data surfaces that expressions may read;
+- the semantic distinction between expression contexts;
+- the boundary between local expression evaluation and connector operation execution;
+- the boundary between local expression evaluation and workflow control surfaces.
+
+This domain does not own exact grammar, parser structure, `${...}` envelope rules, or YAML field shape details.
+
+## Core entities
+
+### Local expression
+
+A local expression is a workflow-visible declarative expression whose meaning stays within local workflow semantics.
+
+It may read documented local surfaces and derive a value or condition, but it must not become a hidden scripting layer.
+
+### Expression context
+
+An expression context is one product surface in which local expressions may appear.
+
+Different contexts may permit different roots, evaluation timing, and restrictions while still belonging to one local-expression domain.
+
+### Expression root
+
+An expression root is a documented workflow-visible surface that an expression may read.
+
+The initial local-expression roots are:
+
+- `inputs...` — declared workflow inputs;
+- `args...` — included-fragment arguments local to one fragment instance;
+- `state...` — documented runtime-state read surface when the surrounding context allows state access;
+- `step...` — prior registered step results when the surrounding context allows execution-local step data.
+
+## Core contexts
+
+### Guard context
+
+Guard context is the pre-execution policy context.
+
+Its job is to express whether execution may proceed before effectful business steps run.
+
+Because of that role, guard context is limited to dependencies that are known at launch time and must remain compatible with read-only, pre-execution analysis.
+
+### Step-condition context
+
+Step-condition context is the step-local conditional execution surface.
+
+It is still workflow-owned condition evaluation, but it is not the same semantic job as guard context because it may depend on execution-local information that appears only after earlier steps run.
+
+### Include-binding context
+
+Include bindings belong to the local-expression domain because they may evaluate caller-scoped local expressions before fragment-local `args...` are bound.
+
+Their semantic job is caller-side value binding for assembly-expanded material, not connector invocation.
+
+### Embedded value context
+
+Embedded value context covers value-bearing fields that reuse local-expression evaluation.
+
+It may depend on whatever is available at the point where that value is resolved, but it remains a pure local-expression surface rather than a hidden execution or control surface.
+
+## Context families
+
+Local-expression contexts divide into two families:
+
+- condition-oriented contexts such as guards and step conditions;
+- value-oriented contexts such as embedded value fields and include bindings.
+
+## Boundary discipline
+
+### Expression versus connector execution
+
+Local expressions may read documented workflow-visible data.
+
+They must not themselves become a public connector invocation surface for effectful work.
+
+Any connector execution semantics belong to connector operations and workflow steps, not to local expressions as such.
+
+### Expression versus workflow control
+
+Local expressions may derive values and conditions.
+
+They must not silently absorb broader workflow control semantics such as branching structure, looping, or hidden execution planning.
+
+### Expression versus storage ownership
+
+`state...` is a read surface inside local expressions when the surrounding context allows it.
+
+That does not make local expressions the semantic owner of runtime state.
+
+### Expression versus execution-local data
+
+`step...` is execution-local.
+
+It may appear only in contexts whose semantics legitimately depend on prior step execution.
+
+It must not be treated as a universally available root across all expression contexts.
+
+In particular, pre-execution policy context must not depend on execution-local `step...` data.
+
+## Tree-wide context discipline
+
+Context restrictions apply to the whole local-expression tree, not only to the root term.
+
+An expression context therefore cannot regain a forbidden dependency class merely by nesting it inside a call argument, list item, comparison, or other subexpression.
+
+## Review standard
+
+A good local-expression surface should let a reader tell:
+
+- what local data is being read;
+- whether the expression is producing a value or a condition;
+- whether the context is pre-execution, step-local, fragment-local, or caller-local;
+- whether a dependency is global, fragment-local, state-backed, or execution-local.
+
+If these distinctions are hard to recover, expression semantics are drifting out of the documented product surface.
+
+## Related domain docs
+
+- workflow semantics: `domain/workflow.md`
+- policy semantics: `domain/policy.md`
+- authoring semantics: `domain/authoring.md`
+
 <!-- source: domain/playbook.md -->
 
 # Playbook domain
@@ -807,7 +912,7 @@ It must not answer the question:
 ## What is acceptable in a workflow
 
 - ordered guard and step blocks;
-- reusable included workflow fragments;
+- reusable included workflow fragments through assembly instructions;
 - future invocation-oriented reusable fragment runs when static composition is insufficient;
 - guard lists inside `guards` blocks;
 - ordered steps inside `steps` blocks;
@@ -817,13 +922,23 @@ It must not answer the question:
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
 
-The stable execution shape is an ordered `blocks` list.
-Each block declares exactly one of:
+## Assembly vs execution
+
+An assembly instruction is a source-level workflow construct that shapes workflow assembly rather than surviving as a block kind in the assembled execution model.
+
+`include` is the initial assembly instruction for static workflow composition.
+
+The stable assembled execution shape is an ordered `blocks` list.
+Each execution block declares exactly one of:
 
 - `guards`
 - `steps`
 
 Top-level `guards` and `steps` may remain as compatibility-only authoring sugar when they normalize to the same block structure.
+
+Assembly instructions may appear in source workflow material, but they do not survive as execution-semantic block kinds in the assembled workflow shape.
+
+Assembly may still carry caller-scoped bindings into expanded material. That does not make the assembly instruction itself part of the assembled block model.
 
 Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
 
@@ -996,85 +1111,6 @@ not buried in shell control flow.
 
 This is stronger than logs, traces, or raw exception text.
 
-<!-- source: domain/policy-guard-expressions.md -->
-
-# Policy guard expressions
-
-## Role
-
-Guard expressions exist to keep execution conditions short, reviewable, and explicit.
-
-They are a policy surface, not a general programming surface.
-
-## Why they exist
-
-Without a compact expression surface, policy tends to drift into one of two bad shapes:
-
-- shell-heavy guard logic that is difficult to review or explain;
-- many narrow probe names that encode policy in operation naming rather than in the workflow declaration.
-
-In the long run, guard policy should prefer a minimal and orthogonal public probe surface over a growing catalog of specialized policy probes.
-
-Guard expressions are meant to preserve the original workflow promise:
-
-- state the conditions for execution briefly;
-- state the ordered actions that follow if conditions pass.
-
-## Boundary
-
-Guard expressions may:
-
-- invoke public probe operations;
-- read documented probe result fields;
-- compare values;
-- combine boolean conditions.
-
-Guard expressions must not:
-
-- execute effectful actions;
-- become a general scripting language;
-- hide complex operational semantics that should remain in public connector contracts.
-
-Guard expressions also should not require a bespoke public probe name for every routine boolean policy question.
-
-## Probe versus policy boundary
-
-As a default design rule, probes should expose stable observable facts and guard expressions should compose those facts into policy.
-
-This means a proposed new probe is a poor fit when its only purpose is to avoid writing a short expression such as:
-
-- a boolean conjunction or disjunction;
-- a direct equality or inequality comparison;
-- a small membership check over documented probe outputs.
-
-A proposed new probe is a better fit when guard composition would otherwise:
-
-- repeat awkward normalization across many workflows;
-- require expression-language growth beyond compact reviewable policy;
-- expose unstable operational detail that belongs inside the connector contract.
-
-Probe naming should therefore prefer observable facts over local verdicts.
-
-For example, names such as `git.branch`, `git.worktree`, or `gh.issue` fit this boundary better than names that directly encode policy intent such as `git.branch_not_main` or `gh.issue_ready_for_review`.
-
-## Readability standard
-
-A good guard section should usually fit in a short top-to-bottom review window.
-
-If the conditions take a screen of repetitive structured boilerplate, the product is failing one of its core workflow goals even if the shape is technically machine-checkable.
-
-## Boundary pressure that guard expressions do not settle by themselves
-
-Guard expressions address compact policy declaration for execution preconditions.
-
-They do not by themselves settle later workflow control-flow questions such as:
-
-- step-level conditional execution;
-- branching based on effectful step outcomes;
-- cross-step data flow semantics.
-
-These concerns should remain explicit separate workflow surfaces rather than being smuggled into guard expression semantics.
-
 <!-- source: domain/boundaries.md -->
 
 # Domain boundaries
@@ -1172,6 +1208,7 @@ Connector code may implement checks, but the workflow/runtime contract must pres
 
 - playbook semantics: `domain/playbook.md`
 - connector semantics: `domain/connector.md`
+- local-expression semantics: `domain/local-expressions.md`
 - workflow semantics: `domain/workflow.md`
 - runtime semantics: `domain/runtime.md`
 - policy semantics: `domain/policy.md`
@@ -1201,6 +1238,210 @@ Specialized policy-shaped probes are not the preferred long-term direction and s
 - Public probe contracts should expose stable output fields suitable for documented guard-expression field access.
 - New connector work should avoid adding specialized policy probes unless a strong public-contract reason exists.
 - Drift between meta examples and connector naming should be resolved by moving toward more orthogonal probe contracts rather than by normalizing policy sprawl into the connector layer.
+
+<!-- source: adr/0005-local-expressions-context-model.md -->
+
+# ADR 0005: local expressions use one context-governed family
+
+## Status
+
+Accepted.
+
+## Context
+
+The project had drifted toward separate guard-expression and value-expression axes in both docs and runtime implementation.
+
+That split obscured the intended semantic model:
+
+- expressions are one workflow-owned local surface;
+- different workflow fields impose different timing and dependency restrictions;
+- those restrictions belong to expression contexts, not to unrelated per-surface languages.
+
+## Decision
+
+Treat local expressions as one product-owned family with explicit contexts.
+
+The initial contexts are:
+
+- guard context;
+- step-condition context;
+- embedded value context;
+- include-binding context.
+
+The initial roots are:
+
+- `inputs...`;
+- `args...`;
+- `state...`;
+- `step...`.
+
+Context restrictions apply to the entire expression tree, not only to the root term.
+
+### Guard context
+
+Guard context is limited to dependencies known at launch time.
+
+This means guard context may use:
+
+- `inputs...`;
+- fragment-local `args...` when present;
+- `state...`;
+- guard-safe pre-execution evaluation surfaces.
+
+Guard context must not depend on `step...` anywhere in the expression tree.
+
+### Step-condition context
+
+Step-condition context may depend on whatever is available when the step condition is evaluated, including prior execution-local `step...` results.
+
+### Include-binding context
+
+Include-binding context evaluates caller-scoped bindings at the include boundary.
+
+It may depend on whatever is available at the include site, including caller-local `step...` results.
+
+The included fragment body does not thereby gain direct caller-local step scope; it receives only the already-bound values.
+
+### Embedded value context
+
+Embedded value context may depend on whatever is available at the point of value resolution.
+
+It remains a pure local-expression surface and must not become effectful execution or hidden workflow control.
+
+## Consequences
+
+- documentation should be organized around `local-expressions` rather than separate guard-expression and value-expression domain axes;
+- runtime implementation should converge toward a shared local-expression core with explicit context policy;
+- syntax and authored-surface differences may remain, but they must not redefine the conceptual model into unrelated expression systems.
+
+<!-- source: model/local-expressions/core.md -->
+
+# Local expression model
+
+## Position
+
+Local expressions form one workflow-owned expression system with multiple contexts.
+
+The model distinguishes:
+
+- the shared idea of local-expression evaluation;
+- context-specific restrictions on roots and timing;
+- authored surface forms used by different fields.
+
+## Shared model elements
+
+### Context
+
+A context determines:
+
+- whether the expression is value-oriented or condition-oriented;
+- which local roots may appear;
+- whether evaluation happens in pre-execution, step-local, caller-local, or fragment-local scope;
+- whether the surface is native or embedded.
+
+### Root
+
+A root is one documented local reference family.
+
+The initial modeled roots are `inputs...`, `args...`, `state...`, and `step...`.
+
+### Scope
+
+Scope determines where a root is meaningful.
+
+- `inputs...` is workflow-global.
+- `args...` is fragment-local.
+- `state...` is runtime-state-owned and context-gated.
+- `step...` is execution-local and order-sensitive.
+
+### Context family
+
+A context family groups surfaces by semantic job.
+
+- condition-oriented contexts produce admission or execution conditions;
+- value-oriented contexts produce local derived values.
+
+## Surface distinction
+
+The model separates:
+
+- the local-expression system itself;
+- the authored surface form used in one field;
+- the restrictions imposed by the surrounding context.
+
+This means an interpolation envelope, a bare condition string, and a caller-side include binding may all belong to the same modeled local-expression system even when their authored syntax differs.
+
+## Control boundary
+
+Local expressions may derive values and conditions.
+
+They are not themselves the owner of:
+
+- connector execution;
+- effectful action semantics;
+- hidden control-flow structure;
+- runtime-state mutation semantics.
+
+<!-- source: model/local-expressions/contexts.md -->
+
+# Local expression contexts
+
+## Embedded value context
+
+Embedded value context models one derived value inside a larger value-bearing field.
+
+Typical surfaces include step inputs, value-bearing workflow fields, include argument bindings, and other scalar positions that reuse local-expression evaluation.
+
+It belongs to the value-oriented context family.
+
+It may consume whatever roots are available at its resolution point, subject to higher-level purity and control-surface exclusions.
+
+## Guard context
+
+Guard context models pre-execution policy evaluation.
+
+Its distinctive property is not a separate expression language, but a restricted dependency model:
+
+- the expression must be meaningful from launch-time-known dependencies before effectful business steps run;
+- execution-local `step...` dependencies are excluded;
+- the result participates in execution admission rather than in post-step branching.
+
+It belongs to the condition-oriented context family.
+
+## Step-condition context
+
+Step-condition context models conditional execution of one workflow step.
+
+Unlike guard context, it may legitimately depend on prior execution-local registered results because it is evaluated after earlier steps may already have run.
+
+It also belongs to the condition-oriented context family.
+
+## Include-binding context
+
+Include-binding context models caller-side argument preparation for included fragments.
+
+The include site may evaluate caller-scoped local expressions before the expanded fragment body receives fragment-local `args...` bindings.
+
+That caller-side evaluation does not make included fragment bodies owners of caller-local `step...` scope.
+
+It belongs to the value-oriented context family.
+
+It may consume whatever caller-scoped roots are available at the include site.
+
+## Native and embedded authored forms
+
+The model allows both:
+
+- native expression contexts whose primary meaning is already conditional or predicate-oriented;
+- embedded expression contexts whose expressions appear inside a broader value-bearing field.
+
+This distinction is about authored surface, not about separate semantic languages.
+
+## Tree-scoped restrictions
+
+Context policy governs the whole parsed expression tree.
+
+A context therefore validates dependency classes structurally rather than only checking the root node.
 
 <!-- source: model/workflow/entities.md -->
 
@@ -1520,254 +1761,6 @@ The entry must resolve to exactly one workflow file.
 - Resolution must be deterministic.
 - Ambiguous implicit matches are not allowed.
 - Playbook resolution must complete before effectful workflow execution begins.
-
-<!-- source: model/workflow/value-expressions.md -->
-
-# Workflow value expressions
-
-## Position
-
-Value expressions provide a compact workflow-owned surface for deriving values from local runtime-visible inputs and prior registered step results.
-
-They sit between two existing surfaces:
-
-- plain scalar values with no runtime evaluation;
-- connector operations and built-in runtime step forms that carry effects.
-
-They are intended for local shaping of values, whether inline inside workflow fields or materialized through a dedicated pure value step, not for orchestration, policy, or integration logic.
-
-Step conditions may also reuse the `${...}` envelope for local boolean evaluation over the same workflow-visible roots.
-
-## Core expression forms
-
-The initial model supports three author-facing forms inside `${...}`:
-
-- direct references such as `inputs.name`;
-- direct references to included-fragment arguments such as `args.repository`;
-- direct references to prior registered step results such as `step.issue.outputs.id`;
-- left-to-right filter pipelines using `|`;
-- root built-in calls such as `format(...)`.
-
-Illustrative examples:
-
-```yaml
-${inputs.repository}
-${args.repository}
-${state.task_state[inputs.task_key].branch}
-${step.issue.outputs.id}
-${inputs.title | slug}
-${inputs.title | trim | slug | truncate(60)}
-${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)}
-```
-
-## Expression roots
-
-The workflow-facing value-expression roots are:
-
-- `inputs...` for declared workflow inputs;
-- `args...` for declared included-fragment arguments local to the current fragment instance;
-- `state...` for persistent runtime state reads;
-- `step...` for prior registered step results.
-
-The `step...` root is execution-local and order-sensitive.
-
-It must not cross included-fragment boundaries in the MVP.
-
-It is not a persistent storage surface.
-
-## Filter pipeline
-
-The pipe form `|` is the canonical compact composition surface.
-
-It should be read left to right:
-
-1. resolve the value on the left;
-2. apply each built-in transform in order;
-3. produce one final derived value.
-
-The pipeline model is intentionally narrow:
-
-- each stage is pure and deterministic;
-- each stage consumes the previous stage output;
-- the pipeline does not imply connector execution, control flow, or collection programming.
-
-## Root built-ins
-
-Some value operations are better expressed as a dedicated root built-in form than as an ordinary pipeline stage.
-
-The first supported root built-in is `format(...)`.
-
-Illustrative inline form:
-
-```yaml
-${format("{}/{}#{}", inputs.owner, inputs.repo, inputs.number)}
-```
-
-`format(...)` exists because workflows often need to compose multiple local values into one string while preserving a compact, reviewable surface.
-
-## Boolean use in step conditions
-
-When a value expression appears in a workflow step condition, it may participate in limited boolean composition through `and`, `or`, `not`, and parentheses.
-
-This boolean layer exists for local workflow-owned condition evaluation over `inputs...`, `args...`, `state...`, and prior `step...` results.
-
-It may combine direct boolean references and boolean-producing predicate expressions, including existing pipeline forms that end in a boolean result.
-
-This does not permit connector or probe calls and does not turn value expressions into the public guard-expression surface.
-
-## YAML equivalent forms
-
-Some root built-ins may also define a structured YAML equivalent.
-
-The structured equivalent is determined by the root expression form, not by arbitrary subexpressions inside the inline syntax.
-
-The first dual-form built-in is `format`.
-
-Illustrative YAML form:
-
-```yaml
-branch:
-  format: "{}/{}-{}"
-  args:
-    - ${inputs.type | lower}
-    - ${inputs.issue_number}
-    - ${inputs.title | slug}
-```
-
-This YAML form exists for readability when the equivalent inline `format(...)` call becomes too dense.
-
-Simple filter pipelines such as `${inputs.title | slug}` do not require a YAML equivalent.
-
-## Initial built-in set
-
-The initial built-in set should stay intentionally small.
-
-Illustrative MVP set:
-
-- `lower`
-- `trim`
-- `slug`
-- `truncate(n)`
-- `replace(from, to)`
-- `format(...)`
-
-This set is closed product surface, not workflow-defined or project-defined syntax.
-
-## Examples
-
-Branch name assembly:
-
-```yaml
-${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug | truncate(60))}
-```
-
-Safe file name assembly:
-
-```yaml
-${format("{}_{}-{}-issue{}.md", inputs.ts, inputs.owner, inputs.repo, inputs.issue_number)}
-```
-
-Structured alternative for a longer formatted value:
-
-```yaml
-branch:
-  format: "{}/{}-{}"
-  args:
-    - ${inputs.type | lower}
-    - ${inputs.issue_number}
-    - ${inputs.title | trim | slug | truncate(60)}
-```
-
-## Non-goals
-
-Value expressions are not meant to become:
-
-- a connector invocation surface;
-- a second guard-expression language;
-- an embedded conditional value-selection language;
-- a general-purpose programming language;
-- a workflow-defined macro system;
-- an open-ended query or collection-transformation language.
-
-They may evaluate predicates and participate in limited boolean composition for step-condition semantics, but they must not choose between alternative values or subexpressions based on a runtime condition.
-
-Illustrative forbidden forms include ternary syntax and helpers such as `if(...)`, `select(...)`, or `case(...)`.
-
-They also must not read future step results or smuggle step-result access into guard evaluation.
-
-## Value-step relation
-
-A workflow may also materialize one derived value through a dedicated built-in `value` step form when later steps should reuse that derived result through the normal `step.<register>...` surface.
-
-Illustrative form:
-
-```yaml
-steps:
-  - name: compute-branch-name
-    value:
-      format: "{}/{}-{}"
-      args:
-        - ${step.project.outputs.type | lower}
-        - ${step.issue.outputs.number}
-        - ${step.issue.outputs.title | slug}
-    register: branch
-```
-
-This does not introduce a second computation model.
-
-The `value` step merely materializes one already-supported workflow value into a registered step result so later steps may read it without recomputing the same expression.
-
-<!-- source: model/workflow/guard-expressions.md -->
-
-# Guard expression model
-
-## Concept
-
-A guard expression is a boolean predicate evaluated when its containing guard block runs.
-
-It is modeled as policy over public probe results rather than as a general embedded program.
-
-## Allowed semantic elements
-
-- boolean literals and other JSON-shaped literals suitable for comparison;
-- references to workflow inputs such as `inputs.issue`;
-- zero-argument public probe references;
-- parameterized public probe references;
-- documented field access over probe outputs;
-- boolean composition;
-- comparison operators.
-
-## Probe reference semantics
-
-- A plain string item in `guards` denotes a compact guard expression.
-- A zero-argument probe reference may appear without empty call syntax.
-- A parameterized probe reference carries explicit named arguments in the preferred authoring form.
-- Within one guard expression, repeated identical probe references should be evaluated once and reused.
-- A probe reference inside an expression must resolve against the same public probe contract surface used by explicit operation-form guards.
-- A public probe surface used by expressions should remain as orthogonal as practical rather than encoding many bespoke policy predicates in probe names.
-- A new probe should not be introduced merely to avoid a short comparison, boolean composition, or small membership check over existing probe outputs.
-
-## Output access semantics
-
-- Field access after a probe reference means reading documented structured output from that probe result.
-- Field access is not a general object method system.
-- Public contract documentation must define which output fields are stable enough to reference from guard expressions.
-- A boolean-valued field may be used directly as a condition.
-- Non-boolean probe outputs should be compared through explicit documented field access such as `git.branch.value`.
-
-## Guard list semantics
-
-- A workflow may contain multiple guard items inside one `guards` block.
-- Each guard item yields a boolean pass/fail outcome or an evaluation failure.
-- Multiple guard items combine as an ordered conjunction over the guard list.
-
-## Failure semantics
-
-- A false comparison result means the guard blocks execution.
-- A probe evaluation failure inside an expression is not the same thing as a false comparison result.
-- Guard explanation should preserve both the boolean structure and the probe-level outcome details.
-- Guard evaluation must remain side-effect free.
-- A statically invalid field path should fail before runtime guard evaluation begins.
 
 <!-- source: model/runtime/lifecycle.md -->
 
@@ -3608,11 +3601,86 @@ Workflow references are resolved against public connector operations.
 
 Workflow readability and portability depend on visible resolution semantics.
 
+<!-- source: data/local-expressions/shape.md -->
+
+# Local expression data shape
+
+## Expression-bearing field families
+
+The stable workflow contract may expose local expressions in more than one field family.
+
+The important shape distinction is between native condition contexts and embedded value contexts.
+
+## Embedded expression form
+
+An embedded expression appears inside a value-bearing field that is not itself a pure expression slot.
+
+Illustrative form:
+
+```yaml
+with:
+  repository: ${inputs.repository}
+  branch: ${step.issue.outputs.branch}
+```
+
+Embedded-shape rules:
+
+- the surrounding field remains a value-bearing field rather than a dedicated condition list;
+- the expression form is explicitly embedded;
+- the allowed roots still depend on the surrounding context.
+
+## Native condition form
+
+A native condition context may use direct expression items without an interpolation envelope.
+
+Illustrative guard form:
+
+```yaml
+guards:
+  - git.worktree.clean and git.branch.value != "main"
+```
+
+Native-condition rules:
+
+- the surrounding field is already a condition-bearing surface;
+- the condition item is authored directly as a local expression;
+- context restrictions still determine which roots may appear.
+
+## Current context-specific notes
+
+- guard items are native condition entries;
+- step `if` remains a condition-bearing field whose current stable authored form is the embedded `${...}` surface;
+- include-site `with` values are embedded value entries evaluated in caller scope;
+- embedded value forms may appear in other workflow fields that reuse local-expression evaluation.
+
+This file describes only authored surface categories and stable reference forms.
+
+It does not define the full semantic restrictions of each context.
+
+## Root-shape notes
+
+- `inputs...` is the stable workflow input reference form;
+- `args...` is the stable included-fragment argument reference form;
+- `state...` is the documented runtime-state read form where the surrounding context allows state reads;
+- `step...` is the documented registered-step-result read form where the surrounding context allows execution-local step reads.
+
+## Compatibility note
+
+Current stable authored surfaces may include context-specific compatibility forms during migration.
+
+Current compatibility decisions:
+
+- object-form guard items using `uses` remain compatibility-only guard authoring surface;
+- string-form native guard entries are the preferred stable guard form;
+- step `if` remains stable in the embedded `${...}` form until a later native condition decision is made explicitly.
+
+Those compatibility forms do not change the higher-level local-expression model or the context restrictions that define which dependencies are allowed.
+
 <!-- source: data/workflow/shape.md -->
 
 # Workflow data shape
 
-## Stable top-level fields
+## Stable assembled top-level fields
 
 - `version`
 - `workflow`
@@ -3625,10 +3693,20 @@ Compatibility-only top-level fields:
 - `guards`
 - `steps`
 
-The stable execution shape is block-based.
+The stable assembled execution shape is block-based.
 Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
 
-## Stable block shape
+## Source workflow shape
+
+Source workflow material may additionally use assembly instructions.
+
+An assembly instruction is a source-level workflow construct that shapes workflow assembly rather than surviving as a block kind in the assembled execution model.
+
+`include` is the initial assembly instruction for static workflow composition.
+
+Assembly may still carry caller-scoped bindings into expanded material. In particular, `include.with` may bind caller-scoped expressions before the expanded fragment payload is validated as assembled workflow material.
+
+## Stable assembled block shape
 
 ```yaml
 blocks:
@@ -3643,19 +3721,22 @@ blocks:
 Rules:
 
 - `blocks` is an ordered non-empty list;
-- each block item must declare exactly one of `guards`, `steps`, or `include`;
+- each assembled block item must declare exactly one of `guards` or `steps`;
 - `guards` block value is a non-empty guard list;
 - `steps` block value is a non-empty step list;
-- an `include` block item references one included workflow fragment and may optionally bind `with` values for declared fragment `args`;
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
 
-Current stable shape note:
+Current stable assembled shape note:
 
 - `run` is not part of the current stable block shape.
 - A future invocation-oriented step form may add `run` under `steps:` rather than changing the meaning of existing `include` items.
 
-Stable include item form:
+## Stable source assembly instruction form
+
+Source workflow material may contain `include` as an assembly instruction.
+
+Stable `include` instruction form:
 
 ```yaml
 - include: github/check-issue
@@ -3669,7 +3750,9 @@ Include item rules:
 - `include` is a non-empty string reference to an included workflow fragment;
 - `with` is optional and, when present, is an object;
 - `with` keys bind only declared fragment `args` keys;
-- include expansion preserves block order in the assembled workflow.
+- include expansion preserves block order in the assembled workflow;
+- `include` participates in source assembly and does not survive as an assembled execution block kind;
+- `with` bindings may carry caller-scoped expressions into the expanded fragment material without making `include` itself an assembled block kind.
 
 ## Planned fragment run step shape
 
@@ -3938,60 +4021,6 @@ Required field:
 ## Current rule
 
 Unknown top-level and nested stable fields fail validation.
-
-<!-- source: data/workflow/guard-expressions.md -->
-
-# Guard expression data shape
-
-## Stable guard forms
-
-Guards may be expressed either as explicit operation calls or as compact expressions.
-
-### Operation-call form
-
-```yaml
-- uses: namespace.name
-  with: {}
-```
-
-### Expression form
-
-```yaml
-- git.worktree.clean and git.branch.value != "main"
-```
-
-```yaml
-- gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"
-- gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
-```
-
-## Expression shape rules
-
-- A string guard item contains a compact boolean policy expression.
-- A string guard item is the preferred compact authoring form for expression guards.
-- Zero-argument probe references do not require `()`.
-- Parameterized probe references use argument syntax only when arguments are present.
-- `inputs.name` is the stable input-reference form inside expressions.
-- Named arguments are the preferred parameter syntax for probe calls.
-- Field access after a probe reference reads probe output fields.
-- Boolean-valued probe fields may appear directly as conditions.
-- Expression grammar remains intentionally small and dedicated to guard evaluation.
-
-## List semantics
-
-- Multiple string or object guard items may appear in one `guards` list.
-- The list structure itself implies conjunction across items.
-- Disjunction belongs inside a single expression item rather than in the list structure.
-
-## Coexistence rule
-
-- Both guard forms may coexist during migration if the product needs compatibility between explicit probe calls and compact expression guards.
-- The stable contract may allow both object-form guards and string-form guards during migration without requiring a tag field for expression guards.
-
-## Serialization rule
-
-- Guard expression meaning is defined over the loaded workflow model, not over incidental YAML formatting.
-- Any parsed guard expression must still map to a losslessly explainable runtime structure.
 
 <!-- source: data/runtime/result-envelope.md -->
 
@@ -4334,38 +4363,6 @@ Desired experience:
 - agent asks "what can I safely do next?" and gets machine-readable status plus next actions;
 - explanation quality does not depend on scraping unstructured stderr.
 
-<!-- source: scenarios/workflow/guard-expressions.md -->
-
-# Guard expression scenarios
-
-## Short review scenario
-
-Reviewer opens a workflow and should be able to see, in a small vertical slice:
-
-- which conditions gate execution;
-- which conditions are simple facts versus comparisons;
-- which actions follow if those conditions pass.
-
-## Shell-replacement scenario
-
-A project has sprawling local shell helpers with many execution preconditions.
-
-Desired migration experience:
-
-- move operational integration details into public probes and actions;
-- keep workflow policy compact enough that the preconditions are easier to read than the original shell control flow;
-- avoid replacing shell sprawl with a long list of repetitive structured guard blocks.
-
-## Agent authoring scenario
-
-Agent composes a workflow from documented public probes and actions.
-
-Desired experience:
-
-- use compact expressions for ordinary policy;
-- avoid inventing a new named probe only to express a simple comparison such as equality, inequality, or membership;
-- receive diagnostics that identify the failing subcondition and observed value.
-
 <!-- source: adr/0001-scope.md -->
 
 # ADR 0001: scope
@@ -4441,6 +4438,39 @@ If schema or runtime semantics change, corresponding `meta/` source docs must ch
 
 If a change breaks any invariant, `meta/` must be updated explicitly in the same work.
 
+<!-- source: verification/local-expressions/invariants.md -->
+
+# Local expression invariants
+
+## Context discipline
+
+- Local expressions remain one product-owned expression family rather than drifting into unrelated per-context languages.
+- Condition-oriented and value-oriented contexts remain explicitly distinguished.
+- Each expression-bearing context has explicit documented root restrictions.
+- Surface-syntax differences do not silently redefine dependency rules.
+
+## Root discipline
+
+- `inputs...`, `args...`, `state...`, and `step...` keep distinct documented meanings.
+- `step...` remains execution-local and must not drift into contexts that are meant to stay pre-execution.
+- Include bindings preserve caller scope without turning fragment bodies into implicit owners of caller-local step data.
+
+## Guard-context discipline
+
+- Guard context must not depend on `step...`.
+- Guard context must remain compatible with read-only, pre-execution analysis.
+- Guard conditions must remain explainable as workflow-visible policy rather than hidden connector-local verdicts.
+
+## Value-context discipline
+
+- Embedded value contexts must not drift into effectful connector execution.
+- Value-oriented local expressions must not grow hidden workflow-control semantics.
+
+## Drift checks
+
+- Documentation must not reintroduce separate first-class expression species such as an unrelated guard language versus an unrelated value language.
+- Context-specific docs must stay aligned with the domain definition in `domain/local-expressions.md`.
+
 <!-- source: verification/playbook/core.md -->
 
 # Playbook verification
@@ -4482,25 +4512,6 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - Authoring verification should not require all reusable-fragment semantics to collapse into `include` when a later runtime-scoped invocation surface would be clearer.
 - If a future `run` surface is introduced, authoring verification should preserve a short explainable distinction between static composition and runtime-scoped fragment invocation.
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
-
-<!-- source: verification/workflow/guard-expressions.md -->
-
-# Guard expression verification
-
-## Rule
-
-Guard expressions must improve policy readability without collapsing explainability or machine-checkability.
-
-## Checks
-
-- Common execution conditions can be written more compactly than equivalent shell guard logic.
-- Common execution conditions do not require creating a new bespoke public probe name for every simple predicate.
-- Zero-argument probe references remain readable without mandatory empty call syntax.
-- Boolean combinations inside one expression remain structured enough for validation and explanation.
-- Runtime diagnostics can identify at least the failing subcondition, the observed value when available, and whether failure came from boolean mismatch or probe evaluation failure.
-- Validation rejects statically invalid field paths against documented probe outputs.
-- Guard resolution rejects effectful `action` operations inside expressions.
-- Repeated identical probe references inside one expression need not be evaluated redundantly.
 
 <!-- source: verification/runtime/guard-evaluation.md -->
 
