@@ -10,7 +10,8 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
-from ordo.runtime.guard_expressions import GuardExpressionNode, ListNode, LiteralNode, ReferenceNode
+from ordo.runtime.guard_expressions import GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode
+from ordo.runtime.state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
 
 if TYPE_CHECKING:
@@ -93,6 +94,15 @@ def evaluate_argument_value(node: GuardExpressionNode, workflow: Workflow) -> JS
                 return _MISSING
             current = current[part]
         return current
+    if isinstance(node, StateReferenceNode):
+        try:
+            expression = _state_expression_text(node)
+            target = resolve_state_target(expression, workflow)
+            document = read_state_document(target.location)
+            value = read_state_value(document, key=target.key, fields=target.fields)
+        except RuntimeStateError:
+            return _MISSING
+        return _MISSING if value is None else value
     if isinstance(node, ListNode):
         values: list[JSONValue] = []
         for item in node.items:
@@ -102,6 +112,12 @@ def evaluate_argument_value(node: GuardExpressionNode, workflow: Workflow) -> JS
             values.append(value)  # type: ignore[arg-type]
         return values
     return _MISSING
+
+
+def _state_expression_text(node: StateReferenceNode) -> str:
+    key_ref = ".".join(node.key_reference)
+    suffix = "" if not node.fields else "." + ".".join(node.fields)
+    return f"state.{node.state_role}[{key_ref}]{suffix}"
 
 
 def run_command(command: Sequence[str], *, reference: str) -> OperationResult:

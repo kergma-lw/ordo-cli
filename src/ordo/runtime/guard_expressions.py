@@ -32,6 +32,13 @@ class ReferenceNode(GuardExpressionNode):
 
 
 @dataclass(frozen=True, slots=True)
+class StateReferenceNode(GuardExpressionNode):
+    state_role: str
+    key_reference: tuple[str, ...]
+    fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ListNode(GuardExpressionNode):
     items: tuple[GuardExpressionNode, ...] = ()
 
@@ -211,8 +218,42 @@ class _Parser:
             value = {"true": True, "false": False, "null": None}[token.text]
             return LiteralNode(start=token.start, end=token.end, value=value)
         if token.kind == "IDENT":
+            if token.text == "state":
+                return self._parse_state_reference()
             return self._parse_reference_or_call()
         raise GuardExpressionParseError("Expected expression term", token.start, token.end)
+
+    def _parse_state_reference(self) -> StateReferenceNode:
+        start = self._consume("IDENT", "Expected 'state'")
+        self._consume("DOT", "Expected '.' after 'state'")
+        state_role = self._consume("IDENT", "Expected state role")
+        self._consume("LBRACKET", "Expected '[' after state role")
+        key_reference = self._parse_reference_or_call()
+        if not isinstance(key_reference, ReferenceNode) or key_reference.parts[0] != "inputs" or len(key_reference.parts) < 2:
+            raise GuardExpressionParseError(
+                "State path key reference must use dotted form such as 'inputs.task_key'",
+                key_reference.start,
+                key_reference.end,
+            )
+        self._consume("RBRACKET", "Expected ']' after state key reference")
+        fields: list[str] = []
+        end = state_role.end
+        while self._match_symbol(".") is not None:
+            field_token = self._peek()
+            if field_token.kind != "IDENT":
+                raise GuardExpressionParseError("Expected field name after '.'", field_token.start, field_token.end)
+            consumed = self._advance()
+            fields.append(consumed.text)
+            end = consumed.end
+        if not fields:
+            end = self._previous().end if self._previous().kind == "RBRACKET" else state_role.end
+        return StateReferenceNode(
+            start=start.start,
+            end=end,
+            state_role=state_role.text,
+            key_reference=key_reference.parts,
+            fields=tuple(fields),
+        )
 
     def _parse_list(self) -> ListNode:
         start = self._consume("LBRACKET", "Expected '[' to start list literal").start
@@ -455,6 +496,8 @@ class _SemanticValidator:
         if isinstance(node, ReferenceNode):
             self._validate_reference(node)
             return
+        if isinstance(node, StateReferenceNode):
+            return
         if isinstance(node, CallNode):
             self._validate_call(node)
             return
@@ -543,6 +586,8 @@ def _is_argument_value(node: GuardExpressionNode) -> bool:
         return True
     if isinstance(node, ReferenceNode):
         return node.parts[0] == "inputs" and len(node.parts) >= 2
+    if isinstance(node, StateReferenceNode):
+        return True
     if isinstance(node, ListNode):
         return all(_is_argument_value(item) for item in node.items)
     return False
