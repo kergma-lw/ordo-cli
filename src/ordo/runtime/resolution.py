@@ -11,7 +11,9 @@ from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
-from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, StateReferenceNode, UnaryNode, parse_guard_expression
+from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, StateReferenceNode, UnaryNode
+from .local_expression_contexts import LocalExpressionContext
+from .local_expressions import parse_local_expression
 from .providers import ConnectorProvider, get_default_connector_provider
 
 
@@ -245,7 +247,9 @@ def _resolve_guard_expression(
     public_registry: ConnectorRegistry,
     local_registry: ConnectorRegistry,
 ) -> ResolvedGuardExpression | Diagnostic:
-    parsed = parse_guard_expression(expression)
+    parsed_local = parse_local_expression(expression, context=LocalExpressionContext.GUARD)
+    assert parsed_local.guard is not None
+    parsed = parsed_local.guard
     diagnostics: list[Diagnostic] = []
     probes: list[ResolvedExpressionProbe] = []
 

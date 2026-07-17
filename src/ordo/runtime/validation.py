@@ -11,7 +11,9 @@ from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
-from .guard_expressions import GuardExpressionParseError, StateReferenceNode as GuardStateReferenceNode, parse_guard_expression, validate_parsed_guard_expression
+from .guard_expressions import StateReferenceNode as GuardStateReferenceNode
+from .local_expression_contexts import LocalExpressionContext
+from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, validate_parsed_local_expression
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .value_expressions import (
@@ -289,11 +291,11 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
                 diagnostics.append(_diagnostic("validation.workflow.guard_expr.empty", "Guard expression must not be empty", item_path, source))
                 continue
             try:
-                parsed = parse_guard_expression(item)
-            except GuardExpressionParseError as exc:
+                parsed = parse_local_expression(item, context=LocalExpressionContext.GUARD)
+            except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
                 diagnostics.append(exc.to_diagnostic(path=item_path, source=source, expression=item))
                 continue
-            for validation_error in validate_parsed_guard_expression(parsed):
+            for validation_error in validate_parsed_local_expression(parsed):
                 diagnostics.append(validation_error.to_diagnostic(path=item_path, source=source, expression=item))
             continue
         diagnostics.extend(_validate_call(item, path=item_path, source=source))
@@ -1143,8 +1145,8 @@ def _validate_format_value_object(
 def _collect_state_roles_from_guard_item(item: JSONValue) -> set[str]:
     if isinstance(item, str):
         try:
-            parsed = parse_guard_expression(item)
-        except GuardExpressionParseError:
+            parsed = parse_local_expression(item, context=LocalExpressionContext.GUARD)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
             return set()
         return _collect_guard_state_references(parsed.root)
     if isinstance(item, dict):
