@@ -159,12 +159,12 @@ EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
     ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "value_expression")),
     ExpressionRootSpec(name="probe", surfaces=("guard_expression",)),
     ExpressionRootSpec(name="args", surfaces=("value_expression",)),
-    ExpressionRootSpec(name="state", surfaces=("value_expression",)),
+    ExpressionRootSpec(name="state", surfaces=("guard_expression", "value_expression")),
     ExpressionRootSpec(name="step", surfaces=("value_expression",)),
 )
 
 EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
-    ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe"), boolean_operators=("and", "or", "not", "parentheses")),
+    ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe", "state"), boolean_operators=("and", "or", "not", "parentheses")),
     ExpressionSurfaceSpec(
         name="value_expression",
         roots=("inputs", "args", "state", "step"),
@@ -177,17 +177,11 @@ EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
 
 NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
     NegativeRuleSpec(
-        name="guard_expression.no_state_root",
-        surface="guard_expression",
-        rule="State references are not allowed in guard expressions",
-        reason="guards run before steps and only support input references and public probe references",
-    ),
-    NegativeRuleSpec(
         name="guard_expression.no_step_root",
         surface="guard_expression",
         rule="Registered step references are not allowed in guard expressions",
         reason="guards run before effectful step execution and therefore cannot depend on registered step results",
-        related_codes=("validation.workflow.guard_expr.step_ref",),
+        related_codes=("validation.workflow.local_expression.guard.step_ref",),
     ),
     NegativeRuleSpec(
         name="guard_expression.no_filters",
@@ -256,6 +250,20 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         rule="state_set must contain exactly one target entry",
         reason="each state-set step writes one resolved state target at a time",
         related_codes=("validation.workflow.state_set.entry_count",),
+    ),
+    NegativeRuleSpec(
+        name="workflow_fragment.no_state_surface",
+        surface="workflow.include_fragments",
+        rule="Included fragments must not read, declare, or mutate runtime state",
+        reason="runtime state remains a top-level workflow handoff surface rather than reusable fragment-local memory",
+        related_codes=("load.workflow.include.state_forbidden",),
+    ),
+    NegativeRuleSpec(
+        name="workflow_state_role.write_after_last_read",
+        surface="workflow.state_needs",
+        rule="Logical state role writes and deletes are allowed only after the final read of that same role",
+        reason="persistent runtime state should capture final cross-run handoff rather than per-run scratch flow",
+        related_codes=("validation.workflow.state_role.write_before_last_read",),
     ),
     NegativeRuleSpec(
         name="format_value.args_must_be_list",

@@ -13,7 +13,14 @@ from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .guard_expressions import StateReferenceNode as GuardStateReferenceNode
 from .local_expression_contexts import LocalExpressionContext
-from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression, parse_local_expression, validate_parsed_local_expression
+from .local_expressions import (
+    LOCAL_EXPRESSION_PARSE_ERRORS,
+    build_local_expression_parse_diagnostic,
+    build_local_expression_validation_diagnostic,
+    parse_embedded_local_expression,
+    parse_local_expression,
+    validate_parsed_local_expression,
+)
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .value_expressions import (
@@ -253,7 +260,15 @@ def _validate_include_binding_values(value: JSONValue, *, source: str, path: tup
         parse_embedded_local_expression(value, context=LocalExpressionContext.INCLUDE_BINDING)
     except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
         expression = _extract_runtime_value_expression(value)
-        diagnostics.append(exc.to_diagnostic(path=path, source=source, expression="" if expression is None else expression))
+        diagnostics.append(
+            build_local_expression_parse_diagnostic(
+                exc,
+                context=LocalExpressionContext.INCLUDE_BINDING,
+                path=path,
+                source=source,
+                expression="" if expression is None else expression,
+            )
+        )
         return diagnostics
     return diagnostics
 
@@ -311,15 +326,31 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
         item_path = path + (str(index),)
         if isinstance(item, str):
             if not item:
-                diagnostics.append(_diagnostic("validation.workflow.guard_expr.empty", "Guard expression must not be empty", item_path, source))
+                diagnostics.append(_diagnostic("validation.workflow.local_expression.guard.empty", "Guard expression must not be empty", item_path, source))
                 continue
             try:
                 parsed = parse_local_expression(item, context=LocalExpressionContext.GUARD)
             except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
-                diagnostics.append(exc.to_diagnostic(path=item_path, source=source, expression=item))
+                diagnostics.append(
+                    build_local_expression_parse_diagnostic(
+                        exc,
+                        context=LocalExpressionContext.GUARD,
+                        path=item_path,
+                        source=source,
+                        expression=item,
+                    )
+                )
                 continue
             for validation_error in validate_parsed_local_expression(parsed):
-                diagnostics.append(validation_error.to_diagnostic(path=item_path, source=source, expression=item))
+                diagnostics.append(
+                    build_local_expression_validation_diagnostic(
+                        validation_error,
+                        context=LocalExpressionContext.GUARD,
+                        path=item_path,
+                        source=source,
+                        expression=item,
+                    )
+                )
             continue
         diagnostics.extend(_validate_call(item, path=item_path, source=source))
     return diagnostics
@@ -526,7 +557,15 @@ def _validate_invocation_condition(
         parsed = parse_embedded_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
     except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
         expression = _extract_runtime_value_expression(condition)
-        diagnostics.append(exc.to_diagnostic(path=condition_path, source=source, expression="" if expression is None else expression))
+        diagnostics.append(
+            build_local_expression_parse_diagnostic(
+                exc,
+                context=LocalExpressionContext.STEP_CONDITION,
+                path=condition_path,
+                source=source,
+                expression="" if expression is None else expression,
+            )
+        )
         return diagnostics
     if parsed is None:
         diagnostics.append(_diagnostic(expression_code, expression_message, condition_path, source))

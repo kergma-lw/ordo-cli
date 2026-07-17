@@ -19,6 +19,7 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
 
         roots = {item["name"]: item for item in payload["expression_roots"]}
         surfaces = {item["name"]: item for item in payload["expression_surfaces"]}
+        self.assertIn("guard_expression", roots["state"]["surfaces"])
         self.assertIn("value_expression", roots["state"]["surfaces"])
         self.assertIn("value_expression", roots["step"]["surfaces"])
         self.assertEqual(surfaces["value_expression"]["filters"], ["lower", "trim", "slug", "eq", "ne", "not"])
@@ -31,11 +32,12 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         payload = describe_capabilities()
 
         rules = {item["name"]: item for item in payload["negative_rules"]}
-        self.assertEqual(rules["guard_expression.no_state_root"]["surface"], "guard_expression")
         self.assertEqual(rules["workflow_step.with_requires_uses"]["related_codes"], ["validation.workflow.step.with_without_uses"])
         self.assertEqual(rules["workflow_step.if_conflicts_with_register"]["related_codes"], ["validation.workflow.step.if_with_register"])
-        self.assertEqual(rules["guard_expression.no_step_root"]["related_codes"], ["validation.workflow.guard_expr.step_ref"])
+        self.assertEqual(rules["guard_expression.no_step_root"]["related_codes"], ["validation.workflow.local_expression.guard.step_ref"])
         self.assertEqual(rules["value_expression.step_refs_must_be_backward"]["related_codes"], ["validation.workflow.step_ref.forward"])
+        self.assertEqual(rules["workflow_fragment.no_state_surface"]["related_codes"], ["load.workflow.include.state_forbidden"])
+        self.assertEqual(rules["workflow_state_role.write_after_last_read"]["related_codes"], ["validation.workflow.state_role.write_before_last_read"])
         self.assertEqual(rules["format_value.args_must_be_list"]["related_codes"], ["validation.workflow.value_expr.format.args_type"])
 
     def test_root_introspection_publishes_capabilities_section(self) -> None:

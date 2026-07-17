@@ -78,7 +78,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.empty")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.empty")
 
     def test_guard_expression_syntax_error_is_reported(self) -> None:
         report = validate_workflow_text(
@@ -95,7 +95,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.syntax")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.syntax")
         self.assertEqual(report.diagnostics[0].path, ("blocks", "0", "guards", "0"))
 
     def test_guard_expression_requires_dotted_input_reference(self) -> None:
@@ -113,7 +113,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.input_ref")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.input_ref")
 
     def test_step_launcher_requires_uses(self) -> None:
         report = validate_workflow_text(
@@ -323,7 +323,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.inputs_call")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.inputs_call")
 
     def test_guard_expression_rejects_non_value_argument_expression(self) -> None:
         report = validate_workflow_text(
@@ -340,7 +340,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.argument_value")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.argument_value")
 
     def test_guard_expression_rejects_duplicate_argument_names(self) -> None:
         report = validate_workflow_text(
@@ -357,7 +357,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.duplicate_argument")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.duplicate_argument")
 
     def test_valid_guard_expression_with_named_argument_and_field_access_passes(self) -> None:
         report = validate_workflow_text(
@@ -752,7 +752,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.guard_expr.step_ref")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.step_ref")
 
     def test_invalid_value_expression_syntax_in_step_input_fails_validation(self) -> None:
         report = validate_workflow_text(

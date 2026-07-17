@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
@@ -40,6 +41,10 @@ LOCAL_EXPRESSION_PARSE_ERRORS = (GuardExpressionParseError, ValueExpressionParse
 LocalExpressionValidationError = GuardExpressionValidationError
 
 
+def _local_expression_validation_prefix(context: LocalExpressionContext) -> str:
+    return f"validation.workflow.local_expression.{context.value}"
+
+
 def parse_local_expression(
     expression: str,
     *,
@@ -69,6 +74,56 @@ def validate_parsed_local_expression(parsed: ParsedLocalExpression) -> tuple[Loc
         assert parsed.guard is not None
         return validate_parsed_guard_expression(parsed.guard)
     return ()
+
+
+def build_local_expression_parse_diagnostic(
+    exc: GuardExpressionParseError | ValueExpressionParseError,
+    *,
+    context: LocalExpressionContext,
+    path: tuple[str, ...],
+    source: str,
+    expression: str,
+) -> Diagnostic:
+    snippet = expression[exc.position : exc.end if exc.end is not None else exc.position + 1]
+    return Diagnostic(
+        code=f"{_local_expression_validation_prefix(context)}.syntax",
+        level="error",
+        message=exc.message,
+        path=path,
+        details={
+            "source": source,
+            "position": exc.position,
+            "end": exc.end if exc.end is not None else exc.position,
+            "snippet": snippet,
+            "expression": expression,
+            "context": context.value,
+        },
+    )
+
+
+def build_local_expression_validation_diagnostic(
+    issue: LocalExpressionValidationError,
+    *,
+    context: LocalExpressionContext,
+    path: tuple[str, ...],
+    source: str,
+    expression: str,
+) -> Diagnostic:
+    suffix = issue.code.rsplit(".", 1)[-1]
+    return Diagnostic(
+        code=f"{_local_expression_validation_prefix(context)}.{suffix}",
+        level="error",
+        message=issue.message,
+        path=path,
+        details={
+            "source": source,
+            "position": issue.start,
+            "end": issue.end,
+            "snippet": expression[issue.start : issue.end],
+            "expression": expression,
+            "context": context.value,
+        },
+    )
 
 
 def extract_embedded_local_expression(value: str) -> str | None:
