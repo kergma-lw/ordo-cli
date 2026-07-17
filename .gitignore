@@ -3,3 +3,5 @@
 .opencode/
 __pycache__/
 *.py[cod]
+.ordo/repo.json
+*.swp
