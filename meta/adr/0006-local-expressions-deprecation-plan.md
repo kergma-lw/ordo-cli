@@ -38,3 +38,9 @@ Removal, if it happens, must wait until a later workflow-contract revision after
 - validation warnings are the canonical runtime signal for these deprecated forms;
 - docs and contract metadata should continue to mark the preferred versus compatibility surfaces clearly;
 - a future hard deprecation can be introduced only as an explicit follow-up contract change rather than as an incidental parser cleanup.
+
+## Follow-up preparation
+
+The concrete inventory and checklist for any future hard removal is tracked in:
+
+- `gaps/local-expressions/hard-removal-prep.md`
