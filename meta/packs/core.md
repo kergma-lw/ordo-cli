@@ -1360,7 +1360,7 @@ Removal, if it happens, must wait until a later workflow-contract revision after
 
 ## Follow-up preparation
 
-The concrete inventory and checklist for any future hard removal is tracked in:
+The concrete inventory and execution checklist for any future hard removal is tracked in:
 
 - `gaps/local-expressions/hard-removal-prep.md`
 
