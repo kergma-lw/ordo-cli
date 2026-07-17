@@ -480,7 +480,7 @@ def _prepend_pre_run_workflows(
                     Step(
                         name=f"pre_run[{index}]",
                         run=item,
-                        resolved_run_path=str(resolved),
+                        resolved_run_path=str(resolved.resolve()),
                     ),
                 )
             )
