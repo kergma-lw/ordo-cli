@@ -13,7 +13,7 @@ state_needs:
   shared_state: {}
 blocks:
   - guards:
-      - uses: git.repo
+      - git.repo
       - inputs.ship == true
       - git.worktrees.count == 1
       - git.stash.count == 0

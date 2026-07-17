@@ -36,12 +36,14 @@ steps: []
 Guards are preconditions without intended side effects.
 They may reference public connector operations directly or use a compact boolean expression surface.
 
-Operation-call form:
+Compatibility-only object form:
 
 ```yaml
 - uses: namespace.name
   with: {}
 ```
+
+Preferred native form uses expression entries such as `git.repo` directly.
 
 Compact expression form:
 
@@ -89,20 +91,20 @@ Expected outcome classes:
 Steps are effectful actions.
 They may reference public connector operations or use built-in runtime state mutation forms.
 
-Steps may also declare an optional `if` condition using the `${...}` expression envelope.
+Steps may also declare an optional `if` condition using the preferred bare condition surface.
 
 Illustrative forms:
 
 ```yaml
 - name: comment-open
-  if: ${step.issue.outputs.open and inputs.notify}
+  if: step.issue.outputs.open and inputs.notify
   uses: gh.issue.comment
   with:
     issue_id: ${step.issue.outputs.id}
     body: "Issue is open."
 
 - name: remember-branch
-  if: ${(inputs.branch | trim | ne("")) and inputs.persist_branch}
+  if: (inputs.branch | trim | ne("")) and inputs.persist_branch
   state_set:
     state.task_memory[inputs.task_key].branch: ${inputs.branch}
 ```
@@ -113,6 +115,7 @@ Step-condition rules:
 - step conditions read only workflow-local roots such as `inputs...`, `state...`, and prior `step...` results;
 - existing value-expression pipelines remain valid leaf forms when they produce boolean values;
 - step conditions do not call connector operations or probes.
+- the older embedded form `if: ${...}` remains deprecated compatibility surface only.
 
 Minimal shape:
 

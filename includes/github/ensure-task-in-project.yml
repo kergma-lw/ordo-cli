@@ -15,7 +15,7 @@ steps:
     register: project_probe
 
   - name: add-issue-to-project
-    if: ${step.project_probe.outputs.exists | not}
+    if: step.project_probe.outputs.exists | not
     uses: gh.project.issue.add
     with:
       repository: ${inputs.repository}

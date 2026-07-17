@@ -12,7 +12,7 @@ state_needs:
   shared_state: {}
 blocks:
   - guards:
-      - uses: git.repo
+      - git.repo
       - inputs.repo_kind == "meta" or git.worktree.clean == true
       - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
   - include: includes/github/ensure-task-in-project
@@ -59,7 +59,7 @@ blocks:
 
       - name: Finalize frontend
         run: includes/git/run-and-commit-generated-changes
-        if: ${inputs.repo_kind | eq("frontend")}
+        if: inputs.repo_kind | eq("frontend")
         with:
           command: set -euo pipefail; npm run openapi; npm run errors:sync; npm run check
           launcher: shell_frontend

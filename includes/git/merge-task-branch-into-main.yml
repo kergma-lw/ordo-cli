@@ -33,7 +33,7 @@ steps:
     register: remote_main
 
   - name: create-local-main-from-remote
-    if: ${not step.local_main.outputs.exists and step.remote_main.outputs.exists}
+    if: not step.local_main.outputs.exists and step.remote_main.outputs.exists
     uses: git.branch.create
     with:
       branch: main
@@ -45,7 +45,7 @@ steps:
       branch: main
 
   - name: merge-origin-main-ff-only
-    if: ${step.remote_main.outputs.exists}
+    if: step.remote_main.outputs.exists
     uses: git.integrate.merge_ff_only
     with:
       ref: refs/remotes/origin/main

@@ -12,11 +12,11 @@ steps:
       command: ${args.command}
 
   - name: Stage generated artifacts
-    if: ${not git.worktree.clean}
+    if: not git.worktree.clean
     uses: git.index.add_all
 
   - name: Commit generated artifacts
-    if: ${not git.worktree.clean}
+    if: not git.worktree.clean
     uses: git.commit.create
     with:
       message: ${args.commit_message}

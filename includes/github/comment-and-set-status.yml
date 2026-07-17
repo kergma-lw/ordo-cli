@@ -10,7 +10,7 @@ args:
 
 steps:
   - name: add-comment
-    if: ${args.comment | ne("")}
+    if: args.comment | ne("")
     uses: gh.issue.comment.add
     with:
       repository: ${inputs.repository}
@@ -18,7 +18,7 @@ steps:
       body: ${args.comment}
 
   - name: set-task-status
-    if: ${args.status | ne("")}
+    if: args.status | ne("")
     uses: gh.project.issue.status.set
     with:
       repository: ${inputs.repository}
