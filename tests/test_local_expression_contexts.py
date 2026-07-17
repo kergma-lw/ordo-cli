@@ -1,5 +1,7 @@
 import unittest
 
+import ordo.runtime as runtime
+
 from ordo.runtime.local_expression_contexts import (
     LocalExpressionContext,
     LocalExpressionContextFamily,
@@ -72,3 +74,8 @@ class LocalExpressionContextsTest(unittest.TestCase):
         assert parsed is not None
         self.assertEqual(parsed.context, LocalExpressionContext.INCLUDE_BINDING)
         self.assertIsNotNone(parsed.value)
+
+    def test_runtime_package_exports_local_expression_api(self) -> None:
+        self.assertIs(runtime.LocalExpressionContext, LocalExpressionContext)
+        self.assertIs(runtime.parse_local_expression, parse_local_expression)
+        self.assertIs(runtime.parse_embedded_local_expression, parse_embedded_local_expression)
