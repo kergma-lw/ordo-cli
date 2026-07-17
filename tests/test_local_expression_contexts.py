@@ -65,3 +65,10 @@ class LocalExpressionContextsTest(unittest.TestCase):
         self.assertEqual(parsed.context, LocalExpressionContext.STEP_CONDITION)
         self.assertIsNotNone(parsed.value)
         self.assertEqual(extract_embedded_local_expression("${inputs.enabled}"), "inputs.enabled")
+
+    def test_include_binding_uses_shared_embedded_local_expression_entrypoint(self) -> None:
+        parsed = parse_embedded_local_expression("${step.issue.outputs.id}", context=LocalExpressionContext.INCLUDE_BINDING)
+
+        assert parsed is not None
+        self.assertEqual(parsed.context, LocalExpressionContext.INCLUDE_BINDING)
+        self.assertIsNotNone(parsed.value)

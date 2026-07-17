@@ -232,6 +232,29 @@ def _validate_include_block(value: JSONObject, *, source: str, path: tuple[str, 
                 actual_type=type(with_value).__name__,
             )
         )
+    elif isinstance(with_value, dict):
+        diagnostics.extend(_validate_include_binding_values(with_value, source=source, path=path + ("with",)))
+    return diagnostics
+
+
+def _validate_include_binding_values(value: JSONValue, *, source: str, path: tuple[str, ...]) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            diagnostics.extend(_validate_include_binding_values(item, source=source, path=path + (str(index),)))
+        return diagnostics
+    if isinstance(value, dict):
+        for key, item in value.items():
+            diagnostics.extend(_validate_include_binding_values(item, source=source, path=path + (str(key),)))
+        return diagnostics
+    if not isinstance(value, str):
+        return diagnostics
+    try:
+        parse_embedded_local_expression(value, context=LocalExpressionContext.INCLUDE_BINDING)
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        expression = _extract_runtime_value_expression(value)
+        diagnostics.append(exc.to_diagnostic(path=path, source=source, expression="" if expression is None else expression))
+        return diagnostics
     return diagnostics
 
 

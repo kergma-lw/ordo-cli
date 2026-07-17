@@ -14,6 +14,8 @@ from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
+from ordo.runtime.local_expression_contexts import LocalExpressionContext
+from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression
 from ordo.runtime.value_expressions import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
 
 
@@ -682,13 +684,15 @@ def _preserve_fragment_binding_provenance(value: JSONValue) -> JSONValue | _Boun
 def _collect_caller_step_reference_registers(value: JSONValue) -> frozenset[str]:
     if not isinstance(value, str):
         return frozenset()
-    expression = _extract_runtime_expression(value)
-    if expression is None:
+    try:
+        parsed = parse_embedded_local_expression(value, context=LocalExpressionContext.INCLUDE_BINDING)
+    except LOCAL_EXPRESSION_PARSE_ERRORS:
         return frozenset()
-    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    if parsed is None or parsed.value is None:
+        return frozenset()
     return frozenset(
         node.register
-        for node in _walk_value_expression_nodes(parsed.root)
+        for node in _walk_value_expression_nodes(parsed.value.root)
         if isinstance(node, StepReferenceNode)
     )
 
