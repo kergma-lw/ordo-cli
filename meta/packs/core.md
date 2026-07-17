@@ -260,6 +260,7 @@
 - The runtime must distinguish at least validation failure, resolution failure, guard failure, execution failure, and success.
 - Structured results must be usable by both a human reviewer and an automated agent without log scraping.
 - Runtime diagnostics should prefer normalized categories and structured fields over ad hoc human prose.
+- At minimum, the structured runtime result must preserve a human-readable message and a machine-readable code when non-success detail matters.
 - The model should support fail-safe behavior for local operational rituals where risk reduction matters more than maximum flexibility.
 - The runtime must expose a machine-usable decision surface, not only an execution surface.
 
@@ -452,6 +453,9 @@ Connector owns:
 - family-level prerequisites;
 - shared runtime context;
 - operation registry.
+
+Connector operations are also the semantic home for non-trivial transformation and integration logic.
+Workflow files may orchestrate them, but should not absorb that algorithmic work into authored workflow structure.
 
 ## What an operation is
 
@@ -852,6 +856,10 @@ It must not answer the question:
 
 > what business steps a workflow performs internally.
 
+Playbook files hold project-local launch intent and resolution context.
+They may select, name, and parameterize workflows through explicit catalogs, defaults, and state bindings,
+but they must not absorb workflow business-step logic.
+
 ## What a playbook owns
 
 - project-local workflow catalog;
@@ -910,6 +918,10 @@ It must not answer the question:
 
 > how a transformation or integration algorithm is implemented internally.
 
+Workflow files hold orchestration intent.
+They may sequence checks, guards, steps, and explicit local composition surfaces,
+but they are not the place where non-trivial transformation algorithms should be implemented.
+
 ## What is acceptable in a workflow
 
 - ordered guard and step blocks;
@@ -922,6 +934,8 @@ It must not answer the question:
 - compact parameters;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
+
+Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
 ## Assembly vs execution
 
@@ -971,6 +985,7 @@ Within an assembled workflow:
 - complex text transformations;
 - project-specific knowledge baked into a generic workflow;
 - hidden side effects.
+- algorithmic transformation logic that belongs in connector operation code.
 
 ## Workflow quality
 
@@ -1073,6 +1088,10 @@ It should depend on:
 
 It should not depend on a hardcoded connector package path as part of its core semantics.
 
+The runtime is not the semantic owner of built-in connector families.
+Built-in connectors should be treated as a public library layer that runtime resolves and executes,
+not as private helper code whose public meaning may drift with runtime refactors.
+
 ## Composition layer
 
 A composition layer such as CLI bootstrap, application bootstrap, or tests may choose which connector provider to install or pass explicitly.
@@ -1112,107 +1131,17 @@ not buried in shell control flow.
 
 This is stronger than logs, traces, or raw exception text.
 
-<!-- source: domain/boundaries.md -->
+## Outcome distinctions
 
-# Domain boundaries
-
-## In scope
-
-- local operational workflows
-- public connector contracts
-- validation and explainability
-- human + agent authored declarations
-- composition via playbooks, profiles, and explicit local extensions
-
-## Product identity boundary
-
-Ordo is not just a YAML task runner.
-
-The intended center of gravity is:
-
-- guarded workflow evaluation;
-- explainable runtime decisions;
-- stable public connector/operation contracts;
-- structured results for both humans and agents.
-
-The project only remains meaningfully distinct if these stay first-class in runtime behavior,
-not just in documentation language.
-
-## Nearby tool boundary
-
-Tools such as shell helpers, task runners, and pipeline engines are relevant references,
-but they are not the target identity.
-
-Useful contrast:
-
-- task runner / pipeline engine: primarily answers **what steps should run**;
-- Ordo: must also answer **whether execution is allowed, why, and what would happen before effectful execution starts**.
-
-This means Ordo should remain analysis-first rather than execution-first.
-
-For the core contract, this also means:
-
-- agent-usable decision support is a primary surface, not a side effect of logs;
-- `check` / `plan` / `explain` are part of the runtime contract, not optional convenience commands;
-- blocked-before-execution remains a first-class outcome category.
-
-## Fixed connector domains for v0
-
-- `git`
-- `gh`
-- `shell`
-
-## Out of scope for the core
-
-- distributed workflow coordination
-- infra inventory management as a primary model
-- opaque shell-first orchestration
-- giant built-in standard library from day one
-- generic "just another pipeline DSL" positioning
-
-## Explicit non-identity
-
-Ordo should not collapse into any of the following:
-
-- a YAML wrapper around shell scripts;
-- a step runner whose only meaningful output is logs and exit code;
-- a system where `explain` means little more than replaying errors after failure;
-- a loose module namespace without stable public operation semantics.
-- a runtime whose primary value is execution while decision support is reconstructed externally.
-
-If these become the dominant shape, the project drifts toward existing task runners and loses its reason to exist.
-
-## Boundary rule
-
-Workflow files hold orchestration intent.
-Algorithmic transformation lives in connector operation implementation code.
-
-Playbook files hold project-local launch intent and resolution context.
-They should not absorb workflow business-step logic.
-
-The runtime is not the semantic owner of built-in connector families.
-Built-in connectors should be treated as a public library layer that the runtime resolves and executes, not as private helper code whose public meaning may drift with runtime refactors.
-Built-in connectors do not live in the runtime core, even when implementation packaging temporarily places adapter code near runtime-owned modules.
-The runtime core should depend on connector-provider wiring abstractions rather than on a specific connector package location.
-
-## Execution rule
-
-Policy evaluation belongs in explicit guards and runtime modes.
-Connector code may implement checks, but the workflow/runtime contract must preserve the distinction between:
+Policy and runtime-facing policy surfaces must preserve the distinction between:
 
 - blocked before execution;
 - planned but not executed;
 - executed and failed;
 - executed and succeeded.
 
-## Related domain docs
-
-- playbook semantics: `domain/playbook.md`
-- connector semantics: `domain/connector.md`
-- local-expression semantics: `domain/local-expressions.md`
-- workflow semantics: `domain/workflow.md`
-- runtime semantics: `domain/runtime.md`
-- policy semantics: `domain/policy.md`
+These are not interchangeable non-success narratives.
+They carry different policy and explanation meaning.
 
 <!-- source: adr/0004-guard-expressions-prefer-orthogonal-probes.md -->
 
@@ -3750,6 +3679,8 @@ Compatibility-only top-level fields:
 The stable assembled execution shape is block-based.
 Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
 
+Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow data shape itself.
+
 ## Source workflow shape
 
 Source workflow material may additionally use assembly instructions.
@@ -3780,6 +3711,7 @@ Rules:
 - `steps` block value is a non-empty step list;
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
+- unknown fields fail validation;
 
 Current stable assembled shape note:
 
@@ -3899,6 +3831,11 @@ Normalization rules:
 - if `blocks` is absent, at least one of top-level `guards` or top-level `steps` must be present;
 - top-level `guards` normalizes to one leading `guards` block;
 - top-level `steps` normalizes to one trailing `steps` block.
+
+YAML is an authoring surface, not the canonical runtime model.
+After loading, workflow data must remain representable as a losslessly JSON-serializable structure.
+Compatibility-only legacy workflow forms must normalize to the same canonical block-based runtime structure.
+Authoring convenience must not introduce YAML-only semantics into runtime behavior.
 
 ## Stable guard shape
 
@@ -4089,6 +4026,8 @@ The runtime result must be able to express:
 - diagnostics
 - outputs
 - skipped/executed steps
+- human-readable message when useful for review
+- machine-readable code when useful for classification
 
 Connector operation results must also preserve enough structure for the runtime to expose:
 

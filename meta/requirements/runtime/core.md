@@ -9,6 +9,7 @@
 - The runtime must distinguish at least validation failure, resolution failure, guard failure, execution failure, and success.
 - Structured results must be usable by both a human reviewer and an automated agent without log scraping.
 - Runtime diagnostics should prefer normalized categories and structured fields over ad hoc human prose.
+- At minimum, the structured runtime result must preserve a human-readable message and a machine-readable code when non-success detail matters.
 - The model should support fail-safe behavior for local operational rituals where risk reduction matters more than maximum flexibility.
 - The runtime must expose a machine-usable decision surface, not only an execution surface.
 

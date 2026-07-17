@@ -159,10 +159,10 @@ Ordo перестаёт быть «ещё одним YAML runner», если у�
 
 - `README.md`
 - `docs/format.md`
-- `meta/vision.md`
-- `meta/product-shape.md`
+- `docs/architecture/vision.md`
+- `docs/architecture/product-shape.md`
 - `meta/model/connector/contract.md`
-- `meta/errors-and-results.md`
+- `docs/architecture/errors-and-results-summary.md`
 - `meta/domain/runtime.md`
 
 ### pypyr

@@ -5,6 +5,7 @@
 - The runtime must treat a profile as a named operational context for one playbook run.
 - A profile must not act as an undocumented second workflow language.
 - Profile application must remain explicit in runtime-facing outputs.
+- Overrides introduced through profile-owned context must remain explicit rather than silently changing workflow meaning.
 
 ## Reviewability
 
@@ -31,4 +32,5 @@
 - When a profile changes execution context, runtime results should preserve which context was selected and why it matters.
 - Profile switching must not silently reinterpret an already-activated workflow run under a different profile.
 - Profile switching must not override explicit activation inputs that were already provided for the current run.
+- Same-name shadowing of base connector operations must not be default behavior for profile-owned adaptation.
 - `check` may apply deterministic `profile_switch` transitions statically when their target profile is resolvable from pre-execution knowledge.

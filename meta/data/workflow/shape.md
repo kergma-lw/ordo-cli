@@ -16,6 +16,8 @@ Compatibility-only top-level fields:
 The stable assembled execution shape is block-based.
 Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
 
+Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow data shape itself.
+
 ## Source workflow shape
 
 Source workflow material may additionally use assembly instructions.
@@ -46,6 +48,7 @@ Rules:
 - `steps` block value is a non-empty step list;
 - block order is semantically meaningful;
 - a `guards` block is evaluated before any later `steps` block may run.
+- unknown fields fail validation;
 
 Current stable assembled shape note:
 
@@ -165,6 +168,11 @@ Normalization rules:
 - if `blocks` is absent, at least one of top-level `guards` or top-level `steps` must be present;
 - top-level `guards` normalizes to one leading `guards` block;
 - top-level `steps` normalizes to one trailing `steps` block.
+
+YAML is an authoring surface, not the canonical runtime model.
+After loading, workflow data must remain representable as a losslessly JSON-serializable structure.
+Compatibility-only legacy workflow forms must normalize to the same canonical block-based runtime structure.
+Authoring convenience must not introduce YAML-only semantics into runtime behavior.
 
 ## Stable guard shape
 

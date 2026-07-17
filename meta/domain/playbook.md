@@ -10,6 +10,10 @@ It must not answer the question:
 
 > what business steps a workflow performs internally.
 
+Playbook files hold project-local launch intent and resolution context.
+They may select, name, and parameterize workflows through explicit catalogs, defaults, and state bindings,
+but they must not absorb workflow business-step logic.
+
 ## What a playbook owns
 
 - project-local workflow catalog;

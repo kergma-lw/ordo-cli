@@ -13,6 +13,9 @@ Connector owns:
 - shared runtime context;
 - operation registry.
 
+Connector operations are also the semantic home for non-trivial transformation and integration logic.
+Workflow files may orchestrate them, but should not absorb that algorithmic work into authored workflow structure.
+
 ## What an operation is
 
 An operation is a concrete public operation within a connector family.

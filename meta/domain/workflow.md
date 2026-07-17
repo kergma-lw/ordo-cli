@@ -10,6 +10,10 @@ It must not answer the question:
 
 > how a transformation or integration algorithm is implemented internally.
 
+Workflow files hold orchestration intent.
+They may sequence checks, guards, steps, and explicit local composition surfaces,
+but they are not the place where non-trivial transformation algorithms should be implemented.
+
 ## What is acceptable in a workflow
 
 - ordered guard and step blocks;
@@ -22,6 +26,8 @@ It must not answer the question:
 - compact parameters;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
+
+Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
 ## Assembly vs execution
 
@@ -71,6 +77,7 @@ Within an assembled workflow:
 - complex text transformations;
 - project-specific knowledge baked into a generic workflow;
 - hidden side effects.
+- algorithmic transformation logic that belongs in connector operation code.
 
 ## Workflow quality
 

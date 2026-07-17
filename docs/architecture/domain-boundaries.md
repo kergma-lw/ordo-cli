@@ -66,34 +66,22 @@ Ordo should not collapse into any of the following:
 
 If these become the dominant shape, the project drifts toward existing task runners and loses its reason to exist.
 
-## Boundary rule
+## Architectural boundary themes
 
-Workflow files hold orchestration intent.
-Algorithmic transformation lives in connector operation implementation code.
+At the architecture level, Ordo keeps several boundary themes visible:
 
-Playbook files hold project-local launch intent and resolution context.
-They should not absorb workflow business-step logic.
+- workflow declarations hold orchestration intent rather than implementation-heavy transformation logic;
+- playbooks hold project-local launch and resolution context rather than workflow business-step logic;
+- connectors act as a public integration library layer rather than as private runtime internals;
+- runtime and policy surfaces preserve distinctions between blocked, planned, failed, and successful execution states.
 
-The runtime is not the semantic owner of built-in connector families.
-Built-in connectors should be treated as a public library layer that the runtime resolves and executes, not as private helper code whose public meaning may drift with runtime refactors.
-Built-in connectors do not live in the runtime core, even when implementation packaging temporarily places adapter code near runtime-owned modules.
-The runtime core should depend on connector-provider wiring abstractions rather than on a specific connector package location.
+The operational source-of-truth rules for these themes live in the corresponding `meta/domain/*` documents rather than in this architecture overview.
 
-## Execution rule
+## Related runtime and domain docs
 
-Policy evaluation belongs in explicit guards and runtime modes.
-Connector code may implement checks, but the workflow/runtime contract must preserve the distinction between:
-
-- blocked before execution;
-- planned but not executed;
-- executed and failed;
-- executed and succeeded.
-
-## Related domain docs
-
-- playbook semantics: `domain/playbook.md`
-- connector semantics: `domain/connector.md`
-- local-expression semantics: `domain/local-expressions.md`
-- workflow semantics: `domain/workflow.md`
-- runtime semantics: `domain/runtime.md`
-- policy semantics: `domain/policy.md`
+- `meta/domain/playbook.md`
+- `meta/domain/connector.md`
+- `meta/domain/local-expressions.md`
+- `meta/domain/workflow.md`
+- `meta/domain/runtime.md`
+- `meta/domain/policy.md`

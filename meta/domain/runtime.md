@@ -87,6 +87,10 @@ It should depend on:
 
 It should not depend on a hardcoded connector package path as part of its core semantics.
 
+The runtime is not the semantic owner of built-in connector families.
+Built-in connectors should be treated as a public library layer that runtime resolves and executes,
+not as private helper code whose public meaning may drift with runtime refactors.
+
 ## Composition layer
 
 A composition layer such as CLI bootstrap, application bootstrap, or tests may choose which connector provider to install or pass explicitly.

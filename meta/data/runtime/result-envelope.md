@@ -9,6 +9,8 @@ The runtime result must be able to express:
 - diagnostics
 - outputs
 - skipped/executed steps
+- human-readable message when useful for review
+- machine-readable code when useful for classification
 
 Connector operation results must also preserve enough structure for the runtime to expose:
 

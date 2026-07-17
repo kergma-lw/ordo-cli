@@ -25,6 +25,8 @@ A profile is not:
 - an implicit source of business policy;
 - a hidden mutation layer that silently rewrites workflow meaning.
 
+Profiles and approved overrides should therefore remain explicit context-shaping surfaces rather than silent semantic substitution.
+
 Profiles should select an operational context, not invent a second orchestration model.
 
 ## Activation semantics
@@ -72,3 +74,5 @@ Workflow files describe orchestration intent.
 Profiles describe where and under which approved activation context that intent runs.
 
 This separation allows the same workflow to remain reusable while still supporting project-specific operational contexts.
+
+When local projects need genuinely project-specific operations, those extensions should prefer an explicit local namespace rather than silent same-name replacement of base connector operations.

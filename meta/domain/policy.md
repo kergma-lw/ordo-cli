@@ -25,3 +25,15 @@ not buried in shell control flow.
 - which next action a human or agent can take.
 
 This is stronger than logs, traces, or raw exception text.
+
+## Outcome distinctions
+
+Policy and runtime-facing policy surfaces must preserve the distinction between:
+
+- blocked before execution;
+- planned but not executed;
+- executed and failed;
+- executed and succeeded.
+
+These are not interchangeable non-success narratives.
+They carry different policy and explanation meaning.
