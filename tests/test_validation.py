@@ -431,6 +431,23 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.diagnostics[0].level, "warning")
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.uses_deprecated")
 
+    def test_include_binding_rejects_args_references(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - include: fragments/task.yml
+                    with:
+                      repository: ${args.repository}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.include_binding.args_ref")
+
     def test_guard_expression_allows_state_reference(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

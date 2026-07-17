@@ -11,14 +11,29 @@ from ordo.model.workflow import Workflow
 
 from .guard_expressions import (
     ConditionExpressionNode,
+    StateReferenceNode as ConditionStateReferenceNode,
     ConditionExpressionParseError,
     ConditionExpressionValidationError,
+    ReferenceNode as ConditionReferenceNode,
+    CallArgumentNode as ConditionCallArgumentNode,
+    CallNode as ConditionCallNode,
+    ListNode as ConditionListNode,
+    UnaryNode as ConditionUnaryNode,
+    BinaryNode as ConditionBinaryNode,
     ParsedConditionExpression,
     parse_condition_expression,
     validate_parsed_condition_expression,
 )
-from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, get_local_expression_context_policy
+from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, LocalExpressionRoot, get_local_expression_context_policy
 from .value_expressions import (
+    ReferenceNode as EmbeddedValueReferenceNode,
+    StateReferenceNode as EmbeddedValueStateReferenceNode,
+    StepReferenceNode as EmbeddedValueStepReferenceNode,
+    FilterApplicationNode,
+    PipelineNode,
+    BuiltinCallNode,
+    UnaryNode as EmbeddedValueUnaryNode,
+    BinaryNode as EmbeddedValueBinaryNode,
     EmbeddedValueExpressionEvaluationError,
     EmbeddedValueExpressionNode,
     EmbeddedValueExpressionParseError,
@@ -46,6 +61,14 @@ class ParsedLocalExpression:
 
 LOCAL_EXPRESSION_PARSE_ERRORS = (ConditionExpressionParseError, EmbeddedValueExpressionParseError)
 LocalExpressionValidationError = ConditionExpressionValidationError
+
+
+@dataclass(frozen=True, slots=True)
+class LocalExpressionContextPolicyError:
+    code: str
+    message: str
+    start: int
+    end: int
 
 
 def _local_expression_validation_prefix(context: LocalExpressionContext) -> str:
@@ -77,10 +100,12 @@ def parse_local_expression(
 def validate_parsed_local_expression(parsed: ParsedLocalExpression) -> tuple[LocalExpressionValidationError, ...]:
     """Validate one parsed local expression according to its context."""
 
+    errors: list[LocalExpressionValidationError | LocalExpressionContextPolicyError] = []
+    errors.extend(_validate_context_policy(parsed))
     if parsed.context is LocalExpressionContext.GUARD:
         assert parsed.guard is not None
-        return validate_parsed_condition_expression(parsed.guard)
-    return ()
+        errors.extend(validate_parsed_condition_expression(parsed.guard))
+    return tuple(errors)
 
 
 def build_local_expression_parse_diagnostic(
@@ -109,7 +134,7 @@ def build_local_expression_parse_diagnostic(
 
 
 def build_local_expression_validation_diagnostic(
-    issue: LocalExpressionValidationError,
+    issue: LocalExpressionValidationError | LocalExpressionContextPolicyError,
     *,
     context: LocalExpressionContext,
     path: tuple[str, ...],
@@ -131,6 +156,116 @@ def build_local_expression_validation_diagnostic(
             "context": context.value,
         },
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _LocalExpressionDependency:
+    root: LocalExpressionRoot
+    start: int
+    end: int
+
+
+def _validate_context_policy(parsed: ParsedLocalExpression) -> tuple[LocalExpressionContextPolicyError, ...]:
+    policy = get_local_expression_context_policy(parsed.context)
+    if not policy.whole_tree_restrictions:
+        return ()
+    errors: list[LocalExpressionContextPolicyError] = []
+    seen: set[tuple[LocalExpressionRoot, int, int]] = set()
+    for dependency in _collect_local_expression_dependencies(parsed):
+        if policy.allows_root(dependency.root):
+            continue
+        key = (dependency.root, dependency.start, dependency.end)
+        if key in seen:
+            continue
+        seen.add(key)
+        errors.append(
+            LocalExpressionContextPolicyError(
+                code=f"validation.workflow.local_expression.{parsed.context.value}.{dependency.root.value}_ref",
+                message=f"{dependency.root.value} references are not allowed in the {parsed.context.value} local-expression context",
+                start=dependency.start,
+                end=dependency.end,
+            )
+        )
+    return tuple(errors)
+
+
+def _collect_local_expression_dependencies(parsed: ParsedLocalExpression) -> tuple[_LocalExpressionDependency, ...]:
+    if parsed.guard is not None:
+        return tuple(_iter_condition_dependencies(parsed.guard.root))
+    if parsed.value is not None:
+        return tuple(_iter_embedded_value_dependencies(parsed.value.root))
+    return ()
+
+
+def _iter_condition_dependencies(node: ConditionExpressionNode) -> tuple[_LocalExpressionDependency, ...]:
+    found: list[_LocalExpressionDependency] = []
+
+    def visit(current: ConditionExpressionNode) -> None:
+        if isinstance(current, ConditionReferenceNode):
+            if current.parts and current.parts[0] in {root.value for root in LocalExpressionRoot}:
+                found.append(_LocalExpressionDependency(root=LocalExpressionRoot(current.parts[0]), start=current.start, end=current.end))
+            return
+        if isinstance(current, ConditionStateReferenceNode):
+            found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STATE, start=current.start, end=current.end))
+            return
+        if isinstance(current, ConditionCallArgumentNode):
+            visit(current.value)
+            return
+        if isinstance(current, ConditionCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, ConditionListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, ConditionUnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, ConditionBinaryNode):
+            visit(current.left)
+            visit(current.right)
+
+    visit(node)
+    return tuple(found)
+
+
+def _iter_embedded_value_dependencies(node: EmbeddedValueExpressionNode) -> tuple[_LocalExpressionDependency, ...]:
+    found: list[_LocalExpressionDependency] = []
+
+    def visit(current: EmbeddedValueExpressionNode) -> None:
+        if isinstance(current, EmbeddedValueReferenceNode):
+            if current.parts and current.parts[0] in {root.value for root in LocalExpressionRoot}:
+                found.append(_LocalExpressionDependency(root=LocalExpressionRoot(current.parts[0]), start=current.start, end=current.end))
+            return
+        if isinstance(current, EmbeddedValueStateReferenceNode):
+            found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STATE, start=current.start, end=current.end))
+            return
+        if isinstance(current, EmbeddedValueStepReferenceNode):
+            found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STEP, start=current.start, end=current.end))
+            return
+        if isinstance(current, PipelineNode):
+            visit(current.source)
+            for item in current.filters:
+                visit(item)
+            return
+        if isinstance(current, FilterApplicationNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, BuiltinCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, EmbeddedValueUnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, EmbeddedValueBinaryNode):
+            visit(current.left)
+            visit(current.right)
+
+    visit(node)
+    return tuple(found)
 
 
 def extract_embedded_local_expression(value: str) -> str | None:

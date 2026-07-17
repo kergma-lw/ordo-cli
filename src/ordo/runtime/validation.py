@@ -257,7 +257,7 @@ def _validate_include_binding_values(value: JSONValue, *, source: str, path: tup
     if not isinstance(value, str):
         return diagnostics
     try:
-        parse_embedded_local_expression(value, context=LocalExpressionContext.INCLUDE_BINDING)
+        parsed = parse_embedded_local_expression(value, context=LocalExpressionContext.INCLUDE_BINDING)
     except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
         expression = _extract_runtime_value_expression(value)
         diagnostics.append(
@@ -270,6 +270,18 @@ def _validate_include_binding_values(value: JSONValue, *, source: str, path: tup
             )
         )
         return diagnostics
+    if parsed is None:
+        return diagnostics
+    for validation_error in validate_parsed_local_expression(parsed):
+        diagnostics.append(
+            build_local_expression_validation_diagnostic(
+                validation_error,
+                context=LocalExpressionContext.INCLUDE_BINDING,
+                path=path,
+                source=source,
+                expression=_extract_runtime_value_expression(value) or value,
+            )
+        )
     return diagnostics
 
 
