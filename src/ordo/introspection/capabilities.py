@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ordo.model.json import JSONObject
 from ordo.runtime.capabilities import EXPRESSION_ROOTS, EXPRESSION_SURFACES, NEGATIVE_RULES, RUNTIME_CAPABILITIES
-from ordo.runtime.value_expressions import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
+from ordo.runtime.local_expression_impl.embedded_value import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 
 
 def describe_capabilities() -> JSONObject:

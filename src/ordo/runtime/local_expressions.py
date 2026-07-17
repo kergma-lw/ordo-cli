@@ -9,7 +9,7 @@ from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
-from .guard_expressions import (
+from .local_expression_impl.condition import (
     ConditionExpressionNode,
     StateReferenceNode as ConditionStateReferenceNode,
     ConditionExpressionParseError,
@@ -25,7 +25,7 @@ from .guard_expressions import (
     validate_parsed_condition_expression,
 )
 from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, LocalExpressionRoot, get_local_expression_context_policy
-from .value_expressions import (
+from .local_expression_impl.embedded_value import (
     ReferenceNode as EmbeddedValueReferenceNode,
     StateReferenceNode as EmbeddedValueStateReferenceNode,
     StepReferenceNode as EmbeddedValueStepReferenceNode,

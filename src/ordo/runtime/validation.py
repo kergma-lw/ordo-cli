@@ -11,9 +11,9 @@ from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
-from .guard_expressions import StateReferenceNode as GuardStateReferenceNode
+from .local_expression_impl.condition import StateReferenceNode as GuardStateReferenceNode
 from .local_expression_contexts import LocalExpressionContext
-from .local_expressions import (
+from .local_expression_impl.api import (
     LOCAL_EXPRESSION_PARSE_ERRORS,
     build_local_expression_parse_diagnostic,
     build_local_expression_validation_diagnostic,
@@ -25,7 +25,7 @@ from .local_expressions import (
 )
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
-from .value_expressions import (
+from .local_expression_impl.embedded_value import (
     BinaryNode,
     BuiltinCallNode,
     FilterApplicationNode,
@@ -1332,7 +1332,7 @@ def _collect_state_roles_from_runtime_value_surface(value: JSONValue | None) -> 
 
 def _collect_guard_state_references(node) -> set[str]:
     roles: set[str] = set()
-    from .guard_expressions import BinaryNode as GuardBinaryNode, CallArgumentNode as GuardCallArgumentNode, CallNode as GuardCallNode, ListNode as GuardListNode, UnaryNode as GuardUnaryNode
+    from .local_expression_impl.condition import BinaryNode as GuardBinaryNode, CallArgumentNode as GuardCallArgumentNode, CallNode as GuardCallNode, ListNode as GuardListNode, UnaryNode as GuardUnaryNode
 
     def visit(current) -> None:
         if isinstance(current, GuardStateReferenceNode):

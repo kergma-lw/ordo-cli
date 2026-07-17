@@ -14,8 +14,8 @@ from ordo.model.profile import Profile
 from ordo.model.workflow import Step, StepBlock, Workflow
 from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document, validate_workflow_document
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
-from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
-from ordo.runtime.value_expressions import (
+from ordo.runtime.local_expression_impl.api import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
+from ordo.runtime.local_expression_impl.embedded_value import (
     BuiltinCallNode,
     FilterApplicationNode,
     PipelineNode,
