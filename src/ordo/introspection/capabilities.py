@@ -14,7 +14,7 @@ def describe_capabilities() -> JSONObject:
         "capabilities": [capability.to_contract() for capability in RUNTIME_CAPABILITIES],
         "expression_roots": [root.to_contract() for root in EXPRESSION_ROOTS],
         "expression_surfaces": [surface.to_contract() for surface in EXPRESSION_SURFACES],
-        "value_expression_filters": [spec.to_contract() for spec in VALUE_EXPRESSION_FILTERS.values()],
-        "value_expression_builtins": [spec.to_contract() for spec in VALUE_EXPRESSION_BUILTINS.values()],
+        "embedded_value_expression_filters": [spec.to_contract() for spec in VALUE_EXPRESSION_FILTERS.values()],
+        "embedded_value_expression_builtins": [spec.to_contract() for spec in VALUE_EXPRESSION_BUILTINS.values()],
         "negative_rules": [rule.to_contract() for rule in NEGATIVE_RULES],
     }

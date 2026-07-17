@@ -92,19 +92,19 @@ class NegativeRuleSpec:
 
 
 RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
-    CapabilitySpec(name="workflow.value_expressions", status="supported", scope="workflow"),
+    CapabilitySpec(name="workflow.local_expressions", status="supported", scope="workflow"),
     CapabilitySpec(
         name="workflow.include_fragments",
         status="supported",
         scope="workflow",
-        related_capabilities=("workflow.value_expressions", "workflow.step.register"),
+        related_capabilities=("workflow.local_expressions", "workflow.step.register"),
         related_model_nodes=(
             "workflow.include_contract",
             "workflow.include",
             "workflow.include.with",
             "workflow.fragment.description",
             "workflow.fragment.args",
-            "workflow.value_expression_root.args",
+            "workflow.local_expression_root.args",
         ),
     ),
     CapabilitySpec(name="workflow.state_needs", status="supported", scope="workflow"),
@@ -156,17 +156,17 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
 )
 
 EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
-    ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "value_expression")),
+    ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "embedded_value_expression")),
     ExpressionRootSpec(name="probe", surfaces=("guard_expression",)),
-    ExpressionRootSpec(name="args", surfaces=("value_expression",)),
-    ExpressionRootSpec(name="state", surfaces=("guard_expression", "value_expression")),
-    ExpressionRootSpec(name="step", surfaces=("value_expression",)),
+    ExpressionRootSpec(name="args", surfaces=("embedded_value_expression",)),
+    ExpressionRootSpec(name="state", surfaces=("guard_expression", "embedded_value_expression")),
+    ExpressionRootSpec(name="step", surfaces=("embedded_value_expression",)),
 )
 
 EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
     ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe", "state"), boolean_operators=("and", "or", "not", "parentheses")),
     ExpressionSurfaceSpec(
-        name="value_expression",
+        name="embedded_value_expression",
         roots=("inputs", "args", "state", "step"),
         filters=tuple(VALUE_EXPRESSION_FILTERS),
         builtins=tuple(VALUE_EXPRESSION_BUILTINS),
@@ -238,8 +238,8 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
     ),
     NegativeRuleSpec(
-        name="value_expression.step_refs_must_be_backward",
-        surface="value_expression",
+        name="embedded_value_expression.step_refs_must_be_backward",
+        surface="embedded_value_expression",
         rule="Registered step references may target only earlier steps in the same workflow",
         reason="step-result reads are order-sensitive execution-local data flow rather than random access workflow state",
         related_codes=("validation.workflow.step_ref.forward",),
@@ -267,7 +267,7 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
     ),
     NegativeRuleSpec(
         name="format_value.args_must_be_list",
-        surface="value_expression.format_object",
+        surface="embedded_value_expression.format_object",
         rule="format-object args must be a list when provided",
         reason="format object arguments are evaluated positionally",
         related_codes=("validation.workflow.value_expr.format.args_type",),

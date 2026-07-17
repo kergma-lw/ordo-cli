@@ -5,7 +5,7 @@
       "capabilities": [
         {
           "must_not_infer": [],
-          "name": "workflow.value_expressions",
+          "name": "workflow.local_expressions",
           "related_capabilities": [],
           "related_model_nodes": [],
           "related_negative_rules": [],
@@ -16,7 +16,7 @@
           "must_not_infer": [],
           "name": "workflow.include_fragments",
           "related_capabilities": [
-            "workflow.value_expressions",
+            "workflow.local_expressions",
             "workflow.step.register"
           ],
           "related_model_nodes": [
@@ -25,7 +25,7 @@
             "workflow.include.with",
             "workflow.fragment.description",
             "workflow.fragment.args",
-            "workflow.value_expression_root.args"
+            "workflow.local_expression_root.args"
           ],
           "related_negative_rules": [],
           "scope": "workflow",
@@ -181,13 +181,50 @@
           "status": "supported"
         }
       ],
+      "embedded_value_expression_builtins": [
+        {
+          "name": "format"
+        }
+      ],
+      "embedded_value_expression_filters": [
+        {
+          "input_type": "string",
+          "name": "lower",
+          "output_type": "string"
+        },
+        {
+          "input_type": "string",
+          "name": "trim",
+          "output_type": "string"
+        },
+        {
+          "input_type": "string",
+          "name": "slug",
+          "output_type": "string"
+        },
+        {
+          "input_type": "json",
+          "name": "eq",
+          "output_type": "boolean"
+        },
+        {
+          "input_type": "json",
+          "name": "ne",
+          "output_type": "boolean"
+        },
+        {
+          "input_type": "boolean",
+          "name": "not",
+          "output_type": "boolean"
+        }
+      ],
       "expression_roots": [
         {
           "name": "inputs",
           "surfaces": [
             "guard_expression",
             "state_key_reference",
-            "value_expression"
+            "embedded_value_expression"
           ]
         },
         {
@@ -199,20 +236,20 @@
         {
           "name": "args",
           "surfaces": [
-            "value_expression"
+            "embedded_value_expression"
           ]
         },
         {
           "name": "state",
           "surfaces": [
             "guard_expression",
-            "value_expression"
+            "embedded_value_expression"
           ]
         },
         {
           "name": "step",
           "surfaces": [
-            "value_expression"
+            "embedded_value_expression"
           ]
         }
       ],
@@ -251,7 +288,7 @@
             "ne",
             "not"
           ],
-          "name": "value_expression",
+          "name": "embedded_value_expression",
           "roots": [
             "inputs",
             "args",
@@ -385,7 +422,7 @@
           "surface": "workflow_step"
         },
         {
-          "name": "value_expression.step_refs_must_be_backward",
+          "name": "embedded_value_expression.step_refs_must_be_backward",
           "reason": "step-result reads are order-sensitive execution-local data flow rather than random access workflow state",
           "related_capabilities": [],
           "related_codes": [
@@ -393,7 +430,7 @@
           ],
           "related_model_nodes": [],
           "rule": "Registered step references may target only earlier steps in the same workflow",
-          "surface": "value_expression"
+          "surface": "embedded_value_expression"
         },
         {
           "name": "state_set.single_target_entry",
@@ -437,44 +474,7 @@
           ],
           "related_model_nodes": [],
           "rule": "format-object args must be a list when provided",
-          "surface": "value_expression.format_object"
-        }
-      ],
-      "value_expression_builtins": [
-        {
-          "name": "format"
-        }
-      ],
-      "value_expression_filters": [
-        {
-          "input_type": "string",
-          "name": "lower",
-          "output_type": "string"
-        },
-        {
-          "input_type": "string",
-          "name": "trim",
-          "output_type": "string"
-        },
-        {
-          "input_type": "string",
-          "name": "slug",
-          "output_type": "string"
-        },
-        {
-          "input_type": "json",
-          "name": "eq",
-          "output_type": "boolean"
-        },
-        {
-          "input_type": "json",
-          "name": "ne",
-          "output_type": "boolean"
-        },
-        {
-          "input_type": "boolean",
-          "name": "not",
-          "output_type": "boolean"
+          "surface": "embedded_value_expression.format_object"
         }
       ]
     },
