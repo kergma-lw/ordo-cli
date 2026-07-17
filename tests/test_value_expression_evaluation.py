@@ -31,7 +31,7 @@ blocks:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_path = f"{temp_dir}/task-state.json"
             with open(state_path, "w", encoding="utf-8") as handle:
-                json.dump({"version": 1, "values": {"owner/repo#1": {"branch": "task/1-demo"}}}, handle)
+                json.dump({"owner/repo#1": {"branch": "task/1-demo"}}, handle)
 
             workflow = load_workflow_text(
                 f"""

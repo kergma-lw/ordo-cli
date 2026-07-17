@@ -43,10 +43,9 @@ ERROR_TAXONOMY: JSONObject = {
         {
             "name": "unsupported_feature",
             "runtime_statuses": ["validation_error", "resolution_error"],
-            "code_prefixes": ["runtime.value.expression_builtin_unsupported", "runtime.state.unsupported_"],
+            "code_prefixes": ["runtime.value.expression_builtin_unsupported"],
             "example_codes": [
                 "runtime.value.expression_builtin_unsupported",
-                "runtime.state.unsupported_version",
             ],
         },
         {

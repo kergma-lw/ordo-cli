@@ -10,24 +10,22 @@ from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class RuntimeStateIntegrationTest(unittest.TestCase):
-    def test_execute_can_write_read_and_delete_runtime_state_in_one_workflow(self) -> None:
+    def test_execute_can_read_and_delete_runtime_state_in_one_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_path = f"{temp_dir}/task-state.json"
+            with open(state_path, "w", encoding="utf-8") as handle:
+                json.dump({"owner/repo#1": {"command": "printf integrated-state"}}, handle)
             workflow = load_workflow_text(
                 f"""
 version: 0
 workflow: open-task
 inputs:
   issue_ref: owner/repo#1
-  command: printf integrated-state
 state_needs:
   task_memory: {{}}
 blocks:
   - guards: []
   - steps:
-      - name: remember-command
-        state_set:
-          state.task_memory[inputs.issue_ref].command: ${{inputs.command}}
       - name: run-command
         uses: shell.command
         with:
@@ -50,11 +48,11 @@ blocks:
             result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
             self.assertEqual(result.status, RuntimeStatus.OK)
-            self.assertEqual(result.outputs["executed_steps"], ["remember-command", "run-command", "forget-command"])
-            self.assertEqual(result.operation_results[1].outputs.get("stdout"), "integrated-state")
+            self.assertEqual(result.outputs["executed_steps"], ["run-command", "forget-command"])
+            self.assertEqual(result.operation_results[0].outputs.get("stdout"), "integrated-state")
             with open(state_path, "r", encoding="utf-8") as handle:
                 persisted = json.load(handle)
-            self.assertEqual(persisted["values"], {})
+            self.assertEqual(persisted, {})
 
     def test_plan_and_check_keep_runtime_state_steps_visible_without_executing_them(self) -> None:
         workflow = load_workflow_text(

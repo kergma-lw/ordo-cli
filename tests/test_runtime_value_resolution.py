@@ -18,8 +18,7 @@ class RuntimeValueResolutionTest(unittest.TestCase):
             with open(state_path, "w", encoding="utf-8") as handle:
                 json.dump(
                     {
-                        "version": 1,
-                        "values": {"owner/repo#1": {"command": "printf resolved-from-state"}},
+                        "owner/repo#1": {"command": "printf resolved-from-state"},
                     },
                     handle,
                 )
@@ -62,7 +61,7 @@ blocks:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_path = f"{temp_dir}/task-state.json"
             with open(state_path, "w", encoding="utf-8") as handle:
-                json.dump({"version": 1, "values": {}}, handle)
+                json.dump({}, handle)
 
             workflow = load_workflow_text(
                 f"""

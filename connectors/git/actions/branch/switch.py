@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import current_branch, map_nonzero, require_local_branch
+from connectors.git.actions._shared import CHECKOUT_STATE_INVALIDATION, current_branch, map_nonzero, require_local_branch
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, ok
 
 
@@ -13,7 +13,7 @@ def info():
         effects=("switch current checkout to a local branch",),
         outputs={"branch": "string", "changed": "boolean"},
         failure_modes=("branch_not_found", "worktree_change_conflict", "unresolved_state", "switch_blocked"),
-        invalidates_observations=("git.branch", "git.worktree", "git.ref.*"),
+        invalidates_observations=CHECKOUT_STATE_INVALIDATION,
         handler=run,
     )
 

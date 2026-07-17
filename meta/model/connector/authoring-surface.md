@@ -37,6 +37,7 @@ Implications:
 - the execution handler remains the operation's execution point rather than the module's publication point;
 - runtime or connector-family discovery should read the operation module through this uniform publication hook;
 - simple operation modules should not rely on ad hoc naming magic to bind contract metadata to execution behavior.
+- effectful action publication may declare conservative observation-invalidation metadata for runtime `check` reasoning.
 
 ## Minimal authoring context
 

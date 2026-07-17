@@ -19,7 +19,7 @@ The text root may be concise, but it should still publish:
 
 The JSON root should carry the same semantic content in machine-readable form.
 
-## Public commands
+## Public topic commands
 
 The initial public command model is:
 
@@ -37,6 +37,14 @@ The initial public command model is:
 ```
 
 The public contract should remain topic-oriented rather than exposing implementation module names directly.
+
+## Discovery action commands
+
+- `operation <reference>` resolves one focused operation contract.
+- `describe <topic>` resolves one supported public topic or subtopic to the same canonical discovery surface.
+- `search <query>` helps a caller bridge from vague terms to public topics, contract facts, or operation references.
+
+These actions are navigation surfaces over the public topic model rather than additional top-level topics.
 
 ## Topic mapping
 

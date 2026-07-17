@@ -11,6 +11,17 @@ PROFILE_CONTRACT: JSONObject = {
     "top_level_fields": [
         {"name": "name", "required": True, "type": "string"},
         {"name": "inputs", "required": False, "type": "object", "runtime_effect": "applies_missing_workflow_inputs"},
+        {
+            "name": "working_directory",
+            "required": False,
+            "type": "string",
+            "runtime_effect": "sets_profile_execution_working_directory",
+            "resolution_base": "playbook_dir",
+            "expression_syntax": "${...}",
+            "expression_surface": "activation_input_value_expression",
+            "expression_allowed_roots": ["inputs"],
+            "expression_forbidden_roots": ["state", "step"],
+        },
         {"name": "checks", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
         {"name": "overrides", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
         {"name": "launchers", "required": False, "type": "object", "runtime_effect": "publishes_profile_scoped_launchers"},
@@ -28,6 +39,10 @@ PROFILE_CONTRACT: JSONObject = {
     ],
     "compose_semantics": {
         "inputs": {
+            "strategy": "first_writer_wins",
+            "conflict": "validation_error",
+        },
+        "working_directory": {
             "strategy": "first_writer_wins",
             "conflict": "validation_error",
         },
@@ -50,6 +65,10 @@ PROFILE_CONTRACT: JSONObject = {
             "may_add_missing": True,
             "may_override_explicit_workflow_values": False,
             "conflict": "validation_error",
+        },
+        "working_directory": {
+            "mutates_workflow_steps": False,
+            "published_as_explicit_metadata": True,
         },
         "checks": {
             "mutates_workflow_contract": False,

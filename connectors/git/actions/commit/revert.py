@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import current_branch, head_commit, map_nonzero, require_commit
+from connectors.git.actions._shared import COMMIT_GRAPH_INVALIDATION, current_branch, head_commit, map_nonzero, require_commit
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, ok
 
 
@@ -13,6 +13,7 @@ def info():
         effects=("create a new commit that reverts a target commit",),
         outputs={"reverted_commit": "string", "revert_commit": "string", "branch": "string | null"},
         failure_modes=("commit_not_found", "merge_commit_not_supported", "revert_conflict", "revert_blocked"),
+        invalidates_observations=COMMIT_GRAPH_INVALIDATION,
         handler=run,
     )
 

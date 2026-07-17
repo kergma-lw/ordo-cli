@@ -12,6 +12,7 @@ PLAYBOOK_CONTRACT: JSONObject = {
     "discovery": {"path": ".ordo/playbook.yml"},
     "top_level_fields": [
         {"name": "version", "required": True, "type": "integer"},
+        {"name": "pre_run", "required": False, "type": "array"},
         {"name": "states", "required": True, "type": "object"},
         {"name": "defaults", "required": False, "type": "object"},
         {"name": "workflows", "required": True, "type": "object"},
@@ -40,6 +41,17 @@ PLAYBOOK_CONTRACT: JSONObject = {
     ],
     "defaults_fields": [
         {"name": "profile", "required": False, "type": "string", "runtime_effect": "selects_active_profile"},
+        {
+            "name": "working_directory",
+            "required": False,
+            "type": "string",
+            "runtime_effect": "sets_default_execution_working_directory",
+            "resolution_base": "playbook_dir",
+            "expression_syntax": "${...}",
+            "expression_surface": "activation_input_value_expression",
+            "expression_allowed_roots": ["inputs"],
+            "expression_forbidden_roots": ["state", "step"],
+        },
     ],
     "activation_semantics": {
         "discovery": {
@@ -50,6 +62,10 @@ PLAYBOOK_CONTRACT: JSONObject = {
         "workflow_entries": {
             "requires": ["file"],
             "optional": ["working_directory", "state_bindings"],
+        },
+        "pre_run": {
+            "item_type": "workflow_reference",
+            "effect": "executes_before_requested_workflow_in_same_runtime_session",
         },
         "profile_entries": {
             "requires": ["file"],

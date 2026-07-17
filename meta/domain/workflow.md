@@ -13,7 +13,7 @@ It must not answer the question:
 ## What is acceptable in a workflow
 
 - ordered guard and step blocks;
-- reusable included workflow fragments;
+- reusable included workflow fragments through assembly instructions;
 - future invocation-oriented reusable fragment runs when static composition is insufficient;
 - guard lists inside `guards` blocks;
 - ordered steps inside `steps` blocks;
@@ -23,13 +23,23 @@ It must not answer the question:
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
 
-The stable execution shape is an ordered `blocks` list.
-Each block declares exactly one of:
+## Assembly vs execution
+
+An assembly instruction is a source-level workflow construct that shapes workflow assembly rather than surviving as a block kind in the assembled execution model.
+
+`include` is the initial assembly instruction for static workflow composition.
+
+The stable assembled execution shape is an ordered `blocks` list.
+Each execution block declares exactly one of:
 
 - `guards`
 - `steps`
 
 Top-level `guards` and `steps` may remain as compatibility-only authoring sugar when they normalize to the same block structure.
+
+Assembly instructions may appear in source workflow material, but they do not survive as execution-semantic block kinds in the assembled workflow shape.
+
+Assembly may still carry caller-scoped bindings into expanded material. That does not make the assembly instruction itself part of the assembled block model.
 
 Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
 

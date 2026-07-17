@@ -12,7 +12,7 @@ class IntrospectionProfileContractTest(unittest.TestCase):
         field_names = {field["name"] for field in payload["top_level_fields"]}
         override_fields = {field["name"] for field in payload["override_fields"]}
         launcher_fields = {field["name"] for field in payload["launcher_fields"]}
-        self.assertEqual(field_names, {"name", "inputs", "checks", "overrides", "launchers"})
+        self.assertEqual(field_names, {"name", "inputs", "working_directory", "checks", "overrides", "launchers"})
         self.assertEqual(override_fields, {"target", "with", "reason"})
         self.assertEqual(launcher_fields, {"file", "connector", "before", "after"})
         self.assertEqual(payload["compose_semantics"]["inputs"]["strategy"], "first_writer_wins")

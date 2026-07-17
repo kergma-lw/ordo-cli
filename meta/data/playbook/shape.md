@@ -14,6 +14,7 @@
 workflows:
   close-task:
     file: close-task.yml
+    working_directory: ${inputs.repo_root}
     state_bindings:
       task_memory: repo_task_state
 ```
@@ -24,7 +25,20 @@ Required field:
 
 Optional stable field:
 
+- `working_directory`
 - `state_bindings`
+
+## Stable pre-run shape
+
+```yaml
+pre_run:
+  - workflows/resolve-context.yml
+  - workflows/ensure-environment.yml
+```
+
+Optional stable top-level field:
+
+- `pre_run`
 
 Stable `state_bindings` shape:
 
@@ -38,11 +52,13 @@ state_bindings:
 ```yaml
 defaults:
   profile: backend-default
+  working_directory: repos/default-backend
 ```
 
 Optional stable field:
 
 - `profile`
+- `working_directory`
 
 ## Stable profile entry shape
 

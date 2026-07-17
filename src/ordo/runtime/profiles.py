@@ -45,12 +45,14 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
 
     diagnostics: list[Diagnostic] = []
     merged_inputs: dict[str, object] = {}
+    merged_working_directory: str | None = None
     merged_checks: list[str] = []
     merged_overrides: list[Override] = []
     merged_launchers = {}
     input_sources: dict[str, str] = {}
     override_sources: dict[str, str] = {}
     launcher_sources: dict[str, str] = {}
+    working_directory_source: str | None = None
 
     for profile in profiles:
         for key, value in profile.inputs.items():
@@ -70,6 +72,23 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
             if key not in merged_inputs:
                 merged_inputs[key] = value
                 input_sources[key] = profile.name
+
+        if profile.working_directory is not None:
+            if merged_working_directory is not None and merged_working_directory != profile.working_directory:
+                diagnostics.append(
+                    _diagnostic(
+                        code="composition.profile.working_directory_conflict",
+                        message="Profile working_directory conflicts with an earlier profile value",
+                        path=("working_directory",),
+                        profile=profile.name,
+                        first_profile=working_directory_source,
+                        previous_value=merged_working_directory,
+                        new_value=profile.working_directory,
+                    )
+                )
+            elif merged_working_directory is None:
+                merged_working_directory = profile.working_directory
+                working_directory_source = profile.name
 
         for check in profile.checks:
             if check not in merged_checks:
@@ -121,6 +140,7 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
         profile=Profile(
             name=composed_name,
             inputs=merged_inputs,
+            working_directory=merged_working_directory,
             checks=tuple(merged_checks),
             overrides=tuple(merged_overrides),
             launchers=merged_launchers,
@@ -172,6 +192,33 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
             states=workflow.states,
             step_results=workflow.step_results,
             blocks=workflow.blocks,
+        ),
+        active_profile=profile.name,
+        active_overrides=profile.overrides,
+    )
+
+
+def apply_profile_defaults_to_subsequent_steps(workflow: Workflow, profile: Profile) -> WorkflowProfileApplicationResult:
+    """Apply profile missing-input defaults forward-only for subsequent execution."""
+
+    merged_inputs = dict(workflow.inputs)
+    for key, value in profile.inputs.items():
+        merged_inputs.setdefault(key, value)
+
+    return WorkflowProfileApplicationResult(
+        status=RuntimeStatus.OK,
+        workflow=Workflow(
+            version=workflow.version,
+            workflow=workflow.workflow,
+            inputs=merged_inputs,
+            declared_inputs=workflow.declared_inputs,
+            state_needs=workflow.state_needs,
+            state_bindings=workflow.state_bindings,
+            states=workflow.states,
+            step_results=workflow.step_results,
+            blocks=workflow.blocks,
+            source_path=workflow.source_path,
+            launch_dir=workflow.launch_dir,
         ),
         active_profile=profile.name,
         active_overrides=profile.overrides,

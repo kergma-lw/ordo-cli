@@ -5,17 +5,17 @@ args:
   commit_message: string
 
 steps:
-  - name: run-generator-command
+  - name: Run generator command
     uses: shell.command
     launcher: ${args.launcher}
     with:
       command: ${args.command}
 
-  - name: stage-generated-artifacts
+  - name: Stage generated artifacts
     if: ${not git.worktree.clean}
     uses: git.index.add_all
 
-  - name: commit-generated-artifacts
+  - name: Commit generated artifacts
     if: ${not git.worktree.clean}
     uses: git.commit.create
     with:

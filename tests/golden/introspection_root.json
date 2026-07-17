@@ -14,6 +14,25 @@
         },
         {
           "must_not_infer": [],
+          "name": "workflow.include_fragments",
+          "related_capabilities": [
+            "workflow.value_expressions",
+            "workflow.step.register"
+          ],
+          "related_model_nodes": [
+            "workflow.include_contract",
+            "workflow.include",
+            "workflow.include.with",
+            "workflow.fragment.description",
+            "workflow.fragment.args",
+            "workflow.value_expression_root.args"
+          ],
+          "related_negative_rules": [],
+          "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
           "name": "workflow.state_needs",
           "related_capabilities": [],
           "related_model_nodes": [],
@@ -54,6 +73,40 @@
           "related_capabilities": [],
           "related_model_nodes": [],
           "related_negative_rules": [],
+          "scope": "workflow.step",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
+          "name": "runtime.launchers",
+          "related_capabilities": [
+            "workflow.step.launcher"
+          ],
+          "related_model_nodes": [
+            "profile.launchers",
+            "workflow.step.launcher",
+            "workflow.step_forms.operation_call"
+          ],
+          "related_negative_rules": [
+            "workflow_step.launcher_requires_uses"
+          ],
+          "scope": "runtime",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
+          "name": "workflow.step.launcher",
+          "related_capabilities": [
+            "runtime.launchers"
+          ],
+          "related_model_nodes": [
+            "workflow.step.launcher",
+            "profile.launchers",
+            "workflow.step_forms.operation_call"
+          ],
+          "related_negative_rules": [
+            "workflow_step.launcher_requires_uses"
+          ],
           "scope": "workflow.step",
           "status": "supported"
         },
@@ -108,10 +161,7 @@
           "status": "supported"
         },
         {
-          "must_not_infer": [
-            "workflow.step.condition is unsupported",
-            "workflow.step.register is unsupported"
-          ],
+          "must_not_infer": [],
           "name": "workflow.branching",
           "related_capabilities": [
             "workflow.step.condition",
@@ -128,7 +178,7 @@
             "workflow_step.if_conflicts_with_register"
           ],
           "scope": "workflow",
-          "status": "unsupported"
+          "status": "supported"
         }
       ],
       "expression_roots": [
@@ -147,8 +197,15 @@
           ]
         },
         {
+          "name": "args",
+          "surfaces": [
+            "value_expression"
+          ]
+        },
+        {
           "name": "state",
           "surfaces": [
+            "guard_expression",
             "value_expression"
           ]
         },
@@ -161,15 +218,28 @@
       ],
       "expression_surfaces": [
         {
+          "boolean_operators": [
+            "and",
+            "or",
+            "not",
+            "parentheses"
+          ],
           "builtins": [],
           "filters": [],
           "name": "guard_expression",
           "roots": [
             "inputs",
-            "probe"
+            "probe",
+            "state"
           ]
         },
         {
+          "boolean_operators": [
+            "and",
+            "or",
+            "not",
+            "parentheses"
+          ],
           "builtins": [
             "format"
           ],
@@ -184,11 +254,13 @@
           "name": "value_expression",
           "roots": [
             "inputs",
+            "args",
             "state",
             "step"
           ]
         },
         {
+          "boolean_operators": [],
           "builtins": [],
           "filters": [],
           "name": "state_key_reference",
@@ -199,20 +271,11 @@
       ],
       "negative_rules": [
         {
-          "name": "guard_expression.no_state_root",
-          "reason": "guards run before steps and only support input references and public probe references",
-          "related_capabilities": [],
-          "related_codes": [],
-          "related_model_nodes": [],
-          "rule": "State references are not allowed in guard expressions",
-          "surface": "guard_expression"
-        },
-        {
           "name": "guard_expression.no_step_root",
           "reason": "guards run before effectful step execution and therefore cannot depend on registered step results",
           "related_capabilities": [],
           "related_codes": [
-            "validation.workflow.guard_expr.step_ref"
+            "validation.workflow.local_expression.guard.step_ref"
           ],
           "related_model_nodes": [],
           "rule": "Registered step references are not allowed in guard expressions",
@@ -260,6 +323,24 @@
             "workflow.step_forms.operation_call"
           ],
           "rule": "The with field is allowed only together with uses",
+          "surface": "workflow_step"
+        },
+        {
+          "name": "workflow_step.launcher_requires_uses",
+          "reason": "launcher selection wraps operation-call execution surfaces rather than builtin value or state steps",
+          "related_capabilities": [
+            "runtime.launchers",
+            "workflow.step.launcher"
+          ],
+          "related_codes": [
+            "validation.workflow.step.launcher_without_uses"
+          ],
+          "related_model_nodes": [
+            "workflow.step.launcher",
+            "workflow.step.uses",
+            "workflow.step_forms.operation_call"
+          ],
+          "rule": "The launcher field is allowed only together with uses",
           "surface": "workflow_step"
         },
         {
@@ -324,6 +405,28 @@
           "related_model_nodes": [],
           "rule": "state_set must contain exactly one target entry",
           "surface": "state_set"
+        },
+        {
+          "name": "workflow_fragment.no_state_surface",
+          "reason": "runtime state remains a top-level workflow handoff surface rather than reusable fragment-local memory",
+          "related_capabilities": [],
+          "related_codes": [
+            "load.workflow.include.state_forbidden"
+          ],
+          "related_model_nodes": [],
+          "rule": "Included fragments must not read, declare, or mutate runtime state",
+          "surface": "workflow.include_fragments"
+        },
+        {
+          "name": "workflow_state_role.write_after_last_read",
+          "reason": "persistent runtime state should capture final cross-run handoff rather than per-run scratch flow",
+          "related_capabilities": [],
+          "related_codes": [
+            "validation.workflow.state_role.write_before_last_read"
+          ],
+          "related_model_nodes": [],
+          "rule": "Logical state role writes and deletes are allowed only after the final read of that same role",
+          "surface": "workflow.state_needs"
         },
         {
           "name": "format_value.args_must_be_list",
@@ -473,12 +576,10 @@
         },
         {
           "code_prefixes": [
-            "runtime.value.expression_builtin_unsupported",
-            "runtime.state.unsupported_"
+            "runtime.value.expression_builtin_unsupported"
           ],
           "example_codes": [
-            "runtime.value.expression_builtin_unsupported",
-            "runtime.state.unsupported_version"
+            "runtime.value.expression_builtin_unsupported"
           ],
           "name": "unsupported_feature",
           "runtime_statuses": [
@@ -569,11 +670,115 @@
             "shell_fallback"
           ],
           "verified": true
+        },
+        {
+          "name": "launcher-step",
+          "path": "examples/launcher-step.yaml",
+          "related_topics": [
+            "capabilities",
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "step_launcher_selection",
+            "profile_scoped_launchers",
+            "shell_wrapper_example"
+          ],
+          "verified": true
+        },
+        {
+          "name": "include-plain",
+          "path": "examples/include-plain.yaml",
+          "related_topics": [
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "workflow_include",
+            "plain_fragment_reuse"
+          ],
+          "verified": true
+        },
+        {
+          "name": "include-args",
+          "path": "examples/include-args.yaml",
+          "related_topics": [
+            "capabilities",
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "workflow_include",
+            "fragment_args",
+            "ordo_help_aligned_fragment_contract"
+          ],
+          "verified": true
+        },
+        {
+          "name": "playbook-pre-run",
+          "path": "examples/playbook-pre-run.yaml",
+          "related_topics": [
+            "model",
+            "examples",
+            "operations"
+          ],
+          "shows": [
+            "playbook_pre_run",
+            "runtime_profile_switch",
+            "shared_preparation_stage"
+          ],
+          "verified": true
         }
       ]
     },
     "operations": {
       "connectors": [
+        {
+          "bootstrap": {
+            "context_fields": [],
+            "prerequisites": []
+          },
+          "namespace": "runtime",
+          "operations": [
+            {
+              "deprecated": true,
+              "effects": [
+                "switch runtime profile for later execution in the current run"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "profile": "string"
+                  },
+                  "reference": "runtime.profile.use"
+                }
+              ],
+              "failure_modes": [
+                "input_error",
+                "execution_error"
+              ],
+              "inputs": {
+                "profile": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "profile.use",
+              "outputs": {
+                "profile": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": [
+                "workflow.step.profile_switch"
+              ],
+              "summary": "Legacy compatibility action for switching runtime execution to another declared profile",
+              "tags": [
+                "runtime",
+                "action"
+              ]
+            }
+          ]
+        },
         {
           "bootstrap": {
             "context_fields": [
@@ -599,6 +804,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "branch",
@@ -640,6 +846,10 @@
                 "branch": "string",
                 "start_point": "string | null"
               },
+              "invalidates_observations": [
+                "git.branches",
+                "git.ref.*"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "branch.create",
@@ -678,6 +888,10 @@
               "inputs": {
                 "branch": "string"
               },
+              "invalidates_observations": [
+                "git.branches",
+                "git.ref.*"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "branch.delete",
@@ -714,6 +928,18 @@
               "inputs": {
                 "branch": "string"
               },
+              "invalidates_observations": [
+                "git.branch",
+                "git.branches",
+                "git.upstream",
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.repo",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "branch.switch",
@@ -742,6 +968,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "branches",
@@ -787,6 +1014,14 @@
               "inputs": {
                 "message": "string | null"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "commit.amend",
@@ -824,6 +1059,14 @@
               "inputs": {
                 "message": "string"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "commit.create",
@@ -861,6 +1104,14 @@
               "inputs": {
                 "commit": "string"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "commit.revert",
@@ -872,6 +1123,92 @@
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.commit.revert'",
+              "tags": [
+                "git",
+                "action"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "limit": 5,
+                    "rev": "HEAD"
+                  },
+                  "reference": "git.commits"
+                },
+                {
+                  "inputs": {
+                    "limit": 3,
+                    "rev": "HEAD~10..HEAD"
+                  },
+                  "reference": "git.commits"
+                }
+              ],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {
+                "limit": "integer",
+                "rev": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "commits",
+              "outputs": {
+                "count": "integer",
+                "items": [
+                  {
+                    "author_name": "string",
+                    "body": "string",
+                    "commit": "string",
+                    "committed_at": "string",
+                    "subject": "string",
+                    "text": "string"
+                  }
+                ],
+                "repository_root": "string",
+                "rev": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
+              "tags": [
+                "git",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "stage all current worktree changes into the index"
+              ],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "git.index.add_all"
+                }
+              ],
+              "failure_modes": [
+                "stage_blocked"
+              ],
+              "inputs": {},
+              "invalidates_observations": [
+                "git.worktree",
+                "git.state"
+              ],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "index.add_all",
+              "outputs": {
+                "staged": "boolean"
+              },
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Action operation 'git.index.add_all'",
               "tags": [
                 "git",
                 "action"
@@ -899,6 +1236,14 @@
               "inputs": {
                 "commit": "string"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "integrate.cherry_pick",
@@ -936,6 +1281,14 @@
               "inputs": {
                 "ref": "string"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "integrate.merge",
@@ -973,6 +1326,14 @@
               "inputs": {
                 "ref": "string"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "integrate.merge_ff_only",
@@ -1017,6 +1378,14 @@
                 "onto": "string",
                 "upstream": "string"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.worktree",
+                "git.worktrees",
+                "git.state",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "integrate.rebase_onto",
@@ -1052,6 +1421,7 @@
                 "base": "string",
                 "head": "string"
               },
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "range",
@@ -1090,6 +1460,7 @@
               "inputs": {
                 "ref": "string"
               },
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "ref",
@@ -1122,6 +1493,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "repo",
@@ -1156,6 +1528,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "stash",
@@ -1191,6 +1564,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "state",
@@ -1232,6 +1606,13 @@
               "inputs": {
                 "remote": "string"
               },
+              "invalidates_observations": [
+                "git.ref.*",
+                "git.branches",
+                "git.repo",
+                "git.range",
+                "git.commits"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "sync.fetch",
@@ -1272,6 +1653,7 @@
                 "branch": "string",
                 "remote": "string | null"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "sync.push",
@@ -1300,6 +1682,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "upstream",
@@ -1332,6 +1715,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "worktree",
@@ -1366,6 +1750,7 @@
                 "probe_failed"
               ],
               "inputs": {},
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "worktrees",
@@ -1428,6 +1813,7 @@
                 "issue_number": "integer",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "issue",
@@ -1495,6 +1881,7 @@
                 "separator": "string | null",
                 "text": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "issue.body.append",
@@ -1537,6 +1924,7 @@
                 "issue_number": "integer",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "issue.body.replace",
@@ -1576,6 +1964,7 @@
                 "issue_number": "integer",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "issue.close",
@@ -1617,6 +2006,7 @@
                 "issue_number": "integer",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "issue.comment.add",
@@ -1659,6 +2049,7 @@
                 "repository": "string",
                 "title": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "issue.create",
@@ -1700,6 +2091,7 @@
                 "project_id": "string",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "probe",
               "maturity": "stable",
               "name": "project.issue",
@@ -1746,6 +2138,7 @@
                 "project_id": "string",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.add",
@@ -1791,6 +2184,7 @@
                 "project_id": "string",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.estimate.set",
@@ -1837,6 +2231,7 @@
                 "project_id": "string",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.iteration.set",
@@ -1883,6 +2278,7 @@
                 "project_id": "string",
                 "repository": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.priority.set",
@@ -1929,6 +2325,7 @@
                 "repository": "string",
                 "size": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.size.set",
@@ -1975,6 +2372,7 @@
                 "repository": "string",
                 "status": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.status.set",
@@ -2021,6 +2419,7 @@
                 "repository": "string",
                 "type": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.type.set",
@@ -2073,6 +2472,7 @@
               "inputs": {
                 "command": "string"
               },
+              "invalidates_observations": [],
               "kind": "action",
               "maturity": "stable",
               "name": "command",
@@ -2134,6 +2534,10 @@
           "path": ".ordo/playbook.yml",
           "strategy": "cwd_relative_single_path"
         },
+        "pre_run": {
+          "effect": "executes_before_requested_workflow_in_same_runtime_session",
+          "item_type": "workflow_reference"
+        },
         "profile_entries": {
           "requires": [
             "file"
@@ -2146,6 +2550,7 @@
         },
         "workflow_entries": {
           "optional": [
+            "working_directory",
             "state_bindings"
           ],
           "requires": [
@@ -2158,6 +2563,22 @@
           "name": "profile",
           "required": false,
           "runtime_effect": "selects_active_profile",
+          "type": "string"
+        },
+        {
+          "expression_allowed_roots": [
+            "inputs"
+          ],
+          "expression_forbidden_roots": [
+            "state",
+            "step"
+          ],
+          "expression_surface": "activation_input_value_expression",
+          "expression_syntax": "${...}",
+          "name": "working_directory",
+          "required": false,
+          "resolution_base": "playbook_dir",
+          "runtime_effect": "sets_default_execution_working_directory",
           "type": "string"
         }
       ],
@@ -2186,6 +2607,11 @@
           "type": "integer"
         },
         {
+          "name": "pre_run",
+          "required": false,
+          "type": "array"
+        },
+        {
           "name": "states",
           "required": true,
           "type": "object"
@@ -2211,6 +2637,22 @@
         {
           "name": "file",
           "required": true,
+          "type": "string"
+        },
+        {
+          "expression_allowed_roots": [
+            "inputs"
+          ],
+          "expression_forbidden_roots": [
+            "state",
+            "step"
+          ],
+          "expression_surface": "activation_input_value_expression",
+          "expression_syntax": "${...}",
+          "name": "working_directory",
+          "required": false,
+          "resolution_base": "playbook_dir",
+          "runtime_effect": "sets_execution_working_directory",
           "type": "string"
         },
         {
@@ -2276,12 +2718,43 @@
           "conflict": "validation_error",
           "strategy": "first_writer_wins"
         },
+        "launchers": {
+          "conflict": "validation_error",
+          "conflict_key": "launcher_name",
+          "strategy": "first_writer_wins"
+        },
         "overrides": {
           "conflict": "validation_error",
           "conflict_key": "target"
+        },
+        "working_directory": {
+          "conflict": "validation_error",
+          "strategy": "first_writer_wins"
         }
       },
       "document_kind": "profile",
+      "launcher_fields": [
+        {
+          "name": "file",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "connector",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "before",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "after",
+          "required": false,
+          "type": "string"
+        }
+      ],
       "override_fields": [
         {
           "name": "target",
@@ -2312,6 +2785,22 @@
           "type": "object"
         },
         {
+          "expression_allowed_roots": [
+            "inputs"
+          ],
+          "expression_forbidden_roots": [
+            "state",
+            "step"
+          ],
+          "expression_surface": "activation_input_value_expression",
+          "expression_syntax": "${...}",
+          "name": "working_directory",
+          "required": false,
+          "resolution_base": "playbook_dir",
+          "runtime_effect": "sets_profile_execution_working_directory",
+          "type": "string"
+        },
+        {
           "name": "checks",
           "required": false,
           "runtime_effect": "published_metadata_only",
@@ -2322,6 +2811,12 @@
           "required": false,
           "runtime_effect": "published_metadata_only",
           "type": "array"
+        },
+        {
+          "name": "launchers",
+          "required": false,
+          "runtime_effect": "publishes_profile_scoped_launchers",
+          "type": "object"
         }
       ],
       "workflow_apply_semantics": {
@@ -2333,7 +2828,15 @@
           "may_add_missing": true,
           "may_override_explicit_workflow_values": false
         },
+        "launchers": {
+          "mutates_workflow_steps": false,
+          "published_as_explicit_metadata": true
+        },
         "overrides": {
+          "mutates_workflow_steps": false,
+          "published_as_explicit_metadata": true
+        },
+        "working_directory": {
           "mutates_workflow_steps": false,
           "published_as_explicit_metadata": true
         }
@@ -2380,12 +2883,8 @@
         }
       ],
       "storage_document": {
-        "required_fields": [
-          "version",
-          "values"
-        ],
-        "values_type": "object",
-        "version": 1
+        "root_type": "object",
+        "top_level_keys": "user-defined"
       },
       "workflow_surface": {
         "state_binding_field": "state_bindings",
@@ -2410,6 +2909,15 @@
           "required_fields": [
             "steps"
           ]
+        },
+        {
+          "name": "include_block",
+          "optional_fields": [
+            "with"
+          ],
+          "required_fields": [
+            "include"
+          ]
         }
       ],
       "document_kind": "workflow",
@@ -2419,42 +2927,176 @@
           "shape": {
             "uses": "string",
             "with": "object"
-          }
+          },
+          "status": "compatibility_only"
         },
         {
           "name": "expression",
-          "shape": "string"
+          "shape": "string",
+          "status": "stable_preferred"
         }
       ],
+      "include_contract": {
+        "authoring_role": "workflow_fragment_reuse",
+        "call_fields": [
+          {
+            "name": "include",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "authoring_role": "fragment_argument_bindings",
+            "name": "with",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "cycle_detection": "current_expansion_stack",
+        "directive_field": "include",
+        "error_codes": [
+          "load.workflow.include.not_found",
+          "load.workflow.include.cycle",
+          "load.workflow.include.depth",
+          "load.workflow.include.forbidden_path",
+          "load.workflow.include.not_file",
+          "load.workflow.include.with.type",
+          "load.workflow.include.args.invalid_declaration",
+          "load.workflow.include.args.missing",
+          "load.workflow.include.args.unknown",
+          "load.workflow.include.args.type"
+        ],
+        "expansion_semantics": "resolve_bind_expand_whole_node_replacement",
+        "extension_probe_order": [
+          ".yaml",
+          ".yml"
+        ],
+        "fragment_argument_access_surface": "args.name",
+        "fragment_argument_declaration_forms": [
+          {
+            "name": "required_short_form",
+            "shape": "arg_name: string_type_name"
+          },
+          {
+            "name": "object_form",
+            "shape": {
+              "default": "json_value_optional",
+              "required": "boolean_optional",
+              "type": "string"
+            }
+          }
+        ],
+        "fragment_argument_default_semantics": {
+          "default_makes_argument_optional": true,
+          "default_null_is_valid": true,
+          "omitted_argument_is_distinct_from_explicit_null_binding": true
+        },
+        "fragment_metadata_fields": [
+          {
+            "name": "description",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "authoring_role": "declares_fragment_local_inputs",
+            "name": "args",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "max_depth": 32,
+        "search_order": [
+          "including_file_dir",
+          "launch_dir",
+          "launch_dir_dot_ordo",
+          "home_dot_ordo",
+          "built_in_includes_dir"
+        ],
+        "state_scope": "global_across_assembled_workflow",
+        "step_scope": "local_to_workflow_or_fragment_expansion_scope",
+        "stops_on_first_match": true,
+        "targets": "files_only",
+        "validation_boundary": "assembled_workflow_after_include_expansion_and_argument_binding"
+      },
+      "inputs_contract": {
+        "access_surface": "inputs.name",
+        "declaration_shape": "mapping",
+        "declared_keys_required_at_activation": true,
+        "empty_string_is_distinct_value": true,
+        "null_is_distinct_from_missing": true,
+        "rejects_unknown_activation_inputs": true,
+        "scope": "global",
+        "validated_by": "runtime"
+      },
+      "run_contract": {
+        "authoring_role": "workflow_fragment_invocation",
+        "call_fields": [
+          {
+            "name": "run",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "authoring_role": "caller_scoped_invocation_condition",
+            "name": "if",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "authoring_role": "fragment_argument_bindings",
+            "name": "with",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "caller_scoped_binding_surface": [
+          "inputs",
+          "state",
+          "step"
+        ],
+        "caller_scoped_condition_surface": [
+          "inputs",
+          "state",
+          "step"
+        ],
+        "directive_field": "run",
+        "execution_semantics": "runtime_scoped_fragment_invocation",
+        "fragment_argument_access_surface": "args.name",
+        "surface_kind": "step_form"
+      },
       "step_form_rules": [
         {
           "fields": [
             "uses",
+            "run",
+            "profile_switch",
             "value",
             "state_set",
             "state_delete"
           ],
           "kind": "exclusive_choice",
-          "message": "A workflow step must define exactly one of uses, value, state_set, or state_delete",
+          "message": "A workflow step must define exactly one of uses, run, profile_switch, value, state_set, or state_delete",
           "name": "exactly_one_step_form"
         },
         {
           "field": "with",
           "kind": "dependency",
-          "message": "The with field is allowed only together with uses",
+          "message": "The with field is allowed only together with uses or run",
           "name": "with_requires_uses",
           "requires": [
-            "uses"
+            "uses",
+            "run"
           ]
         }
       ],
       "step_forms": [
         {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
           "name": "operation_call",
           "optional_fields": [
             "if",
             "with",
-            "register"
+            "register",
+            "launcher"
           ],
           "required_fields": [
             "name",
@@ -2462,6 +3104,30 @@
           ]
         },
         {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "name": "run_invocation",
+          "optional_fields": [
+            "if",
+            "with"
+          ],
+          "required_fields": [
+            "name",
+            "run"
+          ]
+        },
+        {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "name": "profile_switch",
+          "optional_fields": [
+            "if"
+          ],
+          "required_fields": [
+            "name",
+            "profile_switch"
+          ]
+        },
+        {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
           "name": "value",
           "optional_fields": [
             "if",
@@ -2473,6 +3139,7 @@
           ]
         },
         {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
           "name": "state_set",
           "optional_fields": [
             "if"
@@ -2483,6 +3150,7 @@
           ]
         },
         {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
           "name": "state_delete",
           "optional_fields": [
             "if"
@@ -2497,12 +3165,18 @@
         "guard_expression": {
           "allowed_roots": [
             "inputs",
-            "probe"
+            "probe",
+            "state"
+          ],
+          "boolean_operators": [
+            "and",
+            "or",
+            "not",
+            "parentheses"
           ],
           "forbidden_features": [
             "value_expression_filters",
-            "value_expression_builtins",
-            "state_references"
+            "value_expression_builtins"
           ]
         },
         "runtime_value_surface": {
@@ -2519,8 +3193,15 @@
           ],
           "allowed_roots": [
             "inputs",
+            "args",
             "state",
             "step"
+          ],
+          "boolean_operators": [
+            "and",
+            "or",
+            "not",
+            "parentheses"
           ]
         }
       },
@@ -2536,9 +3217,12 @@
           "type": "string"
         },
         {
+          "activation_requirement": "all_declared_keys_required",
+          "authoring_role": "declares_global_activation_inputs",
           "name": "inputs",
           "required": false,
-          "type": "object"
+          "type": "object",
+          "unknown_input_policy": "reject_unknown_inputs"
         },
         {
           "name": "state_needs",

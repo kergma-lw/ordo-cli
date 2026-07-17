@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import map_nonzero
+from connectors.git.actions._shared import FETCH_INVALIDATION, map_nonzero
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, ok
 
 
@@ -13,6 +13,7 @@ def info():
         effects=("fetch refs from a remote into the local repository",),
         outputs={"remote": "string", "fetched": "boolean"},
         failure_modes=("remote_not_found", "fetch_blocked"),
+        invalidates_observations=FETCH_INVALIDATION,
         handler=run,
     )
 

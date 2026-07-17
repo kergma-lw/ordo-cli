@@ -12,8 +12,12 @@
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
-- A playbook workflow entry may declare an explicit execution working directory for that run.
-- A playbook workflow entry working directory may use the existing `${...}` value-expression syntax when the expression stays within an activation-time-safe subset.
+- A playbook launch surface may declare an explicit execution working directory for a run through playbook defaults, the active profile, or the active workflow entry.
+- Working-directory precedence must be deterministic and follow increasing specificity from playbook defaults to profile context to workflow-entry context.
+- Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` value-expression syntax when the expression stays within an activation-time-safe subset.
+- A playbook may declare a `pre_run` workflow set that executes before the requested workflow in the same runtime session.
+- A `pre_run` workflow set must remain explicit, project-local, and reviewable from the playbook surface.
+- Failure in any `pre_run` workflow must prevent effectful execution of the requested workflow.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -36,6 +40,6 @@
 - A playbook must remain a project-level launch surface rather than becoming a second workflow language.
 - Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
 - Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
-- A playbook execution working directory should be explicit runtime context rather than hidden shell-first behavior.
-- A playbook working-directory expression must reuse the documented value-expression syntax rather than introducing a second expression language.
-- A playbook working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.
+- Execution working directory should remain explicit runtime context rather than hidden shell-first behavior.
+- A working-directory expression must reuse the documented value-expression syntax rather than introducing a second expression language.
+- A working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.

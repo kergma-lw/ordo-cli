@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import current_branch, head_commit, map_nonzero
+from connectors.git.actions._shared import COMMIT_GRAPH_INVALIDATION, current_branch, head_commit, map_nonzero
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
 
 
@@ -13,6 +13,7 @@ def info():
         effects=("create a new commit from the current index",),
         outputs={"commit": "string", "branch": "string | null"},
         failure_modes=("message_invalid", "nothing_to_commit", "commit_blocked"),
+        invalidates_observations=COMMIT_GRAPH_INVALIDATION,
         handler=run,
     )
 

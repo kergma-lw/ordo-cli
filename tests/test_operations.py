@@ -20,6 +20,7 @@ class OperationTest(unittest.TestCase):
         git_worktrees_module = importlib.import_module("connectors.git.probes.worktrees")
         git_branches_module = importlib.import_module("connectors.git.probes.branches")
         git_stash_module = importlib.import_module("connectors.git.probes.stash")
+        git_commits_module = importlib.import_module("connectors.git.probes.commits")
         git_state_module = importlib.import_module("connectors.git.probes.state")
         git_ref_module = importlib.import_module("connectors.git.probes.ref")
         git_upstream_module = importlib.import_module("connectors.git.probes.upstream")
@@ -30,6 +31,7 @@ class OperationTest(unittest.TestCase):
         worktrees_info = git_worktrees_module.info()
         branches_info = git_branches_module.info()
         stash_info = git_stash_module.info()
+        commits_info = git_commits_module.info()
         state_info = git_state_module.info()
         ref_info = git_ref_module.info()
         upstream_info = git_upstream_module.info()
@@ -53,6 +55,9 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(stash_info.name, "stash")
         self.assertEqual(stash_info.kind, "probe")
         self.assertIs(stash_info.handler, git_stash_module.run)
+        self.assertEqual(commits_info.name, "commits")
+        self.assertEqual(commits_info.kind, "probe")
+        self.assertIs(commits_info.handler, git_commits_module.run)
         self.assertEqual(state_info.name, "state")
         self.assertEqual(state_info.kind, "probe")
         self.assertIs(state_info.handler, git_state_module.run)
@@ -495,6 +500,79 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "probe_failed")
         self.assertEqual(result.diagnostics[0].code, "probe.git_branch.invalid_ref")
+
+    def test_git_commits_probe_returns_bounded_readable_commit_entries(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.commits", with_={"limit": 2, "rev": "HEAD"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.commits")
+        resolved = ResolvedOperation("git.commits", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout=(
+                        "1111111111111111111111111111111111111111\x1fAlice\x1f2026-07-09T12:00:00+00:00\x1fAdd parser\x1fHandle edge cases\n\x1e"
+                        "2222222222222222222222222222222222222222\x1fBob\x1f2026-07-08T08:30:00+00:00\x1fRefine docs\x1f\x1e"
+                    ),
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 2)
+        self.assertEqual(result.outputs["rev"], "HEAD")
+        self.assertEqual(result.outputs["repository_root"], "/tmp/demo-repo")
+        self.assertEqual(result.outputs["items"][0]["commit"], "1111111111111111111111111111111111111111")
+        self.assertEqual(result.outputs["items"][0]["text"], "Add parser\n\nHandle edge cases")
+        self.assertEqual(result.outputs["items"][1]["body"], "")
+        self.assertEqual(result.outputs["items"][1]["text"], "Refine docs")
+
+    def test_git_commits_probe_rejects_non_positive_limit(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.commits", with_={"limit": 0, "rev": "HEAD"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.commits")
+        resolved = ResolvedOperation("git.commits", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr="")]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "probe_failed")
+        self.assertEqual(result.diagnostics[0].code, "probe.git_commits.invalid_limit")
+
+    def test_git_commits_probe_reports_unresolved_revision_scope(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.commits", with_={"limit": 2, "rev": "missing"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.commits")
+        resolved = ResolvedOperation("git.commits", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=128, stdout="", stderr="fatal: ambiguous argument 'missing'\n"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "probe_failed")
+        self.assertEqual(result.diagnostics[0].code, "probe.git_commits.unresolved_rev")
 
     def test_git_ref_probe_returns_existing_symbolic_ref_facts(self) -> None:
         workflow = Workflow(

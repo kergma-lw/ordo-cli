@@ -4,7 +4,7 @@ from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
-from ordo.runtime import apply_profile_to_workflow, compose_profiles
+from ordo.runtime import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, compose_profiles
 
 
 class ProfileCompositionTest(unittest.TestCase):
@@ -72,6 +72,16 @@ class ProfileCompositionTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "composition.workflow.input_conflict")
 
+    def test_subsequent_profile_application_fills_only_missing_inputs(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", inputs={"repository": "explicit/repo"})
+        profile = Profile(name="frontend", inputs={"repository": "profile/repo", "repo_dir": "../frontend"})
+
+        result = apply_profile_defaults_to_subsequent_steps(workflow, profile)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.workflow.inputs["repository"], "explicit/repo")
+        self.assertEqual(result.workflow.inputs["repo_dir"], "../frontend")
+
     def test_profile_composition_preserves_launchers_when_non_conflicting(self) -> None:
         first = Profile(name="repo-a", launchers={"shell_frontend": Launcher(connector="shell.command", before="nvm use")})
         second = Profile(name="repo-b", inputs={"branch": "keep"})
@@ -80,6 +90,15 @@ class ProfileCompositionTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertIn("shell_frontend", result.profile.launchers)
+
+    def test_profile_composition_rejects_conflicting_working_directory(self) -> None:
+        first = Profile(name="repo-a", working_directory="repos/a")
+        second = Profile(name="repo-b", working_directory="repos/b")
+
+        result = compose_profiles(first, second)
+
+        self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "composition.profile.working_directory_conflict")
 
 
 if __name__ == "__main__":

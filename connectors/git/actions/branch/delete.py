@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import current_branch, map_nonzero, require_local_branch
+from connectors.git.actions._shared import BRANCH_INVENTORY_INVALIDATION, current_branch, map_nonzero, require_local_branch
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
 
 
@@ -13,6 +13,7 @@ def info():
         effects=("delete a local non-default branch",),
         outputs={"branch": "string"},
         failure_modes=("branch_not_found", "branch_checked_out", "default_branch_protected", "branch_not_merged", "delete_blocked"),
+        invalidates_observations=BRANCH_INVENTORY_INVALIDATION,
         handler=run,
     )
 

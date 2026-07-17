@@ -46,6 +46,12 @@ EXAMPLES_CATALOG: JSONObject = {
             "shows": ["workflow_include", "fragment_args", "ordo_help_aligned_fragment_contract"],
             "related_topics": ["capabilities", "model", "examples"],
         },
+        {
+            "name": "playbook-pre-run",
+            "path": "examples/playbook-pre-run.yaml",
+            "shows": ["playbook_pre_run", "runtime_profile_switch", "shared_preparation_stage"],
+            "related_topics": ["model", "examples", "operations"],
+        },
     ],
 }
 

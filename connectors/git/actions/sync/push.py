@@ -13,6 +13,7 @@ def info():
         effects=("push a local branch to a remote",),
         outputs={"remote": "string", "branch": "string"},
         failure_modes=("branch_not_found", "remote_not_found", "upstream_remote_missing", "non_fast_forward", "push_blocked"),
+        invalidates_observations=(),
         handler=run,
     )
 

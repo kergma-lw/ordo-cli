@@ -1,6 +1,11 @@
 {
+  "connector_namespaces": [
+    "runtime",
+    "git",
+    "gh",
+    "shell"
+  ],
   "document_kind": "overview",
-  "purpose": "World map for Ordo discovery and authoring bootstrap",
   "document_kinds": [
     "error_taxonomy",
     "examples_catalog",
@@ -26,11 +31,6 @@
       "execution_error"
     ]
   },
-  "connector_namespaces": [
-    "git",
-    "gh",
-    "shell"
-  ],
   "published_topics": [
     "overview",
     "capabilities",
@@ -42,6 +42,7 @@
     "describe",
     "search"
   ],
+  "purpose": "World map for Ordo discovery and authoring bootstrap",
   "recommended_next_calls": [
     {
       "command": "ordo-help capabilities --json",

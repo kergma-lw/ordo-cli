@@ -15,12 +15,16 @@ Canonical path in the initial model:
 ```yaml
 version: 1
 
+pre_run:
+  - workflows/resolve-context.yml
+
 states:
   repo_task_state:
     path: .ordo/state/task-state.json
 
 defaults:
   profile: backend-default
+  working_directory: repos/default-backend
 
 workflows:
   inspect-issue:
@@ -43,7 +47,16 @@ profiles:
 - `states` — named project-local runtime state declarations;
 - `workflows` — named launchable workflow entries;
 - `profiles` — named launchable profile entries;
+- `pre_run` — optional project-local workflow set that executes before the requested workflow;
 - `defaults` — optional playbook-run defaults such as the active profile.
+
+## Pre-run role
+
+`pre_run` is an optional ordered set of workflow references.
+
+Each referenced workflow executes in the same runtime session before the requested workflow begins its own effectful execution.
+
+The initial model treats `pre_run` as playbook-owned orchestration for shared preparation such as context resolution, environment checks, or runtime-profile switching.
 
 ## Workflow entry role
 
@@ -59,9 +72,10 @@ It may additionally declare:
 
 Playbook defaults apply to one playbook run.
 
-The initial important default is:
+The initial important defaults are:
 
 - `defaults.profile` — the default active profile for the run when the caller does not select one explicitly.
+- `defaults.working_directory` — the default execution working directory when neither the active profile nor the active workflow entry selects a more specific one.
 
 ## Profile entry role
 
@@ -73,6 +87,7 @@ That context may include:
 
 - input bindings;
 - approved overrides;
+- a profile-scoped `working_directory` default, expressed either as a literal path string or as an activation-time-safe `${...}` value expression;
 - future runtime-facing execution selectors that remain declarative and reviewable.
 
 Profiles do not create a second orchestration language.
@@ -98,4 +113,5 @@ while the playbook owns the concrete project binding such as `repo_task_state`.
 ## Activation rule
 
 The initial playbook model assumes one workflow per run.
-The run selects one active profile, applies that profile, and then activates one named workflow entry.
+The run selects one active profile, applies that profile, executes any declared `pre_run` workflows, and then activates one named workflow entry.
+When execution working directory is declared at multiple playbook-owned launch surfaces, the more specific declaration wins in this order: playbook defaults, then active profile, then active workflow entry.

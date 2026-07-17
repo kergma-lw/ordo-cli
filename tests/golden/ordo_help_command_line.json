@@ -1,59 +1,54 @@
 {
-  "document_kind": "command_line",
   "commands": [
     {
-      "name": "ordo-playbook",
-      "purpose": "Launch one named workflow from the project playbook into one runtime mode",
-      "usage": "ordo-playbook [--file PATH] --workflow NAME [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <mode>",
-      "modes": [
-        "check",
-        "plan",
-        "explain",
-        "run",
-        "next"
+      "examples": [
+        "ordo-playbook --workflow inspect-issue plan",
+        "ordo-playbook --workflow inspect-issue --profile review plan",
+        "ordo-playbook --workflow inspect-issue --input enabled=true plan",
+        "ordo-playbook --workflow inspect-issue --input-file body=./prompt.md plan"
       ],
       "flags": [
         {
-          "name": "--file",
-          "value_shape": "PATH",
-          "required": false,
           "effect": "override_playbook_discovery",
-          "summary": "Use one explicit playbook file path"
+          "name": "--file",
+          "required": false,
+          "summary": "Use one explicit playbook file path",
+          "value_shape": "PATH"
         },
         {
-          "name": "--workflow",
-          "value_shape": "NAME",
-          "required": true,
           "effect": "select_workflow_entry",
-          "summary": "Select one named workflow from the playbook"
+          "name": "--workflow",
+          "required": true,
+          "summary": "Select one named workflow from the playbook",
+          "value_shape": "NAME"
         },
         {
-          "name": "--profile",
-          "value_shape": "NAME",
-          "required": false,
           "effect": "select_active_profile",
-          "summary": "Select one named profile for this run"
+          "name": "--profile",
+          "required": false,
+          "summary": "Select one named profile for this run",
+          "value_shape": "NAME"
         },
         {
-          "name": "--input",
-          "value_shape": "KEY=VALUE",
-          "required": false,
-          "repeatable": true,
           "effect": "override_input_inline",
-          "summary": "Add or override one top-level workflow input from an inline YAML value"
-        },
-        {
-          "name": "--input-file",
-          "value_shape": "KEY=PATH",
-          "required": false,
+          "name": "--input",
           "repeatable": true,
-          "effect": "override_input_from_file",
-          "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"
+          "required": false,
+          "summary": "Add or override one top-level workflow input from an inline YAML value",
+          "value_shape": "KEY=VALUE"
         },
         {
+          "effect": "override_input_from_file",
+          "name": "--input-file",
+          "repeatable": true,
+          "required": false,
+          "summary": "Add or override one top-level workflow input from a raw UTF-8 file string",
+          "value_shape": "KEY=PATH"
+        },
+        {
+          "effect": "emit_json",
           "name": "--json",
           "required": false,
-          "effect": "emit_json",
           "summary": "Emit JSON without extra decoration"
         }
       ],
@@ -65,12 +60,32 @@
         "unknown activation inputs are rejected=true",
         "when both --input and --input-file set the same key, --input-file wins"
       ],
-      "examples": [
-        "ordo-playbook --workflow inspect-issue plan",
-        "ordo-playbook --workflow inspect-issue --profile review plan",
-        "ordo-playbook --workflow inspect-issue --input enabled=true plan",
-        "ordo-playbook --workflow inspect-issue --input-file body=./prompt.md plan"
-      ]
+      "modes": [
+        {
+          "name": "check",
+          "summary": "check whether the workflow can be run now, without making changes"
+        },
+        {
+          "name": "plan",
+          "summary": "show what the workflow would do, without making changes"
+        },
+        {
+          "name": "explain",
+          "summary": "explain why the workflow can or cannot be run right now"
+        },
+        {
+          "name": "run",
+          "summary": "run the workflow and do the real work"
+        },
+        {
+          "name": "next",
+          "summary": "suggest the next workflow step to run now"
+        }
+      ],
+      "name": "ordo-playbook",
+      "purpose": "Launch one named workflow from the project playbook into one runtime mode",
+      "usage": "ordo-playbook [--file PATH] --workflow NAME [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <mode>"
     }
-  ]
+  ],
+  "document_kind": "command_line"
 }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from connectors.git.actions._shared import INDEX_INVALIDATION
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
 
 
@@ -11,6 +12,7 @@ def info():
         effects=("stage all current worktree changes into the index",),
         outputs={"staged": "boolean"},
         failure_modes=("stage_blocked",),
+        invalidates_observations=INDEX_INVALIDATION,
         handler=run,
     )
 

@@ -121,7 +121,13 @@ def build_command_line_response() -> JSONObject:
                 "name": "ordo-playbook",
                 "purpose": "Launch one named workflow from the project playbook into one runtime mode",
                 "usage": "ordo-playbook [--file PATH] --workflow NAME [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <mode>",
-                "modes": ["check", "plan", "explain", "run", "next"],
+                "modes": [
+                    {"name": "check", "summary": "check whether the workflow can be run now, without making changes"},
+                    {"name": "plan", "summary": "show what the workflow would do, without making changes"},
+                    {"name": "explain", "summary": "explain why the workflow can or cannot be run right now"},
+                    {"name": "run", "summary": "run the workflow and do the real work"},
+                    {"name": "next", "summary": "suggest the next workflow step to run now"},
+                ],
                 "flags": playbook_flags,
                 "input_override_precedence": [
                     f"workflow.inputs declares the allowed activation keys; declared keys are required at activation={str(input_contract['declared_keys_required_at_activation']).lower()}",
@@ -295,6 +301,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         add_node(f"profile.overrides.{field['name']}", contract="profile", node_category="override_field", summary="Published profile override field metadata", metadata=field)
     for field in model["playbook"]["top_level_fields"]:
         add_node(f"playbook.{field['name']}", contract="playbook", node_category="field", summary="Published playbook field metadata", metadata=field)
+    if "pre_run" in model["playbook"].get("activation_semantics", {}):
+        add_node(
+            "playbook.pre_run_contract",
+            contract="playbook",
+            node_category="pre_run_contract",
+            summary="Published playbook pre-run contract metadata",
+            metadata=model["playbook"]["activation_semantics"]["pre_run"],
+        )
     for field in model["playbook"]["defaults_fields"]:
         add_node(f"playbook.defaults.{field['name']}", contract="playbook", node_category="default_field", summary="Published playbook default field metadata", metadata=field)
     for field in model["playbook"]["workflow_entry_fields"]:
@@ -601,6 +615,18 @@ def render_operation_text(payload: JSONObject) -> str:
         f"namespace: {payload['namespace']}",
         f"maturity: {operation['maturity']}",
     ]
+    if operation["inputs"]:
+        lines.extend(["", "inputs:"])
+        for name, shape in operation["inputs"].items():
+            lines.append(f"- {name}: {shape}")
+    if operation["outputs"]:
+        lines.extend(["", "outputs:"])
+        for name, shape in operation["outputs"].items():
+            lines.append(f"- {name}: {shape}")
+    if operation["failure_modes"]:
+        lines.extend(["", "failure modes:"])
+        for mode in operation["failure_modes"]:
+            lines.append(f"- {mode}")
     return "\n".join(lines)
 
 

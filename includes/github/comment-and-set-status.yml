@@ -1,5 +1,6 @@
 description: Optionally comment on an issue and optionally set its project status
 args:
+  issue_number: integer
   comment:
     type: string
     default: ""
@@ -13,7 +14,7 @@ steps:
     uses: gh.issue.comment.add
     with:
       repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
+      issue_number: ${args.issue_number}
       body: ${args.comment}
 
   - name: set-task-status
@@ -21,6 +22,6 @@ steps:
     uses: gh.project.issue.status.set
     with:
       repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
+      issue_number: ${args.issue_number}
       project_id: ${inputs.project_id}
       status: ${args.status}

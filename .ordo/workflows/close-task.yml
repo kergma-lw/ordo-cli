@@ -1,28 +1,27 @@
 version: 0
 workflow: close-task
 inputs:
-  issue_number: {}
-  verify_command: ""
+  active_profile_key: active_profile
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
   close_comment: ""
   ship: false
+state_needs:
+  common_state: {}
+  shared_state: {}
 blocks:
   - guards:
       - uses: git.repo
       - inputs.ship == true
       - git.worktrees.count == 1
       - git.stash.count == 0
-      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
-      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
-      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).status == "In review"
 
-  - steps:
-      - name: verify
-        if: ${inputs.verify_command | ne("")}
-        uses: shell.command
-        with:
-          command: ${inputs.verify_command}
-
-  - guards:
+      - gh.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number).state == "OPEN"
+      - gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number, project_id=inputs.project_id).exists
+      - gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number, project_id=inputs.project_id).status == "In review"
+      - state.common_state[inputs.repository].branch == git.branch.value
       - git.worktree.clean
       - git.branch.value != "main"
 
@@ -33,11 +32,15 @@ blocks:
         uses: gh.issue.close
         with:
           repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
+          issue_number: ${state.common_state[inputs.repository].issue_number}
 
   - steps:
       - name: comment-and-set-status
         run: includes/github/comment-and-set-status
         with:
+          issue_number: ${state.common_state[inputs.repository].issue_number}
           comment: ${inputs.close_comment}
           status: Done
+
+      - name: Forget stored task
+        state_delete: state.common_state[inputs.repository]

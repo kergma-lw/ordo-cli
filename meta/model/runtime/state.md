@@ -130,3 +130,6 @@ state_delete: state.task_memory[inputs.task_key].branch
 - The initial model should not assume multiple state scopes beyond explicitly declared named entries.
 - The initial model should not require bulk update semantics, query semantics, or concurrency semantics.
 - The initial model should not rename this capability into a larger semantic system before the runtime actually owns those broader concerns.
+- The initial model should treat runtime state as persistent handoff memory across runs, not as a second per-run scratch surface beside step registers.
+- State writes and deletes belong to the top-level workflow authoring surface rather than to include fragments or run-invoked fragments.
+- Within one workflow, a logical state role should be written or deleted only after the final read of that same role.

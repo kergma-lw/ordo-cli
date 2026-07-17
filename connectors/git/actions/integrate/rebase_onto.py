@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import current_branch, head_commit, map_nonzero, require_commit
+from connectors.git.actions._shared import COMMIT_GRAPH_INVALIDATION, current_branch, head_commit, map_nonzero, require_commit
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
 
 
@@ -13,6 +13,7 @@ def info():
         effects=("rebase a non-default branch range onto a new base using rebase --onto semantics",),
         outputs={"branch": "string", "onto": "string", "head_commit": "string"},
         failure_modes=("onto_not_found", "upstream_not_found", "branch_not_found", "default_branch_protected", "rebase_conflict", "rebase_blocked"),
+        invalidates_observations=COMMIT_GRAPH_INVALIDATION,
         handler=run,
     )
 

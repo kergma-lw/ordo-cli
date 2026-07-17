@@ -4,3 +4,4 @@ inputs:
   repo_dir: /home/ww/projects/check-list.life/meta
   repository: kergma-lw/checklist-meta
   project_id: PVT_kwHOAahuQ84AwWwR
+working_directory: ${inputs.repo_dir}

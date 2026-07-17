@@ -5,6 +5,37 @@ from __future__ import annotations
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic
 
 
+BRANCH_INVENTORY_INVALIDATION: tuple[str, ...] = ("git.branches", "git.ref.*")
+CHECKOUT_STATE_INVALIDATION: tuple[str, ...] = (
+    "git.branch",
+    "git.branches",
+    "git.upstream",
+    "git.ref.*",
+    "git.worktree",
+    "git.worktrees",
+    "git.state",
+    "git.repo",
+    "git.range",
+    "git.commits",
+)
+FETCH_INVALIDATION: tuple[str, ...] = (
+    "git.ref.*",
+    "git.branches",
+    "git.repo",
+    "git.range",
+    "git.commits",
+)
+INDEX_INVALIDATION: tuple[str, ...] = ("git.worktree", "git.state")
+COMMIT_GRAPH_INVALIDATION: tuple[str, ...] = (
+    "git.ref.*",
+    "git.worktree",
+    "git.worktrees",
+    "git.state",
+    "git.range",
+    "git.commits",
+)
+
+
 def current_branch(ctx: OperationContext) -> str | None | OperationOutcome:
     outcome = ctx.call("branch")
     if outcome.status != "ok":

@@ -86,6 +86,21 @@
         "ordo_help_aligned_fragment_contract"
       ],
       "verified": true
+    },
+    {
+      "name": "playbook-pre-run",
+      "path": "examples/playbook-pre-run.yaml",
+      "related_topics": [
+        "model",
+        "examples",
+        "operations"
+      ],
+      "shows": [
+        "playbook_pre_run",
+        "runtime_profile_switch",
+        "shared_preparation_stage"
+      ],
+      "verified": true
     }
   ]
 }

@@ -5,7 +5,7 @@ args:
   issue_title: string
 
 steps:
-  - name: compute-branch-name
+  - name: Compute branch name
     value:
       format: "%s/%s-%s"
       args:
@@ -14,36 +14,36 @@ steps:
         - ${args.issue_title | slug}
     register: branch
 
-  - name: probe-local-main-ref
+  - name: Probe local main ref
     uses: git.ref
     with:
       ref: refs/heads/main
     register: local_main
 
-  - name: fetch-origin
+  - name: Fetch origin
     uses: git.sync.fetch
     with:
       remote: origin
 
-  - name: probe-remote-main-ref
+  - name: Probe remote main ref
     uses: git.ref
     with:
       ref: refs/remotes/origin/main
     register: remote_main
 
-  - name: switch-main
+  - name: Switch main
     if: ${step.local_main.outputs.exists}
     uses: git.branch.switch
     with:
       branch: main
 
-  - name: merge-origin-main-ff-only
+  - name: Merge origin/main ff-only
     if: ${step.local_main.outputs.exists and step.remote_main.outputs.exists}
     uses: git.integrate.merge_ff_only
     with:
       ref: refs/remotes/origin/main
 
-  - name: probe-target-branch-ref
+  - name: Probe target branch ref
     uses: git.ref
     with:
       ref:
@@ -52,27 +52,27 @@ steps:
           - ${step.branch.outputs.value}
     register: target_branch
 
-  - name: switch-existing-target-branch
+  - name: Switch existing target branch
     if: ${step.target_branch.outputs.exists}
     uses: git.branch.switch
     with:
       branch: ${step.branch.outputs.value}
 
-  - name: create-target-branch-from-local-main
+  - name: Create target branch from local main
     if: ${not step.target_branch.outputs.exists and step.local_main.outputs.exists}
     uses: git.branch.create
     with:
       branch: ${step.branch.outputs.value}
       start_point: refs/heads/main
 
-  - name: create-target-branch-from-remote-main
+  - name: Create target branch from remote main
     if: ${not step.target_branch.outputs.exists and not step.local_main.outputs.exists}
     uses: git.branch.create
     with:
       branch: ${step.branch.outputs.value}
       start_point: refs/remotes/origin/main
 
-  - name: switch-created-target-branch
+  - name: Switch created target branch
     if: ${not step.target_branch.outputs.exists}
     uses: git.branch.switch
     with:

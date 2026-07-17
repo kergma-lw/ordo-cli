@@ -37,9 +37,8 @@ STATE_CONTRACT: JSONObject = {
         },
     ],
     "storage_document": {
-        "version": 1,
-        "required_fields": ["version", "values"],
-        "values_type": "object",
+        "root_type": "object",
+        "top_level_keys": "user-defined",
     },
     "runtime_rules": [
         {

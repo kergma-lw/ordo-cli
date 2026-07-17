@@ -22,6 +22,15 @@ When CLI is asked to run a named workflow entry such as `close-task`, it resolve
 
 The entry must resolve to exactly one workflow file.
 
+## Pre-run workflow resolution
+
+- `pre_run` is an optional ordered list of workflow references declared directly on the playbook.
+- Each `pre_run` item resolves with the same workflow-path rules as a named workflow file reference.
+- `pre_run` workflows execute in declaration order before the requested workflow performs its own effectful execution.
+- `pre_run` workflows run in the same runtime session as the requested workflow.
+- Runtime context changes produced by `pre_run` workflows may affect later `pre_run` items and the requested workflow.
+- Failure in a `pre_run` workflow prevents effectful execution of the requested workflow.
+
 ## Workflow file resolution
 
 - A bare workflow filename such as `close-task.yml` resolves under `<playbook-dir>/workflows/`.
@@ -42,16 +51,18 @@ The entry must resolve to exactly one workflow file.
 - Otherwise `defaults.profile` becomes the active profile when present.
 - If no explicit profile and no default profile are present, the run proceeds without a profile.
 - Active profile resolution happens before workflow activation and step execution.
+- The profile selected by activation is the starting profile for any `pre_run` workflows and for the requested workflow.
 
 ## Execution working directory
 
-- A workflow entry may declare `working_directory` as explicit runtime context for runs of that entry.
-- `working_directory` may be either a literal path string or a `${...}` value expression that resolves to a path string.
+- Playbook `defaults.working_directory`, active-profile `working_directory`, and workflow-entry `working_directory` are the three explicit declaration surfaces for execution working directory.
+- When more than one declaration is present, the resolved working directory follows increasing specificity in this order: playbook defaults, then active profile, then active workflow entry.
+- Each `working_directory` value may be either a literal path string or a `${...}` value expression that resolves to a path string.
 - A `working_directory` expression reuses the existing value-expression syntax but with a narrower activation-time surface.
 - The activation-time surface may read only launch-known input values.
 - The activation-time surface must not read `state...`, `step...`, or any other runtime-derived value.
 - The activation-time surface must resolve fully before the first guard or step executes.
-- After expression evaluation, a relative `working_directory` path resolves relative to `<playbook-dir>/`.
+- After expression evaluation, a relative `working_directory` path resolves relative to `<playbook-dir>/`, regardless of whether it originated from playbook defaults, the active profile, or the workflow entry.
 - After expression evaluation, an absolute `working_directory` path remains absolute.
 - When present, runtime executes the workflow with that resolved working directory as the execution working directory.
 - Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.

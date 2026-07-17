@@ -840,7 +840,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
-            (root / ".ordo" / "repo.json").write_text('{"version": 1, "values": {"active_profile": "backend"}}\n', encoding="utf-8")
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "backend"}\n', encoding="utf-8")
             (root / ".ordo" / "playbook.yml").write_text(
                 textwrap.dedent(
                     """
@@ -896,7 +896,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
-            (root / ".ordo" / "repo.json").write_text('{"version": 1, "values": {"active_profile": "backend"}}\n', encoding="utf-8")
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "backend"}\n', encoding="utf-8")
             (root / ".ordo" / "playbook.yml").write_text(
                 textwrap.dedent(
                     """

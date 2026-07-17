@@ -16,8 +16,9 @@ It must not answer the question:
 - named profile catalog for playbook-run profile selection;
 - named runtime state declarations shared across project workflows;
 - bindings from workflow-level logical state roles to concrete project state declarations;
-- explicit execution working directory selection for project-local workflow entries;
-- activation-time derivation of that execution working directory from launch-known inputs only;
+- explicit execution working directory defaults and overrides for project-local launch context;
+- explicit project-local pre-run workflow orchestration before the requested workflow executes;
+- activation-time derivation of any selected execution working directory from launch-known inputs only;
 - deterministic discovery of the project orchestration root;
 - deterministic resolution of project-local workflow and profile references.
 
@@ -31,8 +32,8 @@ It must not answer the question:
 ## Relationship to adjacent domains
 
 - A workflow defines guarded operational intent.
-- A profile defines reusable parameters and explicit overrides.
-- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, logical state-role bindings, and other explicit execution context such as an entry working directory.
+- A profile defines reusable parameters, explicit overrides, and profile-scoped execution context.
+- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults and overrides.
 - Runtime still owns mode behavior and execution semantics after playbook discovery and resolution complete.
 
 ## Quality bar

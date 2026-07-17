@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import re
 import sys
 
 import yaml
@@ -14,8 +15,86 @@ from ordo.model.runtime import RuntimeResult
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory
 
 
+EXPLAIN_MODE_HELP = """usage: ordo-playbook [options] explain
+
+Explain why the selected workflow can or cannot be run right now.
+
+Default output is intended to be concise:
+  - overall status
+  - whether execution is allowed
+  - active blockers
+
+Examples:
+  ordo-playbook --workflow open-task explain
+  ordo-playbook --workflow open-task --profile backend --input issue_number=42 explain
+  ordo-playbook --workflow close-task explain --json
+"""
+
+PLAN_MODE_HELP = """usage: ordo-playbook [options] plan
+
+Show what the selected workflow would do without making changes.
+
+Default output is intended to be concise:
+  - if planning succeeds: guard checks and planned steps
+  - if planning is blocked: a short note to use explain for details
+
+Examples:
+  ordo-playbook --workflow open-task plan
+  ordo-playbook --workflow open-task --profile backend --input issue_number=42 plan
+  ordo-playbook --workflow close-task plan --json
+"""
+
+CHECK_MODE_HELP = """usage: ordo-playbook [options] check
+
+Check whether the selected workflow can be run right now.
+
+Default output is intended to be concise:
+  - overall status
+  - whether execution is allowed
+  - observed facts
+  - missing facts
+
+Examples:
+  ordo-playbook --workflow open-task check
+  ordo-playbook --workflow open-task --profile backend --input issue_number=42 check
+  ordo-playbook --workflow close-task check --json
+"""
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="ordo-playbook")
+    if len(sys.argv) >= 3 and sys.argv[1] in {"check", "plan", "explain"} and sys.argv[2] in {"-h", "--help"}:
+        if sys.argv[1] == "check":
+            print(CHECK_MODE_HELP)
+        elif sys.argv[1] == "plan":
+            print(PLAN_MODE_HELP)
+        else:
+            print(EXPLAIN_MODE_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "explain":
+        print(EXPLAIN_MODE_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "plan":
+        print(PLAN_MODE_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "check":
+        print(CHECK_MODE_HELP)
+        return 0
+
+    parser = argparse.ArgumentParser(
+        prog="ordo-playbook",
+        usage="%(prog)s [options] <mode>",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "mode help:\n"
+            "  run `ordo-playbook <mode> --help` to see mode-specific guidance\n\n"
+            "modes:\n"
+            "  check    check whether the workflow can be run now, without making changes\n"
+            "  plan     show what the workflow would do, without making changes\n"
+            "  explain  explain why the workflow can or cannot be run right now\n"
+            "  run      run the workflow and do the real work\n"
+            "  next     suggest the next workflow step to run now"
+        ),
+    )
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
     parser.add_argument("--workflow", required=True, help="workflow name declared in the playbook")
     parser.add_argument("--profile", help="active profile name for this run")
@@ -36,7 +115,11 @@ def main() -> int:
         help="load one workflow input value from a file as a raw string; repeatable",
     )
     parser.add_argument("--json", action="store_true", help="emit JSON without extra decoration")
-    parser.add_argument("mode", choices=("check", "plan", "explain", "run", "next"))
+    parser.add_argument(
+        "mode",
+        choices=("check", "plan", "explain", "run", "next"),
+        help="execution mode; see the mode descriptions below",
+    )
     args = parser.parse_args()
     input_overrides = _parse_input_overrides(args.input_overrides, parser=parser)
     input_overrides.update(_parse_input_file_overrides(args.input_files, parser=parser))
@@ -107,6 +190,13 @@ def main() -> int:
                     "profile": None if activated.profile is None else activated.profile.name,
                 }
             )
+
+        if args.mode == "explain" and not args.json:
+            payload = _summarize_explain_payload(payload)
+        if args.mode == "plan" and not args.json:
+            payload = _summarize_plan_payload(payload)
+        if args.mode == "check" and not args.json:
+            payload = _summarize_check_payload(payload)
 
         if args.json:
             json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -212,6 +302,185 @@ def _emit_error(exc: PlaybookError, *, as_json: bool) -> int:
     else:
         print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
     return 1
+
+
+def _summarize_explain_payload(payload: dict[str, object]) -> dict[str, object]:
+    outputs = payload.get("outputs")
+    if not isinstance(outputs, dict):
+        outputs = {}
+    explanation = outputs.get("explanation")
+    if not isinstance(explanation, dict):
+        explanation = {}
+
+    return {
+        "mode": payload.get("mode"),
+        "status": payload.get("status"),
+        "workflow": payload.get("workflow"),
+        "playbook": payload.get("playbook"),
+        "profile": payload.get("profile"),
+        "allowed": explanation.get("allowed", outputs.get("execution_allowed")),
+        "category": explanation.get("category", outputs.get("reason_category")),
+        "why": explanation.get("why"),
+        "failed_guard": payload.get("failed_guard"),
+        "blockers": explanation.get("blockers", outputs.get("blockers", [])),
+        "diagnostics": payload.get("diagnostics", []),
+    }
+
+
+def _summarize_plan_payload(payload: dict[str, object]) -> dict[str, object]:
+    outputs = payload.get("outputs")
+    if not isinstance(outputs, dict):
+        outputs = {}
+    plan = payload.get("plan")
+    if not isinstance(plan, dict):
+        plan = {}
+
+    summary = {
+        "mode": payload.get("mode"),
+        "status": payload.get("status"),
+        "workflow": payload.get("workflow"),
+        "playbook": payload.get("playbook"),
+        "profile": payload.get("profile"),
+        "allowed": outputs.get("execution_allowed", outputs.get("can_execute")),
+        "diagnostics": payload.get("diagnostics", []),
+    }
+
+    if summary["status"] == "ok" and summary["allowed"] is True:
+        summary["guard_checks"] = plan.get("guard_checks", [])
+        summary["step_names"] = plan.get("step_names", [])
+    else:
+        summary["message"] = "plan unavailable; use explain for details"
+
+    return summary
+
+
+def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
+    outputs = payload.get("outputs")
+    if not isinstance(outputs, dict):
+        outputs = {}
+
+    allowed = outputs.get("can_execute")
+    if not isinstance(allowed, bool):
+        allowed = None
+
+    summary = {
+        "mode": payload.get("mode"),
+        "status": payload.get("status"),
+        "workflow": payload.get("workflow"),
+        "playbook": payload.get("playbook"),
+        "profile": payload.get("profile"),
+        "allowed": allowed,
+        "diagnostics": payload.get("diagnostics", []),
+        "observed_facts": _collect_observed_facts(outputs),
+        "missing_facts": _collect_missing_facts(outputs),
+    }
+
+    if payload.get("failed_guard") is not None:
+        summary["failed_guard"] = payload.get("failed_guard")
+
+    if outputs.get("verdict_basis_weakened"):
+        summary["message"] = "check incomplete; use --json check or explain for details"
+
+    return summary
+
+
+def _collect_observed_facts(outputs: dict[str, object]) -> list[str]:
+    guard_details = outputs.get("guard_details")
+    if not isinstance(guard_details, list):
+        return []
+
+    facts: list[str] = []
+    seen: set[str] = set()
+    for detail in guard_details:
+        if not isinstance(detail, dict):
+            continue
+        reference = detail.get("reference")
+        if reference == "git.repo" and detail.get("status") == "ok":
+            _append_unique(facts, seen, "git.repo: ok")
+        trace = detail.get("trace")
+        if not isinstance(trace, list):
+            continue
+        for item in trace:
+            if not isinstance(item, dict):
+                continue
+            if item.get("kind") not in {"probe", "state", "input"}:
+                continue
+            if item.get("status") != "ok":
+                continue
+            expr = item.get("expr")
+            if not isinstance(expr, str) or not expr:
+                continue
+            rendered = f"{expr} = {_compact_value(item.get('value'))}"
+            _append_unique(facts, seen, rendered)
+
+    return _limit_items(facts)
+
+
+def _collect_missing_facts(outputs: dict[str, object]) -> list[str]:
+    facts: list[str] = []
+    seen: set[str] = set()
+
+    weakened_scopes = outputs.get("weakened_observation_scopes")
+    if isinstance(weakened_scopes, list):
+        for scope in weakened_scopes:
+            if isinstance(scope, str) and scope:
+                _append_unique(facts, seen, f"fresh facts unavailable for {scope}")
+
+    unevaluated_guards = outputs.get("unevaluated_relevant_guards")
+    if isinstance(unevaluated_guards, list):
+        for guard in unevaluated_guards:
+            if not isinstance(guard, str) or not guard:
+                continue
+            references = _extract_fact_references(guard)
+            if references:
+                for reference in references:
+                    _append_unique(facts, seen, reference)
+            else:
+                _append_unique(facts, seen, guard)
+
+    return _limit_items(facts)
+
+
+def _append_unique(items: list[str], seen: set[str], value: str) -> None:
+    if value in seen:
+        return
+    seen.add(value)
+    items.append(value)
+
+
+def _limit_items(items: list[str], *, limit: int = 8) -> list[str]:
+    if len(items) <= limit:
+        return items
+    hidden_count = len(items) - limit
+    return [*items[:limit], f"… and {hidden_count} more"]
+
+
+def _compact_value(value: object, *, limit: int = 80) -> str:
+    if isinstance(value, str):
+        rendered = value
+    elif isinstance(value, (int, float, bool)) or value is None:
+        rendered = json.dumps(value, ensure_ascii=False)
+    else:
+        rendered = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    if len(rendered) <= limit:
+        return rendered
+    return f"{rendered[: limit - 1]}…"
+
+
+def _extract_fact_references(expression: str) -> list[str]:
+    matches = re.findall(r"([A-Za-z_][A-Za-z0-9_.]*(?:\([^)]*\))?(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", expression)
+    references: list[str] = []
+    seen: set[str] = set()
+    for match in matches:
+        if "." not in match:
+            continue
+        if match.startswith("inputs."):
+            continue
+        if match in seen:
+            continue
+        seen.add(match)
+        references.append(match)
+    return references
 
 
 if __name__ == "__main__":  # pragma: no cover

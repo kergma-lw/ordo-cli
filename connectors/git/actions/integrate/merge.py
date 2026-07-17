@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import current_branch, head_commit, map_nonzero, require_commit
+from connectors.git.actions._shared import COMMIT_GRAPH_INVALIDATION, current_branch, head_commit, map_nonzero, require_commit
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, ok
 
 
@@ -13,6 +13,7 @@ def info():
         effects=("integrate a target ref into the current checkout using merge semantics",),
         outputs={"merged_ref": "string", "head_commit": "string", "branch": "string | null"},
         failure_modes=("ref_not_found", "merge_conflict", "merge_blocked"),
+        invalidates_observations=COMMIT_GRAPH_INVALIDATION,
         handler=run,
     )
 

@@ -31,6 +31,8 @@ Shared family prerequisites belong to connector bootstrap rather than to every o
 
 Operation contract may also expose lifecycle metadata when needed, for example whether an operation is deprecated and which canonical operations should replace it.
 
+Action contracts may also expose conservative observation-invalidation metadata for runtime `check` reasoning.
+
 ## Explainability and failure normalization
 
 Every operation must:
@@ -55,6 +57,19 @@ Implications:
 - actions should place their durable effect summary in `outputs` rather than in summary text alone
 - `raw` is supplementary detail and must not be the only place where contract-relevant meaning exists
 - runtime mode semantics should be derived from this structured local surface rather than pushed down into operation-specific mode logic
+
+## Observation invalidation metadata
+
+An effectful action may declare which probe-derived observation scopes it invalidates.
+
+When such metadata is present, runtime may use it to reason conservatively about the stability limits of pre-execution knowledge during `check`.
+
+If an effectful connector action does not declare narrower observation invalidation metadata, runtime should conservatively treat it as invalidating the full observation namespace of that connector family.
+
+Why this matters:
+- `check` should not over-trust probe observations across later effect boundaries;
+- missing invalidation detail must weaken confidence rather than justify optimistic approval;
+- connector authors may improve precision incrementally without requiring perfect metadata coverage before the mechanism is useful.
 
 ## Contract split
 

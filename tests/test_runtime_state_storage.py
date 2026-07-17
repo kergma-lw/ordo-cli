@@ -5,7 +5,6 @@ from pathlib import Path
 
 from ordo.model.workflow import Workflow
 from ordo.runtime.state import (
-    STATE_FILE_VERSION,
     RuntimeStateError,
     RuntimeStateRegistry,
     delete_state_value,
@@ -27,16 +26,16 @@ class RuntimeStateStorageTest(unittest.TestCase):
             Path("/tmp/ordo-runtime-state/.ordo/task-state.json"),
         )
 
-    def test_read_missing_state_file_returns_empty_versioned_document(self) -> None:
+    def test_read_missing_state_file_returns_empty_plain_document(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workflow = Workflow(version=0, workflow="open-task", states={"task_state": "task-state.json"})
             registry = RuntimeStateRegistry.from_workflow(workflow, base_dir=temp_dir)
 
             document = read_state_document(registry.require("task_state"))
 
-            self.assertEqual(document, {"version": STATE_FILE_VERSION, "values": {}})
+            self.assertEqual(document, {})
 
-    def test_write_and_delete_state_value_persist_versioned_file_shape(self) -> None:
+    def test_write_and_delete_state_value_persist_plain_file_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             workflow = Workflow(version=0, workflow="open-task", states={"task_state": "task-state.json"})
             location = RuntimeStateRegistry.from_workflow(workflow, base_dir=temp_dir).require("task_state")
@@ -46,13 +45,7 @@ class RuntimeStateStorageTest(unittest.TestCase):
             write_state_document(location, document)
 
             persisted = json.loads(location.path.read_text(encoding="utf-8"))
-            self.assertEqual(
-                persisted,
-                {
-                    "version": STATE_FILE_VERSION,
-                    "values": {"owner/repo#1": {"branch": "feature/1"}},
-                },
-            )
+            self.assertEqual(persisted, {"owner/repo#1": {"branch": "feature/1"}})
 
             loaded = read_state_document(location)
             self.assertEqual(read_state_value(loaded, key="owner/repo#1", fields=("branch",)), "feature/1")
@@ -71,7 +64,7 @@ class RuntimeStateStorageTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             workflow = Workflow(version=0, workflow="open-task", states={"task_state": "task-state.json"})
             location = RuntimeStateRegistry.from_workflow(workflow, base_dir=temp_dir).require("task_state")
-            location.path.write_text('{"version": 1, "values": []}\n', encoding="utf-8")
+            location.path.write_text('[]\n', encoding="utf-8")
 
             with self.assertRaises(RuntimeStateError) as exc_info:
                 read_state_document(location)

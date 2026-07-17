@@ -11,6 +11,7 @@ It exists for:
 - parameter presets;
 - common verification sets;
 - project and repo defaults;
+- project-context execution defaults such as working directory;
 - reducing duplication in workflows.
 
 Examples:

@@ -92,6 +92,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         working_directory_result = json.loads(self.run_help("search", "working_directory", "--json").stdout)
         launcher_result = json.loads(self.run_help("search", "launcher", "--json").stdout)
         run_result = json.loads(self.run_help("search", "run", "--json").stdout)
+        pre_run_result = json.loads(self.run_help("search", "pre_run", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"].startswith("profile.") for item in profile_result["facts"]))
         self.assertTrue(any(item["kind"] == "capability" and item["name"] == "workflow.branching" for item in branching_result["facts"]))
@@ -102,6 +103,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "profile.launchers" for item in launcher_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.step.launcher" for item in launcher_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.run_contract" for item in run_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.pre_run" for item in pre_run_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.pre_run_contract" for item in pre_run_result["facts"]))
 
     def test_capabilities_publish_cross_links_for_branching(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -122,11 +125,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         workflow_entry_fields = {item["name"]: item for item in model["playbook"]["workflow_entry_fields"]}
         workflow_inputs = next(item for item in model["workflow"]["top_level_fields"] if item["name"] == "inputs")
 
+        self.assertEqual(model["playbook"]["activation_semantics"]["pre_run"]["item_type"], "workflow_reference")
         self.assertEqual(profile_fields["inputs"]["runtime_effect"], "applies_missing_workflow_inputs")
+        self.assertEqual(profile_fields["working_directory"]["runtime_effect"], "sets_profile_execution_working_directory")
         self.assertEqual(profile_fields["checks"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["launchers"]["runtime_effect"], "publishes_profile_scoped_launchers")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
+        self.assertEqual(defaults_fields["working_directory"]["runtime_effect"], "sets_default_execution_working_directory")
         self.assertEqual(workflow_inputs["authoring_role"], "declares_global_activation_inputs")
         self.assertEqual(workflow_entry_fields["working_directory"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(workflow_entry_fields["working_directory"]["resolution_base"], "playbook_dir")
@@ -161,6 +167,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         command_line_node = json.loads(self.run_help("describe", "command-line.ordo-playbook.flag.input_file", "--json").stdout)
         working_directory_node = json.loads(self.run_help("describe", "playbook.workflows.working_directory", "--json").stdout)
         launcher_node = json.loads(self.run_help("describe", "profile.launchers", "--json").stdout)
+        pre_run_node = json.loads(self.run_help("describe", "playbook.pre_run_contract", "--json").stdout)
         missing = self.run_help("describe", "missing.node", "--json")
 
         self.assertEqual(capability_node["document_kind"], "capability_node")
@@ -175,6 +182,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(run_contract_node["document_kind"], "model_node")
         self.assertEqual(run_contract_node["name"], "workflow.run_contract")
         self.assertEqual(run_contract_node["metadata"]["directive_field"], "run")
+        self.assertEqual(pre_run_node["document_kind"], "model_node")
+        self.assertEqual(pre_run_node["name"], "playbook.pre_run_contract")
+        self.assertEqual(pre_run_node["metadata"]["effect"], "executes_before_requested_workflow_in_same_runtime_session")
         self.assertEqual(command_line_node["document_kind"], "command_line_node")
         self.assertEqual(command_line_node["name"], "command-line.ordo-playbook.flag.input_file")
         self.assertEqual(command_line_node["metadata"]["effect"], "override_input_from_file")
@@ -206,6 +216,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["document_kind"], "operation")
         self.assertEqual(payload["operation"]["inputs"]["repository"], "string")
         self.assertEqual(payload["operation"]["inputs"]["issue_number"], "integer")
+
+    def test_operation_topic_publishes_narrow_git_commits_boundary(self) -> None:
+        payload = json.loads(self.run_help("operation", "git.commits", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "operation")
+        self.assertEqual(payload["operation"]["inputs"], {"limit": "integer", "rev": "string"})
+        self.assertIn("does not expose patch text", payload["operation"]["summary"])
+        self.assertEqual(payload["operation"]["outputs"]["items"][0]["text"], "string")
+        self.assertEqual(payload["operation"]["outputs"]["items"][0]["author_name"], "string")
 
     def test_examples_topic_publishes_launcher_step_example(self) -> None:
         payload = json.loads(self.run_help("examples", "--json").stdout)

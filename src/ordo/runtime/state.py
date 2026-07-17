@@ -11,8 +11,6 @@ from ordo.model.json import JSONObject, JSONValue
 from ordo.model.workflow import Workflow
 from .state_paths import StatePathParseError, parse_state_path
 
-STATE_FILE_VERSION = 1
-
 
 @dataclass(frozen=True, slots=True)
 class RuntimeStateError(Exception):
@@ -84,10 +82,10 @@ class RuntimeStateRegistry:
 
 
 def read_state_document(location: StateLocation) -> JSONObject:
-    """Return the versioned state document for a declared location."""
+    """Return the plain-object state document for a declared location."""
 
     if not location.path.exists():
-        return {"version": STATE_FILE_VERSION, "values": {}}
+        return {}
     try:
         payload = json.loads(location.path.read_text(encoding="utf-8"))
     except OSError as exc:
@@ -142,7 +140,7 @@ def resolve_state_target(expression: str, workflow: Workflow, *, base_dir: str |
 
 
 def write_state_document(location: StateLocation, document: JSONObject) -> None:
-    """Persist a versioned state document to a declared location."""
+    """Persist a plain-object state document to a declared location."""
 
     _validate_state_document(document, location=location)
     try:
@@ -157,12 +155,11 @@ def write_state_document(location: StateLocation, document: JSONObject) -> None:
 
 
 def read_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...] = ()) -> JSONValue | None:
-    """Read a stored value from a versioned state document."""
+    """Read a stored value from a plain-object state document."""
 
-    values = _values_object(document)
-    if key not in values:
+    if key not in document:
         return None
-    current: JSONValue = values[key]
+    current: JSONValue = document[key]
     for field in fields:
         if not isinstance(current, dict) or field not in current:
             return None
@@ -171,20 +168,19 @@ def read_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...] 
 
 
 def write_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...] = (), value: JSONValue) -> JSONObject:
-    """Create or replace a stored value inside a versioned state document."""
+    """Create or replace a stored value inside a plain-object state document."""
 
-    values = _values_object(document)
     if not fields:
-        values[key] = value
+        document[key] = value
         return document
 
-    current = values.get(key)
+    current = document.get(key)
     if current is None:
         current = {}
-        values[key] = current
+        document[key] = current
     if not isinstance(current, dict):
         current = {}
-        values[key] = current
+        document[key] = current
 
     node = current
     for field in fields[:-1]:
@@ -198,16 +194,15 @@ def write_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...]
 
 
 def delete_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...] = ()) -> bool:
-    """Delete a stored value from a versioned state document."""
+    """Delete a stored value from a plain-object state document."""
 
-    values = _values_object(document)
-    if key not in values:
+    if key not in document:
         return False
     if not fields:
-        del values[key]
+        del document[key]
         return True
 
-    current = values[key]
+    current = document[key]
     if not isinstance(current, dict):
         return False
 
@@ -233,8 +228,8 @@ def delete_state_value(document: JSONObject, *, key: str, fields: tuple[str, ...
             continue
         break
 
-    if isinstance(values.get(key), dict) and not values[key]:
-        del values[key]
+    if isinstance(document.get(key), dict) and not document[key]:
+        del document[key]
     return True
 
 
@@ -245,32 +240,7 @@ def _validate_state_document(payload: JSONValue, *, location: StateLocation) -> 
             message="Runtime state file root must be an object",
             details={"state": location.name, "path": str(location.path), "actual_type": type(payload).__name__},
         )
-    version = payload.get("version")
-    if version != STATE_FILE_VERSION:
-        raise RuntimeStateError(
-            code="runtime.state.unsupported_version",
-            message="Runtime state file version is not supported",
-            details={"state": location.name, "path": str(location.path), "version": version},
-        )
-    values = payload.get("values")
-    if not isinstance(values, dict):
-        raise RuntimeStateError(
-            code="runtime.state.invalid_shape",
-            message="Runtime state file 'values' field must be an object",
-            details={"state": location.name, "path": str(location.path), "actual_type": type(values).__name__},
-        )
-    return {"version": STATE_FILE_VERSION, "values": dict(values)}
-
-
-def _values_object(document: JSONObject) -> dict[str, JSONValue]:
-    values = document.get("values")
-    if not isinstance(values, dict):
-        raise RuntimeStateError(
-            code="runtime.state.invalid_shape",
-            message="Runtime state document 'values' field must be an object",
-            details={"actual_type": type(values).__name__},
-        )
-    return values
+    return dict(payload)
 
 
 def resolve_workflow_input_reference(parts: tuple[str, ...], workflow: Workflow) -> JSONValue:

@@ -33,3 +33,6 @@
 - Runtime state should not be described as a broad fact or knowledge system at this stage.
 - Runtime state should not introduce a broad query language, lock model, reconciliation model, or multi-scope memory model in the MVP.
 - The MVP should prefer a narrow explicit surface over premature generalization.
+- Runtime state should remain a cross-run memory surface rather than a substitute for per-run step registers.
+- A workflow should not write or delete a logical state role before its final read of that same logical role.
+- State mutation should remain a top-level workflow concern and should not appear inside included fragments or runtime-invoked fragments.

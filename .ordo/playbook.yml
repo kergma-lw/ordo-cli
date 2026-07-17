@@ -1,12 +1,28 @@
 version: 1
-states: {}
+pre_run:
+  - workflows/switch-active-profile.yml
+defaults:
+  profile: backend
+states:
+  common_state:
+    path: .ordo.json
+  shared_state:
+    path: /home/ww/projects/ordo/.ordo/repo.json
 workflows:
   open-task:
     file: workflows/open-task.yml
-    working_directory: ${inputs.repo_dir}
+    state_bindings:
+      common_state: common_state
+      shared_state: shared_state
   close-task:
     file: workflows/close-task.yml
-    working_directory: ${inputs.repo_dir}
+    state_bindings:
+      common_state: common_state
+      shared_state: shared_state
+  set-active-profile:
+    file: workflows/set-active-profile.yml
+    state_bindings:
+      shared_state: shared_state
 profiles:
   frontend:
     file: profiles/frontend.yml

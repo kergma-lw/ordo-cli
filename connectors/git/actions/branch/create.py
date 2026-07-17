@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from connectors.git.actions._shared import head_commit, require_branch_name, require_commit, require_local_branch
+from connectors.git.actions._shared import BRANCH_INVENTORY_INVALIDATION, head_commit, require_branch_name, require_commit, require_local_branch
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
 
 
@@ -13,6 +13,7 @@ def info():
         effects=("create a new local branch",),
         outputs={"branch": "string", "start_point": "string"},
         failure_modes=("invalid_branch", "branch_exists", "start_point_not_found", "create_blocked"),
+        invalidates_observations=BRANCH_INVENTORY_INVALIDATION,
         handler=run,
     )
 
