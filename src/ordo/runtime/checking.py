@@ -1,4 +1,4 @@
-"""Check mode for pre-execution validation, resolution, and guard analysis."""
+"""Check mode for pre-execution validation, local-expression-aware resolution, and guard analysis."""
 
 from __future__ import annotations
 

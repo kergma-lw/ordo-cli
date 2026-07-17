@@ -1,4 +1,4 @@
-"""Runtime value resolution for workflow value expressions."""
+"""Runtime resolution for embedded-value local-expression surfaces."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def resolve_runtime_value(
     step_results: dict[str, OperationResult | JSONObject] | None = None,
     allow_boolean_composition: bool = False,
 ) -> JSONValue:
-    """Resolve runtime value expressions against workflow inputs and runtime state."""
+    """Resolve embedded-value local-expression surfaces against workflow inputs, state, and step results."""
 
     resolved_step_results = dict(workflow.step_results) if step_results is None else step_results
     if _is_format_object(value):

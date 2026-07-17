@@ -248,6 +248,8 @@ def _resolve_guard_expression(
     public_registry: ConnectorRegistry,
     local_registry: ConnectorRegistry,
 ) -> ResolvedConditionExpression | Diagnostic:
+    """Resolve one guard-context local expression against the connector registries."""
+
     parsed_local = parse_local_expression(expression, context=LocalExpressionContext.GUARD)
     assert parsed_local.guard is not None
     parsed = parsed_local.guard

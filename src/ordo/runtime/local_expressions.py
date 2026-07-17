@@ -47,9 +47,9 @@ from .value_expressions import (
 class ParsedLocalExpression:
     """Context-tagged parsed local expression.
 
-    Phase 2 still delegates to legacy parsers internally, but callers stop
-    talking directly to separate guard/value axes and instead enter through one
-    local-expression surface keyed by context.
+    Runtime internals may still route through specialized parser/evaluator
+    helpers, but callers enter through one local-expression surface keyed by
+    semantic context.
     """
 
     context: LocalExpressionContext

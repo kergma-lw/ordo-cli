@@ -1,4 +1,4 @@
-"""Project-local playbook discovery, loading, and workflow activation."""
+"""Project-local playbook discovery, loading, activation, and local-expression-aware working-directory resolution."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""YAML loading into canonical JSON-shaped models."""
+"""YAML loading into canonical JSON-shaped models and local-expression-aware workflow assembly."""
 
 from __future__ import annotations
 
