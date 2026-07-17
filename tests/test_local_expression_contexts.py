@@ -79,3 +79,41 @@ class LocalExpressionContextsTest(unittest.TestCase):
         self.assertIs(runtime.LocalExpressionContext, LocalExpressionContext)
         self.assertIs(runtime.parse_local_expression, parse_local_expression)
         self.assertIs(runtime.parse_embedded_local_expression, parse_embedded_local_expression)
+
+    def test_guard_context_rejects_nested_step_dependency(self) -> None:
+        parsed = parse_local_expression(
+            "gh.issue(repository=step.issue.outputs.id, issue_number=inputs.issue_number).state != \"CLOSED\"",
+            context=LocalExpressionContext.GUARD,
+        )
+
+        diagnostics = validate_parsed_local_expression(parsed)
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0].code, "validation.workflow.guard_expr.argument_value")
+
+    def test_guard_context_allows_state_dependency(self) -> None:
+        parsed = parse_local_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == state.task_memory[inputs.issue_ref].status',
+            context=LocalExpressionContext.GUARD,
+        )
+
+        self.assertEqual(validate_parsed_local_expression(parsed), ())
+
+    def test_step_condition_context_allows_step_dependency(self) -> None:
+        parsed = parse_embedded_local_expression(
+            "${step.issue.outputs.open and inputs.enabled}",
+            context=LocalExpressionContext.STEP_CONDITION,
+        )
+
+        assert parsed is not None
+        self.assertEqual(parsed.context, LocalExpressionContext.STEP_CONDITION)
+        self.assertIsNotNone(parsed.value)
+
+    def test_include_binding_context_allows_step_dependency(self) -> None:
+        parsed = parse_embedded_local_expression(
+            "${step.issue.outputs.id}",
+            context=LocalExpressionContext.INCLUDE_BINDING,
+        )
+
+        assert parsed is not None
+        self.assertEqual(parsed.context, LocalExpressionContext.INCLUDE_BINDING)
+        self.assertIsNotNone(parsed.value)
