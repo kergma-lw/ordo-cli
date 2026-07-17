@@ -6,7 +6,12 @@ from ordo.runtime.local_expression_contexts import (
     LocalExpressionRoot,
     get_local_expression_context_policy,
 )
-from ordo.runtime.local_expressions import parse_local_expression, validate_parsed_local_expression
+from ordo.runtime.local_expressions import (
+    extract_embedded_local_expression,
+    parse_embedded_local_expression,
+    parse_local_expression,
+    validate_parsed_local_expression,
+)
 
 
 class LocalExpressionContextsTest(unittest.TestCase):
@@ -52,3 +57,11 @@ class LocalExpressionContextsTest(unittest.TestCase):
         self.assertEqual(parsed.context, LocalExpressionContext.GUARD)
         self.assertIsNotNone(parsed.guard)
         self.assertEqual(validate_parsed_local_expression(parsed), ())
+
+    def test_step_condition_uses_shared_embedded_local_expression_entrypoint(self) -> None:
+        parsed = parse_embedded_local_expression("${step.issue.outputs.open and inputs.enabled}", context=LocalExpressionContext.STEP_CONDITION)
+
+        assert parsed is not None
+        self.assertEqual(parsed.context, LocalExpressionContext.STEP_CONDITION)
+        self.assertIsNotNone(parsed.value)
+        self.assertEqual(extract_embedded_local_expression("${inputs.enabled}"), "inputs.enabled")

@@ -13,7 +13,7 @@ from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .guard_expressions import StateReferenceNode as GuardStateReferenceNode
 from .local_expression_contexts import LocalExpressionContext
-from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, validate_parsed_local_expression
+from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression, parse_local_expression, validate_parsed_local_expression
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .value_expressions import (
@@ -499,14 +499,14 @@ def _validate_invocation_condition(
     if not isinstance(condition, str):
         diagnostics.append(_diagnostic(type_code, type_message, condition_path, source, actual_type=type(condition).__name__))
         return diagnostics
-    expression = _extract_runtime_value_expression(condition)
-    if expression is None:
-        diagnostics.append(_diagnostic(expression_code, expression_message, condition_path, source))
-        return diagnostics
     try:
-        parsed = parse_value_expression(expression, allow_boolean_composition=True)
-    except ValueExpressionParseError as exc:
-        diagnostics.append(exc.to_diagnostic(path=condition_path, source=source, expression=expression))
+        parsed = parse_embedded_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        expression = _extract_runtime_value_expression(condition)
+        diagnostics.append(exc.to_diagnostic(path=condition_path, source=source, expression="" if expression is None else expression))
+        return diagnostics
+    if parsed is None:
+        diagnostics.append(_diagnostic(expression_code, expression_message, condition_path, source))
         return diagnostics
     diagnostics.extend(
         _validate_step_references(
