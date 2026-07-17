@@ -16,7 +16,7 @@ class ValidationTest(unittest.TestCase):
                   issue: repo#1
                 blocks:
                   - guards:
-                      - uses: git.worktree
+                      - git.worktree.clean
                   - steps:
                       - name: inspect-issue
                         uses: gh.issue
@@ -61,7 +61,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.unknown_field")
+        self.assertIn("validation.unknown_field", [diagnostic.code for diagnostic in report.diagnostics])
 
     def test_guard_expression_must_not_be_empty(self) -> None:
         report = validate_workflow_text(
@@ -412,6 +412,24 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_object_form_guard_is_deprecated_but_valid(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards:
+                      - uses: git.repo
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+        self.assertEqual(report.diagnostics[0].level, "warning")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.uses_deprecated")
 
     def test_guard_expression_allows_state_reference(self) -> None:
         report = validate_workflow_text(

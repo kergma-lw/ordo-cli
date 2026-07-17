@@ -353,6 +353,15 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
                     )
                 )
             continue
+        if isinstance(item, dict) and "uses" in item:
+            diagnostics.append(
+                _warning(
+                    "validation.workflow.local_expression.guard.uses_deprecated",
+                    "Object-form guard 'uses:' entries are compatibility-only; prefer native guard expressions",
+                    item_path + ("uses",),
+                    source,
+                )
+            )
         diagnostics.extend(_validate_call(item, path=item_path, source=source))
     return diagnostics
 
