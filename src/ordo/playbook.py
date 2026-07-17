@@ -13,19 +13,17 @@ from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
 from ordo.model.workflow import Step, StepBlock, Workflow
 from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document, validate_workflow_document
+from ordo.runtime.local_expression_contexts import LocalExpressionContext
+from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
 from ordo.runtime.value_expressions import (
     BuiltinCallNode,
     FilterApplicationNode,
-    ParsedValueExpression,
     PipelineNode,
     ReferenceNode,
     StateReferenceNode,
     StepReferenceNode,
     ValueExpressionEvaluationError,
     ValueExpressionNode,
-    ValueExpressionParseError,
-    evaluate_value_expression,
-    parse_value_expression,
 )
 
 
@@ -696,8 +694,8 @@ def _evaluate_working_directory_expression(
     input_overrides: dict[str, object] | None,
 ) -> str:
     try:
-        parsed = parse_value_expression(expression)
-    except ValueExpressionParseError as exc:
+        parsed = parse_local_expression(expression, context=LocalExpressionContext.EMBEDDED_VALUE)
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
         raise _playbook_error(
             _working_directory_code(scope, "expression_syntax"),
             exc.message,
@@ -723,7 +721,7 @@ def _evaluate_working_directory_expression(
 
     activation_workflow = _working_directory_activation_workflow(workflow=workflow, profile=profile, input_overrides=input_overrides)
     try:
-        value = evaluate_value_expression(parsed, activation_workflow, step_results={})
+        value = evaluate_parsed_local_expression(parsed, activation_workflow, step_results={})
     except ValueExpressionEvaluationError as exc:
         raise _playbook_error(
             _working_directory_code(scope, "expression_invalid"),
@@ -779,7 +777,9 @@ def _working_directory_activation_workflow(
     )
 
 
-def _validate_working_directory_expression(parsed: ParsedValueExpression) -> tuple[str, str, dict[str, object]] | None:
+def _validate_working_directory_expression(parsed) -> tuple[str, str, dict[str, object]] | None:
+    root = parsed.value.root if getattr(parsed, "value", None) is not None else parsed.root
+
     def visit(node: ValueExpressionNode) -> tuple[str, str, dict[str, object]] | None:
         if isinstance(node, ReferenceNode):
             if len(node.parts) < 2 or node.parts[0] != "inputs":
@@ -824,7 +824,7 @@ def _validate_working_directory_expression(parsed: ParsedValueExpression) -> tup
             return None
         return None
 
-    return visit(parsed.root)
+    return visit(root)
 
 
 def _category_for_code(code: str) -> str:

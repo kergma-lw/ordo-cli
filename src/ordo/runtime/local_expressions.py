@@ -134,13 +134,32 @@ def extract_embedded_local_expression(value: str) -> str | None:
     return None
 
 
-def parse_embedded_local_expression(value: str, *, context: LocalExpressionContext) -> ParsedLocalExpression | None:
+def parse_embedded_local_expression(
+    value: str,
+    *,
+    context: LocalExpressionContext,
+    allow_boolean_composition: bool | None = None,
+) -> ParsedLocalExpression | None:
     """Parse one embedded local-expression surface for a non-native context."""
 
     expression = extract_embedded_local_expression(value)
     if expression is None:
         return None
-    return parse_local_expression(expression, context=context)
+    return parse_local_expression(expression, context=context, allow_boolean_composition=allow_boolean_composition)
+
+
+def parse_embedded_value_local_expression(
+    value: str,
+    *,
+    allow_boolean_composition: bool | None = None,
+) -> ParsedLocalExpression | None:
+    """Parse the embedded `${...}` surface in the standard value context."""
+
+    return parse_embedded_local_expression(
+        value,
+        context=LocalExpressionContext.EMBEDDED_VALUE,
+        allow_boolean_composition=allow_boolean_composition,
+    )
 
 
 def parse_condition_local_expression(value: str, *, context: LocalExpressionContext) -> ParsedLocalExpression:
@@ -173,19 +192,41 @@ def evaluate_parsed_local_expression(
     return evaluate_value_expression(parsed.value, workflow, step_results={} if step_results is None else step_results)
 
 
+def evaluate_parsed_value_local_expression(
+    parsed: ParsedLocalExpression,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+) -> JSONValue:
+    """Evaluate one parsed local expression in the standard value context."""
+
+    if parsed.context is not LocalExpressionContext.EMBEDDED_VALUE:
+        raise ValueExpressionEvaluationError(
+            code="runtime.local_expression.context_mismatch",
+            message="Embedded value evaluation expects the embedded-value context",
+            details={"context": parsed.context.value},
+        )
+    return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
+
+
 def resolve_embedded_local_expression(
     value: str,
     workflow: Workflow,
     *,
     context: LocalExpressionContext,
     step_results: dict[str, OperationResult | JSONValue] | None = None,
+    allow_boolean_composition: bool | None = None,
 ) -> JSONValue:
     """Resolve one embedded local-expression surface through the shared context API."""
 
     from .value_resolution import ValueResolutionError
 
     try:
-        parsed = parse_embedded_local_expression(value, context=context)
+        parsed = parse_embedded_local_expression(
+            value,
+            context=context,
+            allow_boolean_composition=allow_boolean_composition,
+        )
     except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
         raise ValueResolutionError(
             code="runtime.local_expression.syntax",
@@ -202,6 +243,24 @@ def resolve_embedded_local_expression(
         return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
     except ValueExpressionEvaluationError as exc:
         raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
+
+
+def resolve_embedded_value_local_expression(
+    value: str,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+    allow_boolean_composition: bool | None = None,
+) -> JSONValue:
+    """Resolve the embedded `${...}` surface in the standard value context."""
+
+    return resolve_embedded_local_expression(
+        value,
+        workflow,
+        context=LocalExpressionContext.EMBEDDED_VALUE,
+        step_results=step_results,
+        allow_boolean_composition=allow_boolean_composition,
+    )
 
 
 def resolve_condition_local_expression(

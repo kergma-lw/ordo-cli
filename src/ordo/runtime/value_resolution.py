@@ -9,7 +9,7 @@ from ordo.model.json import JSONArray, JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
-from .value_expressions import ValueExpressionEvaluationError, ValueExpressionParseError, evaluate_value_expression, parse_value_expression
+from .local_expressions import resolve_embedded_value_local_expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,21 +49,17 @@ def resolve_runtime_value(
     if not isinstance(value, str):
         return value
 
-    expression = _extract_expression(value)
-    if expression is None:
+    if _extract_expression(value) is None:
         return value
     try:
-        parsed = parse_value_expression(expression, allow_boolean_composition=allow_boolean_composition)
-    except ValueExpressionParseError as exc:
-        raise ValueResolutionError(
-            code="runtime.value.expression_syntax",
-            message=exc.message,
-            details={"expression": expression, "position": exc.position, "end": exc.end if exc.end is not None else exc.position},
-        ) from exc
-    try:
-        return evaluate_value_expression(parsed, workflow, step_results=resolved_step_results)
-    except ValueExpressionEvaluationError as exc:
-        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
+        return resolve_embedded_value_local_expression(
+            value,
+            workflow,
+            step_results=resolved_step_results,
+            allow_boolean_composition=allow_boolean_composition,
+        )
+    except ValueResolutionError:
+        raise
 
 
 def _extract_expression(value: str) -> str | None:

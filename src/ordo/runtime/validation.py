@@ -18,6 +18,7 @@ from .local_expressions import (
     build_local_expression_parse_diagnostic,
     build_local_expression_validation_diagnostic,
     parse_condition_local_expression,
+    parse_embedded_value_local_expression,
     parse_embedded_local_expression,
     parse_local_expression,
     validate_parsed_local_expression,
@@ -35,9 +36,7 @@ from .value_expressions import (
     StepReferenceNode,
     UnaryNode,
     ValueExpressionNode,
-    ValueExpressionParseError,
     collect_step_references,
-    parse_value_expression,
 )
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
@@ -884,13 +883,23 @@ def _validate_runtime_value_surface(
     if expression is None:
         return diagnostics
     try:
-        parsed = parse_value_expression(expression)
-    except ValueExpressionParseError as exc:
-        diagnostics.append(exc.to_diagnostic(path=path, source=source, expression=expression))
+        parsed = parse_embedded_value_local_expression(value)
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        diagnostics.append(
+            build_local_expression_parse_diagnostic(
+                exc,
+                context=LocalExpressionContext.EMBEDDED_VALUE,
+                path=path,
+                source=source,
+                expression=expression,
+            )
+        )
+        return diagnostics
+    if parsed is None or parsed.value is None:
         return diagnostics
     diagnostics.extend(
         _validate_step_references(
-            collect_step_references(parsed.root),
+            collect_step_references(parsed.value.root),
             path=path,
             source=source,
             prior_registers={} if prior_registers is None else prior_registers,
@@ -934,11 +943,21 @@ def _validate_profile_switch_value(
     if expression is None:
         return diagnostics
     try:
-        parsed = parse_value_expression(expression)
-    except ValueExpressionParseError as exc:
-        diagnostics.append(exc.to_diagnostic(path=path, source=source, expression=expression))
+        parsed = parse_embedded_value_local_expression(value)
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        diagnostics.append(
+            build_local_expression_parse_diagnostic(
+                exc,
+                context=LocalExpressionContext.EMBEDDED_VALUE,
+                path=path,
+                source=source,
+                expression=expression,
+            )
+        )
         return diagnostics
-    references = collect_step_references(parsed.root)
+    if parsed is None or parsed.value is None:
+        return diagnostics
+    references = collect_step_references(parsed.value.root)
     if references:
         diagnostics.append(
             _diagnostic(
@@ -1291,10 +1310,12 @@ def _collect_state_roles_from_runtime_value_surface(value: JSONValue | None) -> 
     if expression is None:
         return roles
     try:
-        parsed = parse_value_expression(expression, allow_boolean_composition=True)
-    except ValueExpressionParseError:
+        parsed = parse_embedded_value_local_expression(value)
+    except LOCAL_EXPRESSION_PARSE_ERRORS:
         return roles
-    return _collect_value_state_references(parsed.root)
+    if parsed is None or parsed.value is None:
+        return roles
+    return _collect_value_state_references(parsed.value.root)
 
 
 def _collect_guard_state_references(node) -> set[str]:

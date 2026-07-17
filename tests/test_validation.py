@@ -808,7 +808,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.syntax")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.embedded_value.syntax")
 
     def test_invalid_value_expression_syntax_in_state_set_value_fails_validation(self) -> None:
         report = validate_workflow_text(
@@ -829,7 +829,7 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.syntax")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.embedded_value.syntax")
 
     def test_invalid_yaml_format_args_type_fails_validation(self) -> None:
         report = validate_workflow_text(
