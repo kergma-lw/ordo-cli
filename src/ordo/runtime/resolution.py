@@ -11,7 +11,7 @@ from ordo.model.profile import Override
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
-from .guard_expressions import BinaryNode, CallNode, GuardExpressionNode, ListNode, LiteralNode, ParsedGuardExpression, ReferenceNode, StateReferenceNode, UnaryNode
+from .guard_expressions import BinaryNode, CallNode, ConditionExpressionNode, ListNode, LiteralNode, ParsedConditionExpression, ReferenceNode, StateReferenceNode, UnaryNode
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import parse_local_expression
 from .providers import ConnectorProvider, get_default_connector_provider
@@ -38,7 +38,7 @@ class ResolvedExpressionProbe:
     source: str
     expression_text: str
     fields: tuple[str, ...] = ()
-    arguments: tuple[tuple[str, GuardExpressionNode], ...] = ()
+    arguments: tuple[tuple[str, ConditionExpressionNode], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +46,7 @@ class ResolvedConditionExpression:
     """Resolved condition expression under the shared local-expression model."""
 
     expr: str
-    parsed: ParsedGuardExpression
+    parsed: ParsedConditionExpression
     probes: tuple[ResolvedExpressionProbe, ...] = ()
 
     @property
@@ -254,7 +254,7 @@ def _resolve_guard_expression(
     diagnostics: list[Diagnostic] = []
     probes: list[ResolvedExpressionProbe] = []
 
-    def visit(node: GuardExpressionNode) -> None:
+    def visit(node: ConditionExpressionNode) -> None:
         if isinstance(node, ReferenceNode):
             if node.parts[0] == "inputs":
                 return

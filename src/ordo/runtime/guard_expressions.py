@@ -591,3 +591,12 @@ def _is_argument_value(node: GuardExpressionNode) -> bool:
     if isinstance(node, ListNode):
         return all(_is_argument_value(item) for item in node.items)
     return False
+
+
+# Preferred local-expression terminology.
+ConditionExpressionNode = GuardExpressionNode
+ParsedConditionExpression = ParsedGuardExpression
+ConditionExpressionParseError = GuardExpressionParseError
+ConditionExpressionValidationError = GuardExpressionValidationError
+parse_condition_expression = parse_guard_expression
+validate_parsed_condition_expression = validate_parsed_guard_expression

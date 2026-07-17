@@ -851,3 +851,12 @@ def _decode_string(token_text: str, start: int) -> str:
 
 def _decode_number(token_text: str) -> int:
     return int(token_text)
+
+
+# Preferred local-expression terminology.
+EmbeddedValueExpressionNode = ValueExpressionNode
+ParsedEmbeddedValueExpression = ParsedValueExpression
+EmbeddedValueExpressionParseError = ValueExpressionParseError
+EmbeddedValueExpressionEvaluationError = ValueExpressionEvaluationError
+parse_embedded_value_expression = parse_value_expression
+evaluate_embedded_value_expression = evaluate_value_expression
