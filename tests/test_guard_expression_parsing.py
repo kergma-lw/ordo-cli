@@ -3,7 +3,7 @@ import unittest
 from ordo.runtime.guard_expressions import BinaryNode, CallNode, GuardExpressionParseError, ReferenceNode, parse_guard_expression
 
 
-class GuardExpressionParsingTest(unittest.TestCase):
+class LegacyGuardExpressionParsingTest(unittest.TestCase):
     def test_parses_boolean_composition_and_probe_calls(self) -> None:
         parsed = parse_guard_expression(
             'git.worktree.clean and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"'

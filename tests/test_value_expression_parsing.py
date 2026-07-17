@@ -14,7 +14,7 @@ from ordo.runtime.value_expressions import (
 )
 
 
-class ValueExpressionParsingTest(unittest.TestCase):
+class LegacyEmbeddedValueExpressionParsingTest(unittest.TestCase):
     def test_parse_direct_reference(self) -> None:
         parsed = parse_value_expression("inputs.title")
 
