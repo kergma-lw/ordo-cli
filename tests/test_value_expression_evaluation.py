@@ -4,7 +4,7 @@ import unittest
 
 from ordo.model.workflow import Workflow
 from ordo.runtime import load_workflow_text
-from ordo.runtime.value_expressions import ValueExpressionEvaluationError, evaluate_value_expression, parse_value_expression
+from ordo.runtime.local_expression_impl.embedded_value import EmbeddedValueExpressionEvaluationError, evaluate_embedded_value_expression, parse_embedded_value_expression
 
 
 class ValueExpressionEvaluationTest(unittest.TestCase):
@@ -21,9 +21,9 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression("inputs.title | trim | lower | slug")
+        parsed = parse_embedded_value_expression("inputs.title | trim | lower | slug")
 
-        value = evaluate_value_expression(parsed, workflow)
+        value = evaluate_embedded_value_expression(parsed, workflow)
 
         self.assertEqual(value, "hello-world")
 
@@ -58,9 +58,9 @@ blocks:
                 steps=workflow.steps,
             )
 
-            parsed = parse_value_expression("state.task_memory[inputs.issue_ref].branch")
+            parsed = parse_embedded_value_expression("state.task_memory[inputs.issue_ref].branch")
 
-            value = evaluate_value_expression(parsed, workflow)
+            value = evaluate_embedded_value_expression(parsed, workflow)
 
             self.assertEqual(value, "task/1-demo")
 
@@ -77,10 +77,10 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression("inputs.title | missing")
+        parsed = parse_embedded_value_expression("inputs.title | missing")
 
-        with self.assertRaises(ValueExpressionEvaluationError) as ctx:
-            evaluate_value_expression(parsed, workflow)
+        with self.assertRaises(EmbeddedValueExpressionEvaluationError) as ctx:
+            evaluate_embedded_value_expression(parsed, workflow)
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_unknown")
 
@@ -97,10 +97,10 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression("inputs.number | lower")
+        parsed = parse_embedded_value_expression("inputs.number | lower")
 
-        with self.assertRaises(ValueExpressionEvaluationError) as ctx:
-            evaluate_value_expression(parsed, workflow)
+        with self.assertRaises(EmbeddedValueExpressionEvaluationError) as ctx:
+            evaluate_embedded_value_expression(parsed, workflow)
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
 
@@ -119,9 +119,9 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression('format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)')
+        parsed = parse_embedded_value_expression('format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)')
 
-        value = evaluate_value_expression(parsed, workflow)
+        value = evaluate_embedded_value_expression(parsed, workflow)
 
         self.assertEqual(value, "task/7-hello-world")
 
@@ -138,10 +138,10 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression('format("{}/{}", inputs.owner)')
+        parsed = parse_embedded_value_expression('format("{}/{}", inputs.owner)')
 
-        with self.assertRaises(ValueExpressionEvaluationError) as ctx:
-            evaluate_value_expression(parsed, workflow)
+        with self.assertRaises(EmbeddedValueExpressionEvaluationError) as ctx:
+            evaluate_embedded_value_expression(parsed, workflow)
 
         self.assertEqual(ctx.exception.code, "runtime.value.format_args_invalid")
 
@@ -157,10 +157,10 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression("format(7)")
+        parsed = parse_embedded_value_expression("format(7)")
 
-        with self.assertRaises(ValueExpressionEvaluationError) as ctx:
-            evaluate_value_expression(parsed, workflow)
+        with self.assertRaises(EmbeddedValueExpressionEvaluationError) as ctx:
+            evaluate_embedded_value_expression(parsed, workflow)
 
         self.assertEqual(ctx.exception.code, "runtime.value.format_template_invalid")
 
@@ -177,9 +177,9 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression('inputs.status | eq("ok")')
+        parsed = parse_embedded_value_expression('inputs.status | eq("ok")')
 
-        self.assertIs(evaluate_value_expression(parsed, workflow), True)
+        self.assertIs(evaluate_embedded_value_expression(parsed, workflow), True)
 
     def test_evaluate_ne_filter_can_compare_boolean_literal(self) -> None:
         workflow = load_workflow_text(
@@ -194,9 +194,9 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression("inputs.open | ne(true)")
+        parsed = parse_embedded_value_expression("inputs.open | ne(true)")
 
-        self.assertIs(evaluate_value_expression(parsed, workflow), True)
+        self.assertIs(evaluate_embedded_value_expression(parsed, workflow), True)
 
     def test_evaluate_not_filter_negates_boolean(self) -> None:
         workflow = load_workflow_text(
@@ -211,9 +211,9 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression("inputs.open | not")
+        parsed = parse_embedded_value_expression("inputs.open | not")
 
-        self.assertIs(evaluate_value_expression(parsed, workflow), True)
+        self.assertIs(evaluate_embedded_value_expression(parsed, workflow), True)
 
     def test_evaluate_not_filter_rejects_non_boolean_input(self) -> None:
         workflow = load_workflow_text(
@@ -228,10 +228,10 @@ blocks:
 """
         )
 
-        parsed = parse_value_expression("inputs.status | not")
+        parsed = parse_embedded_value_expression("inputs.status | not")
 
-        with self.assertRaises(ValueExpressionEvaluationError) as ctx:
-            evaluate_value_expression(parsed, workflow)
+        with self.assertRaises(EmbeddedValueExpressionEvaluationError) as ctx:
+            evaluate_embedded_value_expression(parsed, workflow)
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
 

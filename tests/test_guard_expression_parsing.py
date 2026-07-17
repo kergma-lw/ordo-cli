@@ -1,11 +1,11 @@
 import unittest
 
-from ordo.runtime.guard_expressions import BinaryNode, CallNode, GuardExpressionParseError, ReferenceNode, parse_guard_expression
+from ordo.runtime.local_expression_impl.condition import BinaryNode, CallNode, ConditionExpressionParseError, ReferenceNode, parse_condition_expression
 
 
 class LegacyGuardExpressionParsingTest(unittest.TestCase):
     def test_parses_boolean_composition_and_probe_calls(self) -> None:
-        parsed = parse_guard_expression(
+        parsed = parse_condition_expression(
             'git.worktree.clean and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"'
         )
 
@@ -21,19 +21,19 @@ class LegacyGuardExpressionParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root.right.left.fields, ("state",))
 
     def test_parses_not_in_operator(self) -> None:
-        parsed = parse_guard_expression('gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["CLOSED"]')
+        parsed = parse_condition_expression('gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["CLOSED"]')
 
         self.assertIsInstance(parsed.root, BinaryNode)
         self.assertEqual(parsed.root.operator, "not in")
 
     def test_rejects_positional_arguments_in_current_grammar(self) -> None:
-        with self.assertRaises(GuardExpressionParseError) as context:
-            parse_guard_expression("gh.issue(inputs.issue).status")
+        with self.assertRaises(ConditionExpressionParseError) as context:
+            parse_condition_expression("gh.issue(inputs.issue).status")
 
         self.assertIn("Expected '=' after argument name", context.exception.message)
 
     def test_parses_nested_project_issue_probe(self) -> None:
-        parsed = parse_guard_expression("gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists")
+        parsed = parse_condition_expression("gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists")
 
         self.assertIsInstance(parsed.root, CallNode)
         self.assertEqual(parsed.root.target.parts, ("gh", "project", "issue"))
@@ -42,7 +42,7 @@ class LegacyGuardExpressionParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root.fields, ("exists",))
 
     def test_rejects_unterminated_string(self) -> None:
-        with self.assertRaises(GuardExpressionParseError) as context:
-            parse_guard_expression('git.branch == "main')
+        with self.assertRaises(ConditionExpressionParseError) as context:
+            parse_condition_expression('git.branch == "main')
 
         self.assertIn("Unterminated string literal", context.exception.message)

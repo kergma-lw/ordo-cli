@@ -6,7 +6,7 @@ from ordo.connectors.operations import evaluate_probe, execute_action
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import check_workflow
-from ordo.runtime.guard_expressions import LiteralNode, ReferenceNode
+from ordo.runtime.local_expression_impl.condition import LiteralNode, ReferenceNode
 from ordo.runtime.resolution import ResolvedExpressionProbe, ResolvedOperation
 from ordo.connectors.registry import get_public_connector_registry
 from tests.support import STANDARD_CONNECTOR_PROVIDER
