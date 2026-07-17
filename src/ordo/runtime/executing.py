@@ -18,7 +18,7 @@ from .launchers import apply_launcher_to_step
 from .preflight_interpreter import evaluate_preflight_step_condition, evaluate_preflight_value_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
-from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
 from .state import RuntimeStateError, delete_state_value, read_state_document, resolve_state_target, write_state_document, write_state_value
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -123,7 +123,7 @@ def execute_workflow(
             block_blockers: list[str] = []
             block_guard_details: list[dict[str, object]] = []
             for resolved_guard in resolved_block.guards:
-                if isinstance(resolved_guard, ResolvedGuardExpression):
+                if isinstance(resolved_guard, ResolvedConditionExpression):
                     with _execution_working_directory(current_working_directory):
                         result = _evaluate_guard_expression(resolved_guard, effective_workflow, guard_probe or _default_guard_probe(provider=connector_provider))
                 else:

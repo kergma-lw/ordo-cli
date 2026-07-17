@@ -42,8 +42,8 @@ class ResolvedExpressionProbe:
 
 
 @dataclass(frozen=True, slots=True)
-class ResolvedGuardExpression:
-    """Resolved string-form guard expression."""
+class ResolvedConditionExpression:
+    """Resolved condition expression under the shared local-expression model."""
 
     expr: str
     parsed: ParsedGuardExpression
@@ -54,7 +54,8 @@ class ResolvedGuardExpression:
         return self.expr
 
 
-ResolvedGuard = ResolvedOperation | ResolvedGuardExpression
+ResolvedGuardExpression = ResolvedConditionExpression
+ResolvedGuard = ResolvedOperation | ResolvedConditionExpression
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,7 +247,7 @@ def _resolve_guard_expression(
     path: tuple[str, ...],
     public_registry: ConnectorRegistry,
     local_registry: ConnectorRegistry,
-) -> ResolvedGuardExpression | Diagnostic:
+) -> ResolvedConditionExpression | Diagnostic:
     parsed_local = parse_local_expression(expression, context=LocalExpressionContext.GUARD)
     assert parsed_local.guard is not None
     parsed = parsed_local.guard
@@ -349,7 +350,7 @@ def _resolve_guard_expression(
     visit(parsed.root)
     if diagnostics:
         return diagnostics[0]
-    return ResolvedGuardExpression(expr=expression, parsed=parsed, probes=tuple(probes))
+    return ResolvedConditionExpression(expr=expression, parsed=parsed, probes=tuple(probes))
 
 
 def split_probe_reference(

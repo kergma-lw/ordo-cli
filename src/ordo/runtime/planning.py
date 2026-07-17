@@ -12,7 +12,7 @@ from .checking import check_workflow
 from .preflight_steps import classify_preflight_step
 from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
-from .resolution import ResolvedBuiltinStep, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedRunStep, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedGuardBlock, ResolvedRunStep, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
 
 
@@ -272,7 +272,7 @@ def _build_guard_items(
         for index, resolved_guard in enumerate(resolution.resolved_guards):
             operation_result = check_result.operation_results[index] if index < len(check_result.operation_results) else None
             coverage = coverage_by_reference.get(resolved_guard.reference, {})
-            if isinstance(resolved_guard, ResolvedGuardExpression):
+            if isinstance(resolved_guard, ResolvedConditionExpression):
                 detail = check_result.outputs.get("guard_details", [])[index] if index < len(check_result.outputs.get("guard_details", [])) else {}
                 guard_items.append(
                     {

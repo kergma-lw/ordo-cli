@@ -11,9 +11,9 @@ from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 if TYPE_CHECKING:
-    from .resolution import ResolvedExpressionProbe, ResolvedGuardExpression, ResolvedOperation
+    from .resolution import ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedOperation
 
-GuardProbe = Callable[["ResolvedOperation | ResolvedExpressionProbe | ResolvedGuardExpression", Workflow], OperationResult]
+GuardProbe = Callable[["ResolvedOperation | ResolvedExpressionProbe | ResolvedConditionExpression", Workflow], OperationResult]
 StepExecutor = Callable[["ResolvedOperation", Workflow], OperationResult]
 
 

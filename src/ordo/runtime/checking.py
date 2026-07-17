@@ -18,7 +18,7 @@ from .preflight_interpreter import build_preflight_halt, evaluate_preflight_prob
 from .preflight_steps import classify_preflight_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
-from .resolution import ResolvedBuiltinStep, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedGuardExpression, ResolvedOperation, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 from .validation import validate_workflow_document
 
@@ -279,7 +279,7 @@ def check_workflow(
             block_blockers: list[str] = []
             block_guard_details: list[dict[str, object]] = []
             for resolved_guard in resolved_block.guards:
-                if isinstance(resolved_guard, ResolvedGuardExpression):
+                if isinstance(resolved_guard, ResolvedConditionExpression):
                     result = _evaluate_guard_expression(resolved_guard, effective_workflow, probe)
                 else:
                     result = probe(resolved_guard, effective_workflow)
@@ -1099,7 +1099,7 @@ def _default_guard_probe(*, provider: ConnectorProvider | None):
 
 
 def _evaluate_guard_expression(
-    resolved_guard: ResolvedGuardExpression,
+    resolved_guard: ResolvedConditionExpression,
     workflow: Workflow,
     probe: GuardProbe,
 ) -> OperationResult:
@@ -1240,7 +1240,7 @@ def _resolve_input_reference(
 
 
 def _lookup_probe_spec(
-    resolved_guard: ResolvedGuardExpression,
+    resolved_guard: ResolvedConditionExpression,
     expression_text: str,
     fallback_fields: tuple[str, ...],
 ) -> ResolvedExpressionProbe:
@@ -1252,7 +1252,7 @@ def _lookup_probe_spec(
 
 def _resolve_state_reference(
     node: StateReferenceNode,
-    resolved_guard: ResolvedGuardExpression,
+    resolved_guard: ResolvedConditionExpression,
     workflow: Workflow,
     diagnostics: list[Diagnostic],
 ) -> tuple[str, JSONValue | None]:
@@ -1329,10 +1329,10 @@ def _extract_probe_value(outputs: dict[str, JSONValue], fields: tuple[str, ...])
     return current
 
 
-def _guard_observation_scopes(resolved_guard: ResolvedOperation | ResolvedGuardExpression) -> list[str]:
+def _guard_observation_scopes(resolved_guard: ResolvedOperation | ResolvedConditionExpression) -> list[str]:
     if isinstance(resolved_guard, ResolvedOperation):
         return [resolved_guard.reference]
-    if isinstance(resolved_guard, ResolvedGuardExpression):
+    if isinstance(resolved_guard, ResolvedConditionExpression):
         return [probe.reference for probe in resolved_guard.probes]
     return []
 
