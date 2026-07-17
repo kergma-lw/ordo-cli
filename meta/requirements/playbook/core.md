@@ -14,7 +14,7 @@
 - A playbook launch surface may support explicit launch-time input overrides for one run.
 - A playbook launch surface may declare an explicit execution working directory for a run through playbook defaults, the active profile, or the active workflow entry.
 - Working-directory precedence must be deterministic and follow increasing specificity from playbook defaults to profile context to workflow-entry context.
-- Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` value-expression syntax when the expression stays within an activation-time-safe subset.
+- Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` embedded-value local-expression surface when the expression stays within an activation-time-safe subset.
 - A playbook may declare a `pre_run` workflow set that executes before the requested workflow in the same runtime session.
 - A `pre_run` workflow set must remain explicit, project-local, and reviewable from the playbook surface.
 - Failure in any `pre_run` workflow must prevent effectful execution of the requested workflow.
@@ -41,5 +41,5 @@
 - Workflow business logic should stay in workflow files rather than being duplicated into playbook entry definitions.
 - Playbook ergonomics should reduce the need for handwritten bootstrap commands without hiding runtime semantics.
 - Execution working directory should remain explicit runtime context rather than hidden shell-first behavior.
-- A working-directory expression must reuse the documented value-expression syntax rather than introducing a second expression language.
+- A working-directory expression must reuse the documented embedded-value local-expression surface rather than introducing a second expression language.
 - A working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.

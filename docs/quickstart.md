@@ -236,7 +236,7 @@ Current important limits:
 - no stable CLI yet;
 - the initial playbook contract is documented, but the user-facing playbook CLI is still not implemented;
 - only a minimal canonical operation set has concrete implementations;
-- direct references, pipe-based value expressions, and dual-form `format` exist for local workflow value computation, but the surface remains intentionally small rather than a general programming language;
+- direct references, embedded-value pipelines, and dual-form `format` exist for local workflow value computation, but the surface remains intentionally small rather than a general programming language;
 - some registry-visible operations still intentionally return structured not-yet-implemented results.
 
 ## 11. Runtime state example

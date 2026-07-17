@@ -57,8 +57,8 @@ The entry must resolve to exactly one workflow file.
 
 - Playbook `defaults.working_directory`, active-profile `working_directory`, and workflow-entry `working_directory` are the three explicit declaration surfaces for execution working directory.
 - When more than one declaration is present, the resolved working directory follows increasing specificity in this order: playbook defaults, then active profile, then active workflow entry.
-- Each `working_directory` value may be either a literal path string or a `${...}` value expression that resolves to a path string.
-- A `working_directory` expression reuses the existing value-expression syntax but with a narrower activation-time surface.
+- Each `working_directory` value may be either a literal path string or a `${...}` embedded-value local expression that resolves to a path string.
+- A `working_directory` expression reuses the existing embedded-value local-expression surface but with a narrower activation-time subset.
 - The activation-time surface may read only launch-known input values.
 - The activation-time surface must not read `state...`, `step...`, or any other runtime-derived value.
 - The activation-time surface must resolve fully before the first guard or step executes.

@@ -65,7 +65,7 @@ A workflow entry gives a stable project-local name to a workflow file.
 It may additionally declare:
 
 - state bindings from workflow logical roles to concrete playbook state entries;
-- an explicit execution `working_directory` for runs of that workflow entry, expressed either as a literal path string or as an activation-time-safe `${...}` value expression;
+- an explicit execution `working_directory` for runs of that workflow entry, expressed either as a literal path string or as an activation-time-safe `${...}` embedded-value local expression;
 - future launch metadata that remains project-local rather than workflow-semantic.
 
 ## Defaults role
@@ -87,7 +87,7 @@ That context may include:
 
 - input bindings;
 - approved overrides;
-- a profile-scoped `working_directory` default, expressed either as a literal path string or as an activation-time-safe `${...}` value expression;
+- a profile-scoped `working_directory` default, expressed either as a literal path string or as an activation-time-safe `${...}` embedded-value local expression;
 - future runtime-facing execution selectors that remain declarative and reviewable.
 
 Profiles do not create a second orchestration language.

@@ -718,7 +718,7 @@ def _serialize_binding_for_expression(
         return json.dumps(value)
     raise _workflow_include_error(
         code="load.workflow.include.args.type",
-        message="Fragment argument bound inside an expression must resolve to a scalar or value expression",
+        message="Fragment argument bound inside an expression must resolve to a scalar or embedded-value local expression",
         include_path=include_node_path + ("with", arg_name),
         include_chain=include_chain,
         source=str(source),

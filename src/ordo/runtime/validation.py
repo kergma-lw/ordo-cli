@@ -532,7 +532,7 @@ def _validate_step_condition(
         field_name="if",
         type_code="validation.workflow.step.if.type",
         expression_code="validation.workflow.local_expression.step_condition.syntax",
-        type_message="Step field 'if' must be a string-form value expression",
+        type_message="Step field 'if' must be a string-form local expression",
         expression_message="Step field 'if' must be a valid step-condition expression",
     )
     condition = value.get("if")

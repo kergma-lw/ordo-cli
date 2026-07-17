@@ -4,7 +4,7 @@
 
 - The workflow authoring surface should support optional step-level eligibility conditions through an `if` field.
 - Step conditions should allow one declared workflow step to execute or be skipped without introducing first-class branch blocks, loops, or join semantics.
-- Step conditions should reuse the existing value-expression surface rather than introducing a third workflow expression language.
+- Step conditions should reuse the common local-expression system rather than introducing a third workflow expression language.
 
 ## Authoring shape
 
@@ -30,7 +30,7 @@
 - A direct reference is valid in `if` only when the referenced value is boolean.
 - Predicate transforms such as equality comparison may be used when they return boolean.
 - `not` should accept only boolean input and return boolean output.
-- Existing value-expression pipelines may appear inside boolean subexpressions when they produce boolean output.
+- Existing embedded-value pipelines may appear inside boolean subexpressions when they produce boolean output.
 - Shared boolean syntax with guards should not change the allowed step-condition reference domains or permit probe calls.
 - Failure to evaluate an `if` expression must fail execution rather than being treated as `false`.
 

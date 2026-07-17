@@ -77,7 +77,7 @@ guards:
 
 Current implementation note:
 
-- the workflow contract and runtime support plain-string guard expressions;
+- the workflow contract and runtime support native plain-string guard expressions;
 - expression guards resolve only public `probe` operations;
 - failed expression guards preserve structured guard details and evaluation traces.
 
@@ -111,9 +111,9 @@ Illustrative forms:
 
 Step-condition rules:
 
-- step conditions use the same boolean composition syntax as guard expressions: `and`, `or`, `not`, and parentheses;
+- step conditions use the same boolean composition syntax as native guard expressions: `and`, `or`, `not`, and parentheses;
 - step conditions read only workflow-local roots such as `inputs...`, `state...`, and prior `step...` results;
-- existing value-expression pipelines remain valid leaf forms when they produce boolean values;
+- existing embedded-value pipelines remain valid leaf forms when they produce boolean values;
 - step conditions do not call connector operations or probes.
 - the older embedded form `if: ${...}` remains deprecated compatibility surface only.
 
