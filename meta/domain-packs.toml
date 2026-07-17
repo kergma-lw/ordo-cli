@@ -25,6 +25,7 @@ sources = [
   "domain/boundaries.md",
   "adr/0004-guard-expressions-prefer-orthogonal-probes.md",
   "adr/0005-local-expressions-context-model.md",
+  "adr/0006-local-expressions-deprecation-plan.md",
   "model/local-expressions/core.md",
   "model/local-expressions/contexts.md",
   "model/workflow/entities.md",

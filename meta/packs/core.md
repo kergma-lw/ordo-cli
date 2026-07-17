@@ -1315,6 +1315,49 @@ It remains a pure local-expression surface and must not become effectful executi
 - runtime implementation should converge toward a shared local-expression core with explicit context policy;
 - syntax and authored-surface differences may remain, but they must not redefine the conceptual model into unrelated expression systems.
 
+<!-- source: adr/0006-local-expressions-deprecation-plan.md -->
+
+# ADR 0006: deprecate legacy local-expression authored surfaces through warnings first
+
+## Status
+
+Accepted.
+
+## Context
+
+The local-expressions migration established two preferred authored surfaces:
+
+- native guard expressions instead of object-form guard `uses:` entries;
+- bare step `if` conditions instead of embedded `if: ${...}`.
+
+The runtime already accepts the preferred forms and emits compatibility warnings for the legacy forms.
+
+The remaining open question was the retirement policy for those deprecated surfaces.
+
+## Decision
+
+The project will keep both legacy forms valid during the current v0 warning window.
+
+The deprecated forms are:
+
+- object-form guard `uses:` entries;
+- embedded step `if: ${...}`.
+
+During this warning window:
+
+- validation warnings remain the primary deprecation signal;
+- contract metadata and docs may describe the forms as deprecated compatibility surface;
+- help and introspection do not need a separate dedicated warning screen beyond that contract metadata.
+
+Removal, if it happens, must wait until a later workflow-contract revision after at least one sustained warning period in the current v0 line.
+
+## Consequences
+
+- workflow authors keep a stable migration window rather than facing an immediate breaking change;
+- validation warnings are the canonical runtime signal for these deprecated forms;
+- docs and contract metadata should continue to mark the preferred versus compatibility surfaces clearly;
+- a future hard deprecation can be introduced only as an explicit follow-up contract change rather than as an incidental parser cleanup.
+
 <!-- source: model/local-expressions/core.md -->
 
 # Local expression model
@@ -3676,6 +3719,8 @@ Current compatibility decisions:
 - string-form native guard entries are the preferred stable guard form;
 - step `if` prefers native bare condition entries;
 - step `if: ${...}` remains a deprecated compatibility form.
+
+These deprecated compatibility forms remain valid during the current v0 warning window and require an explicit future contract revision before hard removal.
 
 Those compatibility forms do not change the higher-level local-expression model or the context restrictions that define which dependencies are allowed.
 

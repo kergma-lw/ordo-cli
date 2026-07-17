@@ -71,4 +71,6 @@ Current compatibility decisions:
 - step `if` prefers native bare condition entries;
 - step `if: ${...}` remains a deprecated compatibility form.
 
+These deprecated compatibility forms remain valid during the current v0 warning window and require an explicit future contract revision before hard removal.
+
 Those compatibility forms do not change the higher-level local-expression model or the context restrictions that define which dependencies are allowed.

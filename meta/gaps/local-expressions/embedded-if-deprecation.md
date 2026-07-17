@@ -2,7 +2,7 @@
 
 ## Status
 
-This note records a real transition gap rather than a settled final policy.
+Resolved by `adr/0006-local-expressions-deprecation-plan.md`.
 
 The preferred step-condition surface is now bare `if`, while embedded
 `if: ${...}` remains supported only for compatibility.
@@ -14,12 +14,12 @@ The runtime and docs can already distinguish:
 - preferred native step conditions such as `if: step.issue.outputs.open`;
 - deprecated embedded compatibility forms such as `if: ${step.issue.outputs.open}`.
 
-What is still open is the product-level deprecation path:
+The product-level deprecation path is now fixed:
 
-- whether runtime should emit explicit deprecation warnings;
-- how long embedded `if: ${...}` should remain accepted;
-- whether help and explain surfaces should flag the older form automatically;
-- what migration ergonomics should exist for existing workflow files.
+- runtime emits explicit validation warnings for embedded `if: ${...}`;
+- the compatibility form remains accepted during the current v0 warning window;
+- help and introspection rely on contract metadata and docs rather than a separate dedicated warning screen;
+- removal, if it happens later, requires an explicit workflow-contract revision after the warning window.
 
 ## Why this matters
 
@@ -32,13 +32,6 @@ That weakens:
 - machine-teachable surface guidance;
 - future cleanup of legacy condition embedding.
 
-## Desired outcome
+## Result
 
-The product should eventually define:
-
-- whether embedded `if: ${...}` produces warnings during validation or help output;
-- when, if ever, the compatibility form becomes hard-deprecated or removed;
-- how migration should be communicated and automated.
-
-This note does not decide the timeline. It only records that the compatibility
-surface now exists and needs an explicit retirement policy later.
+This note remains only as a historical record of the gap that existed before ADR 0006 fixed the retirement plan.
