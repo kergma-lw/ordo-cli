@@ -16,7 +16,7 @@ from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression
-from ordo.runtime.local_expression_engine.core import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
+from ordo.runtime.local_expression_engine.core import BinaryNode, BuiltinCallNode, FilterApplicationNode, LocalExpressionNode, ParsedLocalExpressionTree, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, parse_local_expression_tree
 
 
 @dataclass(frozen=True, slots=True)
@@ -607,7 +607,7 @@ def _bind_fragment_arg_string(
     expression = _extract_runtime_expression(value)
     if expression is None:
         return value
-    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    parsed = parse_local_expression_tree(expression, allow_boolean_composition=True)
     direct_arg_name = _direct_fragment_arg_name(parsed)
     if direct_arg_name is not None:
         if direct_arg_name not in include_bindings:
@@ -635,7 +635,7 @@ def _bind_fragment_arg_string(
     return rebound_value
 
 
-def _direct_fragment_arg_name(parsed: ParsedValueExpression) -> str | None:
+def _direct_fragment_arg_name(parsed: ParsedLocalExpressionTree) -> str | None:
     node = parsed.root
     if isinstance(node, ReferenceNode) and len(node.parts) == 2 and node.parts[0] == "args":
         return node.parts[1]
@@ -643,7 +643,7 @@ def _direct_fragment_arg_name(parsed: ParsedValueExpression) -> str | None:
 
 
 def _collect_fragment_arg_expression_replacements(
-    parsed: ParsedValueExpression,
+    parsed: ParsedLocalExpressionTree,
     *,
     include_bindings: JSONObject,
     source: Path,
@@ -783,7 +783,7 @@ def _ensure_fragment_has_no_state_surface(
     expression = _extract_runtime_expression(value)
     if expression is None:
         return
-    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    parsed = parse_local_expression_tree(expression, allow_boolean_composition=True)
     if _value_expression_uses_state(parsed.root):
         raise _workflow_include_error(
             code="load.workflow.include.state_forbidden",
@@ -794,7 +794,7 @@ def _ensure_fragment_has_no_state_surface(
         )
 
 
-def _value_expression_uses_state(node: ValueExpressionNode) -> bool:
+def _value_expression_uses_state(node: LocalExpressionNode) -> bool:
     if isinstance(node, StateReferenceNode):
         return True
     if isinstance(node, PipelineNode):
@@ -896,7 +896,7 @@ def _rewrite_fragment_step_reference_string(
     expression = _extract_runtime_expression(value)
     if expression is None:
         return value
-    parsed = parse_value_expression(expression, allow_boolean_composition=True)
+    parsed = parse_local_expression_tree(expression, allow_boolean_composition=True)
     replacements: list[tuple[int, int, str]] = []
     for node in _walk_value_expression_nodes(parsed.root):
         if not isinstance(node, StepReferenceNode):
@@ -972,7 +972,7 @@ def _ensure_fragment_has_no_external_step_references(
     )
 
 
-def _walk_value_expression_nodes(node: ValueExpressionNode) -> list[ValueExpressionNode]:
+def _walk_value_expression_nodes(node: LocalExpressionNode) -> list[LocalExpressionNode]:
     nodes = [node]
     if isinstance(node, PipelineNode):
         nodes.extend(_walk_value_expression_nodes(node.source))

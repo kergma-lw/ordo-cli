@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from ordo.model.json import JSONObject, JSONValue
 
 if False:  # pragma: no cover
-    from .core import BuiltinCallNode, FilterApplicationNode, ParsedValueExpression
+    from .core import BuiltinCallNode, FilterApplicationNode, ParsedLocalExpressionTree
     from ordo.model.workflow import Workflow
 
 
-FilterHandler = Callable[[JSONValue, "FilterApplicationNode", "ParsedValueExpression", "Workflow", dict], JSONValue]
-BuiltinHandler = Callable[["BuiltinCallNode", "ParsedValueExpression", "Workflow"], JSONValue]
+FilterHandler = Callable[[JSONValue, "FilterApplicationNode", "ParsedLocalExpressionTree", "Workflow", dict], JSONValue]
+BuiltinHandler = Callable[["BuiltinCallNode", "ParsedLocalExpressionTree", "Workflow"], JSONValue]
 
 
 @dataclass(frozen=True, slots=True)

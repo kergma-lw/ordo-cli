@@ -27,15 +27,15 @@ from .local_expression_engine.core import (
 )
 from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, LocalExpressionRoot, get_local_expression_context_policy
 from .local_expression_engine.core import (
-    EmbeddedValueExpressionEvaluationError,
     EmbeddedValueExpressionNode,
-    EmbeddedValueExpressionParseError,
-    ValueExpressionValidationError,
-    ParsedEmbeddedValueExpression,
-    collect_value_expression_dependencies,
-    evaluate_embedded_value_expression,
-    parse_embedded_value_expression,
-    validate_value_expression,
+    ParsedLocalExpressionTree,
+    collect_local_expression_dependencies,
+    evaluate_local_expression_tree,
+    parse_local_expression_tree,
+    LocalExpressionEvaluationError,
+    LocalExpressionParseError,
+    LocalExpressionValidationIssue,
+    validate_local_expression_tree,
 )
 
 
@@ -52,11 +52,11 @@ class ParsedLocalExpression:
     source: str
     root: ConditionExpressionNode | EmbeddedValueExpressionNode
     guard: ParsedConditionExpression | None = None
-    value: ParsedEmbeddedValueExpression | None = None
+    value: ParsedLocalExpressionTree | None = None
 
 
-LOCAL_EXPRESSION_PARSE_ERRORS = (ConditionExpressionParseError, EmbeddedValueExpressionParseError)
-LocalExpressionValidationError = ConditionExpressionValidationError | ValueExpressionValidationError
+LOCAL_EXPRESSION_PARSE_ERRORS = (ConditionExpressionParseError, LocalExpressionParseError)
+LocalExpressionValidationError = ConditionExpressionValidationError | LocalExpressionValidationIssue
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +84,7 @@ def parse_local_expression(
         return ParsedLocalExpression(context=context, source=expression, root=parsed.root, guard=parsed)
 
     policy = get_local_expression_context_policy(context)
-    parsed = parse_embedded_value_expression(
+    parsed = parse_local_expression_tree(
         expression,
         allow_boolean_composition=(policy.family is LocalExpressionContextFamily.CONDITION)
         if allow_boolean_composition is None
@@ -102,12 +102,12 @@ def validate_parsed_local_expression(parsed: ParsedLocalExpression) -> tuple[Loc
         assert parsed.guard is not None
         errors.extend(validate_parsed_condition_expression(parsed.guard))
     elif parsed.value is not None:
-        errors.extend(validate_value_expression(parsed.value))
+        errors.extend(validate_local_expression_tree(parsed.value))
     return tuple(errors)
 
 
 def build_local_expression_parse_diagnostic(
-    exc: ConditionExpressionParseError | EmbeddedValueExpressionParseError,
+    exc: ConditionExpressionParseError | LocalExpressionParseError,
     *,
     context: LocalExpressionContext,
     path: tuple[str, ...],
@@ -193,7 +193,7 @@ def _collect_local_expression_dependencies(parsed: ParsedLocalExpression) -> tup
     if parsed.value is not None:
         return tuple(
             _LocalExpressionDependency(root=LocalExpressionRoot(dependency.name), start=dependency.start, end=dependency.end)
-            for dependency in collect_value_expression_dependencies(parsed.value.root)
+            for dependency in collect_local_expression_dependencies(parsed.value.root)
         )
     return ()
 
@@ -292,12 +292,12 @@ def evaluate_parsed_local_expression(
     """Evaluate one parsed local expression through the shared context API."""
 
     if parsed.value is None:
-        raise EmbeddedValueExpressionEvaluationError(
+        raise LocalExpressionEvaluationError(
             code="runtime.local_expression.evaluation_unsupported",
             message=f"Local-expression context '{parsed.context.value}' is not directly evaluable through the canonical local-expression engine",
             details={"context": parsed.context.value},
         )
-    return evaluate_embedded_value_expression(parsed.value, workflow, step_results={} if step_results is None else step_results)
+    return evaluate_local_expression_tree(parsed.value, workflow, step_results={} if step_results is None else step_results)
 
 
 def evaluate_parsed_value_local_expression(
@@ -309,7 +309,7 @@ def evaluate_parsed_value_local_expression(
     """Evaluate one parsed local expression in the standard value context."""
 
     if parsed.context is not LocalExpressionContext.EMBEDDED_VALUE:
-        raise EmbeddedValueExpressionEvaluationError(
+        raise LocalExpressionEvaluationError(
             code="runtime.local_expression.context_mismatch",
             message="Embedded value evaluation expects the embedded-value context",
             details={"context": parsed.context.value},
@@ -349,7 +349,7 @@ def resolve_embedded_local_expression(
         )
     try:
         return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
-    except EmbeddedValueExpressionEvaluationError as exc:
+    except LocalExpressionEvaluationError as exc:
         raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
 
 
@@ -398,5 +398,5 @@ def resolve_condition_local_expression(
         ) from exc
     try:
         return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
-    except EmbeddedValueExpressionEvaluationError as exc:
+    except LocalExpressionEvaluationError as exc:
         raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc

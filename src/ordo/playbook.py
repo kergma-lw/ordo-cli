@@ -18,11 +18,11 @@ from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evalua
 from ordo.runtime.local_expression_engine.core import (
     BuiltinCallNode,
     FilterApplicationNode,
+    LocalExpressionEvaluationError,
     PipelineNode,
     ReferenceNode,
     StateReferenceNode,
     StepReferenceNode,
-    ValueExpressionEvaluationError,
     ValueExpressionNode,
 )
 
@@ -722,7 +722,7 @@ def _evaluate_working_directory_expression(
     activation_workflow = _working_directory_activation_workflow(workflow=workflow, profile=profile, input_overrides=input_overrides)
     try:
         value = evaluate_parsed_local_expression(parsed, activation_workflow, step_results={})
-    except ValueExpressionEvaluationError as exc:
+    except LocalExpressionEvaluationError as exc:
         raise _playbook_error(
             _working_directory_code(scope, "expression_invalid"),
             exc.message,

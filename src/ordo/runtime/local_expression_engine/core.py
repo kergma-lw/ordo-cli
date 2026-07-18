@@ -1,4 +1,4 @@
-"""Internal model and parser for workflow value expressions."""
+"""Canonical parser and evaluator for the shared local-expression engine."""
 
 from __future__ import annotations
 
@@ -130,15 +130,15 @@ class BinaryNode(ValueExpressionNode):
 
 
 @dataclass(frozen=True, slots=True)
-class ParsedValueExpression:
-    """Structured parsed representation of a string-form value expression."""
+class ParsedLocalExpressionTree:
+    """Structured parsed representation of one canonical local-expression tree."""
 
     source: str
     root: ValueExpressionNode
 
 
 @dataclass(frozen=True, slots=True)
-class ValueExpressionParseError(Exception):
+class LocalExpressionParseError(Exception):
     """Structured parser error suitable for workflow diagnostics."""
 
     message: str
@@ -163,8 +163,8 @@ class ValueExpressionParseError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
-class ValueExpressionEvaluationError(Exception):
-    """Structured evaluation error for parsed value expressions."""
+class LocalExpressionEvaluationError(Exception):
+    """Structured evaluation error for canonical local-expression trees."""
 
     code: str
     message: str
@@ -181,8 +181,8 @@ class ValueExpressionEvaluationError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
-class ValueExpressionValidationError:
-    """Structured semantic validation error for canonical local-expression trees."""
+class LocalExpressionValidationIssue:
+    """Structured semantic validation issue for canonical local-expression trees."""
 
     code: str
     message: str
@@ -206,13 +206,22 @@ class ValueExpressionValidationError:
 
 
 @dataclass(frozen=True, slots=True)
-class ValueExpressionDependency:
+class LocalExpressionDependency:
     """One dependency reference collected from the canonical expression tree."""
 
     kind: Literal["root"]
     name: str
     start: int
     end: int
+
+
+# Transitional aliases retained while runtime callers move to canonical terminology.
+LocalExpressionNode = ValueExpressionNode
+ParsedValueExpression = ParsedLocalExpressionTree
+ValueExpressionParseError = LocalExpressionParseError
+ValueExpressionEvaluationError = LocalExpressionEvaluationError
+ValueExpressionValidationError = LocalExpressionValidationIssue
+ValueExpressionDependency = LocalExpressionDependency
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,27 +289,27 @@ class _Token:
     end: int
 
 
-def parse_value_expression(expression: str, *, allow_boolean_composition: bool = False) -> ParsedValueExpression:
-    """Parse a string-form value expression into a structured tree."""
+def parse_local_expression_tree(expression: str, *, allow_boolean_composition: bool = False) -> ParsedLocalExpressionTree:
+    """Parse one canonical local-expression tree from authored text."""
 
     parser = _Parser(expression, allow_boolean_composition=allow_boolean_composition)
     root = parser.parse()
-    return ParsedValueExpression(source=expression, root=root)
+    return ParsedLocalExpressionTree(source=expression, root=root)
 
 
-def evaluate_value_expression(
-    parsed: ParsedValueExpression,
+def evaluate_local_expression_tree(
+    parsed: ParsedLocalExpressionTree,
     workflow: Workflow,
     *,
     step_results: dict[str, OperationResult] | None = None,
 ) -> JSONValue:
-    """Evaluate a parsed value expression against workflow inputs and state."""
+    """Evaluate one canonical local-expression tree against workflow-visible data."""
 
     return _evaluate_node(parsed.root, parsed=parsed, workflow=workflow, step_results={} if step_results is None else step_results)
 
 
 def evaluate_condition_expression(
-    parsed: ParsedValueExpression,
+    parsed: ParsedLocalExpressionTree,
     workflow: Workflow,
     *,
     observe: Callable[[ConditionObservationRequest], ConditionObservationResult],
@@ -317,28 +326,28 @@ def evaluate_condition_expression(
     return evaluator.evaluate()
 
 
-def validate_value_expression(parsed: ParsedValueExpression) -> tuple[ValueExpressionValidationError, ...]:
+def validate_local_expression_tree(parsed: ParsedLocalExpressionTree) -> tuple[LocalExpressionValidationIssue, ...]:
     """Validate semantic rules over the canonical local-expression tree."""
 
     validator = _SemanticValidator(parsed)
     return tuple(validator.validate())
 
 
-def collect_value_expression_dependencies(node: ValueExpressionNode) -> tuple[ValueExpressionDependency, ...]:
+def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[LocalExpressionDependency, ...]:
     """Collect local-root dependencies from the canonical local-expression tree."""
 
-    found: list[ValueExpressionDependency] = []
+    found: list[LocalExpressionDependency] = []
 
     def visit(current: ValueExpressionNode) -> None:
         if isinstance(current, ReferenceNode):
             if current.parts and current.parts[0] in {"inputs", "args", "state", "step"}:
-                found.append(ValueExpressionDependency(kind="root", name=current.parts[0], start=current.start, end=current.end))
+                found.append(LocalExpressionDependency(kind="root", name=current.parts[0], start=current.start, end=current.end))
             return
         if isinstance(current, StateReferenceNode):
-            found.append(ValueExpressionDependency(kind="root", name="state", start=current.start, end=current.end))
+            found.append(LocalExpressionDependency(kind="root", name="state", start=current.start, end=current.end))
             return
         if isinstance(current, StepReferenceNode):
-            found.append(ValueExpressionDependency(kind="root", name="step", start=current.start, end=current.end))
+            found.append(LocalExpressionDependency(kind="root", name="step", start=current.start, end=current.end))
             return
         if isinstance(current, ListNode):
             for item in current.items:
@@ -1477,22 +1486,29 @@ def _decode_number(token_text: str) -> int | float:
 
 # Preferred local-expression terminology.
 EmbeddedValueExpressionNode = ValueExpressionNode
-ParsedEmbeddedValueExpression = ParsedValueExpression
-EmbeddedValueExpressionParseError = ValueExpressionParseError
-EmbeddedValueExpressionEvaluationError = ValueExpressionEvaluationError
-parse_embedded_value_expression = parse_value_expression
-evaluate_embedded_value_expression = evaluate_value_expression
+ParsedEmbeddedValueExpression = ParsedLocalExpressionTree
+EmbeddedValueExpressionParseError = LocalExpressionParseError
+EmbeddedValueExpressionEvaluationError = LocalExpressionEvaluationError
+parse_embedded_value_expression = parse_local_expression_tree
+evaluate_embedded_value_expression = evaluate_local_expression_tree
 
 
 def parse_condition_expression(expression: str) -> ParsedValueExpression:
-    return parse_value_expression(expression, allow_boolean_composition=True)
+    return parse_local_expression_tree(expression, allow_boolean_composition=True)
 
 
 def validate_parsed_condition_expression(parsed: ParsedValueExpression) -> tuple[ValueExpressionValidationError, ...]:
-    return validate_value_expression(parsed)
+    return validate_local_expression_tree(parsed)
 
 
 ConditionExpressionNode = ValueExpressionNode
 ParsedConditionExpression = ParsedValueExpression
 ConditionExpressionParseError = ValueExpressionParseError
 ConditionExpressionValidationError = ValueExpressionValidationError
+
+
+# Transitional low-level helper aliases.
+parse_value_expression = parse_local_expression_tree
+evaluate_value_expression = evaluate_local_expression_tree
+validate_value_expression = validate_local_expression_tree
+collect_value_expression_dependencies = collect_local_expression_dependencies
