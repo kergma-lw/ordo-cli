@@ -9,7 +9,7 @@ from ordo.model.json import JSONArray, JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
-from .local_expression_impl.api import resolve_embedded_value_local_expression
+from .local_expressions import resolve_embedded_value_local_expression
 
 
 @dataclass(frozen=True, slots=True)

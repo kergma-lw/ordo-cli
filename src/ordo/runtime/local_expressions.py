@@ -9,7 +9,7 @@ from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
-from .local_expression_impl.condition import (
+from .local_expression_engine.core import (
     ConditionExpressionNode,
     StateReferenceNode as ConditionStateReferenceNode,
     StepReferenceNode as ConditionStepReferenceNode,

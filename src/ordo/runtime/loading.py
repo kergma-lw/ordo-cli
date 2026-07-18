@@ -15,8 +15,8 @@ from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
-from ordo.runtime.local_expression_impl.api import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression
-from ordo.runtime.local_expression_impl.embedded_value import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
+from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression
+from ordo.runtime.local_expression_engine.core import BinaryNode, BuiltinCallNode, FilterApplicationNode, ParsedValueExpression, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, ValueExpressionNode, parse_value_expression
 
 
 @dataclass(frozen=True, slots=True)

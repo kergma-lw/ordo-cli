@@ -12,8 +12,8 @@ from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
-from .local_expression_impl.api import parse_local_expression
-from .local_expression_impl.condition import BinaryNode, CallNode, ConditionExpressionNode, ListNode, LiteralNode, ParsedConditionExpression, ReferenceNode, StateReferenceNode, UnaryNode
+from .local_expressions import parse_local_expression
+from .local_expression_engine.core import BinaryNode, CallNode, ConditionExpressionNode, ListNode, LiteralNode, ParsedConditionExpression, ReferenceNode, StateReferenceNode, UnaryNode
 from .providers import ConnectorProvider, get_default_connector_provider
 
 

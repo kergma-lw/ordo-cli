@@ -7,7 +7,7 @@ from typing import Literal
 
 from ordo.model.json import JSONObject
 
-from .local_expression_impl.embedded_value import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
+from .local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 
 CapabilityStatus = Literal["supported", "unsupported", "planned"]
 
