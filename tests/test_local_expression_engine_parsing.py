@@ -1,11 +1,11 @@
 import unittest
 
-from ordo.runtime.local_expression_impl.embedded_value import (
+from ordo.runtime.local_expression_engine.core import (
     BinaryNode,
     BuiltinCallNode,
     CallArgumentNode,
+    ConditionExpressionParseError,
     CallNode,
-    EmbeddedValueExpressionParseError,
     FilterApplicationNode,
     ListNode,
     LiteralNode,
@@ -13,11 +13,12 @@ from ordo.runtime.local_expression_impl.embedded_value import (
     ReferenceNode,
     StateReferenceNode,
     UnaryNode,
+    parse_condition_expression,
     parse_embedded_value_expression,
 )
 
 
-class LegacyEmbeddedValueExpressionParsingTest(unittest.TestCase):
+class LocalExpressionEngineParsingTest(unittest.TestCase):
     def test_parse_direct_reference(self) -> None:
         parsed = parse_embedded_value_expression("inputs.title")
 
@@ -61,13 +62,13 @@ class LegacyEmbeddedValueExpressionParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root, LiteralNode(start=0, end=4, value=True))
 
     def test_parse_rejects_missing_filter_name(self) -> None:
-        with self.assertRaises(EmbeddedValueExpressionParseError) as ctx:
+        with self.assertRaises(ConditionExpressionParseError) as ctx:
             parse_embedded_value_expression("inputs.title |")
 
         self.assertEqual(ctx.exception.message, "Expected filter name after '|'")
 
     def test_parse_rejects_non_input_state_key_reference(self) -> None:
-        with self.assertRaises(EmbeddedValueExpressionParseError) as ctx:
+        with self.assertRaises(ConditionExpressionParseError) as ctx:
             parse_embedded_value_expression("state.task_memory[foo.bar]")
 
         self.assertIn("State path key reference", ctx.exception.message)
@@ -82,7 +83,7 @@ class LegacyEmbeddedValueExpressionParsingTest(unittest.TestCase):
         self.assertIsInstance(parsed.root.arguments[2], PipelineNode)
 
     def test_parse_rejects_unterminated_string_literal(self) -> None:
-        with self.assertRaises(EmbeddedValueExpressionParseError) as ctx:
+        with self.assertRaises(ConditionExpressionParseError) as ctx:
             parse_embedded_value_expression('format("unterminated)')
 
         self.assertEqual(ctx.exception.message, "Unterminated string literal")
@@ -113,7 +114,7 @@ class LegacyEmbeddedValueExpressionParsingTest(unittest.TestCase):
         )
 
     def test_parse_rejects_boolean_composition_when_not_enabled(self) -> None:
-        with self.assertRaises(EmbeddedValueExpressionParseError) as ctx:
+        with self.assertRaises(ConditionExpressionParseError) as ctx:
             parse_embedded_value_expression("inputs.enabled and inputs.ready")
 
         self.assertEqual(ctx.exception.message, "Unexpected trailing token")
@@ -172,6 +173,49 @@ class LegacyEmbeddedValueExpressionParsingTest(unittest.TestCase):
         parsed = parse_embedded_value_expression("-1.5")
 
         self.assertEqual(parsed.root, LiteralNode(start=0, end=4, value=-1.5))
+
+    def test_parse_condition_surface_probe_composition(self) -> None:
+        parsed = parse_condition_expression(
+            'git.worktree.clean and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"'
+        )
+
+        self.assertIsInstance(parsed.root, BinaryNode)
+        self.assertEqual(parsed.root.operator, "and")
+        self.assertIsInstance(parsed.root.left, ReferenceNode)
+        self.assertEqual(parsed.root.left.parts, ("git", "worktree", "clean"))
+        self.assertIsInstance(parsed.root.right, BinaryNode)
+        self.assertEqual(parsed.root.right.operator, "!=")
+        self.assertIsInstance(parsed.root.right.left, CallNode)
+        self.assertEqual(parsed.root.right.left.target.parts, ("gh", "issue"))
+        self.assertEqual(parsed.root.right.left.arguments[0].name, "repository")
+        self.assertEqual(parsed.root.right.left.fields, ("state",))
+
+    def test_parse_condition_surface_not_in_operator(self) -> None:
+        parsed = parse_condition_expression('gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["CLOSED"]')
+
+        self.assertIsInstance(parsed.root, BinaryNode)
+        self.assertEqual(parsed.root.operator, "not in")
+
+    def test_parse_condition_surface_rejects_positional_arguments(self) -> None:
+        with self.assertRaises(ConditionExpressionParseError) as context:
+            parse_condition_expression("gh.issue(inputs.issue).status")
+
+        self.assertIn("Expected '=' after argument name", context.exception.message)
+
+    def test_parse_condition_surface_nested_project_issue_probe(self) -> None:
+        parsed = parse_condition_expression("gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists")
+
+        self.assertIsInstance(parsed.root, CallNode)
+        self.assertEqual(parsed.root.target.parts, ("gh", "project", "issue"))
+        self.assertEqual(parsed.root.arguments[0].name, "repository")
+        self.assertEqual(parsed.root.arguments[1].name, "issue_number")
+        self.assertEqual(parsed.root.fields, ("exists",))
+
+    def test_parse_condition_surface_rejects_unterminated_string(self) -> None:
+        with self.assertRaises(ConditionExpressionParseError) as context:
+            parse_condition_expression('git.branch == "main')
+
+        self.assertIn("Unterminated string literal", context.exception.message)
 
 
 if __name__ == "__main__":

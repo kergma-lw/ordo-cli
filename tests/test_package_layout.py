@@ -24,7 +24,7 @@ from ordo.introspection import (
     describe_system,
     describe_workflow_contract,
 )
-from ordo.runtime.local_expression_impl.embedded_value import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 
 
 class PackageLayoutSmokeTest(unittest.TestCase):

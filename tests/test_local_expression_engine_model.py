@@ -1,6 +1,6 @@
 import unittest
 
-from ordo.runtime.local_expression_impl.embedded_value import (
+from ordo.runtime.local_expression_engine.core import (
     BuiltinCallNode,
     EmbeddedValueExpressionParseError,
     FilterApplicationNode,
@@ -12,7 +12,7 @@ from ordo.runtime.local_expression_impl.embedded_value import (
 )
 
 
-class ValueExpressionModelTest(unittest.TestCase):
+class LocalExpressionEngineModelTest(unittest.TestCase):
     def test_model_can_represent_filtered_input_reference(self) -> None:
         reference = ReferenceNode(start=0, end=12, parts=("inputs", "title"))
         slug = FilterApplicationNode(start=15, end=19, name="slug")

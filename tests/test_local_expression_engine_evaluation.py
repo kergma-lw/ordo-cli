@@ -4,10 +4,10 @@ import unittest
 
 from ordo.model.workflow import Workflow
 from ordo.runtime import load_workflow_text
-from ordo.runtime.local_expression_impl.embedded_value import EmbeddedValueExpressionEvaluationError, evaluate_embedded_value_expression, parse_embedded_value_expression
+from ordo.runtime.local_expression_engine.core import EmbeddedValueExpressionEvaluationError, evaluate_embedded_value_expression, parse_embedded_value_expression
 
 
-class ValueExpressionEvaluationTest(unittest.TestCase):
+class LocalExpressionEngineEvaluationTest(unittest.TestCase):
     def test_evaluate_input_reference_filter_chain(self) -> None:
         workflow = load_workflow_text(
             """

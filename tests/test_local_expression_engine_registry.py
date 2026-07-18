@@ -1,9 +1,9 @@
 import unittest
 
-from ordo.runtime.local_expression_impl.embedded_value import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 
 
-class ValueExpressionRegistryTest(unittest.TestCase):
+class LocalExpressionEngineRegistryTest(unittest.TestCase):
     def test_supported_filters_are_published_in_canonical_registry(self) -> None:
         self.assertEqual(tuple(VALUE_EXPRESSION_FILTERS), ("lower", "trim", "slug", "eq", "ne", "not"))
         self.assertEqual(VALUE_EXPRESSION_FILTERS["lower"].to_contract()["input_type"], "string")
