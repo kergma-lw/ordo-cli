@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import cast
 
 from ordo.model.diagnostic import Diagnostic
@@ -1102,11 +1103,55 @@ def _evaluate_guard_expression(
     workflow: Workflow,
     probe: GuardProbe,
 ) -> OperationResult:
+    observer = _ResolvedGuardObserver(resolved_guard=resolved_guard, workflow=workflow, probe=probe)
     evaluation = evaluate_condition_expression(
         resolved_guard.parsed,
         workflow,
-        observe=lambda request: _observe_guard_probe(request, resolved_guard=resolved_guard, workflow=workflow, probe=probe),
+        observe=observer.observe,
     )
+    return _build_guard_expression_result(resolved_guard.expr, evaluation)
+
+
+@dataclass(slots=True)
+class _ResolvedGuardObserver:
+    resolved_guard: ResolvedConditionExpression
+    workflow: Workflow
+    probe: GuardProbe
+    _probes_by_expression: dict[str, ResolvedExpressionProbe] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._probes_by_expression = {probe.expression_text: probe for probe in self.resolved_guard.probes}
+
+    def observe(self, request: ConditionObservationRequest) -> ConditionObservationResult:
+        probe_spec = self._probes_by_expression.get(request.expression_text)
+        if probe_spec is None:
+            raise ValueError(
+                f"Resolved probe metadata missing for expression segment: {request.expression_text} ({request.fields})"
+            )
+        result = self.probe(probe_spec, self.workflow)
+        if result.status != "ok":
+            return ConditionObservationResult(status="probe_failed", value=None, diagnostics=result.diagnostics, reference=probe_spec.reference)
+
+        value = _extract_probe_value(result.outputs, probe_spec.fields)
+        if value is _MISSING:
+            diagnostic = Diagnostic(
+                code="guard.probe_field_missing",
+                level="error",
+                message=f"Probe field path '{'.'.join(probe_spec.fields)}' was not present at runtime",
+                path=(),
+                details={"reference": probe_spec.reference, "field_path": ".".join(probe_spec.fields)},
+            )
+            return ConditionObservationResult(
+                status="probe_failed",
+                value=None,
+                diagnostics=result.diagnostics + (diagnostic,),
+                reference=probe_spec.reference,
+            )
+
+        return ConditionObservationResult(status="ok", value=value, diagnostics=result.diagnostics, reference=probe_spec.reference)
+
+
+def _build_guard_expression_result(expr: str, evaluation: ConditionEvaluationResult) -> OperationResult:
     failed_trace = next(
         (entry for entry in reversed(evaluation.trace) if entry.status == "probe_failed" or entry.value is False),
         None,
@@ -1116,7 +1161,7 @@ def _evaluate_guard_expression(
             status="probe_failed",
             summary="Guard expression could not be evaluated safely",
             diagnostics=evaluation.diagnostics,
-            outputs={"guard": resolved_guard.expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.expr},
+            outputs={"guard": expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.expr},
             raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "probe_failed"},
         )
     passed = bool(evaluation.value)
@@ -1124,51 +1169,9 @@ def _evaluate_guard_expression(
         status="ok" if passed else "guard_failed",
         summary="Guard expression evaluated successfully" if passed else "Guard expression evaluated false",
         diagnostics=evaluation.diagnostics,
-        outputs={"guard": resolved_guard.expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.expr},
+        outputs={"guard": expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.expr},
         raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "guard_failed" if not passed else None},
     )
-
-
-def _lookup_probe_spec(
-    resolved_guard: ResolvedConditionExpression,
-    expression_text: str,
-    fallback_fields: tuple[str, ...],
-) -> ResolvedExpressionProbe:
-    for probe in resolved_guard.probes:
-        if probe.expression_text == expression_text:
-            return probe
-    raise ValueError(f"Resolved probe metadata missing for expression segment: {expression_text} ({fallback_fields})")
-
-
-def _observe_guard_probe(
-    request: ConditionObservationRequest,
-    *,
-    resolved_guard: ResolvedConditionExpression,
-    workflow: Workflow,
-    probe: GuardProbe,
-) -> ConditionObservationResult:
-    probe_spec = _lookup_probe_spec(resolved_guard, request.expression_text, request.fields)
-    result = probe(probe_spec, workflow)
-    if result.status != "ok":
-        return ConditionObservationResult(status="probe_failed", value=None, diagnostics=result.diagnostics, reference=probe_spec.reference)
-
-    value = _extract_probe_value(result.outputs, probe_spec.fields)
-    if value is _MISSING:
-        diagnostic = Diagnostic(
-            code="guard.probe_field_missing",
-            level="error",
-            message=f"Probe field path '{'.'.join(probe_spec.fields)}' was not present at runtime",
-            path=(),
-            details={"reference": probe_spec.reference, "field_path": ".".join(probe_spec.fields)},
-        )
-        return ConditionObservationResult(
-            status="probe_failed",
-            value=None,
-            diagnostics=result.diagnostics + (diagnostic,),
-            reference=probe_spec.reference,
-        )
-
-    return ConditionObservationResult(status="ok", value=value, diagnostics=result.diagnostics, reference=probe_spec.reference)
 
 
 _MISSING = object()
