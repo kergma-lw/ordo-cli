@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import re
 from typing import TYPE_CHECKING, Literal
@@ -215,6 +216,63 @@ class ValueExpressionDependency:
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionObservationRequest:
+    """One read-only probe observation requested by canonical condition evaluation."""
+
+    expression_text: str
+    target: tuple[str, ...]
+    fields: tuple[str, ...] = ()
+    arguments: tuple[tuple[str, JSONValue], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionObservationResult:
+    """One read-only probe observation result returned to canonical evaluation."""
+
+    status: Literal["ok", "probe_failed"]
+    value: JSONValue | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+    reference: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionTraceEntry:
+    """One trace item emitted by canonical condition evaluation."""
+
+    expr: str
+    kind: str
+    status: str
+    value: JSONValue | None = None
+    operator: str | None = None
+    left: JSONValue | None = None
+    right: JSONValue | None = None
+    reference: str | None = None
+
+    def to_contract(self) -> JSONObject:
+        payload: JSONObject = {"expr": self.expr, "kind": self.kind, "status": self.status, "value": self.value}
+        if self.operator is not None:
+            payload["operator"] = self.operator
+        if self.left is not None:
+            payload["left"] = self.left
+        if self.right is not None:
+            payload["right"] = self.right
+        if self.reference is not None:
+            payload["reference"] = self.reference
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionEvaluationResult:
+    """Canonical condition-evaluation result over the shared local-expression AST."""
+
+    status: Literal["ok", "probe_failed"]
+    value: JSONValue | None
+    diagnostics: tuple[Diagnostic, ...] = ()
+    trace: tuple[ConditionTraceEntry, ...] = ()
+    cache_entries: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class _Token:
     kind: str
     text: str
@@ -239,6 +297,24 @@ def evaluate_value_expression(
     """Evaluate a parsed value expression against workflow inputs and state."""
 
     return _evaluate_node(parsed.root, parsed=parsed, workflow=workflow, step_results={} if step_results is None else step_results)
+
+
+def evaluate_condition_expression(
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    *,
+    observe: Callable[[ConditionObservationRequest], ConditionObservationResult],
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+) -> ConditionEvaluationResult:
+    """Evaluate a canonical condition expression, including read-only probe observations."""
+
+    evaluator = _ConditionEvaluator(
+        parsed,
+        workflow,
+        observe=observe,
+        step_results={} if step_results is None else step_results,
+    )
+    return evaluator.evaluate()
 
 
 def validate_value_expression(parsed: ParsedValueExpression) -> tuple[ValueExpressionValidationError, ...]:
@@ -651,6 +727,206 @@ class _SemanticValidator:
 
     def _error(self, code: str, message: str, node: ValueExpressionNode) -> None:
         self._errors.append(ValueExpressionValidationError(code=code, message=message, start=node.start, end=node.end))
+
+
+class _ConditionEvaluator:
+    def __init__(
+        self,
+        parsed: ParsedValueExpression,
+        workflow: Workflow,
+        *,
+        observe: Callable[[ConditionObservationRequest], ConditionObservationResult],
+        step_results: dict[str, OperationResult | JSONObject],
+    ) -> None:
+        self._parsed = parsed
+        self._workflow = workflow
+        self._observe = observe
+        self._step_results = step_results
+        self._diagnostics: list[Diagnostic] = []
+        self._trace: list[ConditionTraceEntry] = []
+        self._cache: dict[str, ConditionObservationResult] = {}
+
+    def evaluate(self) -> ConditionEvaluationResult:
+        status, value = self._evaluate(self._parsed.root)
+        return ConditionEvaluationResult(
+            status=status,
+            value=value,
+            diagnostics=tuple(self._diagnostics),
+            trace=tuple(self._trace),
+            cache_entries=len(self._cache),
+        )
+
+    def _evaluate(self, node: ValueExpressionNode) -> tuple[Literal["ok", "probe_failed"], JSONValue | None]:
+        if isinstance(node, LiteralNode):
+            value = node.value
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="literal", status="ok", value=value))
+            return "ok", value
+        if isinstance(node, ListNode):
+            values: list[JSONValue] = []
+            for item in node.items:
+                status, value = self._evaluate(item)
+                if status != "ok":
+                    return status, None
+                values.append(value)
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="list", status="ok", value=values))
+            return "ok", values
+        if isinstance(node, ReferenceNode):
+            if node.parts[0] == "inputs":
+                try:
+                    value = _resolve_input_reference(node.parts, workflow=self._workflow)
+                except ValueExpressionEvaluationError as exc:
+                    self._diagnostics.append(exc.to_diagnostic())
+                    self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="input", status="probe_failed", value=None))
+                    return "probe_failed", None
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="input", status="ok", value=value))
+                return "ok", value
+            return self._observe_reference(node)
+        if isinstance(node, StateReferenceNode):
+            try:
+                value = _resolve_state_reference(node, parsed=self._parsed, workflow=self._workflow)
+            except ValueExpressionEvaluationError as exc:
+                self._diagnostics.append(exc.to_diagnostic())
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="state", status="probe_failed", value=None))
+                return "probe_failed", None
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="state", status="ok", value=value))
+            return "ok", value
+        if isinstance(node, StepReferenceNode):
+            try:
+                value = _resolve_step_reference(node, parsed=self._parsed, step_results=self._step_results)
+            except ValueExpressionEvaluationError as exc:
+                self._diagnostics.append(exc.to_diagnostic())
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="step", status="probe_failed", value=None))
+                return "probe_failed", None
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="step", status="ok", value=value))
+            return "ok", value
+        if isinstance(node, CallNode):
+            return self._observe_call(node)
+        if isinstance(node, UnaryNode):
+            status, value = self._evaluate(node.operand)
+            if status != "ok":
+                return status, None
+            result = not bool(value)
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="unary", status="ok", value=result, operator=node.operator))
+            return "ok", result
+        if isinstance(node, BinaryNode):
+            return self._evaluate_binary(node)
+        raise ValueExpressionEvaluationError(
+            code="runtime.local_expression.condition_node_unsupported",
+            message=f"Condition evaluation does not support node '{type(node).__name__}'",
+            details={"expression": self._parsed.source, "node_type": type(node).__name__},
+        )
+
+    def _observe_reference(self, node: ReferenceNode) -> tuple[Literal["ok", "probe_failed"], JSONValue | None]:
+        request = ConditionObservationRequest(expression_text=self._expr(node), target=node.parts)
+        result = self._observe_cached(request)
+        self._trace.append(
+            ConditionTraceEntry(
+                expr=request.expression_text,
+                kind="probe",
+                status=result.status,
+                value=result.value,
+                reference=result.reference,
+            )
+        )
+        return result.status, result.value
+
+    def _observe_call(self, node: CallNode) -> tuple[Literal["ok", "probe_failed"], JSONValue | None]:
+        arguments: list[tuple[str, JSONValue]] = []
+        for argument in node.arguments:
+            status, value = self._evaluate(argument.value)
+            if status != "ok":
+                return status, None
+            arguments.append((argument.name, value))
+        request = ConditionObservationRequest(
+            expression_text=self._expr(node),
+            target=node.target.parts,
+            fields=node.fields,
+            arguments=tuple(arguments),
+        )
+        result = self._observe_cached(request)
+        self._trace.append(
+            ConditionTraceEntry(
+                expr=request.expression_text,
+                kind="probe",
+                status=result.status,
+                value=result.value,
+                reference=result.reference,
+            )
+        )
+        return result.status, result.value
+
+    def _observe_cached(self, request: ConditionObservationRequest) -> ConditionObservationResult:
+        cached = self._cache.get(request.expression_text)
+        if cached is not None:
+            return cached
+        result = self._observe(request)
+        self._diagnostics.extend(result.diagnostics)
+        self._cache[request.expression_text] = result
+        return result
+
+    def _evaluate_binary(self, node: BinaryNode) -> tuple[Literal["ok", "probe_failed"], JSONValue | None]:
+        if node.operator == "and":
+            left_status, left_value = self._evaluate(node.left)
+            if left_status != "ok":
+                return left_status, None
+            if not bool(left_value):
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="binary", status="ok", value=False, operator=node.operator))
+                return "ok", False
+            right_status, right_value = self._evaluate(node.right)
+            if right_status != "ok":
+                return right_status, None
+            result = bool(right_value)
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="binary", status="ok", value=result, operator=node.operator))
+            return "ok", result
+        if node.operator == "or":
+            left_status, left_value = self._evaluate(node.left)
+            if left_status != "ok":
+                return left_status, None
+            if bool(left_value):
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="binary", status="ok", value=True, operator=node.operator))
+                return "ok", True
+            right_status, right_value = self._evaluate(node.right)
+            if right_status != "ok":
+                return right_status, None
+            result = bool(right_value)
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="binary", status="ok", value=result, operator=node.operator))
+            return "ok", result
+        left_status, left_value = self._evaluate(node.left)
+        if left_status != "ok":
+            return left_status, None
+        right_status, right_value = self._evaluate(node.right)
+        if right_status != "ok":
+            return right_status, None
+        result: JSONValue
+        if node.operator == "==":
+            result = left_value == right_value
+        elif node.operator == "!=":
+            result = left_value != right_value
+        elif node.operator == "in":
+            result = left_value in right_value  # type: ignore[operator]
+        elif node.operator == "not in":
+            result = left_value not in right_value  # type: ignore[operator]
+        else:
+            raise ValueExpressionEvaluationError(
+                code="runtime.local_expression.operator_unsupported",
+                message=f"Unsupported condition operator '{node.operator}'",
+                details={"expression": self._parsed.source, "operator": node.operator},
+            )
+        self._trace.append(
+            ConditionTraceEntry(
+                expr=self._expr(node),
+                kind="binary",
+                status="ok",
+                value=result,
+                operator=node.operator,
+                left=left_value,
+                right=right_value,
+            )
+        )
+        return "ok", result
+
+    def _expr(self, node: ValueExpressionNode) -> str:
+        return self._parsed.source[node.start : node.end]
 
 
 def _tokenize(text: str) -> tuple[_Token, ...]:

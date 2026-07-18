@@ -4,7 +4,15 @@ import unittest
 
 from ordo.model.workflow import Workflow
 from ordo.runtime import load_workflow_text
-from ordo.runtime.local_expression_engine.core import EmbeddedValueExpressionEvaluationError, evaluate_embedded_value_expression, parse_embedded_value_expression
+from ordo.runtime.local_expression_engine.core import (
+    ConditionObservationRequest,
+    ConditionObservationResult,
+    EmbeddedValueExpressionEvaluationError,
+    evaluate_condition_expression,
+    evaluate_embedded_value_expression,
+    parse_condition_expression,
+    parse_embedded_value_expression,
+)
 
 
 class LocalExpressionEngineEvaluationTest(unittest.TestCase):
@@ -268,6 +276,67 @@ blocks:
         parsed = parse_embedded_value_expression('inputs.status in ["ok", "closed"]', allow_boolean_composition=True)
 
         self.assertIs(evaluate_embedded_value_expression(parsed, workflow), True)
+
+    def test_condition_evaluation_uses_observer_inside_canonical_engine(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_condition_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        )
+        observed: list[ConditionObservationRequest] = []
+
+        result = evaluate_condition_expression(
+            parsed,
+            workflow,
+            observe=lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="OPEN", reference="gh.issue"),
+        )
+
+        self.assertEqual(result.status, "ok")
+        self.assertIs(result.value, True)
+        self.assertEqual(observed[0].target, ("gh", "issue"))
+        self.assertEqual(observed[0].arguments, (("repository", "owner/repo"), ("issue_number", 7)))
+        self.assertEqual(result.trace[-1].operator, "==")
+
+    def test_condition_evaluation_caches_repeated_probe_observation(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_condition_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        )
+        count = 0
+
+        def observe(_: ConditionObservationRequest) -> ConditionObservationResult:
+            nonlocal count
+            count += 1
+            return ConditionObservationResult(status="ok", value="OPEN", reference="gh.issue")
+
+        result = evaluate_condition_expression(parsed, workflow, observe=observe)
+
+        self.assertEqual(result.status, "ok")
+        self.assertIs(result.value, True)
+        self.assertEqual(count, 1)
+        self.assertEqual(result.cache_entries, 1)
 
 
 if __name__ == "__main__":

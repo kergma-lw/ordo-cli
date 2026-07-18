@@ -11,8 +11,7 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBl
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
-from .local_expression_engine.core import BinaryNode, CallNode, ConditionExpressionNode as GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode, UnaryNode
-from .state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
+from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, evaluate_condition_expression
 from .launchers import validate_step_launchers
 from .preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, store_preflight_register_output
 from .preflight_steps import classify_preflight_step
@@ -1103,140 +1102,31 @@ def _evaluate_guard_expression(
     workflow: Workflow,
     probe: GuardProbe,
 ) -> OperationResult:
-    cache: dict[str, tuple[str, JSONValue | None, OperationResult]] = {}
-    diagnostics: list[Diagnostic] = []
-    trace: list[dict[str, object]] = []
-
-    def evaluate(node: GuardExpressionNode) -> tuple[str, JSONValue | None]:
-        if isinstance(node, LiteralNode):
-            value = cast(JSONValue, node.value)
-            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "literal", "status": "ok", "value": value})
-            return "ok", value
-        if isinstance(node, ListNode):
-            values: list[JSONValue] = []
-            for item in node.items:
-                status, value = evaluate(item)
-                if status != "ok":
-                    return status, None
-                values.append(cast(JSONValue, value))
-            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "list", "status": "ok", "value": values})
-            return "ok", values
-        if isinstance(node, ReferenceNode):
-            if node.parts[0] == "inputs":
-                status, value = _resolve_input_reference(node.parts, workflow, diagnostics)
-                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "input", "status": status, "value": value})
-                return status, value
-            probe_spec = _lookup_probe_spec(resolved_guard, resolved_guard.expr[node.start : node.end], tuple())
-            status, value = _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
-            trace.append({"expr": probe_spec.expression_text, "kind": "probe", "status": status, "value": value, "reference": probe_spec.reference})
-            return status, value
-        if isinstance(node, StateReferenceNode):
-            status, value = _resolve_state_reference(node, resolved_guard, workflow, diagnostics)
-            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "state", "status": status, "value": value})
-            return status, value
-        if isinstance(node, CallNode):
-            probe_spec = _lookup_probe_spec(resolved_guard, resolved_guard.expr[node.start : node.end], node.fields)
-            status, value = _evaluate_probe_reference(probe_spec, probe, workflow, cache, diagnostics)
-            trace.append({"expr": probe_spec.expression_text, "kind": "probe", "status": status, "value": value, "reference": probe_spec.reference})
-            return status, value
-        if isinstance(node, UnaryNode):
-            status, value = evaluate(node.operand)
-            if status != "ok":
-                return status, None
-            result = not bool(value)
-            trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "unary", "operator": node.operator, "status": "ok", "value": result})
-            return "ok", result
-        if isinstance(node, BinaryNode):
-            if node.operator == "and":
-                left_status, left_value = evaluate(node.left)
-                if left_status != "ok":
-                    return left_status, None
-                if not bool(left_value):
-                    trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": False})
-                    return "ok", False
-                right_status, right_value = evaluate(node.right)
-                if right_status != "ok":
-                    return right_status, None
-                result = bool(right_value)
-                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result})
-                return "ok", result
-            if node.operator == "or":
-                left_status, left_value = evaluate(node.left)
-                if left_status != "ok":
-                    return left_status, None
-                if bool(left_value):
-                    trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": True})
-                    return "ok", True
-                right_status, right_value = evaluate(node.right)
-                if right_status != "ok":
-                    return right_status, None
-                result = bool(right_value)
-                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result})
-                return "ok", result
-            left_status, left_value = evaluate(node.left)
-            if left_status != "ok":
-                return left_status, None
-            right_status, right_value = evaluate(node.right)
-            if right_status != "ok":
-                return right_status, None
-            if node.operator == "==":
-                result = left_value == right_value
-                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
-                return "ok", result
-            if node.operator == "!=":
-                result = left_value != right_value
-                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
-                return "ok", result
-            if node.operator == "in":
-                result = left_value in cast(object, right_value)
-                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
-                return "ok", result
-            if node.operator == "not in":
-                result = left_value not in cast(object, right_value)
-                trace.append({"expr": resolved_guard.expr[node.start : node.end], "kind": "binary", "operator": node.operator, "status": "ok", "value": result, "left": left_value, "right": right_value})
-                return "ok", result
-        return "probe_failed", None
-
-    status, value = evaluate(resolved_guard.parsed.root)
-    failed_trace = next((entry for entry in reversed(trace) if entry.get("status") == "probe_failed" or entry.get("value") is False), None)
-    if status == "probe_failed":
+    evaluation = evaluate_condition_expression(
+        resolved_guard.parsed,
+        workflow,
+        observe=lambda request: _observe_guard_probe(request, resolved_guard=resolved_guard, workflow=workflow, probe=probe),
+    )
+    failed_trace = next(
+        (entry for entry in reversed(evaluation.trace) if entry.status == "probe_failed" or entry.value is False),
+        None,
+    )
+    if evaluation.status == "probe_failed":
         return OperationResult(
             status="probe_failed",
             summary="Guard expression could not be evaluated safely",
-            diagnostics=tuple(diagnostics),
-            outputs={"guard": resolved_guard.expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.get("expr")},
-            raw={"cache_entries": len(cache), "trace": trace, "failure_kind": "probe_failed"},
+            diagnostics=evaluation.diagnostics,
+            outputs={"guard": resolved_guard.expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.expr},
+            raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "probe_failed"},
         )
-    passed = bool(value)
+    passed = bool(evaluation.value)
     return OperationResult(
         status="ok" if passed else "guard_failed",
         summary="Guard expression evaluated successfully" if passed else "Guard expression evaluated false",
-        diagnostics=tuple(diagnostics),
-        outputs={"guard": resolved_guard.expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.get("expr")},
-        raw={"cache_entries": len(cache), "trace": trace, "failure_kind": "guard_failed" if not passed else None},
+        diagnostics=evaluation.diagnostics,
+        outputs={"guard": resolved_guard.expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.expr},
+        raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "guard_failed" if not passed else None},
     )
-
-
-def _resolve_input_reference(
-    parts: tuple[str, ...],
-    workflow: Workflow,
-    diagnostics: list[Diagnostic],
-) -> tuple[str, JSONValue | None]:
-    current: JSONValue = workflow.inputs
-    for part in parts[1:]:
-        if not isinstance(current, dict) or part not in current:
-            diagnostics.append(
-                Diagnostic(
-                    code="guard.input_missing",
-                    level="error",
-                    message=f"Workflow input '{'.'.join(parts)}' is missing",
-                    path=(),
-                    details={"input": ".".join(parts)},
-                )
-            )
-            return "probe_failed", None
-        current = current[part]
-    return "ok", current
 
 
 def _lookup_probe_spec(
@@ -1250,69 +1140,35 @@ def _lookup_probe_spec(
     raise ValueError(f"Resolved probe metadata missing for expression segment: {expression_text} ({fallback_fields})")
 
 
-def _resolve_state_reference(
-    node: StateReferenceNode,
+def _observe_guard_probe(
+    request: ConditionObservationRequest,
+    *,
     resolved_guard: ResolvedConditionExpression,
     workflow: Workflow,
-    diagnostics: list[Diagnostic],
-) -> tuple[str, JSONValue | None]:
-    expression = resolved_guard.expr[node.start : node.end]
-    try:
-        target = resolve_state_target(expression, workflow)
-        document = read_state_document(target.location)
-        value = read_state_value(document, key=target.key, fields=target.fields)
-    except RuntimeStateError as exc:
-        diagnostics.append(exc.to_diagnostic())
-        return "probe_failed", None
-    if value is None:
-        diagnostics.append(
-            Diagnostic(
-                code="runtime.state.read_missing",
-                level="error",
-                message="Runtime state value is missing",
-                path=(),
-                details={"expression": expression, "state": target.location.name, "key": target.key, "fields": list(target.fields)},
-            )
-        )
-        return "probe_failed", None
-    return "ok", value
-
-
-def _evaluate_probe_reference(
-    probe_spec: ResolvedExpressionProbe,
     probe: GuardProbe,
-    workflow: Workflow,
-    cache: dict[str, tuple[str, JSONValue | None, OperationResult]],
-    diagnostics: list[Diagnostic],
-) -> tuple[str, JSONValue | None]:
-    cache_key = probe_spec.expression_text
-    cached = cache.get(cache_key)
-    if cached is not None:
-        status, value, _ = cached
-        return status, value
-
+) -> ConditionObservationResult:
+    probe_spec = _lookup_probe_spec(resolved_guard, request.expression_text, request.fields)
     result = probe(probe_spec, workflow)
-    diagnostics.extend(result.diagnostics)
     if result.status != "ok":
-        cache[cache_key] = ("probe_failed", None, result)
-        return "probe_failed", None
+        return ConditionObservationResult(status="probe_failed", value=None, diagnostics=result.diagnostics, reference=probe_spec.reference)
 
     value = _extract_probe_value(result.outputs, probe_spec.fields)
     if value is _MISSING:
-        diagnostics.append(
-            Diagnostic(
-                code="guard.probe_field_missing",
-                level="error",
-                message=f"Probe field path '{'.'.join(probe_spec.fields)}' was not present at runtime",
-                path=(),
-                details={"reference": probe_spec.reference, "field_path": ".".join(probe_spec.fields)},
-            )
+        diagnostic = Diagnostic(
+            code="guard.probe_field_missing",
+            level="error",
+            message=f"Probe field path '{'.'.join(probe_spec.fields)}' was not present at runtime",
+            path=(),
+            details={"reference": probe_spec.reference, "field_path": ".".join(probe_spec.fields)},
         )
-        cache[cache_key] = ("probe_failed", None, result)
-        return "probe_failed", None
+        return ConditionObservationResult(
+            status="probe_failed",
+            value=None,
+            diagnostics=result.diagnostics + (diagnostic,),
+            reference=probe_spec.reference,
+        )
 
-    cache[cache_key] = ("ok", value, result)
-    return "ok", value
+    return ConditionObservationResult(status="ok", value=value, diagnostics=result.diagnostics, reference=probe_spec.reference)
 
 
 _MISSING = object()
