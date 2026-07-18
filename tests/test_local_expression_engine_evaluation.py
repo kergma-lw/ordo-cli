@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 
+from ordo.model.diagnostic import Diagnostic
 from ordo.model.workflow import Workflow
 from ordo.runtime import load_workflow_text
 from ordo.runtime.local_expression_engine.core import (
@@ -337,6 +338,41 @@ blocks:
         self.assertIs(result.value, True)
         self.assertEqual(count, 1)
         self.assertEqual(result.cache_entries, 1)
+
+    def test_condition_evaluation_caches_failed_probe_diagnostics_once(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_condition_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        )
+        count = 0
+
+        def observe(_: ConditionObservationRequest) -> ConditionObservationResult:
+            nonlocal count
+            count += 1
+            return ConditionObservationResult(
+                status="probe_failed",
+                value=None,
+                diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),),
+                reference="gh.issue",
+            )
+
+        result = evaluate_condition_expression(parsed, workflow, observe=observe)
+
+        self.assertEqual(result.status, "probe_failed")
+        self.assertEqual(count, 1)
+        self.assertEqual(result.cache_entries, 1)
+        self.assertEqual([item.code for item in result.diagnostics], ["probe.failed"])
 
 
 if __name__ == "__main__":
