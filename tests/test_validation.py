@@ -343,7 +343,7 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.inputs_call")
 
-    def test_guard_expression_rejects_non_value_argument_expression(self) -> None:
+    def test_guard_expression_accepts_non_effectful_argument_expression(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
@@ -357,8 +357,7 @@ class ValidationTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.argument_value")
+        self.assertEqual(report.status, RuntimeStatus.OK)
 
     def test_guard_expression_rejects_duplicate_argument_names(self) -> None:
         report = validate_workflow_text(

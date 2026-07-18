@@ -97,10 +97,7 @@ class LocalExpressionContextsTest(unittest.TestCase):
         diagnostics = validate_parsed_local_expression(parsed)
         self.assertEqual(
             {diagnostic.code for diagnostic in diagnostics},
-            {
-                "validation.workflow.local_expression.guard.step_ref",
-                "validation.workflow.guard_expr.argument_value",
-            },
+            {"validation.workflow.local_expression.guard.step_ref"},
         )
 
     def test_guard_context_allows_state_dependency(self) -> None:

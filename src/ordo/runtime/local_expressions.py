@@ -12,6 +12,7 @@ from ordo.model.workflow import Workflow
 from .local_expression_impl.condition import (
     ConditionExpressionNode,
     StateReferenceNode as ConditionStateReferenceNode,
+    StepReferenceNode as ConditionStepReferenceNode,
     ConditionExpressionParseError,
     ConditionExpressionValidationError,
     ReferenceNode as ConditionReferenceNode,
@@ -207,6 +208,9 @@ def _iter_condition_dependencies(node: ConditionExpressionNode) -> tuple[_LocalE
             return
         if isinstance(current, ConditionStateReferenceNode):
             found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STATE, start=current.start, end=current.end))
+            return
+        if isinstance(current, ConditionStepReferenceNode):
+            found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STEP, start=current.start, end=current.end))
             return
         if isinstance(current, ConditionCallArgumentNode):
             visit(current.value)

@@ -571,7 +571,12 @@ class _SemanticValidator:
         return self._errors
 
     def _visit(self, node: ValueExpressionNode) -> None:
-        if isinstance(node, (LiteralNode, ReferenceNode, StateReferenceNode, StepReferenceNode)):
+        if isinstance(node, LiteralNode):
+            return
+        if isinstance(node, ReferenceNode):
+            self._validate_reference(node)
+            return
+        if isinstance(node, (StateReferenceNode, StepReferenceNode)):
             return
         if isinstance(node, ListNode):
             for item in node.items:
@@ -628,6 +633,21 @@ class _SemanticValidator:
             else:
                 seen_names.add(argument.name)
             self._visit(argument)
+
+    def _validate_reference(self, node: ReferenceNode) -> None:
+        if node.parts[0] == "inputs" and len(node.parts) < 2:
+            self._error(
+                "validation.workflow.value_expr.input_ref",
+                "Workflow input references must use dotted form such as 'inputs.issue'",
+                node,
+            )
+            return
+        if node.parts[0] == "args" and len(node.parts) < 2:
+            self._error(
+                "validation.workflow.value_expr.arg_ref",
+                "Fragment argument references must use dotted form such as 'args.name'",
+                node,
+            )
 
     def _error(self, code: str, message: str, node: ValueExpressionNode) -> None:
         self._errors.append(ValueExpressionValidationError(code=code, message=message, start=node.start, end=node.end))
@@ -1186,3 +1206,17 @@ EmbeddedValueExpressionParseError = ValueExpressionParseError
 EmbeddedValueExpressionEvaluationError = ValueExpressionEvaluationError
 parse_embedded_value_expression = parse_value_expression
 evaluate_embedded_value_expression = evaluate_value_expression
+
+
+def parse_condition_expression(expression: str) -> ParsedValueExpression:
+    return parse_value_expression(expression, allow_boolean_composition=True)
+
+
+def validate_parsed_condition_expression(parsed: ParsedValueExpression) -> tuple[ValueExpressionValidationError, ...]:
+    return validate_value_expression(parsed)
+
+
+ConditionExpressionNode = ValueExpressionNode
+ParsedConditionExpression = ParsedValueExpression
+ConditionExpressionParseError = ValueExpressionParseError
+ConditionExpressionValidationError = ValueExpressionValidationError
