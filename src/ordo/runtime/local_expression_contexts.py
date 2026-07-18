@@ -1,10 +1,4 @@
-"""Shared context policy for workflow-local expressions.
-
-Phase 1 intentionally records the target semantic model without yet forcing
-parser convergence. Runtime paths may still enter through separate guard/value
-parsers, but they should describe themselves through one local-expression
-context matrix.
-"""
+"""Shared context policy for the canonical workflow-local expression engine."""
 
 from __future__ import annotations
 

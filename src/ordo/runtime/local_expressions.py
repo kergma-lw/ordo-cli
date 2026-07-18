@@ -294,7 +294,7 @@ def evaluate_parsed_local_expression(
     if parsed.value is None:
         raise EmbeddedValueExpressionEvaluationError(
             code="runtime.local_expression.evaluation_unsupported",
-            message=f"Local-expression context '{parsed.context.value}' is not directly evaluable through the value-expression runtime",
+            message=f"Local-expression context '{parsed.context.value}' is not directly evaluable through the canonical local-expression engine",
             details={"context": parsed.context.value},
         )
     return evaluate_embedded_value_expression(parsed.value, workflow, step_results={} if step_results is None else step_results)
