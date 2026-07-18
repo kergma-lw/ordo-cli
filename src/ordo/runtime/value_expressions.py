@@ -860,3 +860,6 @@ EmbeddedValueExpressionParseError = ValueExpressionParseError
 EmbeddedValueExpressionEvaluationError = ValueExpressionEvaluationError
 parse_embedded_value_expression = parse_value_expression
 evaluate_embedded_value_expression = evaluate_value_expression
+"""Compatibility wrapper for the canonical local-expression engine core."""
+
+from .local_expression_engine.core import *  # noqa: F401,F403

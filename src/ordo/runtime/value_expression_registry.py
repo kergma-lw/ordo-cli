@@ -50,3 +50,6 @@ def build_filter_registry(*specs: ValueExpressionFilterSpec) -> dict[str, ValueE
 
 def build_builtin_registry(*specs: ValueExpressionBuiltinSpec) -> dict[str, ValueExpressionBuiltinSpec]:
     return {spec.name: spec for spec in specs}
+"""Compatibility wrapper for canonical value-expression registries."""
+
+from .local_expression_engine.registry import *  # noqa: F401,F403

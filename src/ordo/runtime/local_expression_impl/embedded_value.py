@@ -1,3 +1,3 @@
-"""Embedded-value parsing and evaluation internals."""
+"""Embedded-value compatibility surface over the canonical local-expression engine."""
 
-from ..value_expressions import *  # noqa: F401,F403
+from ..local_expression_engine.core import *  # noqa: F401,F403

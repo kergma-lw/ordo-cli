@@ -25,7 +25,7 @@ from .local_expression_impl.condition import (
     validate_parsed_condition_expression,
 )
 from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, LocalExpressionRoot, get_local_expression_context_policy
-from .local_expression_impl.embedded_value import (
+from .local_expression_engine.core import (
     ReferenceNode as EmbeddedValueReferenceNode,
     StateReferenceNode as EmbeddedValueStateReferenceNode,
     StepReferenceNode as EmbeddedValueStepReferenceNode,
