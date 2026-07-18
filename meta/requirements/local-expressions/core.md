@@ -25,12 +25,34 @@
 - `state...` is the runtime-state read surface when the context explicitly allows state reads.
 - `step...` is the execution-local registered-step-result surface when the context explicitly allows step-result reads.
 
+## Non-effectful observation dependencies
+
+- Local expressions may depend on product-defined non-effectful connector observations such as read-only probes.
+- Such observation dependencies must remain reviewable, explicit, and compatible with the surrounding context policy.
+- A context may allow non-effectful probe observation without thereby allowing effectful connector execution.
+
+## Derived values and representation adapters
+
+- Local expressions may derive intermediate values from already available values.
+- Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
+- Representation-adapter operations must remain pure, local, and value-producing.
+- Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
+- Any update-style representation-adapter operation must return a new derived value rather than persisting change by itself.
+
+## Canonical core boundary
+
+- The canonical local-expression core should include shared non-effectful constructs for observation, comparison, composition, and value derivation.
+- Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
+- Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
+
 ## Permanent exclusions
 
 - Local expressions must never perform effectful connector work by themselves.
 - Local expressions must never smuggle hidden workflow control structures such as looping or open-ended branching.
 - Local expressions must never rely on project-defined syntax whose meaning is outside the stable product contract.
 - Local expressions must never become a user-extensible language with workflow-defined functions, macros, or operators.
+- Representation-adapter operations must never perform connector invocation, hidden I/O, or other effectful work.
+- Representation-adapter families and operations must remain product-defined rather than workflow-defined extensions.
 
 ## Product discipline
 

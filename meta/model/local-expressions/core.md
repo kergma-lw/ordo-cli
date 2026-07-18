@@ -8,6 +8,7 @@ The model distinguishes:
 
 - the shared idea of local-expression evaluation;
 - context-specific restrictions on roots and timing;
+- product-defined value interpretation and transformation over already available values;
 - authored surface forms used by different fields.
 
 ## Shared model elements
@@ -27,6 +28,13 @@ A root is one documented local reference family.
 
 The initial modeled roots are `inputs...`, `args...`, `state...`, and `step...`.
 
+### Non-effectful observation dependency
+
+A non-effectful observation dependency is a product-defined read-only observation that a local expression may request without changing the world.
+
+Read-only probe calls belong to this dependency class.
+They are distinct from local roots, but they may participate in the same expression tree when the surrounding context permits them.
+
 ### Scope
 
 Scope determines where a root is meaningful.
@@ -42,6 +50,46 @@ A context family groups surfaces by semantic job.
 
 - condition-oriented contexts produce admission or execution conditions;
 - value-oriented contexts produce local derived values.
+
+### Derived value
+
+A derived value is a value produced from already available local-expression inputs or prior derived values.
+
+Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
+
+### Representation adapter
+
+A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
+
+Examples may include markdown-, html-, json-, or string-oriented operations.
+
+An adapter operation may:
+
+- navigate or select within a represented value;
+- expose an addressable focus over part of that value for further pure local work;
+- transform the represented value into a new derived value.
+
+Such operations remain part of local value derivation rather than connector execution.
+
+### Canonical core
+
+The canonical local-expression core is the shared non-effectful tree model that supports both condition-oriented and value-oriented contexts.
+
+Its retained construct families should cover:
+
+- literals and list values;
+- local-root references and field navigation;
+- read-only probe observations;
+- boolean composition and comparison;
+- pipelines and built-in calls;
+- representation-adapter operations and their derived values.
+
+Its excluded construct families should cover:
+
+- effectful connector actions;
+- runtime-state mutation semantics;
+- hidden workflow-control structures;
+- workflow-defined language extension.
 
 ## Surface distinction
 
@@ -63,3 +111,6 @@ They are not themselves the owner of:
 - effectful action semantics;
 - hidden control-flow structure;
 - runtime-state mutation semantics.
+
+Any adapter-provided update semantics therefore describe pure value transformation only.
+Persistence of a transformed value remains outside the local-expression system and belongs to workflow steps or other effectful runtime surfaces.

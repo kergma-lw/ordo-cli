@@ -12,6 +12,8 @@ This domain owns:
 
 - the idea that workflows may carry expression-bearing fields;
 - the local data surfaces that expressions may read;
+- the idea that expressions may derive intermediate values from already available values;
+- product-defined representation adapters for pure value interpretation and transformation;
 - the semantic distinction between expression contexts;
 - the boundary between local expression evaluation and connector operation execution;
 - the boundary between local expression evaluation and workflow control surfaces.
@@ -42,6 +44,26 @@ The initial local-expression roots are:
 - `args...` — included-fragment arguments local to one fragment instance;
 - `state...` — documented runtime-state read surface when the surrounding context allows state access;
 - `step...` — prior registered step results when the surrounding context allows execution-local step data.
+
+### Read-only probe observation
+
+A local expression may also depend on product-defined read-only connector observations when the surrounding context allows non-effectful external observation.
+
+Such observation remains part of local-expression semantics only when it is read-only, reviewable, and does not introduce effectful connector execution.
+
+### Derived intermediate value
+
+A local expression may derive one value from another already available value and then continue evaluation over that derived value.
+
+Such intermediate values remain inside local-expression semantics.
+They do not by themselves introduce connector execution, workflow control, or storage ownership.
+
+### Representation adapter
+
+A representation adapter is a product-defined local-expression surface for interpreting an already available value through a specific representation such as markdown, html, json, or string.
+
+Representation adapters may expose pure navigation and transformation operations over those values.
+They are not connectors and they do not own external integration semantics.
 
 ## Core contexts
 
@@ -83,16 +105,53 @@ Local-expression contexts divide into two families:
 ### Expression versus connector execution
 
 Local expressions may read documented workflow-visible data.
+They may also derive additional values from those already available values through pure local operations.
+They may depend on read-only connector observations when those observations are modeled as non-effectful expression dependencies.
 
 They must not themselves become a public connector invocation surface for effectful work.
 
 Any connector execution semantics belong to connector operations and workflow steps, not to local expressions as such.
+
+### Canonical core direction
+
+The canonical local-expression core should keep only non-effectful observation and value-derivation semantics.
+
+That core includes stable value and condition constructs such as:
+
+- literals and lists;
+- local roots and their field navigation;
+- read-only probe observations;
+- boolean composition and comparison;
+- pipelines, built-ins, and representation-adapter operations.
+
+It excludes:
+
+- effectful connector actions;
+- hidden workflow control;
+- workflow-defined language extension.
+
+### Expression versus value adaptation
+
+Representation adapters belong to local-expression value derivation rather than to connector execution.
+
+Implications:
+
+- adapter operations may interpret, navigate, select, normalize, and transform already available values;
+- adapter operations may return derived values or addressable focus values for further pure local use;
+- adapter update-style operations must still return new derived values rather than persisting changes by themselves;
+- any persistence of such derived values happens only when a workflow step passes the resulting value into an effectful operation.
 
 ### Expression versus workflow control
 
 Local expressions may derive values and conditions.
 
 They must not silently absorb broader workflow control semantics such as branching structure, looping, or hidden execution planning.
+
+### Expression versus user-defined extensibility
+
+Representation-adapter operations must belong to the stable product contract.
+
+Workflows must not define their own expression functions, operators, macros, or adapter families.
 
 ### Expression versus storage ownership
 

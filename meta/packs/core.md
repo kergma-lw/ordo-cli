@@ -111,12 +111,34 @@
 - `state...` is the runtime-state read surface when the context explicitly allows state reads.
 - `step...` is the execution-local registered-step-result surface when the context explicitly allows step-result reads.
 
+## Non-effectful observation dependencies
+
+- Local expressions may depend on product-defined non-effectful connector observations such as read-only probes.
+- Such observation dependencies must remain reviewable, explicit, and compatible with the surrounding context policy.
+- A context may allow non-effectful probe observation without thereby allowing effectful connector execution.
+
+## Derived values and representation adapters
+
+- Local expressions may derive intermediate values from already available values.
+- Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
+- Representation-adapter operations must remain pure, local, and value-producing.
+- Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
+- Any update-style representation-adapter operation must return a new derived value rather than persisting change by itself.
+
+## Canonical core boundary
+
+- The canonical local-expression core should include shared non-effectful constructs for observation, comparison, composition, and value derivation.
+- Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
+- Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
+
 ## Permanent exclusions
 
 - Local expressions must never perform effectful connector work by themselves.
 - Local expressions must never smuggle hidden workflow control structures such as looping or open-ended branching.
 - Local expressions must never rely on project-defined syntax whose meaning is outside the stable product contract.
 - Local expressions must never become a user-extensible language with workflow-defined functions, macros, or operators.
+- Representation-adapter operations must never perform connector invocation, hidden I/O, or other effectful work.
+- Representation-adapter families and operations must remain product-defined rather than workflow-defined extensions.
 
 ## Product discipline
 
@@ -721,6 +743,8 @@ This domain owns:
 
 - the idea that workflows may carry expression-bearing fields;
 - the local data surfaces that expressions may read;
+- the idea that expressions may derive intermediate values from already available values;
+- product-defined representation adapters for pure value interpretation and transformation;
 - the semantic distinction between expression contexts;
 - the boundary between local expression evaluation and connector operation execution;
 - the boundary between local expression evaluation and workflow control surfaces.
@@ -751,6 +775,26 @@ The initial local-expression roots are:
 - `args...` — included-fragment arguments local to one fragment instance;
 - `state...` — documented runtime-state read surface when the surrounding context allows state access;
 - `step...` — prior registered step results when the surrounding context allows execution-local step data.
+
+### Read-only probe observation
+
+A local expression may also depend on product-defined read-only connector observations when the surrounding context allows non-effectful external observation.
+
+Such observation remains part of local-expression semantics only when it is read-only, reviewable, and does not introduce effectful connector execution.
+
+### Derived intermediate value
+
+A local expression may derive one value from another already available value and then continue evaluation over that derived value.
+
+Such intermediate values remain inside local-expression semantics.
+They do not by themselves introduce connector execution, workflow control, or storage ownership.
+
+### Representation adapter
+
+A representation adapter is a product-defined local-expression surface for interpreting an already available value through a specific representation such as markdown, html, json, or string.
+
+Representation adapters may expose pure navigation and transformation operations over those values.
+They are not connectors and they do not own external integration semantics.
 
 ## Core contexts
 
@@ -792,16 +836,53 @@ Local-expression contexts divide into two families:
 ### Expression versus connector execution
 
 Local expressions may read documented workflow-visible data.
+They may also derive additional values from those already available values through pure local operations.
+They may depend on read-only connector observations when those observations are modeled as non-effectful expression dependencies.
 
 They must not themselves become a public connector invocation surface for effectful work.
 
 Any connector execution semantics belong to connector operations and workflow steps, not to local expressions as such.
+
+### Canonical core direction
+
+The canonical local-expression core should keep only non-effectful observation and value-derivation semantics.
+
+That core includes stable value and condition constructs such as:
+
+- literals and lists;
+- local roots and their field navigation;
+- read-only probe observations;
+- boolean composition and comparison;
+- pipelines, built-ins, and representation-adapter operations.
+
+It excludes:
+
+- effectful connector actions;
+- hidden workflow control;
+- workflow-defined language extension.
+
+### Expression versus value adaptation
+
+Representation adapters belong to local-expression value derivation rather than to connector execution.
+
+Implications:
+
+- adapter operations may interpret, navigate, select, normalize, and transform already available values;
+- adapter operations may return derived values or addressable focus values for further pure local use;
+- adapter update-style operations must still return new derived values rather than persisting changes by themselves;
+- any persistence of such derived values happens only when a workflow step passes the resulting value into an effectful operation.
 
 ### Expression versus workflow control
 
 Local expressions may derive values and conditions.
 
 They must not silently absorb broader workflow control semantics such as branching structure, looping, or hidden execution planning.
+
+### Expression versus user-defined extensibility
+
+Representation-adapter operations must belong to the stable product contract.
+
+Workflows must not define their own expression functions, operators, macros, or adapter families.
 
 ### Expression versus storage ownership
 
@@ -1305,6 +1386,7 @@ The model distinguishes:
 
 - the shared idea of local-expression evaluation;
 - context-specific restrictions on roots and timing;
+- product-defined value interpretation and transformation over already available values;
 - authored surface forms used by different fields.
 
 ## Shared model elements
@@ -1324,6 +1406,13 @@ A root is one documented local reference family.
 
 The initial modeled roots are `inputs...`, `args...`, `state...`, and `step...`.
 
+### Non-effectful observation dependency
+
+A non-effectful observation dependency is a product-defined read-only observation that a local expression may request without changing the world.
+
+Read-only probe calls belong to this dependency class.
+They are distinct from local roots, but they may participate in the same expression tree when the surrounding context permits them.
+
 ### Scope
 
 Scope determines where a root is meaningful.
@@ -1339,6 +1428,46 @@ A context family groups surfaces by semantic job.
 
 - condition-oriented contexts produce admission or execution conditions;
 - value-oriented contexts produce local derived values.
+
+### Derived value
+
+A derived value is a value produced from already available local-expression inputs or prior derived values.
+
+Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
+
+### Representation adapter
+
+A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
+
+Examples may include markdown-, html-, json-, or string-oriented operations.
+
+An adapter operation may:
+
+- navigate or select within a represented value;
+- expose an addressable focus over part of that value for further pure local work;
+- transform the represented value into a new derived value.
+
+Such operations remain part of local value derivation rather than connector execution.
+
+### Canonical core
+
+The canonical local-expression core is the shared non-effectful tree model that supports both condition-oriented and value-oriented contexts.
+
+Its retained construct families should cover:
+
+- literals and list values;
+- local-root references and field navigation;
+- read-only probe observations;
+- boolean composition and comparison;
+- pipelines and built-in calls;
+- representation-adapter operations and their derived values.
+
+Its excluded construct families should cover:
+
+- effectful connector actions;
+- runtime-state mutation semantics;
+- hidden workflow-control structures;
+- workflow-defined language extension.
 
 ## Surface distinction
 
@@ -1360,6 +1489,9 @@ They are not themselves the owner of:
 - effectful action semantics;
 - hidden control-flow structure;
 - runtime-state mutation semantics.
+
+Any adapter-provided update semantics therefore describe pure value transformation only.
+Persistence of a transformed value remains outside the local-expression system and belongs to workflow steps or other effectful runtime surfaces.
 
 <!-- source: model/local-expressions/contexts.md -->
 
