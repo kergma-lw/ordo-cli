@@ -64,6 +64,30 @@ class StepReferenceNode(ValueExpressionNode):
 
 
 @dataclass(frozen=True, slots=True)
+class ListNode(ValueExpressionNode):
+    """List literal used inside a local expression."""
+
+    items: tuple[ValueExpressionNode, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CallArgumentNode(ValueExpressionNode):
+    """Named argument passed to a read-only probe call."""
+
+    name: str
+    value: ValueExpressionNode
+
+
+@dataclass(frozen=True, slots=True)
+class CallNode(ValueExpressionNode):
+    """Read-only dotted call such as ``gh.issue(repository=inputs.repository)``."""
+
+    target: ReferenceNode
+    arguments: tuple[CallArgumentNode, ...] = ()
+    fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class FilterApplicationNode(ValueExpressionNode):
     """One built-in filter stage inside a pipe chain."""
 
@@ -97,9 +121,9 @@ class UnaryNode(ValueExpressionNode):
 
 @dataclass(frozen=True, slots=True)
 class BinaryNode(ValueExpressionNode):
-    """Binary boolean operator inside a step-condition expression."""
+    """Binary boolean or comparison operator inside a local expression."""
 
-    operator: Literal["and", "or"]
+    operator: Literal["and", "or", "==", "!=", "in", "not in"]
     left: ValueExpressionNode
     right: ValueExpressionNode
 
@@ -206,9 +230,27 @@ class _Parser:
         return parse_boolean_not(
             match_not=lambda: self._match_keyword("not"),
             parse_not=self._parse_not,
-            parse_fallback=self._parse_pipeline,
+            parse_fallback=self._parse_comparison,
             make_unary=self._make_boolean_unary,
         )
+
+    def _parse_comparison(self) -> ValueExpressionNode:
+        node = self._parse_pipeline()
+        if self._match("EQEQ") is not None:
+            right = self._parse_pipeline()
+            return BinaryNode(start=node.start, end=right.end, operator="==", left=node, right=right)
+        if self._match("NEQ") is not None:
+            right = self._parse_pipeline()
+            return BinaryNode(start=node.start, end=right.end, operator="!=", left=node, right=right)
+        if self._peek_kind("IDENT", expected_text="not") and self._peek_kind("IDENT", offset=1, expected_text="in"):
+            self._advance()
+            self._advance()
+            right = self._parse_pipeline()
+            return BinaryNode(start=node.start, end=right.end, operator="not in", left=node, right=right)
+        if self._match_keyword("in") is not None:
+            right = self._parse_pipeline()
+            return BinaryNode(start=node.start, end=right.end, operator="in", left=node, right=right)
+        return node
 
     def _parse_pipeline(self) -> ValueExpressionNode:
         source = self._parse_primary()
@@ -231,11 +273,13 @@ class _Parser:
 
     def _parse_primary(self) -> ValueExpressionNode:
         token = self._peek()
-        if self._allow_boolean_composition and token.kind == "LPAREN":
+        if token.kind == "LPAREN":
             self._advance()
-            node = self._parse_or()
+            node = self._parse_or() if self._allow_boolean_composition else self._parse_pipeline()
             end = self._consume("RPAREN", "Expected ')' to close grouped expression")
             return _with_grouped_end(node, end.end)
+        if token.kind == "LBRACKET":
+            return self._parse_list()
         if token.kind == "STRING":
             self._advance()
             return LiteralNode(start=token.start, end=token.end, value=_decode_string(token.text, token.start))
@@ -254,19 +298,32 @@ class _Parser:
             return self._parse_step_reference()
         if self._peek_kind("IDENT") and self._peek_kind("LPAREN", offset=1):
             return self._parse_builtin_call()
-        return self._parse_dotted_reference()
+        return self._parse_reference_or_call()
 
-    def _parse_builtin_call(self) -> BuiltinCallNode:
+    def _parse_builtin_call(self) -> BuiltinCallNode | CallNode:
         name_token = self._consume("IDENT", "Expected built-in name")
         self._consume("LPAREN", "Expected '(' after built-in name")
-        arguments: list[ValueExpressionNode] = []
-        if self._peek().kind != "RPAREN":
-            while True:
-                arguments.append(self._parse_pipeline())
-                if self._match("COMMA") is None:
-                    break
-        end = self._consume("RPAREN", "Expected ')' after built-in arguments").end
-        return BuiltinCallNode(start=name_token.start, end=end, name=name_token.text, arguments=tuple(arguments))
+        if name_token.text in VALUE_EXPRESSION_BUILTINS:
+            arguments: list[ValueExpressionNode] = []
+            if self._peek().kind != "RPAREN":
+                while True:
+                    arguments.append(self._parse_or() if self._allow_boolean_composition else self._parse_pipeline())
+                    if self._match("COMMA") is None:
+                        break
+            end = self._consume("RPAREN", "Expected ')' after built-in arguments").end
+            return BuiltinCallNode(start=name_token.start, end=end, name=name_token.text, arguments=tuple(arguments))
+
+        arguments = self._parse_named_call_arguments()
+        closing = self._consume("RPAREN", "Expected ')' after call arguments")
+        fields = self._parse_field_suffixes()
+        end = fields[1] if fields is not None else closing.end
+        return CallNode(
+            start=name_token.start,
+            end=end,
+            target=ReferenceNode(start=name_token.start, end=name_token.end, parts=(name_token.text,)),
+            arguments=arguments,
+            fields=fields[0] if fields is not None else (),
+        )
 
     def _parse_dotted_reference(self) -> ReferenceNode:
         start_token = self._consume("IDENT", "Expected identifier")
@@ -277,6 +334,51 @@ class _Parser:
             parts.append(next_token.text)
             end = next_token.end
         return ReferenceNode(start=start_token.start, end=end, parts=tuple(parts))
+
+    def _parse_reference_or_call(self) -> ReferenceNode | CallNode:
+        reference = self._parse_dotted_reference()
+        if self._match("LPAREN") is None:
+            return reference
+        arguments = self._parse_named_call_arguments()
+        closing = self._consume("RPAREN", "Expected ')' after call arguments")
+        fields = self._parse_field_suffixes()
+        end = fields[1] if fields is not None else closing.end
+        return CallNode(start=reference.start, end=end, target=reference, arguments=arguments, fields=fields[0] if fields is not None else ())
+
+    def _parse_named_call_arguments(self) -> tuple[CallArgumentNode, ...]:
+        arguments: list[CallArgumentNode] = []
+        if self._peek().kind == "RPAREN":
+            return ()
+        while True:
+            name_token = self._consume("IDENT", "Expected named argument")
+            self._consume("EQUAL", "Expected '=' after argument name")
+            value = self._parse_or() if self._allow_boolean_composition else self._parse_pipeline()
+            arguments.append(CallArgumentNode(start=name_token.start, end=value.end, name=name_token.text, value=value))
+            if self._match("COMMA") is None:
+                break
+        return tuple(arguments)
+
+    def _parse_field_suffixes(self) -> tuple[tuple[str, ...], int] | None:
+        fields: list[str] = []
+        end: int | None = None
+        while self._match("DOT") is not None:
+            field_token = self._consume("IDENT", "Expected field name after '.'")
+            fields.append(field_token.text)
+            end = field_token.end
+        if not fields or end is None:
+            return None
+        return tuple(fields), end
+
+    def _parse_list(self) -> ListNode:
+        start = self._consume("LBRACKET", "Expected '[' to start list literal").start
+        items: list[ValueExpressionNode] = []
+        if self._peek().kind != "RBRACKET":
+            while True:
+                items.append(self._parse_or() if self._allow_boolean_composition else self._parse_pipeline())
+                if self._match("COMMA") is None:
+                    break
+        end = self._consume("RBRACKET", "Expected ']' to close list literal").end
+        return ListNode(start=start, end=end, items=tuple(items))
 
     def _parse_state_reference(self) -> StateReferenceNode:
         start = self._consume("IDENT", "Expected 'state'")
@@ -404,16 +506,36 @@ def _tokenize(text: str) -> tuple[_Token, ...]:
             tokens.append(_Token("COMMA", char, position, position + 1))
             position += 1
             continue
+        if char == "=" and position + 1 < length and text[position + 1] == "=":
+            tokens.append(_Token("EQEQ", "==", position, position + 2))
+            position += 2
+            continue
+        if char == "!" and position + 1 < length and text[position + 1] == "=":
+            tokens.append(_Token("NEQ", "!=", position, position + 2))
+            position += 2
+            continue
+        if char == "=":
+            tokens.append(_Token("EQUAL", char, position, position + 1))
+            position += 1
+            continue
         if char in {'"', "'"}:
             start = position
             position = _consume_string(text, position)
             tokens.append(_Token("STRING", text[start:position], start, position))
             continue
-        if char.isdigit():
+        if char.isdigit() or (char == "-" and position + 1 < length and text[position + 1].isdigit()):
             start = position
+            if char == "-":
+                position += 1
             position += 1
             while position < length and text[position].isdigit():
                 position += 1
+            if position < length and text[position] == ".":
+                position += 1
+                if position >= length or not text[position].isdigit():
+                    raise ValueExpressionParseError("Invalid number literal", start, position)
+                while position < length and text[position].isdigit():
+                    position += 1
             tokens.append(_Token("NUMBER", text[start:position], start, position))
             continue
         if char.isalpha() or char == "_":
@@ -438,6 +560,12 @@ def _with_grouped_end(node: ValueExpressionNode, end: int) -> ValueExpressionNod
         return StateReferenceNode(start=node.start, end=end, state_role=node.state_role, key_reference=node.key_reference, fields=node.fields)
     if isinstance(node, StepReferenceNode):
         return StepReferenceNode(start=node.start, end=end, register=node.register, fields=node.fields)
+    if isinstance(node, ListNode):
+        return ListNode(start=node.start, end=end, items=node.items)
+    if isinstance(node, CallArgumentNode):
+        return CallArgumentNode(start=node.start, end=end, name=node.name, value=node.value)
+    if isinstance(node, CallNode):
+        return CallNode(start=node.start, end=end, target=node.target, arguments=node.arguments, fields=node.fields)
     if isinstance(node, PipelineNode):
         return PipelineNode(start=node.start, end=end, source=node.source, filters=node.filters)
     if isinstance(node, BuiltinCallNode):
@@ -464,6 +592,14 @@ def _evaluate_node(
         return _resolve_state_reference(node, parsed=parsed, workflow=workflow)
     if isinstance(node, StepReferenceNode):
         return _resolve_step_reference(node, parsed=parsed, step_results=step_results)
+    if isinstance(node, ListNode):
+        return [_evaluate_node(item, parsed=parsed, workflow=workflow, step_results=step_results) for item in node.items]
+    if isinstance(node, CallNode):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.call_unsupported",
+            message="Read-only probe calls are not evaluable through the canonical value engine yet",
+            details={"expression": parsed.source, "target": ".".join(node.target.parts)},
+        )
     if isinstance(node, PipelineNode):
         value = _evaluate_node(node.source, parsed=parsed, workflow=workflow, step_results=step_results)
         for filter_node in node.filters:
@@ -481,6 +617,20 @@ def _evaluate_node(
             details={"expression": parsed.source, "operator": node.operator, "actual_type": type(value).__name__},
         )
     if isinstance(node, BinaryNode):
+        if node.operator in {"==", "!=", "in", "not in"}:
+            left = _evaluate_node(node.left, parsed=parsed, workflow=workflow, step_results=step_results)
+            right = _evaluate_node(node.right, parsed=parsed, workflow=workflow, step_results=step_results)
+            if node.operator == "==":
+                return left == right
+            if node.operator == "!=":
+                return left != right
+            if not isinstance(right, list):
+                raise ValueExpressionEvaluationError(
+                    code="runtime.value.comparison_operand_type",
+                    message=f"Operator '{node.operator}' requires a list right operand",
+                    details={"expression": parsed.source, "operator": node.operator, "actual_type": type(right).__name__},
+                )
+            return left in right if node.operator == "in" else left not in right
         left = _evaluate_node(node.left, parsed=parsed, workflow=workflow, step_results=step_results)
         if not isinstance(left, bool):
             raise ValueExpressionEvaluationError(
@@ -797,6 +947,17 @@ def collect_step_references(node: ValueExpressionNode) -> tuple[StepReferenceNod
         if isinstance(current, StepReferenceNode):
             refs.append(current)
             return
+        if isinstance(current, ListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, CallArgumentNode):
+            visit(current.value)
+            return
+        if isinstance(current, CallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
         if isinstance(current, PipelineNode):
             visit(current.source)
             for filter_node in current.filters:
@@ -849,8 +1010,8 @@ def _decode_string(token_text: str, start: int) -> str:
         raise ValueExpressionParseError("Invalid string literal", start, start + len(token_text)) from exc
 
 
-def _decode_number(token_text: str) -> int:
-    return int(token_text)
+def _decode_number(token_text: str) -> int | float:
+    return float(token_text) if "." in token_text else int(token_text)
 
 
 # Preferred local-expression terminology.

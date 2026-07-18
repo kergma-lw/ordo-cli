@@ -29,6 +29,9 @@ from .local_expression_engine.core import (
     ReferenceNode as EmbeddedValueReferenceNode,
     StateReferenceNode as EmbeddedValueStateReferenceNode,
     StepReferenceNode as EmbeddedValueStepReferenceNode,
+    ListNode as EmbeddedValueListNode,
+    CallArgumentNode as EmbeddedValueCallArgumentNode,
+    CallNode as EmbeddedValueCallNode,
     FilterApplicationNode,
     PipelineNode,
     BuiltinCallNode,
@@ -243,6 +246,17 @@ def _iter_embedded_value_dependencies(node: EmbeddedValueExpressionNode) -> tupl
             return
         if isinstance(current, EmbeddedValueStepReferenceNode):
             found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STEP, start=current.start, end=current.end))
+            return
+        if isinstance(current, EmbeddedValueListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, EmbeddedValueCallArgumentNode):
+            visit(current.value)
+            return
+        if isinstance(current, EmbeddedValueCallNode):
+            for argument in current.arguments:
+                visit(argument)
             return
         if isinstance(current, PipelineNode):
             visit(current.source)

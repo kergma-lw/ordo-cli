@@ -235,6 +235,40 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
 
+    def test_evaluate_comparison_expression(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  status: ok
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_embedded_value_expression('inputs.status == "ok"', allow_boolean_composition=True)
+
+        self.assertIs(evaluate_embedded_value_expression(parsed, workflow), True)
+
+    def test_evaluate_membership_expression(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  status: ok
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_embedded_value_expression('inputs.status in ["ok", "closed"]', allow_boolean_composition=True)
+
+        self.assertIs(evaluate_embedded_value_expression(parsed, workflow), True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,8 +3,11 @@ import unittest
 from ordo.runtime.local_expression_impl.embedded_value import (
     BinaryNode,
     BuiltinCallNode,
+    CallArgumentNode,
+    CallNode,
     EmbeddedValueExpressionParseError,
     FilterApplicationNode,
+    ListNode,
     LiteralNode,
     PipelineNode,
     ReferenceNode,
@@ -114,6 +117,61 @@ class LegacyEmbeddedValueExpressionParsingTest(unittest.TestCase):
             parse_embedded_value_expression("inputs.enabled and inputs.ready")
 
         self.assertEqual(ctx.exception.message, "Unexpected trailing token")
+
+    def test_parse_list_literal(self) -> None:
+        parsed = parse_embedded_value_expression('["OPEN", "CLOSED"]')
+
+        self.assertEqual(
+            parsed.root,
+            ListNode(
+                start=0,
+                end=18,
+                items=(
+                    LiteralNode(start=1, end=7, value="OPEN"),
+                    LiteralNode(start=9, end=17, value="CLOSED"),
+                ),
+            ),
+        )
+
+    def test_parse_comparison_expression_when_boolean_mode_enabled(self) -> None:
+        parsed = parse_embedded_value_expression('inputs.status == "ok"', allow_boolean_composition=True)
+
+        self.assertIsInstance(parsed.root, BinaryNode)
+        self.assertEqual(parsed.root.operator, "==")
+
+    def test_parse_probe_call_with_named_arguments_and_field_access(self) -> None:
+        parsed = parse_embedded_value_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state'
+        )
+
+        self.assertEqual(
+            parsed.root,
+            CallNode(
+                start=0,
+                end=78,
+                target=ReferenceNode(start=0, end=8, parts=("gh", "issue")),
+                arguments=(
+                    CallArgumentNode(
+                        start=9,
+                        end=37,
+                        name="repository",
+                        value=ReferenceNode(start=20, end=37, parts=("inputs", "repository")),
+                    ),
+                    CallArgumentNode(
+                        start=39,
+                        end=71,
+                        name="issue_number",
+                        value=ReferenceNode(start=52, end=71, parts=("inputs", "issue_number")),
+                    ),
+                ),
+                fields=("state",),
+            ),
+        )
+
+    def test_parse_negative_and_float_numbers(self) -> None:
+        parsed = parse_embedded_value_expression("-1.5")
+
+        self.assertEqual(parsed.root, LiteralNode(start=0, end=4, value=-1.5))
 
 
 if __name__ == "__main__":
