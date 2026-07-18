@@ -42,6 +42,25 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
         self.assertEqual(parsed.context, LocalExpressionContext.INCLUDE_BINDING)
         self.assertIsNotNone(parsed.value)
 
+    def test_embedded_value_surface_rejects_non_dotted_call_target(self) -> None:
+        parsed = parse_local_expression('inputs(repository=inputs.repository)', context=LocalExpressionContext.EMBEDDED_VALUE)
+
+        self.assertEqual(
+            {issue.code for issue in validate_parsed_local_expression(parsed)},
+            {"validation.workflow.value_expr.inputs_call"},
+        )
+
+    def test_embedded_value_surface_rejects_duplicate_probe_argument_names(self) -> None:
+        parsed = parse_local_expression(
+            'gh.issue(repository=inputs.repository, repository=inputs.other_repository)',
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+        )
+
+        self.assertEqual(
+            {issue.code for issue in validate_parsed_local_expression(parsed)},
+            {"validation.workflow.value_expr.duplicate_argument"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

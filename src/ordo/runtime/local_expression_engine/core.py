@@ -180,6 +180,41 @@ class ValueExpressionEvaluationError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class ValueExpressionValidationError:
+    """Structured semantic validation error for canonical local-expression trees."""
+
+    code: str
+    message: str
+    start: int
+    end: int
+
+    def to_diagnostic(self, *, path: tuple[str, ...], source: str, expression: str) -> Diagnostic:
+        return Diagnostic(
+            code=self.code,
+            level="error",
+            message=self.message,
+            path=path,
+            details={
+                "source": source,
+                "position": self.start,
+                "end": self.end,
+                "snippet": expression[self.start : self.end],
+                "expression": expression,
+            },
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ValueExpressionDependency:
+    """One dependency reference collected from the canonical expression tree."""
+
+    kind: Literal["root"]
+    name: str
+    start: int
+    end: int
+
+
+@dataclass(frozen=True, slots=True)
 class _Token:
     kind: str
     text: str
@@ -204,6 +239,64 @@ def evaluate_value_expression(
     """Evaluate a parsed value expression against workflow inputs and state."""
 
     return _evaluate_node(parsed.root, parsed=parsed, workflow=workflow, step_results={} if step_results is None else step_results)
+
+
+def validate_value_expression(parsed: ParsedValueExpression) -> tuple[ValueExpressionValidationError, ...]:
+    """Validate semantic rules over the canonical local-expression tree."""
+
+    validator = _SemanticValidator(parsed)
+    return tuple(validator.validate())
+
+
+def collect_value_expression_dependencies(node: ValueExpressionNode) -> tuple[ValueExpressionDependency, ...]:
+    """Collect local-root dependencies from the canonical local-expression tree."""
+
+    found: list[ValueExpressionDependency] = []
+
+    def visit(current: ValueExpressionNode) -> None:
+        if isinstance(current, ReferenceNode):
+            if current.parts and current.parts[0] in {"inputs", "args", "state", "step"}:
+                found.append(ValueExpressionDependency(kind="root", name=current.parts[0], start=current.start, end=current.end))
+            return
+        if isinstance(current, StateReferenceNode):
+            found.append(ValueExpressionDependency(kind="root", name="state", start=current.start, end=current.end))
+            return
+        if isinstance(current, StepReferenceNode):
+            found.append(ValueExpressionDependency(kind="root", name="step", start=current.start, end=current.end))
+            return
+        if isinstance(current, ListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, CallArgumentNode):
+            visit(current.value)
+            return
+        if isinstance(current, CallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, PipelineNode):
+            visit(current.source)
+            for item in current.filters:
+                visit(item)
+            return
+        if isinstance(current, FilterApplicationNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, BuiltinCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, UnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, BinaryNode):
+            visit(current.left)
+            visit(current.right)
+
+    visit(node)
+    return tuple(found)
 
 
 class _Parser:
@@ -466,6 +559,78 @@ class _Parser:
 
     def _make_boolean_unary(self, operator: str, token: _Token, operand: ValueExpressionNode) -> UnaryNode:
         return UnaryNode(start=token.start, end=operand.end, operator=operator, operand=operand)
+
+
+class _SemanticValidator:
+    def __init__(self, parsed: ParsedValueExpression) -> None:
+        self._parsed = parsed
+        self._errors: list[ValueExpressionValidationError] = []
+
+    def validate(self) -> list[ValueExpressionValidationError]:
+        self._visit(self._parsed.root)
+        return self._errors
+
+    def _visit(self, node: ValueExpressionNode) -> None:
+        if isinstance(node, (LiteralNode, ReferenceNode, StateReferenceNode, StepReferenceNode)):
+            return
+        if isinstance(node, ListNode):
+            for item in node.items:
+                self._visit(item)
+            return
+        if isinstance(node, CallArgumentNode):
+            self._visit(node.value)
+            return
+        if isinstance(node, CallNode):
+            self._validate_call(node)
+            return
+        if isinstance(node, FilterApplicationNode):
+            for argument in node.arguments:
+                self._visit(argument)
+            return
+        if isinstance(node, PipelineNode):
+            self._visit(node.source)
+            for item in node.filters:
+                self._visit(item)
+            return
+        if isinstance(node, BuiltinCallNode):
+            for argument in node.arguments:
+                self._visit(argument)
+            return
+        if isinstance(node, UnaryNode):
+            self._visit(node.operand)
+            return
+        if isinstance(node, BinaryNode):
+            self._visit(node.left)
+            self._visit(node.right)
+
+    def _validate_call(self, node: CallNode) -> None:
+        if node.target.parts[0] == "inputs":
+            self._error(
+                "validation.workflow.value_expr.inputs_call",
+                "Workflow input references are values and must not be called like probes",
+                node.target,
+            )
+        elif len(node.target.parts) < 2:
+            self._error(
+                "validation.workflow.value_expr.call_target",
+                "Read-only probe calls must target a dotted public reference such as 'gh.issue'",
+                node.target,
+            )
+
+        seen_names: set[str] = set()
+        for argument in node.arguments:
+            if argument.name in seen_names:
+                self._error(
+                    "validation.workflow.value_expr.duplicate_argument",
+                    f"Duplicate local-expression argument '{argument.name}'",
+                    argument,
+                )
+            else:
+                seen_names.add(argument.name)
+            self._visit(argument)
+
+    def _error(self, code: str, message: str, node: ValueExpressionNode) -> None:
+        self._errors.append(ValueExpressionValidationError(code=code, message=message, start=node.start, end=node.end))
 
 
 def _tokenize(text: str) -> tuple[_Token, ...]:

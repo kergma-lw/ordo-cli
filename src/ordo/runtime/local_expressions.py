@@ -26,23 +26,15 @@ from .local_expression_impl.condition import (
 )
 from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, LocalExpressionRoot, get_local_expression_context_policy
 from .local_expression_engine.core import (
-    ReferenceNode as EmbeddedValueReferenceNode,
-    StateReferenceNode as EmbeddedValueStateReferenceNode,
-    StepReferenceNode as EmbeddedValueStepReferenceNode,
-    ListNode as EmbeddedValueListNode,
-    CallArgumentNode as EmbeddedValueCallArgumentNode,
-    CallNode as EmbeddedValueCallNode,
-    FilterApplicationNode,
-    PipelineNode,
-    BuiltinCallNode,
-    UnaryNode as EmbeddedValueUnaryNode,
-    BinaryNode as EmbeddedValueBinaryNode,
     EmbeddedValueExpressionEvaluationError,
     EmbeddedValueExpressionNode,
     EmbeddedValueExpressionParseError,
+    ValueExpressionValidationError,
     ParsedEmbeddedValueExpression,
+    collect_value_expression_dependencies,
     evaluate_embedded_value_expression,
     parse_embedded_value_expression,
+    validate_value_expression,
 )
 
 
@@ -63,7 +55,7 @@ class ParsedLocalExpression:
 
 
 LOCAL_EXPRESSION_PARSE_ERRORS = (ConditionExpressionParseError, EmbeddedValueExpressionParseError)
-LocalExpressionValidationError = ConditionExpressionValidationError
+LocalExpressionValidationError = ConditionExpressionValidationError | ValueExpressionValidationError
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +100,8 @@ def validate_parsed_local_expression(parsed: ParsedLocalExpression) -> tuple[Loc
     if parsed.context is LocalExpressionContext.GUARD:
         assert parsed.guard is not None
         errors.extend(validate_parsed_condition_expression(parsed.guard))
+    elif parsed.value is not None:
+        errors.extend(validate_value_expression(parsed.value))
     return tuple(errors)
 
 
@@ -196,7 +190,10 @@ def _collect_local_expression_dependencies(parsed: ParsedLocalExpression) -> tup
     if parsed.guard is not None:
         return tuple(_iter_condition_dependencies(parsed.guard.root))
     if parsed.value is not None:
-        return tuple(_iter_embedded_value_dependencies(parsed.value.root))
+        return tuple(
+            _LocalExpressionDependency(root=LocalExpressionRoot(dependency.name), start=dependency.start, end=dependency.end)
+            for dependency in collect_value_expression_dependencies(parsed.value.root)
+        )
     return ()
 
 
@@ -226,55 +223,6 @@ def _iter_condition_dependencies(node: ConditionExpressionNode) -> tuple[_LocalE
             visit(current.operand)
             return
         if isinstance(current, ConditionBinaryNode):
-            visit(current.left)
-            visit(current.right)
-
-    visit(node)
-    return tuple(found)
-
-
-def _iter_embedded_value_dependencies(node: EmbeddedValueExpressionNode) -> tuple[_LocalExpressionDependency, ...]:
-    found: list[_LocalExpressionDependency] = []
-
-    def visit(current: EmbeddedValueExpressionNode) -> None:
-        if isinstance(current, EmbeddedValueReferenceNode):
-            if current.parts and current.parts[0] in {root.value for root in LocalExpressionRoot}:
-                found.append(_LocalExpressionDependency(root=LocalExpressionRoot(current.parts[0]), start=current.start, end=current.end))
-            return
-        if isinstance(current, EmbeddedValueStateReferenceNode):
-            found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STATE, start=current.start, end=current.end))
-            return
-        if isinstance(current, EmbeddedValueStepReferenceNode):
-            found.append(_LocalExpressionDependency(root=LocalExpressionRoot.STEP, start=current.start, end=current.end))
-            return
-        if isinstance(current, EmbeddedValueListNode):
-            for item in current.items:
-                visit(item)
-            return
-        if isinstance(current, EmbeddedValueCallArgumentNode):
-            visit(current.value)
-            return
-        if isinstance(current, EmbeddedValueCallNode):
-            for argument in current.arguments:
-                visit(argument)
-            return
-        if isinstance(current, PipelineNode):
-            visit(current.source)
-            for item in current.filters:
-                visit(item)
-            return
-        if isinstance(current, FilterApplicationNode):
-            for argument in current.arguments:
-                visit(argument)
-            return
-        if isinstance(current, BuiltinCallNode):
-            for argument in current.arguments:
-                visit(argument)
-            return
-        if isinstance(current, EmbeddedValueUnaryNode):
-            visit(current.operand)
-            return
-        if isinstance(current, EmbeddedValueBinaryNode):
             visit(current.left)
             visit(current.right)
 
