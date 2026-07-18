@@ -186,13 +186,13 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
     NegativeRuleSpec(
         name="guard_expression.no_filters",
         surface="guard_expression",
-        rule="Value-expression filters are not allowed in guard expressions",
+        rule="Local-expression filter pipelines are not allowed in guard expressions",
         reason="the shared local-expression engine keeps filter pipelines context-gated, and guard context does not currently evaluate them",
     ),
     NegativeRuleSpec(
         name="guard_expression.no_format_builtin",
         surface="guard_expression",
-        rule="The format builtin is not allowed in guard expressions",
+        rule="The format local-expression builtin is not allowed in guard expressions",
         reason="the shared local-expression engine keeps built-in value construction context-gated, and guard context does not currently evaluate them",
     ),
     NegativeRuleSpec(

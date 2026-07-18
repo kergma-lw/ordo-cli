@@ -135,7 +135,7 @@
 
 - The canonical local-expression execution model must define how read-only probe-call nodes are evaluated without treating them as a second parser or second expression family.
 - The canonical engine must remain the owner of probe-call node semantics, context gating, dependency visibility, caching expectations, trace shape, and diagnostics.
-- Any external read-only observation needed to satisfy a probe call must pass through an explicit engine-facing probe-observation interface rather than through ad hoc split-era helper paths.
+- Any external read-only observation needed to satisfy a probe call must pass through an explicit engine-facing probe-observation interface rather than through ad hoc legacy helper paths.
 - A context that forbids non-effectful external observation must reject probe-call nodes through normal context-policy enforcement.
 
 ## Permanent exclusions
@@ -2661,7 +2661,7 @@ The interpreter may read from:
 - workflow inputs;
 - runtime state;
 - active profile context and overrides;
-- literals and pure value-expression outputs;
+- literals and pure local-expression outputs;
 - outputs of previously interpreted read-only steps;
 - outputs of read-only probes;
 - already-expanded nested preflight results.
@@ -3431,7 +3431,7 @@ At minimum it should support:
 - narrow execution-environment access when needed for local behavior or diagnostics;
 - explicit access to shared family bootstrap state or shared capability context when the operation depends on it.
 
-The context should not require small operations to know workflow internals, guard-expression internals, or runtime mode state.
+The context should not require small operations to know workflow internals, guard-context expression internals, or runtime mode state.
 
 When operation-to-operation reuse is allowed, the SDK should prefer an explicit local dependency surface over hidden runtime magic.
 

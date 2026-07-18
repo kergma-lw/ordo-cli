@@ -1,4 +1,4 @@
-"""Canonical metadata registries for value-expression filters and builtins."""
+"""Canonical metadata registries for local-expression filters and builtins."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ BuiltinHandler = Callable[["BuiltinCallNode", "ParsedLocalExpressionTree", "Work
 
 @dataclass(frozen=True, slots=True)
 class ValueExpressionFilterSpec:
-    """Canonical metadata for one published value-expression filter."""
+    """Canonical metadata for one published local-expression filter."""
 
     name: str
     input_type: str
@@ -35,7 +35,7 @@ class ValueExpressionFilterSpec:
 
 @dataclass(frozen=True, slots=True)
 class ValueExpressionBuiltinSpec:
-    """Canonical metadata for one published value-expression builtin."""
+    """Canonical metadata for one published local-expression builtin."""
 
     name: str
     handler: BuiltinHandler

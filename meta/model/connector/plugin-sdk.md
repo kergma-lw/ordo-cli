@@ -62,7 +62,7 @@ At minimum it should support:
 - narrow execution-environment access when needed for local behavior or diagnostics;
 - explicit access to shared family bootstrap state or shared capability context when the operation depends on it.
 
-The context should not require small operations to know workflow internals, guard-expression internals, or runtime mode state.
+The context should not require small operations to know workflow internals, guard-context expression internals, or runtime mode state.
 
 When operation-to-operation reuse is allowed, the SDK should prefer an explicit local dependency surface over hidden runtime magic.
 

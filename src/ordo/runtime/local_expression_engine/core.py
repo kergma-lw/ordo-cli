@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class ValueExpressionNode:
-    """Base parsed value-expression node."""
+    """Base parsed local-expression node."""
 
     start: int
     end: int
@@ -465,7 +465,7 @@ class _Parser:
             self._advance()
             return LiteralNode(start=token.start, end=token.end, value=_decode_number(token.text))
         if token.kind != "IDENT":
-            raise ValueExpressionParseError("Expected value-expression term", token.start, token.end)
+            raise ValueExpressionParseError("Expected local-expression term", token.start, token.end)
         if token.text in {"true", "false", "null"}:
             self._advance()
             value = {"true": True, "false": False, "null": None}[token.text]
@@ -1220,7 +1220,7 @@ def _apply_filter(
         return spec.handler(value, filter_node, parsed, workflow, step_results)
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_unknown",
-        message=f"Unknown value-expression filter '{filter_node.name}'",
+        message=f"Unknown local-expression filter '{filter_node.name}'",
         details={"expression": parsed.source, "filter": filter_node.name},
     )
 
@@ -1409,7 +1409,7 @@ VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin
 
 
 def collect_step_references(node: ValueExpressionNode) -> tuple[StepReferenceNode, ...]:
-    """Collect registered step-result references from a parsed value-expression tree."""
+    """Collect registered step-result references from a parsed local-expression tree."""
 
     refs: list[StepReferenceNode] = []
 

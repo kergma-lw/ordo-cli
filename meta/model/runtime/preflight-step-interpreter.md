@@ -129,7 +129,7 @@ The interpreter may read from:
 - workflow inputs;
 - runtime state;
 - active profile context and overrides;
-- literals and pure value-expression outputs;
+- literals and pure local-expression outputs;
 - outputs of previously interpreted read-only steps;
 - outputs of read-only probes;
 - already-expanded nested preflight results.

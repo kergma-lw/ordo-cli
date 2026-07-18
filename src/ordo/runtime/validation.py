@@ -692,7 +692,7 @@ def _validate_run_step(
             type_code="validation.workflow.run.if.type",
             expression_code="validation.workflow.run.if.expression",
             type_message="Run field 'if' must be a string-form value expression",
-            expression_message="Run field 'if' must use the '${...}' value-expression form",
+            expression_message="Run field 'if' must use the '${...}' local-expression form",
         )
     )
     if value.get("register") is not None:
@@ -1210,7 +1210,7 @@ def _validate_format_value_object(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.value_expr.format.unknown_field",
-                    f"Unknown value-expression format field '{key}'",
+                    f"Unknown local-expression format field '{key}'",
                     path + (key,),
                     source,
                     allowed_fields=sorted(allowed_fields),
