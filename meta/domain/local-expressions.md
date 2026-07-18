@@ -130,6 +130,22 @@ It excludes:
 - hidden workflow control;
 - workflow-defined language extension.
 
+### Canonical probe-call execution boundary
+
+Read-only probe-call semantics should remain inside the canonical local-expression execution model, but they do not collapse into ordinary local-value lookup.
+
+The intended split is:
+
+- the canonical engine owns parsing, canonical AST shape, context policy, dependency analysis, and the node-level meaning of read-only probe-call expressions;
+- runtime probe providers own the actual external observation work needed to satisfy a read-only probe call;
+- expression evaluation may therefore request a read-only observation through an engine-facing probe-observation interface without thereby becoming an effectful action surface.
+
+Implications:
+
+- a probe call is still one canonical local-expression node, not a second expression language hidden beside the main engine;
+- probe-call caching, diagnostics, and trace behavior belong to the canonical execution model even when the observed value comes from a provider surface;
+- contexts that forbid non-effectful external observation must reject probe-call nodes through normal context policy rather than through ad hoc runtime split behavior.
+
 ### Expression versus value adaptation
 
 Representation adapters belong to local-expression value derivation rather than to connector execution.

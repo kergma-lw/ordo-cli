@@ -45,6 +45,13 @@
 - Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
 - Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
 
+## Probe-call execution model
+
+- The canonical local-expression execution model must define how read-only probe-call nodes are evaluated without treating them as a second parser or second expression family.
+- The canonical engine must remain the owner of probe-call node semantics, context gating, dependency visibility, caching expectations, trace shape, and diagnostics.
+- Any external read-only observation needed to satisfy a probe call must pass through an explicit engine-facing probe-observation interface rather than through ad hoc split-era helper paths.
+- A context that forbids non-effectful external observation must reject probe-call nodes through normal context-policy enforcement.
+
 ## Permanent exclusions
 
 - Local expressions must never perform effectful connector work by themselves.

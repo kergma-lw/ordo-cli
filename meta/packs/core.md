@@ -131,6 +131,13 @@
 - Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
 - Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
 
+## Probe-call execution model
+
+- The canonical local-expression execution model must define how read-only probe-call nodes are evaluated without treating them as a second parser or second expression family.
+- The canonical engine must remain the owner of probe-call node semantics, context gating, dependency visibility, caching expectations, trace shape, and diagnostics.
+- Any external read-only observation needed to satisfy a probe call must pass through an explicit engine-facing probe-observation interface rather than through ad hoc split-era helper paths.
+- A context that forbids non-effectful external observation must reject probe-call nodes through normal context-policy enforcement.
+
 ## Permanent exclusions
 
 - Local expressions must never perform effectful connector work by themselves.
@@ -861,6 +868,22 @@ It excludes:
 - hidden workflow control;
 - workflow-defined language extension.
 
+### Canonical probe-call execution boundary
+
+Read-only probe-call semantics should remain inside the canonical local-expression execution model, but they do not collapse into ordinary local-value lookup.
+
+The intended split is:
+
+- the canonical engine owns parsing, canonical AST shape, context policy, dependency analysis, and the node-level meaning of read-only probe-call expressions;
+- runtime probe providers own the actual external observation work needed to satisfy a read-only probe call;
+- expression evaluation may therefore request a read-only observation through an engine-facing probe-observation interface without thereby becoming an effectful action surface.
+
+Implications:
+
+- a probe call is still one canonical local-expression node, not a second expression language hidden beside the main engine;
+- probe-call caching, diagnostics, and trace behavior belong to the canonical execution model even when the observed value comes from a provider surface;
+- contexts that forbid non-effectful external observation must reject probe-call nodes through normal context policy rather than through ad hoc runtime split behavior.
+
 ### Expression versus value adaptation
 
 Representation adapters belong to local-expression value derivation rather than to connector execution.
@@ -1468,6 +1491,18 @@ Its excluded construct families should cover:
 - runtime-state mutation semantics;
 - hidden workflow-control structures;
 - workflow-defined language extension.
+
+### Probe-observation execution contract
+
+Canonical local-expression evaluation may require a read-only probe observation when the tree contains a probe-call node and the surrounding context permits such observation.
+
+The intended execution contract is:
+
+- canonical parsing and validation produce one tree model regardless of whether a node is satisfied from local roots or from read-only observation;
+- canonical evaluation may delegate probe acquisition through a dedicated read-only observation interface;
+- canonical evaluation remains the owner of node semantics, context gating, caching expectations, trace shape, and diagnostics emitted for probe-call execution.
+
+This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 
 ## Surface distinction
 

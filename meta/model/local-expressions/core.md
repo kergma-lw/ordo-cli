@@ -91,6 +91,18 @@ Its excluded construct families should cover:
 - hidden workflow-control structures;
 - workflow-defined language extension.
 
+### Probe-observation execution contract
+
+Canonical local-expression evaluation may require a read-only probe observation when the tree contains a probe-call node and the surrounding context permits such observation.
+
+The intended execution contract is:
+
+- canonical parsing and validation produce one tree model regardless of whether a node is satisfied from local roots or from read-only observation;
+- canonical evaluation may delegate probe acquisition through a dedicated read-only observation interface;
+- canonical evaluation remains the owner of node semantics, context gating, caching expectations, trace shape, and diagnostics emitted for probe-call execution.
+
+This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
+
 ## Surface distinction
 
 The model separates:
