@@ -39,8 +39,9 @@ class _MarkdownSection:
     sections: list["_MarkdownSection"] = field(default_factory=list)
 
 
-class _MarkdownParseError(Exception):
-    pass
+@dataclass(frozen=True, slots=True)
+class _MarkdownPrelude:
+    blocks: tuple[_MarkdownBlock, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +58,11 @@ class _IndexStep:
 class _BlockKindStep:
     kind: str
     expect_one: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _PreludeStep:
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +234,8 @@ def _parse_dot_step(body: str, start: int) -> tuple[object, int]:
         )
     name = match.group(1)
     end = start + len(match.group(0))
+    if name == "prelude":
+        return _PreludeStep(), end
     if name == "list":
         return _BlockKindStep(kind="list", expect_one=True), end
     if name == "lists":
@@ -339,6 +347,15 @@ def _evaluate_markdown_plan(plan: _MarkdownSelectorPlan, document: _MarkdownSect
                     details={"index": step.index, "matches": len(current)},
                 )
             current = [current[step.index]]
+            continue
+        if isinstance(step, _PreludeStep):
+            if len(current) != 1 or not isinstance(current[0], _MarkdownSection) or current[0].title is not None:
+                raise RepresentationAdapterError(
+                    code="runtime.value.adapter_invalid_path",
+                    message="Markdown prelude is only available from the document root",
+                    details={},
+                )
+            current = [_MarkdownPrelude(blocks=tuple(current[0].blocks))]
             continue
         if isinstance(step, _BlockKindStep):
             matches = [block for node in current for block in _child_blocks(node) if block.kind == step.kind]
@@ -455,6 +472,8 @@ def _child_sections(node: object) -> list[_MarkdownSection]:
 def _child_blocks(node: object) -> list[_MarkdownBlock]:
     if isinstance(node, _MarkdownSection):
         return list(node.blocks)
+    if isinstance(node, _MarkdownPrelude):
+        return list(node.blocks)
     return []
 
 
@@ -467,6 +486,12 @@ def _selection_to_json(selection: object) -> JSONValue:
             "title": selection.title,
             "level": selection.level,
             "blocks": [_selection_to_json(block) for block in selection.blocks],
+        }
+    if isinstance(selection, _MarkdownPrelude):
+        return {
+            "kind": "prelude",
+            "blocks": [_selection_to_json(block) for block in selection.blocks],
+            "text": _render_markdown_blocks(selection.blocks),
         }
     if isinstance(selection, _MarkdownBlock):
         payload: JSONObject = {
@@ -504,6 +529,15 @@ def _render_markdown(section: _MarkdownSection) -> str:
         if rendered:
             parts.append(rendered)
     return "\n\n".join(parts)
+
+
+def _render_markdown_blocks(blocks: tuple[_MarkdownBlock, ...] | list[_MarkdownBlock]) -> str:
+    rendered: list[str] = []
+    for block in blocks:
+        block_lines = _render_block_lines(block)
+        if block_lines:
+            rendered.append("\n".join(block_lines))
+    return "\n\n".join(rendered)
 
 
 _register()

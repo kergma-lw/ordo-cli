@@ -5,6 +5,48 @@ from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_
 
 
 class MarkdownAdapterTest(unittest.TestCase):
+    def test_prelude_exists_for_empty_document(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": ""})
+
+        value = resolve_runtime_value('${markdown.prelude with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, {"kind": "prelude", "blocks": [], "text": ""})
+
+    def test_prelude_exists_as_empty_for_heading_first_document(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Tasks\n- ship\n"})
+
+        value = resolve_runtime_value('${markdown.prelude with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, {"kind": "prelude", "blocks": [], "text": ""})
+
+    def test_prelude_returns_leading_blocks_before_first_heading(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": "intro\n\n- one\n\n## Tasks\n- ship\n"},
+        )
+
+        value = resolve_runtime_value('${markdown.prelude with{root: inputs.body}}', workflow)
+
+        self.assertEqual(
+            value,
+            {
+                "kind": "prelude",
+                "blocks": [
+                    {"kind": "paragraph", "text": "intro"},
+                    {"kind": "list", "text": "- one", "items": ["one"]},
+                ],
+                "text": "intro\n\n- one",
+            },
+        )
+
+    def test_prelude_supports_further_block_selection(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "intro\n\n## Tasks\n- ship\n"})
+
+        value = resolve_runtime_value('${markdown.prelude.paragraph with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, {"kind": "paragraph", "text": "intro"})
+
     def test_read_path_selects_unique_list_in_named_section(self) -> None:
         workflow = Workflow(
             version=0,

@@ -491,7 +491,7 @@ def _try_parse_adapter_invocation(expression: str, *, allow_boolean_composition:
     probe = family_end
     while probe < len(expression) and expression[probe].isspace():
         probe += 1
-    if probe >= len(expression) or expression[probe] not in "[{":
+    if probe >= len(expression) or expression[probe] not in "[{.":
         return None
 
     body, bindings, end = _split_adapter_body_and_bindings(
