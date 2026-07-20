@@ -432,6 +432,34 @@ blocks:
         self.assertEqual(count, 1)
         self.assertEqual(result.cache_entries, 1)
 
+    def test_observation_session_canonicalizes_cache_keys_for_equivalent_calls(self) -> None:
+        observed: list[ConditionObservationRequest] = []
+        session = ReadOnlyObservationSession(
+            lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="OPEN", reference="gh.issue")
+        )
+
+        first = ConditionObservationRequest(
+            expression_text="gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state",
+            target=("gh", "issue"),
+            fields=("state",),
+            arguments=(("repository", "owner/repo"), ("issue_number", 7)),
+        )
+        second = ConditionObservationRequest(
+            expression_text="gh.issue( issue_number = inputs.issue_number , repository = inputs.repository ).state",
+            target=("gh", "issue"),
+            fields=("state",),
+            arguments=(("issue_number", 7), ("repository", "owner/repo")),
+        )
+
+        first_result = session.observe(first)
+        second_result = session.observe(second)
+
+        self.assertFalse(first_result.cached)
+        self.assertTrue(second_result.cached)
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(session.cache_entries, 1)
+
     def test_value_evaluation_executes_read_only_call_with_shared_session(self) -> None:
         workflow = load_workflow_text(
             """

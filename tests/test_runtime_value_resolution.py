@@ -351,6 +351,40 @@ blocks:
         self.assertEqual(value, {"title": "Issue body", "items": ["Issue body"]})
         self.assertEqual(count, 1)
 
+    def test_resolve_runtime_value_reuses_session_for_ast_equivalent_call_formatting(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        count = 0
+
+        def observe(_: ConditionObservationRequest) -> ConditionObservationResult:
+            nonlocal count
+            count += 1
+            return ConditionObservationResult(status="ok", value="Issue body", reference="gh.issue")
+
+        session = ReadOnlyObservationSession(observe)
+
+        value = resolve_runtime_value(
+            [
+                "${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}",
+                "${gh.issue( issue_number = inputs.issue_number , repository = inputs.repository ).body}",
+            ],
+            workflow,
+            observation_session=session,
+        )
+
+        self.assertEqual(value, ["Issue body", "Issue body"])
+        self.assertEqual(count, 1)
+
     def test_resolve_runtime_value_reports_probe_failure(self) -> None:
         workflow = load_workflow_text(
             """

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import json
 import re
 from typing import TYPE_CHECKING, Literal
 
@@ -313,7 +314,15 @@ class ReadOnlyObservationSession:
         return len(self._cache)
 
     def _cache_key(self, request: ConditionObservationRequest) -> str:
-        return request.expression_text
+        payload = {
+            "target": list(request.target),
+            "fields": list(request.fields),
+            "arguments": [
+                {"name": name, "value": value}
+                for name, value in sorted(request.arguments, key=lambda item: item[0])
+            ],
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 @dataclass(frozen=True, slots=True)
