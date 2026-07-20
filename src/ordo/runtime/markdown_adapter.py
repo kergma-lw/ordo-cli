@@ -27,6 +27,7 @@ class _MarkdownBlock:
     lines: list[str]
     items: list[str] = field(default_factory=list)
     checked: list[bool] = field(default_factory=list)
+    list_prefix: str = ""
 
 
 @dataclass(slots=True)
@@ -92,7 +93,7 @@ def _register() -> None:
             name="markdown",
             summary="Select and transform markdown sections, blocks, and lists through a family-owned path surface.",
             selectors=("prelude", "[\"title\"]", "[n]", '.blocks("kind")'),
-            actions=("append_item", "append", "replace", "remove"),
+            actions=("append_item", "add", "append", "replace", "remove"),
             shortcuts=("list", "lists", "task_list", "task_lists", "paragraph", "paragraphs", "prelude"),
         ),
     )
@@ -184,7 +185,7 @@ def _parse_action(body: str, start: int) -> tuple[_MarkdownAction, int]:
             details={"body": body, "position": start},
         )
     raw_arguments = _split_action_arguments(argument_text)
-    expected = {"append_item": (1, 1), "append": (1, 2), "replace": (1, 1)}.get(name)
+    expected = {"append_item": (1, 1), "add": (1, 1), "append": (1, 2), "replace": (1, 1)}.get(name)
     if expected is None:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_action",
@@ -358,22 +359,32 @@ def _make_block(lines: list[str], start_line: int) -> _MarkdownBlock | None:
         return None
     task_matches = [re.match(r"^\s*[-*]\s+\[([ xX])]\s+(.*)$", line) for line in stripped]
     if all(match is not None for match in task_matches):
+        first_line = next(line for line in stripped if line.strip())
+        prefix_match = re.match(r"^(\s*)[-*]\s+\[[ xX]]\s+", first_line)
+        prefix = "" if prefix_match is None else prefix_match.group(1)
+        base_indent = len(prefix)
         return _MarkdownBlock(
             kind="task_list",
             start_line=start_line,
             end_line=start_line + len(lines),
             lines=list(lines),
-            items=[match.group(2) for match in task_matches if match is not None],
-            checked=[match.group(1).lower() == "x" for match in task_matches if match is not None],
+            items=[match.group(2) for match, line in zip(task_matches, stripped, strict=False) if match is not None and _leading_indent(line) == base_indent],
+            checked=[match.group(1).lower() == "x" for match, line in zip(task_matches, stripped, strict=False) if match is not None and _leading_indent(line) == base_indent],
+            list_prefix=prefix,
         )
     list_matches = [re.match(r"^\s*[-*]\s+(.*)$", line) for line in stripped]
     if all(match is not None for match in list_matches):
+        first_line = next(line for line in stripped if line.strip())
+        prefix_match = re.match(r"^(\s*)[-*]\s+", first_line)
+        prefix = "" if prefix_match is None else prefix_match.group(1)
+        base_indent = len(prefix)
         return _MarkdownBlock(
             kind="list",
             start_line=start_line,
             end_line=start_line + len(lines),
             lines=list(lines),
-            items=[match.group(1) for match in list_matches if match is not None],
+            items=[match.group(1) for match, line in zip(list_matches, stripped, strict=False) if match is not None and _leading_indent(line) == base_indent],
+            list_prefix=prefix,
         )
     if any(line == "" for line in lines):
         return _MarkdownBlock(kind="raw", start_line=start_line, end_line=start_line + len(lines), lines=list(lines))
@@ -454,18 +465,18 @@ def _apply_markdown_action(plan: _MarkdownSelectorPlan, document: _MarkdownSecti
             message="Markdown write path requires one explicit target",
             details={"matches": len(selection)},
         )
-    if plan.action.name == "append_item":
+    if plan.action.name in {"append_item", "add"}:
         if not isinstance(selection, _MarkdownBlock) or selection.kind not in {"list", "task_list"}:
             raise RepresentationAdapterError(
                 code="runtime.value.adapter_invalid_action",
-                message="Markdown append_item requires a list or task_list target",
+                message=f"Markdown {plan.action.name} requires a list or task_list target",
                 details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
             )
         item_text = _resolve_action_argument(plan.action.arguments[0], parameters)
         selection.items.append(item_text)
         if selection.kind == "task_list":
             selection.checked.append(False)
-        selection.lines = _render_block_lines(selection)
+        selection.lines = _append_list_item_line(selection.lines, selection.kind, item_text, selection.list_prefix)
         selection.end_line = selection.start_line + len(selection.lines)
         return _render_markdown(document)
     if plan.action.name == "append":
@@ -689,10 +700,27 @@ def _selection_to_json(selection: object) -> JSONValue:
 
 def _render_block_lines(block: _MarkdownBlock) -> list[str]:
     if block.kind == "list":
-        return [f"- {item}" for item in block.items]
+        if block.lines:
+            return list(block.lines)
+        return [f"{block.list_prefix}- {item}" for item in block.items]
     if block.kind == "task_list":
-        return [f"- [{'x' if checked else ' '}] {item}" for item, checked in zip(block.items, block.checked, strict=False)]
+        if block.lines:
+            return list(block.lines)
+        return [f"{block.list_prefix}- [{'x' if checked else ' '}] {item}" for item, checked in zip(block.items, block.checked, strict=False)]
     return list(block.lines)
+
+
+def _append_list_item_line(lines: list[str], kind: str, item_text: str, prefix: str) -> list[str]:
+    rendered = list(lines)
+    if kind == "task_list":
+        rendered.append(f"{prefix}- [ ] {item_text}")
+        return rendered
+    rendered.append(f"{prefix}- {item_text}")
+    return rendered
+
+
+def _leading_indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
 
 
 def _render_markdown(section: _MarkdownSection) -> str:

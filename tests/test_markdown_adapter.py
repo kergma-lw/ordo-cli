@@ -131,7 +131,31 @@ class MarkdownAdapterTest(unittest.TestCase):
             },
         )
 
-    def test_write_path_appends_item_and_returns_updated_root(self) -> None:
+    def test_list_add_appends_new_item_and_returns_updated_root(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Tasks\n- ship\n", "item": "verify"})
+
+        value = resolve_runtime_value(
+            '${markdown["Tasks"].list->add(item) with{root: inputs.body, item: inputs.item}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "## Tasks\n\n- ship\n- verify")
+
+    def test_list_add_preserves_nested_list_structure_at_current_level(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": "## Tasks\n- parent\n  - child\n", "item": "sibling"},
+        )
+
+        value = resolve_runtime_value(
+            '${markdown["Tasks"].list->add(item) with{root: inputs.body, item: inputs.item}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "## Tasks\n\n- parent\n  - child\n- sibling")
+
+    def test_append_item_alias_still_maps_to_list_level_addition(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Tasks\n- ship\n", "item": "verify"})
 
         value = resolve_runtime_value(
@@ -141,22 +165,22 @@ class MarkdownAdapterTest(unittest.TestCase):
 
         self.assertEqual(value, "## Tasks\n\n- ship\n- verify")
 
-    def test_write_path_auto_creates_missing_section_and_list(self) -> None:
+    def test_list_add_auto_creates_missing_section_and_list(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "# Overview", "item": "verify"})
 
         value = resolve_runtime_value(
-            '${markdown["Tasks"].list->append_item(item) with{root: inputs.body, item: inputs.item}}',
+            '${markdown["Tasks"].list->add(item) with{root: inputs.body, item: inputs.item}}',
             workflow,
         )
 
         self.assertEqual(value, "# Overview\n\n## Tasks\n\n- verify")
 
-    def test_write_path_preserves_ambiguity_instead_of_creating_through_it(self) -> None:
+    def test_list_add_preserves_ambiguity_instead_of_creating_through_it(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Tasks\n\n## Tasks", "item": "verify"})
 
         with self.assertRaises(ValueResolutionError) as context:
             resolve_runtime_value(
-                '${markdown["Tasks"].list->append_item(item) with{root: inputs.body, item: inputs.item}}',
+                '${markdown["Tasks"].list->add(item) with{root: inputs.body, item: inputs.item}}',
                 workflow,
             )
 
