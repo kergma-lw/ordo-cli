@@ -9,6 +9,7 @@ from ordo.runtime.local_expression_engine.core import (
     ConditionObservationRequest,
     ConditionObservationResult,
     LocalExpressionEvaluationError,
+    ReadOnlyObservationSession,
     evaluate_condition_expression,
     evaluate_local_expression_tree,
     parse_condition_expression,
@@ -373,6 +374,63 @@ blocks:
         self.assertEqual(count, 1)
         self.assertEqual(result.cache_entries, 1)
         self.assertEqual([item.code for item in result.diagnostics], ["probe.failed"])
+
+    def test_observation_session_caches_successful_probe_once(self) -> None:
+        observed: list[ConditionObservationRequest] = []
+
+        session = ReadOnlyObservationSession(
+            lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="OPEN", reference="gh.issue")
+        )
+
+        request = ConditionObservationRequest(
+            expression_text="gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state",
+            target=("gh", "issue"),
+            fields=("state",),
+            arguments=(("repository", "owner/repo"), ("issue_number", 7)),
+        )
+
+        first = session.observe(request)
+        second = session.observe(request)
+
+        self.assertFalse(first.cached)
+        self.assertTrue(second.cached)
+        self.assertEqual(first.result.value, "OPEN")
+        self.assertEqual(second.result.value, "OPEN")
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(session.cache_entries, 1)
+
+    def test_condition_evaluation_accepts_shared_observation_session(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_condition_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        )
+        count = 0
+
+        def observe(_: ConditionObservationRequest) -> ConditionObservationResult:
+            nonlocal count
+            count += 1
+            return ConditionObservationResult(status="ok", value="OPEN", reference="gh.issue")
+
+        session = ReadOnlyObservationSession(observe)
+
+        result = evaluate_condition_expression(parsed, workflow, session=session)
+
+        self.assertEqual(result.status, "ok")
+        self.assertIs(result.value, True)
+        self.assertEqual(count, 1)
+        self.assertEqual(result.cache_entries, 1)
 
 
 if __name__ == "__main__":

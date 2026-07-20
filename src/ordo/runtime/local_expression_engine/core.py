@@ -282,6 +282,41 @@ class ConditionEvaluationResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ObservationSessionResult:
+    """One read-only observation outcome returned by a shared session."""
+
+    result: ConditionObservationResult
+    cached: bool
+
+
+class ReadOnlyObservationSession:
+    """Shared cache/session for read-only local-expression observations."""
+
+    def __init__(
+        self,
+        observe: Callable[[ConditionObservationRequest], ConditionObservationResult],
+    ) -> None:
+        self._observe = observe
+        self._cache: dict[str, ConditionObservationResult] = {}
+
+    def observe(self, request: ConditionObservationRequest) -> ObservationSessionResult:
+        cache_key = self._cache_key(request)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return ObservationSessionResult(result=cached, cached=True)
+        result = self._observe(request)
+        self._cache[cache_key] = result
+        return ObservationSessionResult(result=result, cached=False)
+
+    @property
+    def cache_entries(self) -> int:
+        return len(self._cache)
+
+    def _cache_key(self, request: ConditionObservationRequest) -> str:
+        return request.expression_text
+
+
+@dataclass(frozen=True, slots=True)
 class _Token:
     kind: str
     text: str
@@ -312,15 +347,20 @@ def evaluate_condition_expression(
     parsed: ParsedLocalExpressionTree,
     workflow: Workflow,
     *,
-    observe: Callable[[ConditionObservationRequest], ConditionObservationResult],
+    observe: Callable[[ConditionObservationRequest], ConditionObservationResult] | None = None,
+    session: ReadOnlyObservationSession | None = None,
     step_results: dict[str, OperationResult | JSONObject] | None = None,
 ) -> ConditionEvaluationResult:
     """Evaluate a canonical condition expression, including read-only probe observations."""
 
+    if session is None:
+        if observe is None:
+            raise ValueError("Condition evaluation requires either an observation session or an observe callback")
+        session = ReadOnlyObservationSession(observe)
     evaluator = _ConditionEvaluator(
         parsed,
         workflow,
-        observe=observe,
+        observation_session=session,
         step_results={} if step_results is None else step_results,
     )
     return evaluator.evaluate()
@@ -744,16 +784,15 @@ class _ConditionEvaluator:
         parsed: ParsedValueExpression,
         workflow: Workflow,
         *,
-        observe: Callable[[ConditionObservationRequest], ConditionObservationResult],
+        observation_session: ReadOnlyObservationSession,
         step_results: dict[str, OperationResult | JSONObject],
     ) -> None:
         self._parsed = parsed
         self._workflow = workflow
-        self._observe = observe
+        self._observation_session = observation_session
         self._step_results = step_results
         self._diagnostics: list[Diagnostic] = []
         self._trace: list[ConditionTraceEntry] = []
-        self._cache: dict[str, ConditionObservationResult] = {}
 
     def evaluate(self) -> ConditionEvaluationResult:
         status, value = self._evaluate(self._parsed.root)
@@ -762,7 +801,7 @@ class _ConditionEvaluator:
             value=value,
             diagnostics=tuple(self._diagnostics),
             trace=tuple(self._trace),
-            cache_entries=len(self._cache),
+            cache_entries=self._observation_session.cache_entries,
         )
 
     def _evaluate(self, node: ValueExpressionNode) -> tuple[Literal["ok", "probe_failed"], JSONValue | None]:
@@ -865,13 +904,10 @@ class _ConditionEvaluator:
         return result.status, result.value
 
     def _observe_cached(self, request: ConditionObservationRequest) -> ConditionObservationResult:
-        cached = self._cache.get(request.expression_text)
-        if cached is not None:
-            return cached
-        result = self._observe(request)
-        self._diagnostics.extend(result.diagnostics)
-        self._cache[request.expression_text] = result
-        return result
+        outcome = self._observation_session.observe(request)
+        if not outcome.cached:
+            self._diagnostics.extend(outcome.result.diagnostics)
+        return outcome.result
 
     def _evaluate_binary(self, node: BinaryNode) -> tuple[Literal["ok", "probe_failed"], JSONValue | None]:
         if node.operator == "and":
