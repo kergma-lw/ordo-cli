@@ -13,6 +13,7 @@ from .representation_adapters import (
     RepresentationAdapterInvocation,
     RepresentationAdapterResult,
     adapter_read_result,
+    adapter_write_result,
     register_representation_adapter,
 )
 
@@ -58,8 +59,21 @@ class _BlockKindStep:
 
 
 @dataclass(frozen=True, slots=True)
+class _ActionArgument:
+    kind: str
+    value: str
+
+
+@dataclass(frozen=True, slots=True)
+class _MarkdownAction:
+    name: str
+    argument: _ActionArgument
+
+
+@dataclass(frozen=True, slots=True)
 class _MarkdownSelectorPlan:
     steps: tuple[object, ...]
+    action: _MarkdownAction | None = None
 
 
 def _register() -> None:
@@ -75,13 +89,17 @@ def _evaluate_markdown_invocation(invocation: RepresentationAdapterInvocation) -
         )
     plan = _parse_markdown_body(invocation.body)
     document = _parse_markdown_document(invocation.root_value)
-    selection = _evaluate_markdown_plan(plan, document)
-    return adapter_read_result(_selection_to_json(selection))
+    if plan.action is None:
+        selection = _evaluate_markdown_plan(plan, document, action_mode=False)
+        return adapter_read_result(_selection_to_json(selection))
+    updated_root = _apply_markdown_action(plan, document, invocation.parameters)
+    return adapter_write_result(updated_root)
 
 
 def _parse_markdown_body(body: str) -> _MarkdownSelectorPlan:
     position = 0
     steps: list[object] = []
+    action: _MarkdownAction | None = None
     while position < len(body):
         char = body[position]
         if char.isspace():
@@ -96,17 +114,59 @@ def _parse_markdown_body(body: str) -> _MarkdownSelectorPlan:
             steps.append(step)
             continue
         if body.startswith("->", position):
-            raise RepresentationAdapterError(
-                code="runtime.value.adapter_invalid_action",
-                message="Markdown actions are not implemented yet",
-                details={"body": body},
-            )
+            action, position = _parse_action(body, position)
+            break
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_path",
             message="Markdown adapter body contains unsupported syntax",
             details={"body": body, "position": position},
         )
-    return _MarkdownSelectorPlan(steps=tuple(steps))
+    if position < len(body) and body[position:].strip():
+        trailing_start = position + len(body[position:]) - len(body[position:].lstrip())
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_path",
+            message="Markdown adapter body has unexpected trailing syntax",
+            details={"body": body, "position": trailing_start},
+        )
+    return _MarkdownSelectorPlan(steps=tuple(steps), action=action)
+
+
+def _parse_action(body: str, start: int) -> tuple[_MarkdownAction, int]:
+    if not body.startswith("->append_item(", start):
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message="Unknown markdown action",
+            details={"body": body, "position": start},
+        )
+    close = body.find(")", start + len("->append_item("))
+    if close == -1:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message="Markdown append_item action expected closing ')'",
+            details={"body": body, "position": start},
+        )
+    argument_text = body[start + len("->append_item(") : close].strip()
+    if not argument_text:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message="Markdown append_item action requires one argument",
+            details={"body": body, "position": start},
+        )
+    try:
+        literal = json.loads(argument_text)
+    except json.JSONDecodeError:
+        literal = None
+    if isinstance(literal, str):
+        argument = _ActionArgument(kind="literal", value=literal)
+    elif re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", argument_text):
+        argument = _ActionArgument(kind="parameter", value=argument_text)
+    else:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message="Markdown append_item action expects a string literal or parameter name",
+            details={"body": body, "position": start},
+        )
+    return _MarkdownAction(name="append_item", argument=argument), close + 1
 
 
 def _parse_bracket_step(body: str, start: int) -> tuple[object, int]:
@@ -244,11 +304,14 @@ def _make_block(lines: list[str], start_line: int) -> _MarkdownBlock | None:
     return _MarkdownBlock(kind="paragraph", start_line=start_line, end_line=start_line + len(lines), lines=list(lines))
 
 
-def _evaluate_markdown_plan(plan: _MarkdownSelectorPlan, document: _MarkdownSection) -> object:
+def _evaluate_markdown_plan(plan: _MarkdownSelectorPlan, document: _MarkdownSection, *, action_mode: bool) -> object:
     current: list[object] = [document]
-    for step in plan.steps:
+    for index, step in enumerate(plan.steps):
+        remaining_steps = plan.steps[index + 1 :]
         if isinstance(step, _TitleStep):
             matches = [section for node in current for section in _child_sections(node) if section.title == step.title]
+            if not matches and action_mode:
+                matches = _auto_create_sections(current, step.title)
             if not matches:
                 raise RepresentationAdapterError(
                     code="runtime.value.adapter_not_found",
@@ -268,6 +331,8 @@ def _evaluate_markdown_plan(plan: _MarkdownSelectorPlan, document: _MarkdownSect
             continue
         if isinstance(step, _BlockKindStep):
             matches = [block for node in current for block in _child_blocks(node) if block.kind == step.kind]
+            if not matches and action_mode and not remaining_steps and step.expect_one:
+                matches = [_auto_create_block(current, step.kind)]
             if not matches:
                 raise RepresentationAdapterError(
                     code="runtime.value.adapter_not_found",
@@ -293,6 +358,75 @@ def _evaluate_markdown_plan(plan: _MarkdownSelectorPlan, document: _MarkdownSect
     if len(current) == 1:
         return current[0]
     return current
+
+
+def _apply_markdown_action(plan: _MarkdownSelectorPlan, document: _MarkdownSection, parameters: JSONObject) -> str:
+    assert plan.action is not None
+    selection = _evaluate_markdown_plan(plan, document, action_mode=True)
+    if isinstance(selection, list):
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_ambiguous",
+            message="Markdown write path requires one explicit target",
+            details={"matches": len(selection)},
+        )
+    if not isinstance(selection, _MarkdownBlock) or selection.kind not in {"list", "task_list"}:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message="Markdown append_item requires a list or task_list target",
+            details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
+        )
+    item_text = _resolve_action_argument(plan.action.argument, parameters)
+    selection.items.append(item_text)
+    if selection.kind == "task_list":
+        selection.checked.append(False)
+    selection.lines = _render_block_lines(selection)
+    selection.end_line = selection.start_line + len(selection.lines)
+    return _render_markdown(document)
+
+
+def _resolve_action_argument(argument: _ActionArgument, parameters: JSONObject) -> str:
+    if argument.kind == "literal":
+        return argument.value
+    value = parameters.get(argument.value)
+    if not isinstance(value, str):
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message=f"Markdown action parameter '{argument.value}' must resolve to a string",
+            details={"parameter": argument.value, "actual_type": type(value).__name__ if value is not None else "null"},
+        )
+    return value
+
+
+def _auto_create_sections(current: list[object], title: str) -> list[_MarkdownSection]:
+    if len(current) != 1 or not isinstance(current[0], _MarkdownSection):
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_ambiguous",
+            message="Markdown write path cannot create through an ambiguous section selection",
+            details={"matches": len(current)},
+        )
+    parent = current[0]
+    level = 2 if parent.level is None else parent.level + 1
+    section = _MarkdownSection(title=title, level=level, start_line=0)
+    parent.sections.append(section)
+    return [section]
+
+
+def _auto_create_block(current: list[object], kind: str) -> _MarkdownBlock:
+    if len(current) != 1 or not isinstance(current[0], _MarkdownSection):
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_ambiguous",
+            message="Markdown write path cannot create through an ambiguous block selection",
+            details={"matches": len(current)},
+        )
+    if kind not in {"list", "task_list", "paragraph"}:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_unsupported",
+            message=f"Markdown auto-creation for block kind '{kind}' is not supported",
+            details={"kind": kind},
+        )
+    block = _MarkdownBlock(kind=kind, start_line=0, end_line=0, lines=[])
+    current[0].blocks.append(block)
+    return block
 
 
 def _child_sections(node: object) -> list[_MarkdownSection]:
@@ -334,6 +468,31 @@ def _selection_to_json(selection: object) -> JSONValue:
             payload["checked"] = list(selection.checked)
         return payload
     return selection  # type: ignore[return-value]
+
+
+def _render_block_lines(block: _MarkdownBlock) -> list[str]:
+    if block.kind == "list":
+        return [f"- {item}" for item in block.items]
+    if block.kind == "task_list":
+        return [f"- [{'x' if checked else ' '}] {item}" for item, checked in zip(block.items, block.checked, strict=False)]
+    return list(block.lines)
+
+
+def _render_markdown(section: _MarkdownSection) -> str:
+    parts: list[str] = []
+    if section.heading_line is not None:
+        parts.append(section.heading_line)
+    elif section.title is not None and section.level is not None:
+        parts.append(f"{'#' * section.level} {section.title}")
+    for block in section.blocks:
+        block_lines = _render_block_lines(block)
+        if block_lines:
+            parts.append("\n".join(block_lines))
+    for child in section.sections:
+        rendered = _render_markdown(child)
+        if rendered:
+            parts.append(rendered)
+    return "\n\n".join(parts)
 
 
 _register()

@@ -89,6 +89,37 @@ class MarkdownAdapterTest(unittest.TestCase):
             },
         )
 
+    def test_write_path_appends_item_and_returns_updated_root(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Tasks\n- ship\n", "item": "verify"})
+
+        value = resolve_runtime_value(
+            '${markdown["Tasks"].list->append_item(item) with{root: inputs.body, item: inputs.item}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "## Tasks\n\n- ship\n- verify")
+
+    def test_write_path_auto_creates_missing_section_and_list(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "# Overview", "item": "verify"})
+
+        value = resolve_runtime_value(
+            '${markdown["Tasks"].list->append_item(item) with{root: inputs.body, item: inputs.item}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "# Overview\n\n## Tasks\n\n- verify")
+
+    def test_write_path_preserves_ambiguity_instead_of_creating_through_it(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Tasks\n\n## Tasks", "item": "verify"})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value(
+                '${markdown["Tasks"].list->append_item(item) with{root: inputs.body, item: inputs.item}}',
+                workflow,
+            )
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_ambiguous")
+
 
 if __name__ == "__main__":
     unittest.main()
