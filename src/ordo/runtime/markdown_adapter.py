@@ -11,6 +11,7 @@ from ordo.model.json import JSONArray, JSONObject, JSONValue
 from .representation_adapters import (
     RepresentationAdapterError,
     RepresentationAdapterInvocation,
+    RepresentationAdapterMetadata,
     RepresentationAdapterResult,
     adapter_read_result,
     adapter_write_result,
@@ -77,7 +78,17 @@ class _MarkdownSelectorPlan:
 
 
 def _register() -> None:
-    register_representation_adapter("markdown", _evaluate_markdown_invocation)
+    register_representation_adapter(
+        "markdown",
+        _evaluate_markdown_invocation,
+        metadata=RepresentationAdapterMetadata(
+            name="markdown",
+            summary="Select and transform markdown sections, blocks, and lists through a family-owned path surface.",
+            selectors=("[\"title\"]", "[n]", '.blocks("kind")'),
+            actions=("append_item",),
+            shortcuts=("list", "lists", "task_list", "task_lists", "paragraph", "paragraphs"),
+        ),
+    )
 
 
 def _evaluate_markdown_invocation(invocation: RepresentationAdapterInvocation) -> RepresentationAdapterResult:

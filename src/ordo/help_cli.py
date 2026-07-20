@@ -8,6 +8,7 @@ import sys
 
 from ordo.connectors import get_public_connector_registry
 from ordo.introspection import describe_capabilities, describe_examples_catalog, describe_operations, describe_playbook_contract, describe_profile_contract, describe_state_contract, describe_system, describe_workflow_contract
+from ordo.runtime.representation_adapters import describe_representation_adapter_surface
 from ordo.model.runtime import Mode, RuntimeStatus
 from ordo.model.json import JSONObject
 
@@ -98,6 +99,7 @@ def build_model_response() -> JSONObject:
         "profile": describe_profile_contract(),
         "playbook": describe_playbook_contract(),
         "state": describe_state_contract(),
+        "representation_adapters": describe_representation_adapter_surface(),
     }
 
 
@@ -267,6 +269,31 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "step_scope": model["workflow"]["include_contract"].get("step_scope"),
         },
     )
+    add_node(
+        "workflow.local_expression.adapter_seam",
+        contract="workflow",
+        node_category="adapter_seam",
+        summary="Published shared representation-adapter seam metadata",
+        metadata=model["representation_adapters"]["shared_seam"],
+    )
+    add_node(
+        "workflow.local_expression.adapter_binding",
+        contract="workflow",
+        node_category="adapter_binding",
+        summary="Published outer representation-adapter binding metadata",
+        metadata={
+            "outer_binding_form": model["representation_adapters"]["shared_seam"]["outer_binding_form"],
+            "host_binding_rules": model["representation_adapters"]["shared_seam"]["host_binding_rules"],
+        },
+    )
+    for adapter in model["representation_adapters"]["families"]:
+        add_node(
+            f"workflow.local_expression.adapter.{adapter['name']}",
+            contract="workflow",
+            node_category="adapter_family",
+            summary="Published representation-adapter family metadata",
+            metadata=adapter,
+        )
     for form in model["workflow"]["step_forms"]:
         add_node(
             f"workflow.step_forms.{form['name']}",
@@ -565,7 +592,12 @@ def render_model_text(payload: JSONObject) -> str:
         f"- profile: {payload['profile']['document_kind']}",
         f"- playbook: {payload['playbook']['document_kind']}",
         f"- state: {payload['state']['document_kind']}",
+        "",
+        "Representation adapters:",
+        f"- outer binding form: {payload['representation_adapters']['shared_seam']['outer_binding_form']}",
     ]
+    for family in payload["representation_adapters"]["families"]:
+        lines.append(f"- {family['name']}: selectors={', '.join(family['selectors'])}; actions={', '.join(family['actions'])}")
     return "\n".join(lines)
 
 

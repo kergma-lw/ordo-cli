@@ -118,6 +118,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.branching", if_conflict["related_capabilities"])
         self.assertIn("workflow.step.register", if_conflict["related_capabilities"])
 
+    def test_capabilities_publish_representation_adapter_capability(self) -> None:
+        capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
+        adapter_capability = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.local_expression.adapters")
+
+        self.assertEqual(adapter_capability["status"], "supported")
+        self.assertIn("workflow.local_expression.adapter.markdown", adapter_capability["related_model_nodes"])
+
     def test_model_publishes_runtime_effect_metadata_for_profiles(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         profile_fields = {item["name"]: item for item in model["profile"]["top_level_fields"]}
@@ -148,6 +155,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
         self.assertIn("register", step_forms["value"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["optional_fields"])
+
+    def test_model_publishes_representation_adapter_surface(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        adapter_surface = model["representation_adapters"]
+        markdown = next(item for item in adapter_surface["families"] if item["name"] == "markdown")
+
+        self.assertEqual(adapter_surface["shared_seam"]["outer_binding_form"], " with{...}")
+        self.assertIn('["title"]', markdown["selectors"])
+        self.assertIn("append_item", markdown["actions"])
+        self.assertIn("list", markdown["shortcuts"])
 
     def test_capabilities_publish_explicit_non_inference_metadata(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -197,6 +214,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(launcher_node["metadata"]["runtime_effect"], "publishes_profile_scoped_launchers")
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
+
+    def test_describe_resolves_representation_adapter_model_nodes(self) -> None:
+        seam_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter_seam", "--json").stdout)
+        markdown_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.markdown", "--json").stdout)
+
+        self.assertEqual(seam_node["document_kind"], "model_node")
+        self.assertEqual(seam_node["metadata"]["outer_binding_form"], " with{...}")
+        self.assertEqual(markdown_node["metadata"]["name"], "markdown")
+        self.assertIn("append_item", markdown_node["metadata"]["actions"])
+
+    def test_search_indexes_representation_adapter_topics(self) -> None:
+        result = json.loads(self.run_help("search", "markdown", "--json").stdout)
+
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.markdown" for item in result["facts"]))
 
     def test_command_line_topic_publishes_playbook_flags_and_precedence(self) -> None:
         payload = json.loads(self.run_help("command-line", "--json").stdout)
