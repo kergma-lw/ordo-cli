@@ -69,6 +69,10 @@ A representation adapter is a product-defined local-expression surface for inter
 Representation adapters may expose pure navigation and transformation operations over those values.
 They are not connectors and they do not own external integration semantics.
 
+Concrete adapter families rely on one shared product-defined adapter invocation seam rather than bypassing local-expression evaluation through ad hoc family-specific entry paths.
+
+Adapter-specific authored syntax belongs in adapter-specific requirements, for example `requirements/local-expressions/markdown.md` for the markdown adapter surface.
+
 Adapter discipline:
 
 - everything between the adapter name and a terminal mutation is adapter-defined selection or navigation surface;

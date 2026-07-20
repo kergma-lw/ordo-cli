@@ -123,8 +123,10 @@
 - Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
 - Representation-adapter operations must remain pure, local, and value-producing.
 - Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
+- Representation adapters require one shared product-defined invocation seam so concrete adapter families can participate in local-expression evaluation consistently.
 - The authored addressing or selection surface between an adapter name and a terminal mutation may be adapter-defined.
 - The product must not require all adapters to share one identical middle syntax when their represented structures differ materially.
+- Adapter-specific authored syntax should be documented in adapter-specific requirements rather than overloaded into the shared core requirements.
 - Any terminal representation-adapter mutation must return the updated root value of the adapted representation.
 - Any update-style representation-adapter operation must return a new derived value rather than persisting change by itself.
 
@@ -157,6 +159,152 @@
 - The product should prefer one local-expression family with context-specific restrictions over multiple independent expression languages for nearby workflow surfaces.
 - Context-specific restrictions should change allowed dependencies or expected result shape rather than introducing separate read-only execution engines for equivalent expression constructs.
 - Syntax and evaluation detail may differ by authored context, but those differences must not silently fragment the conceptual model into unrelated expression systems.
+
+<!-- source: requirements/local-expressions/adapters.md -->
+
+# Representation-adapter requirements
+
+## Role
+
+- Representation adapters are product-defined local-expression surfaces for interpreting already available root values through stable representation-specific semantics.
+- They exist to let local expressions navigate, select, normalize, derive, and transform values such as markdown, html, json, or string without turning those operations into connector execution or hidden I/O.
+- A representation adapter is not just a parser choice or implementation detail. It is an authored product surface that needs one shared execution seam so adapter families can participate in local-expression evaluation consistently.
+
+## Why a shared adapter seam is required
+
+- The product must not force each adapter family to invent its own ad hoc runtime entry path.
+- The product must provide one shared adapter execution seam so a concrete adapter family such as `markdown` can be implemented as an adapter rather than as scattered special cases inside unrelated evaluator code.
+- That shared seam exists to distinguish read versus write invocation, dispatch to the requested adapter family, normalize common failure categories, and preserve the root-value discipline of adapter updates.
+- Adapter-specific authored syntax may vary freely inside that seam, but the surrounding invocation and result discipline must remain shared.
+
+## Shared invocation model
+
+- Every adapter invocation starts from an already available root value.
+- Every adapter invocation names one product-defined adapter family.
+- Every adapter invocation applies one adapter-defined addressing, navigation, selection, or transformation chain to that root value.
+- An adapter invocation may be read-only or may end in one explicit terminal mutation.
+
+## Adapter-owned body and host-owned parameterization
+
+- The shared adapter seam should identify the adapter family and delimit the adapter-owned authored body, but it should not need to parse the adapter family's interior navigation, search, or action grammar.
+- The interior syntax of the adapter-owned body belongs to the concrete adapter family rather than to the shared local-expression parser.
+- Host local-expression references such as `inputs...`, `args...`, `state...`, `step...`, or read-only probe dependencies should not appear as bare references inside adapter-owned body syntax.
+- When adapter invocation needs host-derived values, the shared seam should provide those values through an outer host-owned binding surface rather than by injecting host semantics directly into adapter grammar.
+- A concrete adapter family must not take ownership of host-root policy, probe execution rules, or canonical local-expression diagnostics semantics merely because adapter behavior is parameterized by host-derived values.
+- Host-side parameterization should resolve local-expression values from the outer binding surface before adapter evaluation begins and pass them to the adapter family as resolved parameter values rather than as naive string substitution.
+- Host-side parameterization may supply values into adapter-family parameters, but it should not dynamically generate adapter grammar.
+
+## Preferred outer binding form
+
+- The shared adapter seam may expose one host-owned trailing binding form such as ` with{...}` after the adapter-owned body.
+- That outer binding form belongs to the shared local-expression surface rather than to any concrete adapter family.
+- The outer binding form should be recognized only as a top-level trailing suffix after the adapter-owned body.
+- The outer binding form should contain ordinary Ordo value bindings rather than adapter-family syntax.
+- Without such a trailing binding form, adapter invocation should still remain valid for non-parameterized use.
+- The shared seam may rely on ordinary top-level lexical balancing rules to delimit a trailing binding suffix; it does not need to parse the interior grammar of the adapter-owned body to do so.
+- The product should not require support for lexically malformed adapter bodies such as unpaired unescaped quotes when determining whether a top-level trailing host binding suffix is present.
+
+## Cross-family composition
+
+- The shared adapter seam should permit one adapter invocation result to become the root value for a later adapter invocation.
+- Cross-family composition should therefore work as ordinary value flow rather than by requiring one adapter family to know the interior syntax or execution rules of another adapter family.
+- When one adapter family selects or derives a value such as markdown text, json text, or a structured subvalue, that resulting value may serve as the next adapter root value if the following adapter family can interpret it.
+- The shared adapter seam does not need family-to-family special cases merely to support such composition.
+- A failure in one adapter invocation should fail that invocation directly rather than being hidden inside another adapter family's semantics.
+
+## Read invocation contract
+
+- A read invocation must treat the supplied root value as input-only.
+- A read invocation may select a focus value, derive a new value, normalize a represented structure, or expose an addressable focus for further pure local evaluation.
+- A read invocation must not create missing structure.
+- A read invocation must not persist change.
+- A read invocation result is the selected or derived value produced by the adapter family.
+
+## Write invocation contract
+
+- A write invocation is an adapter invocation that ends in one terminal mutation.
+- A write invocation may use adapter-defined navigation or selection before the terminal mutation.
+- A write invocation must return the updated root value of the adapted representation.
+- A write invocation must not persist change by itself.
+- Any later persistence of the updated root value belongs to workflow execution surfaces outside the adapter contract.
+
+## Shared outcome categories
+
+- Adapter families may have family-specific diagnostics, but they should converge on one shared minimum outcome vocabulary.
+- That minimum shared vocabulary should include:
+  - `not_found` when a requested path or focus does not exist;
+  - `ambiguous` when the invocation requires one target but the adapter surface produced multiple candidates;
+  - `unsupported` when the requested operation is outside the adapter's supported contract;
+  - `invalid_path` when the authored adapter path is not valid for that adapter family;
+  - `invalid_action` when the terminal mutation is not valid for the selected focus or adapter family;
+  - `invalid_root_value` when the supplied root value cannot be interpreted through the requested adapter family.
+- A shared outcome vocabulary does not require all families to expose identical interior syntax or identical represented node types.
+
+## Failure ownership boundary
+
+- A failure while resolving host-owned parameter bindings remains a host local-expression failure rather than an adapter-path failure.
+- A failure after host-owned parameter values from the outer binding surface have been supplied to adapter evaluation remains an adapter-family failure under the shared adapter outcome vocabulary.
+- The shared adapter seam should preserve this distinction so diagnostics and explainability do not blur host local-expression failures into adapter-family path or action errors.
+
+## Failure timing and explainability
+
+- A malformed adapter invocation should fail as early as the shared seam can determine that the outer invocation shape is not lexically or structurally valid.
+- Such early failures may include an unknown adapter family, an undelimitable adapter-owned body, or an invalid outer host-owned binding suffix.
+- Host-owned binding expressions should fail at the earliest stage where their values and context restrictions can be evaluated, which may be parse-adjacent validation, `check`, preflight-style analysis, or full execution depending on availability.
+- Adapter-family path or action failures should fail at the earliest stage where the adapted root value and any resolved outer binding values are available to the adapter family.
+- The product should therefore report adapter-related failures as early as value availability permits rather than reserving all such failures for full execution.
+- `check` or preflight-style analysis should surface host-binding failures or adapter-family failures whenever the required values are already observable through the surrounding context and runtime mode.
+- Full execution remains the fallback failure stage when required root values or host-bound parameter values are not available earlier.
+- Explainability should preserve whether a failure arose while resolving the outer binding surface or while evaluating the adapter-family body after parameter supply.
+
+## Shared purity and locality rules
+
+- Representation adapters must remain pure, local, and value-producing.
+- Representation adapters must not perform connector invocation.
+- Representation adapters must not perform hidden I/O.
+- Representation adapters must not become a second execution or orchestration surface.
+- Representation adapters must not smuggle persistence semantics into terminal mutations.
+
+## Shared read-versus-write boundary
+
+- The product must preserve an explicit distinction between read paths and write paths.
+- A read path ends in value selection or value derivation.
+- A write path ends in a terminal mutation and returns an updated root value.
+- Adapter-specific middle syntax may vary, but adapter families should not blur the boundary between read-only navigation and root-transforming update.
+
+## Shared auto-creation boundary
+
+- Auto-creation of missing represented structure is a write-path concern only.
+- Read paths must never auto-create represented structure.
+- A write path may auto-create missing structure only when each missing step is unambiguous and has a canonical shape for that adapter family.
+- Auto-creation must never pass through ambiguity.
+- Search-style or discovery-style selectors must not silently create structure.
+
+## Ownership split between the shared seam and each adapter family
+
+- The shared adapter seam owns:
+  - dispatch by adapter family;
+  - delimiting the adapter-owned authored body;
+  - recognizing and resolving any outer host-owned binding surface before adapter evaluation begins;
+  - passing one adapter result value forward as the root value of a later adapter invocation;
+  - the distinction between read and write invocation;
+  - the rule that write invocation returns an updated root value;
+  - the common boundary around auto-creation;
+  - the shared minimum outcome vocabulary.
+- A concrete adapter family owns:
+  - its authored path syntax;
+  - parsing and evaluating its adapter-owned body after host-owned parameter values from the outer binding surface have been resolved and supplied;
+  - its internal represented structure model;
+  - its supported focus kinds and derived values;
+  - its supported terminal mutations;
+  - its canonical creation shapes for write-path auto-creation;
+  - any family-specific diagnostics beyond the shared minimum vocabulary.
+
+## Documentation discipline
+
+- Shared adapter invocation and outcome rules belong in shared adapter requirements rather than being restated independently by each adapter family.
+- Concrete adapter-family documents should focus on family-specific syntax, compatibility targets, canonical creation shapes, and supported actions.
+- Adapter-specific documentation must not imply that a concrete family bypasses the shared adapter seam.
 
 <!-- source: requirements/local-expressions/contexts.md -->
 
@@ -210,6 +358,76 @@
 - A native condition context may expose expressions without an interpolation envelope.
 - An embedded value context may use a distinct authored embedding form for local expressions.
 - Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.
+
+<!-- source: requirements/local-expressions/markdown.md -->
+
+# Markdown representation-adapter requirements
+
+## Role
+
+- The `markdown` representation adapter is a product-defined local-expression surface for interpreting and transforming already available markdown text.
+- This document defines markdown-family behavior within the shared representation-adapter invocation seam described in `requirements/local-expressions/adapters.md`.
+- It should prioritize compatibility with typical GitHub-authored markdown text without introducing a separate `github_markdown` adapter family.
+
+## Compatibility target
+
+- The adapter should target a stable markdown document model suitable for general markdown inputs.
+- Compatibility should prioritize common CommonMark and commonly used GitHub Flavored Markdown constructs.
+- The adapter contract should document supported constructs and should not promise perfect reproduction of every source-specific markdown dialect detail.
+
+## Authored path surface
+
+- Markdown path syntax belongs to the markdown adapter contract rather than to the shared local-expression core.
+- The shared adapter seam should identify the markdown family and the extent of the markdown-owned body, while markdown-family parsing owns the interior markdown-specific selector and action syntax.
+- Optional host-derived parameterization should live outside the markdown-owned body through the shared adapter binding surface rather than through host references embedded directly in markdown-family grammar.
+- Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
+- Positional disambiguation uses `[n]`.
+- Explicit structural selection may use adapter-defined forms such as `.blocks("kind")`.
+- The adapter may provide common structural shortcuts such as `.list`, `.task_list`, or `.paragraph` as convenience sugar over the explicit structural form.
+- The adapter may provide text-search helpers such as `.find("...")` when the product needs them.
+
+## Outer parameter binding
+
+- When markdown-family behavior needs host-derived values, those values should be supplied through the shared outer adapter binding surface rather than embedded directly inside markdown-family syntax.
+- Markdown-family evaluation should therefore consume resolved parameter values rather than unresolved host-owned references.
+- Host-derived parameter values may parameterize markdown-family selectors or action arguments, but they should not be treated as a way to generate markdown-family grammar dynamically.
+- One preferred form is a trailing host-owned binding suffix such as ` with{...}` after the markdown-owned body.
+
+## Shortcut discipline
+
+- Any shortcut must remain convenience sugar over one explicit markdown-adapter form.
+- A shortcut must not introduce semantic behavior that is unavailable in the explicit form.
+- A shortcut must not weaken normal `not_found`, `ambiguous`, or write-path auto-creation rules.
+- A shortcut should expand to one stable explicit interpretation rather than depending on hidden heuristics.
+- If the adapter offers both singular and plural structural shortcuts, their plurality semantics should remain consistent across node kinds.
+- If the adapter offers paired singular and plural structural shortcuts, the singular form should denote an expect-one convenience form and the plural form should denote the corresponding many-valued explicit selection.
+
+## Selection semantics
+
+- The shared read-versus-write boundary and shared adapter outcome vocabulary come from `requirements/local-expressions/adapters.md`.
+- Read paths must never create structure.
+- A path that yields zero matches must fail as `not_found`.
+- A path that yields multiple matches without explicit disambiguation must fail as `ambiguous`.
+- The adapter must not silently apply implicit first-match selection.
+
+## Terminal action surface
+
+- A trailing `->action(...)` form may denote a terminal mutation over the selected markdown focus.
+- A terminal markdown mutation is one markdown-family instance of the shared adapter write-invocation rule that returns the updated root value.
+- Action names should remain author-comprehensible rather than exposing low-level parser internals.
+
+## Write-path auto-creation
+
+- The markdown adapter inherits the shared write-only auto-creation boundary from `requirements/local-expressions/adapters.md`.
+- Write paths may auto-create missing structure only when each missing step is unambiguous and has a canonical markdown shape.
+- Auto-creation must never pass through ambiguity.
+- Search-based selectors must not trigger implicit creation.
+- Read paths must not auto-create structure.
+
+## Product-shape guidance
+
+- The explicit form defines canonical markdown-family semantics within the shared adapter seam.
+- Any shorter GitHub-friendly forms should remain convenience syntax layered over the explicit form rather than separate semantics.
 
 <!-- source: requirements/playbook/core.md -->
 
@@ -814,6 +1032,10 @@ A representation adapter is a product-defined local-expression surface for inter
 
 Representation adapters may expose pure navigation and transformation operations over those values.
 They are not connectors and they do not own external integration semantics.
+
+Concrete adapter families rely on one shared product-defined adapter invocation seam rather than bypassing local-expression evaluation through ad hoc family-specific entry paths.
+
+Adapter-specific authored syntax belongs in adapter-specific requirements, for example `requirements/local-expressions/markdown.md` for the markdown adapter surface.
 
 Adapter discipline:
 
@@ -1497,6 +1719,7 @@ Such operations remain part of local value derivation rather than connector exec
 
 The modeled adapter shape is:
 
+- concrete adapter families rely on one shared adapter invocation seam rather than ad hoc family-specific runtime entry points;
 - adapter invocation starts one adapter-defined addressing or selection chain over an already available root value;
 - the interior shape of that chain is adapter-specific rather than globally normalized;
 - a terminal adapter mutation ends the chain and returns an updated root value for the represented structure.
@@ -1558,6 +1781,169 @@ They are not themselves the owner of:
 
 Any adapter-provided update semantics therefore describe pure value transformation only.
 Persistence of a transformed value remains outside the local-expression system and belongs to workflow steps or other effectful runtime surfaces.
+
+<!-- source: model/local-expressions/adapters.md -->
+
+# Representation-adapter model
+
+## Position
+
+Representation adapters are modeled as one shared local-expression extension point with family-specific interior syntax and structure semantics.
+
+The model therefore separates:
+
+- the shared invocation and result discipline that lets adapter families participate consistently in local-expression evaluation;
+- the family-specific path surface used inside one adapter family;
+- the family-specific represented structure manipulated by that family.
+
+## Shared modeled elements
+
+### Adapter family
+
+An adapter family is one product-defined representation-specific operation family such as `markdown`, `html`, `json`, or `string`.
+
+It names the representation discipline through which one already available root value will be interpreted.
+
+### Root value
+
+An adapter root value is the already available value supplied to an adapter invocation.
+
+The adapter does not own how that root value was obtained.
+It only owns how that value is interpreted and transformed once supplied.
+
+### Adapter invocation
+
+An adapter invocation applies one adapter family to one root value through one adapter-defined path or action chain.
+
+The shared modeled shape is:
+
+- adapter family selection;
+- root-value supply;
+- adapter-defined interior navigation or selection;
+- optional terminal mutation.
+
+### Adapter-owned body
+
+The model treats the interior body of an adapter invocation as adapter-owned.
+
+That means:
+
+- the shared seam identifies the adapter family and the extent of the adapter-owned body;
+- the concrete adapter family owns parsing and interpretation of that interior body;
+- the shared seam does not need one globally normalized grammar for family-specific search, navigation, or mutation syntax.
+
+### Host-owned outer parameter binding
+
+The model prefers host-owned parameter binding outside the adapter-owned body over host references embedded directly inside adapter-family grammar.
+
+The model therefore separates:
+
+- adapter-owned syntax and structure semantics inside the adapter body;
+- host-owned value resolution for outer parameter bindings such as values derived from `inputs...`, `args...`, `state...`, `step...`, or read-only probes.
+
+The intended modeled flow is:
+
+- the shared seam identifies the adapter-owned body and any top-level trailing host binding suffix;
+- canonical local-expression evaluation resolves the host-owned bindings under normal context policy;
+- adapter evaluation receives the adapter-owned body plus resolved parameter values from the outer binding surface;
+- adapter evaluation continues without taking ownership of host-root semantics.
+
+The model prefers resolved parameter values from the outer binding surface over naive string substitution so host-owned values do not collapse prematurely into untyped text.
+
+### Top-level trailing binding suffix
+
+One workable modeled form is a top-level trailing host binding suffix such as ` with{...}` after the adapter-owned body.
+
+In that form:
+
+- the adapter-owned body remains family-specific;
+- the trailing binding suffix remains host-owned;
+- the shared seam only needs top-level lexical boundary detection rather than family-specific body parsing to separate the two.
+
+### Cross-family value flow
+
+The model permits ordinary composition across adapter families by value flow.
+
+That means:
+
+- one adapter invocation may yield a focus value or other derived value;
+- that resulting value may become the root value of a later adapter invocation;
+- the shared seam only needs to preserve value handoff, not family-specific knowledge of the next adapter's interior syntax.
+
+This keeps cross-family composition as a normal consequence of value-producing adapter evaluation rather than as a special nested-adapter feature.
+
+### Focus value
+
+A focus value is the selected or derived value produced by a read invocation before any persistence semantics exist.
+
+It may be:
+
+- a scalar derived from the represented structure;
+- a structured derived value;
+- an addressable focus inside the represented structure suitable for further pure local evaluation.
+
+### Terminal mutation
+
+A terminal mutation is the final write operation in an adapter invocation.
+
+It ends adapter navigation and produces an updated root value for the represented structure.
+
+### Adapter outcome
+
+An adapter outcome is the modeled result category returned by the shared adapter seam.
+
+At minimum the model expects support for:
+
+- successful selection or derivation;
+- successful root update;
+- `not_found`;
+- `ambiguous`;
+- `unsupported`;
+- `invalid_path`;
+- `invalid_action`;
+- `invalid_root_value`.
+
+The model also distinguishes host-side failures that occur while resolving the outer binding surface from adapter-side failures that occur after resolved parameter values have been supplied to the adapter family.
+
+## Read-versus-write model
+
+The model distinguishes two invocation kinds.
+
+### Read invocation
+
+A read invocation consumes a root value and yields a focus value or other derived value.
+
+It does not create structure and does not update the root.
+
+### Write invocation
+
+A write invocation consumes a root value, applies one terminal mutation, and yields an updated root value.
+
+It may auto-create missing structure only within the modeled write-path boundary.
+
+## Auto-creation model
+
+The modeled auto-creation rule is intentionally narrow:
+
+- only write invocation may auto-create missing structure;
+- each created step must be unambiguous;
+- each created step must have a canonical family-defined shape;
+- ambiguity blocks creation rather than being resolved implicitly.
+
+## Boundary model
+
+Representation adapters remain inside local-expression value derivation.
+
+They are modeled as distinct from:
+
+- connector execution;
+- hidden I/O;
+- persistence ownership;
+- workflow control semantics.
+
+## Modeling consequence
+
+Because concrete families such as `markdown` require one shared invocation seam, the product model should not describe family-specific syntax without also modeling the shared adapter invocation boundary they rely on.
 
 <!-- source: model/local-expressions/contexts.md -->
 
@@ -4656,6 +5042,12 @@ If a change breaks any invariant, `meta/` must be updated explicitly in the same
 
 - Embedded value contexts must not drift into effectful connector execution.
 - Value-oriented local expressions must not grow hidden workflow-control semantics.
+
+## Representation-adapter discipline
+
+- Representation-adapter docs must preserve the boundary between host-owned outer binding evaluation and adapter-family body evaluation.
+- Representation-adapter docs must not drift back toward bare host-root references inside adapter-owned body syntax.
+- Adapter-related failures should remain attributable either to outer binding resolution or to adapter-family evaluation rather than collapsing those phases into one opaque error class.
 
 ## Drift checks
 

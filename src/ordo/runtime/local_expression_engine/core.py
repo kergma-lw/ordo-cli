@@ -131,6 +131,23 @@ class BinaryNode(ValueExpressionNode):
 
 
 @dataclass(frozen=True, slots=True)
+class AdapterBindingNode(ValueExpressionNode):
+    """One host-owned outer parameter binding for an adapter invocation."""
+
+    name: str
+    value: ValueExpressionNode
+
+
+@dataclass(frozen=True, slots=True)
+class AdapterInvocationNode(ValueExpressionNode):
+    """One representation-adapter invocation with family-owned body."""
+
+    family: str
+    body: str
+    bindings: tuple[AdapterBindingNode, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedLocalExpressionTree:
     """Structured parsed representation of one canonical local-expression tree."""
 
@@ -336,6 +353,10 @@ class _Token:
 def parse_local_expression_tree(expression: str, *, allow_boolean_composition: bool = False) -> ParsedLocalExpressionTree:
     """Parse one canonical local-expression tree from authored text."""
 
+    adapter_node = _try_parse_adapter_invocation(expression, allow_boolean_composition=allow_boolean_composition)
+    if adapter_node is not None:
+        return ParsedLocalExpressionTree(source=expression, root=adapter_node)
+
     parser = _Parser(expression, allow_boolean_composition=allow_boolean_composition)
     root = parser.parse()
     return ParsedLocalExpressionTree(source=expression, root=root)
@@ -435,9 +456,269 @@ def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[Lo
         if isinstance(current, BinaryNode):
             visit(current.left)
             visit(current.right)
+            return
+        if isinstance(current, AdapterBindingNode):
+            visit(current.value)
+            return
+        if isinstance(current, AdapterInvocationNode):
+            for binding in current.bindings:
+                visit(binding)
+            return
 
     visit(node)
     return tuple(found)
+
+
+def _try_parse_adapter_invocation(expression: str, *, allow_boolean_composition: bool) -> AdapterInvocationNode | None:
+    start = 0
+    while start < len(expression) and expression[start].isspace():
+        start += 1
+    if start >= len(expression) or not (expression[start].isalpha() or expression[start] == "_"):
+        return None
+
+    family_end = start + 1
+    while family_end < len(expression) and (expression[family_end].isalnum() or expression[family_end] == "_"):
+        family_end += 1
+    family = expression[start:family_end]
+    if family in {"inputs", "args", "state", "step", "true", "false", "null", "not", "in"}:
+        return None
+
+    probe = family_end
+    while probe < len(expression) and expression[probe].isspace():
+        probe += 1
+    if probe >= len(expression) or expression[probe] not in "[{":
+        return None
+
+    body, bindings, end = _split_adapter_body_and_bindings(
+        expression,
+        body_start=family_end,
+        allow_boolean_composition=allow_boolean_composition,
+    )
+    trailing = expression[end:]
+    if trailing.strip():
+        token_start = end + len(trailing) - len(trailing.lstrip())
+        raise ValueExpressionParseError("Unexpected trailing token", token_start, len(expression))
+    return AdapterInvocationNode(start=start, end=end, family=family, body=body, bindings=bindings)
+
+
+def _split_adapter_body_and_bindings(
+    text: str,
+    *,
+    body_start: int,
+    allow_boolean_composition: bool,
+) -> tuple[str, tuple[AdapterBindingNode, ...], int]:
+    position = body_start
+    depth_paren = 0
+    depth_bracket = 0
+    depth_brace = 0
+    quote: str | None = None
+    escape = False
+    while position < len(text):
+        char = text[position]
+        if quote is not None:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == quote:
+                quote = None
+            position += 1
+            continue
+        if char in {'"', "'"}:
+            quote = char
+            position += 1
+            continue
+        if char == "(":
+            depth_paren += 1
+            position += 1
+            continue
+        if char == ")":
+            depth_paren -= 1
+            if depth_paren < 0:
+                raise ValueExpressionParseError("Unexpected ')' in adapter body", position, position + 1)
+            position += 1
+            continue
+        if char == "[":
+            depth_bracket += 1
+            position += 1
+            continue
+        if char == "]":
+            depth_bracket -= 1
+            if depth_bracket < 0:
+                raise ValueExpressionParseError("Unexpected ']' in adapter body", position, position + 1)
+            position += 1
+            continue
+        if char == "{":
+            depth_brace += 1
+            position += 1
+            continue
+        if char == "}":
+            depth_brace -= 1
+            if depth_brace < 0:
+                raise ValueExpressionParseError("Unexpected '}' in adapter body", position, position + 1)
+            position += 1
+            continue
+        if (
+            char.isspace()
+            and depth_paren == 0
+            and depth_bracket == 0
+            and depth_brace == 0
+            and text.startswith("with{", position + 1)
+        ):
+            binding_start = position + 1
+            binding_end = _find_balanced_brace_end(text, binding_start + 4)
+            bindings = _parse_adapter_bindings(
+                text[binding_start + 5 : binding_end - 1],
+                start_offset=binding_start + 5,
+                allow_boolean_composition=allow_boolean_composition,
+            )
+            return text[body_start:position].rstrip(), bindings, binding_end
+        position += 1
+
+    if quote is not None:
+        raise ValueExpressionParseError("Unterminated string literal", len(text) - 1, len(text))
+    if depth_paren != 0 or depth_bracket != 0 or depth_brace != 0:
+        raise ValueExpressionParseError("Unbalanced adapter body structure", body_start, len(text))
+    return text[body_start:].rstrip(), (), len(text)
+
+
+def _find_balanced_brace_end(text: str, open_brace_index: int) -> int:
+    if open_brace_index >= len(text) or text[open_brace_index] != "{":
+        raise ValueExpressionParseError("Expected '{' to start outer adapter binding suffix", open_brace_index, open_brace_index + 1)
+    depth = 1
+    position = open_brace_index + 1
+    quote: str | None = None
+    escape = False
+    while position < len(text):
+        char = text[position]
+        if quote is not None:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == quote:
+                quote = None
+            position += 1
+            continue
+        if char in {'"', "'"}:
+            quote = char
+            position += 1
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return position + 1
+        position += 1
+    raise ValueExpressionParseError("Expected '}' to close outer adapter binding suffix", open_brace_index, len(text))
+
+
+def _parse_adapter_bindings(
+    binding_text: str,
+    *,
+    start_offset: int,
+    allow_boolean_composition: bool,
+) -> tuple[AdapterBindingNode, ...]:
+    if not binding_text.strip():
+        return ()
+    items = _split_top_level_items(binding_text)
+    bindings: list[AdapterBindingNode] = []
+    for item_text, relative_start in items:
+        name, value_text, name_start, value_start = _split_binding_item(item_text, start_offset=start_offset + relative_start)
+        parsed_value = parse_local_expression_tree(value_text, allow_boolean_composition=allow_boolean_composition)
+        value_node = _shift_node_offsets(parsed_value.root, delta=value_start)
+        bindings.append(AdapterBindingNode(start=name_start, end=value_node.end, name=name, value=value_node))
+    return tuple(bindings)
+
+
+def _split_top_level_items(text: str) -> tuple[tuple[str, int], ...]:
+    items: list[tuple[str, int]] = []
+    start = 0
+    depth_paren = 0
+    depth_bracket = 0
+    quote: str | None = None
+    escape = False
+    for index, char in enumerate(text):
+        if quote is not None:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {'"', "'"}:
+            quote = char
+            continue
+        if char == "(":
+            depth_paren += 1
+            continue
+        if char == ")":
+            depth_paren -= 1
+            continue
+        if char == "[":
+            depth_bracket += 1
+            continue
+        if char == "]":
+            depth_bracket -= 1
+            continue
+        if char == "," and depth_paren == 0 and depth_bracket == 0:
+            items.append((text[start:index], start))
+            start = index + 1
+    items.append((text[start:], start))
+    return tuple(items)
+
+
+def _split_binding_item(item_text: str, *, start_offset: int) -> tuple[str, str, int, int]:
+    colon_index = _find_top_level_separator(item_text, separator=":")
+    if colon_index is None:
+        raise ValueExpressionParseError("Expected ':' in outer adapter binding", start_offset, start_offset + len(item_text))
+    raw_name = item_text[:colon_index].strip()
+    if not raw_name or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", raw_name) is None:
+        raise ValueExpressionParseError("Outer adapter binding names must be identifiers", start_offset, start_offset + max(colon_index, 1))
+    raw_value = item_text[colon_index + 1 :].strip()
+    if not raw_value:
+        value_position = start_offset + colon_index + 1
+        raise ValueExpressionParseError("Expected value in outer adapter binding", value_position, value_position + 1)
+    name_start = start_offset + item_text.index(raw_name)
+    suffix = item_text[colon_index + 1 :]
+    value_start = start_offset + colon_index + 1 + len(suffix) - len(suffix.lstrip())
+    return raw_name, raw_value, name_start, value_start
+
+
+def _find_top_level_separator(text: str, *, separator: str) -> int | None:
+    depth_paren = 0
+    depth_bracket = 0
+    quote: str | None = None
+    escape = False
+    for index, char in enumerate(text):
+        if quote is not None:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {'"', "'"}:
+            quote = char
+            continue
+        if char == "(":
+            depth_paren += 1
+            continue
+        if char == ")":
+            depth_paren -= 1
+            continue
+        if char == "[":
+            depth_bracket += 1
+            continue
+        if char == "]":
+            depth_bracket -= 1
+            continue
+        if char == separator and depth_paren == 0 and depth_bracket == 0:
+            return index
+    return None
 
 
 class _Parser:
@@ -748,6 +1029,14 @@ class _SemanticValidator:
         if isinstance(node, BinaryNode):
             self._visit(node.left)
             self._visit(node.right)
+            return
+        if isinstance(node, AdapterBindingNode):
+            self._visit(node.value)
+            return
+        if isinstance(node, AdapterInvocationNode):
+            for binding in node.bindings:
+                self._visit(binding)
+            return
 
     def _validate_call(self, node: CallNode) -> None:
         if node.target.parts[0] == "inputs":
@@ -1096,6 +1385,81 @@ def _with_grouped_end(node: ValueExpressionNode, end: int) -> ValueExpressionNod
         return UnaryNode(start=node.start, end=end, operator=node.operator, operand=node.operand)
     if isinstance(node, BinaryNode):
         return BinaryNode(start=node.start, end=end, operator=node.operator, left=node.left, right=node.right)
+    if isinstance(node, AdapterBindingNode):
+        return AdapterBindingNode(start=node.start, end=end, name=node.name, value=node.value)
+    if isinstance(node, AdapterInvocationNode):
+        return AdapterInvocationNode(start=node.start, end=end, family=node.family, body=node.body, bindings=node.bindings)
+    return node
+
+
+def _shift_node_offsets(node: ValueExpressionNode, *, delta: int) -> ValueExpressionNode:
+    if isinstance(node, LiteralNode):
+        return LiteralNode(start=node.start + delta, end=node.end + delta, value=node.value)
+    if isinstance(node, ReferenceNode):
+        return ReferenceNode(start=node.start + delta, end=node.end + delta, parts=node.parts)
+    if isinstance(node, StateReferenceNode):
+        return StateReferenceNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            state_role=node.state_role,
+            key_reference=node.key_reference,
+            fields=node.fields,
+        )
+    if isinstance(node, StepReferenceNode):
+        return StepReferenceNode(start=node.start + delta, end=node.end + delta, register=node.register, fields=node.fields)
+    if isinstance(node, ListNode):
+        return ListNode(start=node.start + delta, end=node.end + delta, items=tuple(_shift_node_offsets(item, delta=delta) for item in node.items))
+    if isinstance(node, CallArgumentNode):
+        return CallArgumentNode(start=node.start + delta, end=node.end + delta, name=node.name, value=_shift_node_offsets(node.value, delta=delta))
+    if isinstance(node, CallNode):
+        return CallNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            target=_shift_node_offsets(node.target, delta=delta),
+            arguments=tuple(_shift_node_offsets(argument, delta=delta) for argument in node.arguments),
+            fields=node.fields,
+        )
+    if isinstance(node, FilterApplicationNode):
+        return FilterApplicationNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            name=node.name,
+            arguments=tuple(_shift_node_offsets(argument, delta=delta) for argument in node.arguments),
+        )
+    if isinstance(node, PipelineNode):
+        return PipelineNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            source=_shift_node_offsets(node.source, delta=delta),
+            filters=tuple(_shift_node_offsets(item, delta=delta) for item in node.filters),
+        )
+    if isinstance(node, BuiltinCallNode):
+        return BuiltinCallNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            name=node.name,
+            arguments=tuple(_shift_node_offsets(argument, delta=delta) for argument in node.arguments),
+        )
+    if isinstance(node, UnaryNode):
+        return UnaryNode(start=node.start + delta, end=node.end + delta, operator=node.operator, operand=_shift_node_offsets(node.operand, delta=delta))
+    if isinstance(node, BinaryNode):
+        return BinaryNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            operator=node.operator,
+            left=_shift_node_offsets(node.left, delta=delta),
+            right=_shift_node_offsets(node.right, delta=delta),
+        )
+    if isinstance(node, AdapterBindingNode):
+        return AdapterBindingNode(start=node.start + delta, end=node.end + delta, name=node.name, value=_shift_node_offsets(node.value, delta=delta))
+    if isinstance(node, AdapterInvocationNode):
+        return AdapterInvocationNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            family=node.family,
+            body=node.body,
+            bindings=tuple(_shift_node_offsets(binding, delta=delta) for binding in node.bindings),
+        )
     return node
 
 

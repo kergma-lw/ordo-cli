@@ -37,8 +37,10 @@
 - Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
 - Representation-adapter operations must remain pure, local, and value-producing.
 - Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
+- Representation adapters require one shared product-defined invocation seam so concrete adapter families can participate in local-expression evaluation consistently.
 - The authored addressing or selection surface between an adapter name and a terminal mutation may be adapter-defined.
 - The product must not require all adapters to share one identical middle syntax when their represented structures differ materially.
+- Adapter-specific authored syntax should be documented in adapter-specific requirements rather than overloaded into the shared core requirements.
 - Any terminal representation-adapter mutation must return the updated root value of the adapted representation.
 - Any update-style representation-adapter operation must return a new derived value rather than persisting change by itself.
 

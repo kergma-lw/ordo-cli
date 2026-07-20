@@ -24,6 +24,12 @@
 - Embedded value contexts must not drift into effectful connector execution.
 - Value-oriented local expressions must not grow hidden workflow-control semantics.
 
+## Representation-adapter discipline
+
+- Representation-adapter docs must preserve the boundary between host-owned outer binding evaluation and adapter-family body evaluation.
+- Representation-adapter docs must not drift back toward bare host-root references inside adapter-owned body syntax.
+- Adapter-related failures should remain attributable either to outer binding resolution or to adapter-family evaluation rather than collapsing those phases into one opaque error class.
+
 ## Drift checks
 
 - Documentation must not reintroduce separate first-class expression species such as an unrelated guard language versus an unrelated value language.

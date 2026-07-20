@@ -75,6 +75,7 @@ Such operations remain part of local value derivation rather than connector exec
 
 The modeled adapter shape is:
 
+- concrete adapter families rely on one shared adapter invocation seam rather than ad hoc family-specific runtime entry points;
 - adapter invocation starts one adapter-defined addressing or selection chain over an already available root value;
 - the interior shape of that chain is adapter-specific rather than globally normalized;
 - a terminal adapter mutation ends the chain and returns an updated root value for the represented structure.

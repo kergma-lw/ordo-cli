@@ -1,6 +1,8 @@
 import unittest
 
 from ordo.runtime.local_expression_engine.core import (
+    AdapterBindingNode,
+    AdapterInvocationNode,
     BuiltinCallNode,
     FilterApplicationNode,
     LiteralNode,
@@ -66,6 +68,30 @@ class LocalExpressionEngineModelTest(unittest.TestCase):
         self.assertEqual(diagnostic.code, "validation.workflow.value_expr.syntax")
         self.assertEqual(diagnostic.details["position"], 5)
         self.assertEqual(diagnostic.details["end"], 6)
+
+    def test_model_can_represent_adapter_invocation_with_outer_bindings(self) -> None:
+        parsed = ParsedLocalExpressionTree(
+            source='markdown["section"].list->append_item(item) with{section: inputs.section}',
+            root=AdapterInvocationNode(
+                start=0,
+                end=72,
+                family="markdown",
+                body='["section"].list->append_item(item)',
+                bindings=(
+                    AdapterBindingNode(
+                        start=48,
+                        end=71,
+                        name="section",
+                        value=ReferenceNode(start=57, end=71, parts=("inputs", "section")),
+                    ),
+                ),
+            ),
+        )
+
+        self.assertEqual(parsed.root.family, "markdown")
+        self.assertEqual(parsed.root.body, '["section"].list->append_item(item)')
+        self.assertEqual(parsed.root.bindings[0].name, "section")
+        self.assertEqual(parsed.root.bindings[0].value.parts, ("inputs", "section"))
 
 
 if __name__ == "__main__":

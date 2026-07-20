@@ -1,6 +1,8 @@
 import unittest
 
 from ordo.runtime.local_expression_engine.core import (
+    AdapterBindingNode,
+    AdapterInvocationNode,
     BinaryNode,
     BuiltinCallNode,
     CallArgumentNode,
@@ -13,6 +15,7 @@ from ordo.runtime.local_expression_engine.core import (
     PipelineNode,
     ReferenceNode,
     StateReferenceNode,
+    StepReferenceNode,
     UnaryNode,
     parse_condition_expression,
     parse_local_expression_tree,
@@ -217,6 +220,55 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
             parse_condition_expression('git.branch == "main')
 
         self.assertIn("Unterminated string literal", context.exception.message)
+
+    def test_parse_adapter_invocation_with_outer_bindings(self) -> None:
+        parsed = parse_local_expression_tree(
+            'markdown["section"].list->append_item(item) with{section: inputs.section, item: step.prepare.outputs.text}'
+        )
+
+        self.assertEqual(
+            parsed.root,
+            AdapterInvocationNode(
+                start=0,
+                end=106,
+                family="markdown",
+                body='["section"].list->append_item(item)',
+                bindings=(
+                    AdapterBindingNode(
+                        start=49,
+                        end=72,
+                        name="section",
+                        value=ReferenceNode(start=58, end=72, parts=("inputs", "section")),
+                    ),
+                    AdapterBindingNode(
+                        start=74,
+                        end=105,
+                        name="item",
+                        value=StepReferenceNode(start=80, end=105, register="prepare", fields=("outputs", "text")),
+                    ),
+                ),
+            ),
+        )
+
+    def test_parse_adapter_invocation_without_bindings(self) -> None:
+        parsed = parse_local_expression_tree('markdown["Tasks"].list->append_item("Release build")')
+
+        self.assertEqual(
+            parsed.root,
+            AdapterInvocationNode(
+                start=0,
+                end=52,
+                family="markdown",
+                body='["Tasks"].list->append_item("Release build")',
+                bindings=(),
+            ),
+        )
+
+    def test_parse_rejects_unclosed_outer_adapter_bindings(self) -> None:
+        with self.assertRaises(LocalExpressionParseError) as context:
+            parse_local_expression_tree('markdown["Tasks"] with{section: inputs.section')
+
+        self.assertIn("close outer adapter binding suffix", context.exception.message)
 
 
 if __name__ == "__main__":
