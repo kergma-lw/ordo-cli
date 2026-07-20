@@ -15,6 +15,8 @@ from ordo.runtime.local_expression_engine.core import (
 )
 from ordo.runtime.representation_adapters import (
     RepresentationAdapterInvocation,
+    adapter_read_result,
+    adapter_write_result,
     register_representation_adapter,
     unregister_representation_adapter,
 )
@@ -25,6 +27,7 @@ from tests.support import STANDARD_CONNECTOR_PROVIDER
 class RuntimeValueResolutionTest(unittest.TestCase):
     def tearDown(self) -> None:
         unregister_representation_adapter("fixture")
+        unregister_representation_adapter("json")
 
     def test_execute_resolves_state_reference_in_step_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -232,12 +235,12 @@ blocks:
 
         def handle(invocation: RepresentationAdapterInvocation):
             seen.append(invocation)
-            return {
+            return adapter_read_result({
                 "family": invocation.family,
                 "body": invocation.body,
                 "root": invocation.root_value,
                 "parameters": dict(invocation.parameters),
-            }
+            })
 
         register_representation_adapter("fixture", handle)
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello", "name": "Tasks"})
@@ -266,7 +269,7 @@ blocks:
         def handle(_invocation: RepresentationAdapterInvocation):
             nonlocal called
             called = True
-            return "unexpected"
+            return adapter_read_result("unexpected")
 
         register_representation_adapter("fixture", handle)
         workflow = Workflow(version=0, workflow="demo")
@@ -278,13 +281,39 @@ blocks:
         self.assertFalse(called)
 
     def test_resolve_runtime_value_requires_outer_root_binding_for_adapter_dispatch(self) -> None:
-        register_representation_adapter("fixture", lambda invocation: invocation.root_value)
+        register_representation_adapter("fixture", lambda invocation: adapter_read_result(invocation.root_value))
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello"})
 
         with self.assertRaises(ValueResolutionError) as context:
             resolve_runtime_value('${fixture["body"] with{section: inputs.body}}', workflow)
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_root_missing")
+
+    def test_resolve_runtime_value_supports_cross_adapter_value_flow(self) -> None:
+        register_representation_adapter("fixture", lambda invocation: adapter_read_result({"wrapped": invocation.root_value}))
+        register_representation_adapter("json", lambda invocation: adapter_read_result(invocation.root_value[invocation.parameters["field"]]))
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello", "field": "wrapped"})
+
+        value = resolve_runtime_value(
+            '${json["field"] with{root: fixture["body"] with{root: inputs.body}, field: inputs.field}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "hello")
+
+    def test_resolve_runtime_value_returns_updated_root_from_write_result(self) -> None:
+        register_representation_adapter(
+            "fixture",
+            lambda invocation: adapter_write_result(f"{invocation.root_value}:{invocation.parameters['suffix']}"),
+        )
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello", "suffix": "done"})
+
+        value = resolve_runtime_value(
+            '${fixture["body"]->set(suffix) with{root: inputs.body, suffix: inputs.suffix}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "hello:done")
 
     def test_execute_resolves_registered_step_output_in_later_step_block(self) -> None:
         workflow = load_workflow_text(

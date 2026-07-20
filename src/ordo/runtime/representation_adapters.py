@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from ordo.model.json import JSONObject, JSONValue
 
@@ -20,6 +21,14 @@ class RepresentationAdapterInvocation:
 
 
 @dataclass(frozen=True, slots=True)
+class RepresentationAdapterResult:
+    """Normalized adapter-family runtime result."""
+
+    kind: Literal["read", "write"]
+    value: JSONValue
+
+
+@dataclass(frozen=True, slots=True)
 class RepresentationAdapterError(Exception):
     """Structured adapter-family failure surfaced through the shared seam."""
 
@@ -28,7 +37,7 @@ class RepresentationAdapterError(Exception):
     details: JSONObject
 
 
-RepresentationAdapterHandler = Callable[[RepresentationAdapterInvocation], JSONValue]
+RepresentationAdapterHandler = Callable[[RepresentationAdapterInvocation], RepresentationAdapterResult]
 
 _REPRESENTATION_ADAPTERS: dict[str, RepresentationAdapterHandler] = {}
 
@@ -51,7 +60,19 @@ def has_representation_adapter(family: str) -> bool:
     return family in _REPRESENTATION_ADAPTERS
 
 
-def evaluate_representation_adapter_invocation(invocation: RepresentationAdapterInvocation) -> JSONValue:
+def adapter_read_result(value: JSONValue) -> RepresentationAdapterResult:
+    """Return one normalized read invocation result."""
+
+    return RepresentationAdapterResult(kind="read", value=value)
+
+
+def adapter_write_result(updated_root_value: JSONValue) -> RepresentationAdapterResult:
+    """Return one normalized write invocation result."""
+
+    return RepresentationAdapterResult(kind="write", value=updated_root_value)
+
+
+def evaluate_representation_adapter_invocation(invocation: RepresentationAdapterInvocation) -> RepresentationAdapterResult:
     """Dispatch one resolved invocation through the shared adapter seam."""
 
     handler = _REPRESENTATION_ADAPTERS.get(invocation.family)

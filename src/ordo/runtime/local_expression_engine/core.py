@@ -1865,7 +1865,7 @@ def _evaluate_adapter_invocation(
         )
     root_value = parameters.pop("root")
     try:
-        return evaluate_representation_adapter_invocation(
+        result = evaluate_representation_adapter_invocation(
             RepresentationAdapterInvocation(
                 family=node.family,
                 body=node.body,
@@ -1874,6 +1874,7 @@ def _evaluate_adapter_invocation(
                 source_expression=parsed.source[node.start : node.end],
             )
         )
+        return result.value
     except RepresentationAdapterError as exc:
         raise ValueExpressionEvaluationError(code=exc.code, message=exc.message, details=exc.details) from exc
 
