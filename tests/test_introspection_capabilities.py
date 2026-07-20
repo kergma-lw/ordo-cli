@@ -20,8 +20,12 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         roots = {item["name"]: item for item in payload["expression_roots"]}
         surfaces = {item["name"]: item for item in payload["expression_surfaces"]}
         self.assertIn("guard_expression", roots["state"]["surfaces"])
+        self.assertIn("step_condition", roots["probe"]["surfaces"])
         self.assertIn("embedded_value_expression", roots["state"]["surfaces"])
         self.assertIn("embedded_value_expression", roots["step"]["surfaces"])
+        self.assertIn("probe", surfaces["step_condition"]["roots"])
+        self.assertEqual(surfaces["step_condition"]["filters"], ["lower", "trim", "slug", "eq", "ne", "not"])
+        self.assertEqual(surfaces["step_condition"]["builtins"], ["format"])
         self.assertEqual(surfaces["embedded_value_expression"]["filters"], ["lower", "trim", "slug", "eq", "ne", "not"])
         self.assertEqual(surfaces["embedded_value_expression"]["builtins"], ["format"])
         self.assertEqual(surfaces["embedded_value_expression"]["boolean_operators"], ["and", "or", "not", "parentheses"])

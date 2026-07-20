@@ -156,18 +156,25 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
 )
 
 EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
-    ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "embedded_value_expression")),
-    ExpressionRootSpec(name="probe", surfaces=("guard_expression",)),
-    ExpressionRootSpec(name="args", surfaces=("embedded_value_expression",)),
-    ExpressionRootSpec(name="state", surfaces=("guard_expression", "embedded_value_expression")),
-    ExpressionRootSpec(name="step", surfaces=("embedded_value_expression",)),
+    ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "step_condition", "embedded_value_expression")),
+    ExpressionRootSpec(name="probe", surfaces=("guard_expression", "step_condition", "embedded_value_expression")),
+    ExpressionRootSpec(name="args", surfaces=("step_condition", "embedded_value_expression")),
+    ExpressionRootSpec(name="state", surfaces=("guard_expression", "step_condition", "embedded_value_expression")),
+    ExpressionRootSpec(name="step", surfaces=("step_condition", "embedded_value_expression")),
 )
 
 EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
     ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe", "state"), boolean_operators=("and", "or", "not", "parentheses")),
     ExpressionSurfaceSpec(
+        name="step_condition",
+        roots=("inputs", "args", "state", "step", "probe"),
+        filters=tuple(VALUE_EXPRESSION_FILTERS),
+        builtins=tuple(VALUE_EXPRESSION_BUILTINS),
+        boolean_operators=("and", "or", "not", "parentheses"),
+    ),
+    ExpressionSurfaceSpec(
         name="embedded_value_expression",
-        roots=("inputs", "args", "state", "step"),
+        roots=("inputs", "args", "state", "step", "probe"),
         filters=tuple(VALUE_EXPRESSION_FILTERS),
         builtins=tuple(VALUE_EXPRESSION_BUILTINS),
         boolean_operators=("and", "or", "not", "parentheses"),

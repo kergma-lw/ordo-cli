@@ -29,12 +29,26 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
         self.assertEqual(parsed.context, LocalExpressionContext.STEP_CONDITION)
         self.assertIsNotNone(parsed.value)
 
+    def test_step_condition_surface_accepts_read_only_call_shapes(self) -> None:
+        parsed = parse_condition_local_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).exists',
+            context=LocalExpressionContext.STEP_CONDITION,
+        )
+
+        self.assertEqual(validate_parsed_local_expression(parsed), ())
+
     def test_embedded_value_surface_parses_in_embedded_value_context(self) -> None:
         parsed = parse_embedded_value_local_expression('${inputs.title | trim | slug}')
 
         assert parsed is not None
         self.assertEqual(parsed.context, LocalExpressionContext.EMBEDDED_VALUE)
         self.assertIsNotNone(parsed.value)
+
+    def test_embedded_value_surface_accepts_read_only_call_shapes(self) -> None:
+        parsed = parse_embedded_value_local_expression('${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}')
+
+        assert parsed is not None
+        self.assertEqual(validate_parsed_local_expression(parsed), ())
 
     def test_include_binding_surface_parses_in_include_binding_context(self) -> None:
         parsed = parse_local_expression('step.issue.outputs.id', context=LocalExpressionContext.INCLUDE_BINDING)
