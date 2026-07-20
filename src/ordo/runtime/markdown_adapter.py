@@ -185,7 +185,7 @@ def _parse_action(body: str, start: int) -> tuple[_MarkdownAction, int]:
             details={"body": body, "position": start},
         )
     raw_arguments = _split_action_arguments(argument_text)
-    expected = {"append_item": (1, 1), "add": (1, 1), "append": (1, 2), "replace": (1, 1)}.get(name)
+    expected = {"add": (1, 1), "append": (1, 2), "replace": (1, 1)}.get(name)
     if expected is None:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_action",
@@ -465,11 +465,11 @@ def _apply_markdown_action(plan: _MarkdownSelectorPlan, document: _MarkdownSecti
             message="Markdown write path requires one explicit target",
             details={"matches": len(selection)},
         )
-    if plan.action.name in {"append_item", "add"}:
+    if plan.action.name == "add":
         if not isinstance(selection, _MarkdownBlock) or selection.kind not in {"list", "task_list"}:
             raise RepresentationAdapterError(
                 code="runtime.value.adapter_invalid_action",
-                message=f"Markdown {plan.action.name} requires a list or task_list target",
+                message="Markdown add requires a list or task_list target",
                 details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
             )
         item_text = _resolve_action_argument(plan.action.arguments[0], parameters)

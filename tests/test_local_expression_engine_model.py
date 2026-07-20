@@ -71,12 +71,12 @@ class LocalExpressionEngineModelTest(unittest.TestCase):
 
     def test_model_can_represent_adapter_invocation_with_outer_bindings(self) -> None:
         parsed = ParsedLocalExpressionTree(
-            source='markdown["section"].list->append_item(item) with{section: inputs.section}',
+            source='markdown["section"].list->add(item) with{section: inputs.section}',
             root=AdapterInvocationNode(
                 start=0,
                 end=72,
                 family="markdown",
-                body='["section"].list->append_item(item)',
+                body='["section"].list->add(item)',
                 bindings=(
                     AdapterBindingNode(
                         start=48,
@@ -89,7 +89,7 @@ class LocalExpressionEngineModelTest(unittest.TestCase):
         )
 
         self.assertEqual(parsed.root.family, "markdown")
-        self.assertEqual(parsed.root.body, '["section"].list->append_item(item)')
+        self.assertEqual(parsed.root.body, '["section"].list->add(item)')
         self.assertEqual(parsed.root.bindings[0].name, "section")
         self.assertEqual(parsed.root.bindings[0].value.parts, ("inputs", "section"))
 

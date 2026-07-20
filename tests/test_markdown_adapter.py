@@ -155,16 +155,6 @@ class MarkdownAdapterTest(unittest.TestCase):
 
         self.assertEqual(value, "## Tasks\n\n- parent\n  - child\n- sibling")
 
-    def test_append_item_alias_still_maps_to_list_level_addition(self) -> None:
-        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Tasks\n- ship\n", "item": "verify"})
-
-        value = resolve_runtime_value(
-            '${markdown["Tasks"].list->append_item(item) with{root: inputs.body, item: inputs.item}}',
-            workflow,
-        )
-
-        self.assertEqual(value, "## Tasks\n\n- ship\n- verify")
-
     def test_list_add_auto_creates_missing_section_and_list(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "# Overview", "item": "verify"})
 
