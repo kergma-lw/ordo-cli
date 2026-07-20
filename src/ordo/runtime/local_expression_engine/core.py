@@ -14,6 +14,11 @@ from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 from ..state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target, resolve_workflow_input_reference
+from ..representation_adapters import (
+    RepresentationAdapterError,
+    RepresentationAdapterInvocation,
+    evaluate_representation_adapter_invocation,
+)
 from ..boolean_composition import parse_boolean_and, parse_boolean_not, parse_boolean_or
 from .registry import (
     ValueExpressionBuiltinSpec,
@@ -1498,6 +1503,14 @@ def _evaluate_node(
             step_results=step_results,
             observation_session=observation_session,
         )
+    if isinstance(node, AdapterInvocationNode):
+        return _evaluate_adapter_invocation(
+            node,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
     if isinstance(node, PipelineNode):
         value = _evaluate_node(
             node.source,
@@ -1825,6 +1838,44 @@ def _evaluate_read_only_call(
             details=details,
         )
     return observation.value
+
+
+def _evaluate_adapter_invocation(
+    node: AdapterInvocationNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
+) -> JSONValue:
+    parameters: JSONObject = {}
+    for binding in node.bindings:
+        parameters[binding.name] = _evaluate_node(
+            binding.value,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
+    if "root" not in parameters:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.adapter_root_missing",
+            message=f"Representation-adapter family '{node.family}' requires outer binding 'root'",
+            details={"expression": parsed.source, "family": node.family},
+        )
+    root_value = parameters.pop("root")
+    try:
+        return evaluate_representation_adapter_invocation(
+            RepresentationAdapterInvocation(
+                family=node.family,
+                body=node.body,
+                root_value=root_value,
+                parameters=parameters,
+                source_expression=parsed.source[node.start : node.end],
+            )
+        )
+    except RepresentationAdapterError as exc:
+        raise ValueExpressionEvaluationError(code=exc.code, message=exc.message, details=exc.details) from exc
 
 
 def _require_string(value: JSONValue, *, filter_name: str, parsed: ParsedValueExpression) -> str:

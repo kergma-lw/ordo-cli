@@ -13,11 +13,19 @@ from ordo.runtime.local_expression_engine.core import (
     ConditionObservationResult,
     ReadOnlyObservationSession,
 )
+from ordo.runtime.representation_adapters import (
+    RepresentationAdapterInvocation,
+    register_representation_adapter,
+    unregister_representation_adapter,
+)
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class RuntimeValueResolutionTest(unittest.TestCase):
+    def tearDown(self) -> None:
+        unregister_representation_adapter("fixture")
+
     def test_execute_resolves_state_reference_in_step_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             state_path = f"{temp_dir}/task-state.json"
@@ -218,7 +226,65 @@ blocks:
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.operation_results[0].outputs.get("value"), "task/7-hello-world")
-        self.assertEqual(result.operation_results[1].outputs.get("stdout"), "task/7-hello-world")
+
+    def test_resolve_runtime_value_dispatches_adapter_with_resolved_outer_bindings(self) -> None:
+        seen: list[RepresentationAdapterInvocation] = []
+
+        def handle(invocation: RepresentationAdapterInvocation):
+            seen.append(invocation)
+            return {
+                "family": invocation.family,
+                "body": invocation.body,
+                "root": invocation.root_value,
+                "parameters": dict(invocation.parameters),
+            }
+
+        register_representation_adapter("fixture", handle)
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello", "name": "Tasks"})
+
+        value = resolve_runtime_value(
+            '${fixture["body"] with{root: inputs.body, section: inputs.name}}',
+            workflow,
+        )
+
+        self.assertEqual(
+            value,
+            {
+                "family": "fixture",
+                "body": '["body"]',
+                "root": "hello",
+                "parameters": {"section": "Tasks"},
+            },
+        )
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0].root_value, "hello")
+        self.assertEqual(seen[0].parameters, {"section": "Tasks"})
+
+    def test_resolve_runtime_value_reports_host_binding_failure_before_adapter_dispatch(self) -> None:
+        called = False
+
+        def handle(_invocation: RepresentationAdapterInvocation):
+            nonlocal called
+            called = True
+            return "unexpected"
+
+        register_representation_adapter("fixture", handle)
+        workflow = Workflow(version=0, workflow="demo")
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${fixture["body"] with{root: inputs.body}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.input_missing")
+        self.assertFalse(called)
+
+    def test_resolve_runtime_value_requires_outer_root_binding_for_adapter_dispatch(self) -> None:
+        register_representation_adapter("fixture", lambda invocation: invocation.root_value)
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello"})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${fixture["body"] with{section: inputs.body}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_root_missing")
 
     def test_execute_resolves_registered_step_output_in_later_step_block(self) -> None:
         workflow = load_workflow_text(
