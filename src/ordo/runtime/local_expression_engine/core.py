@@ -337,10 +337,17 @@ def evaluate_local_expression_tree(
     workflow: Workflow,
     *,
     step_results: dict[str, OperationResult] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Evaluate one canonical local-expression tree against workflow-visible data."""
 
-    return _evaluate_node(parsed.root, parsed=parsed, workflow=workflow, step_results={} if step_results is None else step_results)
+    return _evaluate_node(
+        parsed.root,
+        parsed=parsed,
+        workflow=workflow,
+        step_results={} if step_results is None else step_results,
+        observation_session=observation_session,
+    )
 
 
 def evaluate_condition_expression(
@@ -1089,6 +1096,7 @@ def _evaluate_node(
     parsed: ParsedValueExpression,
     workflow: Workflow,
     step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     if isinstance(node, LiteralNode):
         return node.value
@@ -1099,22 +1107,58 @@ def _evaluate_node(
     if isinstance(node, StepReferenceNode):
         return _resolve_step_reference(node, parsed=parsed, step_results=step_results)
     if isinstance(node, ListNode):
-        return [_evaluate_node(item, parsed=parsed, workflow=workflow, step_results=step_results) for item in node.items]
+        return [
+            _evaluate_node(
+                item,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
+            for item in node.items
+        ]
     if isinstance(node, CallNode):
-        raise ValueExpressionEvaluationError(
-            code="runtime.value.call_unsupported",
-            message="Read-only probe calls are not evaluable through the canonical value engine yet",
-            details={"expression": parsed.source, "target": ".".join(node.target.parts)},
+        return _evaluate_read_only_call(
+            node,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
         )
     if isinstance(node, PipelineNode):
-        value = _evaluate_node(node.source, parsed=parsed, workflow=workflow, step_results=step_results)
+        value = _evaluate_node(
+            node.source,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
         for filter_node in node.filters:
-            value = _apply_filter(filter_node, value, parsed=parsed, workflow=workflow, step_results=step_results)
+            value = _apply_filter(
+                filter_node,
+                value,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
         return value
     if isinstance(node, BuiltinCallNode):
-        return _evaluate_builtin_call(node, parsed=parsed, workflow=workflow, step_results=step_results)
+        return _evaluate_builtin_call(
+            node,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
     if isinstance(node, UnaryNode):
-        value = _evaluate_node(node.operand, parsed=parsed, workflow=workflow, step_results=step_results)
+        value = _evaluate_node(
+            node.operand,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
         if isinstance(value, bool):
             return not value
         raise ValueExpressionEvaluationError(
@@ -1124,8 +1168,20 @@ def _evaluate_node(
         )
     if isinstance(node, BinaryNode):
         if node.operator in {"==", "!=", "in", "not in"}:
-            left = _evaluate_node(node.left, parsed=parsed, workflow=workflow, step_results=step_results)
-            right = _evaluate_node(node.right, parsed=parsed, workflow=workflow, step_results=step_results)
+            left = _evaluate_node(
+                node.left,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
+            right = _evaluate_node(
+                node.right,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
             if node.operator == "==":
                 return left == right
             if node.operator == "!=":
@@ -1137,7 +1193,13 @@ def _evaluate_node(
                     details={"expression": parsed.source, "operator": node.operator, "actual_type": type(right).__name__},
                 )
             return left in right if node.operator == "in" else left not in right
-        left = _evaluate_node(node.left, parsed=parsed, workflow=workflow, step_results=step_results)
+        left = _evaluate_node(
+            node.left,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
         if not isinstance(left, bool):
             raise ValueExpressionEvaluationError(
                 code="runtime.value.boolean_operand_type",
@@ -1147,7 +1209,13 @@ def _evaluate_node(
         if node.operator == "and":
             if not left:
                 return False
-            right = _evaluate_node(node.right, parsed=parsed, workflow=workflow, step_results=step_results)
+            right = _evaluate_node(
+                node.right,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
             if isinstance(right, bool):
                 return right
             raise ValueExpressionEvaluationError(
@@ -1158,7 +1226,13 @@ def _evaluate_node(
         if node.operator == "or":
             if left:
                 return True
-            right = _evaluate_node(node.right, parsed=parsed, workflow=workflow, step_results=step_results)
+            right = _evaluate_node(
+                node.right,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
             if isinstance(right, bool):
                 return right
             raise ValueExpressionEvaluationError(
@@ -1250,10 +1324,11 @@ def _apply_filter(
     parsed: ParsedValueExpression,
     workflow: Workflow,
     step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     spec = VALUE_EXPRESSION_FILTERS.get(filter_node.name)
     if spec is not None:
-        return spec.handler(value, filter_node, parsed, workflow, step_results)
+        return spec.handler(value, filter_node, parsed, workflow, {"step_results": step_results, "observation_session": observation_session})
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_unknown",
         message=f"Unknown local-expression filter '{filter_node.name}'",
@@ -1267,10 +1342,17 @@ def _evaluate_builtin_call(
     parsed: ParsedValueExpression,
     workflow: Workflow,
     step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     spec = VALUE_EXPRESSION_BUILTINS.get(node.name)
     if spec is not None:
-        return spec.handler(node, parsed=parsed, workflow=workflow, step_results=step_results)
+        return spec.handler(
+            node,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
     raise ValueExpressionEvaluationError(
         code="runtime.value.expression_builtin_unsupported",
         message=f"Built-in value expression '{node.name}' is not supported yet",
@@ -1284,6 +1366,7 @@ def _evaluate_format_call(
     parsed: ParsedValueExpression,
     workflow: Workflow,
     step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     if not node.arguments:
         raise ValueExpressionEvaluationError(
@@ -1291,14 +1374,29 @@ def _evaluate_format_call(
             message="Built-in value expression 'format' requires a template argument",
             details={"expression": parsed.source, "builtin": node.name},
         )
-    template = _evaluate_node(node.arguments[0], parsed=parsed, workflow=workflow, step_results=step_results)
+    template = _evaluate_node(
+        node.arguments[0],
+        parsed=parsed,
+        workflow=workflow,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
     if not isinstance(template, str):
         raise ValueExpressionEvaluationError(
             code="runtime.value.format_template_invalid",
             message="Built-in value expression 'format' requires a string template",
             details={"expression": parsed.source, "builtin": node.name, "actual_type": type(template).__name__},
         )
-    values = tuple(_evaluate_node(argument, parsed=parsed, workflow=workflow, step_results=step_results) for argument in node.arguments[1:])
+    values = tuple(
+        _evaluate_node(
+            argument,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
+        for argument in node.arguments[1:]
+    )
     placeholder_count = template.count("{}")
     if placeholder_count != len(values):
         raise ValueExpressionEvaluationError(
@@ -1307,6 +1405,53 @@ def _evaluate_format_call(
             details={"expression": parsed.source, "builtin": node.name, "placeholders": placeholder_count, "arguments": len(values)},
         )
     return template.format(*tuple(_coerce_format_value(value) for value in values))
+
+
+def _evaluate_read_only_call(
+    node: CallNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
+) -> JSONValue:
+    if observation_session is None:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.call_unsupported",
+            message="Read-only probe calls require a shared observation session in canonical value evaluation",
+            details={"expression": parsed.source, "target": ".".join(node.target.parts)},
+        )
+    arguments = tuple(
+        (
+            argument.name,
+            _evaluate_node(
+                argument.value,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=observation_session,
+            ),
+        )
+        for argument in node.arguments
+    )
+    observation = observation_session.observe(
+        ConditionObservationRequest(
+            expression_text=parsed.source[node.start : node.end],
+            target=node.target.parts,
+            fields=node.fields,
+            arguments=arguments,
+        )
+    ).result
+    if observation.status != "ok":
+        details: JSONObject = {"expression": parsed.source, "target": ".".join(node.target.parts)}
+        if observation.reference is not None:
+            details["reference"] = observation.reference
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.call_probe_failed",
+            message=f"Read-only probe call '{'.'.join(node.target.parts)}' failed during value evaluation",
+            details=details,
+        )
+    return observation.value
 
 
 def _require_string(value: JSONValue, *, filter_name: str, parsed: ParsedValueExpression) -> str:
@@ -1330,7 +1475,7 @@ def _apply_lower_filter(
     _filter_node: FilterApplicationNode,
     parsed: ParsedValueExpression,
     _workflow: Workflow,
-    _step_results: dict[str, OperationResult],
+    _evaluation_context: dict[str, object],
 ) -> JSONValue:
     text = _require_string(value, filter_name="lower", parsed=parsed)
     return text.lower()
@@ -1341,7 +1486,7 @@ def _apply_trim_filter(
     _filter_node: FilterApplicationNode,
     parsed: ParsedValueExpression,
     _workflow: Workflow,
-    _step_results: dict[str, OperationResult],
+    _evaluation_context: dict[str, object],
 ) -> JSONValue:
     text = _require_string(value, filter_name="trim", parsed=parsed)
     return text.strip()
@@ -1352,7 +1497,7 @@ def _apply_slug_filter(
     _filter_node: FilterApplicationNode,
     parsed: ParsedValueExpression,
     _workflow: Workflow,
-    _step_results: dict[str, OperationResult],
+    _evaluation_context: dict[str, object],
 ) -> JSONValue:
     text = _require_string(value, filter_name="slug", parsed=parsed)
     return _slugify(text)
@@ -1365,6 +1510,7 @@ def _evaluate_filter_argument(
     parsed: ParsedValueExpression,
     workflow: Workflow,
     step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     try:
         argument = filter_node.arguments[index]
@@ -1374,7 +1520,23 @@ def _evaluate_filter_argument(
             message=f"Filter '{filter_node.name}' received the wrong number of arguments",
             details={"expression": parsed.source, "filter": filter_node.name, "arguments": len(filter_node.arguments)},
         ) from exc
-    return _evaluate_node(argument, parsed=parsed, workflow=workflow, step_results=step_results)
+    return _evaluate_node(
+        argument,
+        parsed=parsed,
+        workflow=workflow,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
+
+
+def _context_step_results(evaluation_context: dict[str, object]) -> dict[str, OperationResult]:
+    value = evaluation_context.get("step_results")
+    return value if isinstance(value, dict) else {}
+
+
+def _context_observation_session(evaluation_context: dict[str, object]) -> ReadOnlyObservationSession | None:
+    value = evaluation_context.get("observation_session")
+    return value if isinstance(value, ReadOnlyObservationSession) else None
 
 
 def _require_no_extra_filter_arguments(filter_node: FilterApplicationNode, *, parsed: ParsedValueExpression, expected: int) -> None:
@@ -1396,10 +1558,17 @@ def _apply_eq_filter(
     filter_node: FilterApplicationNode,
     parsed: ParsedValueExpression,
     workflow: Workflow,
-    step_results: dict[str, OperationResult],
+    evaluation_context: dict[str, object],
 ) -> JSONValue:
     _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
-    expected_value = _evaluate_filter_argument(filter_node, 0, parsed=parsed, workflow=workflow, step_results=step_results)
+    expected_value = _evaluate_filter_argument(
+        filter_node,
+        0,
+        parsed=parsed,
+        workflow=workflow,
+        step_results=_context_step_results(evaluation_context),
+        observation_session=_context_observation_session(evaluation_context),
+    )
     return value == expected_value
 
 
@@ -1408,10 +1577,17 @@ def _apply_ne_filter(
     filter_node: FilterApplicationNode,
     parsed: ParsedValueExpression,
     workflow: Workflow,
-    step_results: dict[str, OperationResult],
+    evaluation_context: dict[str, object],
 ) -> JSONValue:
     _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
-    expected_value = _evaluate_filter_argument(filter_node, 0, parsed=parsed, workflow=workflow, step_results=step_results)
+    expected_value = _evaluate_filter_argument(
+        filter_node,
+        0,
+        parsed=parsed,
+        workflow=workflow,
+        step_results=_context_step_results(evaluation_context),
+        observation_session=_context_observation_session(evaluation_context),
+    )
     return value != expected_value
 
 
@@ -1420,7 +1596,7 @@ def _apply_not_filter(
     filter_node: FilterApplicationNode,
     parsed: ParsedValueExpression,
     _workflow: Workflow,
-    _step_results: dict[str, OperationResult],
+    _evaluation_context: dict[str, object],
 ) -> JSONValue:
     _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
     if isinstance(value, bool):

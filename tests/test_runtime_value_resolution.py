@@ -2,11 +2,17 @@ import json
 import tempfile
 import unittest
 
+from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import OperationResult
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
 from ordo.runtime import execute_workflow, load_workflow_text
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
+from ordo.runtime.local_expression_engine.core import (
+    ConditionObservationRequest,
+    ConditionObservationResult,
+    ReadOnlyObservationSession,
+)
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -282,6 +288,99 @@ blocks:
         )
 
         self.assertIs(value, True)
+
+    def test_resolve_runtime_value_executes_read_only_calls_with_shared_session(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        observed: list[ConditionObservationRequest] = []
+        session = ReadOnlyObservationSession(
+            lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="Issue body", reference="gh.issue")
+        )
+
+        value = resolve_runtime_value(
+            "${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}",
+            workflow,
+            observation_session=session,
+        )
+
+        self.assertEqual(value, "Issue body")
+        self.assertEqual(observed[0].fields, ("body",))
+
+    def test_resolve_runtime_value_reuses_shared_session_in_nested_structures(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        count = 0
+
+        def observe(_: ConditionObservationRequest) -> ConditionObservationResult:
+            nonlocal count
+            count += 1
+            return ConditionObservationResult(status="ok", value="Issue body", reference="gh.issue")
+
+        session = ReadOnlyObservationSession(observe)
+
+        value = resolve_runtime_value(
+            {
+                "title": "${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}",
+                "items": ["${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}"],
+            },
+            workflow,
+            observation_session=session,
+        )
+
+        self.assertEqual(value, {"title": "Issue body", "items": ["Issue body"]})
+        self.assertEqual(count, 1)
+
+    def test_resolve_runtime_value_reports_probe_failure(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        session = ReadOnlyObservationSession(
+            lambda _: ConditionObservationResult(
+                status="probe_failed",
+                value=None,
+                diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),),
+                reference="gh.issue",
+            )
+        )
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value(
+                "${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}",
+                workflow,
+                observation_session=session,
+            )
+
+        self.assertEqual(context.exception.code, "runtime.value.call_probe_failed")
 
 
 if __name__ == "__main__":

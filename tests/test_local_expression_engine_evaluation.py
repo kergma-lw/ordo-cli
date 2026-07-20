@@ -432,6 +432,61 @@ blocks:
         self.assertEqual(count, 1)
         self.assertEqual(result.cache_entries, 1)
 
+    def test_value_evaluation_executes_read_only_call_with_shared_session(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree("gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body")
+        observed: list[ConditionObservationRequest] = []
+        session = ReadOnlyObservationSession(
+            lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="Issue body", reference="gh.issue")
+        )
+
+        value = evaluate_local_expression_tree(parsed, workflow, observation_session=session)
+
+        self.assertEqual(value, "Issue body")
+        self.assertEqual(observed[0].target, ("gh", "issue"))
+        self.assertEqual(observed[0].fields, ("body",))
+        self.assertEqual(observed[0].arguments, (("repository", "owner/repo"), ("issue_number", 7)))
+
+    def test_value_evaluation_propagates_probe_failure(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree("gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body")
+        session = ReadOnlyObservationSession(
+            lambda _: ConditionObservationResult(
+                status="probe_failed",
+                value=None,
+                diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),),
+                reference="gh.issue",
+            )
+        )
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow, observation_session=session)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.call_probe_failed")
+
 
 if __name__ == "__main__":
     unittest.main()

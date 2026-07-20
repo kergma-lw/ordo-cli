@@ -11,6 +11,7 @@ from ordo.model.workflow import Workflow
 
 from .local_expression_engine.core import (
     ConditionExpressionNode,
+    ReadOnlyObservationSession,
     StateReferenceNode as ConditionStateReferenceNode,
     StepReferenceNode as ConditionStepReferenceNode,
     ConditionExpressionParseError,
@@ -288,6 +289,7 @@ def evaluate_parsed_local_expression(
     workflow: Workflow,
     *,
     step_results: dict[str, OperationResult | JSONValue] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Evaluate one parsed local expression through the shared context API."""
 
@@ -297,7 +299,12 @@ def evaluate_parsed_local_expression(
             message=f"Local-expression context '{parsed.context.value}' is not directly evaluable through the canonical local-expression engine",
             details={"context": parsed.context.value},
         )
-    return evaluate_local_expression_tree(parsed.value, workflow, step_results={} if step_results is None else step_results)
+    return evaluate_local_expression_tree(
+        parsed.value,
+        workflow,
+        step_results={} if step_results is None else step_results,
+        observation_session=observation_session,
+    )
 
 
 def evaluate_parsed_value_local_expression(
@@ -305,6 +312,7 @@ def evaluate_parsed_value_local_expression(
     workflow: Workflow,
     *,
     step_results: dict[str, OperationResult | JSONValue] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Evaluate one parsed local expression in the standard value context."""
 
@@ -314,7 +322,12 @@ def evaluate_parsed_value_local_expression(
             message="Embedded value evaluation expects the embedded-value context",
             details={"context": parsed.context.value},
         )
-    return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
+    return evaluate_parsed_local_expression(
+        parsed,
+        workflow,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
 
 
 def resolve_embedded_local_expression(
@@ -324,6 +337,7 @@ def resolve_embedded_local_expression(
     context: LocalExpressionContext,
     step_results: dict[str, OperationResult | JSONValue] | None = None,
     allow_boolean_composition: bool | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Resolve one embedded local-expression surface through the shared context API."""
 
@@ -348,7 +362,12 @@ def resolve_embedded_local_expression(
             details={"context": context.value},
         )
     try:
-        return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
+        return evaluate_parsed_local_expression(
+            parsed,
+            workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
     except LocalExpressionEvaluationError as exc:
         raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
 
@@ -359,6 +378,7 @@ def resolve_embedded_value_local_expression(
     *,
     step_results: dict[str, OperationResult | JSONValue] | None = None,
     allow_boolean_composition: bool | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Resolve the embedded `${...}` surface in the standard value context."""
 
@@ -368,6 +388,7 @@ def resolve_embedded_value_local_expression(
         context=LocalExpressionContext.EMBEDDED_VALUE,
         step_results=step_results,
         allow_boolean_composition=allow_boolean_composition,
+        observation_session=observation_session,
     )
 
 

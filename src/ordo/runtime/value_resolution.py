@@ -9,6 +9,7 @@ from ordo.model.json import JSONArray, JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
+from .local_expression_engine.core import ReadOnlyObservationSession
 from .local_expressions import resolve_embedded_value_local_expression
 
 
@@ -36,16 +37,33 @@ def resolve_runtime_value(
     *,
     step_results: dict[str, OperationResult | JSONObject] | None = None,
     allow_boolean_composition: bool = False,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Resolve embedded-value local-expression surfaces against workflow inputs, state, and step results."""
 
     resolved_step_results = dict(workflow.step_results) if step_results is None else step_results
     if _is_format_object(value):
-        return _resolve_format_object(value, workflow, step_results=resolved_step_results)
+        return _resolve_format_object(value, workflow, step_results=resolved_step_results, observation_session=observation_session)
     if isinstance(value, list):
-        return [resolve_runtime_value(item, workflow, step_results=resolved_step_results) for item in value]
+        return [
+            resolve_runtime_value(
+                item,
+                workflow,
+                step_results=resolved_step_results,
+                observation_session=observation_session,
+            )
+            for item in value
+        ]
     if isinstance(value, dict):
-        return {key: resolve_runtime_value(item, workflow, step_results=resolved_step_results) for key, item in value.items()}
+        return {
+            key: resolve_runtime_value(
+                item,
+                workflow,
+                step_results=resolved_step_results,
+                observation_session=observation_session,
+            )
+            for key, item in value.items()
+        }
     if not isinstance(value, str):
         return value
 
@@ -57,6 +75,7 @@ def resolve_runtime_value(
             workflow,
             step_results=resolved_step_results,
             allow_boolean_composition=allow_boolean_composition,
+            observation_session=observation_session,
         )
     except ValueResolutionError:
         raise
@@ -72,14 +91,28 @@ def _is_format_object(value: JSONValue) -> bool:
     return isinstance(value, dict) and "format" in value and set(value.keys()) <= {"format", "args"}
 
 
-def _resolve_format_object(value: JSONObject, workflow: Workflow, *, step_results: dict[str, OperationResult | JSONObject]) -> JSONValue:
+def _resolve_format_object(
+    value: JSONObject,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONObject],
+    observation_session: ReadOnlyObservationSession | None,
+) -> JSONValue:
     template = value.get("format")
     if not isinstance(template, str):
         return value
     args_value = value.get("args", [])
     if not isinstance(args_value, list):
         return value
-    resolved_args = [resolve_runtime_value(item, workflow, step_results=step_results) for item in args_value]
+    resolved_args = [
+        resolve_runtime_value(
+            item,
+            workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
+        for item in args_value
+    ]
     placeholder_count = template.count("{}")
     if placeholder_count != len(resolved_args):
         raise ValueResolutionError(
