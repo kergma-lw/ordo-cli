@@ -162,9 +162,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         markdown = next(item for item in adapter_surface["families"] if item["name"] == "markdown")
 
         self.assertEqual(adapter_surface["shared_seam"]["outer_binding_form"], " with{...}")
+        self.assertIn("prelude", markdown["selectors"])
         self.assertIn('["title"]', markdown["selectors"])
-        self.assertIn("append_item", markdown["actions"])
+        self.assertIn("add", markdown["actions"])
+        self.assertIn("append", markdown["actions"])
         self.assertIn("list", markdown["shortcuts"])
+        self.assertIn("prelude", markdown["shortcuts"])
 
     def test_capabilities_publish_explicit_non_inference_metadata(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -222,7 +225,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(seam_node["document_kind"], "model_node")
         self.assertEqual(seam_node["metadata"]["outer_binding_form"], " with{...}")
         self.assertEqual(markdown_node["metadata"]["name"], "markdown")
-        self.assertIn("append_item", markdown_node["metadata"]["actions"])
+        self.assertIn("prelude", markdown_node["metadata"]["selectors"])
+        self.assertIn("add", markdown_node["metadata"]["actions"])
 
     def test_search_indexes_representation_adapter_topics(self) -> None:
         result = json.loads(self.run_help("search", "markdown", "--json").stdout)

@@ -93,7 +93,7 @@ def _register() -> None:
             name="markdown",
             summary="Select and transform markdown sections, blocks, and lists through a family-owned path surface.",
             selectors=("prelude", "[\"title\"]", "[n]", '.blocks("kind")'),
-            actions=("append_item", "add", "append", "replace", "remove"),
+            actions=("add", "append", "replace", "remove"),
             shortcuts=("list", "lists", "task_list", "task_lists", "paragraph", "paragraphs", "prelude"),
         ),
     )
