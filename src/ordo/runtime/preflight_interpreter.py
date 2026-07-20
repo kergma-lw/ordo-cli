@@ -50,10 +50,11 @@ def resolve_preflight_value(
     workflow: Workflow,
     *,
     step_results: dict[str, OperationResult | JSONObject] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Resolve one preflight value against current workflow and stored step results."""
 
-    return resolve_runtime_value(value, workflow, step_results=step_results)
+    return resolve_runtime_value(value, workflow, step_results=step_results, observation_session=observation_session)
 
 
 def evaluate_preflight_step_condition(
@@ -87,13 +88,14 @@ def evaluate_preflight_value_step(
     workflow: Workflow,
     *,
     step_results: dict[str, OperationResult | JSONObject] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> OperationResult:
     """Evaluate one pure value step without executing any effectful behavior."""
 
     if step.value is None:
         return OperationResult(status="state_error", summary=f"Step '{step.name}' is not a value step")
     try:
-        value = resolve_preflight_value(step.value, workflow, step_results=step_results)
+        value = resolve_preflight_value(step.value, workflow, step_results=step_results, observation_session=observation_session)
     except ValueResolutionError as exc:
         return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
     return OperationResult(

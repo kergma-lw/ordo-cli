@@ -12,7 +12,7 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBl
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
-from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, evaluate_condition_expression
+from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ReadOnlyObservationSession, evaluate_condition_expression
 from .launchers import validate_step_launchers
 from .preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, store_preflight_register_output
 from .preflight_steps import classify_preflight_step
@@ -660,9 +660,15 @@ def _interpret_step_block_for_check(
     incomplete_reasons: list[str] = []
     halt_item: dict[str, object] | None = None
     step_items: list[dict[str, object]] = []
+    observation_session = _build_preflight_observation_session(workflow, probe=probe, connector_provider=connector_provider)
 
     for step_index, (step, resolved_step) in enumerate(zip(block.steps, resolved_block.steps, strict=False)):
-        condition = evaluate_preflight_step_condition(step, workflow, step_results=workflow.step_results)
+        condition = evaluate_preflight_step_condition(
+            step,
+            workflow,
+            step_results=workflow.step_results,
+            observation_session=observation_session,
+        )
         if isinstance(condition, ValueResolutionError):
             halt = build_preflight_halt(
                 "condition_not_computable",
@@ -740,7 +746,13 @@ def _interpret_step_block_for_check(
 
         classification = classify_preflight_step(step, resolved_step)
         if classification == "read_only_analyzable":
-            result = _evaluate_analyzable_preflight_step(step, resolved_step, workflow, probe=probe)
+            result = _evaluate_analyzable_preflight_step(
+                step,
+                resolved_step,
+                workflow,
+                probe=probe,
+                observation_session=observation_session,
+            )
             diagnostics.extend(result.diagnostics)
             if result.status != "ok":
                 halt = build_preflight_halt(
@@ -846,11 +858,12 @@ def _evaluate_analyzable_preflight_step(
     workflow: Workflow,
     *,
     probe: GuardProbe,
+    observation_session: ReadOnlyObservationSession,
 ) -> OperationResult:
     if isinstance(resolved_step, ResolvedOperation):
         return evaluate_preflight_probe_step(step, resolved_step, workflow, guard_probe=probe)
     if isinstance(resolved_step, ResolvedBuiltinStep) and resolved_step.builtin == "value":
-        return evaluate_preflight_value_step(step, workflow, step_results=workflow.step_results)
+        return evaluate_preflight_value_step(step, workflow, step_results=workflow.step_results, observation_session=observation_session)
     return OperationResult(status="state_error", summary=f"Step '{step.name}' is not a supported preflight step")
 
 
@@ -1096,6 +1109,80 @@ def _default_guard_probe(*, provider: ConnectorProvider | None):
         return resolved_provider.guard_probe(resolved_guard, workflow)
 
     return evaluate
+
+
+def _build_preflight_observation_session(
+    workflow: Workflow,
+    *,
+    probe: GuardProbe,
+    connector_provider: ConnectorProvider | None,
+) -> ReadOnlyObservationSession:
+    resolved_provider = connector_provider or get_default_connector_provider()
+
+    def observe(request: ConditionObservationRequest) -> ConditionObservationResult:
+        reference = ".".join(request.target)
+        operation = resolved_provider.registry.get_operation(reference)
+        if operation is None:
+            return ConditionObservationResult(
+                status="probe_failed",
+                value=None,
+                diagnostics=(
+                    Diagnostic(
+                        code="runtime.local_expression.call_target_unknown",
+                        level="error",
+                        message=f"Read-only call target '{reference}' is not a known public operation",
+                        path=(),
+                        details={"reference": reference},
+                    ),
+                ),
+                reference=reference,
+            )
+        if operation.kind != "probe":
+            return ConditionObservationResult(
+                status="probe_failed",
+                value=None,
+                diagnostics=(
+                    Diagnostic(
+                        code="runtime.local_expression.call_target_not_read_only",
+                        level="error",
+                        message=f"Read-only expression calls require a probe target, got '{reference}'",
+                        path=(),
+                        details={"reference": reference, "kind": operation.kind},
+                    ),
+                ),
+                reference=reference,
+            )
+        result = probe(
+            ResolvedOperation(
+                reference=reference,
+                connector_namespace=request.target[0],
+                operation=operation,
+                source="public",
+                declared_with={name: value for name, value in request.arguments},
+            ),
+            workflow,
+        )
+        if result.status != "ok":
+            return ConditionObservationResult(status="probe_failed", value=None, diagnostics=result.diagnostics, reference=reference)
+        value = _extract_probe_value(result.outputs, request.fields)
+        if value is _MISSING:
+            return ConditionObservationResult(
+                status="probe_failed",
+                value=None,
+                diagnostics=(
+                    Diagnostic(
+                        code="runtime.local_expression.probe_field_missing",
+                        level="error",
+                        message=f"Probe field path '{'.'.join(request.fields)}' was not present at runtime",
+                        path=(),
+                        details={"reference": reference, "field_path": ".".join(request.fields)},
+                    ),
+                ),
+                reference=reference,
+            )
+        return ConditionObservationResult(status="ok", value=value, diagnostics=result.diagnostics, reference=reference)
+
+    return ReadOnlyObservationSession(observe)
 
 
 def _evaluate_guard_expression(

@@ -391,6 +391,45 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["block_items"][0]["preflight_halt"]["reason"], "effectful_step_encountered")
         self.assertEqual(result.outputs["unevaluated_relevant_guards"], ["git.worktree"])
 
+    def test_check_uses_shared_read_only_engine_for_preflight_values_and_conditions(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "owner/repo", "issue_number": 7, "run_effectful": False},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="load-exists",
+                            value="${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).exists}",
+                            register="issue_exists",
+                        ),
+                        Step(
+                            name="comment",
+                            operation=OperationRef("gh.issue.close"),
+                            if_="${gh.issue( issue_number = inputs.issue_number , repository = inputs.repository ).exists and inputs.run_effectful}",
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+        seen: list[str] = []
+
+        def probe(resolved_guard, _workflow):
+            seen.append(resolved_guard.reference)
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"exists": True})
+            return OperationResult(status="ok", outputs={"clean": True})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertEqual(seen, ["gh.issue", "git.worktree"])
+        self.assertEqual(result.outputs["block_items"][0]["interpreted_steps"], ["load-exists"])
+        self.assertEqual(result.outputs["block_items"][0]["skipped_steps"], ["comment"])
+
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())
         seen: list[str] = []

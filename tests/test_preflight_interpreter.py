@@ -100,6 +100,22 @@ class PreflightInterpreterTest(unittest.TestCase):
 
         self.assertEqual(value, 42)
 
+    def test_evaluates_preflight_value_step_through_shared_read_only_engine(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"repository": "owner/repo", "issue_number": 7}, steps=())
+        step = Step(name="copy", value="${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}", register="body")
+        count = 0
+
+        def observe(_: ConditionObservationRequest) -> ConditionObservationResult:
+            nonlocal count
+            count += 1
+            return ConditionObservationResult(status="ok", value="Issue body", reference="gh.issue")
+
+        result = evaluate_preflight_value_step(step, workflow, observation_session=ReadOnlyObservationSession(observe))
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["value"], "Issue body")
+        self.assertEqual(count, 1)
+
     def test_evaluates_true_preflight_step_condition(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"enabled": True}, steps=())
         step = Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}")
