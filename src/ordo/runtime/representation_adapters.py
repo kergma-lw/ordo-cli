@@ -83,3 +83,6 @@ def evaluate_representation_adapter_invocation(invocation: RepresentationAdapter
             details={"family": invocation.family, "expression": invocation.source_expression},
         )
     return handler(invocation)
+
+
+from . import markdown_adapter as _markdown_adapter  # noqa: E402,F401
