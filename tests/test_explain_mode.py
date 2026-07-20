@@ -177,6 +177,26 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["step_condition_details"][0]["outcome"], "skipped")
         self.assertEqual(result.outputs["step_condition_details"][0]["reason"], "condition_false")
 
+    def test_explain_execution_result_preserves_adapter_failure_diagnostics(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"body": "## Notes\n- ship\n"},
+            steps=(
+                Step(
+                    name="select",
+                    value='${markdown["Tasks"].list with{root: inputs.body}}',
+                    register="picked",
+                ),
+            ),
+        )
+
+        result = explain_execution_result(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.outputs["reason_category"], "execution")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_not_found")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -622,7 +622,7 @@ def execute_workflow(
 
 
 def _evaluate_step_condition(step, workflow: Workflow) -> bool | Diagnostic:
-    value = evaluate_preflight_step_condition(step, workflow)
+    value = evaluate_preflight_step_condition(step, workflow, step_results=workflow.step_results)
     if isinstance(value, bool):
         return value
     if isinstance(value, ValueResolutionError):

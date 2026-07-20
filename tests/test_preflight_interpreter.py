@@ -116,6 +116,15 @@ class PreflightInterpreterTest(unittest.TestCase):
         self.assertEqual(result.outputs["value"], "Issue body")
         self.assertEqual(count, 1)
 
+    def test_reports_markdown_adapter_failure_during_preflight_value_step(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Notes\n- ship\n"}, steps=())
+        step = Step(name="copy", value='${markdown["Tasks"].list with{root: inputs.body}}', register="body")
+
+        result = evaluate_preflight_value_step(step, workflow)
+
+        self.assertEqual(result.status, "state_error")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_not_found")
+
     def test_evaluates_true_preflight_step_condition(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"enabled": True}, steps=())
         step = Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}")

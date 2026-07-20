@@ -219,6 +219,26 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["skipped_steps"], [])
         self.assertEqual(result.outputs["execution_tree"], None)
 
+    def test_execute_surfaces_markdown_adapter_failure_from_value_step(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"body": "## Notes\n- ship\n"},
+            steps=(
+                Step(
+                    name="select",
+                    value='${markdown["Tasks"].list with{root: inputs.body}}',
+                    register="picked",
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.failed_step, "select")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_not_found")
+
     def test_execute_accepts_plan_derived_execution_tree_input(self) -> None:
         workflow = Workflow(
             version=0,
