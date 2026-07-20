@@ -29,6 +29,7 @@ sources = [
   "adr/0006-local-expressions-deprecation-plan.md",
   "model/local-expressions/core.md",
   "model/local-expressions/adapters.md",
+  "model/local-expressions/markdown.md",
   "model/local-expressions/contexts.md",
   "model/workflow/entities.md",
   "model/playbook/shape.md",

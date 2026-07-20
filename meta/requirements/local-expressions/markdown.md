@@ -18,6 +18,7 @@
 - The shared adapter seam should identify the markdown family and the extent of the markdown-owned body, while markdown-family parsing owns the interior markdown-specific selector and action syntax.
 - Optional host-derived parameterization should live outside the markdown-owned body through the shared adapter binding surface rather than through host references embedded directly in markdown-family grammar.
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
+- The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
 - Positional disambiguation uses `[n]`.
 - Explicit structural selection may use adapter-defined forms such as `.blocks("kind")`.
 - The adapter may provide common structural shortcuts such as `.list`, `.task_list`, or `.paragraph` as convenience sugar over the explicit structural form.
@@ -52,6 +53,17 @@
 - A trailing `->action(...)` form may denote a terminal mutation over the selected markdown focus.
 - A terminal markdown mutation is one markdown-family instance of the shared adapter write-invocation rule that returns the updated root value.
 - Action names should remain author-comprehensible rather than exposing low-level parser internals.
+- The markdown family should prefer one small orthogonal text-action surface for markdown text targets, such as `append(text, prefix="")`, `replace(text)`, and `remove()`.
+- `append` should accept one plain text argument plus an optional plain text prefix argument whose default is the empty string.
+- Markdown action arguments should be plain text rather than structured object payloads.
+- The family may still expose one list-specific action such as `add(text)` when nested-list structure makes generic append semantics ambiguous at the list level.
+- Large, multi-paragraph, or otherwise structurally rich markdown action text should still be treated as plain text input rather than forcing a different public payload shape.
+
+## Prelude semantics
+
+- `prelude` is always present.
+- If a document begins with a heading, `prelude` still exists as the empty leading markdown slice rather than failing as `not_found`.
+- Read and write markdown semantics should therefore treat prelude as one stable target rather than as an optional convenience surface.
 
 ## Write-path auto-creation
 

@@ -381,6 +381,7 @@
 - The shared adapter seam should identify the markdown family and the extent of the markdown-owned body, while markdown-family parsing owns the interior markdown-specific selector and action syntax.
 - Optional host-derived parameterization should live outside the markdown-owned body through the shared adapter binding surface rather than through host references embedded directly in markdown-family grammar.
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
+- The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
 - Positional disambiguation uses `[n]`.
 - Explicit structural selection may use adapter-defined forms such as `.blocks("kind")`.
 - The adapter may provide common structural shortcuts such as `.list`, `.task_list`, or `.paragraph` as convenience sugar over the explicit structural form.
@@ -415,6 +416,17 @@
 - A trailing `->action(...)` form may denote a terminal mutation over the selected markdown focus.
 - A terminal markdown mutation is one markdown-family instance of the shared adapter write-invocation rule that returns the updated root value.
 - Action names should remain author-comprehensible rather than exposing low-level parser internals.
+- The markdown family should prefer one small orthogonal text-action surface for markdown text targets, such as `append(text, prefix="")`, `replace(text)`, and `remove()`.
+- `append` should accept one plain text argument plus an optional plain text prefix argument whose default is the empty string.
+- Markdown action arguments should be plain text rather than structured object payloads.
+- The family may still expose one list-specific action such as `add(text)` when nested-list structure makes generic append semantics ambiguous at the list level.
+- Large, multi-paragraph, or otherwise structurally rich markdown action text should still be treated as plain text input rather than forcing a different public payload shape.
+
+## Prelude semantics
+
+- `prelude` is always present.
+- If a document begins with a heading, `prelude` still exists as the empty leading markdown slice rather than failing as `not_found`.
+- Read and write markdown semantics should therefore treat prelude as one stable target rather than as an optional convenience surface.
 
 ## Write-path auto-creation
 
@@ -1944,6 +1956,68 @@ They are modeled as distinct from:
 ## Modeling consequence
 
 Because concrete families such as `markdown` require one shared invocation seam, the product model should not describe family-specific syntax without also modeling the shared adapter invocation boundary they rely on.
+
+<!-- source: model/local-expressions/markdown.md -->
+
+# Markdown representation-adapter model
+
+## Position
+
+The `markdown` adapter family models one text-oriented representation surface over a markdown root string.
+
+It keeps authored selection and action syntax family-specific while relying on the shared representation-adapter seam for outer ` with{...}` binding, read-versus-write distinction, and shared outcome categories.
+
+## Core modeled targets
+
+### Document
+
+The markdown root value is one whole markdown document string.
+
+### Prelude
+
+The markdown prelude is the portion of the document that appears before the first heading.
+
+Prelude is modeled as always present.
+If the document starts with a heading, prelude still exists as the empty leading markdown slice rather than as `not_found`.
+
+### Section
+
+A markdown section is one heading plus the markdown text governed by that heading.
+
+Selecting a section does not require the adapter family to collapse the selection immediately to only the section body.
+Further selector steps or terminal action semantics may refine how the selected section text is used.
+
+### Block-oriented targets
+
+The family may expose block-oriented targets such as paragraphs and lists inside a section or prelude scope.
+
+## Text-action model
+
+The markdown family should prefer a small orthogonal text-action surface over many special-case action verbs.
+
+The primary modeled actions are:
+
+- `append(text, prefix="")`;
+- `replace(text)`;
+- `remove()`.
+
+Those actions consume plain text arguments rather than structured object payloads.
+
+The adapter family may interpret the selected markdown target to decide where the resulting text is inserted or replaced, but it does not need a public object-shaped fragment argument model.
+
+## List mutation model
+
+Because nested lists make generic append semantics ambiguous at the list level, list targets may expose one list-specific action such as `add(text)`.
+
+`add(text)` models adding one new list item at the current list level rather than performing a generic text splice into an arbitrary list location.
+
+## Argument discipline
+
+Markdown action arguments are modeled as plain text.
+
+The family should not require object-valued public action payloads merely to support large or structurally rich markdown text.
+
+The family may still use its own internal parsing or normalization as an implementation detail when editing the root markdown string, but that does not change the modeled public action argument shape.
 
 <!-- source: model/local-expressions/contexts.md -->
 
