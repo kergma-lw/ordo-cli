@@ -162,6 +162,51 @@ class MarkdownAdapterTest(unittest.TestCase):
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_ambiguous")
 
+    def test_section_append_supports_optional_prefix(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Notes\n\nalpha", "text": "beta", "prefix": "\n\n"})
+
+        value = resolve_runtime_value(
+            '${markdown["Notes"]->append(text, prefix) with{root: inputs.body, text: inputs.text, prefix: inputs.prefix}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "## Notes\n\nalpha\n\nbeta")
+
+    def test_section_replace_replaces_section_body_text(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Notes\n\nalpha\n\n### Nested\n\nomega", "text": "beta\n\ngamma"})
+
+        value = resolve_runtime_value(
+            '${markdown["Notes"]->replace(text) with{root: inputs.body, text: inputs.text}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "## Notes\n\nbeta\n\ngamma")
+
+    def test_section_remove_clears_section_body(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Notes\n\nalpha\n\n### Nested\n\nomega"})
+
+        value = resolve_runtime_value('${markdown["Notes"]->remove() with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, "## Notes")
+
+    def test_prelude_append_and_replace_use_text_arguments(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "intro\n\n## Notes\n\nalpha", "text": "beta", "prefix": "\n\n"})
+
+        appended = resolve_runtime_value('${markdown.prelude->append(text, prefix) with{root: inputs.body, text: inputs.text, prefix: inputs.prefix}}', workflow)
+        replaced = resolve_runtime_value('${markdown.prelude->replace(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(appended, "intro\n\nbeta\n\n## Notes\n\nalpha")
+        self.assertEqual(replaced, "beta\n\n## Notes\n\nalpha")
+
+    def test_paragraph_append_and_remove_work_on_text_targets(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Notes\n\nalpha\n\nbeta", "text": " gamma"})
+
+        appended = resolve_runtime_value('${markdown["Notes"].paragraphs[0]->append(text) with{root: inputs.body, text: inputs.text}}', workflow)
+        removed = resolve_runtime_value('${markdown["Notes"].paragraphs[1]->remove() with{root: inputs.body}}', workflow)
+
+        self.assertEqual(appended, "## Notes\n\nalpha gamma\n\nbeta")
+        self.assertEqual(removed, "## Notes\n\nalpha")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -37,6 +37,7 @@ class _MarkdownSection:
     heading_line: str | None = None
     blocks: list[_MarkdownBlock] = field(default_factory=list)
     sections: list["_MarkdownSection"] = field(default_factory=list)
+    tail_blocks: list[_MarkdownBlock] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +75,7 @@ class _ActionArgument:
 @dataclass(frozen=True, slots=True)
 class _MarkdownAction:
     name: str
-    argument: _ActionArgument
+    arguments: tuple[_ActionArgument, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,9 +91,9 @@ def _register() -> None:
         metadata=RepresentationAdapterMetadata(
             name="markdown",
             summary="Select and transform markdown sections, blocks, and lists through a family-owned path surface.",
-            selectors=("[\"title\"]", "[n]", '.blocks("kind")'),
-            actions=("append_item",),
-            shortcuts=("list", "lists", "task_list", "task_lists", "paragraph", "paragraphs"),
+            selectors=("prelude", "[\"title\"]", "[n]", '.blocks("kind")'),
+            actions=("append_item", "append", "replace", "remove"),
+            shortcuts=("list", "lists", "task_list", "task_lists", "paragraph", "paragraphs", "prelude"),
         ),
     )
 
@@ -149,41 +150,95 @@ def _parse_markdown_body(body: str) -> _MarkdownSelectorPlan:
 
 
 def _parse_action(body: str, start: int) -> tuple[_MarkdownAction, int]:
-    if not body.startswith("->append_item(", start):
+    match = re.match(r"->([A-Za-z_][A-Za-z0-9_]*)\(", body[start:])
+    if match is None:
+        if body.startswith("->remove()", start):
+            return _MarkdownAction(name="remove", arguments=()), start + len("->remove()")
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_action",
             message="Unknown markdown action",
             details={"body": body, "position": start},
         )
-    close = body.find(")", start + len("->append_item("))
+    name = match.group(1)
+    open_paren = start + len(match.group(0)) - 1
+    close = body.find(")", open_paren + 1)
     if close == -1:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_action",
-            message="Markdown append_item action expected closing ')'",
+            message=f"Markdown {name} action expected closing ')'",
             details={"body": body, "position": start},
         )
-    argument_text = body[start + len("->append_item(") : close].strip()
+    argument_text = body[open_paren + 1 : close].strip()
+    if name == "remove":
+        if argument_text:
+            raise RepresentationAdapterError(
+                code="runtime.value.adapter_invalid_action",
+                message="Markdown remove action does not accept arguments",
+                details={"body": body, "position": start},
+            )
+        return _MarkdownAction(name="remove", arguments=()), close + 1
     if not argument_text:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_action",
-            message="Markdown append_item action requires one argument",
+            message=f"Markdown {name} action requires arguments",
             details={"body": body, "position": start},
         )
+    raw_arguments = _split_action_arguments(argument_text)
+    expected = {"append_item": (1, 1), "append": (1, 2), "replace": (1, 1)}.get(name)
+    if expected is None:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message="Unknown markdown action",
+            details={"body": body, "position": start},
+        )
+    minimum, maximum = expected
+    if len(raw_arguments) < minimum or len(raw_arguments) > maximum:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message=f"Markdown {name} action received an unexpected number of arguments",
+            details={"body": body, "position": start, "argument_count": len(raw_arguments)},
+        )
+    return _MarkdownAction(name=name, arguments=tuple(_parse_action_argument(item, body=body, position=start) for item in raw_arguments)), close + 1
+
+
+def _split_action_arguments(argument_text: str) -> list[str]:
+    arguments: list[str] = []
+    start = 0
+    quote: str | None = None
+    escape = False
+    for index, char in enumerate(argument_text):
+        if quote is not None:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in {'"', "'"}:
+            quote = char
+            continue
+        if char == ",":
+            arguments.append(argument_text[start:index].strip())
+            start = index + 1
+    arguments.append(argument_text[start:].strip())
+    return arguments
+
+
+def _parse_action_argument(argument_text: str, *, body: str, position: int) -> _ActionArgument:
     try:
         literal = json.loads(argument_text)
     except json.JSONDecodeError:
         literal = None
     if isinstance(literal, str):
-        argument = _ActionArgument(kind="literal", value=literal)
-    elif re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", argument_text):
-        argument = _ActionArgument(kind="parameter", value=argument_text)
-    else:
-        raise RepresentationAdapterError(
-            code="runtime.value.adapter_invalid_action",
-            message="Markdown append_item action expects a string literal or parameter name",
-            details={"body": body, "position": start},
-        )
-    return _MarkdownAction(name="append_item", argument=argument), close + 1
+        return _ActionArgument(kind="literal", value=literal)
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", argument_text):
+        return _ActionArgument(kind="parameter", value=argument_text)
+    raise RepresentationAdapterError(
+        code="runtime.value.adapter_invalid_action",
+        message="Markdown action arguments must be string literals or parameter names",
+        details={"body": body, "position": position},
+    )
 
 
 def _parse_bracket_step(body: str, start: int) -> tuple[object, int]:
@@ -320,6 +375,8 @@ def _make_block(lines: list[str], start_line: int) -> _MarkdownBlock | None:
             lines=list(lines),
             items=[match.group(1) for match in list_matches if match is not None],
         )
+    if any(line == "" for line in lines):
+        return _MarkdownBlock(kind="raw", start_line=start_line, end_line=start_line + len(lines), lines=list(lines))
     return _MarkdownBlock(kind="paragraph", start_line=start_line, end_line=start_line + len(lines), lines=list(lines))
 
 
@@ -397,19 +454,37 @@ def _apply_markdown_action(plan: _MarkdownSelectorPlan, document: _MarkdownSecti
             message="Markdown write path requires one explicit target",
             details={"matches": len(selection)},
         )
-    if not isinstance(selection, _MarkdownBlock) or selection.kind not in {"list", "task_list"}:
-        raise RepresentationAdapterError(
-            code="runtime.value.adapter_invalid_action",
-            message="Markdown append_item requires a list or task_list target",
-            details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
-        )
-    item_text = _resolve_action_argument(plan.action.argument, parameters)
-    selection.items.append(item_text)
-    if selection.kind == "task_list":
-        selection.checked.append(False)
-    selection.lines = _render_block_lines(selection)
-    selection.end_line = selection.start_line + len(selection.lines)
-    return _render_markdown(document)
+    if plan.action.name == "append_item":
+        if not isinstance(selection, _MarkdownBlock) or selection.kind not in {"list", "task_list"}:
+            raise RepresentationAdapterError(
+                code="runtime.value.adapter_invalid_action",
+                message="Markdown append_item requires a list or task_list target",
+                details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
+            )
+        item_text = _resolve_action_argument(plan.action.arguments[0], parameters)
+        selection.items.append(item_text)
+        if selection.kind == "task_list":
+            selection.checked.append(False)
+        selection.lines = _render_block_lines(selection)
+        selection.end_line = selection.start_line + len(selection.lines)
+        return _render_markdown(document)
+    if plan.action.name == "append":
+        text = _resolve_action_argument(plan.action.arguments[0], parameters)
+        prefix = "" if len(plan.action.arguments) == 1 else _resolve_action_argument(plan.action.arguments[1], parameters)
+        _append_text_to_target(document, selection, text, prefix)
+        return _render_markdown(document)
+    if plan.action.name == "replace":
+        text = _resolve_action_argument(plan.action.arguments[0], parameters)
+        _replace_target_text(document, selection, text)
+        return _render_markdown(document)
+    if plan.action.name == "remove":
+        _remove_target(document, selection)
+        return _render_markdown(document)
+    raise RepresentationAdapterError(
+        code="runtime.value.adapter_invalid_action",
+        message="Unknown markdown action",
+        details={"action": plan.action.name},
+    )
 
 
 def _resolve_action_argument(argument: _ActionArgument, parameters: JSONObject) -> str:
@@ -423,6 +498,112 @@ def _resolve_action_argument(argument: _ActionArgument, parameters: JSONObject) 
             details={"parameter": argument.value, "actual_type": type(value).__name__ if value is not None else "null"},
         )
     return value
+
+
+def _append_text_to_target(document: _MarkdownSection, selection: object, text: str, prefix: str) -> None:
+    payload = f"{prefix}{text}"
+    if isinstance(selection, _MarkdownPrelude):
+        _append_text_at_block_list_end(document.blocks, payload)
+        return
+    if isinstance(selection, _MarkdownSection):
+        _append_text_at_section_end(selection, payload)
+        return
+    if isinstance(selection, _MarkdownBlock) and selection.kind == "paragraph":
+        existing = "\n".join(selection.lines)
+        selection.lines = (existing + payload).splitlines() or [existing + payload]
+        selection.end_line = selection.start_line + len(selection.lines)
+        return
+    raise RepresentationAdapterError(
+        code="runtime.value.adapter_invalid_action",
+        message="Markdown append is only supported for prelude, section, and paragraph targets",
+        details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
+    )
+
+
+def _replace_target_text(document: _MarkdownSection, selection: object, text: str) -> None:
+    replacement = _make_raw_blocks(text)
+    if isinstance(selection, _MarkdownPrelude):
+        document.blocks = replacement
+        return
+    if isinstance(selection, _MarkdownSection):
+        selection.blocks = replacement
+        selection.sections = []
+        selection.tail_blocks = []
+        return
+    if isinstance(selection, _MarkdownBlock) and selection.kind == "paragraph":
+        selection.kind = "raw" if "\n\n" in text else "paragraph"
+        selection.lines = text.splitlines() or [text]
+        selection.items = []
+        selection.checked = []
+        selection.end_line = selection.start_line + len(selection.lines)
+        return
+    raise RepresentationAdapterError(
+        code="runtime.value.adapter_invalid_action",
+        message="Markdown replace is only supported for prelude, section, and paragraph targets",
+        details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
+    )
+
+
+def _remove_target(document: _MarkdownSection, selection: object) -> None:
+    if isinstance(selection, _MarkdownPrelude):
+        document.blocks = []
+        return
+    if isinstance(selection, _MarkdownSection):
+        selection.blocks = []
+        selection.sections = []
+        selection.tail_blocks = []
+        return
+    if isinstance(selection, _MarkdownBlock) and selection.kind == "paragraph":
+        _remove_block_from_tree(document, selection)
+        return
+    raise RepresentationAdapterError(
+        code="runtime.value.adapter_invalid_action",
+        message="Markdown remove is only supported for prelude, section, and paragraph targets",
+        details={"target_kind": getattr(selection, "kind", type(selection).__name__)},
+    )
+
+
+def _make_raw_blocks(text: str) -> list[_MarkdownBlock]:
+    if text == "":
+        return []
+    return [_MarkdownBlock(kind="raw", start_line=0, end_line=0, lines=text.splitlines() or [text])]
+
+
+def _append_text_at_block_list_end(blocks: list[_MarkdownBlock], payload: str) -> None:
+    if not blocks:
+        blocks.extend(_make_raw_blocks(payload))
+        return
+    target = blocks[-1]
+    existing = "\n".join(target.lines)
+    combined = existing + payload
+    target.kind = "raw" if "\n\n" in combined else target.kind
+    target.lines = combined.splitlines() or [combined]
+
+
+def _append_text_at_section_end(section: _MarkdownSection, payload: str) -> None:
+    if section.tail_blocks:
+        _append_text_at_block_list_end(section.tail_blocks, payload)
+        return
+    if section.sections:
+        _append_text_at_section_end(section.sections[-1], payload)
+        return
+    if section.blocks:
+        _append_text_at_block_list_end(section.blocks, payload)
+        return
+    section.blocks.extend(_make_raw_blocks(payload))
+
+
+def _remove_block_from_tree(section: _MarkdownSection, target: _MarkdownBlock) -> bool:
+    if target in section.blocks:
+        section.blocks.remove(target)
+        return True
+    if target in section.tail_blocks:
+        section.tail_blocks.remove(target)
+        return True
+    for child in section.sections:
+        if _remove_block_from_tree(child, target):
+            return True
+    return False
 
 
 def _auto_create_sections(current: list[object], title: str) -> list[_MarkdownSection]:
@@ -485,7 +666,7 @@ def _selection_to_json(selection: object) -> JSONValue:
             "kind": "section",
             "title": selection.title,
             "level": selection.level,
-            "blocks": [_selection_to_json(block) for block in selection.blocks],
+            "blocks": [_selection_to_json(block) for block in [*selection.blocks, *selection.tail_blocks]],
         }
     if isinstance(selection, _MarkdownPrelude):
         return {
@@ -528,6 +709,10 @@ def _render_markdown(section: _MarkdownSection) -> str:
         rendered = _render_markdown(child)
         if rendered:
             parts.append(rendered)
+    for block in section.tail_blocks:
+        block_lines = _render_block_lines(block)
+        if block_lines:
+            parts.append("\n".join(block_lines))
     return "\n\n".join(parts)
 
 

@@ -18,6 +18,7 @@ from ..representation_adapters import (
     RepresentationAdapterError,
     RepresentationAdapterInvocation,
     evaluate_representation_adapter_invocation,
+    has_representation_adapter,
 )
 from ..boolean_composition import parse_boolean_and, parse_boolean_not, parse_boolean_or
 from .registry import (
@@ -492,6 +493,8 @@ def _try_parse_adapter_invocation(expression: str, *, allow_boolean_composition:
     while probe < len(expression) and expression[probe].isspace():
         probe += 1
     if probe >= len(expression) or expression[probe] not in "[{.":
+        return None
+    if expression[probe] == "." and not has_representation_adapter(family):
         return None
 
     body, bindings, end = _split_adapter_body_and_bindings(
