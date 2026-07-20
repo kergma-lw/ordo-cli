@@ -22,6 +22,8 @@ A context determines:
 - whether evaluation happens in pre-execution, step-local, caller-local, or fragment-local scope;
 - whether the surface is native or embedded.
 
+It should not imply a separate read-only execution engine for otherwise equivalent probe-capable expression nodes.
+
 ### Root
 
 A root is one documented local reference family.
@@ -71,6 +73,12 @@ An adapter operation may:
 
 Such operations remain part of local value derivation rather than connector execution.
 
+The modeled adapter shape is:
+
+- adapter invocation starts one adapter-defined addressing or selection chain over an already available root value;
+- the interior shape of that chain is adapter-specific rather than globally normalized;
+- a terminal adapter mutation ends the chain and returns an updated root value for the represented structure.
+
 ### Canonical core
 
 The canonical local-expression core is the shared non-effectful tree model that supports both condition-oriented and value-oriented contexts.
@@ -100,6 +108,8 @@ The intended execution contract is:
 - canonical parsing and validation produce one tree model regardless of whether a node is satisfied from local roots or from read-only observation;
 - canonical evaluation may delegate probe acquisition through a dedicated read-only observation interface;
 - canonical evaluation remains the owner of node semantics, context gating, caching expectations, trace shape, and diagnostics emitted for probe-call execution.
+
+The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 

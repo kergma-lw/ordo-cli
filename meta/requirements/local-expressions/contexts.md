@@ -7,6 +7,7 @@
 - Embedded value contexts may read `args...` when evaluated inside a fragment instance that declared those arguments.
 - Embedded value contexts may read `state...` only where the surrounding contract allows runtime-state reads.
 - Embedded value contexts may read `step...` only where the surrounding contract allows execution-local step-result reads.
+- Embedded value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Embedded value contexts must remain free of connector invocation semantics.
 - Embedded value contexts must remain free of hidden workflow-control semantics.
 
@@ -25,6 +26,7 @@
 
 - Step-condition context expresses step-local conditional execution.
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
+- Step-condition context may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native bare `if` conditions are the preferred step-condition surface.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.

@@ -123,6 +123,9 @@
 - Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
 - Representation-adapter operations must remain pure, local, and value-producing.
 - Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
+- The authored addressing or selection surface between an adapter name and a terminal mutation may be adapter-defined.
+- The product must not require all adapters to share one identical middle syntax when their represented structures differ materially.
+- Any terminal representation-adapter mutation must return the updated root value of the adapted representation.
 - Any update-style representation-adapter operation must return a new derived value rather than persisting change by itself.
 
 ## Canonical core boundary
@@ -136,6 +139,8 @@
 - The canonical local-expression execution model must define how read-only probe-call nodes are evaluated without treating them as a second parser or second expression family.
 - The canonical engine must remain the owner of probe-call node semantics, context gating, dependency visibility, caching expectations, trace shape, and diagnostics.
 - Any external read-only observation needed to satisfy a probe call must pass through an explicit engine-facing probe-observation interface rather than through ad hoc legacy helper paths.
+- Repeated equivalent read-only observation requests within one evaluation scope must reuse one observed result.
+- A failed read-only observation must fail the surrounding expression evaluation rather than silently degrading it.
 - A context that forbids non-effectful external observation must reject probe-call nodes through normal context-policy enforcement.
 
 ## Permanent exclusions
@@ -150,6 +155,7 @@
 ## Product discipline
 
 - The product should prefer one local-expression family with context-specific restrictions over multiple independent expression languages for nearby workflow surfaces.
+- Context-specific restrictions should change allowed dependencies or expected result shape rather than introducing separate read-only execution engines for equivalent expression constructs.
 - Syntax and evaluation detail may differ by authored context, but those differences must not silently fragment the conceptual model into unrelated expression systems.
 
 <!-- source: requirements/local-expressions/contexts.md -->
@@ -163,6 +169,7 @@
 - Embedded value contexts may read `args...` when evaluated inside a fragment instance that declared those arguments.
 - Embedded value contexts may read `state...` only where the surrounding contract allows runtime-state reads.
 - Embedded value contexts may read `step...` only where the surrounding contract allows execution-local step-result reads.
+- Embedded value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Embedded value contexts must remain free of connector invocation semantics.
 - Embedded value contexts must remain free of hidden workflow-control semantics.
 
@@ -181,6 +188,7 @@
 
 - Step-condition context expresses step-local conditional execution.
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
+- Step-condition context may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native bare `if` conditions are the preferred step-condition surface.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
@@ -772,6 +780,8 @@ An expression context is one product surface in which local expressions may appe
 
 Different contexts may permit different roots, evaluation timing, and restrictions while still belonging to one local-expression domain.
 
+Contexts should differ by policy and expected result shape, not by fragmenting read-only expression semantics into separate engines.
+
 ### Expression root
 
 An expression root is a documented workflow-visible surface that an expression may read.
@@ -789,6 +799,8 @@ A local expression may also depend on product-defined read-only connector observ
 
 Such observation remains part of local-expression semantics only when it is read-only, reviewable, and does not introduce effectful connector execution.
 
+When the same read-only observation request appears repeatedly inside one evaluation scope, canonical evaluation should reuse one observed result rather than re-issuing the same probe work.
+
 ### Derived intermediate value
 
 A local expression may derive one value from another already available value and then continue evaluation over that derived value.
@@ -802,6 +814,12 @@ A representation adapter is a product-defined local-expression surface for inter
 
 Representation adapters may expose pure navigation and transformation operations over those values.
 They are not connectors and they do not own external integration semantics.
+
+Adapter discipline:
+
+- everything between the adapter name and a terminal mutation is adapter-defined selection or navigation surface;
+- the product should not force all adapters into one fake-uniform middle syntax when the underlying representations differ materially;
+- terminal adapter mutations should remain explicit and should return the updated root value rather than persisting change by themselves.
 
 ## Core contexts
 
@@ -883,6 +901,7 @@ Implications:
 - a probe call is still one canonical local-expression node, not a second expression language hidden beside the main engine;
 - probe-call caching, diagnostics, and trace behavior belong to the canonical execution model even when the observed value comes from a provider surface;
 - contexts that forbid non-effectful external observation must reject probe-call nodes through normal context policy rather than through ad hoc runtime split behavior.
+- when a read-only probe observation fails, the surrounding expression evaluation should fail rather than silently degrading to a partial value.
 
 ### Expression versus value adaptation
 
@@ -892,6 +911,8 @@ Implications:
 
 - adapter operations may interpret, navigate, select, normalize, and transform already available values;
 - adapter operations may return derived values or addressable focus values for further pure local use;
+- adapter-specific middle syntax may vary freely across adapters so long as the overall local-expression contract stays reviewable and non-effectful;
+- a terminal adapter mutation should end the adapter chain and return an updated root value for the represented document or value;
 - adapter update-style operations must still return new derived values rather than persisting changes by themselves;
 - any persistence of such derived values happens only when a workflow step passes the resulting value into an effectful operation.
 
@@ -1423,6 +1444,8 @@ A context determines:
 - whether evaluation happens in pre-execution, step-local, caller-local, or fragment-local scope;
 - whether the surface is native or embedded.
 
+It should not imply a separate read-only execution engine for otherwise equivalent probe-capable expression nodes.
+
 ### Root
 
 A root is one documented local reference family.
@@ -1472,6 +1495,12 @@ An adapter operation may:
 
 Such operations remain part of local value derivation rather than connector execution.
 
+The modeled adapter shape is:
+
+- adapter invocation starts one adapter-defined addressing or selection chain over an already available root value;
+- the interior shape of that chain is adapter-specific rather than globally normalized;
+- a terminal adapter mutation ends the chain and returns an updated root value for the represented structure.
+
 ### Canonical core
 
 The canonical local-expression core is the shared non-effectful tree model that supports both condition-oriented and value-oriented contexts.
@@ -1501,6 +1530,8 @@ The intended execution contract is:
 - canonical parsing and validation produce one tree model regardless of whether a node is satisfied from local roots or from read-only observation;
 - canonical evaluation may delegate probe acquisition through a dedicated read-only observation interface;
 - canonical evaluation remains the owner of node semantics, context gating, caching expectations, trace shape, and diagnostics emitted for probe-call execution.
+
+The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 
