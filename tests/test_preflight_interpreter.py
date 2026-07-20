@@ -5,6 +5,7 @@ import tempfile
 from ordo.model.connector import OperationContract
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import OperationRef, Step, Workflow
+from ordo.runtime.local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ReadOnlyObservationSession
 from ordo.runtime.preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, expand_preflight_run_step, resolve_preflight_value, store_preflight_register_output
 from ordo.runtime.resolution import ResolvedOperation
 
@@ -122,6 +123,25 @@ class PreflightInterpreterTest(unittest.TestCase):
         result = evaluate_preflight_step_condition(step, workflow)
 
         self.assertEqual(result.code, "runtime.value.input_missing")
+
+    def test_evaluates_preflight_step_condition_through_shared_read_only_engine(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"repository": "owner/repo", "issue_number": 7}, steps=())
+        step = Step(
+            name="inspect",
+            operation=OperationRef("gh.issue"),
+            if_='${gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).exists and gh.issue( issue_number = inputs.issue_number , repository = inputs.repository ).exists}',
+        )
+        count = 0
+
+        def observe(_: ConditionObservationRequest) -> ConditionObservationResult:
+            nonlocal count
+            count += 1
+            return ConditionObservationResult(status="ok", value=True, reference="gh.issue")
+
+        result = evaluate_preflight_step_condition(step, workflow, observation_session=ReadOnlyObservationSession(observe))
+
+        self.assertEqual(result, True)
+        self.assertEqual(count, 1)
 
     def test_builds_structured_preflight_halt_for_blocked_step(self) -> None:
         step = Step(name="inspect", operation=OperationRef("gh.issue"))

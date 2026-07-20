@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ordo.model.diagnostic import Diagnostic
@@ -10,6 +11,8 @@ from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 from .local_expression_engine.core import (
+    ConditionObservationRequest,
+    ConditionObservationResult,
     ConditionExpressionNode,
     ReadOnlyObservationSession,
     StateReferenceNode as ConditionStateReferenceNode,
@@ -31,6 +34,7 @@ from .local_expression_engine.core import (
     EmbeddedValueExpressionNode,
     ParsedLocalExpressionTree,
     collect_local_expression_dependencies,
+    evaluate_condition_expression,
     evaluate_local_expression_tree,
     parse_local_expression_tree,
     LocalExpressionEvaluationError,
@@ -398,6 +402,8 @@ def resolve_condition_local_expression(
     *,
     context: LocalExpressionContext,
     step_results: dict[str, OperationResult | JSONValue] | None = None,
+    observe: Callable[[ConditionObservationRequest], ConditionObservationResult] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Resolve one condition-oriented local-expression surface.
 
@@ -417,6 +423,26 @@ def resolve_condition_local_expression(
             message=exc.message,
             details={"context": context.value, "position": exc.position, "end": exc.end if exc.end is not None else exc.position, "expression": visible},
         ) from exc
+    condition_tree = parsed.guard if parsed.guard is not None else parsed.value
+    if condition_tree is not None and (observation_session is not None or observe is not None):
+        evaluation = evaluate_condition_expression(
+            condition_tree,
+            workflow,
+            observe=observe,
+            session=observation_session,
+            step_results=step_results,
+        )
+        if evaluation.status != "ok":
+            raise ValueResolutionError(
+                code="runtime.local_expression.probe_failed",
+                message="Condition local expression could not be evaluated safely",
+                details={
+                    "context": context.value,
+                    "expression": value,
+                    "diagnostic_codes": [diagnostic.code for diagnostic in evaluation.diagnostics],
+                },
+            )
+        return evaluation.value
     try:
         return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
     except LocalExpressionEvaluationError as exc:

@@ -10,6 +10,7 @@ from ordo.model.workflow import Step, Workflow
 
 from .fragment_runs import classify_run_for_check
 from .local_expression_contexts import LocalExpressionContext
+from .local_expression_engine.core import ReadOnlyObservationSession
 from .local_expressions import resolve_condition_local_expression
 from .providers import GuardProbe
 from .resolution import ResolvedOperation
@@ -60,6 +61,7 @@ def evaluate_preflight_step_condition(
     workflow: Workflow,
     *,
     step_results: dict[str, OperationResult | JSONObject] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
 ) -> bool | ValueResolutionError | None:
     """Evaluate one step `if` condition from currently available preflight knowledge."""
 
@@ -71,6 +73,7 @@ def evaluate_preflight_step_condition(
             workflow,
             context=LocalExpressionContext.STEP_CONDITION,
             step_results=step_results,
+            observation_session=observation_session,
         )
     except ValueResolutionError as exc:
         return exc
