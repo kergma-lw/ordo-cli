@@ -463,6 +463,9 @@
 - A playbook may declare a `pre_run` workflow set that executes before the requested workflow in the same runtime session.
 - A `pre_run` workflow set must remain explicit, project-local, and reviewable from the playbook surface.
 - Failure in any `pre_run` workflow must prevent effectful execution of the requested workflow.
+- `pre_run` must have an explicit playbook-owned dependency model rather than borrowing hidden state requirements from the requested workflow contract.
+- Main workflows must not be required to declare logical state needs only because playbook `pre_run` consumes that state during launch.
+- When `pre_run` needs runtime state, the playbook surface must declare the necessary binding explicitly on the `pre_run` entry itself.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -1229,6 +1232,7 @@ but they must not absorb workflow business-step logic.
 - bindings from workflow-level logical state roles to concrete project state declarations;
 - explicit execution working directory defaults and overrides for project-local launch context;
 - explicit project-local pre-run workflow orchestration before the requested workflow executes;
+- explicit playbook-owned dependency bindings for that pre-run launch phase;
 - activation-time derivation of any selected execution working directory from launch-known inputs only;
 - deterministic discovery of the project orchestration root;
 - deterministic resolution of project-local workflow and profile references.
@@ -1254,6 +1258,7 @@ A good playbook:
 - can be discovered predictably by both humans and agents;
 - gives stable names to common project operations;
 - keeps project-local launch concerns out of generic workflow logic;
+- keeps pre-run launch dependencies in the playbook layer rather than leaking them into unrelated workflow state contracts;
 - makes workflow, profile, and state resolution explicit enough for review;
 - fails early when catalog entries are missing, ambiguous, or structurally invalid.
 
@@ -2171,7 +2176,9 @@ Canonical path in the initial model:
 version: 1
 
 pre_run:
-  - workflows/resolve-context.yml
+  - file: workflows/resolve-context.yml
+    state_bindings:
+      shared_context: repo_task_state
 
 states:
   repo_task_state:
@@ -2202,16 +2209,20 @@ profiles:
 - `states` — named project-local runtime state declarations;
 - `workflows` — named launchable workflow entries;
 - `profiles` — named launchable profile entries;
-- `pre_run` — optional project-local workflow set that executes before the requested workflow;
+- `pre_run` — optional project-local launch-phase workflow set that executes before the requested workflow;
 - `defaults` — optional playbook-run defaults such as the active profile.
 
 ## Pre-run role
 
-`pre_run` is an optional ordered set of workflow references.
+`pre_run` is an optional ordered set of playbook-owned launch-phase entries.
 
-Each referenced workflow executes in the same runtime session before the requested workflow begins its own effectful execution.
+Each entry declares the workflow `file` to execute in the same runtime session before the requested workflow begins its own effectful execution.
+
+Each entry may also declare launch-phase-only bindings such as `state_bindings` that belong to the playbook wrapper rather than to the requested workflow contract.
 
 The initial model treats `pre_run` as playbook-owned orchestration for shared preparation such as context resolution, environment checks, or runtime-profile switching.
+
+That means the requested workflow does not need to declare logical state needs that are consumed only by `pre_run`.
 
 ## Workflow entry role
 
@@ -2335,12 +2346,15 @@ The entry must resolve to exactly one workflow file.
 
 ## Pre-run workflow resolution
 
-- `pre_run` is an optional ordered list of workflow references declared directly on the playbook.
-- Each `pre_run` item resolves with the same workflow-path rules as a named workflow file reference.
+- `pre_run` is an optional ordered list of playbook-owned launch-phase entries declared directly on the playbook.
+- Each `pre_run` item must declare its workflow `file` explicitly.
+- Each `pre_run` item resolves its `file` with the same workflow-path rules as a named workflow file reference.
+- Each `pre_run` item may declare launch-phase `state_bindings` that apply only while that `pre_run` workflow is being evaluated.
 - `pre_run` workflows execute in declaration order before the requested workflow performs its own effectful execution.
 - `pre_run` workflows run in the same runtime session as the requested workflow.
 - Runtime context changes produced by `pre_run` workflows may affect later `pre_run` items and the requested workflow.
 - Failure in a `pre_run` workflow prevents effectful execution of the requested workflow.
+- `pre_run` state dependencies must not require the requested workflow to widen its own declared logical state contract.
 
 ## Workflow file resolution
 
@@ -4909,6 +4923,7 @@ Expected Ordo value:
 
 - common preparation stays explicit in one project-local orchestration surface;
 - requested workflows stay smaller and less repetitive;
+- launch-phase state needs stay playbook-owned rather than leaking into the requested workflow contract;
 - later execution still remains explainable because pre-run orchestration is declared rather than hidden.
 
 ## Scenario 4: logical workflow state binding

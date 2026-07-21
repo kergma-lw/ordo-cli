@@ -69,6 +69,7 @@ Expected Ordo value:
 
 - common preparation stays explicit in one project-local orchestration surface;
 - requested workflows stay smaller and less repetitive;
+- launch-phase state needs stay playbook-owned rather than leaking into the requested workflow contract;
 - later execution still remains explainable because pre-run orchestration is declared rather than hidden.
 
 ## Scenario 4: logical workflow state binding

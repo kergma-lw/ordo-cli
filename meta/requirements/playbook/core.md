@@ -18,6 +18,9 @@
 - A playbook may declare a `pre_run` workflow set that executes before the requested workflow in the same runtime session.
 - A `pre_run` workflow set must remain explicit, project-local, and reviewable from the playbook surface.
 - Failure in any `pre_run` workflow must prevent effectful execution of the requested workflow.
+- `pre_run` must have an explicit playbook-owned dependency model rather than borrowing hidden state requirements from the requested workflow contract.
+- Main workflows must not be required to declare logical state needs only because playbook `pre_run` consumes that state during launch.
+- When `pre_run` needs runtime state, the playbook surface must declare the necessary binding explicitly on the `pre_run` entry itself.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.

@@ -16,7 +16,9 @@ Canonical path in the initial model:
 version: 1
 
 pre_run:
-  - workflows/resolve-context.yml
+  - file: workflows/resolve-context.yml
+    state_bindings:
+      shared_context: repo_task_state
 
 states:
   repo_task_state:
@@ -47,16 +49,20 @@ profiles:
 - `states` — named project-local runtime state declarations;
 - `workflows` — named launchable workflow entries;
 - `profiles` — named launchable profile entries;
-- `pre_run` — optional project-local workflow set that executes before the requested workflow;
+- `pre_run` — optional project-local launch-phase workflow set that executes before the requested workflow;
 - `defaults` — optional playbook-run defaults such as the active profile.
 
 ## Pre-run role
 
-`pre_run` is an optional ordered set of workflow references.
+`pre_run` is an optional ordered set of playbook-owned launch-phase entries.
 
-Each referenced workflow executes in the same runtime session before the requested workflow begins its own effectful execution.
+Each entry declares the workflow `file` to execute in the same runtime session before the requested workflow begins its own effectful execution.
+
+Each entry may also declare launch-phase-only bindings such as `state_bindings` that belong to the playbook wrapper rather than to the requested workflow contract.
 
 The initial model treats `pre_run` as playbook-owned orchestration for shared preparation such as context resolution, environment checks, or runtime-profile switching.
+
+That means the requested workflow does not need to declare logical state needs that are consumed only by `pre_run`.
 
 ## Workflow entry role
 

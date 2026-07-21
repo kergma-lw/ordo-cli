@@ -22,6 +22,7 @@ but they must not absorb workflow business-step logic.
 - bindings from workflow-level logical state roles to concrete project state declarations;
 - explicit execution working directory defaults and overrides for project-local launch context;
 - explicit project-local pre-run workflow orchestration before the requested workflow executes;
+- explicit playbook-owned dependency bindings for that pre-run launch phase;
 - activation-time derivation of any selected execution working directory from launch-known inputs only;
 - deterministic discovery of the project orchestration root;
 - deterministic resolution of project-local workflow and profile references.
@@ -47,6 +48,7 @@ A good playbook:
 - can be discovered predictably by both humans and agents;
 - gives stable names to common project operations;
 - keeps project-local launch concerns out of generic workflow logic;
+- keeps pre-run launch dependencies in the playbook layer rather than leaking them into unrelated workflow state contracts;
 - makes workflow, profile, and state resolution explicit enough for review;
 - fails early when catalog entries are missing, ambiguous, or structurally invalid.
 

@@ -10,7 +10,9 @@ class IntrospectionPlaybookContractTest(unittest.TestCase):
 
         self.assertEqual(payload["discovery"]["path"], ".ordo/ordo.yaml")
         workflow_entry_fields = {field["name"] for field in payload["workflow_entry_fields"]}
+        pre_run_entry_fields = {field["name"] for field in payload["pre_run_entry_fields"]}
         self.assertEqual(workflow_entry_fields, {"file", "description", "working_directory", "state_bindings"})
+        self.assertEqual(pre_run_entry_fields, {"file", "state_bindings"})
         working_directory = next(field for field in payload["workflow_entry_fields"] if field["name"] == "working_directory")
         self.assertEqual(working_directory["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(working_directory["resolution_base"], "playbook_dir")
@@ -26,7 +28,9 @@ class IntrospectionPlaybookContractTest(unittest.TestCase):
         self.assertEqual(payload["activation_semantics"]["discovery"]["missing"], "playbook.discovery.missing")
         self.assertIn("description", payload["activation_semantics"]["workflow_entries"]["optional"])
         self.assertIn("working_directory", payload["activation_semantics"]["workflow_entries"]["optional"])
-        self.assertEqual(payload["activation_semantics"]["pre_run"]["item_type"], "workflow_reference")
+        self.assertEqual(payload["activation_semantics"]["pre_run"]["item_type"], "pre_run_entry")
+        self.assertEqual(payload["activation_semantics"]["pre_run"]["requires"], ["file"])
+        self.assertIn("state_bindings", payload["activation_semantics"]["pre_run"]["optional"])
         self.assertEqual(payload["activation_semantics"]["state_entries"]["requires"], ["path"])
 
     def test_playbook_contract_stays_aligned_with_playbook_surface_constants(self) -> None:

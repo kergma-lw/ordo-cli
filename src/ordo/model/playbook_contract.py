@@ -42,6 +42,15 @@ PLAYBOOK_CONTRACT: JSONObject = {
     "profile_entry_fields": [
         {"name": "file", "required": True, "type": "string"},
     ],
+    "pre_run_entry_fields": [
+        {"name": "file", "required": True, "type": "string"},
+        {
+            "name": "state_bindings",
+            "required": False,
+            "type": "object",
+            "documentation_role": "playbook_owned_pre_run_state_bindings",
+        },
+    ],
     "state_entry_fields": [
         {"name": "path", "required": True, "type": "string"},
     ],
@@ -70,8 +79,12 @@ PLAYBOOK_CONTRACT: JSONObject = {
             "optional": ["description", "working_directory", "state_bindings"],
         },
         "pre_run": {
-            "item_type": "workflow_reference",
+            "item_type": "pre_run_entry",
+            "requires": ["file"],
+            "optional": ["state_bindings"],
             "effect": "executes_before_requested_workflow_in_same_runtime_session",
+            "launch_context_boundary": "playbook_owned",
+            "state_dependency_boundary": "must_not_widen_main_workflow_state_contract",
         },
         "profile_entries": {
             "requires": ["file"],

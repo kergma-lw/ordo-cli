@@ -132,7 +132,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         workflow_entry_fields = {item["name"]: item for item in model["playbook"]["workflow_entry_fields"]}
         workflow_inputs = next(item for item in model["workflow"]["top_level_fields"] if item["name"] == "inputs")
 
-        self.assertEqual(model["playbook"]["activation_semantics"]["pre_run"]["item_type"], "workflow_reference")
+        self.assertEqual(model["playbook"]["activation_semantics"]["pre_run"]["item_type"], "pre_run_entry")
+        self.assertEqual(model["playbook"]["activation_semantics"]["pre_run"]["launch_context_boundary"], "playbook_owned")
         self.assertEqual(profile_fields["inputs"]["runtime_effect"], "applies_missing_workflow_inputs")
         self.assertEqual(profile_fields["working_directory"]["runtime_effect"], "sets_profile_execution_working_directory")
         self.assertEqual(profile_fields["checks"]["runtime_effect"], "published_metadata_only")
@@ -205,6 +206,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(pre_run_node["document_kind"], "model_node")
         self.assertEqual(pre_run_node["name"], "playbook.pre_run_contract")
         self.assertEqual(pre_run_node["metadata"]["effect"], "executes_before_requested_workflow_in_same_runtime_session")
+        self.assertEqual(pre_run_node["metadata"]["launch_context_boundary"], "playbook_owned")
         self.assertEqual(command_line_node["document_kind"], "command_line_node")
         self.assertEqual(command_line_node["name"], "command-line.ordo-playbook.flag.input_file")
         self.assertEqual(command_line_node["metadata"]["effect"], "override_input_from_file")

@@ -24,12 +24,15 @@ The entry must resolve to exactly one workflow file.
 
 ## Pre-run workflow resolution
 
-- `pre_run` is an optional ordered list of workflow references declared directly on the playbook.
-- Each `pre_run` item resolves with the same workflow-path rules as a named workflow file reference.
+- `pre_run` is an optional ordered list of playbook-owned launch-phase entries declared directly on the playbook.
+- Each `pre_run` item must declare its workflow `file` explicitly.
+- Each `pre_run` item resolves its `file` with the same workflow-path rules as a named workflow file reference.
+- Each `pre_run` item may declare launch-phase `state_bindings` that apply only while that `pre_run` workflow is being evaluated.
 - `pre_run` workflows execute in declaration order before the requested workflow performs its own effectful execution.
 - `pre_run` workflows run in the same runtime session as the requested workflow.
 - Runtime context changes produced by `pre_run` workflows may affect later `pre_run` items and the requested workflow.
 - Failure in a `pre_run` workflow prevents effectful execution of the requested workflow.
+- `pre_run` state dependencies must not require the requested workflow to widen its own declared logical state contract.
 
 ## Workflow file resolution
 
