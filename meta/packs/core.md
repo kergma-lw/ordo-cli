@@ -2162,7 +2162,7 @@ The playbook is the project-local orchestration root.
 Canonical path in the initial model:
 
 ```text
-.ordo/playbook.yml
+.ordo/ordo.yaml
 ```
 
 ## Minimal shape
@@ -2280,7 +2280,7 @@ When execution working directory is declared at multiple playbook-owned launch s
 When the caller does not provide an explicit playbook path, CLI should look for:
 
 ```text
-.ordo/playbook.yml
+.ordo/ordo.yaml
 ```
 
 relative to the current working directory.
@@ -2295,13 +2295,13 @@ The initial model should prefer a small and predictable discovery rule over aggr
 
 Implications:
 
-- no silent fallback from `playbook.yml` to unrelated filenames;
+- no silent fallback from `.ordo/ordo.yaml` to alternate filenames such as `playbook.yml` or `playbook.yaml`;
 - no broad directory crawling as a hidden convenience mechanism;
 - no dependence on shell aliases or external wrappers for the canonical discovery rule.
 
 ## Failure rule
 
-If default discovery does not find `.ordo/playbook.yml`, runtime should return a structured missing-playbook outcome rather than guessing a workflow file.
+If default discovery does not find `.ordo/ordo.yaml`, runtime should return a structured missing-playbook outcome rather than guessing a workflow file.
 
 ## Future extensions
 
@@ -2318,7 +2318,7 @@ Resolution starts from the directory that contains the discovered playbook file.
 For the canonical default path:
 
 ```text
-<project>/.ordo/playbook.yml
+<project>/.ordo/ordo.yaml
 ```
 
 the resolution base is:
@@ -4842,7 +4842,7 @@ Expected Ordo value:
 
 ## Scenario 1: project-local workflow catalog
 
-Repo exposes a small named set of common operational workflows through `.ordo/playbook.yml`.
+Repo exposes a small named set of common operational workflows through `.ordo/ordo.yaml`.
 
 Expected Ordo value:
 
@@ -4923,7 +4923,7 @@ Expected Ordo value:
 
 ## Scenario 5: missing playbook on default discovery
 
-Caller runs `ordo plan close-task` in a directory without `.ordo/playbook.yml`.
+Caller runs `ordo plan close-task` in a directory without `.ordo/ordo.yaml`.
 
 Expected Ordo value:
 
@@ -5148,7 +5148,7 @@ Playbook must provide a deterministic and reviewable project-local launch surfac
 
 ## Checks
 
-- `.ordo/playbook.yml` discovery behavior is documented and testable.
+- `.ordo/ordo.yaml` discovery behavior is documented and testable.
 - Missing playbook, missing workflow entry, and missing profile entry fail with distinct structured outcomes.
 - Workflow names are unique within the playbook workflow catalog.
 - Profile names are unique within the playbook profile catalog.

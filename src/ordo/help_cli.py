@@ -110,7 +110,6 @@ def build_command_line_response() -> JSONObject:
     input_contract = workflow_contract["inputs_contract"]
     playbook_flags = [
         {"name": "--file", "value_shape": "PATH", "required": False, "effect": "override_playbook_discovery", "summary": "Use one explicit playbook file path"},
-        {"name": "--workflow", "value_shape": "NAME", "required": False, "effect": "select_workflow_entry_legacy", "summary": "Legacy workflow selector retained for compatibility while positional workflow names become primary"},
         {"name": "--profile", "value_shape": "NAME", "required": False, "effect": "select_active_profile", "summary": "Select one named profile for this run"},
         {"name": "--input", "value_shape": "KEY=VALUE", "required": False, "repeatable": True, "effect": "override_input_inline", "summary": "Add or override one top-level workflow input from an inline YAML value"},
         {"name": "--input-file", "value_shape": "KEY=PATH", "required": False, "repeatable": True, "effect": "override_input_from_file", "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"},

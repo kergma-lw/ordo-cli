@@ -14,6 +14,21 @@
         },
         {
           "must_not_infer": [],
+          "name": "workflow.local_expression.adapters",
+          "related_capabilities": [
+            "workflow.local_expressions"
+          ],
+          "related_model_nodes": [
+            "workflow.local_expression.adapter_seam",
+            "workflow.local_expression.adapter_binding",
+            "workflow.local_expression.adapter.markdown"
+          ],
+          "related_negative_rules": [],
+          "scope": "workflow",
+          "status": "supported"
+        },
+        {
+          "must_not_infer": [],
           "name": "workflow.include_fragments",
           "related_capabilities": [
             "workflow.local_expressions",
@@ -181,61 +196,28 @@
           "status": "supported"
         }
       ],
-      "embedded_value_expression_builtins": [
-        {
-          "name": "format"
-        }
-      ],
-      "embedded_value_expression_filters": [
-        {
-          "input_type": "string",
-          "name": "lower",
-          "output_type": "string"
-        },
-        {
-          "input_type": "string",
-          "name": "trim",
-          "output_type": "string"
-        },
-        {
-          "input_type": "string",
-          "name": "slug",
-          "output_type": "string"
-        },
-        {
-          "input_type": "json",
-          "name": "eq",
-          "output_type": "boolean"
-        },
-        {
-          "input_type": "json",
-          "name": "ne",
-          "output_type": "boolean"
-        },
-        {
-          "input_type": "boolean",
-          "name": "not",
-          "output_type": "boolean"
-        }
-      ],
       "expression_roots": [
         {
           "name": "inputs",
           "surfaces": [
             "guard_expression",
             "state_key_reference",
+            "step_condition",
             "embedded_value_expression"
           ]
         },
         {
           "name": "probe",
           "surfaces": [
-            "guard_expression"
+            "guard_expression",
+            "step_condition",
+            "embedded_value_expression"
           ]
         },
         {
           "name": "args",
           "surfaces": [
+            "step_condition",
             "embedded_value_expression"
           ]
         },
@@ -243,12 +225,14 @@
           "name": "state",
           "surfaces": [
             "guard_expression",
+            "step_condition",
             "embedded_value_expression"
           ]
         },
         {
           "name": "step",
           "surfaces": [
+            "step_condition",
             "embedded_value_expression"
           ]
         }
@@ -288,12 +272,40 @@
             "ne",
             "not"
           ],
+          "name": "step_condition",
+          "roots": [
+            "inputs",
+            "args",
+            "state",
+            "step",
+            "probe"
+          ]
+        },
+        {
+          "boolean_operators": [
+            "and",
+            "or",
+            "not",
+            "parentheses"
+          ],
+          "builtins": [
+            "format"
+          ],
+          "filters": [
+            "lower",
+            "trim",
+            "slug",
+            "eq",
+            "ne",
+            "not"
+          ],
           "name": "embedded_value_expression",
           "roots": [
             "inputs",
             "args",
             "state",
-            "step"
+            "step",
+            "probe"
           ]
         },
         {
@@ -304,6 +316,43 @@
           "roots": [
             "inputs"
           ]
+        }
+      ],
+      "local_expression_builtins": [
+        {
+          "name": "format"
+        }
+      ],
+      "local_expression_filters": [
+        {
+          "input_type": "string",
+          "name": "lower",
+          "output_type": "string"
+        },
+        {
+          "input_type": "string",
+          "name": "trim",
+          "output_type": "string"
+        },
+        {
+          "input_type": "string",
+          "name": "slug",
+          "output_type": "string"
+        },
+        {
+          "input_type": "json",
+          "name": "eq",
+          "output_type": "boolean"
+        },
+        {
+          "input_type": "json",
+          "name": "ne",
+          "output_type": "boolean"
+        },
+        {
+          "input_type": "boolean",
+          "name": "not",
+          "output_type": "boolean"
         }
       ],
       "negative_rules": [
@@ -320,20 +369,20 @@
         },
         {
           "name": "guard_expression.no_filters",
-          "reason": "guard expressions are a distinct probe/input language and do not evaluate value-expression filter pipelines",
+          "reason": "the shared local-expression engine keeps filter pipelines context-gated, and guard context does not currently evaluate them",
           "related_capabilities": [],
           "related_codes": [],
           "related_model_nodes": [],
-          "rule": "Value-expression filters are not allowed in guard expressions",
+          "rule": "Local-expression filter pipelines are not allowed in guard expressions",
           "surface": "guard_expression"
         },
         {
           "name": "guard_expression.no_format_builtin",
-          "reason": "guard expressions do not evaluate value-expression builtins",
+          "reason": "the shared local-expression engine keeps built-in value construction context-gated, and guard context does not currently evaluate them",
           "related_capabilities": [],
           "related_codes": [],
           "related_model_nodes": [],
-          "rule": "The format builtin is not allowed in guard expressions",
+          "rule": "The format local-expression builtin is not allowed in guard expressions",
           "surface": "guard_expression"
         },
         {
@@ -2531,7 +2580,7 @@
       "activation_semantics": {
         "discovery": {
           "missing": "playbook.discovery.missing",
-          "path": ".ordo/playbook.yml",
+          "path": ".ordo/ordo.yaml",
           "strategy": "cwd_relative_single_path"
         },
         "pre_run": {
@@ -2550,6 +2599,7 @@
         },
         "workflow_entries": {
           "optional": [
+            "description",
             "working_directory",
             "state_bindings"
           ],
@@ -2583,7 +2633,7 @@
         }
       ],
       "discovery": {
-        "path": ".ordo/playbook.yml"
+        "path": ".ordo/ordo.yaml"
       },
       "document_kind": "playbook",
       "profile_entry_fields": [
@@ -2637,6 +2687,12 @@
         {
           "name": "file",
           "required": true,
+          "type": "string"
+        },
+        {
+          "documentation_role": "project_local_workflow_summary",
+          "name": "description",
+          "required": false,
           "type": "string"
         },
         {

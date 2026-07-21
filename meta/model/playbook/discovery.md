@@ -5,7 +5,7 @@
 When the caller does not provide an explicit playbook path, CLI should look for:
 
 ```text
-.ordo/playbook.yml
+.ordo/ordo.yaml
 ```
 
 relative to the current working directory.
@@ -20,13 +20,13 @@ The initial model should prefer a small and predictable discovery rule over aggr
 
 Implications:
 
-- no silent fallback from `playbook.yml` to unrelated filenames;
+- no silent fallback from `.ordo/ordo.yaml` to alternate filenames such as `playbook.yml` or `playbook.yaml`;
 - no broad directory crawling as a hidden convenience mechanism;
 - no dependence on shell aliases or external wrappers for the canonical discovery rule.
 
 ## Failure rule
 
-If default discovery does not find `.ordo/playbook.yml`, runtime should return a structured missing-playbook outcome rather than guessing a workflow file.
+If default discovery does not find `.ordo/ordo.yaml`, runtime should return a structured missing-playbook outcome rather than guessing a workflow file.
 
 ## Future extensions
 

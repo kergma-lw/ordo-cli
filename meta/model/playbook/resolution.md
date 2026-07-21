@@ -7,7 +7,7 @@ Resolution starts from the directory that contains the discovered playbook file.
 For the canonical default path:
 
 ```text
-<project>/.ordo/playbook.yml
+<project>/.ordo/ordo.yaml
 ```
 
 the resolution base is:

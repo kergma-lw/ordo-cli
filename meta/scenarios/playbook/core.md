@@ -2,7 +2,7 @@
 
 ## Scenario 1: project-local workflow catalog
 
-Repo exposes a small named set of common operational workflows through `.ordo/playbook.yml`.
+Repo exposes a small named set of common operational workflows through `.ordo/ordo.yaml`.
 
 Expected Ordo value:
 
@@ -83,7 +83,7 @@ Expected Ordo value:
 
 ## Scenario 5: missing playbook on default discovery
 
-Caller runs `ordo plan close-task` in a directory without `.ordo/playbook.yml`.
+Caller runs `ordo plan close-task` in a directory without `.ordo/ordo.yaml`.
 
 Expected Ordo value:
 

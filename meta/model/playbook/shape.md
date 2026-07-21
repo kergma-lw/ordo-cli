@@ -7,7 +7,7 @@ The playbook is the project-local orchestration root.
 Canonical path in the initial model:
 
 ```text
-.ordo/playbook.yml
+.ordo/ordo.yaml
 ```
 
 ## Minimal shape

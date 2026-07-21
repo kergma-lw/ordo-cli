@@ -6,7 +6,7 @@ Playbook must provide a deterministic and reviewable project-local launch surfac
 
 ## Checks
 
-- `.ordo/playbook.yml` discovery behavior is documented and testable.
+- `.ordo/ordo.yaml` discovery behavior is documented and testable.
 - Missing playbook, missing workflow entry, and missing profile entry fail with distinct structured outcomes.
 - Workflow names are unique within the playbook workflow catalog.
 - Profile names are unique within the playbook profile catalog.

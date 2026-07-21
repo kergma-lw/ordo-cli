@@ -28,13 +28,6 @@
           "value_shape": "PATH"
         },
         {
-          "effect": "select_workflow_entry_legacy",
-          "name": "--workflow",
-          "required": false,
-          "summary": "Legacy workflow selector retained for compatibility while positional workflow names become primary",
-          "value_shape": "NAME"
-        },
-        {
           "effect": "select_active_profile",
           "name": "--profile",
           "required": false,

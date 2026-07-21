@@ -115,7 +115,6 @@ def main() -> int:
         ),
     )
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
-    parser.add_argument("--workflow", help="workflow name declared in the playbook; deprecated when used instead of positional workflow selection")
     parser.add_argument("--profile", help="active profile name for this run")
     parser.add_argument(
         "--input",
@@ -255,14 +254,9 @@ def _resolve_execution_workflow_name(args, *, parser: argparse.ArgumentParser) -
     command = list(args.command)
     if len(command) > 2:
         parser.error(f"{command[0]} accepts exactly one workflow name")
-    if len(command) == 2:
-        if args.workflow is not None:
-            parser.error("do not combine a positional workflow name with --workflow")
-        return command[1]
-    if args.workflow is None:
+    if len(command) != 2:
         parser.error(f"{command[0]} requires a workflow name")
-    print("warning: --workflow is deprecated; prefer `ordo-playbook <mode> <workflow>`", file=sys.stderr)
-    return args.workflow
+    return command[1]
 
 
 def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.ArgumentParser) -> int:
