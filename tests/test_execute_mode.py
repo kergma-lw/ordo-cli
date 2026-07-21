@@ -68,6 +68,27 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(context["should_execute"], True)
         self.assertEqual(context["condition_source"], "execution_tree_state")
 
+    def test_execute_reports_undeclared_root_input_inside_run_target_as_validation_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.size == \"L\"\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+            self.assertEqual(result.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+
     def test_record_step_runtime_result_updates_registers_and_diagnostics(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="flag", value=True, register="flag"),))
         step = workflow.steps[0]
@@ -662,6 +683,7 @@ class ExecuteModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
+            declared_inputs={"enabled": {}},
             guards=(),
             steps=(
                 Step(name="first-step", operation=OperationRef("shell.command"), if_="${inputs.enabled}"),

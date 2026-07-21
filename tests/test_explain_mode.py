@@ -45,6 +45,28 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["category"], "resolution")
         self.assertEqual(result.outputs["next_actions"][0]["action"], "fix_operation_references")
 
+    def test_explain_reports_undeclared_root_input_inside_run_target_as_validation_problem(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.size == \"L\"\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                ),
+            )
+
+            result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+            self.assertEqual(result.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+            self.assertEqual(result.outputs["explanation"]["category"], "validation")
+
     def test_explain_reports_ok_state_and_safe_next_action(self) -> None:
         workflow = Workflow(
             version=0,

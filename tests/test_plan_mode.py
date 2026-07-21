@@ -58,6 +58,27 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_items"][0]["status"], "blocked")
         self.assertEqual(result.outputs["step_items"][0]["eligibility"], "blocked")
 
+    def test_plan_reports_undeclared_root_input_inside_run_target_as_validation_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.size == \"L\"\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                ),
+            )
+
+            result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+            self.assertEqual(result.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+
     def test_plan_reports_resolution_failure_without_log_scraping(self) -> None:
         workflow = Workflow(
             version=0,
@@ -140,6 +161,7 @@ class PlanModeTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="open-task",
+                declared_inputs={"repo_kind": {}},
                 blocks=(
                     StepBlock(steps=(Step(name="expand", run="switch-profile.yml", resolved_run_path=str(fragment)),)),
                     GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),

@@ -12,7 +12,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
 from ordo.model.workflow import Step, StepBlock, Workflow
-from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document, validate_workflow_document
+from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document, validate_workflow_document, validate_workflow_semantics
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
 from ordo.runtime.local_expression_engine.core import (
@@ -224,6 +224,9 @@ def activate_playbook(
         input_overrides=None,
     )
     workflow = _resolve_workflow_state_paths(workflow, base_dir=working_directory or playbook_dir)
+    semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
+    if not semantic_report.ok:
+        raise PlaybookError(semantic_report.diagnostics)
     activation_diagnostics = _activation_diagnostics(
         workflow_entry,
         workflow_name=workflow_name,

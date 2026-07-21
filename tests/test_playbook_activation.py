@@ -464,6 +464,56 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(ctx.exception.diagnostics[0].code, "validation.unknown_field")
         self.assertEqual(ctx.exception.diagnostics[0].path, ("blocks", "0", "steps", "0", "unexpected"))
 
+    def test_activate_playbook_reports_validation_errors_from_run_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    blocks:
+                      - steps:
+                          - name: expand
+                            run: fragments/inspect
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "fragments").mkdir()
+            (root / ".ordo" / "workflows" / "fragments" / "inspect.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    blocks:
+                      - guards:
+                          - inputs.repository == "owner/repo"
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+        self.assertEqual(ctx.exception.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+
     def test_activate_playbook_resolves_working_directory_relative_to_playbook(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

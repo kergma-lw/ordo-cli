@@ -25,7 +25,7 @@ from .planning import plan_workflow
 from .profiles import ProfileCompositionResult, WorkflowProfileApplicationResult, apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, compose_profiles
 from .providers import ConnectorProvider, GuardProbe, StepExecutor, clear_default_connector_provider, get_default_connector_provider, set_default_connector_provider
 from .resolution import ResolvedOperation, WorkflowResolution, resolve_workflow_references
-from .validation import ValidationReport, validate_profile_document, validate_profile_text, validate_workflow_document, validate_workflow_text
+from .validation import ValidationReport, validate_profile_document, validate_profile_text, validate_workflow_document, validate_workflow_semantics, validate_workflow_text
 
 __all__ = [
     "LoadError",
@@ -72,5 +72,6 @@ __all__ = [
     "validate_profile_document",
     "validate_profile_text",
     "validate_workflow_document",
+    "validate_workflow_semantics",
     "validate_workflow_text",
 ]

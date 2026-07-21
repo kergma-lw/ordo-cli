@@ -500,6 +500,17 @@ def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -
     return _report("profile", diagnostics)
 
 
+def validate_workflow_semantics(workflow: Workflow, *, source: str | None = None) -> ValidationReport:
+    """Validate shared post-assembly workflow semantics for all runtime entrypoints."""
+
+    effective_source = source or workflow.source_path or "<memory>"
+    document_report = validate_workflow_document(workflow.to_contract(), source=effective_source)
+    diagnostics = list(document_report.diagnostics)
+    if document_report.ok:
+        diagnostics.extend(validate_workflow_run_target_inputs(workflow))
+    return _report("workflow", diagnostics)
+
+
 def validate_workflow_run_target_inputs(workflow: Workflow) -> tuple[Diagnostic, ...]:
     """Validate undeclared root-input references across reusable run targets."""
 
