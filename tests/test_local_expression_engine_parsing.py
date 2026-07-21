@@ -86,6 +86,13 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root.arguments[1].parts, ("inputs", "owner"))
         self.assertIsInstance(parsed.root.arguments[2], PipelineNode)
 
+    def test_parse_presence_check_builtin(self) -> None:
+        parsed = parse_local_expression_tree("is_missing(inputs.priority)")
+
+        self.assertIsInstance(parsed.root, BuiltinCallNode)
+        self.assertEqual(parsed.root.name, "is_missing")
+        self.assertEqual(parsed.root.arguments[0], ReferenceNode(start=11, end=26, parts=("inputs", "priority")))
+
     def test_parse_rejects_unterminated_string_literal(self) -> None:
         with self.assertRaises(LocalExpressionParseError) as ctx:
             parse_local_expression_tree('format("unterminated)')

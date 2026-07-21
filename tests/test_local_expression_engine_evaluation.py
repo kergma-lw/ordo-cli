@@ -245,6 +245,59 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
 
+    def test_evaluate_is_missing_returns_true_for_missing_input(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs: {}
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("is_missing(inputs.priority)")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_present_treats_explicit_null_as_present(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  priority: null
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("is_present(inputs.priority)")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_presence_check_rejects_computed_expression_argument(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  title: hello
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_missing(format("{}", inputs.title))')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.presence_check_argument")
+
     def test_evaluate_comparison_expression(self) -> None:
         workflow = load_workflow_text(
             """

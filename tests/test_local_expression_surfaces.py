@@ -75,6 +75,19 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
             {"validation.workflow.value_expr.duplicate_argument"},
         )
 
+    def test_embedded_value_surface_accepts_presence_check_on_lookup_reference(self) -> None:
+        parsed = parse_local_expression('is_missing(inputs.priority)', context=LocalExpressionContext.EMBEDDED_VALUE)
+
+        self.assertEqual(validate_parsed_local_expression(parsed), ())
+
+    def test_embedded_value_surface_rejects_presence_check_on_computed_expression(self) -> None:
+        parsed = parse_local_expression('is_missing(format("{}", inputs.priority))', context=LocalExpressionContext.EMBEDDED_VALUE)
+
+        self.assertEqual(
+            {issue.code for issue in validate_parsed_local_expression(parsed)},
+            {"validation.workflow.value_expr.presence_check_argument"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

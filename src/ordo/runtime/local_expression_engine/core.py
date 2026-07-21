@@ -1028,6 +1028,7 @@ class _SemanticValidator:
                 self._visit(item)
             return
         if isinstance(node, BuiltinCallNode):
+            self._validate_builtin(node)
             for argument in node.arguments:
                 self._visit(argument)
             return
@@ -1085,6 +1086,24 @@ class _SemanticValidator:
                 "validation.workflow.value_expr.arg_ref",
                 "Fragment argument references must use dotted form such as 'args.name'",
                 node,
+            )
+
+    def _validate_builtin(self, node: BuiltinCallNode) -> None:
+        if node.name not in {"is_missing", "is_present"}:
+            return
+        if len(node.arguments) != 1:
+            self._error(
+                "validation.workflow.value_expr.presence_check_arity",
+                f"Built-in value expression '{node.name}' requires exactly one argument",
+                node,
+            )
+            return
+        argument = node.arguments[0]
+        if not _is_presence_check_reference(argument):
+            self._error(
+                "validation.workflow.value_expr.presence_check_argument",
+                f"Built-in value expression '{node.name}' requires a lookup-style reference argument",
+                argument,
             )
 
     def _error(self, code: str, message: str, node: ValueExpressionNode) -> None:
@@ -1162,6 +1181,20 @@ class _ConditionEvaluator:
             return "ok", value
         if isinstance(node, CallNode):
             return self._observe_call(node)
+        if isinstance(node, BuiltinCallNode):
+            try:
+                value = _evaluate_presence_builtin(
+                    node,
+                    parsed=self._parsed,
+                    workflow=self._workflow,
+                    step_results={key: value for key, value in self._step_results.items() if isinstance(value, OperationResult)},
+                )
+            except ValueExpressionEvaluationError as exc:
+                self._diagnostics.append(exc.to_diagnostic())
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="builtin", status="probe_failed", value=None))
+                return "probe_failed", None
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="builtin", status="ok", value=value))
+            return "ok", value
         if isinstance(node, UnaryNode):
             status, value = self._evaluate(node.operand)
             if status != "ok":
@@ -1735,6 +1768,13 @@ def _evaluate_builtin_call(
 ) -> JSONValue:
     spec = VALUE_EXPRESSION_BUILTINS.get(node.name)
     if spec is not None:
+        if node.name in {"is_missing", "is_present"}:
+            return _evaluate_presence_builtin(
+                node,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+            )
         return spec.handler(
             node,
             parsed=parsed,
@@ -1794,6 +1834,30 @@ def _evaluate_format_call(
             details={"expression": parsed.source, "builtin": node.name, "placeholders": placeholder_count, "arguments": len(values)},
         )
     return template.format(*tuple(_coerce_format_value(value) for value in values))
+
+
+def _evaluate_presence_builtin(
+    node: BuiltinCallNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> JSONValue:
+    if len(node.arguments) != 1:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.presence_check_arity",
+            message=f"Built-in value expression '{node.name}' requires exactly one argument",
+            details={"expression": parsed.source, "builtin": node.name},
+        )
+    argument = node.arguments[0]
+    if not _is_presence_check_reference(argument):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.presence_check_argument",
+            message=f"Built-in value expression '{node.name}' requires a lookup-style reference argument",
+            details={"expression": parsed.source, "builtin": node.name},
+        )
+    missing = _is_reference_missing(argument, parsed=parsed, workflow=workflow, step_results=step_results)
+    return missing if node.name == "is_missing" else not missing
 
 
 def _evaluate_read_only_call(
@@ -2034,6 +2098,49 @@ def _apply_not_filter(
         message="Filter 'not' requires a boolean input",
         details={"expression": parsed.source, "filter": "not", "actual_type": type(value).__name__},
     )
+
+
+def _is_presence_check_reference(node: ValueExpressionNode) -> bool:
+    if isinstance(node, ReferenceNode):
+        return bool(node.parts) and node.parts[0] in {"inputs", "args"} and len(node.parts) >= 2
+    return isinstance(node, (StateReferenceNode, StepReferenceNode))
+
+
+def _is_reference_missing(
+    node: ValueExpressionNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+) -> bool:
+    if isinstance(node, ReferenceNode):
+        current: JSONValue = workflow.inputs
+        parts = node.parts if node.parts[0] == "inputs" else ("inputs", *node.parts[1:])
+        for part in parts[1:]:
+            if not isinstance(current, dict) or part not in current:
+                return True
+            current = current[part]
+        return False
+    if isinstance(node, StepReferenceNode):
+        result = step_results.get(node.register)
+        if result is None:
+            return True
+        current: JSONValue = {"status": result.status, "summary": result.summary, "outputs": result.outputs}
+        for field in node.fields:
+            if not isinstance(current, dict) or field not in current:
+                return True
+            current = current[field]
+        return False
+    if isinstance(node, StateReferenceNode):
+        try:
+            target = resolve_state_target(parsed.source[node.start : node.end], workflow)
+            document = read_state_document(target.location)
+            value = read_state_value(document, key=target.key, fields=target.fields)
+            return value is None
+        except RuntimeStateError:
+            return True
+    return True
+
 VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_registry(
     ValueExpressionFilterSpec(name="lower", input_type="string", output_type="string", handler=_apply_lower_filter),
     ValueExpressionFilterSpec(name="trim", input_type="string", output_type="string", handler=_apply_trim_filter),
@@ -2045,6 +2152,8 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(
     ValueExpressionBuiltinSpec(name="format", handler=_evaluate_format_call),
+    ValueExpressionBuiltinSpec(name="is_missing", handler=_evaluate_format_call),
+    ValueExpressionBuiltinSpec(name="is_present", handler=_evaluate_format_call),
 )
 
 
