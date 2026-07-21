@@ -3843,6 +3843,70 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "project_not_found")
         self.assertEqual(result.diagnostics[0].code, "probe.gh_project_field.project_not_found")
 
+    def test_gh_project_field_option_probe_reports_existing_option(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.project.field.option", with_={"project_id": "PVT_demo", "field": "Priority", "option": "P1"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.project.field.option")
+        resolved = ResolvedOperation("gh.project.field.option", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"__typename":"ProjectV2SingleSelectField","id":"F1","name":"Priority","dataType":"SINGLE_SELECT","options":[{"id":"O1","name":"P0"},{"id":"O2","name":"P1"}]},{"__typename":"ProjectV2IterationField","id":"F3","name":"Iteration","configuration":{"iterations":[{"title":"Sprint 12"}]}}]}}}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertTrue(result.outputs["exists"])
+
+    def test_gh_project_field_option_probe_reports_missing_option(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.project.field.option", with_={"project_id": "PVT_demo", "field": "Priority", "option": "P9"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.project.field.option")
+        resolved = ResolvedOperation("gh.project.field.option", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"__typename":"ProjectV2SingleSelectField","id":"F1","name":"Priority","dataType":"SINGLE_SELECT","options":[{"id":"O1","name":"P0"},{"id":"O2","name":"P1"}]},{"__typename":"ProjectV2IterationField","id":"F3","name":"Iteration","configuration":{"iterations":[{"title":"Sprint 12"}]}}]}}}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.outputs["exists"])
+
+    def test_gh_project_field_option_probe_reports_missing_field_via_exists_false(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.project.field.option", with_={"project_id": "PVT_demo", "field": "Priority", "option": "P1"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.project.field.option")
+        resolved = ResolvedOperation("gh.project.field.option", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[]}}}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.outputs["exists"])
+
+    def test_gh_project_field_option_probe_reports_project_not_found(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.project.field.option", with_={"project_id": "PVT_missing", "field": "Priority", "option": "P1"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.project.field.option")
+        resolved = ResolvedOperation("gh.project.field.option", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_project_field_option.project_not_found")
+
     def _completed(self, *, returncode: int, stdout: str, stderr: str):
         class Completed:
             pass
