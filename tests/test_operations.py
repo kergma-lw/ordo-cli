@@ -3181,6 +3181,35 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["size"], "L")
         self.assertTrue(result.outputs["changed"])
 
+    def test_gh_project_issue_size_set_membership_query_is_graphql_complete(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "L"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
+        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"M","field":{"name":"Size"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_S","name":"Size","options":[{"id":"OPT_M","name":"M"},{"id":"OPT_L","name":"L"}]}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        membership_argv = run.call_args_list[1].args[0]
+        query_arg = membership_argv[membership_argv.index("-f") + 1]
+        self.assertIn("query=", query_arg)
+        self.assertTrue(query_arg.endswith("}}}}"))
+        mutation_argv = run.call_args_list[3].args[0]
+        mutation_arg = mutation_argv[mutation_argv.index("-f") + 1]
+        self.assertTrue(mutation_arg.startswith("query=mutation("))
+
     def test_gh_project_issue_size_set_is_noop_for_same_size(self) -> None:
         workflow = Workflow(
             version=0,

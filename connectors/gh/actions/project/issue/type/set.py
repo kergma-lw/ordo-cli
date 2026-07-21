@@ -95,7 +95,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 "api",
                 "graphql",
                 "-f",
-                "mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id}}}",
+                "query=mutation($project:ID!,$item:ID!,$field:ID!,$option:String!){updateProjectV2ItemFieldValue(input:{projectId:$project,itemId:$item,fieldId:$field,value:{singleSelectOptionId:$option}}){projectV2Item{id}}}",
                 "-f",
                 f"project={project_id}",
                 "-f",
@@ -160,7 +160,7 @@ def _load_issue_membership(
                     "repository(owner:$owner,name:$repo){"
                     "issue(number:$number){"
                     "projectItems(first:50){nodes{id project{... on ProjectV2{id}} fieldValues(first:50){nodes{... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2FieldCommon{name}}}}}}"
-                    "}}}"
+                    "}}}}"
                 ),
                 "-f",
                 f"owner={owner}",
