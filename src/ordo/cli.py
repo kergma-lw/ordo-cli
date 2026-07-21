@@ -15,7 +15,18 @@ from ordo.model.runtime import RuntimeResult
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
 
 
-EXPLAIN_MODE_HELP = """usage: ordo-playbook [options] explain
+WORKFLOWS_HELP = """usage: ordo-playbook workflows <list|show>
+
+Inspect workflow entries declared in the project playbook.
+
+Examples:
+  ordo-playbook workflows list
+  ordo-playbook workflows show inspect-issue
+  ordo-playbook workflows show inspect-issue --json
+"""
+
+
+EXPLAIN_MODE_HELP = """usage: ordo-playbook [options] explain WORKFLOW
 
 Explain why the selected workflow can or cannot be run right now.
 
@@ -25,12 +36,12 @@ Default output is intended to be concise:
   - active blockers
 
 Examples:
-  ordo-playbook --workflow open-task explain
-  ordo-playbook --workflow open-task --profile backend --input issue_number=42 explain
-  ordo-playbook --workflow close-task explain --json
+  ordo-playbook explain open-task
+  ordo-playbook --profile backend --input issue_number=42 explain open-task
+  ordo-playbook explain close-task --json
 """
 
-PLAN_MODE_HELP = """usage: ordo-playbook [options] plan
+PLAN_MODE_HELP = """usage: ordo-playbook [options] plan WORKFLOW
 
 Show what the selected workflow would do without making changes.
 
@@ -39,12 +50,12 @@ Default output is intended to be concise:
   - if planning is blocked: a short note to use explain for details
 
 Examples:
-  ordo-playbook --workflow open-task plan
-  ordo-playbook --workflow open-task --profile backend --input issue_number=42 plan
-  ordo-playbook --workflow close-task plan --json
+  ordo-playbook plan open-task
+  ordo-playbook --profile backend --input issue_number=42 plan open-task
+  ordo-playbook plan close-task --json
 """
 
-CHECK_MODE_HELP = """usage: ordo-playbook [options] check
+CHECK_MODE_HELP = """usage: ordo-playbook [options] check WORKFLOW
 
 Check whether the selected workflow can be run right now.
 
@@ -55,9 +66,9 @@ Default output is intended to be concise:
   - missing facts
 
 Examples:
-  ordo-playbook --workflow open-task check
-  ordo-playbook --workflow open-task --profile backend --input issue_number=42 check
-  ordo-playbook --workflow close-task check --json
+  ordo-playbook check open-task
+  ordo-playbook --profile backend --input issue_number=42 check open-task
+  ordo-playbook check close-task --json
 """
 
 
@@ -79,15 +90,23 @@ def main() -> int:
     if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "check":
         print(CHECK_MODE_HELP)
         return 0
+    if len(sys.argv) >= 3 and sys.argv[1] == "workflows" and sys.argv[2] in {"-h", "--help"}:
+        print(WORKFLOWS_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "workflows":
+        print(WORKFLOWS_HELP)
+        return 0
 
     parser = argparse.ArgumentParser(
         prog="ordo-playbook",
-        usage="%(prog)s [options] <mode>",
+        usage="%(prog)s [options] <command>",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "mode help:\n"
-            "  run `ordo-playbook <mode> --help` to see mode-specific guidance\n\n"
-            "modes:\n"
+            "command help:\n"
+            "  run `ordo-playbook <command> --help` to see command-specific guidance\n\n"
+            "discovery:\n"
+            "  workflows  list workflow entries or show one workflow contract summary\n\n"
+            "execution:\n"
             "  check    check whether the workflow can be run now, without making changes\n"
             "  plan     show what the workflow would do, without making changes\n"
             "  explain  explain why the workflow can or cannot be run right now\n"

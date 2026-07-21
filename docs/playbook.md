@@ -120,10 +120,17 @@ Activation order is:
 
 ## Launch-time input overrides
 
-`ordo-playbook` may add or override top-level workflow inputs for one run with repeatable flags such as:
+`ordo-playbook` may list workflow entries first and then add or override top-level workflow inputs for one run with repeatable flags such as:
 
 ```text
-ordo-playbook --workflow inspect-issue --input repository=repo/name --input issue_number=42 --input enabled=true plan
+ordo-playbook workflows list
+ordo-playbook workflows show inspect-issue
+```
+
+Execution-oriented commands select the workflow positionally:
+
+```text
+ordo-playbook --input repository=repo/name --input issue_number=42 --input enabled=true plan inspect-issue
 ```
 
 These launch-time input values are parsed as YAML scalars or collections and take precedence over both workflow-declared inputs and profile-provided default inputs for that run only.
@@ -131,8 +138,10 @@ These launch-time input values are parsed as YAML scalars or collections and tak
 For multiline string inputs, `ordo-playbook` may also read the value from a file:
 
 ```text
-ordo-playbook --workflow inspect-issue --input-file body=./prompt.md plan
+ordo-playbook --input-file body=./prompt.md plan inspect-issue
 ```
+
+The legacy form `ordo-playbook --workflow inspect-issue plan` remains available temporarily for compatibility, but positional workflow selection is now the primary shape.
 
 `--input-file` reads the file contents as a raw UTF-8 string for that one run. When both `--input` and `--input-file` set the same key, `--input-file` wins.
 

@@ -110,7 +110,7 @@ def build_command_line_response() -> JSONObject:
     input_contract = workflow_contract["inputs_contract"]
     playbook_flags = [
         {"name": "--file", "value_shape": "PATH", "required": False, "effect": "override_playbook_discovery", "summary": "Use one explicit playbook file path"},
-        {"name": "--workflow", "value_shape": "NAME", "required": True, "effect": "select_workflow_entry", "summary": "Select one named workflow from the playbook"},
+        {"name": "--workflow", "value_shape": "NAME", "required": False, "effect": "select_workflow_entry_legacy", "summary": "Legacy workflow selector retained for compatibility while positional workflow names become primary"},
         {"name": "--profile", "value_shape": "NAME", "required": False, "effect": "select_active_profile", "summary": "Select one named profile for this run"},
         {"name": "--input", "value_shape": "KEY=VALUE", "required": False, "repeatable": True, "effect": "override_input_inline", "summary": "Add or override one top-level workflow input from an inline YAML value"},
         {"name": "--input-file", "value_shape": "KEY=PATH", "required": False, "repeatable": True, "effect": "override_input_from_file", "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"},
@@ -121,14 +121,18 @@ def build_command_line_response() -> JSONObject:
         "commands": [
             {
                 "name": "ordo-playbook",
-                "purpose": "Launch one named workflow from the project playbook into one runtime mode",
-                "usage": "ordo-playbook [--file PATH] --workflow NAME [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <mode>",
+                "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
+                "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>",
+                "discovery_commands": [
+                    {"name": "workflows list", "summary": "list declared playbook workflows with project-local descriptions"},
+                    {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata and root-declared inputs"},
+                ],
                 "modes": [
-                    {"name": "check", "summary": "check whether the workflow can be run now, without making changes"},
-                    {"name": "plan", "summary": "show what the workflow would do, without making changes"},
-                    {"name": "explain", "summary": "explain why the workflow can or cannot be run right now"},
-                    {"name": "run", "summary": "run the workflow and do the real work"},
-                    {"name": "next", "summary": "suggest the next workflow step to run now"},
+                    {"name": "check <workflow>", "summary": "check whether the workflow can be run now, without making changes"},
+                    {"name": "plan <workflow>", "summary": "show what the workflow would do, without making changes"},
+                    {"name": "explain <workflow>", "summary": "explain why the workflow can or cannot be run right now"},
+                    {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
+                    {"name": "next <workflow>", "summary": "suggest the next workflow step to run now"},
                 ],
                 "flags": playbook_flags,
                 "input_override_precedence": [
@@ -140,10 +144,12 @@ def build_command_line_response() -> JSONObject:
                     "when both --input and --input-file set the same key, --input-file wins",
                 ],
                 "examples": [
-                    "ordo-playbook --workflow inspect-issue plan",
-                    "ordo-playbook --workflow inspect-issue --profile review plan",
-                    "ordo-playbook --workflow inspect-issue --input enabled=true plan",
-                    "ordo-playbook --workflow inspect-issue --input-file body=./prompt.md plan",
+                    "ordo-playbook workflows list",
+                    "ordo-playbook workflows show inspect-issue",
+                    "ordo-playbook plan inspect-issue",
+                    "ordo-playbook --profile review plan inspect-issue",
+                    "ordo-playbook --input enabled=true plan inspect-issue",
+                    "ordo-playbook --input-file body=./prompt.md plan inspect-issue",
                 ],
             }
         ],

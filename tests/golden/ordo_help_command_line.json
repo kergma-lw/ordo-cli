@@ -1,11 +1,23 @@
 {
   "commands": [
     {
+      "discovery_commands": [
+        {
+          "name": "workflows list",
+          "summary": "list declared playbook workflows with project-local descriptions"
+        },
+        {
+          "name": "workflows show <workflow>",
+          "summary": "show one workflow entry with file metadata and root-declared inputs"
+        }
+      ],
       "examples": [
-        "ordo-playbook --workflow inspect-issue plan",
-        "ordo-playbook --workflow inspect-issue --profile review plan",
-        "ordo-playbook --workflow inspect-issue --input enabled=true plan",
-        "ordo-playbook --workflow inspect-issue --input-file body=./prompt.md plan"
+        "ordo-playbook workflows list",
+        "ordo-playbook workflows show inspect-issue",
+        "ordo-playbook plan inspect-issue",
+        "ordo-playbook --profile review plan inspect-issue",
+        "ordo-playbook --input enabled=true plan inspect-issue",
+        "ordo-playbook --input-file body=./prompt.md plan inspect-issue"
       ],
       "flags": [
         {
@@ -16,10 +28,10 @@
           "value_shape": "PATH"
         },
         {
-          "effect": "select_workflow_entry",
+          "effect": "select_workflow_entry_legacy",
           "name": "--workflow",
-          "required": true,
-          "summary": "Select one named workflow from the playbook",
+          "required": false,
+          "summary": "Legacy workflow selector retained for compatibility while positional workflow names become primary",
           "value_shape": "NAME"
         },
         {
@@ -62,29 +74,29 @@
       ],
       "modes": [
         {
-          "name": "check",
+          "name": "check <workflow>",
           "summary": "check whether the workflow can be run now, without making changes"
         },
         {
-          "name": "plan",
+          "name": "plan <workflow>",
           "summary": "show what the workflow would do, without making changes"
         },
         {
-          "name": "explain",
+          "name": "explain <workflow>",
           "summary": "explain why the workflow can or cannot be run right now"
         },
         {
-          "name": "run",
+          "name": "run <workflow>",
           "summary": "run the workflow and do the real work"
         },
         {
-          "name": "next",
+          "name": "next <workflow>",
           "summary": "suggest the next workflow step to run now"
         }
       ],
       "name": "ordo-playbook",
-      "purpose": "Launch one named workflow from the project playbook into one runtime mode",
-      "usage": "ordo-playbook [--file PATH] --workflow NAME [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <mode>"
+      "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
+      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
     }
   ],
   "document_kind": "command_line"

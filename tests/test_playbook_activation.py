@@ -1660,6 +1660,41 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertNotEqual(ctx.exception.code, 0)
         self.assertIn("plan requires a workflow name", stderr.getvalue())
 
+    def test_cli_top_level_help_mentions_workflows_and_positional_execution(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "--help"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as ctx:
+                    cli_main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("workflows  list workflow entries", help_text)
+        self.assertIn("check    check whether the workflow can be run now", help_text)
+
+    def test_cli_workflows_help_mentions_list_and_show(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "workflows", "--help"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("ordo-playbook workflows list", stdout.getvalue())
+
+    def test_cli_mode_help_uses_positional_workflow_examples(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "plan", "--help"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("usage: ordo-playbook [options] plan WORKFLOW", help_text)
+        self.assertIn("ordo-playbook plan open-task", help_text)
+
     def test_cli_workflows_list_returns_catalog_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
