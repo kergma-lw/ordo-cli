@@ -379,6 +379,7 @@ def execute_workflow(
                 launcher_details.extend([detail for detail in run_result.outputs.get("launcher_details", []) if isinstance(detail, dict)])
                 checked_guards.extend([name for name in run_result.outputs.get("checked_guards", []) if isinstance(name, str)])
                 guard_details.extend([detail for detail in run_result.outputs.get("guard_details", []) if isinstance(detail, dict)])
+                published_results.extend(list(run_result.outputs.get("results", [])) if isinstance(run_result.outputs.get("results", []), list) else [])
                 if run_result.status is not RuntimeStatus.OK:
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))

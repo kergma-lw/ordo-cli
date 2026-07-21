@@ -1311,6 +1311,57 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertIn("remember", result.outputs["executed_steps"])
 
+    def test_execute_after_activation_accumulates_pre_run_results_before_main_results(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "backend"}\n', encoding="utf-8")
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - file: workflows/switch-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    defaults:
+                      profile: backend
+                    workflows:
+                      publish:
+                        file: publish.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                    states:
+                      shared_state:
+                        path: repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-pre\n        result:\n          summary: pre\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "publish.yml").write_text(
+                "version: 0\nworkflow: publish\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-main\n        result:\n          summary: main\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\n", encoding="utf-8")
+
+            activated = activate_playbook(workflow_name="publish", cwd=root)
+            result = execute_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["results"], [{"summary": "pre"}, {"summary": "main"}])
+
     def test_activate_playbook_resolves_working_directory_from_input_override_expression(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1874,10 +1925,10 @@ class PlaybookActivationTest(unittest.TestCase):
                     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                         exit_code = cli_main()
 
-            self.assertEqual(exit_code, 1)
+            self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["mode"], "run")
-            self.assertEqual(payload["diagnostics"][0]["code"], "playbook.run.disabled")
+            self.assertEqual(payload["mode"], "execute")
+            self.assertEqual(payload["status"], "ok")
 
     def test_cli_reports_missing_workflow_for_execution_command(self) -> None:
         stdout = io.StringIO()
@@ -2096,7 +2147,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["diagnostics"][0]["code"], "playbook.discovery.missing")
             self.assertEqual(payload["diagnostics"][0]["details"]["category"], "discovery")
 
-    def test_cli_run_mode_is_temporarily_refused(self) -> None:
+    def test_cli_run_mode_executes_empty_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
@@ -2135,11 +2186,10 @@ class PlaybookActivationTest(unittest.TestCase):
                     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                         exit_code = cli_main()
 
-            self.assertEqual(exit_code, 1)
+            self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["mode"], "run")
-            self.assertEqual(payload["status"], "execution_error")
-            self.assertEqual(payload["diagnostics"][0]["code"], "playbook.run.disabled")
+            self.assertEqual(payload["mode"], "execute")
+            self.assertEqual(payload["status"], "ok")
 
     def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(

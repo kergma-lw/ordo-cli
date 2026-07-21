@@ -137,6 +137,32 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["results"], [])
 
+    def test_execute_accumulates_results_from_nested_run_before_parent_result(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: nested\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="expand", run="nested.yml", resolved_run_path=str(fragment)),
+                            Step(name="publish-parent", result={"summary": "parent"}),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["results"], [{"summary": "nested"}, {"summary": "parent"}])
+
     def test_execute_branch_classifiers_isolate_legacy_shaped_paths(self) -> None:
         probe = ResolvedOperation(reference="gh.issue", connector_namespace="gh", operation=OperationContract(name="issue", kind="probe"), source="public")
         action = ResolvedOperation(reference="runtime.profile.use", connector_namespace="runtime", operation=OperationContract(name="profile.use", kind="action"), source="public")
