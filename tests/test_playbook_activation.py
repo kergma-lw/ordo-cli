@@ -1532,6 +1532,134 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["status"], "ok")
             self.assertEqual(payload["workflow"], "inspect-issue")
 
+    def test_cli_plan_mode_accepts_positional_workflow_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "plan", "inspect-issue"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["mode"], "plan")
+            self.assertEqual(payload["workflow"], "inspect-issue")
+
+    def test_cli_legacy_workflow_flag_emits_deprecation_warning(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.PLAN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={},
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "plan"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated):
+                with patch("ordo.cli._run_mode", return_value=runtime_result):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("deprecated", stderr.getvalue())
+
+    def test_cli_modes_accept_positional_workflow_name_for_dispatch(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.PLAN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={},
+        )
+
+        for mode in ("check", "plan", "explain", "next"):
+            with self.subTest(mode=mode):
+                with patch("sys.argv", ["ordo-playbook", mode, "inspect-issue"]):
+                    with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
+                        with patch("ordo.cli._run_mode", return_value=runtime_result) as run_mode_mock:
+                            stdout = io.StringIO()
+                            stderr = io.StringIO()
+                            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                                exit_code = cli_main()
+
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(activate_mock.call_args.kwargs["workflow_name"], "inspect-issue")
+                self.assertEqual(run_mode_mock.call_args.args[0], mode)
+
+    def test_cli_run_mode_accepts_positional_workflow_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                "version: 1\nworkflows:\n  inspect-issue:\n    file: inspect-issue.yml\nprofiles: {}\nstates: {}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 1)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["mode"], "run")
+            self.assertEqual(payload["diagnostics"][0]["code"], "playbook.run.disabled")
+
+    def test_cli_reports_missing_workflow_for_execution_command(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "plan"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as ctx:
+                    cli_main()
+
+        self.assertNotEqual(ctx.exception.code, 0)
+        self.assertIn("plan requires a workflow name", stderr.getvalue())
+
     def test_cli_workflows_list_returns_catalog_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

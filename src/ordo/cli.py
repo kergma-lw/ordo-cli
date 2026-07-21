@@ -62,8 +62,6 @@ Examples:
 
 
 def main() -> int:
-    if len(sys.argv) >= 2 and sys.argv[1] == "workflows":
-        return _run_workflow_discovery_command(sys.argv[2:])
     if len(sys.argv) >= 3 and sys.argv[1] in {"check", "plan", "explain"} and sys.argv[2] in {"-h", "--help"}:
         if sys.argv[1] == "check":
             print(CHECK_MODE_HELP)
@@ -98,7 +96,7 @@ def main() -> int:
         ),
     )
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
-    parser.add_argument("--workflow", required=True, help="workflow name declared in the playbook")
+    parser.add_argument("--workflow", help="workflow name declared in the playbook; deprecated when used instead of positional workflow selection")
     parser.add_argument("--profile", help="active profile name for this run")
     parser.add_argument(
         "--input",
@@ -117,12 +115,17 @@ def main() -> int:
         help="load one workflow input value from a file as a raw string; repeatable",
     )
     parser.add_argument("--json", action="store_true", help="emit JSON without extra decoration")
-    parser.add_argument(
-        "mode",
-        choices=("check", "plan", "explain", "run", "next"),
-        help="execution mode; see the mode descriptions below",
-    )
+    parser.add_argument("command", nargs="*", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    command = list(args.command)
+    if not command:
+        parser.error("missing command")
+    if command[0] == "workflows":
+        return _run_workflow_discovery_args(args, command[1:], parser=parser)
+    if command[0] not in {"check", "plan", "explain", "run", "next"}:
+        parser.error(f"unknown command: {command[0]}")
+    args.mode = command[0]
+    args.workflow = _resolve_execution_workflow_name(args, parser=parser)
     input_overrides = _parse_input_overrides(args.input_overrides, parser=parser)
     input_overrides.update(_parse_input_file_overrides(args.input_files, parser=parser))
 
@@ -229,21 +232,32 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
     return explained
 
 
-def _run_workflow_discovery_command(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="ordo-playbook workflows")
-    parser.add_argument("command", choices=("list", "show"))
-    parser.add_argument("workflow", nargs="?", help="workflow name for the show command")
-    parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
-    parser.add_argument("--json", action="store_true", help="emit JSON without extra decoration")
-    args = parser.parse_args(argv)
+def _resolve_execution_workflow_name(args, *, parser: argparse.ArgumentParser) -> str:
+    command = list(args.command)
+    if len(command) > 2:
+        parser.error(f"{command[0]} accepts exactly one workflow name")
+    if len(command) == 2:
+        if args.workflow is not None:
+            parser.error("do not combine a positional workflow name with --workflow")
+        return command[1]
+    if args.workflow is None:
+        parser.error(f"{command[0]} requires a workflow name")
+    print("warning: --workflow is deprecated; prefer `ordo-playbook <mode> <workflow>`", file=sys.stderr)
+    return args.workflow
 
-    if args.command == "list" and args.workflow is not None:
+
+def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.ArgumentParser) -> int:
+    if not argv:
+        parser.error("workflows requires a subcommand")
+    if argv[0] not in {"list", "show"}:
+        parser.error(f"unknown workflows subcommand: {argv[0]}")
+    if argv[0] == "list" and len(argv) != 1:
         parser.error("workflows list does not accept a workflow name")
-    if args.command == "show" and args.workflow is None:
+    if argv[0] == "show" and len(argv) != 2:
         parser.error("workflows show requires a workflow name")
 
     try:
-        if args.command == "list":
+        if argv[0] == "list":
             entries = list_playbook_workflows(playbook_path=args.playbook_file)
             payload = {
                 "mode": "workflows.list",
@@ -259,7 +273,7 @@ def _run_workflow_discovery_command(argv: list[str]) -> int:
                 ],
             }
         else:
-            entry = inspect_playbook_workflow(args.workflow, playbook_path=args.playbook_file)
+            entry = inspect_playbook_workflow(argv[1], playbook_path=args.playbook_file)
             payload = {
                 "mode": "workflows.show",
                 "status": "ok",
