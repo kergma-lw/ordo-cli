@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
+from ordo.model.workflow import StepBlock, Workflow
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .local_expression_engine.core import StateReferenceNode as GuardStateReferenceNode
@@ -23,7 +25,7 @@ from .local_expressions import (
     parse_local_expression,
     validate_parsed_local_expression,
 )
-from .loading import LoadError, load_yaml_document
+from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .local_expression_engine.core import (
     BinaryNode,
@@ -496,6 +498,104 @@ def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -
     diagnostics.extend(_validate_launchers(payload.get("launchers"), source=source))
 
     return _report("profile", diagnostics)
+
+
+def validate_workflow_run_target_inputs(workflow: Workflow) -> tuple[Diagnostic, ...]:
+    """Validate undeclared root-input references across reusable run targets."""
+
+    diagnostics: list[Diagnostic] = []
+    _validate_workflow_run_target_inputs_recursive(workflow, diagnostics=diagnostics, visited_paths=set())
+    return tuple(diagnostics)
+
+
+def _validate_workflow_run_target_inputs_recursive(
+    workflow: Workflow,
+    *,
+    diagnostics: list[Diagnostic],
+    visited_paths: set[str],
+) -> None:
+    for block_index, block in enumerate(workflow.blocks):
+        if not isinstance(block, StepBlock):
+            continue
+        for step_index, step in enumerate(block.steps):
+            if step.run is None or step.resolved_run_path is None:
+                continue
+            run_path = str(Path(step.resolved_run_path).resolve())
+            if run_path in visited_paths:
+                continue
+            visited_paths.add(run_path)
+            nested = _load_run_target_workflow_for_validation(step=step, workflow=workflow, block_index=block_index, step_index=step_index)
+            if isinstance(nested, Diagnostic):
+                diagnostics.append(nested)
+                continue
+            diagnostics.extend(validate_workflow_document(nested.to_contract(), source=nested.source_path or run_path).diagnostics)
+            _validate_workflow_run_target_inputs_recursive(nested, diagnostics=diagnostics, visited_paths=visited_paths)
+
+
+def _load_run_target_workflow_for_validation(
+    *,
+    step,
+    workflow: Workflow,
+    block_index: int,
+    step_index: int,
+) -> Workflow | Diagnostic:
+    assert step.run is not None
+    assert step.resolved_run_path is not None
+    run_path = Path(step.resolved_run_path)
+    launch_dir = Path(workflow.launch_dir) if workflow.launch_dir is not None else run_path.parent
+    try:
+        payload = _load_included_fragment_payload(
+            run_path,
+            launch_dir=launch_dir,
+            stack=(),
+            depth=0,
+            include_bindings=dict(step.run_with),
+            include_node_path=("blocks", str(block_index), "steps", str(step_index), "run"),
+        )
+    except LoadError as exc:
+        if step.run_with:
+            return exc.diagnostics[0]
+        try:
+            payload = load_workflow_document_file(run_path, launch_dir=launch_dir)
+        except LoadError:
+            return exc.diagnostics[0]
+
+    if isinstance(payload, list):
+        blocks_payload = payload
+    elif isinstance(payload, dict) and "blocks" in payload:
+        blocks_payload = payload.get("blocks")
+    elif isinstance(payload, dict) and ({"steps", "guards", "run"} & set(payload.keys())):
+        blocks_payload = [payload]
+    else:
+        blocks_payload = None
+
+    if not isinstance(blocks_payload, list):
+        return _diagnostic(
+            "validation.workflow.run.fragment_shape",
+            "Run fragment must normalize to workflow block content",
+            ("blocks", str(block_index), "steps", str(step_index), "run"),
+            workflow.source_path or "<memory>",
+            reference=step.run,
+            actual_type=type(payload).__name__,
+        )
+
+    try:
+        blocks = _load_workflow_blocks({"blocks": blocks_payload}, source=str(run_path))
+    except LoadError as exc:
+        return exc.diagnostics[0]
+
+    return Workflow(
+        version=workflow.version,
+        workflow=f"{workflow.workflow}::{step.run}",
+        inputs=workflow.inputs,
+        declared_inputs=workflow.declared_inputs,
+        state_needs=workflow.state_needs,
+        state_bindings=workflow.state_bindings,
+        states=workflow.states,
+        blocks=blocks,
+        source_path=str(run_path),
+        launch_dir=str(launch_dir),
+    )
 
 
 def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[str, ...] = ("guards",)) -> list[Diagnostic]:

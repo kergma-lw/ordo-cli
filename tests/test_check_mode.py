@@ -260,6 +260,7 @@ class CheckModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
+            declared_inputs={"repo_kind": {}},
             blocks=(
                 StepBlock(steps=(Step(name="switch-profile", profile_switch="frontend"),)),
                 GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
@@ -282,6 +283,7 @@ class CheckModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
+            declared_inputs={"profile": {}, "repo_kind": {}},
             blocks=(
                 StepBlock(steps=(Step(name="switch-profile", profile_switch="${inputs.profile}"),)),
                 GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
@@ -321,6 +323,49 @@ class CheckModeTest(unittest.TestCase):
             self.assertEqual(len(expanded), 1)
             self.assertEqual(expanded[0]["type"], "guards")
 
+    def test_check_rejects_undeclared_root_input_inside_run_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.size == \"L\"\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                ),
+            )
+
+            result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+            self.assertEqual(result.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+
+    def test_check_accepts_declared_root_input_used_inside_run_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "profile-guard.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - inputs.size == \"L\"\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                inputs={"size": "L"},
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="profile-guard.yml", resolved_run_path=str(fragment)),)),
+                ),
+            )
+
+            result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["allowed_state"], "allowed")
+
     def test_check_propagates_profile_context_from_expanded_run_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -332,6 +377,7 @@ class CheckModeTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="open-task",
+                declared_inputs={"repo_kind": {}},
                 blocks=(
                     StepBlock(steps=(Step(name="expand", run="switch.yml", resolved_run_path=str(fragment)),)),
                     GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),

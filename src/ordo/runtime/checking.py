@@ -20,7 +20,7 @@ from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
 from .value_resolution import ValueResolutionError, resolve_runtime_value
-from .validation import validate_workflow_document
+from .validation import validate_workflow_document, validate_workflow_run_target_inputs
 
 
 def _base_verdict_outputs(
@@ -200,6 +200,28 @@ def check_workflow(
             )
         effective_workflow = applied.workflow
         current_profile = profile
+
+    run_target_diagnostics = validate_workflow_run_target_inputs(effective_workflow)
+    if run_target_diagnostics:
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.VALIDATION_ERROR,
+            diagnostics=run_target_diagnostics,
+            plan=ExecutionPlan(),
+            outputs={
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+                "blockers": [],
+                "checked_guards": [],
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guards": [],
+                "block_items": [],
+                "active_profile": active_profile,
+                "active_overrides": [override.to_contract() for override in active_overrides],
+            },
+        )
 
     launcher_diagnostics = validate_step_launchers(effective_workflow, active_profile, {} if profile is None else profile.launchers)
     if launcher_diagnostics:
