@@ -188,12 +188,12 @@ def main() -> int:
         else:
             payload = _public_runtime_payload(args.mode, result)
             activation_diagnostics = getattr(activated, "diagnostics", ())
-            if activation_diagnostics and not (args.mode == "run" and result.status is RuntimeStatus.OK):
+            if activation_diagnostics and args.mode != "run":
                 payload["diagnostics"] = [
                     *payload.get("diagnostics", []),
                     *[diagnostic.to_contract() for diagnostic in activation_diagnostics],
                 ]
-            if not (args.mode == "run" and result.status is RuntimeStatus.OK):
+            if args.mode != "run":
                 payload.update(
                     {
                         "workflow": activated.workflow_name,
@@ -239,14 +239,21 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
 
 
 def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[str, object]:
-    if command_mode == "run" and result.status is RuntimeStatus.OK:
-        raw_results = result.outputs.get("results", [])
-        results = list(raw_results) if isinstance(raw_results, list) else []
-        if not results:
-            results = [_fallback_run_result()]
+    if command_mode == "run":
+        if result.status is RuntimeStatus.OK:
+            raw_results = result.outputs.get("results", [])
+            results = list(raw_results) if isinstance(raw_results, list) else []
+            if not results:
+                results = [_fallback_run_result()]
+            return {
+                "status": "ok",
+                "results": results,
+            }
         return {
-            "status": "ok",
-            "results": results,
+            "status": result.status.value,
+            "failed_guard": result.failed_guard,
+            "failed_step": result.failed_step,
+            "diagnostics": [diagnostic.to_contract() for diagnostic in result.diagnostics],
         }
     return result.to_contract()
 
@@ -306,6 +313,7 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                     {
                         "name": item.name,
                         "description": item.description,
+                        "hint": item.hint,
                     }
                     for item in entry.inputs
                 ],

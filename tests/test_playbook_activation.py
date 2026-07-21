@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ordo.cli import main as cli_main
+from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import ExecutionPlan, Mode, RuntimeResult, RuntimeStatus
 from ordo.runtime import check_workflow, execute_workflow, plan_workflow
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, discover_playbook_path
@@ -2048,6 +2049,7 @@ class PlaybookActivationTest(unittest.TestCase):
                     inputs:
                       repository:
                         description: GitHub repository slug
+                        hint: Use owner/name format
                       issue_number:
                         description: Numeric issue id
                     blocks:
@@ -2072,8 +2074,32 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["workflow"], "inspect-issue")
             self.assertEqual(payload["description"], "Inspect one issue and prepare local context")
             self.assertEqual(payload["working_directory"], "../repo")
-            self.assertEqual(payload["inputs"][0], {"name": "repository", "description": "GitHub repository slug"})
-            self.assertEqual(payload["inputs"][1], {"name": "issue_number", "description": "Numeric issue id"})
+            self.assertEqual(payload["inputs"][0], {"name": "repository", "description": "GitHub repository slug", "hint": "Use owner/name format"})
+            self.assertEqual(payload["inputs"][1], {"name": "issue_number", "description": "Numeric issue id", "hint": None})
+
+    def test_cli_workflows_show_omits_only_hint_values_when_not_declared(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                "version: 1\nworkflows:\n  inspect-issue:\n    file: inspect-issue.yml\nprofiles: {}\nstates: {}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  repository:\n    description: GitHub repository slug\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "workflows", "show", "inspect-issue"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["inputs"][0]["hint"], None)
 
     def test_cli_workflows_show_reports_unknown_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2214,6 +2240,49 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload, {"status": "ok", "results": [{"summary": "done", "changed": True}]})
+
+    def test_cli_run_mode_uses_compact_failure_payload(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            diagnostics=(),
+            available_profiles={},
+            profile_working_directories={},
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXECUTE,
+            status=RuntimeStatus.EXECUTION_ERROR,
+            diagnostics=(
+                Diagnostic(
+                    code="action.gh_project_issue_priority_set.priority_not_found",
+                    level="error",
+                    message="GitHub project priority was not found",
+                    path=(),
+                    details={"priority": "high"},
+                ),
+            ),
+            failed_step="Set task priority",
+            outputs={"operation_results": [{"huge": True}], "block_items": [{"verbose": True}]},
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated):
+                with patch("ordo.cli._run_mode", return_value=runtime_result):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "execution_error")
+        self.assertEqual(payload["failed_step"], "Set task priority")
+        self.assertEqual(payload["diagnostics"][0]["code"], "action.gh_project_issue_priority_set.priority_not_found")
+        self.assertNotIn("operation_results", payload)
+        self.assertNotIn("workflow", payload)
 
     def test_cli_run_emits_only_one_top_level_fallback_when_internal_layers_publish_no_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -74,6 +74,7 @@ class WorkflowCatalogInput:
 
     name: str
     description: str | None = None
+    hint: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -758,11 +759,15 @@ def _optional_non_empty_string(payload: dict[str, object], key: str) -> str | No
 
 def _catalog_input_from_declared_input(name: str, schema: object) -> WorkflowCatalogInput:
     description: str | None = None
+    hint: str | None = None
     if isinstance(schema, dict):
         raw_description = schema.get("description")
         if isinstance(raw_description, str) and raw_description:
             description = raw_description
-    return WorkflowCatalogInput(name=name, description=description)
+        raw_hint = schema.get("hint")
+        if isinstance(raw_hint, str) and raw_hint:
+            hint = raw_hint
+    return WorkflowCatalogInput(name=name, description=description, hint=hint)
 
 
 def _resolve_working_directory(
