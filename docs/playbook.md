@@ -43,6 +43,11 @@ When the caller provides an explicit path through `--file PATH`, that path overr
 ```yaml
 version: 1
 
+pre_run:
+  - file: workflows/resolve-context.yml
+    state_bindings:
+      shared_context: repo_task_state
+
 states:
   repo_task_state:
     path: .ordo/state/task-state.json
@@ -71,6 +76,7 @@ profiles:
 - `defaults`
 - `workflows`
 - `profiles`
+- `pre_run`
 
 ## Workflow entries
 
@@ -80,6 +86,17 @@ Initial stable fields:
 
 - `file` — required workflow file reference;
 - `state_bindings` — optional mapping from workflow logical state roles to concrete playbook state entries.
+
+## Pre-run entries
+
+Each `pre_run` item is a playbook-owned launch-phase entry.
+
+Initial stable fields:
+
+- `file` — required workflow file reference;
+- `state_bindings` — optional mapping for state needed only by that pre-run launch phase.
+
+Those bindings belong to the playbook launch wrapper rather than to the requested workflow contract.
 
 ## Profile entries
 
@@ -115,8 +132,9 @@ Activation order is:
 2. choose the active profile for the run;
 3. select one workflow entry;
 4. apply any explicit launch-time input overrides from the caller;
-5. resolve state bindings;
-6. enter the chosen runtime mode.
+5. resolve requested-workflow state bindings;
+6. execute any declared playbook-owned `pre_run` entries with their own launch-phase bindings;
+7. enter the chosen runtime mode.
 
 ## Launch-time input overrides
 

@@ -341,6 +341,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             summary="Published playbook pre-run contract metadata",
             metadata=model["playbook"]["activation_semantics"]["pre_run"],
         )
+    for field in model["playbook"].get("pre_run_entry_fields", []):
+        add_node(
+            f"playbook.pre_run.{field['name']}",
+            contract="playbook",
+            node_category="pre_run_entry_field",
+            summary="Published playbook pre-run entry field metadata",
+            metadata=field,
+        )
     for field in model["playbook"]["defaults_fields"]:
         add_node(f"playbook.defaults.{field['name']}", contract="playbook", node_category="default_field", summary="Published playbook default field metadata", metadata=field)
     for field in model["playbook"]["workflow_entry_fields"]:

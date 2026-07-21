@@ -2585,7 +2585,15 @@
         },
         "pre_run": {
           "effect": "executes_before_requested_workflow_in_same_runtime_session",
-          "item_type": "workflow_reference"
+          "item_type": "pre_run_entry",
+          "launch_context_boundary": "playbook_owned",
+          "optional": [
+            "state_bindings"
+          ],
+          "requires": [
+            "file"
+          ],
+          "state_dependency_boundary": "must_not_widen_main_workflow_state_contract"
         },
         "profile_entries": {
           "requires": [
@@ -2636,6 +2644,19 @@
         "path": ".ordo/ordo.yaml"
       },
       "document_kind": "playbook",
+      "pre_run_entry_fields": [
+        {
+          "name": "file",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "documentation_role": "playbook_owned_pre_run_state_bindings",
+          "name": "state_bindings",
+          "required": false,
+          "type": "object"
+        }
+      ],
       "profile_entry_fields": [
         {
           "name": "file",
