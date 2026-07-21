@@ -1928,7 +1928,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["results"], [])
+            self.assertEqual(payload["results"], [{"summary": "Workflow completed without publishing an explicit result"}])
 
     def test_cli_reports_missing_workflow_for_execution_command(self) -> None:
         stdout = io.StringIO()
@@ -2189,7 +2189,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["results"], [])
+            self.assertEqual(payload["results"], [{"summary": "Workflow completed without publishing an explicit result"}])
 
     def test_cli_run_mode_surfaces_published_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

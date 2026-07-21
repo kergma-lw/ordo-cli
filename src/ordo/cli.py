@@ -241,11 +241,20 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
 def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[str, object]:
     if command_mode == "run" and result.status is RuntimeStatus.OK:
         raw_results = result.outputs.get("results", [])
+        results = list(raw_results) if isinstance(raw_results, list) else []
+        if not results:
+            results = [_fallback_run_result()]
         return {
             "status": "ok",
-            "results": list(raw_results) if isinstance(raw_results, list) else [],
+            "results": results,
         }
     return result.to_contract()
+
+
+def _fallback_run_result() -> dict[str, object]:
+    return {
+        "summary": "Workflow completed without publishing an explicit result",
+    }
 
 
 def _resolve_execution_workflow_name(args, *, parser: argparse.ArgumentParser) -> str:
