@@ -245,7 +245,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(playbook["usage"], "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>")
         self.assertEqual(playbook["discovery_commands"][0]["name"], "workflows list")
         self.assertEqual(playbook["modes"][0]["name"], "check <workflow>")
-        self.assertEqual(playbook["run_success_surface"], "successful run emits the accumulated workflow-authored results list")
+        self.assertEqual(playbook["run_success_surface"], "successful run emits authored results, or one synthetic fallback result when no explicit result was published")
         self.assertIn("ordo-playbook workflows list", playbook["examples"])
         self.assertIn("ordo-playbook plan inspect-issue", playbook["examples"])
         self.assertNotIn("--workflow", flags)

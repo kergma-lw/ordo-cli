@@ -89,7 +89,7 @@
       ],
       "name": "ordo-playbook",
       "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
-      "run_success_surface": "successful run emits the accumulated workflow-authored results list",
+      "run_success_surface": "successful run emits authored results, or one synthetic fallback result when no explicit result was published",
       "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
     }
   ],

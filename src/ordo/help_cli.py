@@ -133,7 +133,7 @@ def build_command_line_response() -> JSONObject:
                     {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
                     {"name": "next <workflow>", "summary": "suggest the next workflow step to run now"},
                 ],
-                "run_success_surface": "successful run emits the accumulated workflow-authored results list",
+                "run_success_surface": "successful run emits authored results, or one synthetic fallback result when no explicit result was published",
                 "flags": playbook_flags,
                 "input_override_precedence": [
                     f"workflow.inputs declares the allowed activation keys; declared keys are required at activation={str(input_contract['declared_keys_required_at_activation']).lower()}",

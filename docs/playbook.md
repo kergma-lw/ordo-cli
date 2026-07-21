@@ -167,7 +167,11 @@ Successful `ordo-playbook run <workflow>` output is expected to surface the accu
 
 Those values come from executed workflow `result` steps in execution order.
 
-The runtime should not inject extra metadata into those authored result values in the initial model.
+If no explicit `result` step publishes anything, the top-level successful run may emit one synthetic fallback result instead.
+
+That fallback applies only to the requested top-level workflow run, not to internal include, `pre_run`, or nested `run` boundaries.
+
+The runtime should not inject extra metadata into authored result values in the initial model.
 
 ## Resolution notes
 
