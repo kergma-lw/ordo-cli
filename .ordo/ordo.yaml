@@ -11,6 +11,11 @@ states:
   shared_state:
     path: /home/ww/projects/ordo/.ordo/repo.json
 workflows:
+  create-task:
+    file: workflows/create-task.yml
+    description: Create a new project task in the active profile context
+    state_bindings:
+      shared_state: shared_state
   open-task:
     file: workflows/open-task.yml
     state_bindings:

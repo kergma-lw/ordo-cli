@@ -1,0 +1,93 @@
+version: 0
+workflow: create-task
+inputs:
+  active_profile_key: active_profile
+  profile:
+    description: Target profile for the new task
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+  title: {}
+  body: {}
+  type: {}
+  priority:
+    hint: Use one of P0, P1, P2, P3 or omit the input
+  size:
+    hint: Use one of XS, S, M, L, XL or omit the input
+state_needs:
+  shared_state: {}
+blocks:
+  - guards:
+      - git.repo
+      - state.shared_state[inputs.active_profile_key] == inputs.profile
+      - gh.project(project_id=inputs.project_id).exists
+      - gh.project.field(project_id=inputs.project_id, field="Status").exists
+      - gh.project.field.option(project_id=inputs.project_id, field="Status", option="Backlog").exists
+      - gh.project.field(project_id=inputs.project_id, field="Type").exists
+      - not (inputs.repo_kind == "meta") or inputs.type == "Story"
+      - not (inputs.repo_kind == "meta") or gh.project.field.option(project_id=inputs.project_id, field="Type", option="Story").exists
+      - inputs.repo_kind == "meta" or inputs.type == "Task" or inputs.type == "Bug"
+      - inputs.repo_kind == "meta" or gh.project.field.option(project_id=inputs.project_id, field="Type", option=inputs.type).exists
+      - is_missing(inputs.priority) or gh.project.field.option(project_id=inputs.project_id, field="Priority", option=inputs.priority).exists
+      - is_missing(inputs.size) or gh.project.field.option(project_id=inputs.project_id, field="Size", option=inputs.size).exists
+
+  - steps:
+      - name: Create issue
+        uses: gh.issue.create
+        register: created_issue
+        with:
+          repository: ${inputs.repository}
+          title: ${inputs.title}
+          body: ${inputs.body}
+
+      - name: Add issue to project
+        uses: gh.project.issue.add
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${step.created_issue.outputs.number}
+          project_id: ${inputs.project_id}
+
+      - name: Set task status
+        uses: gh.project.issue.status.set
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${step.created_issue.outputs.number}
+          project_id: ${inputs.project_id}
+          status: Backlog
+
+      - name: Set task type
+        uses: gh.project.issue.type.set
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${step.created_issue.outputs.number}
+          project_id: ${inputs.project_id}
+          type: ${inputs.type}
+
+      - name: Set task priority
+        if: ${is_present(inputs.priority)}
+        uses: gh.project.issue.priority.set
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${step.created_issue.outputs.number}
+          project_id: ${inputs.project_id}
+          priority: ${inputs.priority}
+
+      - name: Set task size
+        if: ${is_present(inputs.size)}
+        uses: gh.project.issue.size.set
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${step.created_issue.outputs.number}
+          project_id: ${inputs.project_id}
+          size: ${inputs.size}
+
+      - name: Publish created task
+        result:
+          summary: Task created
+          issue_ref: ${step.created_issue.outputs.issue_ref}
+          issue_number: ${step.created_issue.outputs.number}
+          profile: ${inputs.profile}
+          type: ${inputs.type}
+          priority: ${inputs.priority}
+          size: ${inputs.size}
