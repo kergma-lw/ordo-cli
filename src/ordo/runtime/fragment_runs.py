@@ -87,7 +87,7 @@ def materialize_run_workflow(step: Step, caller_workflow: Workflow, *, block_ind
         declared_inputs=caller_workflow.declared_inputs,
         state_needs=caller_workflow.state_needs,
         state_bindings=step.run_state_bindings or caller_workflow.state_bindings,
-        states=caller_workflow.states,
+        states=step.run_states or caller_workflow.states,
         blocks=blocks,
         source_path=str(run_path),
         launch_dir=str(launch_dir),

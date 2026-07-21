@@ -94,6 +94,7 @@ class PlaybookPreRunEntry:
 
     file: str
     state_bindings: dict[str, str]
+    states: dict[str, str]
 
 
 @contextlib.contextmanager
@@ -589,6 +590,7 @@ def _prepend_pre_run_workflows(
                         run=entry.file,
                         resolved_run_path=str(resolved.resolve()),
                         run_state_bindings=entry.state_bindings,
+                        run_states=entry.states,
                     ),
                 )
             )
@@ -634,7 +636,7 @@ def _parse_pre_run_entry(
     file = _require_string(item, "file", playbook_path=playbook_path, path=("pre_run", str(index), "file"))
     raw_bindings = item.get("state_bindings")
     if raw_bindings is None:
-        return PlaybookPreRunEntry(file=file, state_bindings={})
+        return PlaybookPreRunEntry(file=file, state_bindings={}, states={})
     if not isinstance(raw_bindings, dict):
         raise _playbook_error(
             "playbook.pre_run.state_bindings_invalid",
@@ -643,6 +645,7 @@ def _parse_pre_run_entry(
             details={"playbook": str(playbook_path), "actual_type": type(raw_bindings).__name__},
         )
     state_bindings: dict[str, str] = {}
+    injected_states: dict[str, str] = {}
     for role_name, state_name in raw_bindings.items():
         if not isinstance(role_name, str) or not role_name or not isinstance(state_name, str) or not state_name:
             raise _playbook_error(
@@ -658,8 +661,28 @@ def _parse_pre_run_entry(
                 path=("pre_run", str(index), "state_bindings", role_name),
                 details={"playbook": str(playbook_path), "role": role_name, "state": state_name},
             )
+        state_entry = states[state_name]
+        if not isinstance(state_entry, dict):
+            raise _playbook_error(
+                "playbook.pre_run.state_binding_target_invalid",
+                "Pre-run state binding target must be a playbook state object",
+                path=("pre_run", str(index), "state_bindings", role_name),
+                details={"playbook": str(playbook_path), "role": role_name, "state": state_name},
+            )
+        raw_path = state_entry.get("path")
+        if not isinstance(raw_path, str) or not raw_path:
+            raise _playbook_error(
+                "playbook.pre_run.state_path_invalid",
+                "Pre-run state binding target must declare a non-empty path",
+                path=("states", state_name, "path"),
+                details={"playbook": str(playbook_path), "role": role_name, "state": state_name},
+            )
+        resolved_path = Path(raw_path)
+        if not resolved_path.is_absolute():
+            resolved_path = playbook_path.parent / resolved_path
         state_bindings[role_name] = state_name
-    return PlaybookPreRunEntry(file=file, state_bindings=state_bindings)
+        injected_states[state_name] = str(resolved_path)
+    return PlaybookPreRunEntry(file=file, state_bindings=state_bindings, states=injected_states)
 
 
 def _require_mapping(

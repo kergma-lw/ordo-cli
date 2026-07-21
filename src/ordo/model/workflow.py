@@ -56,6 +56,7 @@ class Step:
     run: str | None = None
     run_with: JSONObject = field(default_factory=dict, kw_only=True)
     run_state_bindings: JSONObject = field(default_factory=dict, kw_only=True)
+    run_states: JSONObject = field(default_factory=dict, kw_only=True)
     profile_switch: JSONValue | None = None
     value: JSONValue | None = None
     state_set: JSONObject | None = None
