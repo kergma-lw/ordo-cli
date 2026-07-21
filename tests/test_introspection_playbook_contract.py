@@ -8,7 +8,7 @@ class IntrospectionPlaybookContractTest(unittest.TestCase):
     def test_playbook_contract_publishes_discovery_and_entry_fields(self) -> None:
         payload = describe_playbook_contract()
 
-        self.assertEqual(payload["discovery"]["path"], ".ordo/playbook.yml")
+        self.assertEqual(payload["discovery"]["path"], ".ordo/ordo.yaml")
         workflow_entry_fields = {field["name"] for field in payload["workflow_entry_fields"]}
         self.assertEqual(workflow_entry_fields, {"file", "description", "working_directory", "state_bindings"})
         working_directory = next(field for field in payload["workflow_entry_fields"] if field["name"] == "working_directory")

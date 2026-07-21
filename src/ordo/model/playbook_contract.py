@@ -9,7 +9,7 @@ from .json import JSONObject
 PLAYBOOK_CONTRACT: JSONObject = {
     "document_kind": "playbook",
     "version": 1,
-    "discovery": {"path": ".ordo/playbook.yml"},
+    "discovery": {"path": ".ordo/ordo.yaml"},
     "top_level_fields": [
         {"name": "version", "required": True, "type": "integer"},
         {"name": "pre_run", "required": False, "type": "array"},
@@ -62,7 +62,7 @@ PLAYBOOK_CONTRACT: JSONObject = {
     "activation_semantics": {
         "discovery": {
             "strategy": "cwd_relative_single_path",
-            "path": ".ordo/playbook.yml",
+            "path": ".ordo/ordo.yaml",
             "missing": "playbook.discovery.missing",
         },
         "workflow_entries": {

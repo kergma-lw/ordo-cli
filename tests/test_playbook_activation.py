@@ -27,12 +27,27 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(diagnostic.code, "playbook.discovery.missing")
         self.assertEqual(diagnostic.details["category"], "discovery")
         self.assertEqual(diagnostic.details["stage"], "activation")
+        self.assertIn(".ordo/ordo.yaml", diagnostic.message)
+
+    def test_discover_playbook_does_not_fall_back_to_legacy_playbook_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text("version: 1\nworkflows: {}\nprofiles: {}\nstates: {}\n", encoding="utf-8")
+            (root / ".ordo" / "playbook.yaml").write_text("version: 1\nworkflows: {}\nprofiles: {}\nstates: {}\n", encoding="utf-8")
+
+            with self.assertRaises(PlaybookError) as ctx:
+                discover_playbook_path(cwd=root)
+
+        diagnostic = ctx.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "playbook.discovery.missing")
+        self.assertEqual(diagnostic.details["expected_path"], str(root / ".ordo" / "ordo.yaml"))
 
     def test_activate_playbook_reports_missing_workflow_entry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 "version: 1\nworkflows: {}\nprofiles: {}\nstates: {}\n",
                 encoding="utf-8",
             )
@@ -49,7 +64,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -81,7 +96,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -123,7 +138,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -150,7 +165,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -183,7 +198,7 @@ class PlaybookActivationTest(unittest.TestCase):
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
             (root / ".ordo" / "launchers").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -232,7 +247,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -298,7 +313,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -338,7 +353,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -378,7 +393,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -424,7 +439,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -476,7 +491,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -526,7 +541,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -577,7 +592,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / "repo").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -604,7 +619,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -636,7 +651,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / "repo-a").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -666,7 +681,7 @@ class PlaybookActivationTest(unittest.TestCase):
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
             (root / "repo-b").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -703,7 +718,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / "repo-default").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -735,7 +750,7 @@ class PlaybookActivationTest(unittest.TestCase):
             (root / ".ordo" / "profiles").mkdir(parents=True)
             (root / "repo-default").mkdir()
             (root / "repo-profile").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -774,7 +789,7 @@ class PlaybookActivationTest(unittest.TestCase):
             (root / ".ordo" / "profiles").mkdir(parents=True)
             (root / "repo-profile").mkdir()
             (root / "repo-workflow").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -813,7 +828,7 @@ class PlaybookActivationTest(unittest.TestCase):
             (root / ".ordo" / "profiles").mkdir(parents=True)
             (root / "repo-a").mkdir()
             (root / "repo-b").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -859,7 +874,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -895,7 +910,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -949,7 +964,7 @@ class PlaybookActivationTest(unittest.TestCase):
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
             (root / ".ordo" / "repo.json").write_text('{"active_profile": "backend"}\n', encoding="utf-8")
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1005,7 +1020,7 @@ class PlaybookActivationTest(unittest.TestCase):
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
             (root / ".ordo" / "repo.json").write_text('{"active_profile": "backend"}\n', encoding="utf-8")
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1059,7 +1074,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / "repo-c").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1087,7 +1102,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1117,7 +1132,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1160,7 +1175,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1194,7 +1209,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1228,7 +1243,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1271,7 +1286,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1314,7 +1329,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1361,7 +1376,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / ".ordo" / "profiles").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1444,7 +1459,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
             (root / "repo").mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1491,7 +1506,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1521,7 +1536,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
             stdout = io.StringIO()
             stderr = io.StringIO()
-            with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "plan"]):
+            with patch("sys.argv", ["ordo-playbook", "plan", "inspect-issue"]):
                 with patch("os.getcwd", return_value=str(root)):
                     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                         exit_code = cli_main()
@@ -1536,7 +1551,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1567,36 +1582,9 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["mode"], "plan")
             self.assertEqual(payload["workflow"], "inspect-issue")
 
-    def test_cli_legacy_workflow_flag_emits_deprecation_warning(self) -> None:
-        activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/playbook.yml"),
-            workflow_name="inspect-issue",
-            workflow=object(),
-            profile=None,
-            working_directory=None,
-        )
-        runtime_result = RuntimeResult(
-            mode=Mode.PLAN,
-            status=RuntimeStatus.OK,
-            diagnostics=(),
-            plan=ExecutionPlan(),
-            outputs={},
-        )
-
-        with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "plan"]):
-            with patch("ordo.cli.activate_playbook", return_value=activated):
-                with patch("ordo.cli._run_mode", return_value=runtime_result):
-                    stdout = io.StringIO()
-                    stderr = io.StringIO()
-                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-                        exit_code = cli_main()
-
-        self.assertEqual(exit_code, 0)
-        self.assertIn("deprecated", stderr.getvalue())
-
     def test_cli_modes_accept_positional_workflow_name_for_dispatch(self) -> None:
         activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
@@ -1628,7 +1616,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 "version: 1\nworkflows:\n  inspect-issue:\n    file: inspect-issue.yml\nprofiles: {}\nstates: {}\n",
                 encoding="utf-8",
             )
@@ -1699,7 +1687,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1742,7 +1730,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1798,7 +1786,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 "version: 1\nworkflows: {}\nprofiles: {}\nstates: {}\n",
                 encoding="utf-8",
             )
@@ -1817,7 +1805,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
     def test_cli_runs_mode_inside_activated_working_directory(self) -> None:
         activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
@@ -1837,7 +1825,7 @@ class PlaybookActivationTest(unittest.TestCase):
             observed["cwd"] = os.getcwd()
             return runtime_result
 
-        with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "plan"]):
+        with patch("sys.argv", ["ordo-playbook", "plan", "inspect-issue"]):
             with patch("ordo.cli.activate_playbook", return_value=activated):
                 with patch("ordo.cli._run_mode", side_effect=fake_run_mode):
                     stdout = io.StringIO()
@@ -1854,7 +1842,7 @@ class PlaybookActivationTest(unittest.TestCase):
             root = Path(temp_dir)
             stdout = io.StringIO()
             stderr = io.StringIO()
-            with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "plan", "--json"]):
+            with patch("sys.argv", ["ordo-playbook", "plan", "inspect-issue", "--json"]):
                 with patch("os.getcwd", return_value=str(root)):
                     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                         exit_code = cli_main()
@@ -1870,7 +1858,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 textwrap.dedent(
                     """
                     version: 1
@@ -1900,7 +1888,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
             stdout = io.StringIO()
             stderr = io.StringIO()
-            with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "run", "--json"]):
+            with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
                 with patch("os.getcwd", return_value=str(root)):
                     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                         exit_code = cli_main()
@@ -1913,7 +1901,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
     def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
@@ -1927,7 +1915,7 @@ class PlaybookActivationTest(unittest.TestCase):
             outputs={},
         )
 
-        with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "--input", "enabled=true", "--input", "count=3", "plan"]):
+        with patch("sys.argv", ["ordo-playbook", "--input", "enabled=true", "--input", "count=3", "plan", "inspect-issue"]):
             with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
                 with patch("ordo.cli._run_mode", return_value=runtime_result):
                     stdout = io.StringIO()
@@ -1940,7 +1928,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
     def test_cli_passes_input_file_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
@@ -1962,13 +1950,12 @@ class PlaybookActivationTest(unittest.TestCase):
                 "sys.argv",
                 [
                     "ordo-playbook",
-                    "--workflow",
-                    "inspect-issue",
                     "--input",
                     "enabled=true",
                     "--input-file",
                     f"body={body_path}",
                     "plan",
+                    "inspect-issue",
                 ],
             ):
                 with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
@@ -1986,7 +1973,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
     def test_cli_input_file_override_wins_over_inline_input_for_same_key(self) -> None:
         activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/playbook.yml"),
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
             workflow_name="inspect-issue",
             workflow=object(),
             profile=None,
@@ -2008,13 +1995,12 @@ class PlaybookActivationTest(unittest.TestCase):
                 "sys.argv",
                 [
                     "ordo-playbook",
-                    "--workflow",
-                    "inspect-issue",
                     "--input",
                     "body=inline",
                     "--input-file",
                     f"body={body_path}",
                     "plan",
+                    "inspect-issue",
                 ],
             ):
                 with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
@@ -2026,6 +2012,17 @@ class PlaybookActivationTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(activate_mock.call_args.kwargs["input_overrides"], {"body": "file value\n"})
+
+    def test_cli_rejects_legacy_workflow_flag(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "--workflow", "inspect-issue", "plan"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as ctx:
+                    cli_main()
+
+        self.assertNotEqual(ctx.exception.code, 0)
+        self.assertIn("unrecognized arguments: --workflow", stderr.getvalue())
 
 
 if __name__ == "__main__":

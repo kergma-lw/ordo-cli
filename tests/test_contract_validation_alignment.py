@@ -23,6 +23,7 @@ class ContractValidationAlignmentTest(unittest.TestCase):
     def test_workflow_validation_fields_derive_from_canonical_contract(self) -> None:
         self.assertEqual(set(WORKFLOW_ALLOWED_FIELDS), _field_names(WORKFLOW_CONTRACT["top_level_fields"]))
         step_fields = set().union(*(set(form["required_fields"]) | set(form["optional_fields"]) for form in WORKFLOW_CONTRACT["step_forms"]))
+        step_fields.add("__run_path__")
         self.assertEqual(set(STEP_ALLOWED_FIELDS), step_fields)
 
     def test_profile_validation_fields_derive_from_canonical_contract(self) -> None:

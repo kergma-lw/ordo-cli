@@ -105,7 +105,7 @@ def activated_working_directory(activated: ActivatedPlaybook):
 
 
 def discover_playbook_path(*, cwd: str | Path | None = None) -> Path:
-    """Return the canonical playbook path under the current working directory."""
+    """Return the canonical Ordo project file path under the current working directory."""
 
     root = Path.cwd() if cwd is None else Path(cwd)
     candidate = root / PLAYBOOK_DISCOVERY_PATH
@@ -113,7 +113,7 @@ def discover_playbook_path(*, cwd: str | Path | None = None) -> Path:
         return candidate
     raise _playbook_error(
         "playbook.discovery.missing",
-        f"Playbook file '{PLAYBOOK_DISCOVERY_PATH}' was not found in the current working directory",
+        f"Ordo project file '{PLAYBOOK_DISCOVERY_PATH}' was not found in the current working directory",
         details={"cwd": str(root), "expected_path": str(candidate)},
     )
 
