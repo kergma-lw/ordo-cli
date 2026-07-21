@@ -38,6 +38,7 @@ DEFAULTS_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["defaults_fields"])
 PROFILE_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["profile_entry_fields"])
 STATE_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["state_entry_fields"])
 WORKFLOW_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["workflow_entry_fields"])
+PRE_RUN_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["pre_run_entry_fields"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +86,14 @@ class PlaybookWorkflowCatalogEntry:
     workflow_description: str | None = None
     working_directory: str | None = None
     inputs: tuple[WorkflowCatalogInput, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybookPreRunEntry:
+    """Explicit playbook-owned launch-phase workflow entry."""
+
+    file: str
+    state_bindings: dict[str, str]
 
 
 @contextlib.contextmanager
@@ -561,29 +570,25 @@ def _prepend_pre_run_workflows(
         )
 
     pre_run_blocks: list[StepBlock] = []
+    states = _require_mapping(playbook_payload, "states", playbook_path=playbook_path, required=False)
     for index, item in enumerate(raw_items):
-        if not isinstance(item, str) or not item:
-            raise _playbook_error(
-                "playbook.pre_run.item_invalid",
-                "Each playbook 'pre_run' item must be a non-empty workflow reference string",
-                path=("pre_run", str(index)),
-                details={"playbook": str(playbook_path), "actual_type": type(item).__name__},
-            )
-        resolved = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=item)
+        entry = _parse_pre_run_entry(item, index=index, playbook_path=playbook_path, states=states)
+        resolved = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=entry.file)
         if not resolved.exists():
             raise _playbook_error(
                 "playbook.pre_run.file_missing",
                 "Workflow file referenced by playbook pre_run does not exist",
                 path=("pre_run", str(index)),
-                details={"playbook": str(playbook_path), "workflow_file": str(resolved), "reference": item},
+                details={"playbook": str(playbook_path), "workflow_file": str(resolved), "reference": entry.file},
             )
         pre_run_blocks.append(
             StepBlock(
                 steps=(
                     Step(
                         name=f"pre_run[{index}]",
-                        run=item,
+                        run=entry.file,
                         resolved_run_path=str(resolved.resolve()),
+                        run_state_bindings=entry.state_bindings,
                     ),
                 )
             )
@@ -602,6 +607,59 @@ def _prepend_pre_run_workflows(
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
     )
+
+
+def _parse_pre_run_entry(
+    item: object,
+    *,
+    index: int,
+    playbook_path: Path,
+    states: dict[str, object],
+) -> PlaybookPreRunEntry:
+    if not isinstance(item, dict):
+        raise _playbook_error(
+            "playbook.pre_run.item_invalid",
+            "Each playbook 'pre_run' item must be an object with an explicit workflow file",
+            path=("pre_run", str(index)),
+            details={"playbook": str(playbook_path), "actual_type": type(item).__name__},
+        )
+    for key in item:
+        if key not in PRE_RUN_ENTRY_ALLOWED_FIELDS:
+            raise _playbook_error(
+                "playbook.pre_run.unknown_field",
+                f"Unknown pre_run entry field '{key}'",
+                path=("pre_run", str(index), key),
+                details={"playbook": str(playbook_path), "allowed_fields": sorted(PRE_RUN_ENTRY_ALLOWED_FIELDS)},
+            )
+    file = _require_string(item, "file", playbook_path=playbook_path, path=("pre_run", str(index), "file"))
+    raw_bindings = item.get("state_bindings")
+    if raw_bindings is None:
+        return PlaybookPreRunEntry(file=file, state_bindings={})
+    if not isinstance(raw_bindings, dict):
+        raise _playbook_error(
+            "playbook.pre_run.state_bindings_invalid",
+            "Pre-run entry field 'state_bindings' must be an object when present",
+            path=("pre_run", str(index), "state_bindings"),
+            details={"playbook": str(playbook_path), "actual_type": type(raw_bindings).__name__},
+        )
+    state_bindings: dict[str, str] = {}
+    for role_name, state_name in raw_bindings.items():
+        if not isinstance(role_name, str) or not role_name or not isinstance(state_name, str) or not state_name:
+            raise _playbook_error(
+                "playbook.pre_run.state_binding_invalid",
+                "Pre-run state bindings must map non-empty logical role names to non-empty playbook state names",
+                path=("pre_run", str(index), "state_bindings"),
+                details={"playbook": str(playbook_path), "role": role_name, "state": state_name},
+            )
+        if state_name not in states:
+            raise _playbook_error(
+                "playbook.pre_run.state_binding_target_missing",
+                "Pre-run state binding must target an existing playbook state declaration",
+                path=("pre_run", str(index), "state_bindings", role_name),
+                details={"playbook": str(playbook_path), "role": role_name, "state": state_name},
+            )
+        state_bindings[role_name] = state_name
+    return PlaybookPreRunEntry(file=file, state_bindings=state_bindings)
 
 
 def _require_mapping(

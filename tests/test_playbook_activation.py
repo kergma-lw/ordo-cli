@@ -879,7 +879,7 @@ class PlaybookActivationTest(unittest.TestCase):
                     """
                     version: 1
                     pre_run:
-                      - workflows/resolve-context.yml
+                      - file: workflows/resolve-context.yml
                     workflows:
                       inspect-issue:
                         file: inspect-issue.yml
@@ -905,6 +905,78 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(first_step.name, "pre_run[0]")
             self.assertEqual(first_step.run, "workflows/resolve-context.yml")
             self.assertEqual(first_step.resolved_run_path, str((root / ".ordo" / "workflows" / "resolve-context.yml").resolve()))
+            self.assertEqual(first_step.run_state_bindings, {})
+
+    def test_activate_playbook_applies_explicit_pre_run_state_bindings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - file: workflows/resolve-context.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states:
+                      shared_state:
+                        path: repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
+                "steps:\n  - name: prepare\n    profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: main\n        value: done\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", input_overrides={"active_profile_key": "active_profile"}, cwd=root)
+
+            first_step = activated.workflow.steps[0]
+            self.assertEqual(first_step.run_state_bindings, {"shared_state": "shared_state"})
+
+    def test_activate_playbook_rejects_pre_run_state_binding_target_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - file: workflows/resolve-context.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "resolve-context.yml").write_text("steps:\n  - name: prepare\n    value: ok\n", encoding="utf-8")
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: main\n        value: done\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+        self.assertEqual(ctx.exception.diagnostics[0].code, "playbook.pre_run.state_binding_target_missing")
 
     def test_check_after_activation_marks_pre_run_main_guard_gap_as_incomplete(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -915,7 +987,7 @@ class PlaybookActivationTest(unittest.TestCase):
                     """
                     version: 1
                     pre_run:
-                      - workflows/resolve-context.yml
+                      - file: workflows/resolve-context.yml
                     workflows:
                       inspect-issue:
                         file: inspect-issue.yml
@@ -969,7 +1041,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     """
                     version: 1
                     pre_run:
-                      - workflows/switch-active-profile.yml
+                      - file: workflows/switch-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
                     defaults:
                       profile: backend
                     workflows:
@@ -1025,7 +1099,9 @@ class PlaybookActivationTest(unittest.TestCase):
                     """
                     version: 1
                     pre_run:
-                      - workflows/switch-active-profile.yml
+                      - file: workflows/switch-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
                     defaults:
                       profile: backend
                     workflows:
