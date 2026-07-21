@@ -69,6 +69,25 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_workflow_input_hint_must_be_string(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: publish
+                inputs:
+                  priority:
+                    hint:
+                      - invalid
+                blocks:
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.inputs.hint.type")
+
     def test_object_guard_with_unknown_expr_field_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

@@ -21,6 +21,8 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "run", "profile_switch", "value", "result", "state_set", "state_delete"])
         self.assertIn("state", payload["surface_constraints"]["guard_expression"]["allowed_roots"])
         self.assertTrue(payload["inputs_contract"]["declared_keys_required_at_activation"])
+        input_fields = {item["name"]: item for item in payload["inputs_contract"]["declaration_fields"]}
+        self.assertEqual(input_fields["hint"]["validation_effect"], "none")
         self.assertEqual(payload["include_contract"]["search_order"][0], "including_file_dir")
         self.assertEqual(payload["include_contract"]["fragment_argument_declaration_forms"][0]["name"], "required_short_form")
         self.assertTrue(payload["include_contract"]["fragment_argument_default_semantics"]["default_null_is_valid"])

@@ -514,6 +514,8 @@
 - A successful workflow run may publish one or more authored result values through existing `result` steps without changing the `result` step syntax.
 - Published result values must accumulate in execution order rather than replacing prior published results.
 - If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
+- Workflow input declarations may carry one optional author-provided `hint` string for invocation guidance.
+- Input `hint` is guidance only, not a validation rule or runtime-inferred contract fact.
 
 ## Product boundary
 
@@ -1304,6 +1306,7 @@ but they are not the place where non-trivial transformation algorithms should be
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
 - explicit authored result publication through existing `result` steps.
+- optional author-provided invocation hints on input declarations.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
@@ -1356,6 +1359,7 @@ The public activation-input contract must stay readable from the root workflow.
 - All user-facing activation inputs must be declared in the root workflow `inputs` contract.
 - Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
 - Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
+- Input-level `hint` text may help humans and agents choose values, but it remains guidance rather than a validation constraint.
 
 ## What is undesirable
 

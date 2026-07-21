@@ -18,6 +18,8 @@
 - A successful workflow run may publish one or more authored result values through existing `result` steps without changing the `result` step syntax.
 - Published result values must accumulate in execution order rather than replacing prior published results.
 - If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
+- Workflow input declarations may carry one optional author-provided `hint` string for invocation guidance.
+- Input `hint` is guidance only, not a validation rule or runtime-inferred contract fact.
 
 ## Product boundary
 

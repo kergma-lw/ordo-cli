@@ -27,6 +27,10 @@ WORKFLOW_CONTRACT: JSONObject = {
         "scope": "global",
         "access_surface": "inputs.name",
         "declaration_shape": "mapping",
+        "declaration_fields": [
+            {"name": "description", "required": False, "type": "string", "authoring_role": "input_meaning"},
+            {"name": "hint", "required": False, "type": "string", "authoring_role": "input_guidance", "validation_effect": "none"},
+        ],
         "declared_keys_required_at_activation": True,
         "rejects_unknown_activation_inputs": True,
         "empty_string_is_distinct_value": True,

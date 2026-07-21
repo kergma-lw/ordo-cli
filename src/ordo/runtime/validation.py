@@ -114,6 +114,7 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_exact_int(payload, "version", 0, source=source))
     diagnostics.extend(_require_non_empty_string(payload, "workflow", source=source))
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
+    diagnostics.extend(_validate_workflow_input_declarations(payload.get("inputs"), source=source))
     diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
     diagnostics.extend(_validate_workflow_blocks(payload, source=source))
     diagnostics.extend(_validate_declared_workflow_input_references(payload, source=source))
@@ -124,6 +125,30 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
 
 def _validate_workflow_blocks(payload: JSONObject, *, source: str) -> list[Diagnostic]:
     return _validate_block_list(payload.get("blocks"), source=source)
+
+
+def _validate_workflow_input_declarations(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
+    if not isinstance(value, dict):
+        return []
+    diagnostics: list[Diagnostic] = []
+    for input_name, declaration in value.items():
+        if not isinstance(input_name, str):
+            continue
+        if not isinstance(declaration, dict):
+            continue
+        hint = declaration.get("hint")
+        if hint is not None and not isinstance(hint, str):
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.inputs.hint.type",
+                    "Workflow input field 'hint' must be a string when present",
+                    ("inputs", input_name, "hint"),
+                    source,
+                    input=input_name,
+                    actual_type=type(hint).__name__,
+                )
+            )
+    return diagnostics
 
 
 def _validate_declared_workflow_input_references(payload: JSONObject, *, source: str) -> list[Diagnostic]:
