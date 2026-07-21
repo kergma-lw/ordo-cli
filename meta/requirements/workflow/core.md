@@ -17,6 +17,7 @@
 - Validation after workflow assembly must reject any `inputs.<name>` reference that does not resolve to a root-declared workflow input.
 - A successful workflow run may publish one or more authored result values through existing `result` steps without changing the `result` step syntax.
 - Published result values must accumulate in execution order rather than replacing prior published results.
+- If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
 
 ## Product boundary
 

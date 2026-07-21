@@ -513,6 +513,7 @@
 - Validation after workflow assembly must reject any `inputs.<name>` reference that does not resolve to a root-declared workflow input.
 - A successful workflow run may publish one or more authored result values through existing `result` steps without changing the `result` step syntax.
 - Published result values must accumulate in execution order rather than replacing prior published results.
+- If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
 
 ## Product boundary
 
@@ -4748,6 +4749,8 @@ This operation outcome is the connector-local structured input to runtime adapta
 - Published result values accumulate in execution order.
 - The runtime must not inject additional metadata into published result values in the initial model.
 - If no `result` step executes, successful run output may return `results: []`.
+- If the product later adds a synthetic fallback result for successful runs without explicit results, that fallback must be emitted only once at the top-level requested workflow boundary.
+- Include expansion, playbook-owned `pre_run`, and nested reusable `run` boundaries must not emit fallback results of their own.
 
 ## Serialization constraints
 

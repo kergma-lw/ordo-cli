@@ -37,6 +37,8 @@ This operation outcome is the connector-local structured input to runtime adapta
 - Published result values accumulate in execution order.
 - The runtime must not inject additional metadata into published result values in the initial model.
 - If no `result` step executes, successful run output may return `results: []`.
+- If the product later adds a synthetic fallback result for successful runs without explicit results, that fallback must be emitted only once at the top-level requested workflow boundary.
+- Include expansion, playbook-owned `pre_run`, and nested reusable `run` boundaries must not emit fallback results of their own.
 
 ## Serialization constraints
 
