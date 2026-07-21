@@ -2,7 +2,7 @@
 
 ## Layers
 
-### 1. `.ordo/playbook.yml`
+### 1. `.ordo/ordo.yaml`
 
 Project-local orchestration root.
 

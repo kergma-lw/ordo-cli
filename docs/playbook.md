@@ -16,22 +16,22 @@ One playbook run activates one workflow.
 
 ## Canonical location
 
-The initial canonical playbook path is:
+The canonical Ordo project file path is:
 
 ```text
-.ordo/playbook.yml
+.ordo/ordo.yaml
 ```
 
 ## Default discovery
 
 When the caller does not provide an explicit playbook file path, the initial discovery rule is:
 
-- look for `.ordo/playbook.yml` relative to the current working directory.
+- look for `.ordo/ordo.yaml` relative to the current working directory.
 
 The initial model deliberately does **not**:
 
 - guess unrelated YAML files;
-- silently fall back to alternate filenames;
+- silently fall back to alternate filenames such as `playbook.yml` or `playbook.yaml`;
 - perform broad parent-directory crawling as hidden convenience behavior.
 
 ## Explicit file override
@@ -140,8 +140,6 @@ For multiline string inputs, `ordo-playbook` may also read the value from a file
 ```text
 ordo-playbook --input-file body=./prompt.md plan inspect-issue
 ```
-
-The legacy form `ordo-playbook --workflow inspect-issue plan` remains available temporarily for compatibility, but positional workflow selection is now the primary shape.
 
 `--input-file` reads the file contents as a raw UTF-8 string for that one run. When both `--input` and `--input-file` set the same key, `--input-file` wins.
 

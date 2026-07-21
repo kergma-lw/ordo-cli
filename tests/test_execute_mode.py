@@ -846,7 +846,7 @@ class ExecuteModeTest(unittest.TestCase):
             backend_dir = root / "backend"
             frontend_dir.mkdir()
             backend_dir.mkdir()
-            (root / ".ordo" / "playbook.yml").write_text(
+            (root / ".ordo" / "ordo.yaml").write_text(
                 "version: 1\npre_run:\n  - workflows/resolve-context.yml\ndefaults:\n  profile: backend\nworkflows:\n  close-task:\n    file: close-task.yml\nprofiles:\n  frontend:\n    file: frontend.yml\n  backend:\n    file: backend.yml\nstates: {}\n",
                 encoding="utf-8",
             )
