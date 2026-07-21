@@ -110,8 +110,8 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "exactly_one_step_form",
             "kind": "exclusive_choice",
-            "fields": ["uses", "run", "profile_switch", "value", "state_set", "state_delete"],
-            "message": "A workflow step must define exactly one of uses, run, profile_switch, value, state_set, or state_delete",
+            "fields": ["uses", "run", "profile_switch", "value", "result", "state_set", "state_delete"],
+            "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, state_set, or state_delete",
         },
         {
             "name": "with_requires_uses",
@@ -144,6 +144,12 @@ WORKFLOW_CONTRACT: JSONObject = {
             "name": "value",
             "required_fields": ["name", "value"],
             "optional_fields": ["if", "register"],
+            "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        },
+        {
+            "name": "result",
+            "required_fields": ["name", "result"],
+            "optional_fields": ["if"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
         },
         {

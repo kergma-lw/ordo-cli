@@ -59,6 +59,7 @@ class Step:
     run_states: JSONObject = field(default_factory=dict, kw_only=True)
     profile_switch: JSONValue | None = None
     value: JSONValue | None = None
+    result: JSONValue | None = None
     state_set: JSONObject | None = None
     state_delete: str | None = None
     if_: str | None = field(default=None, metadata={"contract_name": "if"})
@@ -72,6 +73,7 @@ class Step:
             self.run is not None,
             self.profile_switch is not None,
             self.value is not None,
+            self.result is not None,
             self.state_set is not None,
             self.state_delete is not None,
         )
@@ -108,6 +110,11 @@ class Step:
                 contract["if"] = self.if_
             if self.register is not None:
                 contract["register"] = self.register
+            return contract
+        if self.result is not None:
+            contract = {"name": self.name, "result": self.result}
+            if self.if_ is not None:
+                contract["if"] = self.if_
             return contract
         if self.state_set is not None:
             contract = {"name": self.name, "state_set": dict(self.state_set)}

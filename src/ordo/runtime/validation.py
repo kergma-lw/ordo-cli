@@ -686,9 +686,10 @@ def _validate_step_list(
         has_run = "run" in item
         has_profile_switch = "profile_switch" in item
         has_value = "value" in item
+        has_result = "result" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
-        form_count = sum((has_uses, has_run, has_profile_switch, has_value, has_state_set, has_state_delete))
+        form_count = sum((has_uses, has_run, has_profile_switch, has_value, has_result, has_state_set, has_state_delete))
 
         prior_registers = {name: register_path for name, register_path in seen_registers.items()}
 
@@ -696,7 +697,7 @@ def _validate_step_list(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.form",
-                    "Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'state_set', or 'state_delete'",
+                    "Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'result', 'state_set', or 'state_delete'",
                     item_path,
                     source,
                 )
@@ -729,6 +730,16 @@ def _validate_step_list(
                 _validate_runtime_value_surface(
                     item.get("value"),
                     path=item_path + ("value",),
+                    source=source,
+                    prior_registers=prior_registers,
+                    declared_registers=effective_declared_registers,
+                )
+            )
+        elif has_result:
+            diagnostics.extend(
+                _validate_runtime_value_surface(
+                    item.get("result"),
+                    path=item_path + ("result",),
                     source=source,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,

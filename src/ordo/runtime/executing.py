@@ -94,6 +94,7 @@ def execute_workflow(
     executed_steps: list[str] = []
     reused_steps: list[str] = []
     skipped_steps: list[str] = []
+    published_results: list[JSONValue] = []
     step_condition_details: list[dict[str, object]] = []
     launcher_details: list[dict[str, object]] = []
     block_items: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("block_items", []) if isinstance(item, dict)]
@@ -547,6 +548,8 @@ def execute_workflow(
                 operation_results=operation_results,
                 diagnostics=diagnostics,
             )
+            if step.result is not None:
+                published_results.append(result.outputs.get("value"))
 
             if result.status != "ok":
                 _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
@@ -616,6 +619,7 @@ def execute_workflow(
             checked_guards=checked_guards,
             guard_details=guard_details,
             block_items=block_items,
+            extra={"results": published_results},
         ),
         operation_results=tuple(operation_results),
     )
@@ -831,6 +835,8 @@ def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
     try:
         if step.value is not None:
             return _execute_value_step(step.name, step.value, workflow)
+        if step.result is not None:
+            return _execute_result_step(step.name, step.result, workflow)
         if step.state_set is not None:
             return _execute_state_set(step.name, step.state_set, workflow)
         if step.state_delete is not None:
@@ -844,6 +850,15 @@ def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
 
 def _execute_value_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
     return evaluate_preflight_value_step(Step(name=step_name, value=raw_value), workflow)
+
+
+def _execute_result_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
+    value = resolve_runtime_value(raw_value, workflow)
+    return OperationResult(
+        status="ok",
+        summary=f"Published workflow result for step '{step_name}'",
+        outputs={"value": value},
+    )
 
 
 def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow: Workflow) -> OperationResult:

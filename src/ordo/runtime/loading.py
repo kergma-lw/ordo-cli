@@ -1152,12 +1152,13 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
     has_run = "run" in data
     has_profile_switch = "profile_switch" in data
     has_value = "value" in data
+    has_result = "result" in data
     has_state_set = "state_set" in data
     has_state_delete = "state_delete" in data
-    if sum((has_uses, has_run, has_profile_switch, has_value, has_state_set, has_state_delete)) != 1:
+    if sum((has_uses, has_run, has_profile_switch, has_value, has_result, has_state_set, has_state_delete)) != 1:
         raise _load_error(
             code="load.step.form",
-            message="Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'state_set', or 'state_delete'",
+            message="Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'result', 'state_set', or 'state_delete'",
             path=path,
             details={"source": source},
         )
@@ -1186,6 +1187,7 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
         run_with=dict(run_with_payload) if has_run else {},
         profile_switch=data.get("profile_switch") if has_profile_switch else None,
         value=data.get("value") if has_value else None,
+        result=data.get("result") if has_result else None,
         state_set=state_set,
         state_delete=state_delete,
         if_=_optional_string(data, "if", path=path + ("if",), source=source),

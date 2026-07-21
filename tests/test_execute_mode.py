@@ -109,6 +109,34 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(operation_results, [result])
         self.assertEqual(diagnostics, [diagnostic])
 
+    def test_execute_accumulates_results_from_multiple_result_steps(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={"issue_number": 7},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="publish-one", result={"summary": "first", "issue": "${inputs.issue_number}"}),
+                        Step(name="publish-two", result={"summary": "second"}),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["results"], [{"summary": "first", "issue": 7}, {"summary": "second"}])
+
+    def test_execute_returns_empty_results_when_no_result_step_runs(self) -> None:
+        workflow = Workflow(version=0, workflow="publish", steps=(Step(name="remember", value="ok"),))
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["results"], [])
+
     def test_execute_branch_classifiers_isolate_legacy_shaped_paths(self) -> None:
         probe = ResolvedOperation(reference="gh.issue", connector_namespace="gh", operation=OperationContract(name="issue", kind="probe"), source="public")
         action = ResolvedOperation(reference="runtime.profile.use", connector_namespace="runtime", operation=OperationContract(name="profile.use", kind="action"), source="public")

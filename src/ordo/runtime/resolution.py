@@ -183,6 +183,9 @@ def resolve_workflow_references(
             if step.value is not None:
                 resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="value"))
                 continue
+            if step.result is not None:
+                resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="result"))
+                continue
             if step.run is not None:
                 resolved_steps.append(ResolvedRunStep(name=step.name, run=step.run))
                 continue

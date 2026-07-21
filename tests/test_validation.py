@@ -49,6 +49,26 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_valid_result_step_workflow_passes(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: publish
+                inputs:
+                  issue_number: 7
+                blocks:
+                  - steps:
+                      - name: publish
+                        result:
+                          issue_number: ${inputs.issue_number}
+                          summary: done
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_object_guard_with_unknown_expr_field_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
