@@ -2215,6 +2215,61 @@ class PlaybookActivationTest(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload, {"status": "ok", "results": [{"summary": "done", "changed": True}]})
 
+    def test_cli_run_emits_only_one_top_level_fallback_when_internal_layers_publish_no_results(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "backend"}\n', encoding="utf-8")
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - file: workflows/switch-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    defaults:
+                      profile: backend
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                    states:
+                      shared_state:
+                        path: repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "nested.yml").write_text(
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-value\n        value: ok\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: nested\n        run: nested.yml\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\n", encoding="utf-8")
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed without publishing an explicit result"}]})
+
     def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(
             playbook_path=Path("/tmp/.ordo/ordo.yaml"),
