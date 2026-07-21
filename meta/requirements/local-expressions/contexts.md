@@ -10,6 +10,7 @@
 - Embedded value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Embedded value contexts must remain free of connector invocation semantics.
 - Embedded value contexts must remain free of hidden workflow-control semantics.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
 
 ## Guard context
 
@@ -30,6 +31,14 @@
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native bare `if` conditions are the preferred step-condition surface.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
+
+## Presence-check argument boundary
+
+- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined.
+- Allowed argument forms should be listed explicitly rather than inferred from broad expression permissiveness.
+- Arbitrary computed expressions, built-in calls, pipelines, boolean compositions, probe calls, and literals must not be treated as valid presence-check arguments.
+- Presence checks must preserve the distinction between an explicit `null` value and a missing lookup when the surrounding contract distinguishes them.
 
 ## Include-binding context
 

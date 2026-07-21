@@ -81,6 +81,7 @@ The public activation-input contract must stay readable from the root workflow.
 - Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
 - Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
 - Input-level `hint` text may help humans and agents choose values, but it remains guidance rather than a validation constraint.
+- If later authoring surfaces add explicit presence-check helpers, they should stay narrowly scoped to lookup-style references whose missingness semantics are contractually meaningful.
 
 ## What is undesirable
 
