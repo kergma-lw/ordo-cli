@@ -67,6 +67,26 @@ class ActivatedPlaybook:
     diagnostics: tuple[Diagnostic, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class WorkflowCatalogInput:
+    """Discovery metadata for one root-declared workflow input."""
+
+    name: str
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PlaybookWorkflowCatalogEntry:
+    """Discovery metadata for one playbook workflow entry."""
+
+    playbook_path: Path
+    workflow_name: str
+    workflow_path: Path
+    workflow_description: str | None = None
+    working_directory: str | None = None
+    inputs: tuple[WorkflowCatalogInput, ...] = ()
+
+
 @contextlib.contextmanager
 def activated_working_directory(activated: ActivatedPlaybook):
     """Run inside the activated playbook working directory when one is set."""
@@ -95,6 +115,85 @@ def discover_playbook_path(*, cwd: str | Path | None = None) -> Path:
         "playbook.discovery.missing",
         f"Playbook file '{PLAYBOOK_DISCOVERY_PATH}' was not found in the current working directory",
         details={"cwd": str(root), "expected_path": str(candidate)},
+    )
+
+
+def list_playbook_workflows(*, playbook_path: str | Path | None = None, cwd: str | Path | None = None) -> tuple[PlaybookWorkflowCatalogEntry, ...]:
+    """Return discovery metadata for all declared playbook workflows."""
+
+    path = Path(playbook_path) if playbook_path is not None else discover_playbook_path(cwd=cwd)
+    payload = _load_playbook_document(path)
+    playbook_dir = path.parent
+    workflows = _require_mapping(payload, "workflows", playbook_path=path)
+    entries: list[PlaybookWorkflowCatalogEntry] = []
+    for workflow_name in sorted(workflows):
+        workflow_entry = workflows.get(workflow_name)
+        if not isinstance(workflow_name, str) or not isinstance(workflow_entry, dict):
+            continue
+        _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
+        workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
+        workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
+        entries.append(
+            PlaybookWorkflowCatalogEntry(
+                playbook_path=path,
+                workflow_name=workflow_name,
+                workflow_path=workflow_path,
+                workflow_description=_optional_non_empty_string(workflow_entry, "description"),
+                working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
+            )
+        )
+    return tuple(entries)
+
+
+def inspect_playbook_workflow(
+    workflow_name: str,
+    *,
+    playbook_path: str | Path | None = None,
+    cwd: str | Path | None = None,
+) -> PlaybookWorkflowCatalogEntry:
+    """Return detailed discovery metadata for one playbook workflow entry."""
+
+    path = Path(playbook_path) if playbook_path is not None else discover_playbook_path(cwd=cwd)
+    payload = _load_playbook_document(path)
+    playbook_dir = path.parent
+    workflows = _require_mapping(payload, "workflows", playbook_path=path)
+    workflow_entry = workflows.get(workflow_name)
+    if not isinstance(workflow_entry, dict):
+        raise _playbook_error(
+            "playbook.workflow.missing",
+            f"Workflow '{workflow_name}' is not declared in the playbook",
+            path=("workflows", workflow_name),
+            details={"playbook": str(path), "workflow": workflow_name},
+        )
+    _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
+    workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
+    workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
+    raw_workflow = _load_workflow_payload(workflow_path, launch_dir=Path.cwd() if cwd is None else Path(cwd))
+    validation_report = validate_workflow_document(raw_workflow, source=str(workflow_path))
+    if not validation_report.ok:
+        raise PlaybookError(validation_report.diagnostics)
+    compiled_workflow = _compile_workflow_payload(
+        raw_workflow,
+        workflow_name=workflow_name,
+        workflow_entry=workflow_entry,
+        playbook_payload=payload,
+        playbook_dir=playbook_dir,
+        playbook_path=path,
+    )
+    try:
+        workflow = load_workflow_text(yaml.safe_dump(compiled_workflow, sort_keys=False), source=str(workflow_path))
+    except LoadError as exc:
+        raise PlaybookError(exc.diagnostics) from exc
+    semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
+    if not semantic_report.ok:
+        raise PlaybookError(semantic_report.diagnostics)
+    return PlaybookWorkflowCatalogEntry(
+        playbook_path=path,
+        workflow_name=workflow_name,
+        workflow_path=workflow_path,
+        workflow_description=_optional_non_empty_string(workflow_entry, "description"),
+        working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
+        inputs=tuple(_catalog_input_from_declared_input(name, schema) for name, schema in workflow.declared_inputs.items() if isinstance(name, str)),
     )
 
 
@@ -574,6 +673,15 @@ def _optional_non_empty_string(payload: dict[str, object], key: str) -> str | No
     if isinstance(value, str) and value:
         return value
     return None
+
+
+def _catalog_input_from_declared_input(name: str, schema: object) -> WorkflowCatalogInput:
+    description: str | None = None
+    if isinstance(schema, dict):
+        raw_description = schema.get("description")
+        if isinstance(raw_description, str) and raw_description:
+            description = raw_description
+    return WorkflowCatalogInput(name=name, description=description)
 
 
 def _resolve_working_directory(

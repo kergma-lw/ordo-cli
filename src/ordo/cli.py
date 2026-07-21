@@ -12,7 +12,7 @@ import yaml
 
 from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, set_default_connector_provider
 from ordo.model.runtime import RuntimeResult
-from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory
+from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
 
 
 EXPLAIN_MODE_HELP = """usage: ordo-playbook [options] explain
@@ -62,6 +62,8 @@ Examples:
 
 
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "workflows":
+        return _run_workflow_discovery_command(sys.argv[2:])
     if len(sys.argv) >= 3 and sys.argv[1] in {"check", "plan", "explain"} and sys.argv[2] in {"-h", "--help"}:
         if sys.argv[1] == "check":
             print(CHECK_MODE_HELP)
@@ -225,6 +227,64 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
         )
     explained = explain_workflow(workflow, profile=profile, available_profiles=available_profiles)
     return explained
+
+
+def _run_workflow_discovery_command(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="ordo-playbook workflows")
+    parser.add_argument("command", choices=("list", "show"))
+    parser.add_argument("workflow", nargs="?", help="workflow name for the show command")
+    parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
+    parser.add_argument("--json", action="store_true", help="emit JSON without extra decoration")
+    args = parser.parse_args(argv)
+
+    if args.command == "list" and args.workflow is not None:
+        parser.error("workflows list does not accept a workflow name")
+    if args.command == "show" and args.workflow is None:
+        parser.error("workflows show requires a workflow name")
+
+    try:
+        if args.command == "list":
+            entries = list_playbook_workflows(playbook_path=args.playbook_file)
+            payload = {
+                "mode": "workflows.list",
+                "status": "ok",
+                "playbook": str(entries[0].playbook_path) if entries else str(args.playbook_file) if args.playbook_file else None,
+                "workflows": [
+                    {
+                        "workflow": entry.workflow_name,
+                        "description": entry.workflow_description,
+                        "file": str(entry.workflow_path),
+                    }
+                    for entry in entries
+                ],
+            }
+        else:
+            entry = inspect_playbook_workflow(args.workflow, playbook_path=args.playbook_file)
+            payload = {
+                "mode": "workflows.show",
+                "status": "ok",
+                "playbook": str(entry.playbook_path),
+                "workflow": entry.workflow_name,
+                "description": entry.workflow_description,
+                "file": str(entry.workflow_path),
+                "working_directory": entry.working_directory,
+                "inputs": [
+                    {
+                        "name": item.name,
+                        "description": item.description,
+                    }
+                    for item in entry.inputs
+                ],
+            }
+    except PlaybookError as exc:
+        return _emit_error(exc, as_json=args.json)
+
+    if args.json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
 
 
 def _parse_input_overrides(raw_items: list[str], *, parser: argparse.ArgumentParser) -> dict[str, object]:

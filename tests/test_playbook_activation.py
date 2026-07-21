@@ -1532,6 +1532,126 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["status"], "ok")
             self.assertEqual(payload["workflow"], "inspect-issue")
 
+    def test_cli_workflows_list_returns_catalog_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      zeta-task:
+                        file: zeta-task.yml
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        description: Inspect one issue and prepare local context
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "zeta-task.yml").write_text(
+                "version: 0\nworkflow: zeta-task\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "workflows", "list"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["mode"], "workflows.list")
+            self.assertEqual([item["workflow"] for item in payload["workflows"]], ["inspect-issue", "zeta-task"])
+            self.assertEqual(payload["workflows"][0]["description"], "Inspect one issue and prepare local context")
+
+    def test_cli_workflows_show_returns_declared_inputs_and_description(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        description: Inspect one issue and prepare local context
+                        working_directory: ../repo
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "repo").mkdir()
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      repository:
+                        description: GitHub repository slug
+                      issue_number:
+                        description: Numeric issue id
+                    blocks:
+                      - guards: []
+                      - steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "workflows", "show", "inspect-issue"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["mode"], "workflows.show")
+            self.assertEqual(payload["workflow"], "inspect-issue")
+            self.assertEqual(payload["description"], "Inspect one issue and prepare local context")
+            self.assertEqual(payload["working_directory"], "../repo")
+            self.assertEqual(payload["inputs"][0], {"name": "repository", "description": "GitHub repository slug"})
+            self.assertEqual(payload["inputs"][1], {"name": "issue_number", "description": "Numeric issue id"})
+
+    def test_cli_workflows_show_reports_unknown_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                "version: 1\nworkflows: {}\nprofiles: {}\nstates: {}\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "workflows", "show", "missing", "--json"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 1)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["mode"], "activation")
+            self.assertEqual(payload["diagnostics"][0]["code"], "playbook.workflow.missing")
+
     def test_cli_runs_mode_inside_activated_working_directory(self) -> None:
         activated = SimpleNamespace(
             playbook_path=Path("/tmp/.ordo/playbook.yml"),
