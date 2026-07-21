@@ -119,6 +119,64 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.profile.name if activated.profile else None, "review")
         self.assertEqual(activated.profile.inputs["source"], "explicit")
 
+    def test_activate_playbook_exposes_optional_workflow_description(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        description: Inspect one issue and prepare local context
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+        self.assertEqual(activated.workflow_description, "Inspect one issue and prepare local context")
+
+    def test_activate_playbook_rejects_non_string_workflow_description(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "playbook.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        description:
+                          - invalid
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(PlaybookError) as ctx:
+                activate_playbook(workflow_name="inspect-issue", cwd=root)
+
+        diagnostic = ctx.exception.diagnostics[0]
+        self.assertEqual(diagnostic.code, "playbook.workflow.description_invalid")
+        self.assertEqual(diagnostic.path, ("workflows", "inspect-issue", "description"))
+
     def test_activate_playbook_loads_profile_launchers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -58,6 +58,7 @@ class ActivatedPlaybook:
     workflow_name: str
     workflow: Workflow
     workflow_path: Path
+    workflow_description: str | None = None
     profile: Profile | None = None
     profile_path: Path | None = None
     available_profiles: dict[str, Profile] | None = None
@@ -121,6 +122,7 @@ def activate_playbook(
             details={"playbook": str(path), "workflow": workflow_name},
         )
     _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
+    workflow_description = _optional_non_empty_string(workflow_entry, "description")
 
     workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
     workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
@@ -240,6 +242,7 @@ def activate_playbook(
         workflow_name=workflow_name,
         workflow=workflow,
         workflow_path=workflow_path,
+        workflow_description=workflow_description,
         profile=profile,
         profile_path=resolved_profile_path,
         available_profiles=available_profiles,
@@ -556,6 +559,21 @@ def _validate_workflow_entry_fields(workflow_entry: dict[str, object], *, workfl
                 path=("workflows", workflow_name, key),
                 details={"playbook": str(playbook_path), "workflow": workflow_name, "allowed_fields": sorted(WORKFLOW_ENTRY_ALLOWED_FIELDS)},
             )
+    description = workflow_entry.get("description")
+    if description is not None and (not isinstance(description, str) or not description):
+        raise _playbook_error(
+            "playbook.workflow.description_invalid",
+            "Workflow entry field 'description' must be a non-empty string when present",
+            path=("workflows", workflow_name, "description"),
+            details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(description).__name__},
+        )
+
+
+def _optional_non_empty_string(payload: dict[str, object], key: str) -> str | None:
+    value = payload.get(key)
+    if isinstance(value, str) and value:
+        return value
+    return None
 
 
 def _resolve_working_directory(

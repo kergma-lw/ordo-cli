@@ -21,6 +21,12 @@ PLAYBOOK_CONTRACT: JSONObject = {
     "workflow_entry_fields": [
         {"name": "file", "required": True, "type": "string"},
         {
+            "name": "description",
+            "required": False,
+            "type": "string",
+            "documentation_role": "project_local_workflow_summary",
+        },
+        {
             "name": "working_directory",
             "required": False,
             "type": "string",
@@ -61,7 +67,7 @@ PLAYBOOK_CONTRACT: JSONObject = {
         },
         "workflow_entries": {
             "requires": ["file"],
-            "optional": ["working_directory", "state_bindings"],
+            "optional": ["description", "working_directory", "state_bindings"],
         },
         "pre_run": {
             "item_type": "workflow_reference",
