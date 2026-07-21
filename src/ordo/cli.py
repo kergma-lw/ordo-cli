@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import re
 import sys
@@ -11,7 +10,7 @@ import sys
 import yaml
 
 from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, set_default_connector_provider
-from ordo.model.runtime import RuntimeResult
+from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
 
 
@@ -166,19 +165,7 @@ def main() -> int:
         except PlaybookError as exc:
             return _emit_error(exc, as_json=args.json)
 
-        context_manager = activated_working_directory(activated)
-        if args.mode == "run":
-            context_manager = contextlib.nullcontext()
-
-        with context_manager:
-            if args.mode == "run":
-                return _emit_refusal(
-                    workflow=args.workflow,
-                    playbook=str(activated.playbook_path),
-                    profile=None if activated.profile is None else activated.profile.name,
-                    as_json=args.json,
-                )
-
+        with activated_working_directory(activated):
             result = _run_mode(
                 args.mode,
                 activated.workflow,
@@ -199,20 +186,21 @@ def main() -> int:
                 "explanation": result.outputs.get("explanation"),
             }
         else:
-            payload = result.to_contract()
+            payload = _public_runtime_payload(args.mode, result)
             activation_diagnostics = getattr(activated, "diagnostics", ())
-            if activation_diagnostics:
+            if activation_diagnostics and not (args.mode == "run" and result.status is RuntimeStatus.OK):
                 payload["diagnostics"] = [
                     *payload.get("diagnostics", []),
                     *[diagnostic.to_contract() for diagnostic in activation_diagnostics],
                 ]
-            payload.update(
-                {
-                    "workflow": activated.workflow_name,
-                    "playbook": str(activated.playbook_path),
-                    "profile": None if activated.profile is None else activated.profile.name,
-                }
-            )
+            if not (args.mode == "run" and result.status is RuntimeStatus.OK):
+                payload.update(
+                    {
+                        "workflow": activated.workflow_name,
+                        "playbook": str(activated.playbook_path),
+                        "profile": None if activated.profile is None else activated.profile.name,
+                    }
+                )
 
         if args.mode == "explain" and not args.json:
             payload = _summarize_explain_payload(payload)
@@ -248,6 +236,16 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
         )
     explained = explain_workflow(workflow, profile=profile, available_profiles=available_profiles)
     return explained
+
+
+def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[str, object]:
+    if command_mode == "run" and result.status is RuntimeStatus.OK:
+        raw_results = result.outputs.get("results", [])
+        return {
+            "status": "ok",
+            "results": list(raw_results) if isinstance(raw_results, list) else [],
+        }
+    return result.to_contract()
 
 
 def _resolve_execution_workflow_name(args, *, parser: argparse.ArgumentParser) -> str:
@@ -348,33 +346,6 @@ def _parse_input_file_overrides(raw_items: list[str], *, parser: argparse.Argume
         except OSError as exc:
             parser.error(f"failed to read --input-file {key} from {path}: {exc}")
     return overrides
-
-
-def _emit_refusal(*, workflow: str, playbook: str, profile: str | None, as_json: bool) -> int:
-    payload = {
-        "mode": "run",
-        "status": "execution_error",
-        "workflow": workflow,
-        "playbook": playbook,
-        "profile": profile,
-        "diagnostics": [
-            {
-                "code": "playbook.run.disabled",
-                "level": "error",
-                "message": "Playbook run mode is temporarily disabled",
-                "path": [],
-                "details": {
-                    "reason": "Run mode is intentionally blocked until the playbook execution surface is hardened",
-                },
-            }
-        ],
-    }
-    if as_json:
-        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
-        sys.stdout.write("\n")
-    else:
-        print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
-    return 1
 
 
 def _emit_error(exc: PlaybookError, *, as_json: bool) -> int:

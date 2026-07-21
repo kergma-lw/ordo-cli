@@ -1927,8 +1927,8 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["mode"], "execute")
             self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["results"], [])
 
     def test_cli_reports_missing_workflow_for_execution_command(self) -> None:
         stdout = io.StringIO()
@@ -2188,8 +2188,32 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["mode"], "execute")
             self.assertEqual(payload["status"], "ok")
+            self.assertEqual(payload["results"], [])
+
+    def test_cli_run_mode_surfaces_published_results(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                "version: 1\nworkflows:\n  inspect-issue:\n    file: inspect-issue.yml\nprofiles: {}\nstates: {}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: publish\n        result:\n          summary: done\n          changed: true\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "done", "changed": True}]})
 
     def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(
