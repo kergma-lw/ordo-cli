@@ -35,6 +35,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  repository: owner/repo
+                  other: true
+                  issue_number: 1
                 blocks:
                   - guards:
                       - git.branch != "main"
@@ -51,6 +55,9 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  repository: owner/repo
+                  issue_number: 1
                 blocks:
                   - guards:
                       - uses: git.worktree
@@ -121,6 +128,9 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  kind: feat
+                  number: 123
                 blocks:
                   - guards: []
                   - steps:
@@ -140,6 +150,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - steps:
                       - name: inspect
@@ -180,6 +192,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - steps:
                       - name: prepare
@@ -200,6 +214,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - steps:
                       - name: comment-and-status
@@ -218,6 +234,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - steps:
                       - name: comment-and-status
@@ -235,6 +253,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - steps:
                       - name: comment-and-status
@@ -349,6 +369,10 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  repository: owner/repo
+                  other: true
+                  issue_number: 1
                 blocks:
                   - guards:
                       - gh.issue(repository=inputs.repository and inputs.other, issue_number=inputs.issue_number).status == "Open"
@@ -382,6 +406,9 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  repository: owner/repo
+                  issue_number: 1
                 blocks:
                   - guards:
                       - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"
@@ -446,6 +473,50 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.include_binding.args_ref")
+
+    def test_direct_workflow_reference_to_undeclared_root_input_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  kind: feat
+                  number: 123
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: copy-size
+                        value: ${inputs.size}
+                        register: size
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+        self.assertEqual(report.diagnostics[0].path, ("blocks", "1", "steps", "0", "value"))
+
+    def test_direct_workflow_reference_to_declared_root_input_passes_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  size:
+                    description: task size
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: copy-size
+                        value: ${inputs.size}
+                        register: size
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
 
     def test_guard_expression_allows_state_reference(self) -> None:
         report = validate_workflow_text(
@@ -581,6 +652,9 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  kind: feat
+                  number: 123
                 blocks:
                   - guards: []
                   - steps:
@@ -601,6 +675,9 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  kind: feat
+                  number: 123
                 blocks:
                   - guards: []
                   - steps:
@@ -621,6 +698,9 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  kind: feat
+                  number: 123
                 blocks:
                   - guards: []
                   - steps:
@@ -643,6 +723,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  kind: feat
                 blocks:
                   - guards: []
                   - steps:
@@ -663,6 +745,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - guards: []
                   - steps:
@@ -685,6 +769,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - guards: []
                   - steps:
@@ -704,6 +790,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - guards: []
                   - steps:
@@ -895,6 +983,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - guards: []
                   - steps:

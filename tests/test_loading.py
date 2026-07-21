@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from ordo.model.profile import Profile
+from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
 from ordo.runtime import LoadError, load_profile_file, load_profile_text, load_workflow_document_file, load_workflow_file, load_workflow_text, load_yaml_document, validate_workflow_document
 
@@ -645,6 +646,83 @@ class LoadingTest(unittest.TestCase):
                 load_workflow_file(workflow_path, launch_dir=root)
 
         self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.args.missing")
+
+    def test_validate_workflow_document_rejects_undeclared_root_input_from_included_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - include: fragments/set-size
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "set-size.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: size
+                        value: ${inputs.size}
+                        register: size
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = load_workflow_document_file(workflow_path, launch_dir=root)
+            report = validate_workflow_document(payload, source=str(workflow_path))
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+        self.assertEqual(report.diagnostics[0].path, ("blocks", "0", "steps", "0", "value"))
+
+    def test_validate_workflow_document_accepts_declared_root_input_used_only_in_included_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    inputs:
+                      size:
+                        description: task size
+                    blocks:
+                      - include: fragments/set-size
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "set-size.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: size
+                        value: ${inputs.size}
+                        register: size
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = load_workflow_document_file(workflow_path, launch_dir=root)
+            report = validate_workflow_document(payload, source=str(workflow_path))
+
+        self.assertTrue(report.ok)
 
     def test_load_workflow_file_rejects_unknown_fragment_args(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

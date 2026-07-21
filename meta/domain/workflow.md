@@ -71,6 +71,14 @@ Within an assembled workflow:
 - `args...` is local to the included fragment instance that declared it;
 - `step...` remains execution-local and must not cross included-fragment boundaries unless a later explicit export model is introduced.
 
+## Public input contract
+
+The public activation-input contract must stay readable from the root workflow.
+
+- All user-facing activation inputs must be declared in the root workflow `inputs` contract.
+- Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
+- Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
+
 ## What is undesirable
 
 - large embedded shell fragments;

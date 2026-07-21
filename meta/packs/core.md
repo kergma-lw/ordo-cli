@@ -506,6 +506,8 @@
 - Reusable workflow fragments should support explicit local argument contracts.
 - Explicit fragment argument contracts must not by themselves force static composition and runtime-scoped invocation to collapse into one reuse primitive when their semantics diverge materially.
 - If the product later introduces both `include` and `run`, the distinction must remain brief enough for humans and agents to predict from contract docs and examples.
+- All user-facing activation inputs must be declared in the root workflow `inputs` contract even when they are consumed only inside included fragments or reusable run targets.
+- Validation after workflow assembly must reject any `inputs.<name>` reference that does not resolve to a root-declared workflow input.
 
 ## Product boundary
 
@@ -1337,6 +1339,14 @@ Within an assembled workflow:
 - `state...` remains global workflow state surface;
 - `args...` is local to the included fragment instance that declared it;
 - `step...` remains execution-local and must not cross included-fragment boundaries unless a later explicit export model is introduced.
+
+## Public input contract
+
+The public activation-input contract must stay readable from the root workflow.
+
+- All user-facing activation inputs must be declared in the root workflow `inputs` contract.
+- Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
+- Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
 
 ## What is undesirable
 

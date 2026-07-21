@@ -29,6 +29,7 @@ from .local_expression_engine.core import (
     BinaryNode,
     BuiltinCallNode,
     FilterApplicationNode,
+    ListNode,
     LiteralNode,
     PipelineNode,
     ReferenceNode,
@@ -113,6 +114,7 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
     diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
     diagnostics.extend(_validate_workflow_blocks(payload, source=source))
+    diagnostics.extend(_validate_declared_workflow_input_references(payload, source=source))
     diagnostics.extend(_validate_state_role_write_order(payload, source=source))
 
     return _report("workflow", diagnostics)
@@ -120,6 +122,174 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
 
 def _validate_workflow_blocks(payload: JSONObject, *, source: str) -> list[Diagnostic]:
     return _validate_block_list(payload.get("blocks"), source=source)
+
+
+def _validate_declared_workflow_input_references(payload: JSONObject, *, source: str) -> list[Diagnostic]:
+    blocks = payload.get("blocks")
+    if not isinstance(blocks, list):
+        return []
+
+    declared_inputs = payload.get("inputs")
+    declared_keys = set(declared_inputs) if isinstance(declared_inputs, dict) else set()
+    diagnostics: list[Diagnostic] = []
+    seen: set[tuple[tuple[str, ...], str]] = set()
+
+    for block_index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            continue
+        guards = block.get("guards")
+        if isinstance(guards, list):
+            for guard_index, guard in enumerate(guards):
+                item_path = ("blocks", str(block_index), "guards", str(guard_index))
+                for reference in _collect_input_references_from_guard_item(guard):
+                    _append_undeclared_input_reference_diagnostic(
+                        diagnostics,
+                        seen=seen,
+                        reference=reference,
+                        declared_keys=declared_keys,
+                        path=item_path,
+                        source=source,
+                    )
+        steps = block.get("steps")
+        if isinstance(steps, list):
+            for step_index, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    continue
+                for reference, path in _iter_input_references_from_step_item(step, block_index=block_index, step_index=step_index):
+                    _append_undeclared_input_reference_diagnostic(
+                        diagnostics,
+                        seen=seen,
+                        reference=reference,
+                        declared_keys=declared_keys,
+                        path=path,
+                        source=source,
+                    )
+    return diagnostics
+
+
+def _append_undeclared_input_reference_diagnostic(
+    diagnostics: list[Diagnostic],
+    *,
+    seen: set[tuple[tuple[str, ...], str]],
+    reference: tuple[str, ...],
+    declared_keys: set[str],
+    path: tuple[str, ...],
+    source: str,
+) -> None:
+    if len(reference) < 2 or reference[0] != "inputs":
+        return
+    input_name = reference[1]
+    if input_name in declared_keys:
+        return
+    key = (path, input_name)
+    if key in seen:
+        return
+    seen.add(key)
+    diagnostics.append(
+        _diagnostic(
+            "validation.workflow.inputs.undeclared_reference",
+            f"Workflow input reference '{'.'.join(reference)}' is not declared in the root workflow inputs contract",
+            path,
+            source,
+            input=input_name,
+            reference=".".join(reference),
+        )
+    )
+
+
+def _collect_input_references_from_guard_item(item: JSONValue) -> set[tuple[str, ...]]:
+    if isinstance(item, str):
+        try:
+            parsed = parse_local_expression(item, context=LocalExpressionContext.GUARD)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            return set()
+        return _collect_guard_input_references(parsed.root)
+    if isinstance(item, dict):
+        return _collect_input_references_from_runtime_value_surface(item.get("with"))
+    return set()
+
+
+def _iter_input_references_from_step_item(step: JSONObject, *, block_index: int, step_index: int) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    references: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    base_path = ("blocks", str(block_index), "steps", str(step_index))
+    condition = step.get("if")
+    if isinstance(condition, str):
+        try:
+            parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            parsed = None
+        if parsed is not None and parsed.value is not None:
+            for reference in _collect_value_input_references(parsed.value.root):
+                references.append((reference, base_path + ("if",)))
+    if "uses" in step or "run" in step:
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("with")), path=base_path + ("with",)))
+    if "value" in step:
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("value")), path=base_path + ("value",)))
+    if "profile_switch" in step:
+        references.extend(
+            _pair_input_references_with_paths(
+                _collect_input_references_from_runtime_value_surface(step.get("profile_switch")),
+                path=base_path + ("profile_switch",),
+            )
+        )
+    if "state_set" in step and isinstance(step.get("state_set"), dict):
+        for key, item in step["state_set"].items():
+            if isinstance(key, str):
+                for reference in _collect_input_references_from_state_path_text(key):
+                    references.append((reference, base_path + ("state_set", key)))
+                references.extend(
+                    _pair_input_references_with_paths(
+                        _collect_input_references_from_runtime_value_surface(item),
+                        path=base_path + ("state_set", key),
+                    )
+                )
+    target_expr = step.get("state_delete")
+    if isinstance(target_expr, str):
+        for reference in _collect_input_references_from_state_path_text(target_expr):
+            references.append((reference, base_path + ("state_delete",)))
+    return references
+
+
+def _pair_input_references_with_paths(
+    references: set[tuple[str, ...]], *, path: tuple[str, ...]
+) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    return [(reference, path) for reference in references]
+
+
+def _collect_input_references_from_runtime_value_surface(value: JSONValue | None) -> set[tuple[str, ...]]:
+    references: set[tuple[str, ...]] = set()
+    if _is_format_value_object(value):
+        for arg in value.get("args", []):
+            references.update(_collect_input_references_from_runtime_value_surface(arg))
+        return references
+    if isinstance(value, list):
+        for item in value:
+            references.update(_collect_input_references_from_runtime_value_surface(item))
+        return references
+    if isinstance(value, dict):
+        for item in value.values():
+            references.update(_collect_input_references_from_runtime_value_surface(item))
+        return references
+    if not isinstance(value, str):
+        return references
+    expression = _extract_runtime_value_expression(value)
+    if expression is None:
+        return references
+    try:
+        parsed = parse_embedded_value_local_expression(value)
+    except LOCAL_EXPRESSION_PARSE_ERRORS:
+        return references
+    if parsed is None or parsed.value is None:
+        return references
+    return _collect_value_input_references(parsed.value.root)
+
+
+def _collect_input_references_from_state_path_text(value: str) -> set[tuple[str, ...]]:
+    try:
+        parsed = parse_state_path(value)
+    except StatePathParseError:
+        return set()
+    return {parsed.key_reference}
 
 
 def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> list[Diagnostic]:
@@ -1360,6 +1530,41 @@ def _collect_guard_state_references(node) -> set[str]:
     return roles
 
 
+def _collect_guard_input_references(node) -> set[tuple[str, ...]]:
+    references: set[tuple[str, ...]] = set()
+    from .local_expression_engine.core import BinaryNode as GuardBinaryNode, CallArgumentNode as GuardCallArgumentNode, CallNode as GuardCallNode, ListNode as GuardListNode, UnaryNode as GuardUnaryNode
+
+    def visit(current) -> None:
+        if isinstance(current, ReferenceNode):
+            if current.parts and current.parts[0] == "inputs" and len(current.parts) >= 2:
+                references.add(current.parts)
+            return
+        if isinstance(current, GuardStateReferenceNode):
+            if current.key_reference and current.key_reference[0] == "inputs" and len(current.key_reference) >= 2:
+                references.add(current.key_reference)
+            return
+        if isinstance(current, GuardListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, GuardCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, GuardCallArgumentNode):
+            visit(current.value)
+            return
+        if isinstance(current, GuardUnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, GuardBinaryNode):
+            visit(current.left)
+            visit(current.right)
+
+    visit(node)
+    return references
+
+
 def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
     roles: set[str] = set()
 
@@ -1386,6 +1591,52 @@ def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
 
     visit(node)
     return roles
+
+
+def _collect_value_input_references(node: ValueExpressionNode) -> set[tuple[str, ...]]:
+    references: set[tuple[str, ...]] = set()
+
+    def visit(current: ValueExpressionNode) -> None:
+        if isinstance(current, ReferenceNode):
+            if current.parts and current.parts[0] == "inputs" and len(current.parts) >= 2:
+                references.add(current.parts)
+            return
+        if isinstance(current, ValueStateReferenceNode):
+            if current.key_reference and current.key_reference[0] == "inputs" and len(current.key_reference) >= 2:
+                references.add(current.key_reference)
+            return
+        if isinstance(current, StepReferenceNode):
+            return
+        if isinstance(current, PipelineNode):
+            visit(current.source)
+            for filter_node in current.filters:
+                for argument in filter_node.arguments:
+                    visit(argument)
+            return
+        if isinstance(current, BuiltinCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, UnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, BinaryNode):
+            visit(current.left)
+            visit(current.right)
+            return
+        if isinstance(current, FilterApplicationNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, ListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, LiteralNode):
+            return
+
+    visit(node)
+    return references
 
 
 def _validate_step_references(
