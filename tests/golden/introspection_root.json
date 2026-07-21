@@ -3096,6 +3096,21 @@
       },
       "inputs_contract": {
         "access_surface": "inputs.name",
+        "declaration_fields": [
+          {
+            "authoring_role": "input_meaning",
+            "name": "description",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "authoring_role": "input_guidance",
+            "name": "hint",
+            "required": false,
+            "type": "string",
+            "validation_effect": "none"
+          }
+        ],
         "declaration_shape": "mapping",
         "declared_keys_required_at_activation": true,
         "empty_string_is_distinct_value": true,

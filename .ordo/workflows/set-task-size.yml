@@ -7,7 +7,8 @@ inputs:
   repo_dir: {}
   repository: {}
   project_id: {}
-  size: {}
+  size:
+    hint: Use one of XS, S, M, L, XL
 blocks:
   - guards:
       - git.repo
@@ -18,8 +19,16 @@ blocks:
   - steps:
       - name: Set task size
         uses: gh.project.issue.size.set
+        register: size_update
         with:
           repository: ${inputs.repository}
           issue_number: ${inputs.issue_number}
           project_id: ${inputs.project_id}
           size: ${inputs.size}
+
+      - name: Publish task size result
+        result:
+          summary: Task size updated
+          issue_ref: ${step.size_update.outputs.issue_ref}
+          size: ${step.size_update.outputs.size}
+          changed: ${step.size_update.outputs.changed}

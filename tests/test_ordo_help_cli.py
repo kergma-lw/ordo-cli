@@ -158,6 +158,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("register", step_forms["value"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["optional_fields"])
 
+    def test_model_publishes_workflow_input_hint_metadata(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        input_fields = {item["name"]: item for item in model["workflow"]["inputs_contract"]["declaration_fields"]}
+
+        self.assertEqual(input_fields["hint"]["type"], "string")
+        self.assertEqual(input_fields["hint"]["validation_effect"], "none")
+
     def test_model_publishes_representation_adapter_surface(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         adapter_surface = model["representation_adapters"]

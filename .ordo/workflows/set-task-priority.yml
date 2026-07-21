@@ -7,7 +7,8 @@ inputs:
   repo_dir: {}
   repository: {}
   project_id: {}
-  priority: {}
+  priority:
+    hint: Use one of P0, P1, P2, P3
 blocks:
   - guards:
       - git.repo
@@ -18,8 +19,16 @@ blocks:
   - steps:
       - name: Set task priority
         uses: gh.project.issue.priority.set
+        register: priority_update
         with:
           repository: ${inputs.repository}
           issue_number: ${inputs.issue_number}
           project_id: ${inputs.project_id}
           priority: ${inputs.priority}
+
+      - name: Publish task priority result
+        result:
+          summary: Task priority updated
+          issue_ref: ${step.priority_update.outputs.issue_ref}
+          priority: ${step.priority_update.outputs.priority}
+          changed: ${step.priority_update.outputs.changed}
