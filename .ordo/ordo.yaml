@@ -1,6 +1,8 @@
 version: 1
 pre_run:
-  - workflows/switch-active-profile.yml
+  - file: workflows/switch-active-profile.yml
+    state_bindings:
+      shared_state: shared_state
 defaults:
   profile: backend
 states:
@@ -19,6 +21,12 @@ workflows:
     state_bindings:
       common_state: common_state
       shared_state: shared_state
+  set-task-size:
+    file: workflows/set-task-size.yml
+    description: Update the project Size field for one open task in this repository
+  set-task-priority:
+    file: workflows/set-task-priority.yml
+    description: Update the project Priority field for one open task in this repository
   set-active-profile:
     file: workflows/set-active-profile.yml
     state_bindings:

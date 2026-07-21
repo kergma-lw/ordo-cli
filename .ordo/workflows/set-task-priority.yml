@@ -1,0 +1,25 @@
+version: 0
+workflow: set-task-priority
+inputs:
+  active_profile_key: active_profile
+  issue_number: {}
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+  priority: {}
+blocks:
+  - guards:
+      - git.repo
+      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
+      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
+      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).priority != inputs.priority
+
+  - steps:
+      - name: Set task priority
+        uses: gh.project.issue.priority.set
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          project_id: ${inputs.project_id}
+          priority: ${inputs.priority}

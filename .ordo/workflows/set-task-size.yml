@@ -1,0 +1,25 @@
+version: 0
+workflow: set-task-size
+inputs:
+  active_profile_key: active_profile
+  issue_number: {}
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+  size: {}
+blocks:
+  - guards:
+      - git.repo
+      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
+      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
+      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).size != inputs.size
+
+  - steps:
+      - name: Set task size
+        uses: gh.project.issue.size.set
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          project_id: ${inputs.project_id}
+          size: ${inputs.size}
