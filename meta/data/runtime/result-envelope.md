@@ -8,6 +8,7 @@ The runtime result must be able to express:
 - failed guard or failed step
 - diagnostics
 - outputs
+- published workflow results
 - skipped/executed steps
 - human-readable message when useful for review
 - machine-readable code when useful for classification
@@ -28,6 +29,14 @@ At minimum, a connector operation outcome should preserve:
 - optional supplementary `raw` detail
 
 This operation outcome is the connector-local structured input to runtime adaptation, not the entire public runtime result envelope by itself.
+
+## Published workflow results
+
+- Successful run output may include a `results` list of workflow-authored published result values.
+- Each executed workflow `result` step appends one value to that `results` list.
+- Published result values accumulate in execution order.
+- The runtime must not inject additional metadata into published result values in the initial model.
+- If no `result` step executes, successful run output may return `results: []`.
 
 ## Serialization constraints
 

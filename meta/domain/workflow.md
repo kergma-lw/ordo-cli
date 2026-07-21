@@ -26,6 +26,7 @@ but they are not the place where non-trivial transformation algorithms should be
 - compact parameters;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
+- explicit authored result publication through existing `result` steps.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
@@ -96,3 +97,12 @@ A good workflow:
 - can show where one guard barrier ends and the next step sequence begins;
 - can be moved across projects while preserving contracts.
 - can be authored and iteratively repaired by a sufficiently capable agent using contract docs, examples, and structured diagnostics.
+
+## Result publication
+
+Workflow-owned result publication belongs to the workflow domain.
+
+- Existing `result` step syntax remains unchanged.
+- Each executed `result` step appends one authored value to the runtime results list.
+- Published results accumulate in execution order rather than replacing prior published results.
+- Published result values are stored as authored values only, without added runtime metadata.

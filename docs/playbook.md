@@ -161,6 +161,14 @@ ordo-playbook --input-file body=./prompt.md plan inspect-issue
 
 `--input-file` reads the file contents as a raw UTF-8 string for that one run. When both `--input` and `--input-file` set the same key, `--input-file` wins.
 
+## Successful run results
+
+Successful `ordo-playbook run <workflow>` output is expected to surface the accumulated workflow-authored `results` list.
+
+Those values come from executed workflow `result` steps in execution order.
+
+The runtime should not inject extra metadata into those authored result values in the initial model.
+
 ## Resolution notes
 
 - a bare workflow filename such as `close-task.yml` resolves under `.ordo/workflows/` relative to the playbook directory;

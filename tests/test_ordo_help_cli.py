@@ -154,6 +154,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         step_forms = {item["name"]: item for item in model["workflow"]["step_forms"]}
 
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
+        self.assertEqual(step_forms["result"]["required_fields"], ["name", "result"])
         self.assertIn("register", step_forms["value"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["optional_fields"])
 
@@ -244,6 +245,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(playbook["usage"], "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>")
         self.assertEqual(playbook["discovery_commands"][0]["name"], "workflows list")
         self.assertEqual(playbook["modes"][0]["name"], "check <workflow>")
+        self.assertEqual(playbook["run_success_surface"], "successful run emits the accumulated workflow-authored results list")
         self.assertIn("ordo-playbook workflows list", playbook["examples"])
         self.assertIn("ordo-playbook plan inspect-issue", playbook["examples"])
         self.assertNotIn("--workflow", flags)

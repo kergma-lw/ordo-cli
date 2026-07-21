@@ -3147,11 +3147,12 @@
             "run",
             "profile_switch",
             "value",
+            "result",
             "state_set",
             "state_delete"
           ],
           "kind": "exclusive_choice",
-          "message": "A workflow step must define exactly one of uses, run, profile_switch, value, state_set, or state_delete",
+          "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, state_set, or state_delete",
           "name": "exactly_one_step_form"
         },
         {
@@ -3213,6 +3214,17 @@
           "required_fields": [
             "name",
             "value"
+          ]
+        },
+        {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "name": "result",
+          "optional_fields": [
+            "if"
+          ],
+          "required_fields": [
+            "name",
+            "result"
           ]
         },
         {

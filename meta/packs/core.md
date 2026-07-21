@@ -511,6 +511,8 @@
 - If the product later introduces both `include` and `run`, the distinction must remain brief enough for humans and agents to predict from contract docs and examples.
 - All user-facing activation inputs must be declared in the root workflow `inputs` contract even when they are consumed only inside included fragments or reusable run targets.
 - Validation after workflow assembly must reject any `inputs.<name>` reference that does not resolve to a root-declared workflow input.
+- A successful workflow run may publish one or more authored result values through existing `result` steps without changing the `result` step syntax.
+- Published result values must accumulate in execution order rather than replacing prior published results.
 
 ## Product boundary
 
@@ -1300,6 +1302,7 @@ but they are not the place where non-trivial transformation algorithms should be
 - compact parameters;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
+- explicit authored result publication through existing `result` steps.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
@@ -1370,6 +1373,15 @@ A good workflow:
 - can show where one guard barrier ends and the next step sequence begins;
 - can be moved across projects while preserving contracts.
 - can be authored and iteratively repaired by a sufficiently capable agent using contract docs, examples, and structured diagnostics.
+
+## Result publication
+
+Workflow-owned result publication belongs to the workflow domain.
+
+- Existing `result` step syntax remains unchanged.
+- Each executed `result` step appends one authored value to the runtime results list.
+- Published results accumulate in execution order rather than replacing prior published results.
+- Published result values are stored as authored values only, without added runtime metadata.
 
 <!-- source: domain/runtime.md -->
 
@@ -4707,6 +4719,7 @@ The runtime result must be able to express:
 - failed guard or failed step
 - diagnostics
 - outputs
+- published workflow results
 - skipped/executed steps
 - human-readable message when useful for review
 - machine-readable code when useful for classification
@@ -4727,6 +4740,14 @@ At minimum, a connector operation outcome should preserve:
 - optional supplementary `raw` detail
 
 This operation outcome is the connector-local structured input to runtime adaptation, not the entire public runtime result envelope by itself.
+
+## Published workflow results
+
+- Successful run output may include a `results` list of workflow-authored published result values.
+- Each executed workflow `result` step appends one value to that `results` list.
+- Published result values accumulate in execution order.
+- The runtime must not inject additional metadata into published result values in the initial model.
+- If no `result` step executes, successful run output may return `results: []`.
 
 ## Serialization constraints
 
