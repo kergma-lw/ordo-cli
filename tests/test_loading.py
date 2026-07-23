@@ -61,7 +61,7 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "${inputs.enabled}")
         self.assertEqual(workflow.steps[1].if_, "${inputs.enabled}")
 
-    def test_loads_result_step_into_typed_model(self) -> None:
+    def test_loads_publish_step_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(
                 """
@@ -70,6 +70,25 @@ class LoadingTest(unittest.TestCase):
                 blocks:
                   - steps:
                       - name: publish
+                        publish:
+                          summary: done
+                          changed: true
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].publish, {"summary": "done", "changed": True})
+        self.assertEqual(workflow.to_contract()["blocks"][0]["steps"][0]["publish"], {"summary": "done", "changed": True})
+
+    def test_loads_result_step_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: publish
+                blocks:
+                  - steps:
+                      - name: result
                         result:
                           summary: done
                           changed: true
@@ -79,6 +98,28 @@ class LoadingTest(unittest.TestCase):
 
         self.assertEqual(workflow.steps[0].result, {"summary": "done", "changed": True})
         self.assertEqual(workflow.to_contract()["blocks"][0]["steps"][0]["result"], {"summary": "done", "changed": True})
+
+    def test_loads_run_step_with_for_each_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect
+                inputs:
+                  items:
+                    hint: demo
+                blocks:
+                  - steps:
+                      - name: inspect-one
+                        run: fragment.yml
+                        for_each: ${inputs.items}
+                        register: inspected
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].for_each, "${inputs.items}")
+        self.assertEqual(workflow.to_contract()["blocks"][0]["steps"][0]["for_each"], "${inputs.items}")
 
     def test_loads_bare_step_if_field_into_typed_model(self) -> None:
         workflow = load_workflow_text(

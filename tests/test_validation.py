@@ -49,7 +49,7 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
-    def test_valid_result_step_workflow_passes(self) -> None:
+    def test_valid_publish_step_workflow_passes(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
@@ -60,6 +60,26 @@ class ValidationTest(unittest.TestCase):
                 blocks:
                   - steps:
                       - name: publish
+                        publish:
+                          issue_number: ${inputs.issue_number}
+                          summary: done
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_valid_result_step_workflow_passes(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: publish
+                inputs:
+                  issue_number: 7
+                blocks:
+                  - steps:
+                      - name: result
                         result:
                           issue_number: ${inputs.issue_number}
                           summary: done
@@ -307,7 +327,7 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.diagnostics[0].level, "warning")
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.step_condition.embedded_if_deprecated")
 
-    def test_run_step_rejects_register_in_mvp(self) -> None:
+    def test_run_step_allows_register(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
@@ -322,8 +342,47 @@ class ValidationTest(unittest.TestCase):
             )
         )
 
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_run_step_allows_for_each(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect-many
+                inputs:
+                  items: []
+                blocks:
+                  - steps:
+                      - name: inspect-one
+                        run: github/comment-and-set-status
+                        for_each: ${inputs.items}
+                        register: comment_run
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_for_each_rejected_on_non_run_step(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect-many
+                inputs:
+                  items: []
+                blocks:
+                  - steps:
+                      - name: inspect-one
+                        uses: gh.issue
+                        for_each: ${inputs.items}
+                """
+            )
+        )
+
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.run.register_unsupported")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.for_each_without_run")
 
     def test_valid_profile_launchers_pass(self) -> None:
         report = validate_profile_text(

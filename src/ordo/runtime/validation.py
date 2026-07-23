@@ -498,7 +498,7 @@ def _collect_declared_registers_from_step_list(value: JSONValue | None, *, path:
         item["register"]: path + (str(index), "register")
         for index, item in enumerate(value)
         if isinstance(item, dict)
-        and ("uses" in item or "value" in item)
+        and ("uses" in item or "run" in item or "value" in item)
         and isinstance(item.get("register"), str)
         and REGISTER_PATTERN.fullmatch(item["register"])
     }
@@ -712,9 +712,10 @@ def _validate_step_list(
         has_profile_switch = "profile_switch" in item
         has_value = "value" in item
         has_result = "result" in item
+        has_publish = "publish" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
-        form_count = sum((has_uses, has_run, has_profile_switch, has_value, has_result, has_state_set, has_state_delete))
+        form_count = sum((has_uses, has_run, has_profile_switch, has_value, has_result, has_publish, has_state_set, has_state_delete))
 
         prior_registers = {name: register_path for name, register_path in seen_registers.items()}
 
@@ -722,7 +723,7 @@ def _validate_step_list(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.form",
-                    "Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'result', 'state_set', or 'state_delete'",
+                    "Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'result', 'publish', 'state_set', or 'state_delete'",
                     item_path,
                     source,
                 )
@@ -770,11 +771,30 @@ def _validate_step_list(
                     declared_registers=effective_declared_registers,
                 )
             )
-        elif "with" in item:
+        elif has_publish:
+            diagnostics.extend(
+                _validate_runtime_value_surface(
+                    item.get("publish"),
+                    path=item_path + ("publish",),
+                    source=source,
+                    prior_registers=prior_registers,
+                    declared_registers=effective_declared_registers,
+                )
+            )
+        if "for_each" in item and not has_run:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.for_each_without_run",
+                    "Step field 'for_each' is allowed only together with 'run'",
+                    item_path + ("for_each",),
+                    source,
+                )
+            )
+        if "with" in item and not (has_uses or has_run):
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.with_without_uses",
-                    "Step field 'with' is allowed only together with 'uses'",
+                    "Step field 'with' is allowed only together with 'uses' or 'run'",
                     item_path + ("with",),
                     source,
                 )
@@ -790,7 +810,7 @@ def _validate_step_list(
             )
         )
         diagnostics.extend(_validate_step_launcher(item, path=item_path, source=source, can_use_launcher=has_uses))
-        diagnostics.extend(_validate_step_register(item, path=item_path, source=source, can_register=has_uses or has_value))
+        diagnostics.extend(_validate_step_register(item, path=item_path, source=source, can_register=has_uses or has_run or has_value))
 
         if has_state_set:
             diagnostics.extend(_require_object_field(item, "state_set", path=item_path + ("state_set",), source=source, required=True))
@@ -815,7 +835,7 @@ def _validate_step_list(
                 seen_names[name] = item_path + ("name",)
 
         register = item.get("register")
-        if isinstance(register, str) and register and (has_uses or has_value) and REGISTER_PATTERN.fullmatch(register):
+        if isinstance(register, str) and register and (has_uses or has_run or has_value) and REGISTER_PATTERN.fullmatch(register):
             if register in seen_registers:
                 diagnostics.append(
                     _diagnostic(
@@ -937,7 +957,7 @@ def _validate_step_register(value: JSONObject, *, path: tuple[str, ...], source:
         diagnostics.append(
             _diagnostic(
                 "validation.workflow.step.register_without_uses",
-                "Step field 'register' is allowed only together with 'uses' or 'value'",
+                "Step field 'register' is allowed only together with 'uses', 'run', or 'value'",
                 path + ("register",),
                 source,
             )
@@ -1012,15 +1032,18 @@ def _validate_run_step(
             expression_message="Run field 'if' must use the '${...}' local-expression form",
         )
     )
-    if value.get("register") is not None:
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.run.register_unsupported",
-                "Run steps do not support 'register' in the MVP",
-                path + ("register",),
-                source,
+    if "for_each" in value:
+        diagnostics.extend(
+            _validate_runtime_value_surface(
+                value.get("for_each"),
+                path=path + ("for_each",),
+                source=source,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
             )
         )
+    if value.get("register") is not None:
+        diagnostics.extend(_validate_step_register(value, path=path, source=source, can_register=True))
     if value.get("launcher") is not None:
         diagnostics.append(
             _diagnostic(
@@ -1796,11 +1819,11 @@ def _validate_step_references(
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     for reference in references:
-        if not reference.fields or reference.fields[0] not in {"status", "summary", "outputs"}:
+        if not reference.fields or reference.fields[0] not in {"status", "summary", "outputs", "results"}:
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step_ref.surface",
-                    "Registered step references must use status, summary, or outputs as the first field",
+                    "Registered step references must use status, summary, outputs, or results as the first field",
                     path,
                     source,
                     register=reference.register,

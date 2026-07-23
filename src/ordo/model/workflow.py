@@ -54,12 +54,14 @@ class Step:
     name: str
     operation: OperationRef | None = None
     run: str | None = None
+    for_each: JSONValue | None = None
     run_with: JSONObject = field(default_factory=dict, kw_only=True)
     run_state_bindings: JSONObject = field(default_factory=dict, kw_only=True)
     run_states: JSONObject = field(default_factory=dict, kw_only=True)
     profile_switch: JSONValue | None = None
     value: JSONValue | None = None
     result: JSONValue | None = None
+    publish: JSONValue | None = None
     state_set: JSONObject | None = None
     state_delete: str | None = None
     if_: str | None = field(default=None, metadata={"contract_name": "if"})
@@ -74,11 +76,12 @@ class Step:
             self.profile_switch is not None,
             self.value is not None,
             self.result is not None,
+            self.publish is not None,
             self.state_set is not None,
             self.state_delete is not None,
         )
         if sum(forms) != 1:
-            raise ValueError("Step must define exactly one of operation, run, profile_switch, value, state_set, or state_delete")
+            raise ValueError("Step must define exactly one of operation, run, profile_switch, value, result, publish, state_set, or state_delete")
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped contract form."""
@@ -98,6 +101,10 @@ class Step:
                 contract["if"] = self.if_
             if self.run_with:
                 contract["with"] = dict(self.run_with)
+            if self.for_each is not None:
+                contract["for_each"] = self.for_each
+            if self.register is not None:
+                contract["register"] = self.register
             return contract
         if self.profile_switch is not None:
             contract = {"name": self.name, "profile_switch": self.profile_switch}
@@ -113,6 +120,11 @@ class Step:
             return contract
         if self.result is not None:
             contract = {"name": self.name, "result": self.result}
+            if self.if_ is not None:
+                contract["if"] = self.if_
+            return contract
+        if self.publish is not None:
+            contract = {"name": self.name, "publish": self.publish}
             if self.if_ is not None:
                 contract["if"] = self.if_
             return contract

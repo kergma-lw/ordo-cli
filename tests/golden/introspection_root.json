@@ -262,7 +262,9 @@
             "parentheses"
           ],
           "builtins": [
-            "format"
+            "format",
+            "is_missing",
+            "is_present"
           ],
           "filters": [
             "lower",
@@ -289,7 +291,9 @@
             "parentheses"
           ],
           "builtins": [
-            "format"
+            "format",
+            "is_missing",
+            "is_present"
           ],
           "filters": [
             "lower",
@@ -321,6 +325,12 @@
       "local_expression_builtins": [
         {
           "name": "format"
+        },
+        {
+          "name": "is_missing"
+        },
+        {
+          "name": "is_present"
         }
       ],
       "local_expression_filters": [
@@ -431,10 +441,11 @@
         },
         {
           "name": "workflow_step.register_requires_uses",
-          "reason": "the MVP publishes registered step results only for operation-call steps and pure value steps",
+          "reason": "the MVP publishes registered step results only for operation-call steps, reusable run invocations, and pure value steps",
           "related_capabilities": [
             "workflow.step.register",
-            "workflow.step.value"
+            "workflow.step.value",
+            "workflow.step.run"
           ],
           "related_codes": [
             "validation.workflow.step.register_without_uses"
@@ -442,11 +453,13 @@
           "related_model_nodes": [
             "workflow.step.register",
             "workflow.step.uses",
+            "workflow.step.run",
             "workflow.step.value",
             "workflow.step_forms.operation_call",
+            "workflow.step_forms.run_invocation",
             "workflow.step_forms.value"
           ],
-          "rule": "The register field is allowed only together with uses or value",
+          "rule": "The register field is allowed only together with uses, run, or value",
           "surface": "workflow_step"
         },
         {
@@ -706,8 +719,8 @@
           "verified": true
         },
         {
-          "name": "open-task-from-gitx",
-          "path": "examples/open-task-from-gitx.yaml",
+          "name": "set-active-task-from-gitx",
+          "path": "examples/set-active-task-from-gitx.yaml",
           "related_topics": [
             "capabilities",
             "model",
@@ -2098,7 +2111,9 @@
                 "repository": "string",
                 "title": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "issue.create",
@@ -2115,6 +2130,118 @@
               "tags": [
                 "gh",
                 "action"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project"
+                }
+              ],
+              "failure_modes": [
+                "project_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "project_id": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "project",
+              "outputs": {
+                "exists": "boolean",
+                "id": "string",
+                "title": "string"
+              },
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Probe operation 'gh.project'",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "field": "string",
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project.field"
+                }
+              ],
+              "failure_modes": [
+                "project_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "field": "string",
+                "project_id": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "project.field",
+              "outputs": {
+                "exists": "boolean",
+                "kind": "string",
+                "name": "string",
+                "options": [
+                  "string"
+                ]
+              },
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Probe operation 'gh.project.field'",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "field": "string",
+                    "option": "string",
+                    "project_id": "string"
+                  },
+                  "reference": "gh.project.field.option"
+                }
+              ],
+              "failure_modes": [
+                "project_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "field": "string",
+                "option": "string",
+                "project_id": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "project.field.option",
+              "outputs": {
+                "exists": "boolean"
+              },
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Return whether one named option exists in one GitHub Project field",
+              "tags": [
+                "gh",
+                "probe"
               ]
             },
             {
@@ -2187,7 +2314,9 @@
                 "project_id": "string",
                 "repository": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.add",
@@ -2233,7 +2362,9 @@
                 "project_id": "string",
                 "repository": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.estimate.set",
@@ -2280,7 +2411,9 @@
                 "project_id": "string",
                 "repository": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.iteration.set",
@@ -2327,7 +2460,9 @@
                 "project_id": "string",
                 "repository": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.priority.set",
@@ -2374,7 +2509,9 @@
                 "repository": "string",
                 "size": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.size.set",
@@ -2421,7 +2558,9 @@
                 "repository": "string",
                 "status": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.status.set",
@@ -2468,7 +2607,9 @@
                 "repository": "string",
                 "type": "string"
               },
-              "invalidates_observations": [],
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
               "kind": "action",
               "maturity": "stable",
               "name": "project.issue.type.set",
@@ -3163,11 +3304,12 @@
             "profile_switch",
             "value",
             "result",
+            "publish",
             "state_set",
             "state_delete"
           ],
           "kind": "exclusive_choice",
-          "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, state_set, or state_delete",
+          "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, publish, state_set, or state_delete",
           "name": "exactly_one_step_form"
         },
         {
@@ -3201,7 +3343,9 @@
           "name": "run_invocation",
           "optional_fields": [
             "if",
-            "with"
+            "with",
+            "for_each",
+            "register"
           ],
           "required_fields": [
             "name",
@@ -3240,6 +3384,17 @@
           "required_fields": [
             "name",
             "result"
+          ]
+        },
+        {
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "name": "publish",
+          "optional_fields": [
+            "if"
+          ],
+          "required_fields": [
+            "name",
+            "publish"
           ]
         },
         {

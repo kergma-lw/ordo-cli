@@ -114,8 +114,8 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "exactly_one_step_form",
             "kind": "exclusive_choice",
-            "fields": ["uses", "run", "profile_switch", "value", "result", "state_set", "state_delete"],
-            "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, state_set, or state_delete",
+            "fields": ["uses", "run", "profile_switch", "value", "result", "publish", "state_set", "state_delete"],
+            "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, publish, state_set, or state_delete",
         },
         {
             "name": "with_requires_uses",
@@ -135,7 +135,7 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "run_invocation",
             "required_fields": ["name", "run"],
-            "optional_fields": ["if", "with"],
+            "optional_fields": ["if", "with", "for_each", "register"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
         },
         {
@@ -153,6 +153,12 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "result",
             "required_fields": ["name", "result"],
+            "optional_fields": ["if"],
+            "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        },
+        {
+            "name": "publish",
+            "required_fields": ["name", "publish"],
             "optional_fields": ["if"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
         },

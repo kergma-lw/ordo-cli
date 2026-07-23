@@ -13,12 +13,15 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         step_rules = {item["name"]: item for item in payload["step_form_rules"]}
         self.assertEqual(field_names, {"version", "workflow", "inputs", "state_needs", "blocks"})
         self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
+        self.assertIn("for_each", step_forms["run_invocation"]["optional_fields"])
+        self.assertIn("register", step_forms["run_invocation"]["optional_fields"])
         self.assertEqual(step_forms["profile_switch"]["required_fields"], ["name", "profile_switch"])
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
         self.assertEqual(step_forms["result"]["required_fields"], ["name", "result"])
+        self.assertEqual(step_forms["publish"]["required_fields"], ["name", "publish"])
         self.assertEqual(step_forms["state_set"]["required_fields"], ["name", "state_set"])
         self.assertEqual(step_forms["state_delete"]["required_fields"], ["name", "state_delete"])
-        self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "run", "profile_switch", "value", "result", "state_set", "state_delete"])
+        self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "run", "profile_switch", "value", "result", "publish", "state_set", "state_delete"])
         self.assertIn("state", payload["surface_constraints"]["guard_expression"]["allowed_roots"])
         self.assertTrue(payload["inputs_contract"]["declared_keys_required_at_activation"])
         input_fields = {item["name"]: item for item in payload["inputs_contract"]["declaration_fields"]}
