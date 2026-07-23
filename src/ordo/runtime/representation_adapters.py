@@ -135,3 +135,4 @@ def evaluate_representation_adapter_invocation(invocation: RepresentationAdapter
 
 
 from . import markdown_adapter as _markdown_adapter  # noqa: E402,F401
+from . import text_adapter as _text_adapter  # noqa: E402,F401
