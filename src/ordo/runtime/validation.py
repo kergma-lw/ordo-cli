@@ -120,15 +120,15 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_object_field(payload, "let", source=source, required=False))
     diagnostics.extend(_validate_workflow_let_declarations(payload.get("let"), source=source))
     diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
-    diagnostics.extend(_validate_workflow_blocks(payload, source=source))
+    diagnostics.extend(_validate_workflow_blocks(payload, source=source, let_bindings=payload.get("let") if isinstance(payload.get("let"), dict) else {}))
     diagnostics.extend(_validate_declared_workflow_input_references(payload, source=source))
     diagnostics.extend(_validate_state_role_write_order(payload, source=source))
 
     return _report("workflow", diagnostics)
 
 
-def _validate_workflow_blocks(payload: JSONObject, *, source: str) -> list[Diagnostic]:
-    return _validate_block_list(payload.get("blocks"), source=source)
+def _validate_workflow_blocks(payload: JSONObject, *, source: str, let_bindings: JSONObject) -> list[Diagnostic]:
+    return _validate_block_list(payload.get("blocks"), source=source, let_bindings=let_bindings)
 
 
 def _validate_workflow_input_declarations(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
@@ -192,7 +192,80 @@ def _validate_workflow_let_declarations(value: JSONValue | None, *, source: str)
                     actual_type=type(expression).__name__,
                 )
             )
+            continue
+        try:
+            parsed = parse_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION, allow_boolean_composition=True)
+        except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+            diagnostics.append(
+                Diagnostic(
+                    code="validation.workflow.let.syntax",
+                    level="error",
+                    message=f"Workflow let binding '{binding_name}' is not a valid local expression",
+                    path=path,
+                    details={
+                        "source": source,
+                        "name": binding_name,
+                        "expression": expression,
+                        "position": exc.position,
+                        "end": exc.end if exc.end is not None else exc.position,
+                        "parse_message": exc.message,
+                    },
+                )
+            )
+            continue
+        chained_bindings = _collect_direct_let_references(parsed.root, value)
+        if chained_bindings:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.let.binding_chain",
+                    f"Workflow let binding '{binding_name}' must not reference another let binding",
+                    path,
+                    source,
+                    name=binding_name,
+                    chained_bindings=sorted(chained_bindings),
+                )
+            )
     return diagnostics
+
+
+def _collect_direct_let_references(node: ValueExpressionNode, let_bindings: JSONValue) -> set[str]:
+    if not isinstance(let_bindings, dict):
+        return set()
+    found: set[str] = set()
+
+    def visit(current: ValueExpressionNode) -> None:
+        if isinstance(current, ReferenceNode):
+            if current.parts and current.parts[0] in let_bindings:
+                found.add(current.parts[0])
+            return
+        if isinstance(current, (LiteralNode, ValueStateReferenceNode, StepReferenceNode)):
+            return
+        if isinstance(current, ListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, PipelineNode):
+            visit(current.source)
+            for item in current.filters:
+                visit(item)
+            return
+        if isinstance(current, FilterApplicationNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, BuiltinCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, UnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, BinaryNode):
+            visit(current.left)
+            visit(current.right)
+
+    visit(node)
+    return found
 
 
 def _validate_declared_workflow_input_references(payload: JSONObject, *, source: str) -> list[Diagnostic]:
@@ -417,7 +490,7 @@ def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> lis
     return diagnostics
 
 
-def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
+def _validate_block_list(value: JSONValue | None, *, source: str, let_bindings: JSONObject) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, list):
         diagnostics.append(_diagnostic("validation.workflow.blocks.type", "Field 'blocks' must be a list", ("blocks",), source, actual_type=type(value).__name__))
@@ -446,7 +519,7 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
             continue
         if has_guards:
             diagnostics.extend(_validate_unknown_fields(item, frozenset({"guards"}), path=path, source=source))
-            diagnostics.extend(_validate_guard_list(item.get("guards"), source=source, path=path + ("guards",)))
+            diagnostics.extend(_validate_guard_list(item.get("guards"), source=source, path=path + ("guards",), let_bindings=let_bindings))
         elif has_steps:
             diagnostics.extend(_validate_unknown_fields(item, frozenset({"steps"}), path=path, source=source))
             step_path = path + ("steps",)
@@ -455,17 +528,18 @@ def _validate_block_list(value: JSONValue | None, *, source: str) -> list[Diagno
                     item.get("steps"),
                     source=source,
                     path=step_path,
+                    let_bindings=let_bindings,
                     prior_registers=seen_registers,
                     declared_registers=declared_registers,
                 )
             )
             seen_registers.update(_collect_declared_registers_from_step_list(item.get("steps"), path=step_path))
         elif has_include:
-            diagnostics.extend(_validate_include_block(item, source=source, path=path))
+            diagnostics.extend(_validate_include_block(item, source=source, path=path, let_bindings=let_bindings))
     return diagnostics
 
 
-def _validate_include_block(value: JSONObject, *, source: str, path: tuple[str, ...]) -> list[Diagnostic]:
+def _validate_include_block(value: JSONObject, *, source: str, path: tuple[str, ...], let_bindings: JSONObject) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(_validate_unknown_fields(value, frozenset({"include", "with"}), path=path, source=source))
     diagnostics.extend(_require_non_empty_string(value, "include", path=path + ("include",), source=source))
@@ -481,19 +555,19 @@ def _validate_include_block(value: JSONObject, *, source: str, path: tuple[str, 
             )
         )
     elif isinstance(with_value, dict):
-        diagnostics.extend(_validate_include_binding_values(with_value, source=source, path=path + ("with",)))
+        diagnostics.extend(_validate_include_binding_values(with_value, source=source, path=path + ("with",), let_bindings=let_bindings))
     return diagnostics
 
 
-def _validate_include_binding_values(value: JSONValue, *, source: str, path: tuple[str, ...]) -> list[Diagnostic]:
+def _validate_include_binding_values(value: JSONValue, *, source: str, path: tuple[str, ...], let_bindings: JSONObject) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if isinstance(value, list):
         for index, item in enumerate(value):
-            diagnostics.extend(_validate_include_binding_values(item, source=source, path=path + (str(index),)))
+            diagnostics.extend(_validate_include_binding_values(item, source=source, path=path + (str(index),), let_bindings=let_bindings))
         return diagnostics
     if isinstance(value, dict):
         for key, item in value.items():
-            diagnostics.extend(_validate_include_binding_values(item, source=source, path=path + (str(key),)))
+            diagnostics.extend(_validate_include_binding_values(item, source=source, path=path + (str(key),), let_bindings=let_bindings))
         return diagnostics
     if not isinstance(value, str):
         return diagnostics
@@ -523,6 +597,16 @@ def _validate_include_binding_values(value: JSONValue, *, source: str, path: tup
                 expression=_extract_runtime_value_expression(value) or value,
             )
         )
+    diagnostics.extend(
+        _validate_workflow_let_binding_uses(
+            parsed.root,
+            source=source,
+            path=path,
+            context=LocalExpressionContext.INCLUDE_BINDING,
+            expression=_extract_runtime_value_expression(value) or value,
+            let_bindings=let_bindings,
+        )
+    )
     return diagnostics
 
 
@@ -678,7 +762,7 @@ def _load_run_target_workflow_for_validation(
     )
 
 
-def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[str, ...] = ("guards",)) -> list[Diagnostic]:
+def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[str, ...] = ("guards",), let_bindings: JSONObject) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, list):
         diagnostics.append(_diagnostic("validation.workflow.guards.type", "Field 'guards' must be a list", path, source, actual_type=type(value).__name__))
@@ -713,6 +797,16 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
                         expression=item,
                     )
                 )
+            diagnostics.extend(
+                _validate_workflow_let_binding_uses(
+                    parsed.root,
+                    source=source,
+                    path=item_path,
+                    context=LocalExpressionContext.GUARD,
+                    expression=item,
+                    let_bindings=let_bindings,
+                )
+            )
             continue
         if isinstance(item, dict) and "uses" in item:
             diagnostics.append(
@@ -732,6 +826,7 @@ def _validate_step_list(
     *,
     source: str,
     path: tuple[str, ...] = ("steps",),
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
@@ -779,18 +874,29 @@ def _validate_step_list(
                     path=item_path,
                     source=source,
                     allowed_fields=STEP_ALLOWED_FIELDS,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
                 )
             )
         elif has_run:
-            diagnostics.extend(_validate_run_step(item, source=source, path=item_path, prior_registers=prior_registers, declared_registers=effective_declared_registers))
+            diagnostics.extend(
+                _validate_run_step(
+                    item,
+                    source=source,
+                    path=item_path,
+                    let_bindings=let_bindings,
+                    prior_registers=prior_registers,
+                    declared_registers=effective_declared_registers,
+                )
+            )
         elif has_profile_switch:
             diagnostics.extend(
                 _validate_profile_switch_step(
                     item,
                     source=source,
                     path=item_path,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
                 )
@@ -801,6 +907,7 @@ def _validate_step_list(
                     item.get("value"),
                     path=item_path + ("value",),
                     source=source,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
                 )
@@ -811,6 +918,7 @@ def _validate_step_list(
                     item.get("result"),
                     path=item_path + ("result",),
                     source=source,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
                 )
@@ -821,6 +929,7 @@ def _validate_step_list(
                     item.get("publish"),
                     path=item_path + ("publish",),
                     source=source,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
                 )
@@ -849,6 +958,7 @@ def _validate_step_list(
                 item,
                 path=item_path,
                 source=source,
+                let_bindings=let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=effective_declared_registers,
             )
@@ -863,6 +973,7 @@ def _validate_step_list(
                     item.get("state_set"),
                     path=item_path + ("state_set",),
                     source=source,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
                 )
@@ -901,6 +1012,7 @@ def _validate_step_condition(
     *,
     path: tuple[str, ...],
     source: str,
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
@@ -908,6 +1020,7 @@ def _validate_step_condition(
         value,
         path=path,
         source=source,
+        let_bindings=let_bindings,
         prior_registers={} if prior_registers is None else prior_registers,
         declared_registers={} if declared_registers is None else declared_registers,
         field_name="if",
@@ -939,6 +1052,7 @@ def _validate_invocation_condition(
     *,
     path: tuple[str, ...],
     source: str,
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
     field_name: str,
@@ -980,6 +1094,16 @@ def _validate_invocation_condition(
         )
     )
     diagnostics.extend(_validate_step_condition_type(parsed.root, path=condition_path, source=source))
+    diagnostics.extend(
+        _validate_workflow_let_binding_uses(
+            parsed.root,
+            source=source,
+            path=condition_path,
+            context=LocalExpressionContext.STEP_CONDITION,
+            expression=condition if expression is None else expression,
+            let_bindings=let_bindings,
+        )
+    )
     if expression is not None and not any(diagnostic.level == "error" for diagnostic in diagnostics):
         diagnostics.append(
             _warning(
@@ -1046,6 +1170,7 @@ def _validate_run_step(
     *,
     source: str,
     path: tuple[str, ...],
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
 ) -> list[Diagnostic]:
@@ -1067,6 +1192,7 @@ def _validate_run_step(
             value,
             path=path,
             source=source,
+            let_bindings=let_bindings,
             prior_registers=prior_registers,
             declared_registers=declared_registers,
             field_name="if",
@@ -1082,6 +1208,7 @@ def _validate_run_step(
                 value.get("for_each"),
                 path=path + ("for_each",),
                 source=source,
+                let_bindings=let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=declared_registers,
             )
@@ -1105,6 +1232,7 @@ def _validate_profile_switch_step(
     *,
     source: str,
     path: tuple[str, ...],
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
 ) -> list[Diagnostic]:
@@ -1114,6 +1242,7 @@ def _validate_profile_switch_step(
             value.get("profile_switch"),
             path=path + ("profile_switch",),
             source=source,
+            let_bindings=let_bindings,
             prior_registers=prior_registers,
             declared_registers=declared_registers,
         )
@@ -1154,6 +1283,7 @@ def _validate_call(
     path: tuple[str, ...],
     source: str,
     allowed_fields: frozenset[str] = CALL_ALLOWED_FIELDS,
+    let_bindings: JSONObject | None = None,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
@@ -1174,6 +1304,7 @@ def _validate_call(
                 with_payload,
                 path=path + ("with",),
                 source=source,
+                let_bindings={} if let_bindings is None else let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=declared_registers,
             )
@@ -1186,6 +1317,7 @@ def _validate_state_set_shape(
     *,
     path: tuple[str, ...],
     source: str,
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
@@ -1222,6 +1354,7 @@ def _validate_state_set_shape(
                     item,
                     path=path + (key,),
                     source=source,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
                 )
@@ -1234,6 +1367,7 @@ def _validate_runtime_value_surface(
     *,
     path: tuple[str, ...],
     source: str,
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
@@ -1244,6 +1378,7 @@ def _validate_runtime_value_surface(
                 value,
                 path=path,
                 source=source,
+                let_bindings=let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=declared_registers,
             )
@@ -1256,6 +1391,7 @@ def _validate_runtime_value_surface(
                     item,
                     path=path + (str(index),),
                     source=source,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
                 )
@@ -1268,6 +1404,7 @@ def _validate_runtime_value_surface(
                     item,
                     path=path + (str(key),),
                     source=source,
+                    let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
                 )
@@ -1302,6 +1439,26 @@ def _validate_runtime_value_surface(
             declared_registers={} if declared_registers is None else declared_registers,
         )
     )
+    for validation_error in validate_parsed_local_expression(parsed):
+        diagnostics.append(
+            build_local_expression_validation_diagnostic(
+                validation_error,
+                context=LocalExpressionContext.EMBEDDED_VALUE,
+                path=path,
+                source=source,
+                expression=expression,
+            )
+        )
+    diagnostics.extend(
+        _validate_workflow_let_binding_uses(
+            parsed.value.root,
+            source=source,
+            path=path,
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+            expression=expression,
+            let_bindings=let_bindings,
+        )
+    )
     return diagnostics
 
 
@@ -1310,6 +1467,7 @@ def _validate_profile_switch_value(
     *,
     path: tuple[str, ...],
     source: str,
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
 ) -> list[Diagnostic]:
@@ -1370,10 +1528,82 @@ def _validate_profile_switch_value(
             value,
             path=path,
             source=source,
+            let_bindings=let_bindings,
             prior_registers=prior_registers,
             declared_registers=declared_registers,
         )
     )
+    return diagnostics
+
+
+def _validate_workflow_let_binding_uses(
+    node: ValueExpressionNode,
+    *,
+    source: str,
+    path: tuple[str, ...],
+    context: LocalExpressionContext,
+    expression: str,
+    let_bindings: JSONObject,
+) -> list[Diagnostic]:
+    if not isinstance(let_bindings, dict) or not let_bindings:
+        return []
+    diagnostics: list[Diagnostic] = []
+    for binding_name in _collect_direct_let_references(node, let_bindings):
+        binding_expression = let_bindings.get(binding_name)
+        if not isinstance(binding_expression, str):
+            continue
+        try:
+            parsed_binding = parse_local_expression(
+                binding_expression,
+                context=context,
+                allow_boolean_composition=context in {LocalExpressionContext.GUARD, LocalExpressionContext.STEP_CONDITION},
+            )
+        except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+            diagnostics.append(
+                Diagnostic(
+                    code="validation.workflow.let.binding_syntax",
+                    level="error",
+                    message=f"Workflow let binding '{binding_name}' is not valid in the {context.value} local-expression context",
+                    path=path,
+                    details={
+                        "source": source,
+                        "binding_name": binding_name,
+                        "binding_path": ["let", binding_name],
+                        "binding_expression": binding_expression,
+                        "use_expression": expression,
+                        "position": exc.position,
+                        "end": exc.end if exc.end is not None else exc.position,
+                        "parse_message": exc.message,
+                    },
+                )
+            )
+            continue
+        for validation_error in validate_parsed_local_expression(parsed_binding):
+            diagnostic = build_local_expression_validation_diagnostic(
+                validation_error,
+                context=context,
+                path=path,
+                source=source,
+                expression=binding_expression,
+            )
+            details = dict(diagnostic.details)
+            details.update(
+                {
+                    "binding_name": binding_name,
+                    "binding_path": ["let", binding_name],
+                    "binding_expression": binding_expression,
+                    "use_expression": expression,
+                }
+            )
+            diagnostics.append(
+                Diagnostic(
+                    code=diagnostic.code,
+                    level=diagnostic.level,
+                    message=diagnostic.message,
+                    path=diagnostic.path,
+                    details=details,
+                )
+            )
     return diagnostics
 
 
@@ -1584,6 +1814,7 @@ def _validate_format_value_object(
     *,
     path: tuple[str, ...],
     source: str,
+    let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
@@ -1629,6 +1860,7 @@ def _validate_format_value_object(
                 item,
                 path=path + ("args", str(index)),
                 source=source,
+                let_bindings=let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=declared_registers,
             )

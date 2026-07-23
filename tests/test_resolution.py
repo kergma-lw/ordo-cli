@@ -154,6 +154,22 @@ class ResolutionTest(unittest.TestCase):
         self.assertEqual(result.resolved_guards[0].probes[0].reference, "gh.issue")
         self.assertEqual(result.resolved_guards[0].probes[0].fields, ("state",))
 
+    def test_expr_guard_reports_invalid_let_binding_syntax_as_resolution_error(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "owner/repo"},
+            let_bindings={"issue": "gh.issue(inputs.repository)"},
+            guards=(Guard(expr="issue.exists"),),
+            steps=(),
+        )
+
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "resolution.let_binding.syntax")
+        self.assertEqual(result.diagnostics[0].details["binding_path"], ["let", "issue"])
+
 
 if __name__ == "__main__":
     unittest.main()

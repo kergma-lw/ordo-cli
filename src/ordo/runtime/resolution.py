@@ -12,7 +12,7 @@ from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
-from .local_expressions import parse_local_expression, resolve_workflow_let_reference_node
+from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, resolve_workflow_let_reference_node
 from .local_expression_engine.core import BinaryNode, CallNode, ConditionExpressionNode, ListNode, LiteralNode, ParsedConditionExpression, ReferenceNode, StateReferenceNode, UnaryNode
 from .providers import ConnectorProvider, get_default_connector_provider
 
@@ -262,7 +262,23 @@ def _resolve_guard_expression(
     probes: list[ResolvedExpressionProbe] = []
 
     def visit(node: ConditionExpressionNode) -> None:
-        expanded = resolve_workflow_let_reference_node(node, workflow, context=LocalExpressionContext.GUARD)
+        try:
+            expanded = resolve_workflow_let_reference_node(node, workflow, context=LocalExpressionContext.GUARD)
+        except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+            binding_name = node.parts[0] if isinstance(node, ReferenceNode) and node.parts else "<unknown>"
+            diagnostics.append(
+                _diagnostic(
+                    code="resolution.let_binding.syntax",
+                    message=f"Workflow let binding '{binding_name}' is not a valid guard expression",
+                    path=path,
+                    binding_name=binding_name,
+                    binding_path=["let", binding_name],
+                    position=exc.position,
+                    end=exc.end if exc.end is not None else exc.position,
+                    parse_message=exc.message,
+                )
+            )
+            return
         if expanded is not None:
             visit(expanded)
             return

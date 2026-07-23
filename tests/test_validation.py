@@ -160,6 +160,46 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.let.value_type")
 
+    def test_let_binding_must_not_reference_another_let_binding(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                let:
+                  issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+                  issue_open: issue.state == "OPEN"
+                blocks:
+                  - guards: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.let.binding_chain")
+        self.assertEqual(report.diagnostics[0].path, ("let", "issue_open"))
+
+    def test_guard_use_of_step_based_let_binding_fails_with_binding_details(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                let:
+                  current_issue: step.issue.outputs.id
+                blocks:
+                  - guards:
+                      - current_issue == "42"
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.step_ref")
+        self.assertEqual(report.diagnostics[0].path, ("blocks", "0", "guards", "0"))
+        self.assertEqual(report.diagnostics[0].details["binding_path"], ["let", "current_issue"])
+
     def test_object_guard_with_unknown_expr_field_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
