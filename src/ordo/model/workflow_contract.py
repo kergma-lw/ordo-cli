@@ -20,6 +20,12 @@ WORKFLOW_CONTRACT: JSONObject = {
             "activation_requirement": "all_declared_keys_required",
             "unknown_input_policy": "reject_unknown_inputs",
         },
+        {
+            "name": "let",
+            "required": False,
+            "type": "object",
+            "authoring_role": "declares_workflow_local_named_expressions",
+        },
         {"name": "state_needs", "required": False, "type": "object"},
         {"name": "blocks", "required": False, "type": "array"},
     ],

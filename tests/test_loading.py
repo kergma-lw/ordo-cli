@@ -164,6 +164,48 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.declared_inputs["repository"], {"description": "GitHub repository"})
         self.assertEqual(workflow.to_contract()["inputs"]["issue_number"], {"description": "Numeric issue id"})
 
+    def test_loads_top_level_let_bindings_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                let:
+                  issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+                  issue_open: issue.state == "OPEN"
+                blocks:
+                  - guards: []
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(
+            workflow.let_bindings,
+            {
+                "issue": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)",
+                "issue_open": 'issue.state == "OPEN"',
+            },
+        )
+        self.assertEqual(workflow.to_contract()["let"]["issue_open"], 'issue.state == "OPEN"')
+
+    def test_load_rejects_reserved_let_binding_name(self) -> None:
+        with self.assertRaises(LoadError) as context:
+            load_workflow_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: open-task
+                    let:
+                      inputs: inputs.repository
+                    blocks:
+                      - guards: []
+                    """
+                )
+            )
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.let.reserved_name")
+
     def test_loads_step_launcher_field_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(

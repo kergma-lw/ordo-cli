@@ -11,7 +11,7 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         field_names = {field["name"] for field in payload["top_level_fields"]}
         step_forms = {item["name"]: item for item in payload["step_forms"]}
         step_rules = {item["name"]: item for item in payload["step_form_rules"]}
-        self.assertEqual(field_names, {"version", "workflow", "inputs", "state_needs", "blocks"})
+        self.assertEqual(field_names, {"version", "workflow", "inputs", "let", "state_needs", "blocks"})
         self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
         self.assertIn("for_each", step_forms["run_invocation"]["optional_fields"])
         self.assertIn("register", step_forms["run_invocation"]["optional_fields"])

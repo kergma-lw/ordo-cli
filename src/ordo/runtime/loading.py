@@ -65,12 +65,14 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
 
     blocks = _load_workflow_blocks(payload, source=source)
     workflow_inputs, declared_inputs = _load_workflow_inputs(payload, source=source)
+    let_bindings = _load_workflow_let_bindings(payload, source=source)
 
     return Workflow(
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
         inputs=workflow_inputs,
         declared_inputs=declared_inputs,
+        let_bindings=let_bindings,
         state_needs=_optional_object(payload, "state_needs", source=source),
         state_bindings=_optional_object(payload, "state_bindings", source=source),
         states=_optional_object(payload, "states", source=source),
@@ -87,12 +89,14 @@ def load_workflow_file(path: str | Path, *, launch_dir: str | Path | None = None
     payload = load_workflow_document_file(workflow_path, launch_dir=launch_dir)
     blocks = _load_workflow_blocks(payload, source=source)
     workflow_inputs, declared_inputs = _load_workflow_inputs(payload, source=source)
+    let_bindings = _load_workflow_let_bindings(payload, source=source)
     resolved_launch_dir = _resolve_launch_directory(launch_dir)
     return Workflow(
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
         inputs=workflow_inputs,
         declared_inputs=declared_inputs,
+        let_bindings=let_bindings,
         state_needs=_optional_object(payload, "state_needs", source=source),
         state_bindings=_optional_object(payload, "state_bindings", source=source),
         states=_optional_object(payload, "states", source=source),
@@ -1210,6 +1214,49 @@ def _load_workflow_blocks(payload: JSONObject, *, source: str) -> tuple[Workflow
             details={"source": source, "actual_type": type(raw_blocks).__name__},
         )
     return tuple(_load_block(item, index=index, source=source) for index, item in enumerate(raw_blocks))
+
+
+_LET_RESERVED_NAMES = frozenset({"inputs", "args", "state", "step"})
+
+
+def _load_workflow_let_bindings(payload: JSONObject, *, source: str) -> dict[str, str]:
+    raw_bindings = payload.get("let")
+    if raw_bindings is None:
+        return {}
+    if not isinstance(raw_bindings, dict):
+        raise _load_error(
+            code="load.workflow.let.type",
+            message="Field 'let' must be an object",
+            path=("let",),
+            details={"source": source, "actual_type": type(raw_bindings).__name__},
+        )
+
+    loaded: dict[str, str] = {}
+    for name, expression in raw_bindings.items():
+        path = ("let", str(name))
+        if not isinstance(name, str) or not name:
+            raise _load_error(
+                code="load.workflow.let.name",
+                message="Workflow let binding names must be non-empty strings",
+                path=path,
+                details={"source": source},
+            )
+        if name in _LET_RESERVED_NAMES:
+            raise _load_error(
+                code="load.workflow.let.reserved_name",
+                message=f"Workflow let binding name '{name}' is reserved",
+                path=path,
+                details={"source": source, "name": name},
+            )
+        if not isinstance(expression, str):
+            raise _load_error(
+                code="load.workflow.let.value_type",
+                message="Workflow let binding values must be strings",
+                path=path,
+                details={"source": source, "actual_type": type(expression).__name__, "name": name},
+            )
+        loaded[name] = expression
+    return loaded
 
 
 def _load_block(payload: JSONValue, *, index: int, source: str) -> WorkflowBlock:

@@ -42,6 +42,8 @@ from .local_expression_engine.core import (
     collect_step_references,
 )
 
+LET_RESERVED_NAMES = frozenset({"inputs", "args", "state", "step"})
+
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 REGISTER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 LAUNCHER_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
@@ -115,6 +117,8 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_non_empty_string(payload, "workflow", source=source))
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
     diagnostics.extend(_validate_workflow_input_declarations(payload.get("inputs"), source=source))
+    diagnostics.extend(_require_object_field(payload, "let", source=source, required=False))
+    diagnostics.extend(_validate_workflow_let_declarations(payload.get("let"), source=source))
     diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
     diagnostics.extend(_validate_workflow_blocks(payload, source=source))
     diagnostics.extend(_validate_declared_workflow_input_references(payload, source=source))
@@ -146,6 +150,46 @@ def _validate_workflow_input_declarations(value: JSONValue | None, *, source: st
                     source,
                     input=input_name,
                     actual_type=type(hint).__name__,
+                )
+            )
+    return diagnostics
+
+
+def _validate_workflow_let_declarations(value: JSONValue | None, *, source: str) -> list[Diagnostic]:
+    if not isinstance(value, dict):
+        return []
+    diagnostics: list[Diagnostic] = []
+    for binding_name, expression in value.items():
+        path = ("let", str(binding_name))
+        if not isinstance(binding_name, str) or not binding_name:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.let.name",
+                    "Workflow let binding names must be non-empty strings",
+                    path,
+                    source,
+                )
+            )
+            continue
+        if binding_name in LET_RESERVED_NAMES:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.let.reserved_name",
+                    f"Workflow let binding name '{binding_name}' is reserved",
+                    path,
+                    source,
+                    name=binding_name,
+                )
+            )
+        if not isinstance(expression, str):
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.let.value_type",
+                    "Workflow let binding values must be strings",
+                    path,
+                    source,
+                    name=binding_name,
+                    actual_type=type(expression).__name__,
                 )
             )
     return diagnostics

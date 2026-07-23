@@ -108,6 +108,58 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.inputs.hint.type")
 
+    def test_valid_workflow_with_let_declarations_passes_shape_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                let:
+                  issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+                blocks:
+                  - guards: []
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_reserved_let_binding_name_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                let:
+                  state: inputs.repository
+                blocks:
+                  - guards: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.let.reserved_name")
+
+    def test_non_string_let_binding_value_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                let:
+                  issue:
+                    expression: inputs.repository
+                blocks:
+                  - guards: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.let.value_type")
+
     def test_object_guard_with_unknown_expr_field_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

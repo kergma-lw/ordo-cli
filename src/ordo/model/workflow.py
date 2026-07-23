@@ -188,6 +188,7 @@ class Workflow:
     workflow: str
     inputs: JSONObject = field(default_factory=dict)
     declared_inputs: JSONObject = field(default_factory=dict)
+    let_bindings: dict[str, str] = field(default_factory=dict)
     state_needs: JSONObject = field(default_factory=dict)
     state_bindings: JSONObject = field(default_factory=dict)
     states: JSONObject = field(default_factory=dict)
@@ -203,6 +204,7 @@ class Workflow:
         workflow: str,
         inputs: JSONObject | None = None,
         declared_inputs: JSONObject | None = None,
+        let_bindings: dict[str, str] | None = None,
         state_needs: JSONObject | None = None,
         state_bindings: JSONObject | None = None,
         states: JSONObject | None = None,
@@ -231,6 +233,7 @@ class Workflow:
         declared = {key: {} for key in runtime_inputs} if declared_inputs is None else dict(declared_inputs)
         object.__setattr__(self, "inputs", runtime_inputs)
         object.__setattr__(self, "declared_inputs", declared)
+        object.__setattr__(self, "let_bindings", {} if let_bindings is None else dict(let_bindings))
         object.__setattr__(self, "state_needs", {} if state_needs is None else dict(state_needs))
         object.__setattr__(self, "state_bindings", {} if state_bindings is None else dict(state_bindings))
         object.__setattr__(self, "states", {} if states is None else dict(states))
@@ -254,6 +257,7 @@ class Workflow:
             "version": self.version,
             "workflow": self.workflow,
             "inputs": dict(self.declared_inputs),
+            "let": dict(self.let_bindings),
             "state_needs": dict(self.state_needs),
             "blocks": [block.to_contract() for block in self.blocks],
         }
