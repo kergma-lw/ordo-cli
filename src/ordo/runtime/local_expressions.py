@@ -32,7 +32,12 @@ from .local_expression_engine.core import (
 from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, LocalExpressionRoot, get_local_expression_context_policy
 from .local_expression_engine.core import (
     EmbeddedValueExpressionNode,
+    CallNode,
     ParsedLocalExpressionTree,
+    ReferenceNode,
+    StateReferenceNode,
+    StepReferenceNode,
+    ValueExpressionNode,
     collect_local_expression_dependencies,
     evaluate_condition_expression,
     evaluate_local_expression_tree,
@@ -201,6 +206,47 @@ def _collect_local_expression_dependencies(parsed: ParsedLocalExpression) -> tup
             for dependency in collect_local_expression_dependencies(parsed.value.root)
         )
     return ()
+
+
+def resolve_workflow_let_reference_node(
+    node: ConditionExpressionNode | EmbeddedValueExpressionNode,
+    workflow: Workflow,
+    *,
+    context: LocalExpressionContext,
+) -> ValueExpressionNode | None:
+    """Resolve one workflow-level let reference into its bound expression tree when applicable."""
+
+    if not isinstance(node, ReferenceNode) or not node.parts:
+        return None
+    binding_name = node.parts[0]
+    expression = workflow.let_bindings.get(binding_name)
+    if expression is None:
+        return None
+    parsed_binding = parse_local_expression(expression, context=context, allow_boolean_composition=context is not LocalExpressionContext.EMBEDDED_VALUE)
+    assert parsed_binding.value is not None or parsed_binding.guard is not None
+    binding_root = parsed_binding.value.root if parsed_binding.value is not None else parsed_binding.guard.root
+    suffix = node.parts[1:]
+    return _apply_workflow_let_suffix(binding_root, suffix)
+
+
+def _apply_workflow_let_suffix(node: ValueExpressionNode, suffix: tuple[str, ...]) -> ValueExpressionNode:
+    if not suffix:
+        return node
+    if isinstance(node, ReferenceNode):
+        return ReferenceNode(start=node.start, end=node.end, parts=node.parts + suffix)
+    if isinstance(node, StateReferenceNode):
+        return StateReferenceNode(
+            start=node.start,
+            end=node.end,
+            state_role=node.state_role,
+            key_reference=node.key_reference,
+            fields=node.fields + suffix,
+        )
+    if isinstance(node, StepReferenceNode):
+        return StepReferenceNode(start=node.start, end=node.end, register=node.register, fields=node.fields + suffix)
+    if isinstance(node, CallNode):
+        return CallNode(start=node.start, end=node.end, target=node.target, arguments=node.arguments, fields=node.fields + suffix)
+    return node
 
 
 def _iter_condition_dependencies(node: ConditionExpressionNode) -> tuple[_LocalExpressionDependency, ...]:

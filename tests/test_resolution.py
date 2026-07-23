@@ -136,6 +136,24 @@ class ResolutionTest(unittest.TestCase):
         self.assertEqual(result.resolved_guards[0].probes[0].reference, "gh.project.issue")
         self.assertEqual(result.resolved_guards[0].probes[0].fields, ("exists",))
 
+    def test_expr_guard_resolves_workflow_let_binding_probe_reference(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "owner/repo", "issue_number": 1},
+            let_bindings={
+                "issue": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)",
+            },
+            guards=(Guard(expr='issue.state != "CLOSED"'),),
+            steps=(),
+        )
+
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.resolved_guards[0].probes[0].reference, "gh.issue")
+        self.assertEqual(result.resolved_guards[0].probes[0].fields, ("state",))
+
 
 if __name__ == "__main__":
     unittest.main()

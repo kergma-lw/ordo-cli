@@ -12,7 +12,7 @@ from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
-from .local_expressions import parse_local_expression
+from .local_expressions import parse_local_expression, resolve_workflow_let_reference_node
 from .local_expression_engine.core import BinaryNode, CallNode, ConditionExpressionNode, ListNode, LiteralNode, ParsedConditionExpression, ReferenceNode, StateReferenceNode, UnaryNode
 from .providers import ConnectorProvider, get_default_connector_provider
 
@@ -156,6 +156,7 @@ def resolve_workflow_references(
                 if guard.operation is None:
                     resolved = _resolve_guard_expression(
                         guard.expr or "",
+                        workflow=workflow,
                         path=("blocks", str(block_index), "guards", str(guard_index)),
                         public_registry=public_registry,
                         local_registry=local_registry,
@@ -247,6 +248,7 @@ def _validate_local_connectors(*, local_connectors: tuple[Connector, ...], publi
 def _resolve_guard_expression(
     expression: str,
     *,
+    workflow: Workflow,
     path: tuple[str, ...],
     public_registry: ConnectorRegistry,
     local_registry: ConnectorRegistry,
@@ -260,6 +262,10 @@ def _resolve_guard_expression(
     probes: list[ResolvedExpressionProbe] = []
 
     def visit(node: ConditionExpressionNode) -> None:
+        expanded = resolve_workflow_let_reference_node(node, workflow, context=LocalExpressionContext.GUARD)
+        if expanded is not None:
+            visit(expanded)
+            return
         if isinstance(node, ReferenceNode):
             if node.parts[0] == "inputs":
                 return

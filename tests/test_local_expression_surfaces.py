@@ -1,10 +1,13 @@
 import unittest
 
+from ordo.model.workflow import Workflow
+from ordo.runtime.local_expression_engine.core import CallNode
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import (
     parse_condition_local_expression,
     parse_embedded_value_local_expression,
     parse_local_expression,
+    resolve_workflow_let_reference_node,
     validate_parsed_local_expression,
 )
 
@@ -103,6 +106,23 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
             {issue.code for issue in validate_parsed_local_expression(parsed)},
             {"validation.workflow.value_expr.presence_check_argument"},
         )
+
+    def test_workflow_let_reference_resolves_to_bound_expression_tree(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            let_bindings={"issue": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)"},
+            guards=(),
+            steps=(),
+        )
+        parsed = parse_local_expression("issue.state", context=LocalExpressionContext.GUARD)
+
+        expanded = resolve_workflow_let_reference_node(parsed.root, workflow, context=LocalExpressionContext.GUARD)
+
+        self.assertIsInstance(expanded, CallNode)
+        assert isinstance(expanded, CallNode)
+        self.assertEqual(expanded.target.parts, ("gh", "issue"))
+        self.assertEqual(expanded.fields, ("state",))
 
 
 if __name__ == "__main__":
