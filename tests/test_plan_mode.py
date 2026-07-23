@@ -408,6 +408,35 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], "unknown")
 
+    def test_plan_records_known_fan_out_cardinality_on_run_steps(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": ["one", "two", "three"]},
+            steps=(Step(name="inspect", run="fragment.yml", for_each="${inputs.items}", register="runs"),),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        fan_out = result.outputs["step_items"][0]["fan_out"]
+        self.assertEqual(fan_out["source_status"], "static_known")
+        self.assertEqual(fan_out["item_count"], 3)
+        self.assertEqual(fan_out["register_mode"], "aggregate_results")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["fan_out"]["item_count"], 3)
+
+    def test_plan_marks_runtime_only_fan_out_when_cardinality_is_not_statically_known(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            steps=(Step(name="inspect", run="fragment.yml", for_each="${state.memory.items}", register="runs"),),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        fan_out = result.outputs["step_items"][0]["fan_out"]
+        self.assertEqual(fan_out["source_status"], "runtime_only")
+        self.assertIsNone(fan_out["item_count"])
+
     def test_plan_preserves_preflight_interpretation_details(self) -> None:
         workflow = Workflow(
             version=0,

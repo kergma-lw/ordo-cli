@@ -14,6 +14,7 @@ from .providers import ConnectorProvider, GuardProbe
 from .profiles import apply_profile_to_workflow
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedGuardBlock, ResolvedRunStep, ResolvedStepBlock, WorkflowResolution, resolve_workflow_references
 from .validation import validate_workflow_document
+from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
 def _condition_status_for_step(step, preflight_item: dict[str, object]) -> str | None:
@@ -51,6 +52,44 @@ def _invalidates_scopes_for_step(resolved_step) -> list[str]:
         return []
     invalidation = resolved_step.operation.invalidates_observations or (f"{resolved_step.connector_namespace}.*",)
     return [scope for scope in invalidation if isinstance(scope, str)]
+
+
+def _fan_out_info_for_step(step, workflow: Workflow, *, condition_status: str | None) -> dict[str, object] | None:
+    if step.run is None or step.for_each is None:
+        return None
+    if condition_status == "false":
+        return {
+            "enabled": True,
+            "source_status": "skipped_whole_step",
+            "item_count": None,
+            "failure_policy": "strict",
+            "register_mode": "aggregate_results" if step.register is not None else "none",
+        }
+    try:
+        value = resolve_runtime_value(step.for_each, workflow, allow_boolean_composition=True)
+    except ValueResolutionError:
+        return {
+            "enabled": True,
+            "source_status": "runtime_only",
+            "item_count": None,
+            "failure_policy": "strict",
+            "register_mode": "aggregate_results" if step.register is not None else "none",
+        }
+    if not isinstance(value, list):
+        return {
+            "enabled": True,
+            "source_status": "runtime_only",
+            "item_count": None,
+            "failure_policy": "strict",
+            "register_mode": "aggregate_results" if step.register is not None else "none",
+        }
+    return {
+        "enabled": True,
+        "source_status": "static_known",
+        "item_count": len(value),
+        "failure_policy": "strict",
+        "register_mode": "aggregate_results" if step.register is not None else "none",
+    }
 
 
 def _reuse_policy_for_step_item(item: dict[str, object], weakened_scopes: set[str]) -> str:
@@ -374,6 +413,7 @@ def _build_step_items(
                 continue
             if isinstance(resolved_step, ResolvedRunStep):
                 classification = _effective_preflight_classification(step, resolved_step, block_item=block_item)
+                condition_status = _condition_status_for_step(step, preflight_item)
                 step_items.append(
                     {
                         "name": step.name,
@@ -384,10 +424,11 @@ def _build_step_items(
                         "eligibility": "blocked" if blocked else "eligible",
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
-                        "condition_status": _condition_status_for_step(step, preflight_item),
+                        "condition_status": condition_status,
                         "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "launcher": None,
+                        "fan_out": _fan_out_info_for_step(step, workflow, condition_status=condition_status),
                     }
                 )
                 continue
@@ -426,6 +467,7 @@ def _build_step_items(
                 "observation_scopes": [],
                 "invalidates_scopes": [],
                 "launcher": step.launcher if step.operation is not None else None,
+                "fan_out": _fan_out_info_for_step(step, workflow, condition_status=None),
             }
         )
     return step_items
@@ -506,6 +548,7 @@ def _build_run_items(
                 "eligibility": "blocked" if blocked else "eligible",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
+                "fan_out": _fan_out_info_for_step(step, workflow, condition_status=None),
             }
         )
         blocked = True
@@ -578,6 +621,7 @@ def _build_execution_tree(
                     "divergence_reason": None,
                     **dict(step_by_name.get(step.name, {"name": step.name})),
                     "preflight": dict(preflight_by_name[step.name]) if step.name in preflight_by_name else None,
+                    "fan_out": dict(step_by_name[step.name].get("fan_out", {})) if step.name in step_by_name and isinstance(step_by_name[step.name].get("fan_out"), dict) else None,
                 }
                 for step_index, step in enumerate(declared_block.steps)
             ]
