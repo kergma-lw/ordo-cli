@@ -125,6 +125,15 @@ class PreflightInterpreterTest(unittest.TestCase):
         self.assertEqual(result.status, "state_error")
         self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_not_found")
 
+    def test_reports_text_adapter_collection_misuse_during_preflight_value_step(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello\nworld"}, steps=())
+        step = Step(name="copy", value='${text.lines.after("h") with{root: inputs.body}}', register="body")
+
+        result = evaluate_preflight_value_step(step, workflow)
+
+        self.assertEqual(result.status, "state_error")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_invalid_path")
+
     def test_evaluates_true_preflight_step_condition(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"enabled": True}, steps=())
         step = Step(name="inspect", operation=OperationRef("gh.issue"), if_="${inputs.enabled}")

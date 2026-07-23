@@ -219,6 +219,26 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["reason_category"], "execution")
         self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_not_found")
 
+    def test_explain_execution_result_preserves_text_adapter_failure_diagnostics(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"body": "hello\nworld"},
+            steps=(
+                Step(
+                    name="select",
+                    value='${text.lines.after("h") with{root: inputs.body}}',
+                    register="picked",
+                ),
+            ),
+        )
+
+        result = explain_execution_result(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.outputs["reason_category"], "execution")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_invalid_path")
+
     def test_explain_surfaces_runtime_only_fan_out_in_incomplete_mode(self) -> None:
         workflow = Workflow(
             version=0,

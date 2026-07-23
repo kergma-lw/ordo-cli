@@ -52,6 +52,24 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.unknown_operation")
 
+    def test_check_reports_malformed_text_adapter_invocation_in_value_step(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"body": "hello\nworld"},
+            steps=(
+                Step(
+                    name="select",
+                    value='${text.find("h" with{root: inputs.body}}',
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "validation.workflow.local_expression.embedded_value.syntax")
+
     def test_check_reports_blocking_guard_without_executing_steps(self) -> None:
         workflow = Workflow(
             version=0,

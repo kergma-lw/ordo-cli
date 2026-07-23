@@ -298,6 +298,171 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.presence_check_argument")
 
+    def test_evaluate_is_present_accepts_adapter_invocation_when_path_exists(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    ## Tasks
+
+    - repo/name#1
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(markdown["Tasks"] with{root: inputs.body})')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_present_accepts_list_item_adapter_path(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    ## Tasks
+
+    - repo/name#1
+    - repo/name#2
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(markdown["Tasks"].list[1] with{root: inputs.body})')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_present_accepts_text_adapter_invocation_when_match_exists(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: hello world
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(text.find("world") with{root: inputs.body})')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_missing_accepts_adapter_invocation_when_path_absent(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    ## Notes
+
+    hello
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_missing(markdown["Tasks"] with{root: inputs.body})')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_missing_accepts_text_adapter_invocation_when_match_absent(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: hello world
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_missing(text.find("planet") with{root: inputs.body})')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_presence_check_propagates_non_not_found_adapter_error(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    ## Tasks
+
+    First.
+
+    Second.
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(markdown["Tasks"].paragraph with{root: inputs.body})')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.adapter_ambiguous")
+
+    def test_evaluate_presence_check_rejects_write_adapter_invocation(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    ## Tasks
+
+    - repo/name#1
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(markdown["Tasks"].list->add("repo/name#2") with{root: inputs.body})')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.presence_check_argument")
+
+    def test_evaluate_presence_check_propagates_text_collection_misuse(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    hello
+    world
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(text.lines.after("h") with{root: inputs.body})')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.adapter_invalid_path")
+
     def test_evaluate_comparison_expression(self) -> None:
         workflow = load_workflow_text(
             """
