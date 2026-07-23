@@ -94,6 +94,7 @@ def execute_workflow(
     executed_steps: list[str] = []
     reused_steps: list[str] = []
     skipped_steps: list[str] = []
+    workflow_results: list[JSONValue] = []
     published_results: list[JSONValue] = []
     step_condition_details: list[dict[str, object]] = []
     launcher_details: list[dict[str, object]] = []
@@ -315,7 +316,10 @@ def execute_workflow(
                 block_executed.append(step.name)
                 continue
             if _is_execute_run_step(resolved_step):
-                run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
+                if step.for_each is None:
+                    run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
+                else:
+                    run_workflow = None
                 if isinstance(run_workflow, Diagnostic):
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
@@ -353,33 +357,101 @@ def execute_workflow(
                         failed_step=step.name,
                     )
 
-                run_result = execute_workflow(
-                    run_workflow,
-                    profile=current_profile,
-                    available_profiles=available_profiles,
-                    profile_working_directories=profile_working_directories,
-                    guard_probe=guard_probe,
-                    step_executor=step_executor,
-                    connector_provider=connector_provider,
-                )
-                diagnostics.extend(run_result.diagnostics)
-                operation_results.extend(run_result.operation_results)
-                propagated_profile = run_result.outputs.get("active_profile")
-                if isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
-                    current_profile = available_profiles[propagated_profile]
-                    current_profile_name = propagated_profile
-                    current_working_directory = None if profile_working_directories is None else profile_working_directories.get(propagated_profile)
-                    active_profile = propagated_profile
-                    active_overrides = current_profile.overrides
+                fan_out_items = _evaluate_run_for_each_items(step, effective_workflow, block_index=block_index, step_index=step_index)
+                if isinstance(fan_out_items, Diagnostic):
+                    diagnostics.append(fan_out_items)
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
+                    skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                    _append_execution_error_block_item(
+                        block_items,
+                        block_index=block_index,
+                        declared_block=declared_block,
+                        executed_steps=block_executed,
+                        skipped_steps=block_skipped,
+                        failed_step=step.name,
+                        failed_run=step.run,
+                    )
+                    return RuntimeResult(
+                        mode=Mode.EXECUTE,
+                        status=RuntimeStatus.EXECUTION_ERROR,
+                        diagnostics=tuple(diagnostics),
+                        plan=check_result.plan,
+                        outputs=_build_execute_outputs(
+                            can_execute=False,
+                            active_profile=active_profile,
+                            active_overrides=active_overrides,
+                            execution_tree=execution_tree_output,
+                            execution_tree_mode=execution_tree_mode,
+                            execution_tree_fallback_reason=execution_tree_fallback_reason,
+                            executed_steps=executed_steps,
+                            reused_steps=reused_steps,
+                            skipped_steps=skipped_steps,
+                            step_condition_details=step_condition_details,
+                            launcher_details=launcher_details,
+                            checked_guards=checked_guards,
+                            guard_details=guard_details,
+                            block_items=block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                        ),
+                        operation_results=tuple(operation_results),
+                        failed_step=step.name,
+                    )
+
+                run_results = []
+                for item_index, item in enumerate(fan_out_items):
+                    materialized = materialize_run_workflow(
+                        step,
+                        effective_workflow,
+                        block_index=block_index,
+                        step_index=step_index,
+                        extra_bindings={"item": item} if step.for_each is not None else None,
+                    )
+                    if isinstance(materialized, Diagnostic):
+                        diagnostics.append(materialized)
+                        run_result = RuntimeResult(
+                            mode=Mode.EXECUTE,
+                            status=RuntimeStatus.EXECUTION_ERROR,
+                            diagnostics=(materialized,),
+                        )
+                    else:
+                        run_result = execute_workflow(
+                            materialized,
+                            profile=current_profile,
+                            available_profiles=available_profiles,
+                            profile_working_directories=profile_working_directories,
+                            guard_probe=guard_probe,
+                            step_executor=step_executor,
+                            connector_provider=connector_provider,
+                        )
+                    run_results.append(run_result)
+                    diagnostics.extend(run_result.diagnostics)
+                    operation_results.extend(run_result.operation_results)
+                    propagated_profile = run_result.outputs.get("active_profile")
+                    if isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
+                        current_profile = available_profiles[propagated_profile]
+                        current_profile_name = propagated_profile
+                        current_working_directory = None if profile_working_directories is None else profile_working_directories.get(propagated_profile)
+                        active_profile = propagated_profile
+                        active_overrides = current_profile.overrides
+                    executed_steps.extend([name for name in run_result.outputs.get("executed_steps", []) if isinstance(name, str)])
+                    skipped_steps.extend([name for name in run_result.outputs.get("skipped_steps", []) if isinstance(name, str)])
+                    step_condition_details.extend([detail for detail in run_result.outputs.get("step_condition_details", []) if isinstance(detail, dict)])
+                    launcher_details.extend([detail for detail in run_result.outputs.get("launcher_details", []) if isinstance(detail, dict)])
+                    checked_guards.extend([name for name in run_result.outputs.get("checked_guards", []) if isinstance(name, str)])
+                    guard_details.extend([detail for detail in run_result.outputs.get("guard_details", []) if isinstance(detail, dict)])
+                    published_results.extend(list(run_result.published))
+                    if run_result.status is not RuntimeStatus.OK:
+                        break
+
                 executed_steps.append(step.name)
                 block_executed.append(step.name)
-                executed_steps.extend([name for name in run_result.outputs.get("executed_steps", []) if isinstance(name, str)])
-                skipped_steps.extend([name for name in run_result.outputs.get("skipped_steps", []) if isinstance(name, str)])
-                step_condition_details.extend([detail for detail in run_result.outputs.get("step_condition_details", []) if isinstance(detail, dict)])
-                launcher_details.extend([detail for detail in run_result.outputs.get("launcher_details", []) if isinstance(detail, dict)])
-                checked_guards.extend([name for name in run_result.outputs.get("checked_guards", []) if isinstance(name, str)])
-                guard_details.extend([detail for detail in run_result.outputs.get("guard_details", []) if isinstance(detail, dict)])
-                published_results.extend(list(run_result.outputs.get("results", [])) if isinstance(run_result.outputs.get("results", []), list) else [])
+                if step.register is not None:
+                    if step.for_each is None:
+                        effective_workflow.step_results[step.register] = {"results": list(run_results[0].results)} if run_results else {"results": []}
+                    else:
+                        effective_workflow.step_results[step.register] = {
+                            "results": [{"results": list(result.results)} for result in run_results]
+                        }
+                run_result = next((result for result in run_results if result.status is not RuntimeStatus.OK), run_results[-1] if run_results else RuntimeResult(mode=Mode.EXECUTE, status=RuntimeStatus.OK))
                 if run_result.status is not RuntimeStatus.OK:
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
@@ -550,6 +622,8 @@ def execute_workflow(
                 diagnostics=diagnostics,
             )
             if step.result is not None:
+                workflow_results.append(result.outputs.get("value"))
+            if step.publish is not None:
                 published_results.append(result.outputs.get("value"))
 
             if result.status != "ok":
@@ -620,8 +694,9 @@ def execute_workflow(
             checked_guards=checked_guards,
             guard_details=guard_details,
             block_items=block_items,
-            extra={"results": published_results},
         ),
+        results=tuple(workflow_results),
+        published=tuple(published_results),
         operation_results=tuple(operation_results),
     )
 
@@ -639,6 +714,24 @@ def _evaluate_step_condition(step, workflow: Workflow) -> bool | Diagnostic:
         path=("steps", step.name, "if"),
         details={"actual_type": type(value).__name__},
     )
+
+
+def _evaluate_run_for_each_items(step: Step, workflow: Workflow, *, block_index: int, step_index: int) -> list[JSONValue] | Diagnostic:
+    if step.for_each is None:
+        return [None]
+    try:
+        value = resolve_runtime_value(step.for_each, workflow, allow_boolean_composition=True)
+    except ValueResolutionError as exc:
+        return exc.to_diagnostic(path=("blocks", str(block_index), "steps", str(step_index), "for_each"))
+    if not isinstance(value, list):
+        return Diagnostic(
+            code="runtime.run.for_each.not_array",
+            level="error",
+            message="Run field 'for_each' must resolve to an array value",
+            path=("blocks", str(block_index), "steps", str(step_index), "for_each"),
+            details={"actual_type": type(value).__name__},
+        )
+    return value
 
 
 def _default_step_executor(*, provider: ConnectorProvider | None):
@@ -838,6 +931,8 @@ def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
             return _execute_value_step(step.name, step.value, workflow)
         if step.result is not None:
             return _execute_result_step(step.name, step.result, workflow)
+        if step.publish is not None:
+            return _execute_publish_step(step.name, step.publish, workflow)
         if step.state_set is not None:
             return _execute_state_set(step.name, step.state_set, workflow)
         if step.state_delete is not None:
@@ -853,11 +948,20 @@ def _execute_value_step(step_name: str, raw_value: JSONValue, workflow: Workflow
     return evaluate_preflight_value_step(Step(name=step_name, value=raw_value), workflow)
 
 
+def _execute_publish_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
+    value = resolve_runtime_value(raw_value, workflow)
+    return OperationResult(
+        status="ok",
+        summary=f"Published workflow output for step '{step_name}'",
+        outputs={"value": value},
+    )
+
+
 def _execute_result_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
     value = resolve_runtime_value(raw_value, workflow)
     return OperationResult(
         status="ok",
-        summary=f"Published workflow result for step '{step_name}'",
+        summary=f"Recorded workflow result for step '{step_name}'",
         outputs={"value": value},
     )
 

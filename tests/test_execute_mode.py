@@ -117,8 +117,8 @@ class ExecuteModeTest(unittest.TestCase):
             blocks=(
                 StepBlock(
                     steps=(
-                        Step(name="publish-one", result={"summary": "first", "issue": "${inputs.issue_number}"}),
-                        Step(name="publish-two", result={"summary": "second"}),
+                        Step(name="result-one", result={"summary": "first", "issue": "${inputs.issue_number}"}),
+                        Step(name="result-two", result={"summary": "second"}),
                     )
                 ),
             ),
@@ -127,7 +127,28 @@ class ExecuteModeTest(unittest.TestCase):
         result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["results"], [{"summary": "first", "issue": 7}, {"summary": "second"}])
+        self.assertEqual(list(result.results), [{"summary": "first", "issue": 7}, {"summary": "second"}])
+        self.assertEqual(list(result.published), [])
+
+    def test_execute_accumulates_published_from_multiple_publish_steps(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="publish-one", publish={"summary": "first"}),
+                        Step(name="publish-two", publish={"summary": "second"}),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.results), [])
+        self.assertEqual(list(result.published), [{"summary": "first"}, {"summary": "second"}])
 
     def test_execute_returns_empty_results_when_no_result_step_runs(self) -> None:
         workflow = Workflow(version=0, workflow="publish", steps=(Step(name="remember", value="ok"),))
@@ -135,9 +156,9 @@ class ExecuteModeTest(unittest.TestCase):
         result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["results"], [])
+        self.assertEqual(list(result.results), [])
 
-    def test_execute_accumulates_results_from_nested_run_before_parent_result(self) -> None:
+    def test_execute_keeps_nested_results_local_to_nested_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             fragment = root / "nested.yml"
@@ -161,7 +182,7 @@ class ExecuteModeTest(unittest.TestCase):
             result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
             self.assertEqual(result.status, RuntimeStatus.OK)
-            self.assertEqual(result.outputs["results"], [{"summary": "nested"}, {"summary": "parent"}])
+            self.assertEqual(list(result.results), [{"summary": "parent"}])
 
     def test_execute_does_not_emit_fallback_results_for_nested_run_without_explicit_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -187,7 +208,116 @@ class ExecuteModeTest(unittest.TestCase):
             result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
             self.assertEqual(result.status, RuntimeStatus.OK)
-            self.assertEqual(result.outputs["results"], [])
+            self.assertEqual(list(result.results), [])
+
+    def test_execute_registers_results_from_run_step(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: nested\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="expand", run="nested.yml", register="nested_run", resolved_run_path=str(fragment)),
+                            Step(name="copy", result="${step.nested_run.results}"),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(list(result.results), [[{"summary": "nested"}]])
+
+    def test_execute_fans_out_run_results_over_array_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "args:\n  item: string\nversion: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item}\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                inputs={"items": ["one", "two"]},
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="expand", run="nested.yml", for_each="${inputs.items}", register="nested_run", resolved_run_path=str(fragment)),
+                            Step(name="copy", result="${step.nested_run.results}"),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(
+                list(result.results),
+                [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]],
+            )
+
+    def test_execute_fan_out_registers_empty_results_for_empty_array(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "args:\n  item: string\nversion: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item}\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                inputs={"items": []},
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="expand", run="nested.yml", for_each="${inputs.items}", register="nested_run", resolved_run_path=str(fragment)),
+                            Step(name="copy", result="${step.nested_run.results}"),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(list(result.results), [[]])
+
+    def test_execute_fan_out_fails_strictly_when_one_item_run_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "args:\n  item: object\nversion: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item.summary}\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                inputs={"items": [{"summary": "one"}, {}]},
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="expand", run="nested.yml", for_each="${inputs.items}", register="nested_run", resolved_run_path=str(fragment)),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+            self.assertEqual(result.failed_step, "nested-result")
 
     def test_execute_branch_classifiers_isolate_legacy_shaped_paths(self) -> None:
         probe = ResolvedOperation(reference="gh.issue", connector_namespace="gh", operation=OperationContract(name="issue", kind="probe"), source="public")

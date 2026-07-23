@@ -22,7 +22,14 @@ class CheckRunExpansionDecision:
     workflow: Workflow | None = None
 
 
-def materialize_run_workflow(step: Step, caller_workflow: Workflow, *, block_index: int, step_index: int) -> Workflow | Diagnostic:
+def materialize_run_workflow(
+    step: Step,
+    caller_workflow: Workflow,
+    *,
+    block_index: int,
+    step_index: int,
+    extra_bindings: JSONObject | None = None,
+) -> Workflow | Diagnostic:
     """Load and bind one reusable fragment run into an executable sub-workflow."""
 
     if step.resolved_run_path is None:
@@ -38,6 +45,8 @@ def materialize_run_workflow(step: Step, caller_workflow: Workflow, *, block_ind
         include_bindings = _evaluate_run_bindings(step.run_with, caller_workflow, block_index=block_index, step_index=step_index)
     except ValueResolutionError as exc:
         return exc.to_diagnostic(path=("blocks", str(block_index), "steps", str(step_index), "with"))
+    if extra_bindings:
+        include_bindings = {**include_bindings, **extra_bindings}
 
     run_path = Path(step.resolved_run_path)
     launch_dir = Path(caller_workflow.launch_dir) if caller_workflow.launch_dir is not None else run_path.parent
