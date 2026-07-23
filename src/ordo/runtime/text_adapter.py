@@ -37,6 +37,7 @@ class _TextScope:
 
 @dataclass(frozen=True, slots=True)
 class _TextCollection:
+    root_text: str
     kind: str
     items: tuple[_TextScope, ...]
 
@@ -323,7 +324,7 @@ def _apply_selector(current: _TextScope | _TextCollection, step: _SelectorStep) 
             )
         return matches[0]
     if step.name == "finds":
-        return _TextCollection(kind="matches", items=tuple(_find_matches(current, step.argument)))
+        return _TextCollection(root_text=current.root_text, kind="matches", items=tuple(_find_matches(current, step.argument)))
     if step.name == "before":
         return _narrow_around_anchor(current, step.argument, mode="before")
     if step.name == "after":
@@ -354,7 +355,7 @@ def _apply_index(current: _TextScope | _TextCollection, step: _IndexStep) -> _Te
 def _project_lines(scope: _TextScope) -> _TextCollection:
     text = scope.text
     if text == "":
-        return _TextCollection(kind="lines", items=())
+        return _TextCollection(root_text=scope.root_text, kind="lines", items=())
     items: list[_TextScope] = []
     absolute = scope.span.start
     start = absolute
@@ -362,7 +363,7 @@ def _project_lines(scope: _TextScope) -> _TextCollection:
         end = start + len(part)
         items.append(_TextScope(scope.root_text, _TextSpan(start, end)))
         start = end + 1
-    return _TextCollection(kind="lines", items=tuple(items))
+    return _TextCollection(root_text=scope.root_text, kind="lines", items=tuple(items))
 
 
 def _find_matches(scope: _TextScope, literal: str) -> list[_TextScope]:
@@ -416,11 +417,8 @@ def _apply_text_action(selection: _TextScope | _TextCollection, action: _TextAct
     else:
         replacements = [(selection.span, _resolve_replacement_text(action, selection.text, parameters))]
     if not replacements:
-        if isinstance(selection, _TextCollection):
-            return selection.items[0].root_text if selection.items else ""
+        return _root_text_for_selection(selection)
     root_text = _root_text_for_selection(selection)
-    if not replacements:
-        return root_text
     parts: list[str] = []
     cursor = 0
     for span, replacement in replacements:
@@ -461,9 +459,7 @@ def _resolve_action_argument(argument: _ActionArgument, parameters: JSONObject) 
 
 def _root_text_for_selection(selection: _TextScope | _TextCollection) -> str:
     if isinstance(selection, _TextCollection):
-        if selection.items:
-            return selection.items[0].root_text
-        return ""
+        return selection.root_text
     return selection.root_text
 
 

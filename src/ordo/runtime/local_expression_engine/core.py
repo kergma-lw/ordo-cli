@@ -17,6 +17,7 @@ from ..state import RuntimeStateError, read_state_document, read_state_value, re
 from ..representation_adapters import (
     RepresentationAdapterError,
     RepresentationAdapterInvocation,
+    RepresentationAdapterResult,
     evaluate_representation_adapter_invocation,
     has_representation_adapter,
 )
@@ -476,9 +477,28 @@ def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[Lo
 
 
 def _try_parse_adapter_invocation(expression: str, *, allow_boolean_composition: bool) -> AdapterInvocationNode | None:
-    start = 0
-    while start < len(expression) and expression[start].isspace():
-        start += 1
+    adapter_node = _try_parse_adapter_invocation_at(
+        expression,
+        start=0,
+        allow_boolean_composition=allow_boolean_composition,
+    )
+    if adapter_node is None:
+        return None
+    end = adapter_node.end
+    trailing = expression[end:]
+    if trailing.strip():
+        token_start = end + len(trailing) - len(trailing.lstrip())
+        raise ValueExpressionParseError("Unexpected trailing token", token_start, len(expression))
+    return adapter_node
+
+
+def _try_parse_adapter_invocation_at(
+    expression: str,
+    *,
+    start: int,
+    allow_boolean_composition: bool,
+    stop_chars: str = "",
+) -> AdapterInvocationNode | None:
     if start >= len(expression) or not (expression[start].isalpha() or expression[start] == "_"):
         return None
 
@@ -492,20 +512,19 @@ def _try_parse_adapter_invocation(expression: str, *, allow_boolean_composition:
     probe = family_end
     while probe < len(expression) and expression[probe].isspace():
         probe += 1
-    if probe >= len(expression) or expression[probe] not in "[{.":
+    if probe >= len(expression) or expression[probe] not in "[{.-":
         return None
-    if expression[probe] == "." and not has_representation_adapter(family):
+    if expression[probe] in ".-" and not has_representation_adapter(family):
+        return None
+    if expression[probe] == "-" and not expression.startswith("->", probe):
         return None
 
     body, bindings, end = _split_adapter_body_and_bindings(
         expression,
         body_start=family_end,
         allow_boolean_composition=allow_boolean_composition,
+        stop_chars=stop_chars,
     )
-    trailing = expression[end:]
-    if trailing.strip():
-        token_start = end + len(trailing) - len(trailing.lstrip())
-        raise ValueExpressionParseError("Unexpected trailing token", token_start, len(expression))
     return AdapterInvocationNode(start=start, end=end, family=family, body=body, bindings=bindings)
 
 
@@ -514,6 +533,7 @@ def _split_adapter_body_and_bindings(
     *,
     body_start: int,
     allow_boolean_composition: bool,
+    stop_chars: str = "",
 ) -> tuple[str, tuple[AdapterBindingNode, ...], int]:
     position = body_start
     depth_paren = 0
@@ -566,6 +586,8 @@ def _split_adapter_body_and_bindings(
                 raise ValueExpressionParseError("Unexpected '}' in adapter body", position, position + 1)
             position += 1
             continue
+        if stop_chars and depth_paren == 0 and depth_bracket == 0 and depth_brace == 0 and char in stop_chars:
+            return text[body_start:position].rstrip(), (), position
         if (
             char.isspace()
             and depth_paren == 0
@@ -811,6 +833,15 @@ class _Parser:
             return LiteralNode(start=token.start, end=token.end, value=_decode_number(token.text))
         if token.kind != "IDENT":
             raise ValueExpressionParseError("Expected local-expression term", token.start, token.end)
+        adapter_node = _try_parse_adapter_invocation_at(
+            self._text,
+            start=token.start,
+            allow_boolean_composition=self._allow_boolean_composition,
+            stop_chars=",)]",
+        )
+        if adapter_node is not None:
+            self._advance_to_position(adapter_node.end)
+            return adapter_node
         if token.text in {"true", "false", "null"}:
             self._advance()
             value = {"true": True, "false": False, "null": None}[token.text]
@@ -973,6 +1004,10 @@ class _Parser:
             raise ValueExpressionParseError(message, token.start, token.end)
         return self._advance()
 
+    def _advance_to_position(self, end: int) -> None:
+        while self._peek().kind != "EOF" and self._peek().start < end:
+            self._advance()
+
     def _match(self, kind: str) -> _Token | None:
         if self._peek().kind != kind:
             return None
@@ -1099,10 +1134,10 @@ class _SemanticValidator:
             )
             return
         argument = node.arguments[0]
-        if not _is_presence_check_reference(argument):
+        if not _is_presence_check_argument(argument):
             self._error(
                 "validation.workflow.value_expr.presence_check_argument",
-                f"Built-in value expression '{node.name}' requires a lookup-style reference argument",
+                f"Built-in value expression '{node.name}' requires a lookup-style reference or read-only adapter invocation argument",
                 argument,
             )
 
@@ -1334,6 +1369,14 @@ def _tokenize(text: str) -> tuple[_Token, ...]:
             tokens.append(_Token("DOT", char, position, position + 1))
             position += 1
             continue
+        if char == "{":
+            tokens.append(_Token("LBRACE", char, position, position + 1))
+            position += 1
+            continue
+        if char == "}":
+            tokens.append(_Token("RBRACE", char, position, position + 1))
+            position += 1
+            continue
         if char == "[":
             tokens.append(_Token("LBRACKET", char, position, position + 1))
             position += 1
@@ -1357,6 +1400,14 @@ def _tokenize(text: str) -> tuple[_Token, ...]:
         if char == ",":
             tokens.append(_Token("COMMA", char, position, position + 1))
             position += 1
+            continue
+        if char == ":":
+            tokens.append(_Token("COLON", char, position, position + 1))
+            position += 1
+            continue
+        if char == "-" and position + 1 < length and text[position + 1] == ">":
+            tokens.append(_Token("ARROW", "->", position, position + 2))
+            position += 2
             continue
         if char == "=" and position + 1 < length and text[position + 1] == "=":
             tokens.append(_Token("EQEQ", "==", position, position + 2))
@@ -1393,7 +1444,11 @@ def _tokenize(text: str) -> tuple[_Token, ...]:
         if char.isalpha() or char == "_":
             start = position
             position += 1
-            while position < length and (text[position].isalnum() or text[position] == "_" or text[position] == "-"):
+            while position < length and (
+                text[position].isalnum()
+                or text[position] == "_"
+                or (text[position] == "-" and (position + 1 >= length or text[position + 1] != ">"))
+            ):
                 position += 1
             tokens.append(_Token("IDENT", text[start:position], start, position))
             continue
@@ -1850,12 +1905,32 @@ def _evaluate_presence_builtin(
             details={"expression": parsed.source, "builtin": node.name},
         )
     argument = node.arguments[0]
-    if not _is_presence_check_reference(argument):
+    if not _is_presence_check_argument(argument):
         raise ValueExpressionEvaluationError(
             code="runtime.value.presence_check_argument",
-            message=f"Built-in value expression '{node.name}' requires a lookup-style reference argument",
+            message=f"Built-in value expression '{node.name}' requires a lookup-style reference or read-only adapter invocation argument",
             details={"expression": parsed.source, "builtin": node.name},
         )
+    if isinstance(argument, AdapterInvocationNode):
+        try:
+            result = _evaluate_adapter_invocation_result(
+                argument,
+                parsed=parsed,
+                workflow=workflow,
+                step_results=step_results,
+                observation_session=None,
+            )
+        except ValueExpressionEvaluationError as exc:
+            if exc.code == "runtime.value.adapter_not_found":
+                return True if node.name == "is_missing" else False
+            raise
+        if result.kind != "read":
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.presence_check_argument",
+                message=f"Built-in value expression '{node.name}' requires a read-only adapter invocation argument",
+                details={"expression": parsed.source, "builtin": node.name},
+            )
+        return False if node.name == "is_missing" else True
     missing = _is_reference_missing(argument, parsed=parsed, workflow=workflow, step_results=step_results)
     return missing if node.name == "is_missing" else not missing
 
@@ -1907,14 +1982,14 @@ def _evaluate_read_only_call(
     return observation.value
 
 
-def _evaluate_adapter_invocation(
+def _evaluate_adapter_invocation_result(
     node: AdapterInvocationNode,
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
-) -> JSONValue:
+) -> RepresentationAdapterResult:
     parameters: JSONObject = {}
     for binding in node.bindings:
         parameters[binding.name] = _evaluate_node(
@@ -1932,7 +2007,7 @@ def _evaluate_adapter_invocation(
         )
     root_value = parameters.pop("root")
     try:
-        result = evaluate_representation_adapter_invocation(
+        return evaluate_representation_adapter_invocation(
             RepresentationAdapterInvocation(
                 family=node.family,
                 body=node.body,
@@ -1941,9 +2016,25 @@ def _evaluate_adapter_invocation(
                 source_expression=parsed.source[node.start : node.end],
             )
         )
-        return result.value
     except RepresentationAdapterError as exc:
         raise ValueExpressionEvaluationError(code=exc.code, message=exc.message, details=exc.details) from exc
+
+
+def _evaluate_adapter_invocation(
+    node: AdapterInvocationNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
+) -> JSONValue:
+    return _evaluate_adapter_invocation_result(
+        node,
+        parsed=parsed,
+        workflow=workflow,
+        step_results=step_results,
+        observation_session=observation_session,
+    ).value
 
 
 def _require_string(value: JSONValue, *, filter_name: str, parsed: ParsedValueExpression) -> str:
@@ -2100,9 +2191,11 @@ def _apply_not_filter(
     )
 
 
-def _is_presence_check_reference(node: ValueExpressionNode) -> bool:
+def _is_presence_check_argument(node: ValueExpressionNode) -> bool:
     if isinstance(node, ReferenceNode):
         return bool(node.parts) and node.parts[0] in {"inputs", "args"} and len(node.parts) >= 2
+    if isinstance(node, AdapterInvocationNode):
+        return True
     return isinstance(node, (StateReferenceNode, StepReferenceNode))
 
 

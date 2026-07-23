@@ -110,6 +110,69 @@ class TextAdapterTest(unittest.TestCase):
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_root_value")
 
+    def test_remove_on_root_returns_empty_string(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello"})
+
+        value = resolve_runtime_value('${text->remove() with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, "")
+
+    def test_append_on_root_appends_text(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello", "text": " world"})
+
+        value = resolve_runtime_value('${text->append(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(value, "hello world")
+
+    def test_replace_on_line_focus_updates_only_selected_line(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello\nworld", "text": "planet"})
+
+        value = resolve_runtime_value('${text.lines[1]->replace(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(value, "hello\nplanet")
+
+    def test_append_on_line_collection_updates_each_line(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello\nworld", "text": "!"})
+
+        value = resolve_runtime_value('${text.lines->append(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(value, "hello!\nworld!")
+
+    def test_replace_on_match_focus_updates_only_selected_match(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello hell", "text": "heaven"})
+
+        value = resolve_runtime_value('${text.finds("hell")[1]->replace(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(value, "hello heaven")
+
+    def test_replace_on_match_collection_updates_all_matches(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hell and hell", "text": "heaven"})
+
+        value = resolve_runtime_value('${text.finds("hell")->replace(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(value, "heaven and heaven")
+
+    def test_remove_on_match_collection_removes_all_matches(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hell and hell"})
+
+        value = resolve_runtime_value('${text.finds("hell")->remove() with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, " and ")
+
+    def test_bulk_mutation_over_empty_match_collection_is_no_op(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello", "text": "world"})
+
+        value = resolve_runtime_value('${text.finds("zzz")->replace(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(value, "hello")
+
+    def test_narrowed_scope_line_collection_supports_bulk_append(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "life\nhope", "text": ", bless you"})
+
+        value = resolve_runtime_value('${text.after("life\\n").lines->append(text) with{root: inputs.body, text: inputs.text}}', workflow)
+
+        self.assertEqual(value, "life\nhope, bless you")
+
 
 if __name__ == "__main__":
     unittest.main()

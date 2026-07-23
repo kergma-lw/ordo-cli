@@ -271,6 +271,27 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
             ),
         )
 
+    def test_parse_adapter_invocation_with_root_action_only(self) -> None:
+        parsed = parse_local_expression_tree('text->remove() with{root: inputs.body}')
+
+        self.assertEqual(
+            parsed.root,
+            AdapterInvocationNode(
+                start=0,
+                end=38,
+                family="text",
+                body="->remove()",
+                bindings=(
+                    AdapterBindingNode(
+                        start=20,
+                        end=37,
+                        name="root",
+                        value=ReferenceNode(start=26, end=37, parts=("inputs", "body")),
+                    ),
+                ),
+            ),
+        )
+
     def test_parse_rejects_unclosed_outer_adapter_bindings(self) -> None:
         with self.assertRaises(LocalExpressionParseError) as context:
             parse_local_expression_tree('markdown["Tasks"] with{section: inputs.section')
