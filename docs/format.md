@@ -19,6 +19,7 @@ version: 0
 workflow: string
 
 inputs: {}
+let: {}
 state_needs: {}
 guards: []
 steps: []
@@ -30,6 +31,26 @@ steps: []
 - prefer explicit fields over magic defaults
 - keep semantics deterministic
 - shell is an escape hatch, not the main abstraction
+
+## Let bindings
+
+Workflows may declare top-level `let` bindings for workflow-local named expressions.
+
+```yaml
+let:
+  issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+  should_comment: inputs.enabled and issue.state != "CLOSED"
+```
+
+Rules:
+
+- `let` is workflow-local;
+- each value is one ordinary local expression;
+- bindings are immutable;
+- bindings do not form execution blocks;
+- one `let` binding must not reference another `let` binding.
+
+Use them when one local expression is long or repeated enough that an inline form becomes noisy.
 
 ## Guards
 
@@ -181,6 +202,19 @@ branch:
 ```
 
 This YAML form is selective rather than universal. Simple filter pipelines such as `${inputs.title | slug}` stay inline.
+
+`let` bindings may also shorten repeated value expressions:
+
+```yaml
+let:
+  branch: format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)
+
+steps:
+  - name: print-branch
+    uses: shell.command
+    with:
+      command: ${format("printf {}", branch)}
+```
 
 ## Runtime state
 

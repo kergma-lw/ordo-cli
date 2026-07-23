@@ -35,6 +35,35 @@ steps:
       issue_number: ${inputs.issue_number}
 ```
 
+If you want one example that already uses workflow-local named expressions, inspect:
+
+`examples/let-bindings.yaml`
+
+```yaml
+version: 0
+workflow: let-bindings
+
+inputs:
+  enabled: true
+  type: Task
+  issue_number: 7
+
+let:
+  should_run: inputs.enabled
+  branch: format("{}/{}", inputs.type | lower, inputs.issue_number)
+
+guards:
+  - should_run
+
+steps:
+  - name: print-branch
+    uses: shell.command
+    with:
+      command: ${format("printf {}", branch)}
+```
+
+Use `let` when a guard, condition, or value expression would otherwise become too long or too repetitive inline.
+
 ## 3. Load and validate it
 
 ```bash

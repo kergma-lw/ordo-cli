@@ -1,8 +1,8 @@
 import unittest
 from pathlib import Path
 
-from ordo.model.runtime import OperationResult
-from ordo.runtime import explain_workflow, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
+from ordo.model.runtime import OperationResult, RuntimeStatus
+from ordo.runtime import execute_workflow, explain_workflow, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -14,6 +14,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/inspect-issue.yaml"),
             Path("examples/blocked-main-branch.yaml"),
             Path("examples/launcher-step.yaml"),
+            Path("examples/let-bindings.yaml"),
             Path("examples/run-step.yaml"),
         ):
             report = validate_workflow_text(path.read_text(encoding="utf-8"), source=str(path))
@@ -64,6 +65,14 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertIn("guard_items", result.outputs)
         self.assertIn("step_items", result.outputs)
         self.assertEqual(result.outputs["active_profile"], "read-only-review")
+
+    def test_let_bindings_example_executes_end_to_end(self) -> None:
+        workflow = load_workflow_file(Path("examples/let-bindings.yaml"))
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["print-branch"])
 
 
 if __name__ == "__main__":
