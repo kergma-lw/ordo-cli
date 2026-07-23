@@ -373,15 +373,22 @@ def evaluate_local_expression_tree(
     parsed: ParsedLocalExpressionTree,
     workflow: Workflow,
     *,
+    context=None,
     step_results: dict[str, OperationResult] | None = None,
     observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
     """Evaluate one canonical local-expression tree against workflow-visible data."""
 
+    if context is None:
+        from ordo.runtime.local_expression_contexts import LocalExpressionContext
+
+        context = LocalExpressionContext.EMBEDDED_VALUE
+
     return _evaluate_node(
         parsed.root,
         parsed=parsed,
         workflow=workflow,
+        context=context,
         step_results={} if step_results is None else step_results,
         observation_session=observation_session,
     )
@@ -1186,6 +1193,32 @@ class _ConditionEvaluator:
             self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="list", status="ok", value=values))
             return "ok", values
         if isinstance(node, ReferenceNode):
+            from ordo.runtime.local_expression_contexts import LocalExpressionContext
+            from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, resolve_workflow_let_reference_node
+
+            try:
+                expanded = resolve_workflow_let_reference_node(node, self._workflow, context=LocalExpressionContext.GUARD)
+            except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+                self._diagnostics.append(
+                    Diagnostic(
+                        code="runtime.local_expression.let_binding_invalid",
+                        level="error",
+                        message=f"Workflow let binding '{node.parts[0]}' is not valid in the guard local-expression context",
+                        path=(),
+                        details={
+                            "expression": self._parsed.source,
+                            "binding_name": node.parts[0],
+                            "binding_path": ["let", node.parts[0]],
+                            "position": exc.position,
+                            "end": exc.end if exc.end is not None else exc.position,
+                            "parse_message": exc.message,
+                        },
+                    )
+                )
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="let", status="probe_failed", value=None))
+                return "probe_failed", None
+            if expanded is not None:
+                return self._evaluate(expanded)
             if node.parts[0] == "inputs":
                 try:
                     value = _resolve_input_reference(node.parts, workflow=self._workflow)
@@ -1217,11 +1250,14 @@ class _ConditionEvaluator:
         if isinstance(node, CallNode):
             return self._observe_call(node)
         if isinstance(node, BuiltinCallNode):
+            from ordo.runtime.local_expression_contexts import LocalExpressionContext
+
             try:
                 value = _evaluate_presence_builtin(
                     node,
                     parsed=self._parsed,
                     workflow=self._workflow,
+                    context=LocalExpressionContext.GUARD,
                     step_results={key: value for key, value in self._step_results.items() if isinstance(value, OperationResult)},
                 )
             except ValueExpressionEvaluationError as exc:
@@ -1564,12 +1600,41 @@ def _evaluate_node(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     if isinstance(node, LiteralNode):
         return node.value
     if isinstance(node, ReferenceNode):
+        from ordo.runtime.local_expression_contexts import LocalExpressionContext
+        from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, resolve_workflow_let_reference_node
+
+        try:
+            expanded = resolve_workflow_let_reference_node(node, workflow, context=context)
+        except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+            raise ValueExpressionEvaluationError(
+                code="runtime.local_expression.let_binding_invalid",
+                message=f"Workflow let binding '{node.parts[0]}' is not valid in the {context.value} local-expression context",
+                details={
+                    "expression": parsed.source,
+                    "binding_name": node.parts[0],
+                    "binding_path": ["let", node.parts[0]],
+                    "context": context.value,
+                    "position": exc.position,
+                    "end": exc.end if exc.end is not None else exc.position,
+                    "parse_message": exc.message,
+                },
+            ) from exc
+        if expanded is not None:
+            return _evaluate_node(
+                expanded,
+                parsed=parsed,
+                workflow=workflow,
+                context=context,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
         return _resolve_input_reference(node.parts, workflow=workflow)
     if isinstance(node, StateReferenceNode):
         return _resolve_state_reference(node, parsed=parsed, workflow=workflow)
@@ -1581,6 +1646,7 @@ def _evaluate_node(
                 item,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=observation_session,
             )
@@ -1591,6 +1657,7 @@ def _evaluate_node(
             node,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1599,6 +1666,7 @@ def _evaluate_node(
             node,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1607,6 +1675,7 @@ def _evaluate_node(
             node.source,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1616,6 +1685,7 @@ def _evaluate_node(
                 value,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=observation_session,
             )
@@ -1625,6 +1695,7 @@ def _evaluate_node(
             node,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1633,6 +1704,7 @@ def _evaluate_node(
             node.operand,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1649,6 +1721,7 @@ def _evaluate_node(
                 node.left,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=observation_session,
             )
@@ -1656,6 +1729,7 @@ def _evaluate_node(
                 node.right,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=observation_session,
             )
@@ -1674,6 +1748,7 @@ def _evaluate_node(
             node.left,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1690,6 +1765,7 @@ def _evaluate_node(
                 node.right,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=observation_session,
             )
@@ -1707,6 +1783,7 @@ def _evaluate_node(
                 node.right,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=observation_session,
             )
@@ -1800,12 +1877,13 @@ def _apply_filter(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     spec = VALUE_EXPRESSION_FILTERS.get(filter_node.name)
     if spec is not None:
-        return spec.handler(value, filter_node, parsed, workflow, {"step_results": step_results, "observation_session": observation_session})
+        return spec.handler(value, filter_node, parsed, workflow, {"context": context, "step_results": step_results, "observation_session": observation_session})
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_unknown",
         message=f"Unknown local-expression filter '{filter_node.name}'",
@@ -1818,6 +1896,7 @@ def _evaluate_builtin_call(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
@@ -1828,12 +1907,14 @@ def _evaluate_builtin_call(
                 node,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
             )
         return spec.handler(
             node,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1849,6 +1930,7 @@ def _evaluate_format_call(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
@@ -1862,6 +1944,7 @@ def _evaluate_format_call(
         node.arguments[0],
         parsed=parsed,
         workflow=workflow,
+        context=context,
         step_results=step_results,
         observation_session=observation_session,
     )
@@ -1876,6 +1959,7 @@ def _evaluate_format_call(
             argument,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -1896,6 +1980,7 @@ def _evaluate_presence_builtin(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
 ) -> JSONValue:
     if len(node.arguments) != 1:
@@ -1917,6 +2002,7 @@ def _evaluate_presence_builtin(
                 argument,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=None,
             )
@@ -1931,7 +2017,7 @@ def _evaluate_presence_builtin(
                 details={"expression": parsed.source, "builtin": node.name},
             )
         return False if node.name == "is_missing" else True
-    missing = _is_reference_missing(argument, parsed=parsed, workflow=workflow, step_results=step_results)
+    missing = _is_reference_missing(argument, parsed=parsed, workflow=workflow, context=context, step_results=step_results)
     return missing if node.name == "is_missing" else not missing
 
 
@@ -1940,6 +2026,7 @@ def _evaluate_read_only_call(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
@@ -1956,6 +2043,7 @@ def _evaluate_read_only_call(
                 argument.value,
                 parsed=parsed,
                 workflow=workflow,
+                context=context,
                 step_results=step_results,
                 observation_session=observation_session,
             ),
@@ -1987,6 +2075,7 @@ def _evaluate_adapter_invocation_result(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> RepresentationAdapterResult:
@@ -1996,6 +2085,7 @@ def _evaluate_adapter_invocation_result(
             binding.value,
             parsed=parsed,
             workflow=workflow,
+            context=context,
             step_results=step_results,
             observation_session=observation_session,
         )
@@ -2025,6 +2115,7 @@ def _evaluate_adapter_invocation(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
@@ -2032,6 +2123,7 @@ def _evaluate_adapter_invocation(
         node,
         parsed=parsed,
         workflow=workflow,
+        context=context,
         step_results=step_results,
         observation_session=observation_session,
     ).value
@@ -2092,6 +2184,7 @@ def _evaluate_filter_argument(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
@@ -2107,9 +2200,14 @@ def _evaluate_filter_argument(
         argument,
         parsed=parsed,
         workflow=workflow,
+        context=context,
         step_results=step_results,
         observation_session=observation_session,
     )
+
+
+def _context_local_expression_context(evaluation_context: dict[str, object]):
+    return evaluation_context.get("context")
 
 
 def _context_step_results(evaluation_context: dict[str, object]) -> dict[str, OperationResult]:
@@ -2149,6 +2247,7 @@ def _apply_eq_filter(
         0,
         parsed=parsed,
         workflow=workflow,
+        context=_context_local_expression_context(evaluation_context),
         step_results=_context_step_results(evaluation_context),
         observation_session=_context_observation_session(evaluation_context),
     )
@@ -2168,6 +2267,7 @@ def _apply_ne_filter(
         0,
         parsed=parsed,
         workflow=workflow,
+        context=_context_local_expression_context(evaluation_context),
         step_results=_context_step_results(evaluation_context),
         observation_session=_context_observation_session(evaluation_context),
     )
@@ -2204,9 +2304,18 @@ def _is_reference_missing(
     *,
     parsed: ParsedValueExpression,
     workflow: Workflow,
+    context,
     step_results: dict[str, OperationResult],
 ) -> bool:
     if isinstance(node, ReferenceNode):
+        from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, resolve_workflow_let_reference_node
+
+        try:
+            expanded = resolve_workflow_let_reference_node(node, workflow, context=context)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            return True
+        if expanded is not None:
+            return _is_reference_missing(expanded, parsed=parsed, workflow=workflow, context=context, step_results=step_results)
         current: JSONValue = workflow.inputs
         parts = node.parts if node.parts[0] == "inputs" else ("inputs", *node.parts[1:])
         for part in parts[1:]:

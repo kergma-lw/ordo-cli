@@ -152,6 +152,75 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["executed_steps"], ["comment"])
 
+    def test_execute_step_condition_can_use_workflow_let_binding(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+let:
+  should_comment: inputs.enabled
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if: should_comment
+        uses: shell.command
+        with:
+          command: printf executed
+"""
+        )
+
+        validation = validate_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+let:
+  should_comment: inputs.enabled
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if: should_comment
+        uses: shell.command
+        with:
+          command: printf executed
+"""
+        )
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(validation.status, RuntimeStatus.OK)
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["comment"])
+
+    def test_execute_guard_can_use_workflow_let_binding(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+let:
+  can_run: inputs.enabled
+blocks:
+  - guards:
+      - can_run
+  - steps:
+      - name: comment
+        uses: shell.command
+        with:
+          command: printf executed
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["comment"])
+
 
 if __name__ == "__main__":
     unittest.main()

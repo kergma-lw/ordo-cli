@@ -382,6 +382,7 @@ def _apply_input_overrides(
         workflow=workflow.workflow,
         inputs=merged_workflow_inputs,
         declared_inputs=workflow.declared_inputs,
+        let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
         states=workflow.states,
@@ -602,6 +603,7 @@ def _prepend_pre_run_workflows(
         workflow=workflow.workflow,
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
+        let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
         states=workflow.states,
@@ -861,6 +863,7 @@ def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Work
         workflow=workflow.workflow,
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
+        let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
         states=resolved_states,
@@ -977,13 +980,14 @@ def _working_directory_activation_workflow(
 
     template = workflow
     if template is None:
-        return Workflow(version=0, workflow="activation", inputs=merged_inputs, state_needs={}, state_bindings={}, states={}, step_results={}, blocks=())
+        return Workflow(version=0, workflow="activation", inputs=merged_inputs, let_bindings={}, state_needs={}, state_bindings={}, states={}, step_results={}, blocks=())
 
     return Workflow(
         version=template.version,
         workflow=template.workflow,
         inputs=merged_inputs,
         declared_inputs=template.declared_inputs,
+        let_bindings=template.let_bindings,
         state_needs=template.state_needs,
         state_bindings=template.state_bindings,
         states=template.states,

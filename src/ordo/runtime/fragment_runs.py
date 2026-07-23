@@ -94,6 +94,7 @@ def materialize_run_workflow(
         workflow=f"{caller_workflow.workflow}::{step.run}",
         inputs=caller_workflow.inputs,
         declared_inputs=caller_workflow.declared_inputs,
+        let_bindings=caller_workflow.let_bindings,
         state_needs=caller_workflow.state_needs,
         state_bindings=step.run_state_bindings or caller_workflow.state_bindings,
         states=step.run_states or caller_workflow.states,

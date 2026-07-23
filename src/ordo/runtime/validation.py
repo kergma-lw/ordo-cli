@@ -753,6 +753,7 @@ def _load_run_target_workflow_for_validation(
         workflow=f"{workflow.workflow}::{step.run}",
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
+        let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
         states=workflow.states,
@@ -1093,7 +1094,7 @@ def _validate_invocation_condition(
             declared_registers=declared_registers,
         )
     )
-    diagnostics.extend(_validate_step_condition_type(parsed.root, path=condition_path, source=source))
+    diagnostics.extend(_validate_step_condition_type(parsed.root, path=condition_path, source=source, let_bindings=let_bindings))
     diagnostics.extend(
         _validate_workflow_let_binding_uses(
             parsed.root,
@@ -1613,8 +1614,8 @@ def _extract_runtime_value_expression(value: str) -> str | None:
     return None
 
 
-def _validate_step_condition_type(node: ValueExpressionNode, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
-    inferred, diagnostics = _infer_value_expression_type(node, path=path, source=source, step_condition_mode=True)
+def _validate_step_condition_type(node: ValueExpressionNode, *, path: tuple[str, ...], source: str, let_bindings: JSONObject) -> list[Diagnostic]:
+    inferred, diagnostics = _infer_value_expression_type(node, path=path, source=source, step_condition_mode=True, let_bindings=let_bindings)
     if inferred not in {"boolean", "unknown"}:
         diagnostics.append(
             _diagnostic(
@@ -1634,6 +1635,7 @@ def _infer_value_expression_type(
     path: tuple[str, ...],
     source: str,
     step_condition_mode: bool = False,
+    let_bindings: JSONObject | None = None,
 ) -> tuple[str, list[Diagnostic]]:
     diagnostics: list[Diagnostic] = []
     if isinstance(node, LiteralNode):
@@ -1647,7 +1649,7 @@ def _infer_value_expression_type(
             return "null", diagnostics
         return "unknown", diagnostics
     if isinstance(node, ReferenceNode):
-        if step_condition_mode and node.parts[0] != "inputs":
+        if step_condition_mode and node.parts[0] != "inputs" and not (isinstance(let_bindings, dict) and node.parts[0] in let_bindings):
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.if_expr.root",
@@ -1668,6 +1670,7 @@ def _infer_value_expression_type(
                     path=path,
                     source=source,
                     step_condition_mode=step_condition_mode,
+                    let_bindings=let_bindings,
                 )
                 diagnostics.extend(argument_diagnostics)
             return "string", diagnostics
@@ -1678,6 +1681,7 @@ def _infer_value_expression_type(
             path=path,
             source=source,
             step_condition_mode=step_condition_mode,
+            let_bindings=let_bindings,
         )
         for filter_node in node.filters:
             current_type, filter_diagnostics = _infer_filter_result_type(filter_node, input_type=current_type, path=path, source=source)
@@ -1689,6 +1693,7 @@ def _infer_value_expression_type(
             path=path,
             source=source,
             step_condition_mode=step_condition_mode,
+            let_bindings=let_bindings,
         )
         diagnostics.extend(operand_diagnostics)
         if operand_type not in {"boolean", "unknown"}:
@@ -1709,12 +1714,14 @@ def _infer_value_expression_type(
             path=path,
             source=source,
             step_condition_mode=step_condition_mode,
+            let_bindings=let_bindings,
         )
         right_type, right_diagnostics = _infer_value_expression_type(
             node.right,
             path=path,
             source=source,
             step_condition_mode=step_condition_mode,
+            let_bindings=let_bindings,
         )
         diagnostics.extend(left_diagnostics)
         diagnostics.extend(right_diagnostics)

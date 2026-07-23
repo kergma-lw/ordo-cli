@@ -352,6 +352,7 @@ def evaluate_parsed_local_expression(
     return evaluate_local_expression_tree(
         parsed.value,
         workflow,
+        context=parsed.context,
         step_results={} if step_results is None else step_results,
         observation_session=observation_session,
     )

@@ -172,6 +172,26 @@ blocks:
         self.assertEqual(result.operation_results[0].status, "ok")
         self.assertEqual(result.operation_results[0].outputs.get("stdout"), "task/7-hello-world")
 
+    def test_resolve_runtime_value_supports_workflow_let_binding(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  type: feat
+  issue_number: 7
+let:
+  branch: format("{}/{}", inputs.type, inputs.issue_number)
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        value = resolve_runtime_value("${branch}", workflow)
+
+        self.assertEqual(value, "feat/7")
+
     def test_execute_resolves_registered_step_output_in_later_step_input(self) -> None:
         workflow = load_workflow_text(
             """
