@@ -391,12 +391,14 @@ def execute_workflow(
                             checked_guards=checked_guards,
                             guard_details=guard_details,
                             block_items=block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                            extra={"fan_out_failure": {"step": step.name, "phase": "before_expansion"}},
                         ),
                         operation_results=tuple(operation_results),
                         failed_step=step.name,
                     )
 
                 run_results = []
+                failed_item_index = None
                 for item_index, item in enumerate(fan_out_items):
                     materialized = materialize_run_workflow(
                         step,
@@ -440,6 +442,7 @@ def execute_workflow(
                     guard_details.extend([detail for detail in run_result.outputs.get("guard_details", []) if isinstance(detail, dict)])
                     published_results.extend(list(run_result.published))
                     if run_result.status is not RuntimeStatus.OK:
+                        failed_item_index = item_index
                         break
 
                 executed_steps.append(step.name)
@@ -484,6 +487,15 @@ def execute_workflow(
                             checked_guards=checked_guards,
                             guard_details=guard_details,
                             block_items=block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                            extra={
+                                "fan_out_failure": {
+                                    "step": step.name,
+                                    "item_index": failed_item_index,
+                                    "item_count": len(fan_out_items),
+                                }
+                                if step.for_each is not None
+                                else None,
+                            },
                         ),
                         operation_results=tuple(operation_results),
                         failed_guard=run_result.failed_guard,

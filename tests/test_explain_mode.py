@@ -219,6 +219,34 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["reason_category"], "execution")
         self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_not_found")
 
+    def test_explain_surfaces_runtime_only_fan_out_in_incomplete_mode(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            steps=(
+                Step(name="load-items", operation=OperationRef("gh.issue"), register="items"),
+                Step(name="inspect", run="fragment.yml", for_each="${step.items.outputs.items}", register="runs"),
+            ),
+        )
+
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["explanation"]["category"], "ok")
+        self.assertEqual(result.outputs["explanation"]["fan_out_items"][0]["fan_out"]["source_status"], "runtime_only")
+
+    def test_explain_surfaces_fan_out_failure_details(self) -> None:
+        execution_result = RuntimeResult(
+            mode="execute",  # type: ignore[arg-type]
+            status=RuntimeStatus.EXECUTION_ERROR,
+            failed_step="nested-result",
+            outputs={"fan_out_failure": {"step": "expand", "item_index": 1, "item_count": 2}},
+        )
+
+        result = explain_runtime_result(execution_result)
+
+        self.assertEqual(result.outputs["explanation"]["fan_out_failure"]["item_index"], 1)
+        self.assertEqual(result.outputs["explanation"]["why"], "Execution started but a fan-out item failed")
+
 
 if __name__ == "__main__":
     unittest.main()

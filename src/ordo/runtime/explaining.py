@@ -127,16 +127,19 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
 
     if result.status is RuntimeStatus.EXECUTION_ERROR:
         step_condition_details = [detail for detail in result.outputs.get("step_condition_details", []) if isinstance(detail, dict)]
+        fan_out_failure = result.outputs.get("fan_out_failure") if isinstance(result.outputs.get("fan_out_failure"), dict) else None
         return {
             "category": "execution",
             "allowed": False,
-            "why": "Execution started but a step failed",
+            "why": "Execution started but a fan-out item failed" if fan_out_failure is not None else "Execution started but a step failed",
             "blockers": [result.failed_step] if result.failed_step is not None else [],
             "step_condition_details": step_condition_details,
+            "fan_out_failure": fan_out_failure,
         }
 
     if allowed_state == "unknown" or not analysis_complete:
         preflight_halts = [item for item in result.outputs.get("preflight_halts", []) if isinstance(item, dict)]
+        fan_out_items = [item for item in result.outputs.get("run_items", []) if isinstance(item, dict) and isinstance(item.get("fan_out"), dict)]
         return {
             "category": "incomplete",
             "allowed": False,
@@ -144,6 +147,7 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
             "blockers": [],
             "incomplete_reasons": incomplete_reasons,
             "preflight_halts": preflight_halts,
+            "fan_out_items": fan_out_items,
         }
 
     return {
@@ -151,6 +155,7 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         "allowed": allowed_state == "allowed" if isinstance(allowed_state, str) else bool(result.outputs.get("can_execute", True)),
         "why": "No known blocker prevents execution now",
         "blockers": [],
+        "fan_out_items": [item for item in result.outputs.get("run_items", []) if isinstance(item, dict) and isinstance(item.get("fan_out"), dict)],
     }
 
 

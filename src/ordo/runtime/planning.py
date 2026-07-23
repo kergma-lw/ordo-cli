@@ -92,6 +92,18 @@ def _fan_out_info_for_step(step, workflow: Workflow, *, condition_status: str | 
     }
 
 
+def _fan_out_summary(fan_out: dict[str, object] | None) -> str | None:
+    if not isinstance(fan_out, dict) or not fan_out.get("enabled"):
+        return None
+    source_status = fan_out.get("source_status")
+    item_count = fan_out.get("item_count")
+    if source_status == "static_known" and isinstance(item_count, int):
+        return f"fan-out over {item_count} item(s)"
+    if source_status == "skipped_whole_step":
+        return "fan-out skipped with the whole step"
+    return "fan-out cardinality is runtime-only"
+
+
 def _reuse_policy_for_step_item(item: dict[str, object], weakened_scopes: set[str]) -> str:
     classification = item.get("preflight_classification")
     if classification == "read_only_analyzable":
@@ -431,6 +443,7 @@ def _build_step_items(
                         "fan_out": _fan_out_info_for_step(step, workflow, condition_status=condition_status),
                     }
                 )
+                step_items[-1]["fan_out_summary"] = _fan_out_summary(step_items[-1]["fan_out"])
                 continue
             classification = _effective_preflight_classification(step, resolved_step, block_item=block_item)
             step_items.append(
@@ -549,6 +562,7 @@ def _build_run_items(
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
                 "fan_out": _fan_out_info_for_step(step, workflow, condition_status=None),
+                "fan_out_summary": _fan_out_summary(_fan_out_info_for_step(step, workflow, condition_status=None)),
             }
         )
         blocked = True

@@ -437,6 +437,19 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(fan_out["source_status"], "runtime_only")
         self.assertIsNone(fan_out["item_count"])
 
+    def test_plan_surfaces_reader_friendly_fan_out_summary(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": ["one", "two"]},
+            steps=(Step(name="inspect", run="fragment.yml", for_each="${inputs.items}", register="runs"),),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["step_items"][0]["fan_out_summary"], "fan-out over 2 item(s)")
+        self.assertEqual(result.outputs["run_items"][0]["fan_out_summary"], "fan-out over 2 item(s)")
+
     def test_plan_preserves_preflight_interpretation_details(self) -> None:
         workflow = Workflow(
             version=0,

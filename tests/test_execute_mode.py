@@ -298,13 +298,13 @@ class ExecuteModeTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "nested.yml"
             fragment.write_text(
-                "args:\n  item: object\nversion: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item.summary}\n",
+                "args:\n  item: string\nversion: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-command\n        uses: shell.command\n        with:\n          command: ${args.item}\n",
                 encoding="utf-8",
             )
             workflow = Workflow(
                 version=0,
                 workflow="publish",
-                inputs={"items": [{"summary": "one"}, {}]},
+                inputs={"items": ["ok", "boom"]},
                 blocks=(
                     StepBlock(
                         steps=(
@@ -314,10 +314,16 @@ class ExecuteModeTest(unittest.TestCase):
                 ),
             )
 
-            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+            def executor(resolved_step, _workflow):
+                if getattr(resolved_step, "declared_with", {}).get("command") == "boom":
+                    return OperationResult(status="execution_error", summary="boom")
+                return OperationResult(status="ok", summary="ok")
+
+            result = execute_workflow(workflow, step_executor=executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
             self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
-            self.assertEqual(result.failed_step, "nested-result")
+            self.assertEqual(result.failed_step, "nested-command")
+            self.assertEqual(result.outputs["fan_out_failure"]["item_index"], 1)
 
     def test_execute_branch_classifiers_isolate_legacy_shaped_paths(self) -> None:
         probe = ResolvedOperation(reference="gh.issue", connector_namespace="gh", operation=OperationContract(name="issue", kind="probe"), source="public")
