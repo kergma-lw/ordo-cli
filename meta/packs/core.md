@@ -219,8 +219,6 @@
 - A read invocation must not create missing structure.
 - A read invocation must not persist change.
 - A read invocation result is the selected or derived value produced by the adapter family.
-- When a product-owned presence-check helper explicitly admits read-only adapter invocation as an argument form, successful read invocation may be interpreted by that helper as presence and adapter `not_found` may be interpreted by that helper as absence.
-- Such helper semantics must not change the ordinary standalone read-invocation rule that adapter `not_found` is an adapter failure outcome rather than an implicit null-like value.
 
 ## Write invocation contract
 
@@ -273,7 +271,6 @@
 - A read path ends in value selection or value derivation.
 - A write path ends in a terminal mutation and returns an updated root value.
 - Adapter-specific middle syntax may vary, but adapter families should not blur the boundary between read-only navigation and root-transforming update.
-- Any product-owned presence-check helper that admits adapter invocation must admit read paths only and must reject write paths explicitly rather than evaluating them for boolean presence.
 
 ## Shared auto-creation boundary
 
@@ -323,7 +320,7 @@
 - Embedded value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Embedded value contexts must remain free of connector invocation semantics.
 - Embedded value contexts must remain free of hidden workflow-control semantics.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
 
 ## Guard context
 
@@ -344,16 +341,13 @@
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native bare `if` conditions are the preferred step-condition surface.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
 
 ## Presence-check argument boundary
 
-- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined and read-only representation-adapter invocations whose absence semantics are contractually tied to adapter `not_found`.
+- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined.
 - Allowed argument forms should be listed explicitly rather than inferred from broad expression permissiveness.
 - Arbitrary computed expressions, built-in calls, pipelines, boolean compositions, probe calls, and literals must not be treated as valid presence-check arguments.
-- A read-only representation-adapter invocation used as a presence-check argument should evaluate to presence success when the invocation succeeds and to absence when it fails specifically with adapter `not_found`.
-- Other adapter failures such as `ambiguous`, `invalid_path`, `invalid_root_value`, or `invalid_action` must remain ordinary failures rather than being collapsed into boolean absence.
-- A write-path representation-adapter invocation must not be accepted as a presence-check argument.
 - Presence checks must preserve the distinction between an explicit `null` value and a missing lookup when the surrounding contract distinguishes them.
 
 ## Include-binding context
@@ -398,10 +392,8 @@
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
 - The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
 - Positional disambiguation uses `[n]`.
-- After one singular list or task-list target has been selected, positional indexing with `[n]` may address one top-level list item within that selected block.
 - Explicit structural selection may use adapter-defined forms such as `.blocks("kind")`.
 - The adapter may provide common structural shortcuts such as `.list`, `.task_list`, or `.paragraph` as convenience sugar over the explicit structural form.
-- The adapter may also provide explicit collection-view shortcuts such as `.list_items` or `.task_list_items` when the product needs one array-valued projection distinct from the richer block view.
 - The adapter may provide text-search helpers such as `.find("...")` when the product needs them.
 
 ## Outer parameter binding
@@ -457,6 +449,91 @@
 
 - The explicit form defines canonical markdown-family semantics within the shared adapter seam.
 - Any shorter GitHub-friendly forms should remain convenience syntax layered over the explicit form rather than separate semantics.
+
+<!-- source: requirements/local-expressions/text.md -->
+
+# Text representation-adapter requirements
+
+## Role
+
+- The `text` representation adapter is a product-defined local-expression surface for interpreting and transforming already available plain-text string values.
+- This document defines text-family behavior within the shared representation-adapter invocation seam described in `requirements/local-expressions/adapters.md`.
+- The text family should remain narrow and predictable rather than becoming a general grep, regex, or stream-editing language.
+
+## Compatibility target
+
+- The adapter should target stable plain-text semantics over ordinary newline-delimited strings.
+- The adapter should not claim richer document structure such as markdown sections or universal paragraphs.
+- The adapter should prefer literal authored behavior over heuristic tokenization, linguistic inference, or dialect-specific parsing.
+
+## Authored path surface
+
+- Text path syntax belongs to the text adapter contract rather than to the shared local-expression core.
+- The shared adapter seam should identify the text family and the extent of the text-owned body, while text-family parsing owns the interior text-specific selector and action syntax.
+- Optional host-derived parameterization should live outside the text-owned body through the shared adapter binding surface rather than through host references embedded directly inside text-family grammar.
+- The family should expose `.lines` for line-oriented projection.
+- The family should expose `.find("...")` for singular literal substring selection.
+- The family should expose `.finds("...")` for plural literal substring selection.
+- The family should expose `before("...")` and `after("...")` as singular anchor-based narrowing selectors.
+- Positional disambiguation uses `[n]`.
+
+## Search and anchor semantics
+
+- `find`, `finds`, `before`, and `after` should use literal substring matching only.
+- The family should not infer token, word-boundary, case-insensitive, or regex semantics unless such behavior is introduced later as separate explicit surface.
+- A literal authored to `before("...")` or `after("...")` therefore matches ordinary substring occurrences even when they appear inside larger words.
+- `find("...")` must require exactly one match.
+- `before("...")` and `after("...")` must require exactly one anchor occurrence within the current singular text scope.
+- `.finds("...")` should return matches in source order.
+- `.finds("...")` should model non-overlapping matches.
+
+## Collection surface
+
+- `.lines` should return an ordered collection of line focuses.
+- `.finds("...")` should return an ordered collection of match focuses.
+- `.lines` applied to the empty string must return an empty collection.
+- `[n]` applied to a collection should select one singular member by zero-based index.
+- `[n]` with an out-of-range index must fail as `not_found`.
+
+## Singular-versus-collection boundary
+
+- Singular text scopes may support further text selectors such as `.lines`, `.find`, `.finds`, `before`, and `after`, plus terminal text actions.
+- A selected line focus is a singular text scope.
+- A singular match focus is a singular text scope.
+- Collection-valued focuses should not support further narrowing or search selectors directly.
+- Collection-valued focuses may support terminal bulk mutation when that mutation can be applied independently across ordered non-overlapping members.
+
+## Selection semantics
+
+- The shared read-versus-write boundary and shared adapter outcome vocabulary come from `requirements/local-expressions/adapters.md`.
+- Read paths must never create structure.
+- `find("...")`, `before("...")`, and `after("...")` must fail as `not_found` when no match exists in the current singular text scope.
+- `find("...")`, `before("...")`, and `after("...")` must fail as `ambiguous` when more than one match exists in the current singular text scope.
+- `.finds("...")` should return an empty collection rather than fail when no matches exist.
+- The adapter must not silently apply implicit first-match or last-match selection.
+
+## Terminal action surface
+
+- A trailing `->action(...)` form may denote a terminal mutation over the selected text focus or over one eligible collection focus.
+- A terminal text mutation is one text-family instance of the shared adapter write-invocation rule that returns the updated root value.
+- Action names should remain author-comprehensible rather than exposing parser internals.
+- The text family should expose a small orthogonal text-action surface consisting of `append(text)`, `replace(text)`, and `remove()`.
+- Text action arguments should be plain text rather than structured payloads.
+- `remove()` should be equivalent in effect to replacing the selected focus with the empty string.
+
+## Bulk mutation discipline
+
+- Bulk mutation over a collection focus is allowed only when the targeted members are ordered and non-overlapping.
+- Bulk mutation over a line collection should apply independently to each selected line focus in source order.
+- Bulk mutation over a match collection should apply independently to each selected match focus in source order.
+- Bulk mutation over an empty collection should succeed as a no-op and return the unchanged root value.
+- The family must not imply hidden map, filter, flatten, or regroup semantics for non-terminal collection selectors.
+
+## Product-shape guidance
+
+- The family should remain a narrow plain-text adapter rather than a full document-structure adapter.
+- The family should prefer stable literal scope narrowing and explicit collection handling over heuristic or implicit semantics.
+- If richer text structure or richer search modes are needed later, they should be introduced as explicit new surface rather than silently overloaded into the MVP text contract.
 
 <!-- source: requirements/playbook/core.md -->
 
@@ -1788,21 +1865,6 @@ A derived value is a value produced from already available local-expression inpu
 
 Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
 
-### Presence check
-
-A presence check is one product-defined boolean helper that asks whether one approved lookup-like argument is observably available without collapsing unrelated evaluation failures into boolean absence.
-
-The narrow modeled argument classes are:
-
-- lookup-style references whose missingness semantics are defined by the surrounding root contract;
-- read-only representation-adapter invocations whose absence semantics are defined by adapter `not_found`.
-
-For read-only adapter invocation arguments, the modeled interpretation is:
-
-- successful invocation means present;
-- adapter `not_found` means missing;
-- any other adapter failure remains a real evaluation failure.
-
 ### Representation adapter
 
 A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
@@ -2005,17 +2067,6 @@ At minimum the model expects support for:
 
 The model also distinguishes host-side failures that occur while resolving the outer binding surface from adapter-side failures that occur after resolved parameter values have been supplied to the adapter family.
 
-### Presence-oriented reuse of read invocation
-
-The model allows one product-owned presence-check helper to reuse read-only adapter invocation as a special argument class without changing ordinary adapter outcome semantics.
-
-In that reuse:
-
-- successful read invocation is interpreted by the presence helper as present;
-- adapter `not_found` is interpreted by the presence helper as missing;
-- adapter outcomes other than `not_found` continue to fail evaluation;
-- write invocation is outside the allowed presence-check argument class.
-
 ## Read-versus-write model
 
 The model distinguishes two invocation kinds.
@@ -2090,10 +2141,6 @@ Further selector steps or terminal action semantics may refine how the selected 
 
 The family may expose block-oriented targets such as paragraphs and lists inside a section or prelude scope.
 
-After one singular list or task-list block has been selected, the model may allow positional indexing to address one top-level list item within that selected block.
-
-The family may also expose a separate collection-view projection for list-like blocks, for example `.list_items` or `.task_list_items`, when the product wants an array-valued view distinct from the richer block object.
-
 ## Text-action model
 
 The markdown family should prefer a small orthogonal text-action surface over many special-case action verbs.
@@ -2121,6 +2168,96 @@ Markdown action arguments are modeled as plain text.
 The family should not require object-valued public action payloads merely to support large or structurally rich markdown text.
 
 The family may still use its own internal parsing or normalization as an implementation detail when editing the root markdown string, but that does not change the modeled public action argument shape.
+
+<!-- source: model/local-expressions/text.md -->
+
+# Text representation-adapter model
+
+## Position
+
+The `text` adapter family models one plain-text representation surface over a string root value.
+
+It keeps authored selection and action syntax family-specific while relying on the shared representation-adapter seam for outer ` with{...}` binding, read-versus-write distinction, and shared outcome categories.
+
+## Core modeled targets
+
+### Root text
+
+The text root value is one whole plain-text string.
+
+### Text scope
+
+A text scope is one singular text slice that may serve as the current surface for further narrowing, searching, projection, or terminal mutation.
+
+The root text is a text scope.
+Derived singular text slices such as the result of `before("...")`, `after("...")`, or a singular substring match are also text scopes.
+
+### Line collection
+
+The family may project one text scope into an ordered collection of line focuses through `.lines`.
+
+The line collection is modeled as a collection view rather than as a second root.
+It exists so authored expressions can inspect or mutate line-oriented targets without claiming richer document semantics such as paragraphs or sections.
+
+### Line focus
+
+One indexed line selected from a line collection is a singular text scope.
+
+That means a selected line may participate in further singular text operations such as search, narrowing, or terminal mutation.
+
+### Match collection
+
+The family may project one text scope into an ordered collection of literal substring matches through `.finds("...")`.
+
+The match collection models zero or more non-overlapping matches in source order.
+
+### Match focus
+
+The family may expose one singular substring match either directly through `.find("...")` or by indexing into a match collection.
+
+A singular match focus is a text scope.
+That means search narrowing may continue after one singular match has been selected.
+
+## Anchor narrowing model
+
+The family may expose singular anchor-narrowing selectors such as `before("...")` and `after("...")`.
+
+Those selectors consume one singular text scope and yield one further singular text scope bounded around one unique literal anchor occurrence.
+
+## Collection boundary model
+
+Collections remain ordered views over multiple focuses.
+
+The model permits:
+
+- indexing into a collection to recover one singular focus;
+- terminal bulk mutation over a collection when the targeted members are ordered and non-overlapping.
+
+The model does not require collection-valued focuses to support further narrowing or search selectors directly.
+
+## Search model
+
+The text family models literal substring search rather than token-aware search, regex search, or rich linguistic structure.
+
+That means authored literals match ordinary substring occurrences even when they appear inside larger words or tokens.
+
+## Text-action model
+
+The family may expose a small text-action surface over singular focuses and selected collection views.
+
+The primary modeled actions are:
+
+- `append(text)`;
+- `replace(text)`;
+- `remove()`.
+
+Those actions consume plain text arguments rather than structured payloads.
+
+## Empty-line projection model
+
+Projecting `.lines` from the empty string yields an empty collection.
+
+The family therefore treats empty text as having zero projected line focuses rather than one synthetic empty line focus.
 
 <!-- source: model/local-expressions/contexts.md -->
 

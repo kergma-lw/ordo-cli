@@ -30,8 +30,8 @@
       "verified": true
     },
     {
-      "name": "open-task-from-gitx",
-      "path": "examples/open-task-from-gitx.yaml",
+      "name": "set-active-task-from-gitx",
+      "path": "examples/set-active-task-from-gitx.yaml",
       "related_topics": [
         "capabilities",
         "model",
@@ -99,6 +99,21 @@
         "playbook_pre_run",
         "runtime_profile_switch",
         "shared_preparation_stage"
+      ],
+      "verified": true
+    },
+    {
+      "name": "text-adapter",
+      "path": "examples/text-adapter.yaml",
+      "related_topics": [
+        "capabilities",
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "text_adapter_line_projection",
+        "text_adapter_literal_search",
+        "text_adapter_bulk_mutation"
       ],
       "verified": true
     }

@@ -102,6 +102,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
             "workflow.local_expression.adapter_seam",
             "workflow.local_expression.adapter_binding",
             "workflow.local_expression.adapter.markdown",
+            "workflow.local_expression.adapter.text",
         ),
     ),
     CapabilitySpec(
@@ -240,11 +241,11 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
     NegativeRuleSpec(
         name="workflow_step.register_requires_uses",
         surface="workflow_step",
-        rule="The register field is allowed only together with uses or value",
-        reason="the MVP publishes registered step results only for operation-call steps and pure value steps",
+        rule="The register field is allowed only together with uses, run, or value",
+        reason="the MVP publishes registered step results only for operation-call steps, reusable run invocations, and pure value steps",
         related_codes=("validation.workflow.step.register_without_uses",),
-        related_capabilities=("workflow.step.register", "workflow.step.value"),
-        related_model_nodes=("workflow.step.register", "workflow.step.uses", "workflow.step.value", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
+        related_capabilities=("workflow.step.register", "workflow.step.value", "workflow.step.run"),
+        related_model_nodes=("workflow.step.register", "workflow.step.uses", "workflow.step.run", "workflow.step.value", "workflow.step_forms.operation_call", "workflow.step_forms.run_invocation", "workflow.step_forms.value"),
     ),
     NegativeRuleSpec(
         name="workflow_step.if_conflicts_with_register",

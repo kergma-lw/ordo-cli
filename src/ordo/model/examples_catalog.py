@@ -23,8 +23,8 @@ EXAMPLES_CATALOG: JSONObject = {
             "related_topics": ["capabilities", "model", "operations"],
         },
         {
-            "name": "open-task-from-gitx",
-            "path": "examples/open-task-from-gitx.yaml",
+            "name": "set-active-task-from-gitx",
+            "path": "examples/set-active-task-from-gitx.yaml",
             "shows": ["multi_step_workflow", "state_updates", "shell_fallback"],
             "related_topics": ["capabilities", "model", "operations"],
         },
@@ -51,6 +51,12 @@ EXAMPLES_CATALOG: JSONObject = {
             "path": "examples/playbook-pre-run.yaml",
             "shows": ["playbook_pre_run", "runtime_profile_switch", "shared_preparation_stage"],
             "related_topics": ["model", "examples", "operations"],
+        },
+        {
+            "name": "text-adapter",
+            "path": "examples/text-adapter.yaml",
+            "shows": ["text_adapter_line_projection", "text_adapter_literal_search", "text_adapter_bulk_mutation"],
+            "related_topics": ["capabilities", "model", "examples"],
         },
     ],
 }
