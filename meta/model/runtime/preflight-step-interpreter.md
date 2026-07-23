@@ -44,6 +44,7 @@ Allowed step kinds and capabilities:
 - `register` materialization;
 - `if` evaluation when all dependencies are already known;
 - nested `run` expansion when the callee remains preflight-analyzable;
+- future bounded `run` fan-out when the array source, whole-step eligibility, and callee analyzability remain preflight-computable;
 - deterministic runtime context shaping already allowed by `check` semantics.
 
 Disallowed step kinds and capabilities:
@@ -54,6 +55,7 @@ Disallowed step kinds and capabilities:
 - any step whose inputs depend on unknown values;
 - any branch whose condition truth value is not yet known;
 - any nested run that requires effectful execution or unknown step-local data.
+- any bounded `run` fan-out whose source cardinality or callee analyzability cannot be established well enough for the current preflight phase.
 
 ## PREFLIGHT-STEP-001 — Step interpretation remains strictly non-effectful
 
@@ -210,6 +212,15 @@ Each interpreted step item should expose at least:
 - Nested results should preserve origin boundaries such as caller step and callee workflow.
 - Callee-derived knowledge may flow back to the caller only through structured preflight outputs.
 - Nested effectful or unanalyzable regions must stop analysis conservatively rather than silently flattening into success.
+
+## Planned composition with bounded `for_each`
+
+If `run` later gains bounded `for_each`, the preflight surface should preserve one explicit fan-out run node with its own cardinality and eligibility annotations rather than pretending the repeated calls never existed.
+
+- Whole-step `if` still applies to the fan-out step as one unit.
+- Preflight may record exact item count when the array source is statically known.
+- When the array source is not statically known, preflight should record runtime-only cardinality rather than inventing a guessed count.
+- Lexical nested fan-out in one authoring surface should remain invalid and therefore does not require a nested fan-out tree shape.
 
 ## Determinism and conservatism
 

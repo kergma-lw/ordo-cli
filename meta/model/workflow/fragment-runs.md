@@ -56,6 +56,22 @@ Within a future `run` call:
 
 This preserves an explicit invocation boundary instead of treating caller-local runtime data as if it were authored directly inside the fragment body.
 
+## Workflow-local results and caller registration
+
+A `run` call may legitimately expose the callee workflow-local `results` list back to the caller through caller-side `register`.
+
+- The registered caller-visible payload should reflect workflow-local return values of the just-completed callee run.
+- It must not expose the enclosing run session's global `published` stream as if that were one callee-local return value.
+
+## Planned bounded fan-out
+
+If `run` later grows a bounded `for_each` modifier, that modifier belongs to the invocation surface rather than to a generic control-flow language.
+
+- `for_each` should consume one array-valued source.
+- Caller-side `if` still applies to the whole declared step rather than to each item independently.
+- Lexical nesting of `for_each` inside another `for_each` in one authoring surface should stay invalid.
+- If `register` is also present, the caller-visible payload should preserve one array of per-run workflow-local result payloads rather than flattening them.
+
 ## Relationship to `include`
 
 - `include` remains the static-composition primitive;

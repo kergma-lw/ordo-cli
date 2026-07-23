@@ -34,6 +34,7 @@
 - A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.
 - A `Step` may declare an `if` condition that controls whether that one declared step executes or is skipped.
 - A `Step` may publish an execution-local registered result for later steps through a workflow-local `register` identifier.
+- A `run` step may expose callee workflow-local `results` back to caller-local `step...` reads through that same `register` surface.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
 - A `Profile` supplies reusable parameters or composition defaults.
 - An `Override` changes resolution explicitly, never silently.
@@ -50,6 +51,7 @@
 - Step conditions express per-step eligibility, not first-class branch topology.
 - Built-in runtime step forms may be effectful, such as state mutation, or pure, such as value materialization.
 - Registered step results express execution-local data flow, not persistent workflow state.
+- Workflow-local `result` values and run-session-global `publish` values are distinct result channels with different scopes.
 - Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
 - Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
 - A future fragment-run boundary should keep caller-local `step...` data explicit at the call site rather than treating it as implicit fragment-body scope.

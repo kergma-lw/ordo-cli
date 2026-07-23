@@ -167,15 +167,17 @@ Workflow input declarations may also carry one optional `hint` string for invoca
 
 ## Successful run results
 
-Successful `ordo-playbook run <workflow>` output is expected to surface the accumulated workflow-authored `results` list.
+Successful `ordo-playbook run <workflow>` output is expected to surface the requested workflow's accumulated authored `results` list.
 
-Those values come from executed workflow `result` steps in execution order.
+Those values come from executed workflow `result` steps in execution order for that one workflow run.
+
+Executed workflow `publish` steps contribute separately to one global `published` list for the enclosing run session.
 
 If no explicit `result` step publishes anything, the top-level successful run may emit one synthetic fallback result instead.
 
 That fallback applies only to the requested top-level workflow run, not to internal include, `pre_run`, or nested `run` boundaries.
 
-The runtime should not inject extra metadata into authored result values in the initial model.
+The runtime should not inject extra metadata into authored `results` or `published` values in the initial model.
 
 ## Resolution notes
 

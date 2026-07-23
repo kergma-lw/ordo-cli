@@ -219,6 +219,8 @@
 - A read invocation must not create missing structure.
 - A read invocation must not persist change.
 - A read invocation result is the selected or derived value produced by the adapter family.
+- When a product-owned presence-check helper explicitly admits read-only adapter invocation as an argument form, successful read invocation may be interpreted by that helper as presence and adapter `not_found` may be interpreted by that helper as absence.
+- Such helper semantics must not change the ordinary standalone read-invocation rule that adapter `not_found` is an adapter failure outcome rather than an implicit null-like value.
 
 ## Write invocation contract
 
@@ -271,6 +273,7 @@
 - A read path ends in value selection or value derivation.
 - A write path ends in a terminal mutation and returns an updated root value.
 - Adapter-specific middle syntax may vary, but adapter families should not blur the boundary between read-only navigation and root-transforming update.
+- Any product-owned presence-check helper that admits adapter invocation must admit read paths only and must reject write paths explicitly rather than evaluating them for boolean presence.
 
 ## Shared auto-creation boundary
 
@@ -320,7 +323,7 @@
 - Embedded value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Embedded value contexts must remain free of connector invocation semantics.
 - Embedded value contexts must remain free of hidden workflow-control semantics.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 
 ## Guard context
 
@@ -341,13 +344,16 @@
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native bare `if` conditions are the preferred step-condition surface.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 
 ## Presence-check argument boundary
 
-- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined.
+- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined and read-only representation-adapter invocations whose absence semantics are contractually tied to adapter `not_found`.
 - Allowed argument forms should be listed explicitly rather than inferred from broad expression permissiveness.
 - Arbitrary computed expressions, built-in calls, pipelines, boolean compositions, probe calls, and literals must not be treated as valid presence-check arguments.
+- A read-only representation-adapter invocation used as a presence-check argument should evaluate to presence success when the invocation succeeds and to absence when it fails specifically with adapter `not_found`.
+- Other adapter failures such as `ambiguous`, `invalid_path`, `invalid_root_value`, or `invalid_action` must remain ordinary failures rather than being collapsed into boolean absence.
+- A write-path representation-adapter invocation must not be accepted as a presence-check argument.
 - Presence checks must preserve the distinction between an explicit `null` value and a missing lookup when the surrounding contract distinguishes them.
 
 ## Include-binding context
@@ -392,8 +398,10 @@
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
 - The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
 - Positional disambiguation uses `[n]`.
+- After one singular list or task-list target has been selected, positional indexing with `[n]` may address one top-level list item within that selected block.
 - Explicit structural selection may use adapter-defined forms such as `.blocks("kind")`.
 - The adapter may provide common structural shortcuts such as `.list`, `.task_list`, or `.paragraph` as convenience sugar over the explicit structural form.
+- The adapter may also provide explicit collection-view shortcuts such as `.list_items` or `.task_list_items` when the product needs one array-valued projection distinct from the richer block view.
 - The adapter may provide text-search helpers such as `.find("...")` when the product needs them.
 
 ## Outer parameter binding
@@ -520,8 +528,15 @@
 - If the product later introduces both `include` and `run`, the distinction must remain brief enough for humans and agents to predict from contract docs and examples.
 - All user-facing activation inputs must be declared in the root workflow `inputs` contract even when they are consumed only inside included fragments or reusable run targets.
 - Validation after workflow assembly must reject any `inputs.<name>` reference that does not resolve to a root-declared workflow input.
-- A successful workflow run may publish one or more authored result values through existing `result` steps without changing the `result` step syntax.
-- Published result values must accumulate in execution order rather than replacing prior published results.
+- A successful workflow run may accumulate one or more authored workflow-local return values through explicit `result` steps.
+- Workflow-local result values must accumulate in execution order rather than replacing prior result values for that workflow run.
+- A successful workflow run may also publish one or more authored global output values through explicit `publish` steps.
+- Published global output values must accumulate in execution order across the enclosing run session rather than replacing prior published values.
+- A `run` step may declare `register` when the product chooses to expose the just-completed callee workflow-local `results` list back to the caller.
+- If the product later introduces `for_each` on `run`, that surface must be bounded to array-valued sources rather than to adapter-specific iterable protocols.
+- If `run` later supports `for_each`, the step-level `if` condition must still apply to the whole declared step rather than becoming one per-item filter surface.
+- If `run` later supports `for_each`, lexical nesting of `for_each` inside another `for_each` in the same authoring surface must remain invalid.
+- If `run` later supports both `for_each` and `register`, the registered value should preserve one array of per-run workflow-local result payloads rather than flattening all returned values into one undifferentiated list.
 - If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
 - Workflow input declarations may carry one optional author-provided `hint` string for invocation guidance.
 - Input `hint` is guidance only, not a validation rule or runtime-inferred contract fact.
@@ -578,6 +593,8 @@
 - When a step `if` condition cannot be evaluated, the runtime must fail execution rather than silently treating the condition as `false`.
 - `explain` output should include useful next actions when the runtime can infer them safely.
 - The explanation surface must remain stable enough for agent tooling to rely on status codes and categories.
+- If the product later adds bounded `for_each` on `run`, `check`, `plan`, and `explain` must preserve statically knowable fan-out facts such as whole-step eligibility, exact cardinality when knowable, and explicit unknown-cardinality state when not knowable before execution.
+- If bounded `for_each` is later added on `run`, the runtime must preserve the difference between a fan-out step blocked before expansion, a fan-out step statically expanded with known item count, and a fan-out step whose item count remains runtime-only.
 
 <!-- source: requirements/runtime/introspection.md -->
 
@@ -1314,8 +1331,10 @@ but they are not the place where non-trivial transformation algorithms should be
 - compact parameters;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
-- explicit authored result publication through existing `result` steps.
+- explicit authored workflow-local returns through `result` steps.
+- explicit authored global publication through `publish` steps.
 - optional author-provided invocation hints on input declarations.
+- future bounded fan-out on `run` when it remains one workflow-composition surface rather than a general looping language.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
@@ -1369,7 +1388,7 @@ The public activation-input contract must stay readable from the root workflow.
 - Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
 - Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
 - Input-level `hint` text may help humans and agents choose values, but it remains guidance rather than a validation constraint.
-- If later authoring surfaces add explicit presence-check helpers, they should stay narrowly scoped to lookup-style references whose missingness semantics are contractually meaningful.
+- If later authoring surfaces add explicit presence-check helpers, they should stay narrowly scoped to lookup-style references and read-only representation-adapter invocations whose missingness semantics are contractually meaningful.
 
 ## What is undesirable
 
@@ -1378,6 +1397,7 @@ The public activation-input contract must stay readable from the root workflow.
 - project-specific knowledge baked into a generic workflow;
 - hidden side effects.
 - algorithmic transformation logic that belongs in connector operation code.
+- lexical nested fan-out surfaces that turn one workflow file into a control-flow mini-language.
 
 ## Workflow quality
 
@@ -1389,14 +1409,25 @@ A good workflow:
 - can be moved across projects while preserving contracts.
 - can be authored and iteratively repaired by a sufficiently capable agent using contract docs, examples, and structured diagnostics.
 
-## Result publication
+## Workflow-local returns and global publication
 
-Workflow-owned result publication belongs to the workflow domain.
+Workflow-owned local return values and workflow-authored global publication both belong to the workflow domain, but they serve different scopes.
 
-- Existing `result` step syntax remains unchanged.
-- Each executed `result` step appends one authored value to the runtime results list.
-- Published results accumulate in execution order rather than replacing prior published results.
-- Published result values are stored as authored values only, without added runtime metadata.
+- `result` is the workflow-owned step form for authored workflow-local return values.
+- Each executed `result` step appends one authored value to the current workflow run's local `results` list.
+- `publish` is the workflow-owned step form for authored global publication.
+- Each executed `publish` step appends one authored value to the enclosing run session's global `published` list.
+- Registering one `run` step should expose the just-completed workflow-local `results` list rather than the global `published` stream.
+- Authored `result` and `publish` values are stored as authored values only, without added runtime metadata.
+
+## Planned bounded fan-out on `run`
+
+If the product later adds `for_each` on `run`, it should remain a bounded workflow-composition surface rather than a general looping language.
+
+- The source should be one array-valued expression.
+- The step-level `if` condition should still govern the whole step rather than acting as a per-item filter.
+- Lexical nesting of `for_each` inside another `for_each` in the same authoring surface should stay invalid.
+- Composition through ordinary nested `run` remains acceptable because it preserves workflow boundaries instead of widening one authoring surface into nested loop syntax.
 
 <!-- source: domain/runtime.md -->
 
@@ -1757,6 +1788,21 @@ A derived value is a value produced from already available local-expression inpu
 
 Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
 
+### Presence check
+
+A presence check is one product-defined boolean helper that asks whether one approved lookup-like argument is observably available without collapsing unrelated evaluation failures into boolean absence.
+
+The narrow modeled argument classes are:
+
+- lookup-style references whose missingness semantics are defined by the surrounding root contract;
+- read-only representation-adapter invocations whose absence semantics are defined by adapter `not_found`.
+
+For read-only adapter invocation arguments, the modeled interpretation is:
+
+- successful invocation means present;
+- adapter `not_found` means missing;
+- any other adapter failure remains a real evaluation failure.
+
 ### Representation adapter
 
 A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
@@ -1959,6 +2005,17 @@ At minimum the model expects support for:
 
 The model also distinguishes host-side failures that occur while resolving the outer binding surface from adapter-side failures that occur after resolved parameter values have been supplied to the adapter family.
 
+### Presence-oriented reuse of read invocation
+
+The model allows one product-owned presence-check helper to reuse read-only adapter invocation as a special argument class without changing ordinary adapter outcome semantics.
+
+In that reuse:
+
+- successful read invocation is interpreted by the presence helper as present;
+- adapter `not_found` is interpreted by the presence helper as missing;
+- adapter outcomes other than `not_found` continue to fail evaluation;
+- write invocation is outside the allowed presence-check argument class.
+
 ## Read-versus-write model
 
 The model distinguishes two invocation kinds.
@@ -2032,6 +2089,10 @@ Further selector steps or terminal action semantics may refine how the selected 
 ### Block-oriented targets
 
 The family may expose block-oriented targets such as paragraphs and lists inside a section or prelude scope.
+
+After one singular list or task-list block has been selected, the model may allow positional indexing to address one top-level list item within that selected block.
+
+The family may also expose a separate collection-view projection for list-like blocks, for example `.list_items` or `.task_list_items`, when the product wants an array-valued view distinct from the richer block object.
 
 ## Text-action model
 
@@ -2160,6 +2221,7 @@ A context therefore validates dependency classes structurally rather than only c
 - A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.
 - A `Step` may declare an `if` condition that controls whether that one declared step executes or is skipped.
 - A `Step` may publish an execution-local registered result for later steps through a workflow-local `register` identifier.
+- A `run` step may expose callee workflow-local `results` back to caller-local `step...` reads through that same `register` surface.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
 - A `Profile` supplies reusable parameters or composition defaults.
 - An `Override` changes resolution explicitly, never silently.
@@ -2176,6 +2238,7 @@ A context therefore validates dependency classes structurally rather than only c
 - Step conditions express per-step eligibility, not first-class branch topology.
 - Built-in runtime step forms may be effectful, such as state mutation, or pure, such as value materialization.
 - Registered step results express execution-local data flow, not persistent workflow state.
+- Workflow-local `result` values and run-session-global `publish` values are distinct result channels with different scopes.
 - Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
 - Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
 - A future fragment-run boundary should keep caller-local `step...` data explicit at the call site rather than treating it as implicit fragment-body scope.
@@ -2490,6 +2553,26 @@ Execute mode may mutate only the execute-time fields that represent runtime prog
 Plan-time structural fields such as node identity, topology, and declared semantics remain stable.
 
 When execute mode cannot use the shared tree safely, it must expose an explicit compatibility mode and fallback reason rather than silently pretending tree-driven execution happened.
+
+## Planned fan-out node contract
+
+If the product later adds bounded `for_each` on `run`, the shared tree should preserve that declared fan-out as one step-level structural node rather than flattening it into invisible repeated execution.
+
+The tree-facing model should retain at least:
+
+- that the node is one fan-out `run` step;
+- whether the whole step condition made the fan-out eligible, skipped, or still unknown;
+- whether the source cardinality was statically known, statically zero, or runtime-only;
+- the exact item count when statically known;
+- the declared failure policy for repeated execution;
+- whether caller-side `register` expects one aggregated array of per-run workflow-local result payloads.
+
+The runtime should preserve the difference between:
+
+- fan-out blocked before expansion;
+- fan-out skipped as a whole step;
+- fan-out expanded with known count;
+- fan-out retained as runtime-only cardinality.
 
 <!-- source: model/runtime/check-semantics.md -->
 
@@ -3118,6 +3201,7 @@ Allowed step kinds and capabilities:
 - `register` materialization;
 - `if` evaluation when all dependencies are already known;
 - nested `run` expansion when the callee remains preflight-analyzable;
+- future bounded `run` fan-out when the array source, whole-step eligibility, and callee analyzability remain preflight-computable;
 - deterministic runtime context shaping already allowed by `check` semantics.
 
 Disallowed step kinds and capabilities:
@@ -3128,6 +3212,7 @@ Disallowed step kinds and capabilities:
 - any step whose inputs depend on unknown values;
 - any branch whose condition truth value is not yet known;
 - any nested run that requires effectful execution or unknown step-local data.
+- any bounded `run` fan-out whose source cardinality or callee analyzability cannot be established well enough for the current preflight phase.
 
 ## PREFLIGHT-STEP-001 — Step interpretation remains strictly non-effectful
 
@@ -3284,6 +3369,15 @@ Each interpreted step item should expose at least:
 - Nested results should preserve origin boundaries such as caller step and callee workflow.
 - Callee-derived knowledge may flow back to the caller only through structured preflight outputs.
 - Nested effectful or unanalyzable regions must stop analysis conservatively rather than silently flattening into success.
+
+## Planned composition with bounded `for_each`
+
+If `run` later gains bounded `for_each`, the preflight surface should preserve one explicit fan-out run node with its own cardinality and eligibility annotations rather than pretending the repeated calls never existed.
+
+- Whole-step `if` still applies to the fan-out step as one unit.
+- Preflight may record exact item count when the array source is statically known.
+- When the array source is not statically known, preflight should record runtime-only cardinality rather than inventing a guessed count.
+- Lexical nested fan-out in one authoring surface should remain invalid and therefore does not require a nested fan-out tree shape.
 
 ## Determinism and conservatism
 
@@ -4756,14 +4850,18 @@ At minimum, a connector operation outcome should preserve:
 
 This operation outcome is the connector-local structured input to runtime adaptation, not the entire public runtime result envelope by itself.
 
-## Published workflow results
+## Workflow-local results and global publications
 
-- Successful run output may include a `results` list of workflow-authored published result values.
-- Each executed workflow `result` step appends one value to that `results` list.
-- Published result values accumulate in execution order.
-- The runtime must not inject additional metadata into published result values in the initial model.
-- If no `result` step executes, successful run output may return `results: []`.
-- If the product later adds a synthetic fallback result for successful runs without explicit results, that fallback must be emitted only once at the top-level requested workflow boundary.
+- Successful run output may include a workflow-local `results` list of authored return values produced by the requested workflow run.
+- Each executed workflow `result` step appends one value to that workflow-local `results` list.
+- Workflow-local result values accumulate in execution order inside that one workflow run.
+- Successful run output may also include a global `published` list of authored published values.
+- Each executed workflow `publish` step appends one value to that global `published` list.
+- Published values accumulate in execution order across the enclosing run session, including nested `run` boundaries.
+- Registering one `run` step should expose only the just-completed workflow-local `results` list rather than the global `published` stream.
+- If `run` later supports bounded `for_each`, one registered caller value should preserve one array of per-run workflow-local result payloads rather than flattening all returned values into one list.
+- The runtime must not inject additional metadata into authored `results` or `published` values in the initial model.
+- If no `result` step executes, successful top-level run output may return `results: []` and may still choose one synthetic fallback result for compact human-facing run surfaces.
 - Include expansion, playbook-owned `pre_run`, and nested reusable `run` boundaries must not emit fallback results of their own.
 
 ## Serialization constraints
@@ -4952,7 +5050,6 @@ Expected Ordo value:
 - the caller can override or add the input without editing the workflow file;
 - launch-time values win over workflow defaults and profile-provided defaults;
 - the override remains local to that one run.
-
 
 ## Scenario 3d: playbook-level pre-run workflow set
 

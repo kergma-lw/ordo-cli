@@ -30,14 +30,18 @@ At minimum, a connector operation outcome should preserve:
 
 This operation outcome is the connector-local structured input to runtime adaptation, not the entire public runtime result envelope by itself.
 
-## Published workflow results
+## Workflow-local results and global publications
 
-- Successful run output may include a `results` list of workflow-authored published result values.
-- Each executed workflow `result` step appends one value to that `results` list.
-- Published result values accumulate in execution order.
-- The runtime must not inject additional metadata into published result values in the initial model.
-- If no `result` step executes, successful run output may return `results: []`.
-- If the product later adds a synthetic fallback result for successful runs without explicit results, that fallback must be emitted only once at the top-level requested workflow boundary.
+- Successful run output may include a workflow-local `results` list of authored return values produced by the requested workflow run.
+- Each executed workflow `result` step appends one value to that workflow-local `results` list.
+- Workflow-local result values accumulate in execution order inside that one workflow run.
+- Successful run output may also include a global `published` list of authored published values.
+- Each executed workflow `publish` step appends one value to that global `published` list.
+- Published values accumulate in execution order across the enclosing run session, including nested `run` boundaries.
+- Registering one `run` step should expose only the just-completed workflow-local `results` list rather than the global `published` stream.
+- If `run` later supports bounded `for_each`, one registered caller value should preserve one array of per-run workflow-local result payloads rather than flattening all returned values into one list.
+- The runtime must not inject additional metadata into authored `results` or `published` values in the initial model.
+- If no `result` step executes, successful top-level run output may return `results: []` and may still choose one synthetic fallback result for compact human-facing run surfaces.
 - Include expansion, playbook-owned `pre_run`, and nested reusable `run` boundaries must not emit fallback results of their own.
 
 ## Serialization constraints

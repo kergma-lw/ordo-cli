@@ -41,3 +41,5 @@
 - When a step `if` condition cannot be evaluated, the runtime must fail execution rather than silently treating the condition as `false`.
 - `explain` output should include useful next actions when the runtime can infer them safely.
 - The explanation surface must remain stable enough for agent tooling to rely on status codes and categories.
+- If the product later adds bounded `for_each` on `run`, `check`, `plan`, and `explain` must preserve statically knowable fan-out facts such as whole-step eligibility, exact cardinality when knowable, and explicit unknown-cardinality state when not knowable before execution.
+- If bounded `for_each` is later added on `run`, the runtime must preserve the difference between a fan-out step blocked before expansion, a fan-out step statically expanded with known item count, and a fan-out step whose item count remains runtime-only.

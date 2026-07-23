@@ -26,8 +26,10 @@ but they are not the place where non-trivial transformation algorithms should be
 - compact parameters;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
-- explicit authored result publication through existing `result` steps.
+- explicit authored workflow-local returns through `result` steps.
+- explicit authored global publication through `publish` steps.
 - optional author-provided invocation hints on input declarations.
+- future bounded fan-out on `run` when it remains one workflow-composition surface rather than a general looping language.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
@@ -81,7 +83,7 @@ The public activation-input contract must stay readable from the root workflow.
 - Any `inputs.<name>` reference that appears anywhere in the assembled workflow must refer only to a root-declared workflow input.
 - Included fragments and reusable run targets may consume local `args...`, but they must not widen the public activation-input surface implicitly.
 - Input-level `hint` text may help humans and agents choose values, but it remains guidance rather than a validation constraint.
-- If later authoring surfaces add explicit presence-check helpers, they should stay narrowly scoped to lookup-style references whose missingness semantics are contractually meaningful.
+- If later authoring surfaces add explicit presence-check helpers, they should stay narrowly scoped to lookup-style references and read-only representation-adapter invocations whose missingness semantics are contractually meaningful.
 
 ## What is undesirable
 
@@ -90,6 +92,7 @@ The public activation-input contract must stay readable from the root workflow.
 - project-specific knowledge baked into a generic workflow;
 - hidden side effects.
 - algorithmic transformation logic that belongs in connector operation code.
+- lexical nested fan-out surfaces that turn one workflow file into a control-flow mini-language.
 
 ## Workflow quality
 
@@ -101,11 +104,22 @@ A good workflow:
 - can be moved across projects while preserving contracts.
 - can be authored and iteratively repaired by a sufficiently capable agent using contract docs, examples, and structured diagnostics.
 
-## Result publication
+## Workflow-local returns and global publication
 
-Workflow-owned result publication belongs to the workflow domain.
+Workflow-owned local return values and workflow-authored global publication both belong to the workflow domain, but they serve different scopes.
 
-- Existing `result` step syntax remains unchanged.
-- Each executed `result` step appends one authored value to the runtime results list.
-- Published results accumulate in execution order rather than replacing prior published results.
-- Published result values are stored as authored values only, without added runtime metadata.
+- `result` is the workflow-owned step form for authored workflow-local return values.
+- Each executed `result` step appends one authored value to the current workflow run's local `results` list.
+- `publish` is the workflow-owned step form for authored global publication.
+- Each executed `publish` step appends one authored value to the enclosing run session's global `published` list.
+- Registering one `run` step should expose the just-completed workflow-local `results` list rather than the global `published` stream.
+- Authored `result` and `publish` values are stored as authored values only, without added runtime metadata.
+
+## Planned bounded fan-out on `run`
+
+If the product later adds `for_each` on `run`, it should remain a bounded workflow-composition surface rather than a general looping language.
+
+- The source should be one array-valued expression.
+- The step-level `if` condition should still govern the whole step rather than acting as a per-item filter.
+- Lexical nesting of `for_each` inside another `for_each` in the same authoring surface should stay invalid.
+- Composition through ordinary nested `run` remains acceptable because it preserves workflow boundaries instead of widening one authoring surface into nested loop syntax.
