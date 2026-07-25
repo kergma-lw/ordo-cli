@@ -749,6 +749,50 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_guard_expression_reports_undeclared_input_from_probe_arguments(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: close-task
+                inputs:
+                  repository: owner/repo
+                blocks:
+                  - guards:
+                      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).exists
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
+        self.assertEqual(report.diagnostics[0].path, ("blocks", "0", "guards", "0"))
+
+    def test_state_role_write_after_guard_probe_argument_read_passes_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: demo
+                inputs:
+                  repository: owner/repo
+                  project_id: PVT_demo
+                state_needs:
+                  task_memory: {}
+                blocks:
+                  - guards:
+                      - gh.project.issue(repository=inputs.repository, issue_number=state.task_memory[inputs.repository].issue_number, project_id=inputs.project_id).exists
+                  - steps:
+                      - name: remember-branch
+                        state_set:
+                          state.task_memory[inputs.repository].branch: branch-1
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_state_role_write_before_last_read_fails_validation(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

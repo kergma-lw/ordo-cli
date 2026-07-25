@@ -13,7 +13,6 @@ from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import StepBlock, Workflow
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
-from .local_expression_engine.core import StateReferenceNode as GuardStateReferenceNode
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import (
     LOCAL_EXPRESSION_PARSE_ERRORS,
@@ -29,6 +28,8 @@ from .loading import LoadError, _load_included_fragment_payload, _load_workflow_
 from .state_paths import StatePathParseError, parse_state_path
 from .local_expression_engine.core import (
     BinaryNode,
+    CallArgumentNode,
+    CallNode,
     BuiltinCallNode,
     FilterApplicationNode,
     ListNode,
@@ -348,7 +349,7 @@ def _collect_input_references_from_guard_item(item: JSONValue) -> set[tuple[str,
             parsed = parse_local_expression(item, context=LocalExpressionContext.GUARD)
         except LOCAL_EXPRESSION_PARSE_ERRORS:
             return set()
-        return _collect_guard_input_references(parsed.root)
+        return _collect_value_input_references(parsed.value.root)
     if isinstance(item, dict):
         return _collect_input_references_from_runtime_value_surface(item.get("with"))
     return set()
@@ -1873,7 +1874,7 @@ def _collect_state_roles_from_guard_item(item: JSONValue) -> set[str]:
             parsed = parse_local_expression(item, context=LocalExpressionContext.GUARD)
         except LOCAL_EXPRESSION_PARSE_ERRORS:
             return set()
-        return _collect_guard_state_references(parsed.root)
+        return _collect_value_state_references(parsed.value.root)
     if isinstance(item, dict):
         return _collect_state_roles_from_runtime_value_surface(item.get("with"))
     return set()
@@ -1945,77 +1946,19 @@ def _collect_state_roles_from_runtime_value_surface(value: JSONValue | None) -> 
     return _collect_value_state_references(parsed.value.root)
 
 
-def _collect_guard_state_references(node) -> set[str]:
-    roles: set[str] = set()
-    from .local_expression_engine.core import BinaryNode as GuardBinaryNode, CallArgumentNode as GuardCallArgumentNode, CallNode as GuardCallNode, ListNode as GuardListNode, UnaryNode as GuardUnaryNode
-
-    def visit(current) -> None:
-        if isinstance(current, GuardStateReferenceNode):
-            roles.add(current.state_role)
-            return
-        if isinstance(current, GuardListNode):
-            for item in current.items:
-                visit(item)
-            return
-        if isinstance(current, GuardCallNode):
-            for argument in current.arguments:
-                visit(argument)
-            return
-        if isinstance(current, GuardCallArgumentNode):
-            visit(current.value)
-            return
-        if isinstance(current, GuardUnaryNode):
-            visit(current.operand)
-            return
-        if isinstance(current, GuardBinaryNode):
-            visit(current.left)
-            visit(current.right)
-
-    visit(node)
-    return roles
-
-
-def _collect_guard_input_references(node) -> set[tuple[str, ...]]:
-    references: set[tuple[str, ...]] = set()
-    from .local_expression_engine.core import BinaryNode as GuardBinaryNode, CallArgumentNode as GuardCallArgumentNode, CallNode as GuardCallNode, ListNode as GuardListNode, UnaryNode as GuardUnaryNode
-
-    def visit(current) -> None:
-        if isinstance(current, ReferenceNode):
-            if current.parts and current.parts[0] == "inputs" and len(current.parts) >= 2:
-                references.add(current.parts)
-            return
-        if isinstance(current, GuardStateReferenceNode):
-            if current.key_reference and current.key_reference[0] == "inputs" and len(current.key_reference) >= 2:
-                references.add(current.key_reference)
-            return
-        if isinstance(current, GuardListNode):
-            for item in current.items:
-                visit(item)
-            return
-        if isinstance(current, GuardCallNode):
-            for argument in current.arguments:
-                visit(argument)
-            return
-        if isinstance(current, GuardCallArgumentNode):
-            visit(current.value)
-            return
-        if isinstance(current, GuardUnaryNode):
-            visit(current.operand)
-            return
-        if isinstance(current, GuardBinaryNode):
-            visit(current.left)
-            visit(current.right)
-
-    visit(node)
-    return references
-
-
 def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
     roles: set[str] = set()
 
     def visit(current: ValueExpressionNode) -> None:
         if isinstance(current, ValueStateReferenceNode):
             roles.add(current.state_role)
+            return
+        if isinstance(current, CallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, CallArgumentNode):
+            visit(current.value)
             return
         if isinstance(current, PipelineNode):
             visit(current.source)
@@ -2026,6 +1969,10 @@ def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
         if isinstance(current, BuiltinCallNode):
             for argument in current.arguments:
                 visit(argument)
+            return
+        if isinstance(current, ListNode):
+            for item in current.items:
+                visit(item)
             return
         if isinstance(current, UnaryNode):
             visit(current.operand)
@@ -2051,6 +1998,13 @@ def _collect_value_input_references(node: ValueExpressionNode) -> set[tuple[str,
                 references.add(current.key_reference)
             return
         if isinstance(current, StepReferenceNode):
+            return
+        if isinstance(current, CallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, CallArgumentNode):
+            visit(current.value)
             return
         if isinstance(current, PipelineNode):
             visit(current.source)
