@@ -11,6 +11,7 @@ They exist to keep small workflow-local computation and condition declaration in
 This domain owns:
 
 - the idea that workflows may carry expression-bearing fields;
+- workflow-local naming of local expressions through a top-level `let` surface;
 - the local data surfaces that expressions may read;
 - the idea that expressions may derive intermediate values from already available values;
 - product-defined representation adapters for pure value interpretation and transformation;
@@ -62,6 +63,14 @@ A local expression may derive one value from another already available value and
 Such intermediate values remain inside local-expression semantics.
 They do not by themselves introduce connector execution, workflow control, or storage ownership.
 
+### Workflow-local binding
+
+A workflow may name one local expression through a workflow-level `let` entry.
+
+Such a binding remains part of local-expression authoring rather than introducing a second language layer.
+
+It exists to let a workflow name a long or repeated expression without changing expression semantics.
+
 ### Representation adapter
 
 A representation adapter is a product-defined local-expression surface for interpreting an already available value through a specific representation such as markdown, html, json, or string.
@@ -88,6 +97,10 @@ Guard context is the pre-execution policy context.
 Its job is to express whether execution may proceed before effectful business steps run.
 
 Because of that role, guard context is limited to dependencies that are known at launch time and must remain compatible with read-only, pre-execution analysis.
+
+Guard context may still use the same canonical local-expression family as nearby contexts, including pure built-ins and read-only representation-adapter projections, so long as those constructs remain launch-time-safe and pre-execution-safe.
+
+Guard context must not depend on execution-local `step...` data, must not use representation-adapter write paths such as `->...`, and must ultimately yield a boolean result.
 
 ### Step-condition context
 
@@ -174,6 +187,11 @@ Implications:
 - adapter update-style operations must still return new derived values rather than persisting changes by themselves;
 - any persistence of such derived values happens only when a workflow step passes the resulting value into an effectful operation.
 
+Implication for guard context:
+
+- read-only adapter projections may participate in guard evaluation when the context policy allows them;
+- adapter write paths such as `->...` remain incompatible with guard semantics even though they belong to the same product-defined expression family.
+
 ### Expression versus workflow control
 
 Local expressions may derive values and conditions.
@@ -185,6 +203,8 @@ They must not silently absorb broader workflow control semantics such as branchi
 Representation-adapter operations must belong to the stable product contract.
 
 Workflows must not define their own expression functions, operators, macros, or adapter families.
+
+Workflow-level `let` therefore remains a product-defined authoring surface for naming ordinary expressions rather than a workflow-defined extensibility mechanism.
 
 ### Expression versus storage ownership
 

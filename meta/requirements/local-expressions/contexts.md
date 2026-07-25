@@ -10,7 +10,7 @@
 - Embedded value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Embedded value contexts must remain free of connector invocation semantics.
 - Embedded value contexts must remain free of hidden workflow-control semantics.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 
 ## Guard context
 
@@ -18,8 +18,11 @@
 - Guard context is limited to dependencies known at launch time.
 - Guard context must remain compatible with read-only, pre-execution analysis.
 - Guard context may use workflow-visible inputs and other roots that are safe and meaningful before effectful business steps run.
+- Guard context may use pure built-ins and read-only representation-adapter projections when those constructs remain launch-time-safe and pre-execution-safe.
+- Guard context must not use representation-adapter write paths such as `->...`.
 - Guard context must not depend on `step...`.
 - Guard context must not require action execution in order to determine whether execution may proceed.
+- Guard context must evaluate to a boolean result; a successful non-boolean result is a guard error rather than an implicit truthiness rule.
 - Guard context should keep routine execution policy visible in the workflow declaration rather than encoding that policy in many bespoke probe names.
 - Object-form guard items using `uses` may remain available for compatibility, but they should not displace native guard expressions as the preferred stable guard surface.
 
@@ -31,13 +34,16 @@
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native bare `if` conditions are the preferred step-condition surface.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 
 ## Presence-check argument boundary
 
-- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined.
+- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined and read-only representation-adapter invocations whose absence semantics are contractually tied to adapter `not_found`.
 - Allowed argument forms should be listed explicitly rather than inferred from broad expression permissiveness.
 - Arbitrary computed expressions, built-in calls, pipelines, boolean compositions, probe calls, and literals must not be treated as valid presence-check arguments.
+- A read-only representation-adapter invocation used as a presence-check argument should evaluate to presence success when the invocation succeeds and to absence when it fails specifically with adapter `not_found`.
+- Other adapter failures such as `ambiguous`, `invalid_path`, `invalid_root_value`, or `invalid_action` must remain ordinary failures rather than being collapsed into boolean absence.
+- A write-path representation-adapter invocation must not be accepted as a presence-check argument.
 - Presence checks must preserve the distinction between an explicit `null` value and a missing lookup when the surrounding contract distinguishes them.
 
 ## Include-binding context

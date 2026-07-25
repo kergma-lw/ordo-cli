@@ -18,11 +18,29 @@
 - Guard context must not depend on `step...`.
 - Guard context must remain compatible with read-only, pre-execution analysis.
 - Guard conditions must remain explainable as workflow-visible policy rather than hidden connector-local verdicts.
+- Guard context may allow pure built-ins and read-only representation-adapter projections without regressing into a separate guard-only language.
+- Guard context must continue to forbid representation-adapter write paths such as `->...`.
+- Guard evaluation must end in a boolean result; non-boolean success must remain an error rather than collapsing into implicit truthiness.
 
 ## Value-context discipline
 
 - Embedded value contexts must not drift into effectful connector execution.
 - Value-oriented local expressions must not grow hidden workflow-control semantics.
+
+## Pipeline-filter discipline
+
+- Pipeline filters remain an explicit product-defined contract rather than an implementation-only registry.
+- Product-defined pipeline filters must not drift into workflow-defined extensibility.
+- Predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must remain boolean-only and must not silently introduce coercion semantics.
+- Membership filters such as `in(container)` must preserve explicit list-container discipline rather than silently treating arbitrary strings, objects, or scalars as containers.
+- Boolean-producing filters must keep stable boolean result shape across contexts.
+
+## Workflow-local binding discipline
+
+- Workflow-level `let` remains one local-expression naming surface rather than a second expression language.
+- A `let` binding does not relax the context restrictions that would apply to the equivalent inline expression.
+- A `let` binding may not reference another `let` binding.
+- Reserved roots must not drift into ordinary reusable binding names.
 
 ## Representation-adapter discipline
 

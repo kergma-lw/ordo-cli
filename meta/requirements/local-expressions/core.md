@@ -34,9 +34,15 @@
 ## Derived values and representation adapters
 
 - Local expressions may derive intermediate values from already available values.
+- A workflow may declare workflow-local named expression bindings through a top-level `let` mapping.
+- A `let` binding must denote one immutable local expression rather than a mutable variable, macro expansion, or user-defined function.
+- A `let` binding must remain workflow-local and must not participate in inheritance, export, or cross-workflow resolution.
+- A `let` binding must not reference another `let` binding.
+- `let` bindings must not relax context gating; a binding is valid only in authored contexts where the equivalent inline expression would also be valid.
 - Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
 - Representation-adapter operations must remain pure, local, and value-producing.
 - Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
+- A context may allow read-only representation-adapter projections while still forbidding adapter write paths such as `->...`.
 - Representation adapters require one shared product-defined invocation seam so concrete adapter families can participate in local-expression evaluation consistently.
 - The authored addressing or selection surface between an adapter name and a terminal mutation may be adapter-defined.
 - The product must not require all adapters to share one identical middle syntax when their represented structures differ materially.
@@ -49,6 +55,31 @@
 - The canonical local-expression core should include shared non-effectful constructs for observation, comparison, composition, and value derivation.
 - Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
 - Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
+
+## Product-defined pipeline filter surface
+
+- Pipeline filters are product-defined local-expression operations applied to one already evaluated input value through the `value | filter(...)` surface.
+- A pipeline filter must not widen context policy, introduce effectful connector work, or become a workflow-defined extension point.
+- The product-defined pipeline filter set must be documented explicitly rather than inferred only from implementation code.
+- The current product-defined filter set is:
+  - `lower`;
+  - `trim`;
+  - `slug`;
+  - `eq(...)`;
+  - `ne(...)`;
+  - `not`;
+  - `is_string`;
+  - `is_number`;
+  - `is_integer`;
+  - `is_boolean`;
+  - `in(container)`.
+- `lower`, `trim`, and `slug` are string-to-string transforming filters.
+- `eq(...)`, `ne(...)`, `not`, `is_string`, `is_number`, `is_integer`, `is_boolean`, and `in(container)` are boolean-producing filters.
+- Predicate-style filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must accept any already evaluated local-expression value and return `true` or `false` without implicit coercion.
+- `eq(...)` and `ne(...)` compare without implicit coercion.
+- `in(container)` must evaluate its argument as a container expression and must require that container to produce a list value.
+- `in(container)` must compare the pipeline input against list members without implicit coercion.
+- `in(container)` must fail when the container expression does not produce a list rather than silently reinterpreting strings, objects, or scalars as membership containers.
 
 ## Probe-call execution model
 
@@ -65,6 +96,7 @@
 - Local expressions must never smuggle hidden workflow control structures such as looping or open-ended branching.
 - Local expressions must never rely on project-defined syntax whose meaning is outside the stable product contract.
 - Local expressions must never become a user-extensible language with workflow-defined functions, macros, or operators.
+- Workflow-local `let` bindings must never become a second workflow-defined abstraction layer with parameters, overrides, or dependency chaining.
 - Representation-adapter operations must never perform connector invocation, hidden I/O, or other effectful work.
 - Representation-adapter families and operations must remain product-defined rather than workflow-defined extensions.
 
@@ -73,3 +105,4 @@
 - The product should prefer one local-expression family with context-specific restrictions over multiple independent expression languages for nearby workflow surfaces.
 - Context-specific restrictions should change allowed dependencies or expected result shape rather than introducing separate read-only execution engines for equivalent expression constructs.
 - Syntax and evaluation detail may differ by authored context, but those differences must not silently fragment the conceptual model into unrelated expression systems.
+- Condition-oriented contexts such as guards may still impose a result-shape contract, for example requiring a final boolean result without thereby becoming a separate expression language.

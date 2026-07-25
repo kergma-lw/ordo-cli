@@ -120,9 +120,15 @@
 ## Derived values and representation adapters
 
 - Local expressions may derive intermediate values from already available values.
+- A workflow may declare workflow-local named expression bindings through a top-level `let` mapping.
+- A `let` binding must denote one immutable local expression rather than a mutable variable, macro expansion, or user-defined function.
+- A `let` binding must remain workflow-local and must not participate in inheritance, export, or cross-workflow resolution.
+- A `let` binding must not reference another `let` binding.
+- `let` bindings must not relax context gating; a binding is valid only in authored contexts where the equivalent inline expression would also be valid.
 - Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
 - Representation-adapter operations must remain pure, local, and value-producing.
 - Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
+- A context may allow read-only representation-adapter projections while still forbidding adapter write paths such as `->...`.
 - Representation adapters require one shared product-defined invocation seam so concrete adapter families can participate in local-expression evaluation consistently.
 - The authored addressing or selection surface between an adapter name and a terminal mutation may be adapter-defined.
 - The product must not require all adapters to share one identical middle syntax when their represented structures differ materially.
@@ -135,6 +141,31 @@
 - The canonical local-expression core should include shared non-effectful constructs for observation, comparison, composition, and value derivation.
 - Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
 - Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
+
+## Product-defined pipeline filter surface
+
+- Pipeline filters are product-defined local-expression operations applied to one already evaluated input value through the `value | filter(...)` surface.
+- A pipeline filter must not widen context policy, introduce effectful connector work, or become a workflow-defined extension point.
+- The product-defined pipeline filter set must be documented explicitly rather than inferred only from implementation code.
+- The current product-defined filter set is:
+  - `lower`;
+  - `trim`;
+  - `slug`;
+  - `eq(...)`;
+  - `ne(...)`;
+  - `not`;
+  - `is_string`;
+  - `is_number`;
+  - `is_integer`;
+  - `is_boolean`;
+  - `in(container)`.
+- `lower`, `trim`, and `slug` are string-to-string transforming filters.
+- `eq(...)`, `ne(...)`, `not`, `is_string`, `is_number`, `is_integer`, `is_boolean`, and `in(container)` are boolean-producing filters.
+- Predicate-style filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must accept any already evaluated local-expression value and return `true` or `false` without implicit coercion.
+- `eq(...)` and `ne(...)` compare without implicit coercion.
+- `in(container)` must evaluate its argument as a container expression and must require that container to produce a list value.
+- `in(container)` must compare the pipeline input against list members without implicit coercion.
+- `in(container)` must fail when the container expression does not produce a list rather than silently reinterpreting strings, objects, or scalars as membership containers.
 
 ## Probe-call execution model
 
@@ -151,6 +182,7 @@
 - Local expressions must never smuggle hidden workflow control structures such as looping or open-ended branching.
 - Local expressions must never rely on project-defined syntax whose meaning is outside the stable product contract.
 - Local expressions must never become a user-extensible language with workflow-defined functions, macros, or operators.
+- Workflow-local `let` bindings must never become a second workflow-defined abstraction layer with parameters, overrides, or dependency chaining.
 - Representation-adapter operations must never perform connector invocation, hidden I/O, or other effectful work.
 - Representation-adapter families and operations must remain product-defined rather than workflow-defined extensions.
 
@@ -159,6 +191,7 @@
 - The product should prefer one local-expression family with context-specific restrictions over multiple independent expression languages for nearby workflow surfaces.
 - Context-specific restrictions should change allowed dependencies or expected result shape rather than introducing separate read-only execution engines for equivalent expression constructs.
 - Syntax and evaluation detail may differ by authored context, but those differences must not silently fragment the conceptual model into unrelated expression systems.
+- Condition-oriented contexts such as guards may still impose a result-shape contract, for example requiring a final boolean result without thereby becoming a separate expression language.
 
 <!-- source: requirements/local-expressions/adapters.md -->
 
@@ -219,6 +252,8 @@
 - A read invocation must not create missing structure.
 - A read invocation must not persist change.
 - A read invocation result is the selected or derived value produced by the adapter family.
+- When a product-owned presence-check helper explicitly admits read-only adapter invocation as an argument form, successful read invocation may be interpreted by that helper as presence and adapter `not_found` may be interpreted by that helper as absence.
+- Such helper semantics must not change the ordinary standalone read-invocation rule that adapter `not_found` is an adapter failure outcome rather than an implicit null-like value.
 
 ## Write invocation contract
 
@@ -271,6 +306,7 @@
 - A read path ends in value selection or value derivation.
 - A write path ends in a terminal mutation and returns an updated root value.
 - Adapter-specific middle syntax may vary, but adapter families should not blur the boundary between read-only navigation and root-transforming update.
+- Any product-owned presence-check helper that admits adapter invocation must admit read paths only and must reject write paths explicitly rather than evaluating them for boolean presence.
 
 ## Shared auto-creation boundary
 
@@ -320,7 +356,7 @@
 - Embedded value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Embedded value contexts must remain free of connector invocation semantics.
 - Embedded value contexts must remain free of hidden workflow-control semantics.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 
 ## Guard context
 
@@ -328,8 +364,11 @@
 - Guard context is limited to dependencies known at launch time.
 - Guard context must remain compatible with read-only, pre-execution analysis.
 - Guard context may use workflow-visible inputs and other roots that are safe and meaningful before effectful business steps run.
+- Guard context may use pure built-ins and read-only representation-adapter projections when those constructs remain launch-time-safe and pre-execution-safe.
+- Guard context must not use representation-adapter write paths such as `->...`.
 - Guard context must not depend on `step...`.
 - Guard context must not require action execution in order to determine whether execution may proceed.
+- Guard context must evaluate to a boolean result; a successful non-boolean result is a guard error rather than an implicit truthiness rule.
 - Guard context should keep routine execution policy visible in the workflow declaration rather than encoding that policy in many bespoke probe names.
 - Object-form guard items using `uses` may remain available for compatibility, but they should not displace native guard expressions as the preferred stable guard surface.
 
@@ -341,13 +380,16 @@
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native bare `if` conditions are the preferred step-condition surface.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
-- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references rather than to arbitrary computed expressions.
+- Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 
 ## Presence-check argument boundary
 
-- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined.
+- A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined and read-only representation-adapter invocations whose absence semantics are contractually tied to adapter `not_found`.
 - Allowed argument forms should be listed explicitly rather than inferred from broad expression permissiveness.
 - Arbitrary computed expressions, built-in calls, pipelines, boolean compositions, probe calls, and literals must not be treated as valid presence-check arguments.
+- A read-only representation-adapter invocation used as a presence-check argument should evaluate to presence success when the invocation succeeds and to absence when it fails specifically with adapter `not_found`.
+- Other adapter failures such as `ambiguous`, `invalid_path`, `invalid_root_value`, or `invalid_action` must remain ordinary failures rather than being collapsed into boolean absence.
+- A write-path representation-adapter invocation must not be accepted as a presence-check argument.
 - Presence checks must preserve the distinction between an explicit `null` value and a missing lookup when the surrounding contract distinguishes them.
 
 ## Include-binding context
@@ -392,8 +434,10 @@
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
 - The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
 - Positional disambiguation uses `[n]`.
+- After one singular list or task-list target has been selected, positional indexing with `[n]` may address one top-level list item within that selected block.
 - Explicit structural selection may use adapter-defined forms such as `.blocks("kind")`.
 - The adapter may provide common structural shortcuts such as `.list`, `.task_list`, or `.paragraph` as convenience sugar over the explicit structural form.
+- The adapter may also provide explicit collection-view shortcuts such as `.list_items` or `.task_list_items` when the product needs one array-valued projection distinct from the richer block view.
 - The adapter may provide text-search helpers such as `.find("...")` when the product needs them.
 
 ## Outer parameter binding
@@ -600,6 +644,7 @@
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
+- A workflow may declare workflow-local named expressions through a top-level `let` surface when that keeps long local expressions readable.
 - Reusable workflow fragments should support explicit local argument contracts.
 - Explicit fragment argument contracts must not by themselves force static composition and runtime-scoped invocation to collapse into one reuse primitive when their semantics diverge materially.
 - If the product later introduces both `include` and `run`, the distinction must remain brief enough for humans and agents to predict from contract docs and examples.
@@ -1100,6 +1145,7 @@ They exist to keep small workflow-local computation and condition declaration in
 This domain owns:
 
 - the idea that workflows may carry expression-bearing fields;
+- workflow-local naming of local expressions through a top-level `let` surface;
 - the local data surfaces that expressions may read;
 - the idea that expressions may derive intermediate values from already available values;
 - product-defined representation adapters for pure value interpretation and transformation;
@@ -1151,6 +1197,14 @@ A local expression may derive one value from another already available value and
 Such intermediate values remain inside local-expression semantics.
 They do not by themselves introduce connector execution, workflow control, or storage ownership.
 
+### Workflow-local binding
+
+A workflow may name one local expression through a workflow-level `let` entry.
+
+Such a binding remains part of local-expression authoring rather than introducing a second language layer.
+
+It exists to let a workflow name a long or repeated expression without changing expression semantics.
+
 ### Representation adapter
 
 A representation adapter is a product-defined local-expression surface for interpreting an already available value through a specific representation such as markdown, html, json, or string.
@@ -1177,6 +1231,10 @@ Guard context is the pre-execution policy context.
 Its job is to express whether execution may proceed before effectful business steps run.
 
 Because of that role, guard context is limited to dependencies that are known at launch time and must remain compatible with read-only, pre-execution analysis.
+
+Guard context may still use the same canonical local-expression family as nearby contexts, including pure built-ins and read-only representation-adapter projections, so long as those constructs remain launch-time-safe and pre-execution-safe.
+
+Guard context must not depend on execution-local `step...` data, must not use representation-adapter write paths such as `->...`, and must ultimately yield a boolean result.
 
 ### Step-condition context
 
@@ -1263,6 +1321,11 @@ Implications:
 - adapter update-style operations must still return new derived values rather than persisting changes by themselves;
 - any persistence of such derived values happens only when a workflow step passes the resulting value into an effectful operation.
 
+Implication for guard context:
+
+- read-only adapter projections may participate in guard evaluation when the context policy allows them;
+- adapter write paths such as `->...` remain incompatible with guard semantics even though they belong to the same product-defined expression family.
+
 ### Expression versus workflow control
 
 Local expressions may derive values and conditions.
@@ -1274,6 +1337,8 @@ They must not silently absorb broader workflow control semantics such as branchi
 Representation-adapter operations must belong to the stable product contract.
 
 Workflows must not define their own expression functions, operators, macros, or adapter families.
+
+Workflow-level `let` therefore remains a product-defined authoring surface for naming ordinary expressions rather than a workflow-defined extensibility mechanism.
 
 ### Expression versus storage ownership
 
@@ -1406,6 +1471,7 @@ but they are not the place where non-trivial transformation algorithms should be
 - compact references and parameters that remain workflow-semantic;
 - logical state needs that express workflow-owned state roles without naming project storage instances;
 - compact parameters;
+- workflow-local named expressions through a top-level `let` surface when they keep policy and dataflow reviewable;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
 - explicit authored workflow-local returns through `result` steps.
@@ -1428,6 +1494,8 @@ Each execution block declares exactly one of:
 - `steps`
 
 Top-level `guards` and `steps` may remain as compatibility-only authoring sugar when they normalize to the same block structure.
+
+Top-level `let` belongs to workflow source authoring as a local-expression naming surface, but it does not become an execution block kind.
 
 Assembly instructions may appear in source workflow material, but they do not survive as execution-semantic block kinds in the assembled workflow shape.
 
@@ -1865,6 +1933,36 @@ A derived value is a value produced from already available local-expression inpu
 
 Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
 
+### Workflow-local binding
+
+A workflow-local binding is one authored `let` entry that gives a local expression a workflow-scoped name.
+
+The modeled binding shape is:
+
+- the binding name is workflow-local rather than global or inherited;
+- the binding value is one ordinary local-expression tree rather than a text substitution;
+- the binding is immutable for the duration of the workflow run;
+- the binding may reference documented roots and other dependencies that are otherwise valid for the surrounding expression system;
+- the binding may not reference another `let` binding;
+- the binding does not create a new context and does not widen which dependencies are legal at one use site.
+
+The modeled validation rule is that a `let` binding is accepted only where the equivalent inline expression would be accepted by the surrounding authored context.
+
+### Presence check
+
+A presence check is one product-defined boolean helper that asks whether one approved lookup-like argument is observably available without collapsing unrelated evaluation failures into boolean absence.
+
+The narrow modeled argument classes are:
+
+- lookup-style references whose missingness semantics are defined by the surrounding root contract;
+- read-only representation-adapter invocations whose absence semantics are defined by adapter `not_found`.
+
+For read-only adapter invocation arguments, the modeled interpretation is:
+
+- successful invocation means present;
+- adapter `not_found` means missing;
+- any other adapter failure remains a real evaluation failure.
+
 ### Representation adapter
 
 A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
@@ -1906,6 +2004,43 @@ Its excluded construct families should cover:
 - hidden workflow-control structures;
 - workflow-defined language extension.
 
+### Pipeline filter
+
+A pipeline filter is one product-defined operation applied to an already evaluated local-expression value.
+
+The modeled pipeline shape is:
+
+- the left side supplies one already evaluated input value;
+- the filter name selects one product-defined filter contract;
+- optional filter arguments are themselves local-expression values evaluated under the surrounding context policy;
+- the filter result becomes the next pipeline value.
+
+The modeled input discipline is intentionally broad:
+
+- a pipeline input value may be any ordinary local-expression value such as a string, number, boolean, null, list, object, local-root lookup result, probe result, or prior derived value;
+- individual filter contracts, rather than the pipeline surface itself, determine which input shapes are accepted.
+
+The modeled filter families include:
+
+- transforming filters such as `lower`, `trim`, and `slug`;
+- boolean comparison filters such as `eq(...)` and `ne(...)`;
+- boolean predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean`;
+- boolean membership filters such as `in(container)`;
+- boolean negation filters such as `not`.
+
+The modeled predicate-filter semantics are:
+
+- predicate filters consume one already evaluated input value;
+- predicate filters return only boolean results;
+- predicate filters do not implicitly coerce input values into another type before deciding the result.
+
+The modeled membership-filter semantics are:
+
+- `in(container)` consumes one already evaluated input value and one already evaluated container argument;
+- the container argument must evaluate to a list value;
+- membership is determined by strict element comparison without implicit coercion;
+- a non-list container remains a filter misuse failure rather than a false result.
+
 ### Probe-observation execution contract
 
 Canonical local-expression evaluation may require a read-only probe observation when the tree contains a probe-call node and the surrounding context permits such observation.
@@ -1929,6 +2064,8 @@ The model separates:
 - the restrictions imposed by the surrounding context.
 
 This means an interpolation envelope, a bare condition string, and a caller-side include binding may all belong to the same modeled local-expression system even when their authored syntax differs.
+
+A workflow-level `let` surface therefore adds one more authored way to name local expressions without creating a second expression family or second execution engine.
 
 ## Control boundary
 
@@ -2067,6 +2204,17 @@ At minimum the model expects support for:
 
 The model also distinguishes host-side failures that occur while resolving the outer binding surface from adapter-side failures that occur after resolved parameter values have been supplied to the adapter family.
 
+### Presence-oriented reuse of read invocation
+
+The model allows one product-owned presence-check helper to reuse read-only adapter invocation as a special argument class without changing ordinary adapter outcome semantics.
+
+In that reuse:
+
+- successful read invocation is interpreted by the presence helper as present;
+- adapter `not_found` is interpreted by the presence helper as missing;
+- adapter outcomes other than `not_found` continue to fail evaluation;
+- write invocation is outside the allowed presence-check argument class.
+
 ## Read-versus-write model
 
 The model distinguishes two invocation kinds.
@@ -2140,6 +2288,10 @@ Further selector steps or terminal action semantics may refine how the selected 
 ### Block-oriented targets
 
 The family may expose block-oriented targets such as paragraphs and lists inside a section or prelude scope.
+
+After one singular list or task-list block has been selected, the model may allow positional indexing to address one top-level list item within that selected block.
+
+The family may also expose a separate collection-view projection for list-like blocks, for example `.list_items` or `.task_list_items`, when the product wants an array-valued view distinct from the richer block object.
 
 ## Text-action model
 
@@ -4608,6 +4760,7 @@ Those compatibility forms do not change the higher-level local-expression model 
 - `version`
 - `workflow`
 - `inputs`
+- `let`
 - `state_needs`
 - `blocks`
 
@@ -4618,6 +4771,7 @@ Compatibility-only top-level fields:
 
 The stable assembled execution shape is block-based.
 Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
+Top-level `let` is one workflow-level local-expression binding surface rather than a block kind.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow data shape itself.
 
@@ -4630,6 +4784,26 @@ An assembly instruction is a source-level workflow construct that shapes workflo
 `include` is the initial assembly instruction for static workflow composition.
 
 Assembly may still carry caller-scoped bindings into expanded material. In particular, `include.with` may bind caller-scoped expressions before the expanded fragment payload is validated as assembled workflow material.
+
+Source workflow material may also declare a workflow-level `let` mapping for workflow-local named local expressions.
+
+Stable `let` form:
+
+```yaml
+let:
+  issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+  issue_open: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
+```
+
+`let` rules:
+
+- `let` is optional and, when present, is an object mapping binding names to local expressions;
+- `let` is allowed only at workflow top level;
+- each binding name must be unique within the workflow;
+- reserved roots such as `inputs`, `args`, `state`, and `step` must not be reused as `let` binding names;
+- each binding value is parsed as one ordinary local expression rather than as text substitution;
+- a `let` binding may not reference another `let` binding;
+- `let` bindings do not normalize into `blocks` and do not form an execution block kind of their own.
 
 ## Stable assembled block shape
 
@@ -5409,11 +5583,29 @@ If a change breaks any invariant, `meta/` must be updated explicitly in the same
 - Guard context must not depend on `step...`.
 - Guard context must remain compatible with read-only, pre-execution analysis.
 - Guard conditions must remain explainable as workflow-visible policy rather than hidden connector-local verdicts.
+- Guard context may allow pure built-ins and read-only representation-adapter projections without regressing into a separate guard-only language.
+- Guard context must continue to forbid representation-adapter write paths such as `->...`.
+- Guard evaluation must end in a boolean result; non-boolean success must remain an error rather than collapsing into implicit truthiness.
 
 ## Value-context discipline
 
 - Embedded value contexts must not drift into effectful connector execution.
 - Value-oriented local expressions must not grow hidden workflow-control semantics.
+
+## Pipeline-filter discipline
+
+- Pipeline filters remain an explicit product-defined contract rather than an implementation-only registry.
+- Product-defined pipeline filters must not drift into workflow-defined extensibility.
+- Predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must remain boolean-only and must not silently introduce coercion semantics.
+- Membership filters such as `in(container)` must preserve explicit list-container discipline rather than silently treating arbitrary strings, objects, or scalars as containers.
+- Boolean-producing filters must keep stable boolean result shape across contexts.
+
+## Workflow-local binding discipline
+
+- Workflow-level `let` remains one local-expression naming surface rather than a second expression language.
+- A `let` binding does not relax the context restrictions that would apply to the equivalent inline expression.
+- A `let` binding may not reference another `let` binding.
+- Reserved roots must not drift into ordinary reusable binding names.
 
 ## Representation-adapter discipline
 
@@ -5466,6 +5658,8 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - Reusable included fragments remain understandable as a static-composition `include` surface even when they declare fragment-local `args`.
 - Authoring verification should not require all reusable-fragment semantics to collapse into `include` when a later runtime-scoped invocation surface would be clearer.
 - If a future `run` surface is introduced, authoring verification should preserve a short explainable distinction between static composition and runtime-scoped fragment invocation.
+- Workflow-level `let` should help reduce repeated expression noise without hiding whether a workflow is reading inputs, runtime state, step-local data, or read-only observations.
+- Validation and diagnostics should keep `let` errors attributable both to the binding declaration and to the authored use site when that distinction matters.
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
 
 <!-- source: verification/runtime/guard-evaluation.md -->
