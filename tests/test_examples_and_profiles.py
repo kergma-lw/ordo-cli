@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 
+from ordo.introspection import describe_examples_catalog
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.runtime import execute_workflow, explain_workflow, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
 
@@ -15,6 +16,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/blocked-main-branch.yaml"),
             Path("examples/launcher-step.yaml"),
             Path("examples/let-bindings.yaml"),
+            Path("examples/local-expression-filters.yaml"),
             Path("examples/run-step.yaml"),
         ):
             report = validate_workflow_text(path.read_text(encoding="utf-8"), source=str(path))
@@ -73,6 +75,19 @@ class ExampleSurfaceTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["executed_steps"], ["print-branch"])
+
+    def test_local_expression_filters_example_is_published_and_executes_end_to_end(self) -> None:
+        catalog = describe_examples_catalog()
+        workflow = load_workflow_file(Path("examples/local-expression-filters.yaml"))
+
+        self.assertTrue(any(item["name"] == "local-expression-filters" for item in catalog["examples"]))
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["compute-membership", "announce"])
+        self.assertEqual(result.operation_results[0].outputs.get("value"), True)
+        self.assertEqual(result.operation_results[1].outputs.get("stdout"), "example-task")
 
 
 if __name__ == "__main__":

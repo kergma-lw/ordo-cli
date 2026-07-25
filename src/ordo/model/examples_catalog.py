@@ -58,6 +58,12 @@ EXAMPLES_CATALOG: JSONObject = {
             "shows": ["text_adapter_line_projection", "text_adapter_literal_search", "text_adapter_bulk_mutation"],
             "related_topics": ["capabilities", "model", "examples"],
         },
+        {
+            "name": "local-expression-filters",
+            "path": "examples/local-expression-filters.yaml",
+            "shows": ["type_predicate_filters", "membership_filter", "embedded_value_boolean_flow"],
+            "related_topics": ["model", "examples"],
+        },
     ],
 }
 
