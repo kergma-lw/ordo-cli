@@ -260,6 +260,17 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.operation_results[0].diagnostics[0].code, "guard.probe_field_missing")
         self.assertEqual(result.outputs["guard_details"][0]["failed_subcondition"], "git.branch.value")
 
+    def test_check_reports_non_boolean_guard_result_as_guard_error(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", inputs={"title": "demo"}, guards=(Guard(expr="inputs.title"),), steps=())
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.operation_results[0].status, "execution_error")
+        self.assertEqual(result.operation_results[0].diagnostics[-1].code, "runtime.guard.result_type")
+        self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "result_type")
+        self.assertEqual(result.failed_guard, "inputs.title")
+
     def test_check_surfaces_bootstrap_details_from_operation_results(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.worktree")),), steps=())
 

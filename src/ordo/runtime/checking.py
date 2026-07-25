@@ -1275,7 +1275,22 @@ def _build_guard_expression_result(expr: str, evaluation: ConditionEvaluationRes
             outputs={"guard": expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.expr},
             raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "probe_failed"},
         )
-    passed = bool(evaluation.value)
+    if not isinstance(evaluation.value, bool):
+        diagnostic = Diagnostic(
+            code="runtime.guard.result_type",
+            level="error",
+            message="Guard expression must evaluate to a boolean value",
+            path=(),
+            details={"guard": expr, "actual_type": type(evaluation.value).__name__},
+        )
+        return OperationResult(
+            status="execution_error",
+            summary="Guard expression produced a non-boolean result",
+            diagnostics=evaluation.diagnostics + (diagnostic,),
+            outputs={"guard": expr, "result": None, "failed_subcondition": expr},
+            raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "result_type"},
+        )
+    passed = evaluation.value
     return OperationResult(
         status="ok" if passed else "guard_failed",
         summary="Guard expression evaluated successfully" if passed else "Guard expression evaluated false",

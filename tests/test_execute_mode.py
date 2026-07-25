@@ -89,6 +89,17 @@ class ExecuteModeTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
             self.assertEqual(result.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
 
+    def test_execute_reports_non_boolean_guard_result_as_guard_error(self) -> None:
+        workflow = Workflow(version=0, workflow="open-task", inputs={"title": "demo"}, guards=(Guard(expr="inputs.title"),), steps=())
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.operation_results[0].status, "execution_error")
+        self.assertEqual(result.operation_results[0].diagnostics[-1].code, "runtime.guard.result_type")
+        self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "result_type")
+        self.assertEqual(result.failed_guard, "inputs.title")
+
     def test_record_step_runtime_result_updates_registers_and_diagnostics(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="flag", value=True, register="flag"),))
         step = workflow.steps[0]
