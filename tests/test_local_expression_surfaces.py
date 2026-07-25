@@ -20,7 +20,19 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
         )
 
         self.assertEqual(parsed.context, LocalExpressionContext.GUARD)
-        self.assertIsNotNone(parsed.guard)
+        self.assertIsNotNone(parsed.value)
+        self.assertIs(parsed.guard, parsed.value)
+        self.assertIs(parsed.root, parsed.value.root)
+        self.assertEqual(validate_parsed_local_expression(parsed), ())
+
+    def test_guard_surface_parses_filter_pipelines_through_shared_tree(self) -> None:
+        parsed = parse_local_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state | eq("OPEN")',
+            context=LocalExpressionContext.GUARD,
+        )
+
+        self.assertEqual(parsed.context, LocalExpressionContext.GUARD)
+        self.assertIs(parsed.guard, parsed.value)
         self.assertEqual(validate_parsed_local_expression(parsed), ())
 
     def test_step_condition_surface_parses_as_condition_context(self) -> None:

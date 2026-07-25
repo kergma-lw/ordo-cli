@@ -58,7 +58,7 @@ class LocalExpressionContextsTest(unittest.TestCase):
         parsed = parse_local_expression("git.worktree.clean and inputs.force", context=LocalExpressionContext.GUARD)
 
         self.assertEqual(parsed.context, LocalExpressionContext.GUARD)
-        self.assertIsNotNone(parsed.guard)
+        self.assertIsNotNone(parsed.value)
         self.assertEqual(validate_parsed_local_expression(parsed), ())
 
     def test_step_condition_uses_shared_embedded_local_expression_entrypoint(self) -> None:
