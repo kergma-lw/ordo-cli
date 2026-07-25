@@ -1329,6 +1329,90 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_step_if_accepts_is_string_filter_as_boolean_result(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  status: ok
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.status | is_string}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_step_if_rejects_unknown_filter(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  status: ok
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.status | mystery}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.filter_unknown")
+
+    def test_step_if_rejects_wrong_filter_arity(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  status: ok
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.status | is_string("extra")}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.filter_args")
+
+    def test_step_if_accepts_in_filter_as_boolean_result(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  status: ok
+                  allowed:
+                    - ok
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.status | in(inputs.allowed)}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_step_if_rejects_non_boolean_and_operand(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

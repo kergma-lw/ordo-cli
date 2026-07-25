@@ -1061,6 +1061,7 @@ class _SemanticValidator:
             self._validate_call(node)
             return
         if isinstance(node, FilterApplicationNode):
+            self._validate_filter(node)
             for argument in node.arguments:
                 self._visit(argument)
             return
@@ -1146,6 +1147,22 @@ class _SemanticValidator:
                 "validation.workflow.value_expr.presence_check_argument",
                 f"Built-in value expression '{node.name}' requires a lookup-style reference or read-only adapter invocation argument",
                 argument,
+            )
+
+    def _validate_filter(self, node: FilterApplicationNode) -> None:
+        spec = VALUE_EXPRESSION_FILTERS.get(node.name)
+        if spec is None:
+            self._error(
+                "validation.workflow.value_expr.filter_unknown",
+                f"Unknown local-expression filter '{node.name}'",
+                node,
+            )
+            return
+        if len(node.arguments) != spec.argument_count:
+            self._error(
+                "validation.workflow.value_expr.filter_arity",
+                f"Filter '{node.name}' requires exactly {spec.argument_count} argument(s)",
+                node,
             )
 
     def _error(self, code: str, message: str, node: ValueExpressionNode) -> None:
@@ -2438,17 +2455,17 @@ def _is_reference_missing(
     return True
 
 VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_registry(
-    ValueExpressionFilterSpec(name="lower", input_type="string", output_type="string", handler=_apply_lower_filter),
-    ValueExpressionFilterSpec(name="trim", input_type="string", output_type="string", handler=_apply_trim_filter),
-    ValueExpressionFilterSpec(name="slug", input_type="string", output_type="string", handler=_apply_slug_filter),
-    ValueExpressionFilterSpec(name="eq", input_type="json", output_type="boolean", handler=_apply_eq_filter),
-    ValueExpressionFilterSpec(name="ne", input_type="json", output_type="boolean", handler=_apply_ne_filter),
-    ValueExpressionFilterSpec(name="not", input_type="boolean", output_type="boolean", handler=_apply_not_filter),
-    ValueExpressionFilterSpec(name="is_string", input_type="json", output_type="boolean", handler=_apply_is_string_filter),
-    ValueExpressionFilterSpec(name="is_number", input_type="json", output_type="boolean", handler=_apply_is_number_filter),
-    ValueExpressionFilterSpec(name="is_integer", input_type="json", output_type="boolean", handler=_apply_is_integer_filter),
-    ValueExpressionFilterSpec(name="is_boolean", input_type="json", output_type="boolean", handler=_apply_is_boolean_filter),
-    ValueExpressionFilterSpec(name="in", input_type="json", output_type="boolean", handler=_apply_in_filter),
+    ValueExpressionFilterSpec(name="lower", input_type="string", output_type="string", argument_count=0, handler=_apply_lower_filter),
+    ValueExpressionFilterSpec(name="trim", input_type="string", output_type="string", argument_count=0, handler=_apply_trim_filter),
+    ValueExpressionFilterSpec(name="slug", input_type="string", output_type="string", argument_count=0, handler=_apply_slug_filter),
+    ValueExpressionFilterSpec(name="eq", input_type="json", output_type="boolean", argument_count=1, handler=_apply_eq_filter),
+    ValueExpressionFilterSpec(name="ne", input_type="json", output_type="boolean", argument_count=1, handler=_apply_ne_filter),
+    ValueExpressionFilterSpec(name="not", input_type="boolean", output_type="boolean", argument_count=0, handler=_apply_not_filter),
+    ValueExpressionFilterSpec(name="is_string", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_string_filter),
+    ValueExpressionFilterSpec(name="is_number", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_number_filter),
+    ValueExpressionFilterSpec(name="is_integer", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_integer_filter),
+    ValueExpressionFilterSpec(name="is_boolean", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_boolean_filter),
+    ValueExpressionFilterSpec(name="in", input_type="json", output_type="boolean", argument_count=1, handler=_apply_in_filter),
 )
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(

@@ -38,6 +38,7 @@ from .local_expression_engine.core import (
     StateReferenceNode as ValueStateReferenceNode,
     StepReferenceNode,
     UnaryNode,
+    VALUE_EXPRESSION_FILTERS,
     ValueExpressionNode,
     collect_step_references,
 )
@@ -1749,18 +1750,31 @@ def _infer_filter_result_type(
     source: str,
 ) -> tuple[str, list[Diagnostic]]:
     diagnostics: list[Diagnostic] = []
-    if filter_node.name in {"lower", "trim", "slug"}:
-        if filter_node.arguments:
-            diagnostics.append(
-                _diagnostic(
-                    "validation.workflow.step.if_expr.filter_args",
-                    f"Filter '{filter_node.name}' does not accept arguments",
-                    path,
-                    source,
-                    filter=filter_node.name,
-                    arguments=len(filter_node.arguments),
-                )
+    spec = VALUE_EXPRESSION_FILTERS.get(filter_node.name)
+    if spec is None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.if_expr.filter_unknown",
+                f"Unknown local-expression filter '{filter_node.name}'",
+                path,
+                source,
+                filter=filter_node.name,
             )
+        )
+        return "unknown", diagnostics
+    if len(filter_node.arguments) != spec.argument_count:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.if_expr.filter_args",
+                f"Filter '{filter_node.name}' requires exactly {spec.argument_count} argument(s)",
+                path,
+                source,
+                filter=filter_node.name,
+                arguments=len(filter_node.arguments),
+                expected_arguments=spec.argument_count,
+            )
+        )
+    if filter_node.name in {"lower", "trim", "slug"}:
         if input_type not in {"string", "unknown"}:
             diagnostics.append(
                 _diagnostic(
@@ -1773,31 +1787,9 @@ def _infer_filter_result_type(
                 )
             )
         return "string", diagnostics
-    if filter_node.name in {"eq", "ne"}:
-        if len(filter_node.arguments) != 1:
-            diagnostics.append(
-                _diagnostic(
-                    "validation.workflow.step.if_expr.filter_args",
-                    f"Filter '{filter_node.name}' requires exactly one argument",
-                    path,
-                    source,
-                    filter=filter_node.name,
-                    arguments=len(filter_node.arguments),
-                )
-            )
+    if filter_node.name in {"eq", "ne", "is_string", "is_number", "is_integer", "is_boolean", "in"}:
         return "boolean", diagnostics
     if filter_node.name == "not":
-        if filter_node.arguments:
-            diagnostics.append(
-                _diagnostic(
-                    "validation.workflow.step.if_expr.filter_args",
-                    "Filter 'not' does not accept arguments",
-                    path,
-                    source,
-                    filter="not",
-                    arguments=len(filter_node.arguments),
-                )
-            )
         if input_type not in {"boolean", "unknown"}:
             diagnostics.append(
                 _diagnostic(

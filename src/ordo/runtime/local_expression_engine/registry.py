@@ -23,6 +23,7 @@ class ValueExpressionFilterSpec:
     name: str
     input_type: str
     output_type: str
+    argument_count: int
     handler: FilterHandler
 
     def to_contract(self) -> JSONObject:
@@ -30,6 +31,7 @@ class ValueExpressionFilterSpec:
             "name": self.name,
             "input_type": self.input_type,
             "output_type": self.output_type,
+            "argument_count": self.argument_count,
         }
 
 
