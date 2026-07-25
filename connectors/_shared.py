@@ -10,7 +10,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
-from ordo.runtime.local_expression_engine.core import ConditionExpressionNode as GuardExpressionNode, ListNode, LiteralNode, ReferenceNode, StateReferenceNode
+from ordo.runtime.local_expression_engine.core import ListNode, LiteralNode, ReferenceNode, StateReferenceNode, ValueExpressionNode as GuardExpressionNode
 from ordo.runtime.state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
 

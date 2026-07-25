@@ -12,7 +12,6 @@ from ordo.runtime.local_expression_engine.core import (
     ReadOnlyObservationSession,
     evaluate_condition_expression,
     evaluate_local_expression_tree,
-    parse_condition_expression,
     parse_local_expression_tree,
 )
 
@@ -656,8 +655,9 @@ blocks:
   - steps: []
 """
         )
-        parsed = parse_condition_expression(
-            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"',
+            allow_boolean_composition=True,
         )
         observed: list[ConditionObservationRequest] = []
 
@@ -687,8 +687,9 @@ blocks:
   - steps: []
 """
         )
-        parsed = parse_condition_expression(
-            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"',
+            allow_boolean_composition=True,
         )
         count = 0
 
@@ -717,8 +718,9 @@ blocks:
   - steps: []
 """
         )
-        parsed = parse_condition_expression(
-            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"',
+            allow_boolean_composition=True,
         )
         count = 0
 
@@ -777,8 +779,9 @@ blocks:
   - steps: []
 """
         )
-        parsed = parse_condition_expression(
-            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"'
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN" and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"',
+            allow_boolean_composition=True,
         )
         count = 0
 

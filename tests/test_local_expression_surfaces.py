@@ -21,7 +21,6 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
 
         self.assertEqual(parsed.context, LocalExpressionContext.GUARD)
         self.assertIsNotNone(parsed.value)
-        self.assertIs(parsed.guard, parsed.value)
         self.assertIs(parsed.root, parsed.value.root)
         self.assertEqual(validate_parsed_local_expression(parsed), ())
 
@@ -32,7 +31,6 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
         )
 
         self.assertEqual(parsed.context, LocalExpressionContext.GUARD)
-        self.assertIs(parsed.guard, parsed.value)
         self.assertEqual(validate_parsed_local_expression(parsed), ())
 
     def test_step_condition_surface_parses_as_condition_context(self) -> None:

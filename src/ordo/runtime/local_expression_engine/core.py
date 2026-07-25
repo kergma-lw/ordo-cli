@@ -2558,22 +2558,6 @@ EmbeddedValueExpressionParseError = LocalExpressionParseError
 EmbeddedValueExpressionEvaluationError = LocalExpressionEvaluationError
 parse_embedded_value_expression = parse_local_expression_tree
 evaluate_embedded_value_expression = evaluate_local_expression_tree
-
-
-def parse_condition_expression(expression: str) -> ParsedValueExpression:
-    return parse_local_expression_tree(expression, allow_boolean_composition=True)
-
-
-def validate_parsed_condition_expression(parsed: ParsedValueExpression) -> tuple[ValueExpressionValidationError, ...]:
-    return validate_local_expression_tree(parsed)
-
-
-ConditionExpressionNode = ValueExpressionNode
-ParsedConditionExpression = ParsedValueExpression
-ConditionExpressionParseError = ValueExpressionParseError
-ConditionExpressionValidationError = ValueExpressionValidationError
-
-
 # Transitional low-level helper aliases.
 parse_value_expression = parse_local_expression_tree
 evaluate_value_expression = evaluate_local_expression_tree

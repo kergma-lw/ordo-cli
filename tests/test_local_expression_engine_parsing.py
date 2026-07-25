@@ -6,7 +6,6 @@ from ordo.runtime.local_expression_engine.core import (
     BinaryNode,
     BuiltinCallNode,
     CallArgumentNode,
-    ConditionExpressionParseError,
     CallNode,
     FilterApplicationNode,
     ListNode,
@@ -17,7 +16,6 @@ from ordo.runtime.local_expression_engine.core import (
     StateReferenceNode,
     StepReferenceNode,
     UnaryNode,
-    parse_condition_expression,
     parse_local_expression_tree,
 )
 
@@ -186,8 +184,9 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root, LiteralNode(start=0, end=4, value=-1.5))
 
     def test_parse_condition_surface_probe_composition(self) -> None:
-        parsed = parse_condition_expression(
-            'git.worktree.clean and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"'
+        parsed = parse_local_expression_tree(
+            'git.worktree.clean and gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state != "CLOSED"',
+            allow_boolean_composition=True,
         )
 
         self.assertIsInstance(parsed.root, BinaryNode)
@@ -202,19 +201,25 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root.right.left.fields, ("state",))
 
     def test_parse_condition_surface_not_in_operator(self) -> None:
-        parsed = parse_condition_expression('gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["CLOSED"]')
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in ["CLOSED"]',
+            allow_boolean_composition=True,
+        )
 
         self.assertIsInstance(parsed.root, BinaryNode)
         self.assertEqual(parsed.root.operator, "not in")
 
     def test_parse_condition_surface_rejects_positional_arguments(self) -> None:
-        with self.assertRaises(ConditionExpressionParseError) as context:
-            parse_condition_expression("gh.issue(inputs.issue).status")
+        with self.assertRaises(LocalExpressionParseError) as context:
+            parse_local_expression_tree("gh.issue(inputs.issue).status", allow_boolean_composition=True)
 
         self.assertIn("Expected '=' after argument name", context.exception.message)
 
     def test_parse_condition_surface_nested_project_issue_probe(self) -> None:
-        parsed = parse_condition_expression("gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists")
+        parsed = parse_local_expression_tree(
+            "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists",
+            allow_boolean_composition=True,
+        )
 
         self.assertIsInstance(parsed.root, CallNode)
         self.assertEqual(parsed.root.target.parts, ("gh", "project", "issue"))
@@ -223,8 +228,8 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
         self.assertEqual(parsed.root.fields, ("exists",))
 
     def test_parse_condition_surface_rejects_unterminated_string(self) -> None:
-        with self.assertRaises(ConditionExpressionParseError) as context:
-            parse_condition_expression('git.branch == "main')
+        with self.assertRaises(LocalExpressionParseError) as context:
+            parse_local_expression_tree('git.branch == "main', allow_boolean_composition=True)
 
         self.assertIn("Unterminated string literal", context.exception.message)
 

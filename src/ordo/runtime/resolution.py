@@ -13,7 +13,7 @@ from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, resolve_workflow_let_reference_node
-from .local_expression_engine.core import BinaryNode, CallNode, ConditionExpressionNode, ListNode, LiteralNode, ParsedConditionExpression, ReferenceNode, StateReferenceNode, UnaryNode
+from .local_expression_engine.core import BinaryNode, CallNode, ListNode, LiteralNode, ParsedLocalExpressionTree, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode
 from .providers import ConnectorProvider, get_default_connector_provider
 
 
@@ -38,7 +38,7 @@ class ResolvedExpressionProbe:
     source: str
     expression_text: str
     fields: tuple[str, ...] = ()
-    arguments: tuple[tuple[str, ConditionExpressionNode], ...] = ()
+    arguments: tuple[tuple[str, ValueExpressionNode], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +46,7 @@ class ResolvedConditionExpression:
     """Resolved condition expression under the shared local-expression model."""
 
     expr: str
-    parsed: ParsedConditionExpression
+    parsed: ParsedLocalExpressionTree
     probes: tuple[ResolvedExpressionProbe, ...] = ()
 
     @property
@@ -187,6 +187,9 @@ def resolve_workflow_references(
             if step.result is not None:
                 resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="result"))
                 continue
+            if step.publish is not None:
+                resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="publish"))
+                continue
             if step.run is not None:
                 resolved_steps.append(ResolvedRunStep(name=step.name, run=step.run))
                 continue
@@ -256,12 +259,11 @@ def _resolve_guard_expression(
     """Resolve one guard-context local expression against the connector registries."""
 
     parsed_local = parse_local_expression(expression, context=LocalExpressionContext.GUARD)
-    assert parsed_local.guard is not None
-    parsed = parsed_local.guard
+    parsed = parsed_local.value
     diagnostics: list[Diagnostic] = []
     probes: list[ResolvedExpressionProbe] = []
 
-    def visit(node: ConditionExpressionNode) -> None:
+    def visit(node: ValueExpressionNode) -> None:
         try:
             expanded = resolve_workflow_let_reference_node(node, workflow, context=LocalExpressionContext.GUARD)
         except LOCAL_EXPRESSION_PARSE_ERRORS as exc:

@@ -45,12 +45,6 @@ class ParsedLocalExpression:
     root: EmbeddedValueExpressionNode
     value: ParsedLocalExpressionTree
 
-    @property
-    def guard(self) -> ParsedLocalExpressionTree:
-        """Compatibility alias during the guard-surface migration."""
-
-        return self.value
-
 
 LOCAL_EXPRESSION_PARSE_ERRORS = (LocalExpressionParseError,)
 LocalExpressionValidationError = LocalExpressionValidationIssue
@@ -96,7 +90,7 @@ def validate_parsed_local_expression(parsed: ParsedLocalExpression) -> tuple[Loc
 
 
 def build_local_expression_parse_diagnostic(
-    exc: ConditionExpressionParseError | LocalExpressionParseError,
+    exc: LocalExpressionParseError,
     *,
     context: LocalExpressionContext,
     path: tuple[str, ...],
