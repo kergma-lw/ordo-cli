@@ -33,8 +33,9 @@
   },
   "published_topics": [
     "overview",
-    "capabilities",
     "model",
+    "workflow-authoring",
+    "capabilities",
     "command-line",
     "operations",
     "examples",
@@ -45,12 +46,16 @@
   "purpose": "World map for Ordo discovery and authoring bootstrap",
   "recommended_next_calls": [
     {
-      "command": "ordo-help capabilities --json",
-      "purpose": "Learn capability boundaries"
-    },
-    {
       "command": "ordo-help model --json",
       "purpose": "Learn the main DSL surfaces"
+    },
+    {
+      "command": "ordo-help workflow-authoring --json",
+      "purpose": "Learn preferred workflow authoring patterns and cautions"
+    },
+    {
+      "command": "ordo-help capabilities --json",
+      "purpose": "Learn capability boundaries"
     },
     {
       "command": "ordo-help command-line --json",

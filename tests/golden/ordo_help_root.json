@@ -1,22 +1,81 @@
 {
-  "tool_name": "ordo-help",
-  "purpose": "Self-describing discovery CLI for Ordo",
+  "examples": [
+    "ordo-help overview --json",
+    "ordo-help model --json",
+    "ordo-help workflow-authoring --json",
+    "ordo-help capabilities --json",
+    "ordo-help command-line --json",
+    "ordo-help operations --json",
+    "ordo-help examples --json"
+  ],
+  "introspection": {
+    "entrypoint": "describe_system",
+    "published_sections": [
+      "capabilities",
+      "errors",
+      "examples_catalog",
+      "operations",
+      "pattern_hints",
+      "playbook_contract",
+      "plugin_surface_contract",
+      "profile_contract",
+      "state_contract",
+      "workflow_contract"
+    ],
+    "version": 1
+  },
   "output_modes": [
     "text",
     "json"
   ],
+  "purpose": "Self-describing discovery CLI for Ordo",
+  "recommended_first_calls": [
+    {
+      "command": "ordo-help overview --json",
+      "purpose": "Get the Ordo world map"
+    },
+    {
+      "command": "ordo-help model --json",
+      "purpose": "Learn the main DSL surfaces"
+    },
+    {
+      "command": "ordo-help workflow-authoring --json",
+      "purpose": "Learn preferred workflow authoring patterns and cautions"
+    },
+    {
+      "command": "ordo-help capabilities --json",
+      "purpose": "Learn capability boundaries"
+    },
+    {
+      "command": "ordo-help command-line --json",
+      "purpose": "Inspect public launch commands and flags"
+    },
+    {
+      "command": "ordo-help operations --json",
+      "purpose": "Inspect the public operation catalog"
+    },
+    {
+      "command": "ordo-help examples --json",
+      "purpose": "Inspect verified repository examples"
+    }
+  ],
+  "tool_name": "ordo-help",
   "topics": [
     {
       "name": "overview",
       "summary": "Start with the Ordo world map"
     },
     {
-      "name": "capabilities",
-      "summary": "Inspect supported and unsupported surfaces"
-    },
-    {
       "name": "model",
       "summary": "Inspect the main authoring contracts"
+    },
+    {
+      "name": "workflow-authoring",
+      "summary": "Inspect preferred workflow authoring patterns, shell fallback cautions, early guards, and let usage"
+    },
+    {
+      "name": "capabilities",
+      "summary": "Inspect supported and unsupported surfaces"
     },
     {
       "name": "command-line",
@@ -42,55 +101,5 @@
       "name": "search",
       "summary": "Search topics, contract facts, and operation references"
     }
-  ],
-  "recommended_first_calls": [
-    {
-      "command": "ordo-help overview --json",
-      "purpose": "Get the Ordo world map"
-    },
-    {
-      "command": "ordo-help capabilities --json",
-      "purpose": "Learn capability boundaries"
-    },
-    {
-      "command": "ordo-help model --json",
-      "purpose": "Learn the main DSL surfaces"
-    },
-    {
-      "command": "ordo-help command-line --json",
-      "purpose": "Inspect public launch commands and flags"
-    },
-    {
-      "command": "ordo-help operations --json",
-      "purpose": "Inspect the public operation catalog"
-    },
-    {
-      "command": "ordo-help examples --json",
-      "purpose": "Inspect verified repository examples"
-    }
-  ],
-  "examples": [
-    "ordo-help overview --json",
-    "ordo-help capabilities --json",
-    "ordo-help model --json",
-    "ordo-help command-line --json",
-    "ordo-help operations --json",
-    "ordo-help examples --json"
-  ],
-  "introspection": {
-    "version": 1,
-    "entrypoint": "describe_system",
-    "published_sections": [
-      "capabilities",
-      "errors",
-      "examples_catalog",
-      "operations",
-      "pattern_hints",
-      "playbook_contract",
-      "plugin_surface_contract",
-      "profile_contract",
-      "state_contract",
-      "workflow_contract"
-    ]
-  }
+  ]
 }

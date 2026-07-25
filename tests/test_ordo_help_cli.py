@@ -50,6 +50,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         expected = json.loads((GOLDEN_DIR / "ordo_help_overview.json").read_text(encoding="utf-8"))
         self.assertEqual(actual, expected)
 
+    def test_workflow_authoring_json_matches_golden(self) -> None:
+        result = self.run_help("workflow-authoring", "--json")
+
+        self.assertEqual(result.returncode, 0)
+        actual = json.loads(result.stdout)
+        expected = json.loads((GOLDEN_DIR / "ordo_help_workflow_authoring.json").read_text(encoding="utf-8"))
+        self.assertEqual(actual, expected)
+
     def test_examples_json_matches_golden(self) -> None:
         result = self.run_help("examples", "--json")
 
@@ -69,16 +77,18 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_bootstrap_flow_commands_succeed(self) -> None:
         root = json.loads(self.run_help("--json").stdout)
         overview = json.loads(self.run_help("overview", "--json").stdout)
-        capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         model = json.loads(self.run_help("model", "--json").stdout)
+        workflow_authoring = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+        capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         command_line = json.loads(self.run_help("command-line", "--json").stdout)
         operations = json.loads(self.run_help("operations", "--json").stdout)
         examples = json.loads(self.run_help("examples", "--json").stdout)
 
         self.assertEqual(root["tool_name"], "ordo-help")
         self.assertEqual(overview["document_kind"], "overview")
-        self.assertIn("capabilities", capabilities)
         self.assertEqual(model["document_kind"], "model")
+        self.assertEqual(workflow_authoring["document_kind"], "workflow_authoring")
+        self.assertIn("capabilities", capabilities)
         self.assertEqual(command_line["document_kind"], "command_line")
         self.assertIn("connectors", operations)
         self.assertEqual(examples["document_kind"], "examples_catalog")
@@ -200,6 +210,26 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(filters["is_boolean"]["output_type"], "boolean")
         self.assertEqual(filters["in"]["input_type"], "json")
 
+    def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
+
+        guard_surface = model["workflow"]["surface_constraints"]["guard_expression"]
+        capability_guard_surface = next(item for item in capabilities["expression_surfaces"] if item["name"] == "guard_expression")
+        negative_rules = {item["name"]: item for item in capabilities["negative_rules"]}
+
+        self.assertEqual(guard_surface["allowed_roots"], ["inputs", "probe", "state"])
+        self.assertIn("is_number", guard_surface["allowed_filters"])
+        self.assertEqual(guard_surface["allowed_builtins"], ["format", "is_missing", "is_present"])
+        self.assertTrue(guard_surface["representation_adapter_policy"]["read_only_allowed"])
+        self.assertTrue(guard_surface["representation_adapter_policy"]["write_paths_forbidden"])
+        self.assertEqual(guard_surface["representation_adapter_policy"]["forbidden_write_surface"], "->...")
+        self.assertEqual(guard_surface["result_contract"]["required_output_type"], "boolean")
+        self.assertEqual(capability_guard_surface["builtins"], ["format", "is_missing", "is_present"])
+        self.assertIn("in", capability_guard_surface["filters"])
+        self.assertEqual(negative_rules["guard_expression.no_adapter_write_path"]["surface"], "guard_expression")
+        self.assertEqual(negative_rules["guard_expression.boolean_result_required"]["surface"], "guard_expression")
+
     def test_capabilities_publish_explicit_non_inference_metadata(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")
@@ -287,6 +317,87 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter.is_integer" for item in result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter_surface" for item in surface_result["facts"]))
+
+    def test_search_indexes_workflow_authoring_rules(self) -> None:
+        shell_result = json.loads(self.run_help("search", "shell.command", "--json").stdout)
+        guards_result = json.loads(self.run_help("search", "runner", "--json").stdout)
+        input_validation_result = json.loads(self.run_help("search", "missing input validation", "--json").stdout)
+        adapters_result = json.loads(self.run_help("search", "published results", "--json").stdout)
+        publish_result = json.loads(self.run_help("search", "outward-facing contract", "--json").stdout)
+        state_result = json.loads(self.run_help("search", "general-purpose cache", "--json").stdout)
+        context_result = json.loads(self.run_help("search", "ambient environment requirements", "--json").stdout)
+        control_result = json.loads(self.run_help("search", "workflow applicability", "--json").stdout)
+        let_result = json.loads(self.run_help("search", "repetition", "--json").stdout)
+
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.shell.command" for item in shell_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_guards" for item in guards_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.input_validation_default" for item in input_validation_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.representation_adapters" for item in adapters_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.publish_outputs" for item in publish_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.lifecycle_state" for item in state_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.explicit_execution_context" for item in context_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.separate_control_surfaces" for item in control_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_let" for item in let_result["facts"]))
+
+    def test_workflow_authoring_topic_prioritizes_shell_command_and_early_guards(self) -> None:
+        payload = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "workflow_authoring")
+        self.assertEqual(payload["audience"], ["workflow_authors", "agents"])
+        self.assertIn("treat semantic ambiguity as a reason to clarify rather than improvise", payload["authoring_heuristic"])
+        self.assertIn("when adding or changing inputs, validate them before continuing", payload["authoring_heuristic"])
+        decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")
+        structured_rule = next(item for item in payload["rules"] if item["name"] == "structured_surface_bias")
+        shell_rule = next(item for item in payload["rules"] if item["name"] == "shell.command")
+        ambiguity_rule = next(item for item in payload["rules"] if item["name"] == "semantic_ambiguity")
+        local_rule = next(item for item in payload["rules"] if item["name"] == "local_artifacts_are_context")
+        guards_rule = next(item for item in payload["rules"] if item["name"] == "early_guards")
+        input_validation_rule = next(item for item in payload["rules"] if item["name"] == "input_validation_default")
+        adapters_rule = next(item for item in payload["rules"] if item["name"] == "representation_adapters")
+        publish_rule = next(item for item in payload["rules"] if item["name"] == "publish_outputs")
+        state_rule = next(item for item in payload["rules"] if item["name"] == "lifecycle_state")
+        context_rule = next(item for item in payload["rules"] if item["name"] == "explicit_execution_context")
+        control_rule = next(item for item in payload["rules"] if item["name"] == "separate_control_surfaces")
+        let_rule = next(item for item in payload["rules"] if item["name"] == "early_let")
+        guard_result_rule = next(item for item in payload["rules"] if item["name"] == "guard_result_contract")
+
+        self.assertEqual(decision_rule["priority"], "critical_decision_policy")
+        self.assertTrue(any("composed" in item for item in decision_rule["prefer"]))
+        self.assertEqual(structured_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("product terms" in item for item in structured_rule["why"]))
+        self.assertEqual(shell_rule["priority"], "critical_caution")
+        self.assertEqual(shell_rule["guidance_level"], "discouraged_last_resort")
+        self.assertTrue(any("riskiest" in reason for reason in shell_rule["why"]))
+        self.assertTrue(any("repository-local automation" in item for item in shell_rule["avoid"]))
+        self.assertEqual(ambiguity_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("ask" in item for item in ambiguity_rule["prefer"]))
+        self.assertEqual(local_rule["priority"], "recommended_caution")
+        self.assertTrue(any("public model" in item for item in local_rule["why"] + local_rule["prefer"]))
+        self.assertEqual(guards_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("just a runner" in reason for reason in guards_rule["why"]))
+        self.assertTrue(any("phase guards in a stable order" in item and "input validation" in item for item in guards_rule["prefer"]))
+        self.assertTrue(any("when adding or changing workflow inputs" in item for item in guards_rule["prefer"]))
+        self.assertTrue(any("is_integer" in item and "in(...)" in item for item in guards_rule["prefer"]))
+        self.assertEqual(input_validation_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("pause and decide" in item for item in input_validation_rule["prefer"]))
+        self.assertTrue(any("style references" in item for item in input_validation_rule["prefer"]))
+        self.assertTrue(any("neighboring workflow" in item for item in input_validation_rule["avoid"]))
+        self.assertEqual(adapters_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("published results" in item for item in adapters_rule["rule"].splitlines() + adapters_rule["why"] + adapters_rule["prefer"]))
+        self.assertTrue(any("read-only adapter projections" in item for item in adapters_rule["prefer"]))
+        self.assertTrue(any("->..." in item for item in adapters_rule["avoid"]))
+        self.assertEqual(publish_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("weak outward-facing contract" in item for item in publish_rule["why"] + publish_rule["avoid"]))
+        self.assertEqual(state_rule["priority"], "recommended_caution")
+        self.assertTrue(any("lifecycle" in item for item in [state_rule["rule"], *state_rule["why"], *state_rule["prefer"]]))
+        self.assertEqual(context_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("launchers" in item for item in context_rule["prefer"]))
+        self.assertEqual(control_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("step-local" in item for item in control_rule["prefer"]))
+        self.assertEqual(let_rule["priority"], "recommended_readability_pattern")
+        self.assertEqual(guard_result_rule["priority"], "critical_guard_contract")
+        self.assertEqual(guard_result_rule["guidance_level"], "required")
+        self.assertTrue(any("non-boolean" in item for item in guard_result_rule["prefer"] + guard_result_rule["avoid"]))
 
     def test_command_line_topic_publishes_playbook_flags_and_precedence(self) -> None:
         payload = json.loads(self.run_help("command-line", "--json").stdout)

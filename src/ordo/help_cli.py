@@ -16,8 +16,9 @@ from ordo.model.json import JSONObject
 
 PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "overview", "summary": "Start with the Ordo world map"},
-    {"name": "capabilities", "summary": "Inspect supported and unsupported surfaces"},
     {"name": "model", "summary": "Inspect the main authoring contracts"},
+    {"name": "workflow-authoring", "summary": "Inspect preferred workflow authoring patterns, shell fallback cautions, early guards, and let usage"},
+    {"name": "capabilities", "summary": "Inspect supported and unsupported surfaces"},
     {"name": "command-line", "summary": "Inspect the public command-line launch surface"},
     {"name": "operations", "summary": "Inspect the public connector catalog"},
     {"name": "examples", "summary": "Inspect verified repository examples"},
@@ -26,15 +27,304 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "search", "summary": "Search topics, contract facts, and operation references"},
 )
 
-DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "capabilities", "model", "command-line", "operations", "examples")
+DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "model", "workflow-authoring", "capabilities", "command-line", "operations", "examples")
 
 RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
     {"command": "ordo-help overview --json", "purpose": "Get the Ordo world map"},
-    {"command": "ordo-help capabilities --json", "purpose": "Learn capability boundaries"},
     {"command": "ordo-help model --json", "purpose": "Learn the main DSL surfaces"},
+    {"command": "ordo-help workflow-authoring --json", "purpose": "Learn preferred workflow authoring patterns and cautions"},
+    {"command": "ordo-help capabilities --json", "purpose": "Learn capability boundaries"},
     {"command": "ordo-help command-line --json", "purpose": "Inspect public launch commands and flags"},
     {"command": "ordo-help operations --json", "purpose": "Inspect the public operation catalog"},
     {"command": "ordo-help examples --json", "purpose": "Inspect verified repository examples"},
+)
+
+WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
+    {
+        "name": "decision_order",
+        "priority": "critical_decision_policy",
+        "guidance_level": "strong_recommendation",
+        "rule": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations.",
+        "why": [
+            "a fixed decision order reduces ad hoc shortcutting and makes implementation choices easier to explain",
+            "starting from the public model keeps workflow behavior aligned with published product semantics",
+            "treating fallback as a late-stage decision makes missing capabilities easier to identify explicitly",
+        ],
+        "prefer": [
+            "check whether one published public operation already fits",
+            "otherwise check whether multiple published public operations can be composed cleanly",
+            "name the exact missing capability or semantic gap before considering a fallback",
+            "ask the user before introducing a fallback when the remaining gap is semantic rather than merely mechanical",
+        ],
+        "avoid": [
+            "jumping to the nearest working mechanism before checking the structured public surface",
+            "treating composition as unnecessary just because one direct operation does not exist",
+            "treating unclear semantics as permission to improvise a fallback",
+        ],
+    },
+    {
+        "name": "structured_surface_bias",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Prefer implementations that express product intent through typed public workflow surfaces.",
+        "why": [
+            "typed public surfaces are easier to validate, inspect, and explain across check, plan, explain, and run",
+            "structured implementations are less likely to encode accidental machine-local or repository-local behavior",
+            "a workflow is better not merely because it works, but because its intent stays legible in product terms",
+        ],
+        "prefer": [
+            "optimize for product-legible workflow intent, not just immediate execution success",
+            "prefer narrower typed operations over broader execution surfaces when both can do the job",
+        ],
+        "avoid": [
+            "optimizing for the first mechanism that appears to work",
+            "choosing a broader surface merely because it is familiar or nearby",
+        ],
+    },
+    {
+        "name": "shell.command",
+        "priority": "critical_caution",
+        "guidance_level": "discouraged_last_resort",
+        "rule": "Prefer public Ordo operations and structured workflow surfaces over shell.command.",
+        "why": [
+            "shell.command is the coarsest and riskiest public execution surface",
+            "shell usage is harder to validate, explain, and keep environment-stable",
+            "shell-first workflows can hide missing product surface that should be discussed explicitly",
+        ],
+        "prefer": [
+            "check published connector operations first",
+            "use stable workflow constructs before introducing shell fallback",
+            "state which public operations were considered, why they are insufficient, and what exact capability is missing before using shell.command",
+            "keep unavoidable shell usage narrow, explicit, and easy to reason about",
+        ],
+        "avoid": [
+            "using shell.command as a first-choice implementation tool",
+            "using shell.command for routine inspection, transformation, or orchestration when structured surfaces already exist",
+            "using shell.command to wrap repository-local automation without first exhausting public operations",
+        ],
+    },
+    {
+        "name": "semantic_ambiguity",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Treat semantic ambiguity as a stop signal for clarification, not as permission to invent or preserve semantics silently.",
+        "why": [
+            "silent semantic invention makes workflows surprising and hard to trust later",
+            "asking at the semantic boundary is safer than hard-coding assumptions as if they were product truth",
+            "clarified semantics produce workflows that are more stable for later authors and agents",
+        ],
+        "prefer": [
+            "ask when the public surface is almost sufficient but one semantic edge remains unclear",
+            "separate mechanical gaps from semantic gaps before choosing an implementation strategy",
+        ],
+        "avoid": [
+            "guessing what an unclear public surface probably means",
+            "preserving nearby local helper semantics by default when the product contract is unclear",
+        ],
+    },
+    {
+        "name": "local_artifacts_are_context",
+        "priority": "recommended_caution",
+        "guidance_level": "recommended",
+        "rule": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth.",
+        "why": [
+            "local artifacts may reflect convenience, history, or workaround pressure rather than the preferred product model",
+            "defaulting to repository-local helpers encourages imitation of incidental behavior instead of deliberate workflow design",
+            "preferring the declared public model over local history keeps workflows more portable and explainable",
+        ],
+        "prefer": [
+            "use local artifacts to learn context, constraints, or missing capability signals",
+            "prefer declared public contracts over incidental repository habits when choosing the workflow surface",
+        ],
+        "avoid": [
+            "treating the existence of a local script as sufficient reason to make it the workflow implementation surface",
+            "copying repository-local behavior into a workflow without checking whether it matches the public model",
+        ],
+    },
+    {
+        "name": "early_guards",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Be generous with guards near the start of the workflow.",
+        "why": [
+            "early guards improve execution safety and make workflow applicability explicit",
+            "early guards improve check, plan, and explain readability",
+            "guard-rich workflows help next prefer workflows that are actually relevant now",
+            "without guards, Ordo degrades toward being just a runner",
+        ],
+        "prefer": [
+            "put applicability checks near the top of the workflow",
+            "for non-trivial workflows, phase guards in a stable order such as environment applicability, input validation, domain invariants, and structural preconditions",
+            "when adding or changing workflow inputs, stop and validate each input at the guard boundary before moving on to downstream steps",
+            "use input-validation filters such as value | is_string, value | is_number, value | is_integer, value | is_boolean, value | in(...), value | eq(...), and value | ne(...) when they make the input contract more explicit",
+            "reject inapplicable situations early instead of failing deep inside execution",
+        ],
+        "avoid": [
+            "delaying obvious applicability checks until late steps",
+            "letting non-trivial applicability checks collapse into one unreadable undifferentiated guard mass",
+            "relying on late failures when the workflow could declare inapplicability up front",
+        ],
+    },
+    {
+        "name": "input_validation_default",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs.",
+        "why": [
+            "new inputs silently widen workflow semantics unless their admissible shapes are declared near the top of the workflow",
+            "validation guards are easier for agents and later authors to notice and preserve than downstream step failures",
+            "neighboring workflows may be incomplete examples, so copied omissions should not become the next default",
+        ],
+        "prefer": [
+            "when introducing or changing any workflow input, pause and decide how that input is validated before continuing with step authoring",
+            "add an early guard for each new or changed input whenever a public validation surface exists",
+            "for string inputs prefer value | is_string; for numbers prefer value | is_number or value | is_integer; for booleans prefer value | is_boolean; for enumerated values prefer value | in(...), value | eq(...), or value | ne(...) as appropriate",
+            "if no suitable public validation surface exists, name that exact gap explicitly instead of silently omitting validation",
+            "treat existing workflows as style references, not as waivers for missing input validation",
+        ],
+        "avoid": [
+            "copying a neighboring workflow's missing validation into new authoring work",
+            "introducing a new input and only discovering bad values inside downstream operations",
+            "assuming that a repeated local pattern is automatically the preferred authoring contract",
+        ],
+    },
+    {
+        "name": "representation_adapters",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Prefer representation adapters for transformations that feed guards, conditions, and published results.",
+        "why": [
+            "representation adapters can simplify transformations that would otherwise become awkward inline expressions",
+            "adapter-based workflows are often clearer than ad hoc string-shaping inside guards, conditions, and result publication",
+            "adapters help keep structured workflow intent visible during check, plan, explain, and run",
+        ],
+        "prefer": [
+            "use adapters when text or markdown projections make a downstream decision or published value clearer",
+            "in guard context, prefer read-only adapter projections and keep adapter write paths such as ->... out of guard logic",
+            "keep transformations close to the structured adapter surface instead of re-encoding them manually",
+        ],
+        "avoid": [
+            "hand-rolling repetitive transformations in raw inline expressions when an adapter surface already matches the need",
+            "using adapter write paths such as ->... inside guards",
+            "ignoring published adapter families when they would make guard, condition, or publish logic easier to read",
+        ],
+    },
+    {
+        "name": "guard_result_contract",
+        "priority": "critical_guard_contract",
+        "guidance_level": "required",
+        "rule": "A guard expression must evaluate to a boolean result.",
+        "why": [
+            "guard success and failure are defined by boolean policy outcomes rather than arbitrary value production",
+            "a strict boolean result keeps guard behavior readable across check, plan, explain, and execute",
+        ],
+        "prefer": [
+            "use filters, comparisons, builtins, and read-only adapters only when they clearly contribute to a final boolean guard result",
+            "treat a successful non-boolean guard result as a workflow error to fix rather than as truthy or falsy shorthand",
+        ],
+        "avoid": [
+            "authoring guards that merely produce a string, number, list, or object without an explicit boolean decision",
+            "relying on implicit truthiness instead of an explicit boolean result",
+        ],
+    },
+    {
+        "name": "publish_outputs",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Prefer publish: for intentional outward-facing workflow results.",
+        "why": [
+            "explicit published outputs make workflow intent clearer",
+            "explicit published outputs keep success payloads focused",
+            "fallback-only success output is a weak outward-facing contract",
+        ],
+        "prefer": [
+            "publish the final values that downstream readers are meant to consume",
+            "use publish: when the workflow is meant to communicate a meaningful result beyond internal execution",
+        ],
+        "avoid": [
+            "leaving important final outputs implicit when the workflow is meant to communicate something downstream",
+            "relying on fallback-only success output as the main outward-facing result contract",
+        ],
+    },
+    {
+        "name": "lifecycle_state",
+        "priority": "recommended_caution",
+        "guidance_level": "recommended",
+        "rule": "Use state when multiple workflows represent stages of one lifecycle, and keep stored state small.",
+        "why": [
+            "state is most justified as durable coordination context across related workflow stages",
+            "small state is easier to understand, repair, and keep consistent",
+            "large state payloads turn hidden persistence into a brittle general-purpose cache",
+        ],
+        "prefer": [
+            "store minimal durable context such as active profile, current entity identity, or compact lifecycle markers",
+            "prefer explicit inputs, lets, and published outputs over state when the data does not need cross-workflow persistence",
+        ],
+        "avoid": [
+            "using state as the default dataflow mechanism between unrelated workflows",
+            "writing large payloads or easily re-fetchable remote data into state as a matter of course",
+        ],
+    },
+    {
+        "name": "explicit_execution_context",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic.",
+        "why": [
+            "hidden environment assumptions make workflows brittle",
+            "explicit execution context is easier to explain, validate, and reuse",
+            "workflows are easier for agents to author correctly when required context is visible",
+        ],
+        "prefer": [
+            "express special execution setup through profiles, launchers, or explicit guards",
+            "fail early when required execution context is missing",
+        ],
+        "avoid": [
+            "assuming shell bootstrap has already happened outside the workflow",
+            "embedding silent dependence on preloaded tools, environment variables, or working-directory conventions",
+            "making a workflow succeed only under undocumented machine-local setup",
+        ],
+    },
+    {
+        "name": "separate_control_surfaces",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Use the right control surface for the right kind of decision: guards for workflow applicability, configuration for context variation, and if: for local step branching.",
+        "why": [
+            "mixing these roles makes workflows harder to read and harder to explain",
+            "hidden applicability inside step conditions weakens workflow selection and safety",
+            "using if: as a substitute for configuration or workflow structure leads to brittle branching logic",
+        ],
+        "prefer": [
+            "use guards for conditions that determine whether the workflow should run at all",
+            "use inputs, profiles, and reusable fragments for stable context-specific variation",
+            "use if: only for step-local optional behavior inside an already applicable workflow",
+        ],
+        "avoid": [
+            "hiding workflow inapplicability inside late step-level if: conditions",
+            "expressing broad context variation through many ad hoc if: branches",
+            "cloning or rewriting workflows when explicit configuration would preserve one stable behavior shape",
+        ],
+    },
+    {
+        "name": "early_let",
+        "priority": "recommended_readability_pattern",
+        "guidance_level": "recommended",
+        "rule": "Prefer an early let block when the workflow uses long, repeated, or semantically important expressions.",
+        "why": [
+            "named bindings shorten long fragments and reduce repetition",
+            "named bindings improve readability across check, plan, explain, and run surfaces",
+            "early let bindings make workflow intent easier to scan",
+        ],
+        "prefer": [
+            "name important values early",
+            "bind repeated or hard-to-scan expressions once and reuse them",
+        ],
+        "avoid": [
+            "repeating the same long inline expression across multiple guards or steps",
+            "hiding important intent inside one-off inline expressions when a stable let binding would clarify it",
+        ],
+    },
 )
 
 
@@ -51,8 +341,9 @@ def build_root_response() -> JSONObject:
         "recommended_first_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS],
         "examples": [
             "ordo-help overview --json",
-            "ordo-help capabilities --json",
             "ordo-help model --json",
+            "ordo-help workflow-authoring --json",
+            "ordo-help capabilities --json",
             "ordo-help command-line --json",
             "ordo-help operations --json",
             "ordo-help examples --json",
@@ -110,6 +401,25 @@ def describe_local_expression_surface() -> JSONObject:
 
     return {
         "pipeline_filters": [spec.to_contract() for spec in VALUE_EXPRESSION_FILTERS.values()],
+    }
+
+
+def build_workflow_authoring_response() -> JSONObject:
+    """Return the published workflow authoring guidance surface."""
+
+    return {
+        "document_kind": "workflow_authoring",
+        "purpose": "Preferred workflow authoring patterns and discouraged design choices for Ordo authors and agents",
+        "audience": ["workflow_authors", "agents"],
+        "disclaimer": "This guidance complements the validation contract. It does not replace the formal runtime model.",
+        "authoring_heuristic": [
+            "declare applicability early",
+            "when adding or changing inputs, validate them before continuing",
+            "name important values early",
+            "use structured Ordo surfaces before falling back to shell",
+            "treat semantic ambiguity as a reason to clarify rather than improvise",
+        ],
+        "rules": [dict(rule) for rule in WORKFLOW_AUTHORING_RULES],
     }
 
 
@@ -531,6 +841,30 @@ def build_search_response(query: str) -> JSONObject:
                 }
             )
 
+    workflow_authoring = build_workflow_authoring_response()
+    for rule in workflow_authoring["rules"]:
+        searchable = " ".join(
+            [
+                rule["name"],
+                rule["priority"],
+                rule["guidance_level"],
+                rule["rule"],
+                *rule.get("why", []),
+                *rule.get("prefer", []),
+                *rule.get("avoid", []),
+            ]
+        ).lower()
+        if lowered_query in searchable:
+            fact_results.append(
+                {
+                    "kind": "workflow_authoring_rule",
+                    "name": f"workflow-authoring.{rule['name']}",
+                    "summary": rule["rule"],
+                    "topic": "workflow-authoring",
+                    "command": "ordo-help workflow-authoring --json",
+                }
+            )
+
     return {
         "document_kind": "search_results",
         "query": query,
@@ -560,16 +894,18 @@ def render_root_text() -> str:
             "",
             "Recommended first calls:",
             "1. ordo-help overview --json",
-            "2. ordo-help capabilities --json",
-            "3. ordo-help model --json",
-            "4. ordo-help command-line --json",
-            "5. ordo-help operations --json",
-            "6. ordo-help examples --json",
+            "2. ordo-help model --json",
+            "3. ordo-help workflow-authoring --json",
+            "4. ordo-help capabilities --json",
+            "5. ordo-help command-line --json",
+            "6. ordo-help operations --json",
+            "7. ordo-help examples --json",
             "",
             "Next command examples:",
             "- ordo-help overview --json",
-            "- ordo-help capabilities --json",
             "- ordo-help model --json",
+            "- ordo-help workflow-authoring --json",
+            "- ordo-help capabilities --json",
             "- ordo-help command-line --json",
             "- ordo-help operations --json",
             "- ordo-help examples --json",
@@ -640,6 +976,23 @@ def render_model_text(payload: JSONObject) -> str:
     ]
     for family in payload["representation_adapters"]["families"]:
         lines.append(f"- {family['name']}: selectors={', '.join(family['selectors'])}; actions={', '.join(family['actions'])}")
+    return "\n".join(lines)
+
+
+def render_workflow_authoring_text(payload: JSONObject) -> str:
+    """Return the text workflow-authoring surface."""
+
+    lines = ["workflow-authoring", payload["purpose"], "", "Authoring heuristic:"]
+    lines.extend(f"- {item}" for item in payload["authoring_heuristic"])
+    lines.extend(["", "Rules:"])
+    for rule in payload["rules"]:
+        lines.append(f"- {rule['name']} [{rule['priority']}]: {rule['rule']}")
+        for reason in rule.get("why", []):
+            lines.append(f"  why: {reason}")
+        for preferred in rule.get("prefer", []):
+            lines.append(f"  prefer: {preferred}")
+        for avoided in rule.get("avoid", []):
+            lines.append(f"  avoid: {avoided}")
     return "\n".join(lines)
 
 
@@ -805,10 +1158,12 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
 
     if topic == "overview":
         return build_overview_response(), render_overview_text
-    if topic == "capabilities":
-        return describe_capabilities(), render_capabilities_text
     if topic == "model":
         return build_model_response(), render_model_text
+    if topic == "workflow-authoring":
+        return build_workflow_authoring_response(), render_workflow_authoring_text
+    if topic == "capabilities":
+        return describe_capabilities(), render_capabilities_text
     if topic == "command-line":
         return build_command_line_response(), render_command_line_text
     if topic == "operations":
@@ -843,6 +1198,9 @@ def main(argv: list[str] | None = None) -> int:
 
     model_parser = subparsers.add_parser("model", add_help=False)
     model_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    workflow_authoring_parser = subparsers.add_parser("workflow-authoring", add_help=False)
+    workflow_authoring_parser.add_argument("--json", action="store_true", dest="as_json")
 
     command_line_parser = subparsers.add_parser("command-line", add_help=False)
     command_line_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -884,6 +1242,8 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_payload(describe_capabilities(), as_json=as_json, renderer=render_capabilities_text)
     if parsed.command == "model":
         return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text)
+    if parsed.command == "workflow-authoring":
+        return _emit_payload(build_workflow_authoring_response(), as_json=as_json, renderer=render_workflow_authoring_text)
     if parsed.command == "command-line":
         return _emit_payload(build_command_line_response(), as_json=as_json, renderer=render_command_line_text)
     if parsed.command == "operations":

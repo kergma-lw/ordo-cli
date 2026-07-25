@@ -116,6 +116,20 @@
         "text_adapter_bulk_mutation"
       ],
       "verified": true
+    },
+    {
+      "name": "local-expression-filters",
+      "path": "examples/local-expression-filters.yaml",
+      "related_topics": [
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "type_predicate_filters",
+        "membership_filter",
+        "embedded_value_boolean_flow"
+      ],
+      "verified": true
     }
   ]
 }
