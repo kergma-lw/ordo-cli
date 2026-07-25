@@ -184,13 +184,23 @@ WORKFLOW_CONTRACT: JSONObject = {
     "surface_constraints": {
         "guard_expression": {
             "allowed_roots": ["inputs", "probe", "state"],
+            "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not", "is_string", "is_number", "is_integer", "is_boolean", "in"],
+            "allowed_builtins": ["format", "is_missing", "is_present"],
             "boolean_operators": ["and", "or", "not", "parentheses"],
-            "forbidden_features": ["value_expression_filters", "value_expression_builtins"],
+            "representation_adapter_policy": {
+                "read_only_allowed": True,
+                "write_paths_forbidden": True,
+                "forbidden_write_surface": "->...",
+            },
+            "result_contract": {
+                "required_output_type": "boolean",
+                "non_boolean_result": "error",
+            },
         },
         "runtime_value_surface": {
             "allowed_roots": ["inputs", "args", "state", "step"],
-            "allowed_builtins": ["format"],
-            "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not"],
+            "allowed_builtins": ["format", "is_missing", "is_present"],
+            "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not", "is_string", "is_number", "is_integer", "is_boolean", "in"],
             "boolean_operators": ["and", "or", "not", "parentheses"],
         },
     },

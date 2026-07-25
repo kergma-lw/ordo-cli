@@ -66,7 +66,7 @@ LOCAL_EXPRESSION_CONTEXT_POLICIES: dict[LocalExpressionContext, LocalExpressionC
         hidden_control_forbidden=True,
         whole_tree_restrictions=True,
         allows_inputs=True,
-        allows_args=True,
+        allows_args=False,
         allows_state=True,
         allows_step=False,
     ),

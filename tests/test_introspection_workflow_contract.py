@@ -22,7 +22,15 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(step_forms["state_set"]["required_fields"], ["name", "state_set"])
         self.assertEqual(step_forms["state_delete"]["required_fields"], ["name", "state_delete"])
         self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "run", "profile_switch", "value", "result", "publish", "state_set", "state_delete"])
-        self.assertIn("state", payload["surface_constraints"]["guard_expression"]["allowed_roots"])
+        guard_surface = payload["surface_constraints"]["guard_expression"]
+        self.assertIn("state", guard_surface["allowed_roots"])
+        self.assertIn("is_number", guard_surface["allowed_filters"])
+        self.assertEqual(guard_surface["allowed_builtins"], ["format", "is_missing", "is_present"])
+        self.assertTrue(guard_surface["representation_adapter_policy"]["read_only_allowed"])
+        self.assertTrue(guard_surface["representation_adapter_policy"]["write_paths_forbidden"])
+        self.assertEqual(guard_surface["representation_adapter_policy"]["forbidden_write_surface"], "->...")
+        self.assertEqual(guard_surface["result_contract"]["required_output_type"], "boolean")
+        self.assertEqual(guard_surface["result_contract"]["non_boolean_result"], "error")
         self.assertTrue(payload["inputs_contract"]["declared_keys_required_at_activation"])
         input_fields = {item["name"]: item for item in payload["inputs_contract"]["declaration_fields"]}
         self.assertEqual(input_fields["hint"]["validation_effect"], "none")

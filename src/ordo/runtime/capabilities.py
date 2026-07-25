@@ -176,7 +176,13 @@ EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
 )
 
 EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
-    ExpressionSurfaceSpec(name="guard_expression", roots=("inputs", "probe", "state"), boolean_operators=("and", "or", "not", "parentheses")),
+    ExpressionSurfaceSpec(
+        name="guard_expression",
+        roots=("inputs", "probe", "state"),
+        filters=tuple(VALUE_EXPRESSION_FILTERS),
+        builtins=tuple(VALUE_EXPRESSION_BUILTINS),
+        boolean_operators=("and", "or", "not", "parentheses"),
+    ),
     ExpressionSurfaceSpec(
         name="step_condition",
         roots=("inputs", "args", "state", "step", "probe"),
@@ -203,16 +209,16 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         related_codes=("validation.workflow.local_expression.guard.step_ref",),
     ),
     NegativeRuleSpec(
-        name="guard_expression.no_filters",
+        name="guard_expression.no_adapter_write_path",
         surface="guard_expression",
-        rule="Local-expression filter pipelines are not allowed in guard expressions",
-        reason="the shared local-expression engine keeps filter pipelines context-gated, and guard context does not currently evaluate them",
+        rule="Representation-adapter write paths such as '->...' are not allowed in guard expressions",
+        reason="guard expressions may use read-only local-expression constructs but must remain pure and pre-execution-safe",
     ),
     NegativeRuleSpec(
-        name="guard_expression.no_format_builtin",
+        name="guard_expression.boolean_result_required",
         surface="guard_expression",
-        rule="The format local-expression builtin is not allowed in guard expressions",
-        reason="the shared local-expression engine keeps built-in value construction context-gated, and guard context does not currently evaluate them",
+        rule="Guard expressions must evaluate to a boolean result",
+        reason="guard success and failure are defined by boolean policy outcomes rather than arbitrary value production",
     ),
     NegativeRuleSpec(
         name="workflow_step.exactly_one_form",

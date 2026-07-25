@@ -25,7 +25,7 @@ class LocalExpressionContextsTest(unittest.TestCase):
         self.assertTrue(policy.native_surface)
         self.assertTrue(policy.launch_time_known_only)
         self.assertTrue(policy.allows_root(LocalExpressionRoot.INPUTS))
-        self.assertTrue(policy.allows_root(LocalExpressionRoot.ARGS))
+        self.assertFalse(policy.allows_root(LocalExpressionRoot.ARGS))
         self.assertTrue(policy.allows_root(LocalExpressionRoot.STATE))
         self.assertFalse(policy.allows_root(LocalExpressionRoot.STEP))
 
