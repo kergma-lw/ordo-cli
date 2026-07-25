@@ -188,6 +188,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("append", text["actions"])
         self.assertEqual(text["shortcuts"], [])
 
+    def test_model_publishes_local_expression_filter_surface(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        filters = {item["name"]: item for item in model["local_expressions"]["pipeline_filters"]}
+
+        self.assertIn("lower", filters)
+        self.assertIn("is_integer", filters)
+        self.assertIn("in", filters)
+        self.assertEqual(filters["lower"]["argument_count"], 0)
+        self.assertEqual(filters["eq"]["argument_count"], 1)
+        self.assertEqual(filters["is_boolean"]["output_type"], "boolean")
+        self.assertEqual(filters["in"]["input_type"], "json")
+
     def test_capabilities_publish_explicit_non_inference_metadata(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")
@@ -252,12 +264,29 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("lines", text_node["metadata"]["selectors"])
         self.assertIn("remove", text_node["metadata"]["actions"])
 
+    def test_describe_resolves_local_expression_filter_model_nodes(self) -> None:
+        surface_node = json.loads(self.run_help("describe", "workflow.local_expression.filter_surface", "--json").stdout)
+        filter_node = json.loads(self.run_help("describe", "workflow.local_expression.filter.is_integer", "--json").stdout)
+
+        self.assertEqual(surface_node["document_kind"], "model_node")
+        self.assertTrue(any(item["name"] == "is_integer" for item in surface_node["metadata"]["pipeline_filters"]))
+        self.assertEqual(filter_node["metadata"]["name"], "is_integer")
+        self.assertEqual(filter_node["metadata"]["argument_count"], 0)
+        self.assertEqual(filter_node["metadata"]["output_type"], "boolean")
+
     def test_search_indexes_representation_adapter_topics(self) -> None:
         result = json.loads(self.run_help("search", "markdown", "--json").stdout)
         text_result = json.loads(self.run_help("search", "text", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.markdown" for item in result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.text" for item in text_result["facts"]))
+
+    def test_search_indexes_local_expression_filter_topics(self) -> None:
+        result = json.loads(self.run_help("search", "is_integer", "--json").stdout)
+        surface_result = json.loads(self.run_help("search", "pipeline filter", "--json").stdout)
+
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter.is_integer" for item in result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter_surface" for item in surface_result["facts"]))
 
     def test_command_line_topic_publishes_playbook_flags_and_precedence(self) -> None:
         payload = json.loads(self.run_help("command-line", "--json").stdout)

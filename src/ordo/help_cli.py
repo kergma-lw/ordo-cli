@@ -9,6 +9,7 @@ import sys
 from ordo.connectors import get_public_connector_registry
 from ordo.introspection import describe_capabilities, describe_examples_catalog, describe_operations, describe_playbook_contract, describe_profile_contract, describe_state_contract, describe_system, describe_workflow_contract
 from ordo.runtime.representation_adapters import describe_representation_adapter_surface
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_FILTERS
 from ordo.model.runtime import Mode, RuntimeStatus
 from ordo.model.json import JSONObject
 
@@ -99,7 +100,16 @@ def build_model_response() -> JSONObject:
         "profile": describe_profile_contract(),
         "playbook": describe_playbook_contract(),
         "state": describe_state_contract(),
+        "local_expressions": describe_local_expression_surface(),
         "representation_adapters": describe_representation_adapter_surface(),
+    }
+
+
+def describe_local_expression_surface() -> JSONObject:
+    """Return the published local-expression filter discovery surface."""
+
+    return {
+        "pipeline_filters": [spec.to_contract() for spec in VALUE_EXPRESSION_FILTERS.values()],
     }
 
 
@@ -292,6 +302,21 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "host_binding_rules": model["representation_adapters"]["shared_seam"]["host_binding_rules"],
         },
     )
+    add_node(
+        "workflow.local_expression.filter_surface",
+        contract="workflow",
+        node_category="filter_surface",
+        summary="Published local-expression pipeline filter metadata",
+        metadata=model["local_expressions"],
+    )
+    for filter_spec in model["local_expressions"]["pipeline_filters"]:
+        add_node(
+            f"workflow.local_expression.filter.{filter_spec['name']}",
+            contract="workflow",
+            node_category="filter",
+            summary="Published local-expression pipeline filter metadata",
+            metadata=filter_spec,
+        )
     for adapter in model["representation_adapters"]["families"]:
         add_node(
             f"workflow.local_expression.adapter.{adapter['name']}",
@@ -606,6 +631,9 @@ def render_model_text(payload: JSONObject) -> str:
         f"- profile: {payload['profile']['document_kind']}",
         f"- playbook: {payload['playbook']['document_kind']}",
         f"- state: {payload['state']['document_kind']}",
+        "",
+        "Local-expression pipeline filters:",
+        f"- published filters: {', '.join(item['name'] for item in payload['local_expressions']['pipeline_filters'])}",
         "",
         "Representation adapters:",
         f"- outer binding form: {payload['representation_adapters']['shared_seam']['outer_binding_form']}",
