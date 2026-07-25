@@ -2139,6 +2139,26 @@ def _require_string(value: JSONValue, *, filter_name: str, parsed: ParsedValueEx
     )
 
 
+def _is_number_value(value: JSONValue) -> bool:
+    return type(value) in {int, float}
+
+
+def _is_integer_value(value: JSONValue) -> bool:
+    return type(value) is int
+
+
+def _json_strict_equal(left: JSONValue, right: JSONValue) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, list):
+        assert isinstance(right, list)
+        return len(left) == len(right) and all(_json_strict_equal(left_item, right_item) for left_item, right_item in zip(left, right, strict=False))
+    if isinstance(left, dict):
+        assert isinstance(right, dict)
+        return left.keys() == right.keys() and all(_json_strict_equal(left[key], right[key]) for key in left)
+    return left == right
+
+
 def _slugify(value: str) -> str:
     lowered = value.lower()
     normalized = re.sub(r"[^a-z0-9]+", "-", lowered)
@@ -2176,6 +2196,50 @@ def _apply_slug_filter(
 ) -> JSONValue:
     text = _require_string(value, filter_name="slug", parsed=parsed)
     return _slugify(text)
+
+
+def _apply_is_string_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    return isinstance(value, str)
+
+
+def _apply_is_number_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    return _is_number_value(value)
+
+
+def _apply_is_integer_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    return _is_integer_value(value)
+
+
+def _apply_is_boolean_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    return isinstance(value, bool)
 
 
 def _evaluate_filter_argument(
@@ -2251,7 +2315,7 @@ def _apply_eq_filter(
         step_results=_context_step_results(evaluation_context),
         observation_session=_context_observation_session(evaluation_context),
     )
-    return value == expected_value
+    return _json_strict_equal(value, expected_value)
 
 
 def _apply_ne_filter(
@@ -2271,7 +2335,37 @@ def _apply_ne_filter(
         step_results=_context_step_results(evaluation_context),
         observation_session=_context_observation_session(evaluation_context),
     )
-    return value != expected_value
+    return not _json_strict_equal(value, expected_value)
+
+
+def _apply_in_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
+    container = _evaluate_filter_argument(
+        filter_node,
+        0,
+        parsed=parsed,
+        workflow=workflow,
+        context=_context_local_expression_context(evaluation_context),
+        step_results=_context_step_results(evaluation_context),
+        observation_session=_context_observation_session(evaluation_context),
+    )
+    if not isinstance(container, list):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.filter_type_invalid",
+            message="Filter 'in' requires a list container argument",
+            details={
+                "expression": parsed.source,
+                "filter": "in",
+                "actual_type": type(container).__name__,
+            },
+        )
+    return any(_json_strict_equal(value, item) for item in container)
 
 
 def _apply_not_filter(
@@ -2350,6 +2444,11 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
     ValueExpressionFilterSpec(name="eq", input_type="json", output_type="boolean", handler=_apply_eq_filter),
     ValueExpressionFilterSpec(name="ne", input_type="json", output_type="boolean", handler=_apply_ne_filter),
     ValueExpressionFilterSpec(name="not", input_type="boolean", output_type="boolean", handler=_apply_not_filter),
+    ValueExpressionFilterSpec(name="is_string", input_type="json", output_type="boolean", handler=_apply_is_string_filter),
+    ValueExpressionFilterSpec(name="is_number", input_type="json", output_type="boolean", handler=_apply_is_number_filter),
+    ValueExpressionFilterSpec(name="is_integer", input_type="json", output_type="boolean", handler=_apply_is_integer_filter),
+    ValueExpressionFilterSpec(name="is_boolean", input_type="json", output_type="boolean", handler=_apply_is_boolean_filter),
+    ValueExpressionFilterSpec(name="in", input_type="json", output_type="boolean", handler=_apply_in_filter),
 )
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(

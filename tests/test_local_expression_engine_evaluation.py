@@ -245,6 +245,152 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
 
+    def test_evaluate_is_string_filter_returns_true_for_string_input(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  title: ok
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.title | is_string")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_number_filter_rejects_boolean_values_as_numbers(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  open: true
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.open | is_number")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), False)
+
+    def test_evaluate_is_integer_filter_rejects_float_literal_with_zero_fraction(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  count: 1.0
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.count | is_integer")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), False)
+
+    def test_evaluate_is_boolean_filter_returns_true_for_boolean_input(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  open: true
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.open | is_boolean")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_in_filter_accepts_dynamic_list_container(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  status: ready
+  allowed:
+    - new
+    - ready
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.status | in(inputs.allowed)")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_in_filter_rejects_non_list_container(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  status: ready
+  allowed: ready
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.status | in(inputs.allowed)")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
+    def test_evaluate_eq_filter_uses_strict_json_equality(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  one: 1
+  truthy: true
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.one | eq(inputs.truthy)")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), False)
+
+    def test_evaluate_in_filter_uses_strict_json_membership(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  value: 1
+  allowed:
+    - true
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("inputs.value | in(inputs.allowed)")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), False)
+
     def test_evaluate_is_missing_returns_true_for_missing_input(self) -> None:
         workflow = load_workflow_text(
             """
