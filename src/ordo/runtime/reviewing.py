@@ -46,7 +46,7 @@ def review_workflow(
             analysis_tree=check_result.analysis_tree,
         )
 
-    findings = _build_review_findings(workflow, check_result)
+    findings = _build_review_findings(workflow, check_result, profile=profile)
     outputs = {
         "review_status": "clean" if not findings else "needs_attention",
         "finding_count": len(findings),
@@ -76,26 +76,43 @@ def review_workflow(
     )
 
 
-def _build_review_findings(workflow: Workflow, check_result: RuntimeResult) -> list[dict[str, object]]:
+def _build_review_findings(workflow: Workflow, check_result: RuntimeResult, *, profile: Profile | None) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
-    findings.extend(_find_missing_input_validation(workflow))
+    findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
     findings.extend(_find_missing_recommended_observations(check_result))
     return findings
 
 
-def _find_missing_input_validation(workflow: Workflow) -> list[dict[str, object]]:
-    declared_inputs = [name for name in workflow.declared_inputs if isinstance(name, str)]
-    if not declared_inputs:
+def _find_missing_input_validation(
+    workflow: Workflow,
+    check_result: RuntimeResult,
+    *,
+    profile: Profile | None,
+) -> list[dict[str, object]]:
+    input_usages = _input_usages_from_result(check_result)
+    if not input_usages:
         return []
 
+    analysis_workflow = getattr(check_result, "analysis_tree", None)
+    guard_workflow = workflow
+    if analysis_workflow is not None and hasattr(analysis_workflow, "workflow") and isinstance(analysis_workflow.workflow, Workflow):
+        guard_workflow = analysis_workflow.workflow
+
     early_guard_expressions: list[str] = []
-    for block in workflow.blocks:
-        if not isinstance(block, GuardBlock):
-            break
-        early_guard_expressions.extend(guard.reference for guard in block.guards if isinstance(guard.reference, str))
+    for block in guard_workflow.blocks:
+        if isinstance(block, GuardBlock):
+            early_guard_expressions.extend(guard.reference for guard in block.guards if isinstance(guard.reference, str))
 
     findings: list[dict[str, object]] = []
-    for input_name in declared_inputs:
+    for usage in input_usages:
+        input_name = usage.get("input")
+        if not isinstance(input_name, str):
+            continue
+        classification = _review_input_classification(usage, profile=profile)
+        if classification == "ambient_profile_context":
+            continue
+        if classification not in {"control_input", "effect_target_input"}:
+            continue
         needle = f"inputs.{input_name}"
         if any(needle in expression for expression in early_guard_expressions):
             continue
@@ -108,11 +125,30 @@ def _find_missing_input_validation(workflow: Workflow) -> list[dict[str, object]
                 "path": ["inputs", input_name],
                 "evidence": {
                     "input": input_name,
+                    "classification": classification,
+                    "usage_sites": [dict(site) for site in usage.get("evidence", []) if isinstance(site, dict)],
                     "reason": "no early guard references this input before step execution begins",
                 },
             }
         )
     return findings
+
+
+def _input_usages_from_result(check_result: RuntimeResult) -> list[dict[str, object]]:
+    analysis_tree = getattr(check_result, "analysis_tree", None)
+    if analysis_tree is None or not hasattr(analysis_tree, "input_usages"):
+        return []
+    return [dict(item) for item in getattr(analysis_tree, "input_usages") if isinstance(item, dict)]
+
+
+def _review_input_classification(usage: dict[str, object], *, profile: Profile | None) -> str:
+    base = usage.get("classification")
+    input_name = usage.get("input")
+    if not isinstance(base, str) or not isinstance(input_name, str):
+        return "unknown"
+    if profile is not None and input_name in profile.inputs and base != "control_input":
+        return "ambient_profile_context"
+    return base
 
 
 def _find_missing_recommended_observations(check_result: RuntimeResult) -> list[dict[str, object]]:
