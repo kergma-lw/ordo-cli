@@ -4,9 +4,10 @@ from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Override, Profile
-from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
+from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import check_workflow
+from ordo.runtime.checking import _build_check_analysis_tree
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -894,6 +895,70 @@ class CheckModeTest(unittest.TestCase):
                 {
                     "probe": "gh.project.field.option",
                     "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status", "option": "In review"},
+                    "fields": ["exists"],
+                },
+            ],
+        )
+
+    def test_check_analysis_tree_preserves_missing_input_structural_evidence(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repository": "string", "issue_number": "number", "project_id": "string", "field": "string", "value": "json"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-target", value="${inputs.repository}", register="repo_name"),
+                        Step(
+                            name="set-field",
+                            operation=OperationRef(
+                                "gh.project.issue.field_number.set",
+                                with_={
+                                    "repository": "${step.repo_name.outputs.value}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "${inputs.field}",
+                                    "value": "${inputs.value}",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        analysis = _build_check_analysis_tree(
+            workflow=workflow,
+            active_profile=None,
+            current_profile=None,
+            available_profiles=None,
+            active_overrides=(),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            guard_probe=None,
+        )
+
+        self.assertFalse(isinstance(analysis, RuntimeResult))
+        self.assertEqual(analysis.incomplete_reasons, ("read_only_step_failed", "relevant_guard_coverage_incomplete"))
+        self.assertEqual(analysis.block_items[0]["status"], "preflight_halted")
+        self.assertEqual(
+            analysis.preflight_step_items[1]["preflight_support"]["missing_observations"],
+            [
+                {
+                    "probe": "gh.project.issue",
+                    "with": {
+                        "repository": {"expression": "step.repo_name.outputs.value"},
+                        "issue_number": {"expression": "inputs.issue_number"},
+                        "project_id": {"expression": "inputs.project_id"},
+                    },
+                    "fields": ["exists"],
+                },
+                {
+                    "probe": "gh.project.field",
+                    "with": {
+                        "project_id": {"expression": "inputs.project_id"},
+                        "field": {"expression": "inputs.field"},
+                    },
                     "fields": ["exists"],
                 },
             ],

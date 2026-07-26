@@ -28,6 +28,28 @@ from .validation import validate_workflow_document, validate_workflow_semantics
 _ACTION_PLACEHOLDER_PATTERN = re.compile(r"^\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
 
+@dataclass(frozen=True, slots=True)
+class _CheckAnalysisTree:
+    """Shared internal preflight-analysis tree extracted from check."""
+
+    workflow: Workflow
+    initial_resolution: object
+    active_profile: str | None
+    active_overrides: tuple[object, ...]
+    diagnostics: tuple[Diagnostic, ...]
+    operation_results: tuple[OperationResult, ...]
+    blockers: tuple[str, ...]
+    checked_guards: tuple[str, ...]
+    guard_details: tuple[dict[str, object], ...]
+    block_items: tuple[dict[str, object], ...]
+    preflight_step_items: tuple[dict[str, object], ...]
+    preflight_halts: tuple[dict[str, object], ...]
+    bootstrap_details: tuple[dict[str, object], ...]
+    incomplete_reasons: tuple[str, ...]
+    observed_probe_calls: tuple[dict[str, object], ...]
+    failed_guard: str | None = None
+
+
 def _base_verdict_outputs(
     *,
     can_execute: bool,
@@ -246,10 +268,124 @@ def check_workflow(
             },
         )
 
+    analysis = _build_check_analysis_tree(
+        workflow=effective_workflow,
+        active_profile=active_profile,
+        current_profile=current_profile,
+        available_profiles=available_profiles,
+        active_overrides=active_overrides,
+        connector_provider=connector_provider,
+        guard_probe=guard_probe,
+    )
+    if isinstance(analysis, RuntimeResult):
+        return analysis
+
+    effective_workflow = analysis.workflow
+
+    if analysis.blockers:
+        observation_basis = _build_observation_basis_outputs(effective_workflow, analysis.initial_resolution, list(analysis.guard_details))
+        outputs = {
+            **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+            "blockers": list(analysis.blockers),
+            "checked_guards": list(analysis.checked_guards),
+            **_guard_coverage_outputs(effective_workflow, checked_guards=list(analysis.checked_guards), blockers=list(analysis.blockers)),
+            **observation_basis,
+            "guard_details": list(analysis.guard_details),
+            "block_items": list(analysis.block_items),
+            "preflight_step_items": list(analysis.preflight_step_items),
+            "preflight_halts": list(analysis.preflight_halts),
+            "preflight_registers": dict(effective_workflow.step_results),
+            "preflight_step_results": dict(effective_workflow.step_results),
+            "active_profile": analysis.active_profile,
+            "active_overrides": [override.to_contract() for override in analysis.active_overrides],
+        }
+        if analysis.bootstrap_details:
+            outputs["bootstrap_details"] = list(analysis.bootstrap_details)
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.GUARD_FAILED,
+            diagnostics=analysis.diagnostics,
+            plan=ExecutionPlan(
+                guard_checks=analysis.checked_guards,
+                step_names=tuple(_all_step_names(effective_workflow)),
+                blockers=analysis.blockers,
+            ),
+            outputs=outputs,
+            operation_results=analysis.operation_results,
+            failed_guard=analysis.failed_guard,
+            preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
+        )
+
+    outputs = {
+        **_base_verdict_outputs(
+            can_execute=not analysis.incomplete_reasons,
+            allowed_state="unknown" if analysis.incomplete_reasons else "allowed",
+            analysis_complete=not analysis.incomplete_reasons,
+            incomplete_reasons=list(analysis.incomplete_reasons),
+        ),
+        "blockers": [],
+        "checked_guards": list(analysis.checked_guards),
+        **_guard_coverage_outputs(effective_workflow, checked_guards=list(analysis.checked_guards), blockers=[]),
+        **_build_observation_basis_outputs(effective_workflow, analysis.initial_resolution, list(analysis.guard_details)),
+        "guard_details": list(analysis.guard_details),
+        "block_items": list(analysis.block_items),
+        "preflight_step_items": list(analysis.preflight_step_items),
+        "preflight_halts": list(analysis.preflight_halts),
+        "preflight_registers": dict(effective_workflow.step_results),
+        "preflight_step_results": dict(effective_workflow.step_results),
+        "active_profile": analysis.active_profile,
+        "active_overrides": [override.to_contract() for override in analysis.active_overrides],
+    }
+    if analysis.bootstrap_details:
+        outputs["bootstrap_details"] = list(analysis.bootstrap_details)
+
+    return RuntimeResult(
+        mode=Mode.CHECK,
+        status=RuntimeStatus.OK,
+        diagnostics=analysis.diagnostics,
+        plan=ExecutionPlan(
+            guard_checks=analysis.checked_guards,
+            step_names=tuple(_all_step_names(effective_workflow)),
+            blockers=(),
+        ),
+        outputs=outputs,
+        operation_results=analysis.operation_results,
+        preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
+    )
+
+
+def _build_check_analysis_tree(
+    *,
+    workflow: Workflow,
+    active_profile: str | None,
+    current_profile: Profile | None,
+    available_profiles: dict[str, Profile] | None,
+    active_overrides,
+    connector_provider: ConnectorProvider | None,
+    guard_probe: GuardProbe | None,
+) -> _CheckAnalysisTree | RuntimeResult:
+    probe = guard_probe or _default_guard_probe(provider=connector_provider)
+    diagnostics: list[Diagnostic] = []
+    operation_results: list[OperationResult] = []
+    blockers: list[str] = []
+    checked_guards: list[str] = []
+    guard_details: list[dict[str, object]] = []
+    block_items: list[dict[str, object]] = []
+    preflight_step_items: list[dict[str, object]] = []
+    preflight_halts: list[dict[str, object]] = []
+    bootstrap_details: list[dict[str, object]] = []
+    failed_guard: str | None = None
+    incomplete_reasons: list[str] = []
+    observed_probe_calls: list[dict[str, object]] = []
+
+    current_profile_name = active_profile
+    effective_workflow = workflow
+    resolved_overrides = active_overrides
+    halted = False
     initial_resolution = resolve_workflow_references(
         effective_workflow,
         connector_provider=connector_provider,
-        active_overrides=active_overrides,
+        active_overrides=resolved_overrides,
     )
     if not initial_resolution.ok:
         return RuntimeResult(
@@ -272,25 +408,10 @@ def check_workflow(
                 ),
                 "block_items": _build_pending_block_items(effective_workflow, blocked=False),
                 "active_profile": active_profile,
-                "active_overrides": [override.to_contract() for override in active_overrides],
+                "active_overrides": [override.to_contract() for override in resolved_overrides],
             },
         )
 
-    probe = guard_probe or _default_guard_probe(provider=connector_provider)
-    diagnostics: list[Diagnostic] = []
-    operation_results: list[OperationResult] = []
-    blockers: list[str] = []
-    checked_guards: list[str] = []
-    guard_details: list[dict[str, object]] = []
-    block_items: list[dict[str, object]] = []
-    preflight_step_items: list[dict[str, object]] = []
-    preflight_halts: list[dict[str, object]] = []
-    bootstrap_details: list[dict[str, object]] = []
-    failed_guard: str | None = None
-    incomplete_reasons: list[str] = []
-    observed_probe_calls: list[dict[str, object]] = []
-
-    halted = False
     for block_index, declared_block in enumerate(effective_workflow.blocks):
         if isinstance(declared_block, GuardBlock):
             if halted:
@@ -300,7 +421,7 @@ def check_workflow(
                 effective_workflow,
                 block_index=block_index,
                 connector_provider=connector_provider,
-                active_overrides=active_overrides,
+                active_overrides=resolved_overrides,
             )
             if isinstance(resolved_block, RuntimeResult):
                 return resolved_block
@@ -358,7 +479,7 @@ def check_workflow(
                 halted = True
                 incomplete_reasons.append("profile_switch_not_resolvable_from_current_knowledge")
                 continue
-            current_profile_name, current_profile, active_overrides, effective_workflow = transition
+            current_profile_name, current_profile, resolved_overrides, effective_workflow = transition
             active_profile = current_profile_name
             block_items.append(
                 {
@@ -392,7 +513,7 @@ def check_workflow(
                 current_workflow=effective_workflow,
                 current_profile_name=current_profile_name,
                 current_profile=current_profile,
-                active_overrides=active_overrides,
+                active_overrides=resolved_overrides,
                 available_profiles=available_profiles,
                 connector_provider=connector_provider,
             )
@@ -407,7 +528,7 @@ def check_workflow(
             effective_workflow = cast(Workflow, expansion_outcome["workflow"])
             current_profile_name = cast(str | None, expansion_outcome["current_profile_name"])
             current_profile = cast(Profile | None, expansion_outcome["current_profile"])
-            active_overrides = cast(tuple, expansion_outcome["active_overrides"])
+            resolved_overrides = cast(tuple, expansion_outcome["active_overrides"])
             active_profile = current_profile_name
             if expansion_outcome["failed_guard"] is not None and failed_guard is None:
                 failed_guard = cast(str, expansion_outcome["failed_guard"])
@@ -423,7 +544,7 @@ def check_workflow(
                 current_profile_name=current_profile_name,
                 connector_provider=connector_provider,
                 probe=probe,
-                active_overrides=active_overrides,
+                active_overrides=resolved_overrides,
                 observed_probe_calls=observed_probe_calls,
             )
             if interpreted_step_block is not None:
@@ -457,81 +578,29 @@ def check_workflow(
         block_items=block_items,
         preflight_step_items=preflight_step_items,
         connector_provider=connector_provider,
-        active_overrides=active_overrides,
+        active_overrides=resolved_overrides,
         observed_probe_calls=observed_probe_calls,
     )
     if structural_fill_result is not None:
         return structural_fill_result
 
-    if blockers:
-        observation_basis = _build_observation_basis_outputs(effective_workflow, initial_resolution, guard_details)
-        outputs = {
-            **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
-            "blockers": blockers,
-            "checked_guards": checked_guards,
-            **_guard_coverage_outputs(effective_workflow, checked_guards=checked_guards, blockers=blockers),
-            **observation_basis,
-            "guard_details": guard_details,
-            "block_items": block_items,
-            "preflight_step_items": preflight_step_items,
-            "preflight_halts": preflight_halts,
-            "preflight_registers": dict(effective_workflow.step_results),
-            "preflight_step_results": dict(effective_workflow.step_results),
-            "active_profile": active_profile,
-            "active_overrides": [override.to_contract() for override in active_overrides],
-        }
-        if bootstrap_details:
-            outputs["bootstrap_details"] = bootstrap_details
-        return RuntimeResult(
-            mode=Mode.CHECK,
-            status=RuntimeStatus.GUARD_FAILED,
-            diagnostics=tuple(diagnostics),
-            plan=ExecutionPlan(
-                guard_checks=tuple(checked_guards),
-                step_names=tuple(_all_step_names(effective_workflow)),
-                blockers=tuple(blockers),
-            ),
-            outputs=outputs,
-            operation_results=tuple(operation_results),
-            failed_guard=failed_guard,
-            preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
-        )
-
-    outputs = {
-        **_base_verdict_outputs(
-            can_execute=not incomplete_reasons,
-            allowed_state="unknown" if incomplete_reasons else "allowed",
-            analysis_complete=not incomplete_reasons,
-            incomplete_reasons=incomplete_reasons,
-        ),
-        "blockers": [],
-        "checked_guards": checked_guards,
-        **_guard_coverage_outputs(effective_workflow, checked_guards=checked_guards, blockers=[]),
-        **_build_observation_basis_outputs(effective_workflow, initial_resolution, guard_details),
-        "guard_details": guard_details,
-        "block_items": block_items,
-        "preflight_step_items": preflight_step_items,
-        "preflight_halts": preflight_halts,
-        "preflight_registers": dict(effective_workflow.step_results),
-        "preflight_step_results": dict(effective_workflow.step_results),
-        "active_profile": active_profile,
-        "active_overrides": [override.to_contract() for override in active_overrides],
-    }
-    if bootstrap_details:
-        outputs["bootstrap_details"] = bootstrap_details
-
-    return RuntimeResult(
-        mode=Mode.CHECK,
-        status=RuntimeStatus.OK,
+    return _CheckAnalysisTree(
+        workflow=effective_workflow,
+        initial_resolution=initial_resolution,
+        active_profile=active_profile,
+        active_overrides=tuple(resolved_overrides),
         diagnostics=tuple(diagnostics),
-        plan=ExecutionPlan(
-            guard_checks=tuple(checked_guards),
-            step_names=tuple(_all_step_names(effective_workflow)),
-            blockers=(),
-        ),
-        outputs=outputs,
         operation_results=tuple(operation_results),
-        preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
+        blockers=tuple(blockers),
+        checked_guards=tuple(checked_guards),
+        guard_details=tuple(guard_details),
+        block_items=tuple(block_items),
+        preflight_step_items=tuple(preflight_step_items),
+        preflight_halts=tuple(preflight_halts),
+        bootstrap_details=tuple(bootstrap_details),
+        incomplete_reasons=tuple(incomplete_reasons),
+        observed_probe_calls=tuple(observed_probe_calls),
+        failed_guard=failed_guard,
     )
 
 
