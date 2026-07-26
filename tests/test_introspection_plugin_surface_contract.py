@@ -10,6 +10,7 @@ class IntrospectionPluginSurfaceContractTest(unittest.TestCase):
 
         self.assertEqual(payload["connector_requirements"]["required_fields"], ["namespace", "bootstrap", "operations"])
         self.assertIn("summary", payload["operation_requirements"]["required_fields"])
+        self.assertIn("preflight_observations", payload["operation_requirements"]["required_fields"])
         self.assertFalse(payload["participation_rules"]["special_case_help_logic_required"])
 
     def test_plugin_surface_contract_matches_published_contract(self) -> None:

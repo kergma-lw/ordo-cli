@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from connectors.git.actions._shared import map_nonzero, require_local_branch
-from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
 
 
 def info():
@@ -14,6 +14,11 @@ def info():
         outputs={"remote": "string", "branch": "string"},
         failure_modes=("branch_not_found", "remote_not_found", "upstream_remote_missing", "non_fast_forward", "push_blocked"),
         invalidates_observations=(),
+        preflight_observations=(
+            preflight_observation(probe="git.branch"),
+            preflight_observation(probe="git.upstream"),
+            preflight_observation(probe="git.range", with_={"base": "@{upstream}", "head": "{branch}"}),
+        ),
         handler=run,
     )
 

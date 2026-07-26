@@ -434,6 +434,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["operation"]["outputs"]["items"][0]["text"], "string")
         self.assertEqual(payload["operation"]["outputs"]["items"][0]["author_name"], "string")
 
+    def test_operation_topic_publishes_preflight_observations_for_declaring_action(self) -> None:
+        payload = json.loads(self.run_help("operation", "git.sync.push", "--json").stdout)
+
+        self.assertEqual(
+            payload["operation"]["preflight_observations"],
+            [
+                {"probe": "git.branch", "with": {}},
+                {"probe": "git.upstream", "with": {}},
+                {"probe": "git.range", "with": {"base": "@{upstream}", "head": "{branch}"}},
+            ],
+        )
+
     def test_examples_topic_publishes_launcher_step_example(self) -> None:
         payload = json.loads(self.run_help("examples", "--json").stdout)
 

@@ -31,6 +31,8 @@ PLUGIN_SURFACE_CONTRACT: JSONObject = {
             "maturity",
             "deprecated",
             "replaced_by",
+            "invalidates_observations",
+            "preflight_observations",
         ],
         "kind_values": ["probe", "action"],
     },

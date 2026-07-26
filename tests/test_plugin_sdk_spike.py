@@ -6,13 +6,49 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ordo.connectors.registry import get_public_connector_registry
 from connectors._family import assemble_family
+from ordo.connectors.registry import get_public_connector_registry
 from ordo.model.workflow import Workflow
+from ordo.plugin_sdk import action, ok, preflight_observation
 from ordo.runtime.resolution import ResolvedOperation
 
 
 class PluginSdkSpikeTest(unittest.TestCase):
+    def test_action_publication_accepts_structured_preflight_observations(self) -> None:
+        published = action(
+            name="sync.push",
+            inputs={"branch": "string"},
+            handler=lambda _ctx: ok(),
+            preflight_observations=(
+                preflight_observation(probe="git.branch"),
+                preflight_observation(probe="git.range", with_={"base": "@{upstream}", "head": "{branch}"}),
+            ),
+        )
+
+        self.assertEqual(published.preflight_observations[0].to_contract(), {"probe": "git.branch", "with": {}})
+        self.assertEqual(
+            published.preflight_observations[1].to_contract(),
+            {"probe": "git.range", "with": {"base": "@{upstream}", "head": "{branch}"}},
+        )
+
+    def test_action_publication_rejects_unknown_preflight_placeholder(self) -> None:
+        with self.assertRaisesRegex(ValueError, "not a declared action input"):
+            action(
+                name="sync.push",
+                inputs={"branch": "string"},
+                handler=lambda _ctx: ok(),
+                preflight_observations=(
+                    preflight_observation(probe="git.range", with_={"base": "main", "head": "{missing_branch}"}),
+                ),
+            )
+
+    def test_preflight_observation_rejects_malformed_shape(self) -> None:
+        with self.assertRaisesRegex(ValueError, "dotted public reference"):
+            preflight_observation(probe="git")
+
+        with self.assertRaisesRegex(ValueError, "fields must be non-empty strings"):
+            preflight_observation(probe="git.branch", fields=("",))
+
     def test_assemble_family_discovers_publication_hook_and_adapts_probe_outcome(self) -> None:
         _ = get_public_connector_registry
         with tempfile.TemporaryDirectory() as tmp_dir:

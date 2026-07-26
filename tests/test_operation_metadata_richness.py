@@ -50,6 +50,14 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         self.assertEqual(git_branch_create.invalidates_observations, ("git.branches", "git.ref.*"))
         self.assertEqual(git_sync_fetch.invalidates_observations, ("git.ref.*", "git.branches", "git.repo", "git.range", "git.commits"))
         self.assertEqual(git_sync_push.invalidates_observations, ())
+        self.assertEqual(
+            [item.to_contract() for item in git_sync_push.preflight_observations],
+            [
+                {"probe": "git.branch", "with": {}},
+                {"probe": "git.upstream", "with": {}},
+                {"probe": "git.range", "with": {"base": "@{upstream}", "head": "{branch}"}},
+            ],
+        )
         self.assertEqual(git_commit_create.invalidates_observations, ("git.ref.*", "git.worktree", "git.worktrees", "git.state", "git.range", "git.commits"))
         self.assertTrue(runtime_profile_use.deprecated)
         self.assertEqual(runtime_profile_use.replaced_by, ("workflow.step.profile_switch",))
@@ -60,10 +68,13 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         contract = registry.to_contract()
         gh_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "gh")
         issue = next(operation for operation in gh_connector["operations"] if operation["name"] == "issue")
+        git_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "git")
+        git_push = next(operation for operation in git_connector["operations"] if operation["name"] == "sync.push")
         self.assertEqual(issue["summary"], "Probe operation 'gh.issue'")
         self.assertEqual(issue["tags"], ["gh", "probe"])
         self.assertEqual(issue["examples"][0]["reference"], "gh.issue")
         self.assertEqual(issue["maturity"], "stable")
+        self.assertEqual(git_push["preflight_observations"][0], {"probe": "git.branch", "with": {}})
 
 
 if __name__ == "__main__":

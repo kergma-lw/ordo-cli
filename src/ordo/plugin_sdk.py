@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from ordo.model.connector import PreflightObservation
 from ordo.model.diagnostic import Diagnostic as RuntimeDiagnostic
 from ordo.model.json import JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
@@ -63,6 +64,7 @@ class PublishedOperation:
     deprecated: bool = False
     replaced_by: tuple[str, ...] = ()
     invalidates_observations: tuple[str, ...] = ()
+    preflight_observations: tuple[PreflightObservation, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +192,34 @@ def probe(
     )
 
 
+def preflight_observation(*, probe: str, with_: JSONObject | None = None, fields: tuple[str, ...] = ()) -> PreflightObservation:
+    return PreflightObservation(
+        probe=probe,
+        with_={} if with_ is None else dict(with_),
+        fields=fields,
+    )
+
+
+def _validate_action_preflight_observations(
+    *,
+    name: str,
+    inputs: JSONObject,
+    preflight_observations: tuple[PreflightObservation, ...],
+) -> tuple[PreflightObservation, ...]:
+    input_names = {key for key in inputs if isinstance(key, str)}
+    validated: list[PreflightObservation] = []
+    for observation in preflight_observations:
+        if not isinstance(observation, PreflightObservation):
+            raise ValueError(f"Action '{name}' preflight_observations must contain PreflightObservation objects")
+        for placeholder in observation.placeholder_names():
+            if placeholder not in input_names:
+                raise ValueError(
+                    f"Action '{name}' preflight_observation placeholder '{placeholder}' is not a declared action input"
+                )
+        validated.append(observation)
+    return tuple(validated)
+
+
 def action(
     *,
     name: str,
@@ -206,13 +236,15 @@ def action(
     deprecated: bool = False,
     replaced_by: tuple[str, ...] = (),
     invalidates_observations: tuple[str, ...] = (),
+    preflight_observations: tuple[PreflightObservation, ...] = (),
 ) -> PublishedOperation:
+    normalized_inputs = {} if inputs is None else dict(inputs)
     return PublishedOperation(
         name=name,
         kind="action",
         handler=handler,
         summary=summary,
-        inputs={} if inputs is None else dict(inputs),
+        inputs=normalized_inputs,
         prerequisites=prerequisites,
         effects=effects,
         outputs={} if outputs is None else dict(outputs),
@@ -223,6 +255,11 @@ def action(
         deprecated=deprecated,
         replaced_by=replaced_by,
         invalidates_observations=invalidates_observations,
+        preflight_observations=_validate_action_preflight_observations(
+            name=name,
+            inputs=normalized_inputs,
+            preflight_observations=preflight_observations,
+        ),
     )
 
 
