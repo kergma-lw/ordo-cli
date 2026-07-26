@@ -12,7 +12,8 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBl
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
-from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ReadOnlyObservationSession, evaluate_condition_expression
+from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ListNode, LiteralNode, ReadOnlyObservationSession, ValueExpressionNode, evaluate_condition_expression
+from .local_expressions import extract_embedded_local_expression
 from .launchers import validate_step_launchers
 from .preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, store_preflight_register_output
 from .preflight_steps import classify_preflight_step
@@ -307,7 +308,12 @@ def check_workflow(
                     result = probe(resolved_guard, effective_workflow)
                 operation_results.append(result)
                 diagnostics.extend(result.diagnostics)
-                detail = _build_guard_detail(resolved_guard.reference, result, observation_scopes=_guard_observation_scopes(resolved_guard))
+                detail = _build_guard_detail(
+                    resolved_guard.reference,
+                    result,
+                    observation_scopes=_guard_observation_scopes(resolved_guard),
+                    observations=_guard_observations(resolved_guard),
+                )
                 guard_details.append(detail)
                 block_guard_details.append(detail)
                 checked_guards.append(resolved_guard.reference)
@@ -715,6 +721,7 @@ def _interpret_step_block_for_check(
                     "condition": step.if_,
                     "condition_status": "unknown",
                     "halt_reason": halt.reason,
+                    "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
             break
@@ -748,6 +755,7 @@ def _interpret_step_block_for_check(
                     "condition": step.if_,
                     "condition_status": "unknown",
                     "halt_reason": halt.reason,
+                    "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
             break
@@ -764,6 +772,8 @@ def _interpret_step_block_for_check(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": "false",
+                    "observations": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
+                    "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
             continue
@@ -821,6 +831,8 @@ def _interpret_step_block_for_check(
                     "summary": result.summary,
                     "outputs": dict(result.outputs),
                     "observation_scopes": [resolved_step.reference] if isinstance(resolved_step, ResolvedOperation) else [],
+                    "observations": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
+                    "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
             continue
@@ -849,6 +861,8 @@ def _interpret_step_block_for_check(
                 "condition": step.if_,
                 "condition_status": "true" if step.if_ is not None else None,
                 "halt_reason": halt.reason,
+                "observations": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
+                "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
             }
         )
         break
@@ -1103,6 +1117,50 @@ def _build_observation_basis_outputs(
     }
 
 
+def _normalize_authored_value(value: JSONValue) -> JSONValue:
+    if isinstance(value, str):
+        expression = extract_embedded_local_expression(value)
+        if expression is not None:
+            return {"expression": expression}
+        return value
+    if isinstance(value, list):
+        return [_normalize_authored_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _normalize_authored_value(item) for key, item in value.items()}
+    return value
+
+
+def _normalize_expression_node(node: ValueExpressionNode, *, source: str) -> JSONValue:
+    if isinstance(node, LiteralNode):
+        return node.value
+    if isinstance(node, ListNode):
+        return [_normalize_expression_node(item, source=source) for item in node.items]
+    return {"expression": source[node.start : node.end]}
+
+
+def _observed_probe_call_from_resolved_operation(resolved: ResolvedOperation) -> dict[str, object]:
+    return {
+        "probe": resolved.reference,
+        "with": {name: _normalize_authored_value(value) for name, value in (resolved.declared_with or {}).items()},
+        "fields": [],
+    }
+
+
+def _observed_probe_call_from_expression_probe(probe: ResolvedExpressionProbe, *, source: str) -> dict[str, object]:
+    return {
+        "probe": probe.reference,
+        "with": {name: _normalize_expression_node(value, source=source) for name, value in probe.arguments},
+        "fields": list(probe.fields),
+    }
+
+
+def _action_call_from_resolved_operation(resolved: ResolvedOperation) -> dict[str, object]:
+    return {
+        "reference": resolved.reference,
+        "with": {name: _normalize_authored_value(value) for name, value in (resolved.declared_with or {}).items()},
+    }
+
+
 def _collect_potential_invalidation_scopes(workflow: Workflow, resolution) -> set[str]:
     scopes: set[str] = set()
     for block in resolution.blocks:
@@ -1322,7 +1380,21 @@ def _guard_observation_scopes(resolved_guard: ResolvedOperation | ResolvedCondit
     return []
 
 
-def _build_guard_detail(reference: str, result: OperationResult, *, observation_scopes: list[str] | None = None) -> dict[str, object]:
+def _guard_observations(resolved_guard: ResolvedOperation | ResolvedConditionExpression) -> list[dict[str, object]]:
+    if isinstance(resolved_guard, ResolvedOperation):
+        return [_observed_probe_call_from_resolved_operation(resolved_guard)]
+    if isinstance(resolved_guard, ResolvedConditionExpression):
+        return [_observed_probe_call_from_expression_probe(probe, source=resolved_guard.expr) for probe in resolved_guard.probes]
+    return []
+
+
+def _build_guard_detail(
+    reference: str,
+    result: OperationResult,
+    *,
+    observation_scopes: list[str] | None = None,
+    observations: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     return {
         "reference": reference,
         "status": result.status,
@@ -1331,4 +1403,5 @@ def _build_guard_detail(reference: str, result: OperationResult, *, observation_
         "failure_kind": result.raw.get("failure_kind"),
         "trace": result.raw.get("trace", []),
         "observation_scopes": [] if observation_scopes is None else list(observation_scopes),
+        "observations": [] if observations is None else [dict(item) for item in observations],
     }
