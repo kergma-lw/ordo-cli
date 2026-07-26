@@ -727,6 +727,11 @@ def _interpret_step_block_for_check(
                     status="halted",
                     condition_status="unknown",
                     halt_reason=halt.reason,
+                    preflight_support=_build_preflight_support(
+                        resolved_step,
+                        action_call=_action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
+                        known_observations=known_observations,
+                    ),
                 )
             )
             _append_structural_tail_items(
@@ -765,6 +770,11 @@ def _interpret_step_block_for_check(
                     status="halted",
                     condition_status="unknown",
                     halt_reason=halt.reason,
+                    preflight_support=_build_preflight_support(
+                        resolved_step,
+                        action_call=_action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
+                        known_observations=known_observations,
+                    ),
                 )
             )
             _append_structural_tail_items(
@@ -1202,6 +1212,7 @@ def _structural_step_item(
     status: str,
     condition_status: str | None,
     halt_reason: str | None = None,
+    preflight_support: dict[str, object] | None = None,
 ) -> dict[str, object]:
     item: dict[str, object] = {
         "block_index": block_index,
@@ -1217,6 +1228,8 @@ def _structural_step_item(
     }
     if halt_reason is not None:
         item["halt_reason"] = halt_reason
+    if preflight_support is not None:
+        item["preflight_support"] = preflight_support
     return item
 
 
@@ -1232,6 +1245,8 @@ def _append_structural_tail_items(
     for tail_step_index in range(start_step_index, min(len(block.steps), len(resolved_block.steps))):
         tail_step = block.steps[tail_step_index]
         tail_resolved = resolved_block.steps[tail_step_index]
+        action_call = _action_call_from_resolved_operation(tail_resolved) if isinstance(tail_resolved, ResolvedOperation) and tail_resolved.operation.kind == "action" else None
+        preflight_support = _build_preflight_support(tail_resolved, action_call=action_call, known_observations=known_observations)
         step_items.append(
             _structural_step_item(
                 block_index=block_index,
@@ -1240,6 +1255,7 @@ def _append_structural_tail_items(
                 resolved_step=tail_resolved,
                 status="pending",
                 condition_status="unknown" if tail_step.if_ is not None else None,
+                preflight_support=preflight_support,
             )
         )
 

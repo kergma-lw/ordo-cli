@@ -733,6 +733,97 @@ class CheckModeTest(unittest.TestCase):
             },
         )
 
+    def test_check_renders_missing_preflight_observations_without_input_values_when_step_shape_is_known(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"branch": "string"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support = result.outputs["preflight_step_items"][1]["preflight_support"]
+        self.assertEqual(support["strength"], "weak")
+        self.assertEqual(support["matched_observations"], [])
+        self.assertEqual(
+            support["missing_observations"],
+            [
+                {"probe": "git.branch", "with": {}, "fields": []},
+                {"probe": "git.upstream", "with": {}, "fields": []},
+                {
+                    "probe": "git.range",
+                    "with": {"base": "@{upstream}", "head": {"expression": "step.branch_name.outputs.value"}},
+                    "fields": [],
+                },
+            ],
+        )
+
+    def test_check_keeps_structural_recommendations_expression_shaped_under_missing_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repository": "string", "issue_number": "number", "project_id": "string", "field": "string", "value": "json"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-target", value="${inputs.repository}", register="repo_name"),
+                        Step(
+                            name="set-field",
+                            operation=OperationRef(
+                                "gh.project.issue.field.set",
+                                with_={
+                                    "repository": "${step.repo_name.outputs.value}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "${inputs.field}",
+                                    "value": "${inputs.value}",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support = result.outputs["preflight_step_items"][1]["preflight_support"]
+        self.assertEqual(
+            support["missing_observations"],
+            [
+                {
+                    "probe": "gh.project.issue",
+                    "with": {
+                        "repository": {"expression": "step.repo_name.outputs.value"},
+                        "issue_number": {"expression": "inputs.issue_number"},
+                        "project_id": {"expression": "inputs.project_id"},
+                    },
+                    "fields": [],
+                },
+                {
+                    "probe": "gh.project.field",
+                    "with": {
+                        "project_id": {"expression": "inputs.project_id"},
+                        "field": {"expression": "inputs.field"},
+                    },
+                    "fields": [],
+                },
+            ],
+        )
+
 
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())
