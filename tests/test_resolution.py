@@ -98,7 +98,7 @@ class ResolutionTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             inputs={"repository": "owner/repo", "issue_number": 1, "project_id": "PVT_demo"},
-            guards=(Guard(expr='gh.project.issue.status.set(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id, status="Done").status == "Done"'),),
+            guards=(Guard(expr='gh.project.issue.field_single_select.set(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id, field="Status", option="Done").option == "Done"'),),
             steps=(),
         )
 

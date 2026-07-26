@@ -196,3 +196,5 @@ If `explain` collapses into:
 - a list of steps;
 
 then the distinction from a task or pipeline runner will be weak.
+
+See also: `docs/architecture/next-playbook-query.md` for one possible future direction around playbook-wide next-step recommendation queries.

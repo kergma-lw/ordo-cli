@@ -163,3 +163,73 @@ Why this matters:
 Failure meaning:
 - a failure here means the system is optimistic exactly where it should be conservative;
 - partial metadata rollout would then make `check` less trustworthy instead of more useful.
+
+## HYP-CHECK-007 — Missing advisory preflight observations should weaken explanation quality without becoming blockers
+
+Related normative rules:
+- `CHECK-MODE-013`
+
+Scenario shape:
+- an effectful action appears in the workflow;
+- that action declares advisory preflight-observation templates;
+- the workflow does not currently establish one or more equivalent observations before the step.
+
+Expected result:
+- `check` should be able to report weaker or partial preflight support for that step;
+- `check` must not upgrade the missing advisory observation into an executability failure by itself;
+- any author-facing guidance should identify which recommended observation shape is absent.
+
+Why this matters:
+- the point of advisory metadata is to strengthen explanation quality without creating hidden prerequisites;
+- otherwise connector-authored hints would silently become policy gates;
+- both humans and agents need to distinguish inapplicability from weak preflight support.
+
+Failure meaning:
+- a failure here means advisory metadata has leaked into executability semantics;
+- authors and agents would lose trust in `check` because suggestions would behave like undocumented blockers.
+
+## HYP-CHECK-008 — Rendered recommendations should prefer workflow expressions over one-shot values
+
+Related normative rules:
+- `CHECK-MODE-014`
+
+Scenario shape:
+- an effectful step argument is supplied through a workflow expression such as `inputs.foo`, `state.bar`, or an early `let` binding;
+- the action metadata declares a recommended preflight-observation template that references that action argument.
+
+Expected result:
+- when `check` renders author-facing guidance, it should prefer the workflow expression currently supplying that action argument;
+- if no such expression is available, a fallback surface may still be shown, but expression-shaped guidance is preferred.
+
+Why this matters:
+- recommendations are more actionable when they resemble the authored workflow structure;
+- long rendered expressions remain an authoring-quality signal rather than a reason for runtime to invent prettier names;
+- agents can repair workflows more directly when recommendations are phrased in workflow terms.
+
+Failure meaning:
+- a failure here means `check` guidance is less actionable than it could be;
+- the system would push users toward ephemeral run-instance values instead of durable workflow structure.
+
+## HYP-CHECK-009 — Recommended-observation coverage must not rely on heuristic equivalence
+
+Related normative rules:
+- `CHECK-MODE-015`
+
+Scenario shape:
+- an action declares a recommended preflight-observation template;
+- the workflow has already established a similar-looking observation before that step;
+- the two observation shapes differ by argument expression, selected field path, or canonical probe form.
+
+Expected result:
+- `check` must treat the recommendation as covered only when the canonical shapes match exactly after rendering action-argument expressions;
+- `check` must not mark the recommendation as covered because the values happen to look equal in one run or because the expressions appear semantically close;
+- if exact structural matching is unavailable, `check` should leave the recommendation missing or unknown rather than guessing.
+
+Why this matters:
+- deterministic exact matching is more trustworthy than clever-looking heuristics in a structured workflow system;
+- false-positive coverage would make `check` hide missing observations precisely where author guidance is needed most;
+- this keeps the burden of naming or normalizing important expressions in workflow authoring rather than in speculative runtime inference.
+
+Failure meaning:
+- a failure here means `check` has started inventing equivalence classes it cannot actually prove;
+- recommendation coverage would then become surprising, unstable, and hard to debug.

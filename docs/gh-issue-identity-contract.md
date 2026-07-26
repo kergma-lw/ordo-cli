@@ -20,12 +20,12 @@ This input shape applies to issue-oriented operations such as:
 - `gh.issue.comment.add`
 - `gh.project.issue`
 - `gh.project.issue.add`
-- `gh.project.issue.status.set`
-- `gh.project.issue.iteration.set`
-- `gh.project.issue.priority.set`
-- `gh.project.issue.type.set`
-- `gh.project.issue.size.set`
-- `gh.project.issue.estimate.set`
+- `gh.project.issue.field_single_select.set`
+- `gh.project.issue.field_iteration.set`
+- `gh.project.issue.field_single_select.set`
+- `gh.project.issue.field_single_select.set`
+- `gh.project.issue.field_single_select.set`
+- `gh.project.issue.field_number.set`
 
 ## Validation
 

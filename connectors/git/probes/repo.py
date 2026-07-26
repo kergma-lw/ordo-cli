@@ -11,6 +11,7 @@ def info():
     return probe(
         name="repo",
         outputs={
+            "exists": "boolean",
             "root": "string",
             "git_dir": "string",
             "inside_work_tree": "boolean",
@@ -100,6 +101,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
     return ok(
         summary="Git repository context inspected successfully",
         outputs={
+            "exists": True,
             "root": root,
             "git_dir": git_dir,
             "inside_work_tree": inside_work_tree,
@@ -236,4 +238,3 @@ def _normalize_path(value: str) -> str:
     if path.is_absolute():
         return str(path)
     return str((Path.cwd() / path).resolve())
-

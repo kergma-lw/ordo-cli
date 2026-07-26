@@ -353,6 +353,24 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["allowed_state"], "unknown")
         self.assertIn("profile_switch_not_resolvable_from_current_knowledge", result.outputs["incomplete_reasons"])
 
+    def test_check_evaluates_guard_pipeline_filters(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="set-task-estimate",
+            inputs={"estimate": 1},
+            declared_inputs={"estimate": {}},
+            blocks=(
+                GuardBlock(guards=(Guard(expr="inputs.estimate | is_number"),)),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertEqual(result.outputs["evaluated_relevant_guard_count"], 1)
+
     def test_check_expands_static_run_fragment_and_continues_to_later_guards(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -782,7 +800,7 @@ class CheckModeTest(unittest.TestCase):
                         Step(
                             name="set-field",
                             operation=OperationRef(
-                                "gh.project.issue.field.set",
+                                "gh.project.issue.field_number.set",
                                 with_={
                                     "repository": "${step.repo_name.outputs.value}",
                                     "issue_number": "${inputs.issue_number}",
@@ -811,7 +829,7 @@ class CheckModeTest(unittest.TestCase):
                         "issue_number": {"expression": "inputs.issue_number"},
                         "project_id": {"expression": "inputs.project_id"},
                     },
-                    "fields": [],
+                    "fields": ["exists"],
                 },
                 {
                     "probe": "gh.project.field",
@@ -819,7 +837,64 @@ class CheckModeTest(unittest.TestCase):
                         "project_id": {"expression": "inputs.project_id"},
                         "field": {"expression": "inputs.field"},
                     },
-                    "fields": [],
+                    "fields": ["exists"],
+                },
+            ],
+        )
+
+    def test_check_recommends_missing_observations_for_guardless_effectful_block(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repository": "string", "issue_number": "number", "project_id": "string"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "${inputs.repository}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "Status",
+                                    "option": "In review",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["preflight_step_items"][0]["status"], "pending")
+        support = result.outputs["preflight_step_items"][0]["preflight_support"]
+        self.assertEqual(support["strength"], "weak")
+        self.assertEqual(
+            support["missing_observations"],
+            [
+                {
+                    "probe": "gh.project.issue",
+                    "with": {
+                        "repository": {"expression": "inputs.repository"},
+                        "issue_number": {"expression": "inputs.issue_number"},
+                        "project_id": {"expression": "inputs.project_id"},
+                    },
+                    "fields": ["exists"],
+                },
+                {
+                    "probe": "gh.project.field",
+                    "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status"},
+                    "fields": ["exists"],
+                },
+                {
+                    "probe": "gh.project.field.option",
+                    "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status", "option": "In review"},
+                    "fields": ["exists"],
                 },
             ],
         )

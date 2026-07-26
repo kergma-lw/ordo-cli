@@ -1,7 +1,7 @@
-name: checklist-backend-open-task
+name: sample-backend-set-active-task
 
 inputs:
-  project_id: PVT_BACKEND_PROJECT_ID
+  project_id: PVT_SAMPLE_BACKEND_PROJECT_ID
   remote: origin
   base_branch: main
   allow_backlog: false
@@ -10,7 +10,7 @@ inputs:
   repository_kind: backend
 
 checks:
-  - open-task
+  - set-active-task
   - backend
 
 overrides: []

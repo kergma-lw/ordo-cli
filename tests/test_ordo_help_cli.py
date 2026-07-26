@@ -327,6 +327,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         state_result = json.loads(self.run_help("search", "general-purpose cache", "--json").stdout)
         context_result = json.loads(self.run_help("search", "ambient environment requirements", "--json").stdout)
         control_result = json.loads(self.run_help("search", "workflow applicability", "--json").stdout)
+        delegated_result = json.loads(self.run_help("search", "downstream action validation", "--json").stdout)
         let_result = json.loads(self.run_help("search", "repetition", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.shell.command" for item in shell_result["facts"]))
@@ -337,6 +338,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.lifecycle_state" for item in state_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.explicit_execution_context" for item in context_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.separate_control_surfaces" for item in control_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.delegated_applicability" for item in delegated_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_let" for item in let_result["facts"]))
 
     def test_workflow_authoring_topic_prioritizes_shell_command_and_early_guards(self) -> None:
@@ -346,6 +348,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["audience"], ["workflow_authors", "agents"])
         self.assertIn("treat semantic ambiguity as a reason to clarify rather than improvise", payload["authoring_heuristic"])
         self.assertIn("when adding or changing inputs, validate them before continuing", payload["authoring_heuristic"])
+        self.assertIn("validate both the request shape and the observed target context", payload["authoring_heuristic"])
+        self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early", payload["authoring_heuristic"])
         decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")
         structured_rule = next(item for item in payload["rules"] if item["name"] == "structured_surface_bias")
         shell_rule = next(item for item in payload["rules"] if item["name"] == "shell.command")
@@ -353,6 +357,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         local_rule = next(item for item in payload["rules"] if item["name"] == "local_artifacts_are_context")
         guards_rule = next(item for item in payload["rules"] if item["name"] == "early_guards")
         input_validation_rule = next(item for item in payload["rules"] if item["name"] == "input_validation_default")
+        delegated_rule = next(item for item in payload["rules"] if item["name"] == "delegated_applicability")
         adapters_rule = next(item for item in payload["rules"] if item["name"] == "representation_adapters")
         publish_rule = next(item for item in payload["rules"] if item["name"] == "publish_outputs")
         state_rule = next(item for item in payload["rules"] if item["name"] == "lifecycle_state")
@@ -366,22 +371,57 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(structured_rule["priority"], "strong_recommendation")
         self.assertTrue(any("product terms" in item for item in structured_rule["why"]))
         self.assertEqual(shell_rule["priority"], "critical_caution")
-        self.assertEqual(shell_rule["guidance_level"], "discouraged_last_resort")
+        self.assertEqual(shell_rule["guidance_level"], "forbidden_by_default")
         self.assertTrue(any("riskiest" in reason for reason in shell_rule["why"]))
         self.assertTrue(any("repository-local automation" in item for item in shell_rule["avoid"]))
+        self.assertTrue(any("partial public-surface match" in item for item in shell_rule["why"]))
+        self.assertTrue(any("capability gap remains" in item for item in shell_rule["prefer"]))
+        self.assertTrue(any("remaining gap is semantic" in item for item in shell_rule["prefer"]))
+        self.assertEqual(
+            shell_rule["stop_when"],
+            [
+                "no explicit capability-gap statement has been made",
+                "the remaining gap is semantic rather than mechanical",
+                "shell.command is being chosen mainly because it is faster, familiar, or already available locally",
+            ],
+        )
         self.assertEqual(ambiguity_rule["priority"], "strong_recommendation")
         self.assertTrue(any("ask" in item for item in ambiguity_rule["prefer"]))
         self.assertEqual(local_rule["priority"], "recommended_caution")
+        self.assertEqual(local_rule["guidance_level"], "strong_restriction")
         self.assertTrue(any("public model" in item for item in local_rule["why"] + local_rule["prefer"]))
-        self.assertEqual(guards_rule["priority"], "strong_recommendation")
+        self.assertTrue(any("implementation approval" in item for item in local_rule["prefer"]))
+        self.assertTrue(any("shell.command" in item for item in local_rule["avoid"]))
+        self.assertEqual(
+            local_rule["must_not_infer"],
+            [
+                "there is a script for this => shell.command is acceptable here",
+                "the repo already does it this way => this is the correct workflow contract",
+                "a local helper covers the semantic gap => no clarification is needed",
+            ],
+        )
+        self.assertEqual(guards_rule["priority"], "critical_applicability_policy")
+        self.assertEqual(guards_rule["guidance_level"], "required_default")
         self.assertTrue(any("just a runner" in reason for reason in guards_rule["why"]))
         self.assertTrue(any("phase guards in a stable order" in item and "input validation" in item for item in guards_rule["prefer"]))
         self.assertTrue(any("when adding or changing workflow inputs" in item for item in guards_rule["prefer"]))
+        self.assertTrue(any("externally observable fact" in item for item in guards_rule["prefer"]))
         self.assertTrue(any("is_integer" in item and "in(...)" in item for item in guards_rule["prefer"]))
+        self.assertTrue(any("check and explain" in item for item in guards_rule["prefer"]))
+        self.assertTrue(any("ordo-playbook check <workflow>" in item for item in guards_rule["prefer"]))
         self.assertEqual(input_validation_rule["priority"], "strong_recommendation")
+        self.assertEqual(input_validation_rule["guidance_level"], "required_default")
         self.assertTrue(any("pause and decide" in item for item in input_validation_rule["prefer"]))
+        self.assertTrue(any("target context" in item for item in input_validation_rule["prefer"]))
         self.assertTrue(any("style references" in item for item in input_validation_rule["prefer"]))
+        self.assertTrue(any("type-valid input" in item for item in input_validation_rule["why"]))
         self.assertTrue(any("neighboring workflow" in item for item in input_validation_rule["avoid"]))
+        self.assertTrue(any("request-shape validation" in item for item in input_validation_rule["avoid"]))
+        self.assertEqual(delegated_rule["priority"], "critical_explainability_policy")
+        self.assertEqual(delegated_rule["guidance_level"], "required_default")
+        self.assertTrue(any("safety net" in item for item in delegated_rule["prefer"]))
+        self.assertTrue(any("capability gap" in item for item in delegated_rule["prefer"]))
+        self.assertTrue(any("action preflight" in item for item in delegated_rule["avoid"]))
         self.assertEqual(adapters_rule["priority"], "strong_recommendation")
         self.assertTrue(any("published results" in item for item in adapters_rule["rule"].splitlines() + adapters_rule["why"] + adapters_rule["prefer"]))
         self.assertTrue(any("read-only adapter projections" in item for item in adapters_rule["prefer"]))
@@ -446,8 +486,8 @@ class OrdoHelpCliTest(unittest.TestCase):
             ],
         )
 
-    def test_operation_topic_publishes_preflight_observations_for_generic_project_field_setter(self) -> None:
-        payload = json.loads(self.run_help("operation", "gh.project.issue.field.set", "--json").stdout)
+    def test_operation_topic_publishes_preflight_observations_for_number_field_setter(self) -> None:
+        payload = json.loads(self.run_help("operation", "gh.project.issue.field_number.set", "--json").stdout)
 
         self.assertEqual(
             payload["operation"]["preflight_observations"],
@@ -459,10 +499,12 @@ class OrdoHelpCliTest(unittest.TestCase):
                         "issue_number": "{issue_number}",
                         "project_id": "{project_id}",
                     },
+                    "fields": ["exists"],
                 },
                 {
                     "probe": "gh.project.field",
                     "with": {"project_id": "{project_id}", "field": "{field}"},
+                    "fields": ["exists"],
                 },
             ],
         )

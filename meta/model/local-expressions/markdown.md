@@ -30,6 +30,10 @@ Further selector steps or terminal action semantics may refine how the selected 
 
 The family may expose block-oriented targets such as paragraphs and lists inside a section or prelude scope.
 
+After one singular list or task-list block has been selected, the model may allow positional indexing to address one top-level list item within that selected block.
+
+The family may also expose a separate collection-view projection for list-like blocks, for example `.list_items` or `.task_list_items`, when the product wants an array-valued view distinct from the richer block object.
+
 ## Text-action model
 
 The markdown family should prefer a small orthogonal text-action surface over many special-case action verbs.

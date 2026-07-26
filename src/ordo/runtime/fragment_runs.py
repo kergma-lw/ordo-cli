@@ -11,7 +11,7 @@ from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import resolve_condition_local_expression
-from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file
+from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_workflow_payload
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
@@ -67,6 +67,26 @@ def materialize_run_workflow(
         except LoadError:
             return exc.diagnostics[0]
 
+    if isinstance(payload, dict) and "version" in payload and "workflow" in payload:
+        try:
+            nested_workflow = load_workflow_payload(payload, source=str(run_path), launch_dir=launch_dir)
+        except LoadError as exc:
+            return exc.diagnostics[0]
+        return Workflow(
+            version=nested_workflow.version,
+            workflow=f"{caller_workflow.workflow}::{nested_workflow.workflow}",
+            inputs={**nested_workflow.inputs, **caller_workflow.inputs},
+            declared_inputs={**caller_workflow.declared_inputs, **nested_workflow.declared_inputs},
+            let_bindings={**caller_workflow.let_bindings, **nested_workflow.let_bindings},
+            state_needs={**caller_workflow.state_needs, **nested_workflow.state_needs},
+            state_bindings={**caller_workflow.state_bindings, **nested_workflow.state_bindings, **dict(step.run_state_bindings)},
+            states={**caller_workflow.states, **nested_workflow.states, **dict(step.run_states)},
+            step_results=caller_workflow.step_results,
+            blocks=nested_workflow.blocks,
+            source_path=nested_workflow.source_path,
+            launch_dir=nested_workflow.launch_dir,
+        )
+
     if isinstance(payload, list):
         blocks_payload = payload
     elif isinstance(payload, dict) and "blocks" in payload:
@@ -98,6 +118,7 @@ def materialize_run_workflow(
         state_needs=caller_workflow.state_needs,
         state_bindings=step.run_state_bindings or caller_workflow.state_bindings,
         states=step.run_states or caller_workflow.states,
+        step_results=caller_workflow.step_results,
         blocks=blocks,
         source_path=str(run_path),
         launch_dir=str(launch_dir),

@@ -1,7 +1,7 @@
-name: checklist-frontend-open-task
+name: sample-frontend-set-active-task
 
 inputs:
-  project_id: PVT_FRONTEND_PROJECT_ID
+  project_id: PVT_SAMPLE_FRONTEND_PROJECT_ID
   remote: origin
   base_branch: main
   allow_backlog: false
@@ -10,7 +10,7 @@ inputs:
   repository_kind: frontend
 
 checks:
-  - open-task
+  - set-active-task
   - frontend
 
 overrides: []

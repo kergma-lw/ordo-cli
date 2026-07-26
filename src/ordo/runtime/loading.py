@@ -63,10 +63,25 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
             details={"source": source, "actual_type": type(payload).__name__},
         )
 
+    return load_workflow_payload(payload, source=source)
+
+
+def load_workflow_file(path: str | Path, *, launch_dir: str | Path | None = None) -> Workflow:
+    """Load workflow YAML from a file path."""
+
+    workflow_path = Path(path)
+    source = str(workflow_path)
+    payload = load_workflow_document_file(workflow_path, launch_dir=launch_dir)
+    return load_workflow_payload(payload, source=source, launch_dir=launch_dir)
+
+
+def load_workflow_payload(payload: JSONObject, *, source: str, launch_dir: str | Path | None = None) -> Workflow:
+    """Load one already-expanded workflow payload into the canonical typed model."""
+
     blocks = _load_workflow_blocks(payload, source=source)
     workflow_inputs, declared_inputs = _load_workflow_inputs(payload, source=source)
     let_bindings = _load_workflow_let_bindings(payload, source=source)
-
+    resolved_launch_dir = None if launch_dir is None else _resolve_launch_directory(launch_dir)
     return Workflow(
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
@@ -78,31 +93,7 @@ def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
         states=_optional_object(payload, "states", source=source),
         blocks=blocks,
         source_path=None if source == "<memory>" else source,
-    )
-
-
-def load_workflow_file(path: str | Path, *, launch_dir: str | Path | None = None) -> Workflow:
-    """Load workflow YAML from a file path."""
-
-    workflow_path = Path(path)
-    source = str(workflow_path)
-    payload = load_workflow_document_file(workflow_path, launch_dir=launch_dir)
-    blocks = _load_workflow_blocks(payload, source=source)
-    workflow_inputs, declared_inputs = _load_workflow_inputs(payload, source=source)
-    let_bindings = _load_workflow_let_bindings(payload, source=source)
-    resolved_launch_dir = _resolve_launch_directory(launch_dir)
-    return Workflow(
-        version=_require_int(payload, "version", source=source),
-        workflow=_require_string(payload, "workflow", source=source),
-        inputs=workflow_inputs,
-        declared_inputs=declared_inputs,
-        let_bindings=let_bindings,
-        state_needs=_optional_object(payload, "state_needs", source=source),
-        state_bindings=_optional_object(payload, "state_bindings", source=source),
-        states=_optional_object(payload, "states", source=source),
-        blocks=blocks,
-        source_path=source,
-        launch_dir=str(resolved_launch_dir),
+        launch_dir=None if resolved_launch_dir is None else str(resolved_launch_dir),
     )
 
 

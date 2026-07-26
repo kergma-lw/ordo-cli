@@ -63,6 +63,12 @@ class _BlockKindStep:
 
 
 @dataclass(frozen=True, slots=True)
+class _BlockProjectionStep:
+    kind: str
+    projection: str
+
+
+@dataclass(frozen=True, slots=True)
 class _PreludeStep:
     pass
 
@@ -94,7 +100,7 @@ def _register() -> None:
             summary="Select and transform markdown sections, blocks, and lists through a family-owned path surface.",
             selectors=("prelude", "[\"title\"]", "[n]", '.blocks("kind")'),
             actions=("add", "append", "replace", "remove"),
-            shortcuts=("list", "lists", "task_list", "task_lists", "paragraph", "paragraphs", "prelude"),
+            shortcuts=("list", "lists", "list_items", "task_list", "task_lists", "task_list_items", "paragraph", "paragraphs", "prelude"),
         ),
     )
 
@@ -296,10 +302,14 @@ def _parse_dot_step(body: str, start: int) -> tuple[object, int]:
         return _BlockKindStep(kind="list", expect_one=True), end
     if name == "lists":
         return _BlockKindStep(kind="list", expect_one=False), end
+    if name == "list_items":
+        return _BlockProjectionStep(kind="list", projection="items"), end
     if name == "task_list":
         return _BlockKindStep(kind="task_list", expect_one=True), end
     if name == "task_lists":
         return _BlockKindStep(kind="task_list", expect_one=False), end
+    if name == "task_list_items":
+        return _BlockProjectionStep(kind="task_list", projection="items"), end
     if name == "paragraph":
         return _BlockKindStep(kind="paragraph", expect_one=True), end
     if name == "paragraphs":
@@ -408,6 +418,15 @@ def _evaluate_markdown_plan(plan: _MarkdownSelectorPlan, document: _MarkdownSect
             current = matches
             continue
         if isinstance(step, _IndexStep):
+            if len(current) == 1 and isinstance(current[0], _MarkdownBlock) and current[0].kind in {"list", "task_list"}:
+                if step.index >= len(current[0].items):
+                    raise RepresentationAdapterError(
+                        code="runtime.value.adapter_not_found",
+                        message=f"Markdown list item index {step.index} is not available",
+                        details={"index": step.index, "matches": len(current[0].items)},
+                    )
+                current = [current[0].items[step.index]]
+                continue
             if step.index >= len(current):
                 raise RepresentationAdapterError(
                     code="runtime.value.adapter_not_found",
@@ -446,6 +465,29 @@ def _evaluate_markdown_plan(plan: _MarkdownSelectorPlan, document: _MarkdownSect
             else:
                 current = matches
             continue
+        if isinstance(step, _BlockProjectionStep):
+            matches = [block for node in current for block in _child_blocks(node) if block.kind == step.kind]
+            if not matches:
+                raise RepresentationAdapterError(
+                    code="runtime.value.adapter_not_found",
+                    message=f"Markdown {step.kind} selection found no matches",
+                    details={"kind": step.kind, "projection": step.projection},
+                )
+            if len(matches) > 1:
+                raise RepresentationAdapterError(
+                    code="runtime.value.adapter_ambiguous",
+                    message=f"Markdown {step.kind} selection is ambiguous",
+                    details={"kind": step.kind, "projection": step.projection, "matches": len(matches)},
+                )
+            block = matches[0]
+            if step.projection == "items":
+                current = [list(block.items)]
+                continue
+            raise RepresentationAdapterError(
+                code="runtime.value.adapter_invalid_path",
+                message="Markdown block projection is not supported",
+                details={"kind": step.kind, "projection": step.projection},
+            )
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_path",
             message="Markdown selector step is not supported",

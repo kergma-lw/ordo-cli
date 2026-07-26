@@ -1,0 +1,51 @@
+version: 0
+workflow: story-task-add
+inputs:
+  active_profile_key: active_profile
+  issue_number: {}
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+  task_repository:
+    hint: Use owner/repo format
+  task_issue_number: {}
+state_needs:
+  shared_state: {}
+let:
+  active_profile: state.shared_state[inputs.active_profile_key]
+  story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+  task_issue: gh.issue(repository=inputs.task_repository, issue_number=inputs.task_issue_number)
+  story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
+blocks:
+  - guards:
+      - git.repo.exists
+      - active_profile == "meta"
+      - story_project_issue.exists
+      - story_project_issue.type == "Story"
+      - task_issue.exists
+
+  - steps:
+      - name: Build task ref
+        value:
+          format: "%s#%s"
+          args:
+            - ${inputs.task_repository}
+            - ${inputs.task_issue_number}
+        register: task_ref
+
+      - name: Replace story body
+        uses: gh.issue.body.replace
+        register: body_replace
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          body: '${markdown["Tasks"].list->add(item) with{root: story_body, item: step.task_ref.outputs.value}}'
+
+      - name: Publish add-task result
+        publish:
+          summary: Story task reference updated
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          task_ref: ${step.task_ref.outputs.value}
+          changed: ${step.body_replace.outputs.changed}

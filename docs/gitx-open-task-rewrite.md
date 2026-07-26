@@ -4,13 +4,13 @@
 
 Это не полный перенос `gitx.sh`, а **один вертикальный срез**:
 
-- кусок ритуала `open-task` из `.local/scripts/gitx.sh`;
+- кусок ритуала `set-active-task` from `.local/scripts/gitx.sh`;
 - в частности та часть, где сначала проверяются предохранители,
   потом issue переводится в `In progress`,
   потом синхронизируется `main`,
   потом создаётся или выбирается task branch.
 
-См. пример: `examples/open-task-from-gitx.yaml`.
+См. пример: `examples/set-active-task-from-gitx.yaml`.
 
 ## Почему выбран именно этот кусок
 
@@ -42,7 +42,7 @@
 
 ```yaml
 version: 0
-workflow: open-task
+workflow: set-active-task
 
 inputs:
   repository: kergma-lw/checklist-backend
@@ -58,7 +58,7 @@ guards:
 
 steps:
   - name: move-issue-to-in-progress
-    uses: gh.project.issue.status.set
+    uses: gh.project.issue.field_single_select.set
     with:
       repository: ${inputs.repository}
       issue_number: ${inputs.issue_number}
@@ -66,7 +66,7 @@ steps:
       status: In progress
 
   - name: set-current-iteration
-    uses: gh.project.issue.iteration.set
+    uses: gh.project.issue.field_iteration.set
     with:
       repository: ${inputs.repository}
       issue_number: ${inputs.issue_number}

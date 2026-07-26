@@ -59,6 +59,36 @@ A derived value is a value produced from already available local-expression inpu
 
 Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
 
+### Workflow-local binding
+
+A workflow-local binding is one authored `let` entry that gives a local expression a workflow-scoped name.
+
+The modeled binding shape is:
+
+- the binding name is workflow-local rather than global or inherited;
+- the binding value is one ordinary local-expression tree rather than a text substitution;
+- the binding is immutable for the duration of the workflow run;
+- the binding may reference documented roots and other dependencies that are otherwise valid for the surrounding expression system;
+- the binding may not reference another `let` binding;
+- the binding does not create a new context and does not widen which dependencies are legal at one use site.
+
+The modeled validation rule is that a `let` binding is accepted only where the equivalent inline expression would be accepted by the surrounding authored context.
+
+### Presence check
+
+A presence check is one product-defined boolean helper that asks whether one approved lookup-like argument is observably available without collapsing unrelated evaluation failures into boolean absence.
+
+The narrow modeled argument classes are:
+
+- lookup-style references whose missingness semantics are defined by the surrounding root contract;
+- read-only representation-adapter invocations whose absence semantics are defined by adapter `not_found`.
+
+For read-only adapter invocation arguments, the modeled interpretation is:
+
+- successful invocation means present;
+- adapter `not_found` means missing;
+- any other adapter failure remains a real evaluation failure.
+
 ### Representation adapter
 
 A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
@@ -100,6 +130,43 @@ Its excluded construct families should cover:
 - hidden workflow-control structures;
 - workflow-defined language extension.
 
+### Pipeline filter
+
+A pipeline filter is one product-defined operation applied to an already evaluated local-expression value.
+
+The modeled pipeline shape is:
+
+- the left side supplies one already evaluated input value;
+- the filter name selects one product-defined filter contract;
+- optional filter arguments are themselves local-expression values evaluated under the surrounding context policy;
+- the filter result becomes the next pipeline value.
+
+The modeled input discipline is intentionally broad:
+
+- a pipeline input value may be any ordinary local-expression value such as a string, number, boolean, null, list, object, local-root lookup result, probe result, or prior derived value;
+- individual filter contracts, rather than the pipeline surface itself, determine which input shapes are accepted.
+
+The modeled filter families include:
+
+- transforming filters such as `lower`, `trim`, and `slug`;
+- boolean comparison filters such as `eq(...)` and `ne(...)`;
+- boolean predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean`;
+- boolean membership filters such as `in(container)`;
+- boolean negation filters such as `not`.
+
+The modeled predicate-filter semantics are:
+
+- predicate filters consume one already evaluated input value;
+- predicate filters return only boolean results;
+- predicate filters do not implicitly coerce input values into another type before deciding the result.
+
+The modeled membership-filter semantics are:
+
+- `in(container)` consumes one already evaluated input value and one already evaluated container argument;
+- the container argument must evaluate to a list value;
+- membership is determined by strict element comparison without implicit coercion;
+- a non-list container remains a filter misuse failure rather than a false result.
+
 ### Probe-observation execution contract
 
 Canonical local-expression evaluation may require a read-only probe observation when the tree contains a probe-call node and the surrounding context permits such observation.
@@ -123,6 +190,8 @@ The model separates:
 - the restrictions imposed by the surrounding context.
 
 This means an interpolation envelope, a bare condition string, and a caller-side include binding may all belong to the same modeled local-expression system even when their authored syntax differs.
+
+A workflow-level `let` surface therefore adds one more authored way to name local expressions without creating a second expression family or second execution engine.
 
 ## Control boundary
 

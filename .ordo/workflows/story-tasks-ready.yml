@@ -1,0 +1,32 @@
+version: 0
+workflow: story-tasks-ready
+inputs:
+  active_profile_key: active_profile
+  issue_number: {}
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+state_needs:
+  shared_state: {}
+let:
+  active_profile: state.shared_state[inputs.active_profile_key]
+  story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+  story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
+blocks:
+  - guards:
+      - git.repo.exists
+      - active_profile == "meta"
+      - story_project_issue.exists
+      - story_project_issue.type == "Story"
+
+  - steps:
+      - name: Inspect and publish ready story tasks
+        run: fragments/story-ready-task-item.yml
+        for_each: '${markdown["Tasks"].list_items with{root: story_body}}'
+
+      - name: Record story ready-task publication
+        result:
+          summary: Story ready tasks published
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}

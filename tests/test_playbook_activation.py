@@ -1203,6 +1203,64 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertTrue(result.outputs["analysis_complete"])
             self.assertNotIn("profile_switch_not_resolvable_from_current_knowledge", result.outputs.get("incomplete_reasons", []))
 
+    def test_check_after_activation_crosses_pre_run_profile_switch_via_nested_let_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "backend"}\n', encoding="utf-8")
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - file: workflows/switch-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    defaults:
+                      profile: frontend
+                    workflows:
+                      set-task-size:
+                        file: set-task-size.yml
+                    profiles:
+                      frontend:
+                        file: frontend.yml
+                      backend:
+                        file: backend.yml
+                    states:
+                      shared_state:
+                        path: repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${active_profile}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
+                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - guards:\n      - inputs.active_profile_key == \"active_profile\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\n", encoding="utf-8")
+            (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\n", encoding="utf-8")
+
+            activated = activate_playbook(workflow_name="set-task-size", cwd=root)
+            result = check_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["allowed_state"], "allowed")
+            self.assertTrue(result.outputs["analysis_complete"])
+            self.assertEqual(result.outputs["active_profile"], "backend")
+            self.assertNotIn("profile_switch_not_resolvable_from_current_knowledge", result.outputs.get("incomplete_reasons", []))
+            self.assertNotIn("pre_run_precedes_main_guard_coverage", result.outputs.get("incomplete_reasons", []))
+
     def test_plan_after_activation_crosses_playbook_owned_pre_run_context(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1343,11 +1401,11 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-pre\n        result:\n          summary: pre\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-pre\n        publish:\n          summary: pre\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "publish.yml").write_text(
-                "version: 0\nworkflow: publish\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-main\n        result:\n          summary: main\n",
+                "version: 0\nworkflow: publish\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-main\n        publish:\n          summary: main\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\n", encoding="utf-8")
@@ -1361,7 +1419,7 @@ class PlaybookActivationTest(unittest.TestCase):
             )
 
             self.assertEqual(result.status, RuntimeStatus.OK)
-            self.assertEqual(result.outputs["results"], [{"summary": "pre"}, {"summary": "main"}])
+            self.assertEqual(list(result.published), [{"summary": "pre"}, {"summary": "main"}])
 
     def test_activate_playbook_resolves_working_directory_from_input_override_expression(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1929,7 +1987,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["results"], [{"summary": "Workflow completed without publishing an explicit result"}])
+            self.assertEqual(payload["results"], [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}])
 
     def test_cli_reports_missing_workflow_for_execution_command(self) -> None:
         stdout = io.StringIO()
@@ -1975,7 +2033,7 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         help_text = stdout.getvalue()
         self.assertIn("usage: ordo-playbook [options] plan WORKFLOW", help_text)
-        self.assertIn("ordo-playbook plan open-task", help_text)
+        self.assertIn("ordo-playbook plan set-active-task", help_text)
 
     def test_cli_workflows_list_returns_catalog_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2215,7 +2273,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["results"], [{"summary": "Workflow completed without publishing an explicit result"}])
+            self.assertEqual(payload["results"], [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}])
 
     def test_cli_run_mode_surfaces_published_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2226,7 +2284,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: publish\n        result:\n          summary: done\n          changed: true\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: publish\n        publish:\n          summary: done\n          changed: true\n",
                 encoding="utf-8",
             )
 
@@ -2239,7 +2297,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "done", "changed": True}]})
+            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}], "published": [{"summary": "done", "changed": True}]})
 
     def test_cli_run_mode_uses_compact_failure_payload(self) -> None:
         activated = SimpleNamespace(
@@ -2337,7 +2395,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed without publishing an explicit result"}]})
+            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}]})
 
     def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(

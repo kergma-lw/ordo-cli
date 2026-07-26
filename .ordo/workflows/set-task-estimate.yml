@@ -1,0 +1,41 @@
+version: 0
+workflow: set-task-estimate
+inputs:
+  active_profile_key: active_profile
+  issue_number: {}
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+  estimate:
+    hint: Use a numeric value
+let:
+  issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+  estimate_field: gh.project.field(project_id=inputs.project_id, field="Estimate")
+blocks:
+  - guards:
+      - git.repo.exists
+      - inputs.estimate | is_number
+      - issue.state == "OPEN"
+      - project_issue.exists
+      - estimate_field.exists
+      - project_issue.estimate != inputs.estimate
+
+  - steps:
+      - name: Set task estimate
+        uses: gh.project.issue.field_number.set
+        register: estimate_update
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          project_id: ${inputs.project_id}
+          field: Estimate
+          value: ${inputs.estimate}
+
+      - name: Publish task estimate result
+        publish:
+          summary: Task estimate updated
+          issue_ref: ${step.estimate_update.outputs.issue_ref}
+          estimate: ${step.estimate_update.outputs.value}
+          changed: ${step.estimate_update.outputs.changed}

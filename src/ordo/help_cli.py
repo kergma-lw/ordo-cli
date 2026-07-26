@@ -84,23 +84,35 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
     {
         "name": "shell.command",
         "priority": "critical_caution",
-        "guidance_level": "discouraged_last_resort",
-        "rule": "Prefer public Ordo operations and structured workflow surfaces over shell.command.",
+        "guidance_level": "forbidden_by_default",
+        "rule": "shell.command is forbidden by default. Use it only as a last resort after explicitly proving that no published structured workflow surface can express the required behavior.",
         "why": [
             "shell.command is the coarsest and riskiest public execution surface",
             "shell usage is harder to validate, explain, and keep environment-stable",
             "shell-first workflows can hide missing product surface that should be discussed explicitly",
+            "a partial public-surface match is not permission to encode the semantic remainder in shell.command",
+            "shell fallback changes the workflow contract, not just its implementation detail",
         ],
         "prefer": [
-            "check published connector operations first",
-            "use stable workflow constructs before introducing shell fallback",
-            "state which public operations were considered, why they are insufficient, and what exact capability is missing before using shell.command",
+            "check whether one published public operation fits directly",
+            "otherwise check whether multiple published public operations compose cleanly",
+            "before using shell.command, explicitly name which published operations were considered, why no direct operation fits, why no clean composition fits, and what exact capability gap remains",
+            "use shell.command only when the remaining gap is mechanical rather than semantic",
+            "if the remaining gap is semantic, stop and clarify with the user instead of preserving semantics through shell.command",
             "keep unavoidable shell usage narrow, explicit, and easy to reason about",
         ],
         "avoid": [
             "using shell.command as a first-choice implementation tool",
             "using shell.command for routine inspection, transformation, or orchestration when structured surfaces already exist",
             "using shell.command to wrap repository-local automation without first exhausting public operations",
+            "using shell.command merely because a nearby local script already implements something similar",
+            "bridging a partial public-surface match with shell.command without explicit justification",
+            "silently preserving repository-local semantics through shell.command when the public model does not define those semantics",
+        ],
+        "stop_when": [
+            "no explicit capability-gap statement has been made",
+            "the remaining gap is semantic rather than mechanical",
+            "shell.command is being chosen mainly because it is faster, familiar, or already available locally",
         ],
     },
     {
@@ -125,27 +137,38 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
     {
         "name": "local_artifacts_are_context",
         "priority": "recommended_caution",
-        "guidance_level": "recommended",
+        "guidance_level": "strong_restriction",
         "rule": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth.",
         "why": [
             "local artifacts may reflect convenience, history, or workaround pressure rather than the preferred product model",
             "defaulting to repository-local helpers encourages imitation of incidental behavior instead of deliberate workflow design",
             "preferring the declared public model over local history keeps workflows more portable and explainable",
+            "local scripts often encode repository-specific semantics that should not become product truth by accident",
         ],
         "prefer": [
             "use local artifacts to learn context, constraints, or missing capability signals",
             "prefer declared public contracts over incidental repository habits when choosing the workflow surface",
+            "treat local scripts as evidence of possible user intent or product-surface gaps, not as implementation approval",
+            "when local behavior contains semantics absent from the public model, narrow the workflow contract or ask the user",
         ],
         "avoid": [
             "treating the existence of a local script as sufficient reason to make it the workflow implementation surface",
             "copying repository-local behavior into a workflow without checking whether it matches the public model",
+            "inferring that a repository-local script defines preferred workflow semantics",
+            "wrapping a local helper in shell.command just because it already works in this repository",
+            "preserving local script semantics silently when those semantics are not published in the public workflow model",
+        ],
+        "must_not_infer": [
+            "there is a script for this => shell.command is acceptable here",
+            "the repo already does it this way => this is the correct workflow contract",
+            "a local helper covers the semantic gap => no clarification is needed",
         ],
     },
     {
         "name": "early_guards",
-        "priority": "strong_recommendation",
-        "guidance_level": "recommended",
-        "rule": "Be generous with guards near the start of the workflow.",
+        "priority": "critical_applicability_policy",
+        "guidance_level": "required_default",
+        "rule": "Express workflow applicability near the start of the workflow, not as a late discovery during action execution.",
         "why": [
             "early guards improve execution safety and make workflow applicability explicit",
             "early guards improve check, plan, and explain readability",
@@ -156,36 +179,64 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "put applicability checks near the top of the workflow",
             "for non-trivial workflows, phase guards in a stable order such as environment applicability, input validation, domain invariants, and structural preconditions",
             "when adding or changing workflow inputs, stop and validate each input at the guard boundary before moving on to downstream steps",
+            "when workflow success depends on an externally observable fact and the public surface can observe it, express that fact explicitly in guards or named observations",
             "use input-validation filters such as value | is_string, value | is_number, value | is_integer, value | is_boolean, value | in(...), value | eq(...), and value | ne(...) when they make the input contract more explicit",
+            "design guards so check and explain can name domain inapplicability before any mutating step runs",
+            "run ordo-playbook check <workflow> while authoring to surface missing structural observations or likely guard gaps whenever the current workflow shape makes those recommendations possible",
             "reject inapplicable situations early instead of failing deep inside execution",
         ],
         "avoid": [
             "delaying obvious applicability checks until late steps",
             "letting non-trivial applicability checks collapse into one unreadable undifferentiated guard mass",
             "relying on late failures when the workflow could declare inapplicability up front",
+            "treating action-local preflight or downstream action failure as the workflow's main applicability model",
         ],
     },
     {
         "name": "input_validation_default",
         "priority": "strong_recommendation",
-        "guidance_level": "recommended",
+        "guidance_level": "required_default",
         "rule": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs.",
         "why": [
             "new inputs silently widen workflow semantics unless their admissible shapes are declared near the top of the workflow",
             "validation guards are easier for agents and later authors to notice and preserve than downstream step failures",
+            "type-valid input does not by itself make a workflow applicable",
             "neighboring workflows may be incomplete examples, so copied omissions should not become the next default",
         ],
         "prefer": [
             "when introducing or changing any workflow input, pause and decide how that input is validated before continuing with step authoring",
             "add an early guard for each new or changed input whenever a public validation surface exists",
             "for string inputs prefer value | is_string; for numbers prefer value | is_number or value | is_integer; for booleans prefer value | is_boolean; for enumerated values prefer value | in(...), value | eq(...), or value | ne(...) as appropriate",
+            "after validating input shape, separately decide which observed preconditions make the workflow applicable to the current target context",
             "if no suitable public validation surface exists, name that exact gap explicitly instead of silently omitting validation",
             "treat existing workflows as style references, not as waivers for missing input validation",
         ],
         "avoid": [
             "copying a neighboring workflow's missing validation into new authoring work",
             "introducing a new input and only discovering bad values inside downstream operations",
+            "treating request-shape validation as a substitute for validating target compatibility or workflow applicability",
             "assuming that a repeated local pattern is automatically the preferred authoring contract",
+        ],
+    },
+    {
+        "name": "delegated_applicability",
+        "priority": "critical_explainability_policy",
+        "guidance_level": "required_default",
+        "rule": "Do not delegate workflow applicability to downstream action validation when the public surface can express the relevant precondition earlier.",
+        "why": [
+            "workflow applicability should be reviewable in workflow structure rather than hidden inside one action's failure path",
+            "when applicability lives only inside an action, check and explain become less able to justify why the workflow should not run",
+            "late applicability discovery encourages cargo-cult copying of steps that happen to work in one repository state",
+        ],
+        "prefer": [
+            "treat action-local validation as a safety net, not as the primary way to declare whether the workflow applies now",
+            "if a public observation surface exists for the relevant precondition, probe it explicitly and guard on it",
+            "if no public observation surface exists, name that exact capability gap instead of silently treating late failure as acceptable default behavior",
+        ],
+        "avoid": [
+            "assuming that a successful action preflight makes an explicit workflow guard unnecessary",
+            "letting the first clear signal of inapplicability appear only when a mutating step starts",
+            "treating downstream validation as sufficient merely because a neighboring workflow already does so",
         ],
     },
     {
@@ -415,7 +466,9 @@ def build_workflow_authoring_response() -> JSONObject:
         "authoring_heuristic": [
             "declare applicability early",
             "when adding or changing inputs, validate them before continuing",
+            "validate both the request shape and the observed target context",
             "name important values early",
+            "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",
             "use structured Ordo surfaces before falling back to shell",
             "treat semantic ambiguity as a reason to clarify rather than improvise",
         ],
@@ -993,6 +1046,10 @@ def render_workflow_authoring_text(payload: JSONObject) -> str:
             lines.append(f"  prefer: {preferred}")
         for avoided in rule.get("avoid", []):
             lines.append(f"  avoid: {avoided}")
+        for stop_condition in rule.get("stop_when", []):
+            lines.append(f"  stop when: {stop_condition}")
+        for forbidden_inference in rule.get("must_not_infer", []):
+            lines.append(f"  must not infer: {forbidden_inference}")
     return "\n".join(lines)
 
 

@@ -1,0 +1,57 @@
+version: 0
+workflow: task-to-review
+inputs:
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+state_needs:
+  common_state: {}
+let:
+  stored_issue_number: state.common_state[inputs.repository].issue_number
+  stored_branch: state.common_state[inputs.repository].branch
+  issue: gh.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number, project_id=inputs.project_id)
+blocks:
+  - guards:
+      - git.repo.exists
+      - issue.state == "OPEN"
+      - project_issue.exists
+      - project_issue.type == "Task" or project_issue.type == "Bug"
+      - project_issue.status == "In progress"
+      - stored_branch == git.branch.value
+      - git.branch.value != "main"
+      - git.worktree.clean
+
+  - steps:
+      - name: Render and open review diff
+        uses: shell.command
+        register: review_html
+        with:
+          command:
+            format: |
+              set -euo pipefail
+              out="/tmp/ordo-review-%s.html"
+              { printf '<!doctype html><html><body><h1>Branch diff vs main</h1><pre>'; git diff main...HEAD; printf '</pre></body></html>'; } > "$out"
+              xdg-open "$out" >/dev/null 2>&1 || true
+              printf '%s' "$out"
+            args:
+              - ${stored_issue_number}
+
+      - name: Set task status to In review
+        uses: gh.project.issue.field_single_select.set
+        register: review_update
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${stored_issue_number}
+          project_id: ${inputs.project_id}
+          field: Status
+          option: In review
+
+      - name: Publish review task
+        publish:
+          summary: Task set to In review
+          issue_ref: ${step.review_update.outputs.issue_ref}
+          issue_number: ${stored_issue_number}
+          status: In review
+          review_html: ${step.review_html.outputs.stdout}

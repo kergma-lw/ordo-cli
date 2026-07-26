@@ -24,6 +24,7 @@ but they are not the place where non-trivial transformation algorithms should be
 - compact references and parameters that remain workflow-semantic;
 - logical state needs that express workflow-owned state roles without naming project storage instances;
 - compact parameters;
+- workflow-local named expressions through a top-level `let` surface when they keep policy and dataflow reviewable;
 - simple step-level conditional execution when it has clear semantics.
 - simple branching when it has clear semantics.
 - explicit authored workflow-local returns through `result` steps.
@@ -46,6 +47,8 @@ Each execution block declares exactly one of:
 - `steps`
 
 Top-level `guards` and `steps` may remain as compatibility-only authoring sugar when they normalize to the same block structure.
+
+Top-level `let` belongs to workflow source authoring as a local-expression naming surface, but it does not become an execution block kind.
 
 Assembly instructions may appear in source workflow material, but they do not survive as execution-semantic block kinds in the assembled workflow shape.
 

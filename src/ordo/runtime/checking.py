@@ -452,6 +452,17 @@ def check_workflow(
     if halted and len(block_items) < len(effective_workflow.blocks):
         block_items.extend(_build_pending_block_items(effective_workflow, blocked=bool(blockers), start_index=len(block_items), active_profile=current_profile_name))
 
+    structural_fill_result = _append_structural_items_for_uninterpreted_step_blocks(
+        workflow=effective_workflow,
+        block_items=block_items,
+        preflight_step_items=preflight_step_items,
+        connector_provider=connector_provider,
+        active_overrides=active_overrides,
+        observed_probe_calls=observed_probe_calls,
+    )
+    if structural_fill_result is not None:
+        return structural_fill_result
+
     if blockers:
         observation_basis = _build_observation_basis_outputs(effective_workflow, initial_resolution, guard_details)
         outputs = {
@@ -1258,6 +1269,53 @@ def _append_structural_tail_items(
                 preflight_support=preflight_support,
             )
         )
+
+
+def _append_structural_items_for_uninterpreted_step_blocks(
+    *,
+    workflow: Workflow,
+    block_items: list[dict[str, object]],
+    preflight_step_items: list[dict[str, object]],
+    connector_provider: ConnectorProvider | None,
+    active_overrides,
+    observed_probe_calls: list[dict[str, object]],
+) -> RuntimeResult | None:
+    existing_block_indexes = {
+        item.get("block_index")
+        for item in preflight_step_items
+        if isinstance(item, dict) and isinstance(item.get("block_index"), int)
+    }
+    step_block_items = {
+        item.get("block_index"): item
+        for item in block_items
+        if isinstance(item, dict) and item.get("type") == "steps" and isinstance(item.get("block_index"), int)
+    }
+    for block_index, declared_block in enumerate(workflow.blocks):
+        if not isinstance(declared_block, StepBlock):
+            continue
+        if block_index in existing_block_indexes:
+            continue
+        block_item = step_block_items.get(block_index)
+        if not isinstance(block_item, dict):
+            continue
+        resolved_block = _resolve_step_block(
+            workflow,
+            block_index=block_index,
+            connector_provider=connector_provider,
+            active_overrides=active_overrides,
+        )
+        if isinstance(resolved_block, RuntimeResult):
+            return resolved_block
+        known_observations = [dict(item) for item in observed_probe_calls if isinstance(item, dict)]
+        _append_structural_tail_items(
+            block_index=block_index,
+            start_step_index=0,
+            block=declared_block,
+            resolved_block=resolved_block,
+            step_items=preflight_step_items,
+            known_observations=known_observations,
+        )
+    return None
 
 
 def _render_preflight_observation(template, *, action_call: dict[str, object] | None) -> dict[str, object]:

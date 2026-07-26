@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 
+from connectors.gh.actions._shared import ISSUE_INVENTORY_INVALIDATION
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
 _REPOSITORY_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)$")
@@ -18,6 +19,7 @@ def info():
         effects=("create GitHub issue",),
         outputs={"issue_ref": "string", "repository": "string", "number": "integer", "url": "string", "title": "string"},
         failure_modes=("repository_not_found", "title_invalid", "create_blocked"),
+        invalidates_observations=ISSUE_INVENTORY_INVALIDATION,
         handler=run,
     )
 

@@ -13,7 +13,7 @@ def info():
         outputs={"exists": "boolean"},
         failure_modes=("project_not_found", "probe_failed"),
         handler=run,
-        summary="Return whether one named option exists in one GitHub Project field",
+        summary="Return whether one named allowed value exists in one GitHub Project field when that field exposes a selectable value set",
     )
 
 
@@ -32,13 +32,13 @@ def run(ctx: OperationContext):
         if node.get("name") != field_name:
             continue
         return ok(
-            summary="GitHub project field option fact retrieved successfully",
+            summary="GitHub project field allowed-value fact retrieved successfully",
             outputs={"exists": option_name in field_options(node)},
             raw=raw,
         )
 
     return ok(
-        summary="GitHub project field option was not found",
+        summary="GitHub project field allowed value was not found",
         outputs={"exists": False},
         raw=raw,
     )

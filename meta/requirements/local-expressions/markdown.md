@@ -20,8 +20,10 @@
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
 - The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
 - Positional disambiguation uses `[n]`.
+- After one singular list or task-list target has been selected, positional indexing with `[n]` may address one top-level list item within that selected block.
 - Explicit structural selection may use adapter-defined forms such as `.blocks("kind")`.
 - The adapter may provide common structural shortcuts such as `.list`, `.task_list`, or `.paragraph` as convenience sugar over the explicit structural form.
+- The adapter may also provide explicit collection-view shortcuts such as `.list_items` or `.task_list_items` when the product needs one array-valued projection distinct from the richer block view.
 - The adapter may provide text-search helpers such as `.find("...")` when the product needs them.
 
 ## Outer parameter binding

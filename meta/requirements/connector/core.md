@@ -19,6 +19,17 @@
 - Documented operation `failure_modes` must describe expected contract-level non-success rather than exceptional runtime breakdown.
 - Raw stdout/stderr, when produced by an implementation, must be treated as optional detail fields rather than the primary contract surface.
 
+## Advisory preflight recommendation metadata
+
+- An effectful action may expose advisory `preflight_observations` metadata that helps runtime assess and explain pre-execution support quality.
+- Such templates must not redefine executability or become hidden operation-local prerequisites.
+- `preflight_observations` must use the structured object shape rather than free-form prose.
+- Each `preflight_observations` item must identify the probe reference and map probe arguments to action-argument placeholders.
+- A `preflight_observations` item may additionally specify selected output fields when the recommendation depends on a narrower observed field path.
+- A preflight-observation template should be expressed in terms of the action's own argument names rather than workflow-local value sources.
+- Runtime may render those templates back into workflow-shaped expressions when producing author-facing `check` or `explain` guidance.
+- Missing advisory templates must not weaken correctness, but when templates are present runtime may use them to distinguish stronger versus weaker preflight support.
+
 ## Extension boundary
 
 - The system must allow project-local extension without forking the global contract.

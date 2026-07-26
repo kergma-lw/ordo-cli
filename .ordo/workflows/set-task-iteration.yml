@@ -1,0 +1,41 @@
+version: 0
+workflow: set-task-iteration
+inputs:
+  active_profile_key: active_profile
+  issue_number: {}
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+  iteration:
+    hint: Use the iteration name
+let:
+  issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+  iteration_field: gh.project.field(project_id=inputs.project_id, field="Iteration")
+blocks:
+  - guards:
+      - git.repo.exists
+      - inputs.iteration | is_string
+      - issue.state == "OPEN"
+      - project_issue.exists
+      - iteration_field.exists
+      - project_issue.iteration != inputs.iteration
+
+  - steps:
+      - name: Set task iteration
+        uses: gh.project.issue.field_iteration.set
+        register: iteration_update
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.issue_number}
+          project_id: ${inputs.project_id}
+          field: Iteration
+          iteration: ${inputs.iteration}
+
+      - name: Publish task iteration result
+        publish:
+          summary: Task iteration updated
+          issue_ref: ${step.iteration_update.outputs.issue_ref}
+          iteration: ${step.iteration_update.outputs.iteration}
+          changed: ${step.iteration_update.outputs.changed}

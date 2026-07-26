@@ -48,6 +48,17 @@
 - Documented operation `failure_modes` must describe expected contract-level non-success rather than exceptional runtime breakdown.
 - Raw stdout/stderr, when produced by an implementation, must be treated as optional detail fields rather than the primary contract surface.
 
+## Advisory preflight recommendation metadata
+
+- An effectful action may expose advisory `preflight_observations` metadata that helps runtime assess and explain pre-execution support quality.
+- Such templates must not redefine executability or become hidden operation-local prerequisites.
+- `preflight_observations` must use the structured object shape rather than free-form prose.
+- Each `preflight_observations` item must identify the probe reference and map probe arguments to action-argument placeholders.
+- A `preflight_observations` item may additionally specify selected output fields when the recommendation depends on a narrower observed field path.
+- A preflight-observation template should be expressed in terms of the action's own argument names rather than workflow-local value sources.
+- Runtime may render those templates back into workflow-shaped expressions when producing author-facing `check` or `explain` guidance.
+- Missing advisory templates must not weaken correctness, but when templates are present runtime may use them to distinguish stronger versus weaker preflight support.
+
 ## Extension boundary
 
 - The system must allow project-local extension without forking the global contract.
@@ -897,6 +908,8 @@ An operation contract must define:
 - outputs;
 - failure modes.
 
+An action contract may also expose advisory metadata that helps runtime reason about preflight support quality, for example observation invalidation scopes and recommended preflight-observation templates.
+
 ## Explainability and result discipline
 
 Every connector operation must:
@@ -972,6 +985,7 @@ An action is ready when:
 - its documented `failure_modes` describe expected contract-level non-success rather than exceptional runtime breakdown;
 - its result is understandable from structured outcome fields without relying on raw transport output as the primary contract;
 - it would still make sense if invoked from a different workflow with different surrounding policy.
+- if it declares recommended preflight observations, those recommendations remain advisory explainability support rather than hidden executability rules.
 
 Useful review questions:
 
@@ -994,6 +1008,7 @@ Useful review questions:
 - is any workflow or approval logic leaking into the action;
 - can the result be explained without scraping stdout or stderr;
 - would this action still look clean if another workflow reused it under a different safety policy.
+- if this action advertises recommended preflight observations, do they help `check`, `plan`, and `explain` without assuming one specific workflow-local value source.
 
 ## Action input norms
 
@@ -2981,6 +2996,39 @@ Why this matters:
 - runtime should be able to strengthen guard coverage without turning `check` into hidden execution;
 - a dedicated contract keeps richer preflight behavior reviewable.
 
+## CHECK-MODE-013 — Advisory preflight-observation metadata may strengthen explainability without becoming a prerequisite
+
+When an effectful action declares advisory preflight-observation templates, runtime may use them to evaluate how well the workflow's current pre-execution basis supports explanation of that step's applicability and expected effect.
+
+Missing advisory observations must not by themselves make the workflow inapplicable.
+They may weaken preflight-support quality, explanation strength, or authoring guidance, but they must not silently become hidden executability rules.
+
+Why this matters:
+- some actions remain semantically clear while still benefiting from richer preflight observation basis;
+- runtime needs a way to distinguish execution validity from explanation strength;
+- advisory templates allow connector families to help `check`, `plan`, and `explain` without moving workflow-policy logic into connector actions.
+
+## CHECK-MODE-014 — Author-facing recommendations should preserve workflow expression shape when possible
+
+When runtime renders a recommended preflight observation from action metadata, it should prefer the workflow expressions that currently supply the referenced action arguments rather than only the resolved runtime values.
+
+Why this matters:
+- author-facing recommendations are more useful when they resemble the workflow that must be edited;
+- expression-shaped guidance remains stable across runs better than one-shot resolved values;
+- this keeps long or awkward rendered expressions attributable to workflow authoring quality rather than pushing beautification burden into `check`.
+
+## CHECK-MODE-015 — Recommended-observation matching must stay exact and structural
+
+When runtime compares advisory preflight-observation templates against observations already established by the workflow, that comparison must remain deterministic and structural.
+
+Covered means runtime can prove the same canonical probe reference, the same relevant field selection when applicable, and the same action-argument-relative workflow expressions after rendering.
+Runtime must not use heuristic near-matching, guessed semantic equivalence, or value-level similarity to claim that a recommendation is already covered.
+
+Why this matters:
+- deterministic matching keeps `check` predictable for humans and agents;
+- exact structural comparison avoids false positives that would hide genuinely missing observations;
+- workflows that want readable stable matching can introduce early `let` bindings rather than relying on runtime guesswork.
+
 <!-- source: model/runtime/check-analysis-model.md -->
 
 # Check analysis model exploration
@@ -3007,6 +3055,9 @@ Its role is to capture:
 - candidate internal structures that could support that behavior;
 - candidate data that runtime may need to compute and retain;
 - open questions that should remain visible during iteration.
+
+One such candidate concerns advisory `preflight_observations` declared by effectful actions.
+Those structured probe templates are not part of the minimal normative `check` contract today, but they are a plausible source of richer verdict-basis and author-guidance data.
 
 This document is intentionally more speculative than the normative runtime docs.
 
@@ -3039,6 +3090,7 @@ In that direction, `check` would still emit a simple public verdict surface, but
 - which of those guards were actually evaluated;
 - which were not yet evaluable and why;
 - which observations were used to evaluate those guards;
+- which recommended preflight observations for later effectful steps were already matched or remain absent;
 - which later effectful steps would invalidate or weaken those observations;
 - how strong the basis of the current verdict is.
 
@@ -3190,7 +3242,10 @@ Useful step annotations could include:
 - `conditional`;
 - `condition_expression`;
 - `declared_effect_class`;
-- `currently_reachable_if_prior_guards_pass`.
+- `currently_reachable_if_prior_guards_pass`;
+- `preflight_observations`;
+- `matched_preflight_observations`;
+- `missing_preflight_observations`.
 
 This is still preflight structure, not execution simulation.
 
@@ -3229,10 +3284,23 @@ Possible summary fields:
 - `incomplete_reasons`;
 - `used_observation_domains`;
 - `potential_invalidation_domains`;
+- `preflight_support_strength`;
+- `missing_recommended_observations`;
 - `coverage_strength` or `verdict_basis_strength`.
 
 This summary exists for quick consumption by callers.
 The tree or graph exists so that the summary remains explainable rather than magical.
+
+## Rendering recommendations back into workflow form
+
+If action contracts expose advisory `preflight_observations` over action-argument names, one promising implementation strategy is:
+
+- keep the action's canonical structured template objects in connector metadata;
+- map each template placeholder to the workflow expression currently supplying that action argument;
+- render author-facing guidance from those workflow expressions rather than only from resolved runtime values.
+
+This would not require runtime to prove full semantic equivalence between arbitrary expressions.
+It would merely require runtime to preserve and substitute the authored argument expressions that it already knows at the checked step boundary.
 
 ## Observation domains and invalidation domains
 
@@ -3963,6 +4031,7 @@ Shared family prerequisites belong to connector bootstrap rather than to every o
 Operation contract may also expose lifecycle metadata when needed, for example whether an operation is deprecated and which canonical operations should replace it.
 
 Action contracts may also expose conservative observation-invalidation metadata for runtime `check` reasoning.
+Action contracts may also expose advisory preflight-observation templates for richer `check`, `plan`, and `explain` support.
 
 ## Explainability and failure normalization
 
@@ -4001,6 +4070,42 @@ Why this matters:
 - `check` should not over-trust probe observations across later effect boundaries;
 - missing invalidation detail must weaken confidence rather than justify optimistic approval;
 - connector authors may improve precision incrementally without requiring perfect metadata coverage before the mechanism is useful.
+
+## Preflight observation recommendation metadata
+
+An effectful action may declare `preflight_observations` metadata that usually helps runtime explain applicability and expected effect before execution.
+
+This metadata is advisory rather than executable.
+It is not:
+- an operation-local prerequisite;
+- a hidden workflow dependency;
+- a requirement that a workflow invoke a probe in one literal textual form.
+
+Instead, it is a connector-authored hint that some probe-shaped observation would strengthen preflight reasoning for that action.
+
+`preflight_observations` should:
+- be expressed as structured canonical probe templates rather than as free-form prose alone;
+- refer to action-argument names rather than to workflow-local sources such as `inputs`, `state`, `let`, or step-local expressions;
+- remain mode-agnostic connector metadata rather than workflow-policy logic;
+- help runtime render author-facing recommendations using the workflow expressions that currently supply those action arguments.
+
+The canonical shape is a list of objects.
+Each object should contain:
+- `probe` — the canonical public probe reference;
+- `with` — a mapping from probe argument name to an action-argument placeholder string such as `"{project_id}"`;
+- optional `fields` — an ordered list of selected output fields when the recommendation depends on a narrower field path rather than the whole probe output.
+
+This object shape is the contract surface.
+Runtime may render it into a human-facing probe-call form when showing guidance, but connector authors should publish the structured object form rather than a free-form call string.
+
+Recommended preflight observations are intended for deterministic structural matching.
+Runtime should treat a recommendation as covered only when it can prove the same canonical probe shape for the same referenced action arguments.
+Runtime should not guess semantic equivalence between different expressions, infer near-matches heuristically, or treat similar-looking values as coverage.
+
+Why this matters:
+- some actions are semantically simple for authors while still benefiting from richer preflight observation basis;
+- connector-authored templates can improve `check`, `plan`, and `explain` without forcing authors or agents to read connector implementation internals;
+- action-argument-relative templates stay stable across workflows even when each workflow sources those arguments differently.
 
 ## Contract split
 
@@ -5661,6 +5766,8 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - Workflow-level `let` should help reduce repeated expression noise without hiding whether a workflow is reading inputs, runtime state, step-local data, or read-only observations.
 - Validation and diagnostics should keep `let` errors attributable both to the binding declaration and to the authored use site when that distinction matters.
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
+- When effectful actions publish advisory preflight-observation templates, authoring diagnostics should be able to surface those templates back in workflow-shaped expressions.
+- If those rendered recommendations become awkward or long, that is an authoring signal to name important values earlier rather than a reason to hide workflow structure from diagnostics.
 
 <!-- source: verification/runtime/guard-evaluation.md -->
 
@@ -5845,6 +5952,76 @@ Why this matters:
 Failure meaning:
 - a failure here means the system is optimistic exactly where it should be conservative;
 - partial metadata rollout would then make `check` less trustworthy instead of more useful.
+
+## HYP-CHECK-007 — Missing advisory preflight observations should weaken explanation quality without becoming blockers
+
+Related normative rules:
+- `CHECK-MODE-013`
+
+Scenario shape:
+- an effectful action appears in the workflow;
+- that action declares advisory preflight-observation templates;
+- the workflow does not currently establish one or more equivalent observations before the step.
+
+Expected result:
+- `check` should be able to report weaker or partial preflight support for that step;
+- `check` must not upgrade the missing advisory observation into an executability failure by itself;
+- any author-facing guidance should identify which recommended observation shape is absent.
+
+Why this matters:
+- the point of advisory metadata is to strengthen explanation quality without creating hidden prerequisites;
+- otherwise connector-authored hints would silently become policy gates;
+- both humans and agents need to distinguish inapplicability from weak preflight support.
+
+Failure meaning:
+- a failure here means advisory metadata has leaked into executability semantics;
+- authors and agents would lose trust in `check` because suggestions would behave like undocumented blockers.
+
+## HYP-CHECK-008 — Rendered recommendations should prefer workflow expressions over one-shot values
+
+Related normative rules:
+- `CHECK-MODE-014`
+
+Scenario shape:
+- an effectful step argument is supplied through a workflow expression such as `inputs.foo`, `state.bar`, or an early `let` binding;
+- the action metadata declares a recommended preflight-observation template that references that action argument.
+
+Expected result:
+- when `check` renders author-facing guidance, it should prefer the workflow expression currently supplying that action argument;
+- if no such expression is available, a fallback surface may still be shown, but expression-shaped guidance is preferred.
+
+Why this matters:
+- recommendations are more actionable when they resemble the authored workflow structure;
+- long rendered expressions remain an authoring-quality signal rather than a reason for runtime to invent prettier names;
+- agents can repair workflows more directly when recommendations are phrased in workflow terms.
+
+Failure meaning:
+- a failure here means `check` guidance is less actionable than it could be;
+- the system would push users toward ephemeral run-instance values instead of durable workflow structure.
+
+## HYP-CHECK-009 — Recommended-observation coverage must not rely on heuristic equivalence
+
+Related normative rules:
+- `CHECK-MODE-015`
+
+Scenario shape:
+- an action declares a recommended preflight-observation template;
+- the workflow has already established a similar-looking observation before that step;
+- the two observation shapes differ by argument expression, selected field path, or canonical probe form.
+
+Expected result:
+- `check` must treat the recommendation as covered only when the canonical shapes match exactly after rendering action-argument expressions;
+- `check` must not mark the recommendation as covered because the values happen to look equal in one run or because the expressions appear semantically close;
+- if exact structural matching is unavailable, `check` should leave the recommendation missing or unknown rather than guessing.
+
+Why this matters:
+- deterministic exact matching is more trustworthy than clever-looking heuristics in a structured workflow system;
+- false-positive coverage would make `check` hide missing observations precisely where author guidance is needed most;
+- this keeps the burden of naming or normalizing important expressions in workflow authoring rather than in speculative runtime inference.
+
+Failure meaning:
+- a failure here means `check` has started inventing equivalence classes it cannot actually prove;
+- recommendation coverage would then become surprising, unstable, and hard to debug.
 
 <!-- source: verification/runtime/introspection-drift.md -->
 

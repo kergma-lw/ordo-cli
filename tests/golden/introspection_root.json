@@ -21,7 +21,8 @@
           "related_model_nodes": [
             "workflow.local_expression.adapter_seam",
             "workflow.local_expression.adapter_binding",
-            "workflow.local_expression.adapter.markdown"
+            "workflow.local_expression.adapter.markdown",
+            "workflow.local_expression.adapter.text"
           ],
           "related_negative_rules": [],
           "scope": "workflow",
@@ -245,8 +246,24 @@
             "not",
             "parentheses"
           ],
-          "builtins": [],
-          "filters": [],
+          "builtins": [
+            "format",
+            "is_missing",
+            "is_present"
+          ],
+          "filters": [
+            "lower",
+            "trim",
+            "slug",
+            "eq",
+            "ne",
+            "not",
+            "is_string",
+            "is_number",
+            "is_integer",
+            "is_boolean",
+            "in"
+          ],
           "name": "guard_expression",
           "roots": [
             "inputs",
@@ -272,7 +289,12 @@
             "slug",
             "eq",
             "ne",
-            "not"
+            "not",
+            "is_string",
+            "is_number",
+            "is_integer",
+            "is_boolean",
+            "in"
           ],
           "name": "step_condition",
           "roots": [
@@ -301,7 +323,12 @@
             "slug",
             "eq",
             "ne",
-            "not"
+            "not",
+            "is_string",
+            "is_number",
+            "is_integer",
+            "is_boolean",
+            "in"
           ],
           "name": "embedded_value_expression",
           "roots": [
@@ -335,33 +362,69 @@
       ],
       "local_expression_filters": [
         {
+          "argument_count": 0,
           "input_type": "string",
           "name": "lower",
           "output_type": "string"
         },
         {
+          "argument_count": 0,
           "input_type": "string",
           "name": "trim",
           "output_type": "string"
         },
         {
+          "argument_count": 0,
           "input_type": "string",
           "name": "slug",
           "output_type": "string"
         },
         {
+          "argument_count": 1,
           "input_type": "json",
           "name": "eq",
           "output_type": "boolean"
         },
         {
+          "argument_count": 1,
           "input_type": "json",
           "name": "ne",
           "output_type": "boolean"
         },
         {
+          "argument_count": 0,
           "input_type": "boolean",
           "name": "not",
+          "output_type": "boolean"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "is_string",
+          "output_type": "boolean"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "is_number",
+          "output_type": "boolean"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "is_integer",
+          "output_type": "boolean"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "is_boolean",
+          "output_type": "boolean"
+        },
+        {
+          "argument_count": 1,
+          "input_type": "json",
+          "name": "in",
           "output_type": "boolean"
         }
       ],
@@ -378,21 +441,21 @@
           "surface": "guard_expression"
         },
         {
-          "name": "guard_expression.no_filters",
-          "reason": "the shared local-expression engine keeps filter pipelines context-gated, and guard context does not currently evaluate them",
+          "name": "guard_expression.no_adapter_write_path",
+          "reason": "guard expressions may use read-only local-expression constructs but must remain pure and pre-execution-safe",
           "related_capabilities": [],
           "related_codes": [],
           "related_model_nodes": [],
-          "rule": "Local-expression filter pipelines are not allowed in guard expressions",
+          "rule": "Representation-adapter write paths such as '->...' are not allowed in guard expressions",
           "surface": "guard_expression"
         },
         {
-          "name": "guard_expression.no_format_builtin",
-          "reason": "the shared local-expression engine keeps built-in value construction context-gated, and guard context does not currently evaluate them",
+          "name": "guard_expression.boolean_result_required",
+          "reason": "guard success and failure are defined by boolean policy outcomes rather than arbitrary value production",
           "related_capabilities": [],
           "related_codes": [],
           "related_model_nodes": [],
-          "rule": "The format local-expression builtin is not allowed in guard expressions",
+          "rule": "Guard expressions must evaluate to a boolean result",
           "surface": "guard_expression"
         },
         {
@@ -790,6 +853,35 @@
             "shared_preparation_stage"
           ],
           "verified": true
+        },
+        {
+          "name": "text-adapter",
+          "path": "examples/text-adapter.yaml",
+          "related_topics": [
+            "capabilities",
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "text_adapter_line_projection",
+            "text_adapter_literal_search",
+            "text_adapter_bulk_mutation"
+          ],
+          "verified": true
+        },
+        {
+          "name": "local-expression-filters",
+          "path": "examples/local-expression-filters.yaml",
+          "related_topics": [
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "type_predicate_filters",
+            "membership_filter",
+            "embedded_value_boolean_flow"
+          ],
+          "verified": true
         }
       ]
     },
@@ -829,6 +921,7 @@
               "outputs": {
                 "profile": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [
                 "workflow.step.profile_switch"
@@ -876,6 +969,7 @@
                 "repository_root": "string",
                 "value": "string | null"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.branch'",
@@ -919,6 +1013,7 @@
                 "branch": "string",
                 "start_point": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.branch.create'",
@@ -960,6 +1055,7 @@
               "outputs": {
                 "branch": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.branch.delete'",
@@ -1009,6 +1105,7 @@
                 "branch": "string",
                 "changed": "boolean"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.branch.switch'",
@@ -1047,6 +1144,7 @@
                 ],
                 "repository_root": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.branches'",
@@ -1092,6 +1190,7 @@
                 "commit": "string",
                 "previous_commit": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.commit.amend'",
@@ -1136,6 +1235,7 @@
                 "branch": "string | null",
                 "commit": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.commit.create'",
@@ -1182,6 +1282,7 @@
                 "revert_commit": "string",
                 "reverted_commit": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.commit.revert'",
@@ -1235,6 +1336,7 @@
                 "repository_root": "string",
                 "rev": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
@@ -1268,6 +1370,7 @@
               "outputs": {
                 "staged": "boolean"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.index.add_all'",
@@ -1314,6 +1417,7 @@
                 "head_commit": "string",
                 "picked_commit": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.integrate.cherry_pick'",
@@ -1359,6 +1463,7 @@
                 "head_commit": "string",
                 "merged_ref": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.integrate.merge'",
@@ -1404,6 +1509,7 @@
                 "head_commit": "string",
                 "merged_ref": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.integrate.merge_ff_only'",
@@ -1456,6 +1562,7 @@
                 "head_commit": "string",
                 "onto": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.integrate.rebase_onto'",
@@ -1497,6 +1604,7 @@
                 "merge_base_oid": "string | null",
                 "repository_root": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.range'",
@@ -1534,6 +1642,7 @@
                 "symbolic": "boolean",
                 "symbolic_target": "string | null"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.ref'",
@@ -1569,6 +1678,7 @@
                 "root": "string",
                 "worktree_path": "string | null"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.repo'",
@@ -1605,6 +1715,7 @@
                 ],
                 "repository_root": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.stash'",
@@ -1640,6 +1751,7 @@
                 "stash_count": "integer",
                 "worktree_clean": "boolean"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.state'",
@@ -1682,6 +1794,7 @@
                 "fetched": "boolean",
                 "remote": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.sync.fetch'",
@@ -1723,6 +1836,23 @@
                 "branch": "string",
                 "remote": "string"
               },
+              "preflight_observations": [
+                {
+                  "probe": "git.branch",
+                  "with": {}
+                },
+                {
+                  "probe": "git.upstream",
+                  "with": {}
+                },
+                {
+                  "probe": "git.range",
+                  "with": {
+                    "base": "@{upstream}",
+                    "head": "{branch}"
+                  }
+                }
+              ],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'git.sync.push'",
@@ -1756,6 +1886,7 @@
                 "repository_root": "string",
                 "upstream_ref": "string | null"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.upstream'",
@@ -1791,6 +1922,7 @@
                 "has_untracked": "boolean",
                 "repository_root": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.worktree'",
@@ -1831,6 +1963,7 @@
                 ],
                 "repository_root": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'git.worktrees'",
@@ -1908,6 +2041,7 @@
                 "updated_at": "string",
                 "url": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'gh.issue'",
@@ -1953,6 +2087,7 @@
                 "issue_ref": "string",
                 "url": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'gh.issue.body.append'",
@@ -1996,6 +2131,7 @@
                 "issue_ref": "string",
                 "url": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'gh.issue.body.replace'",
@@ -2035,6 +2171,7 @@
                 "issue_ref": "string",
                 "state": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'gh.issue.close'",
@@ -2078,6 +2215,7 @@
                 "issue_ref": "string",
                 "url": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'gh.issue.comment.add'",
@@ -2124,6 +2262,7 @@
                 "title": "string",
                 "url": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'gh.issue.create'",
@@ -2159,6 +2298,7 @@
                 "id": "string",
                 "title": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'gh.project'",
@@ -2199,6 +2339,7 @@
                   "string"
                 ]
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'gh.project.field'",
@@ -2236,9 +2377,10 @@
               "outputs": {
                 "exists": "boolean"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Return whether one named option exists in one GitHub Project field",
+              "summary": "Return whether one named allowed value exists in one GitHub Project field when that field exposes a selectable value set",
               "tags": [
                 "gh",
                 "probe"
@@ -2281,6 +2423,7 @@
                 "status": "string",
                 "type": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Probe operation 'gh.project.issue'",
@@ -2326,6 +2469,7 @@
                 "item_id": "string",
                 "project_id": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'gh.project.issue.add'",
@@ -2337,75 +2481,30 @@
             {
               "deprecated": false,
               "effects": [
-                "set GitHub project issue estimate"
+                "set one GitHub project issue iteration field by field name"
               ],
               "examples": [
                 {
                   "inputs": {
-                    "estimate": "number",
-                    "issue_number": "integer",
-                    "project_id": "string",
-                    "repository": "string"
-                  },
-                  "reference": "gh.project.issue.estimate.set"
-                }
-              ],
-              "failure_modes": [
-                "issue_not_found",
-                "project_not_found",
-                "estimate_invalid",
-                "estimate_blocked"
-              ],
-              "inputs": {
-                "estimate": "number",
-                "issue_number": "integer",
-                "project_id": "string",
-                "repository": "string"
-              },
-              "invalidates_observations": [
-                "gh.project.issue"
-              ],
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.estimate.set",
-              "outputs": {
-                "changed": "boolean",
-                "estimate": "number",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.estimate.set'",
-              "tags": [
-                "gh",
-                "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue iteration"
-              ],
-              "examples": [
-                {
-                  "inputs": {
+                    "field": "string",
                     "issue_number": "integer",
                     "iteration": "string",
                     "project_id": "string",
                     "repository": "string"
                   },
-                  "reference": "gh.project.issue.iteration.set"
+                  "reference": "gh.project.issue.field_iteration.set"
                 }
               ],
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
+                "field_not_found",
+                "field_kind_unsupported",
                 "iteration_not_found",
-                "iteration_blocked"
+                "field_update_blocked"
               ],
               "inputs": {
+                "field": "string",
                 "issue_number": "integer",
                 "iteration": "string",
                 "project_id": "string",
@@ -2416,17 +2515,41 @@
               ],
               "kind": "action",
               "maturity": "stable",
-              "name": "project.issue.iteration.set",
+              "name": "project.issue.field_iteration.set",
               "outputs": {
                 "changed": "boolean",
+                "field": "string",
                 "issue_ref": "string",
                 "item_id": "string",
                 "iteration": "string",
                 "project_id": "string"
               },
+              "preflight_observations": [
+                {
+                  "fields": [
+                    "exists"
+                  ],
+                  "probe": "gh.project.issue",
+                  "with": {
+                    "issue_number": "{issue_number}",
+                    "project_id": "{project_id}",
+                    "repository": "{repository}"
+                  }
+                },
+                {
+                  "fields": [
+                    "exists"
+                  ],
+                  "probe": "gh.project.field",
+                  "with": {
+                    "field": "{field}",
+                    "project_id": "{project_id}"
+                  }
+                }
+              ],
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.iteration.set'",
+              "summary": "Action operation 'gh.project.issue.field_iteration.set'",
               "tags": [
                 "gh",
                 "action"
@@ -2435,28 +2558,109 @@
             {
               "deprecated": false,
               "effects": [
-                "set GitHub project issue priority"
+                "set one GitHub project issue number field by field name"
               ],
               "examples": [
                 {
                   "inputs": {
+                    "field": "string",
                     "issue_number": "integer",
-                    "priority": "string",
+                    "project_id": "string",
+                    "repository": "string",
+                    "value": "number"
+                  },
+                  "reference": "gh.project.issue.field_number.set"
+                }
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "project_not_found",
+                "field_not_found",
+                "field_kind_unsupported",
+                "field_value_invalid",
+                "field_update_blocked"
+              ],
+              "inputs": {
+                "field": "string",
+                "issue_number": "integer",
+                "project_id": "string",
+                "repository": "string",
+                "value": "number"
+              },
+              "invalidates_observations": [
+                "gh.project.issue"
+              ],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "project.issue.field_number.set",
+              "outputs": {
+                "changed": "boolean",
+                "field": "string",
+                "issue_ref": "string",
+                "item_id": "string",
+                "project_id": "string",
+                "value": "number"
+              },
+              "preflight_observations": [
+                {
+                  "fields": [
+                    "exists"
+                  ],
+                  "probe": "gh.project.issue",
+                  "with": {
+                    "issue_number": "{issue_number}",
+                    "project_id": "{project_id}",
+                    "repository": "{repository}"
+                  }
+                },
+                {
+                  "fields": [
+                    "exists"
+                  ],
+                  "probe": "gh.project.field",
+                  "with": {
+                    "field": "{field}",
+                    "project_id": "{project_id}"
+                  }
+                }
+              ],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Action operation 'gh.project.issue.field_number.set'",
+              "tags": [
+                "gh",
+                "action"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "set one GitHub project issue single-select field by field name"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "field": "string",
+                    "issue_number": "integer",
+                    "option": "string",
                     "project_id": "string",
                     "repository": "string"
                   },
-                  "reference": "gh.project.issue.priority.set"
+                  "reference": "gh.project.issue.field_single_select.set"
                 }
               ],
               "failure_modes": [
                 "issue_not_found",
                 "project_not_found",
-                "priority_not_found",
-                "priority_blocked"
+                "field_not_found",
+                "field_kind_unsupported",
+                "option_not_found",
+                "field_update_blocked"
               ],
               "inputs": {
+                "field": "string",
                 "issue_number": "integer",
-                "priority": "string",
+                "option": "string",
                 "project_id": "string",
                 "repository": "string"
               },
@@ -2465,164 +2669,52 @@
               ],
               "kind": "action",
               "maturity": "stable",
-              "name": "project.issue.priority.set",
+              "name": "project.issue.field_single_select.set",
               "outputs": {
                 "changed": "boolean",
+                "field": "string",
                 "issue_ref": "string",
                 "item_id": "string",
-                "priority": "string",
+                "option": "string",
                 "project_id": "string"
               },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.priority.set'",
-              "tags": [
-                "gh",
-                "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue size"
-              ],
-              "examples": [
+              "preflight_observations": [
                 {
-                  "inputs": {
-                    "issue_number": "integer",
-                    "project_id": "string",
-                    "repository": "string",
-                    "size": "string"
-                  },
-                  "reference": "gh.project.issue.size.set"
+                  "fields": [
+                    "exists"
+                  ],
+                  "probe": "gh.project.issue",
+                  "with": {
+                    "issue_number": "{issue_number}",
+                    "project_id": "{project_id}",
+                    "repository": "{repository}"
+                  }
+                },
+                {
+                  "fields": [
+                    "exists"
+                  ],
+                  "probe": "gh.project.field",
+                  "with": {
+                    "field": "{field}",
+                    "project_id": "{project_id}"
+                  }
+                },
+                {
+                  "fields": [
+                    "exists"
+                  ],
+                  "probe": "gh.project.field.option",
+                  "with": {
+                    "field": "{field}",
+                    "option": "{option}",
+                    "project_id": "{project_id}"
+                  }
                 }
               ],
-              "failure_modes": [
-                "issue_not_found",
-                "project_not_found",
-                "size_not_found",
-                "size_blocked"
-              ],
-              "inputs": {
-                "issue_number": "integer",
-                "project_id": "string",
-                "repository": "string",
-                "size": "string"
-              },
-              "invalidates_observations": [
-                "gh.project.issue"
-              ],
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.size.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string",
-                "size": "string"
-              },
               "prerequisites": [],
               "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.size.set'",
-              "tags": [
-                "gh",
-                "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue status"
-              ],
-              "examples": [
-                {
-                  "inputs": {
-                    "issue_number": "integer",
-                    "project_id": "string",
-                    "repository": "string",
-                    "status": "string"
-                  },
-                  "reference": "gh.project.issue.status.set"
-                }
-              ],
-              "failure_modes": [
-                "issue_not_found",
-                "project_not_found",
-                "status_not_found",
-                "status_blocked"
-              ],
-              "inputs": {
-                "issue_number": "integer",
-                "project_id": "string",
-                "repository": "string",
-                "status": "string"
-              },
-              "invalidates_observations": [
-                "gh.project.issue"
-              ],
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.status.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string",
-                "status": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.status.set'",
-              "tags": [
-                "gh",
-                "action"
-              ]
-            },
-            {
-              "deprecated": false,
-              "effects": [
-                "set GitHub project issue type"
-              ],
-              "examples": [
-                {
-                  "inputs": {
-                    "issue_number": "integer",
-                    "project_id": "string",
-                    "repository": "string",
-                    "type": "string"
-                  },
-                  "reference": "gh.project.issue.type.set"
-                }
-              ],
-              "failure_modes": [
-                "issue_not_found",
-                "project_not_found",
-                "type_not_found",
-                "type_blocked"
-              ],
-              "inputs": {
-                "issue_number": "integer",
-                "project_id": "string",
-                "repository": "string",
-                "type": "string"
-              },
-              "invalidates_observations": [
-                "gh.project.issue"
-              ],
-              "kind": "action",
-              "maturity": "stable",
-              "name": "project.issue.type.set",
-              "outputs": {
-                "changed": "boolean",
-                "issue_ref": "string",
-                "item_id": "string",
-                "project_id": "string",
-                "type": "string"
-              },
-              "prerequisites": [],
-              "replaced_by": [],
-              "summary": "Action operation 'gh.project.issue.type.set'",
+              "summary": "Action operation 'gh.project.issue.field_single_select.set'",
               "tags": [
                 "gh",
                 "action"
@@ -2671,6 +2763,7 @@
                 "stderr": "string",
                 "stdout": "string"
               },
+              "preflight_observations": [],
               "prerequisites": [],
               "replaced_by": [],
               "summary": "Action operation 'shell.command'",
@@ -2915,7 +3008,9 @@
           "examples",
           "maturity",
           "deprecated",
-          "replaced_by"
+          "replaced_by",
+          "invalidates_observations",
+          "preflight_observations"
         ]
       },
       "participation_rules": {
@@ -3422,6 +3517,24 @@
       ],
       "surface_constraints": {
         "guard_expression": {
+          "allowed_builtins": [
+            "format",
+            "is_missing",
+            "is_present"
+          ],
+          "allowed_filters": [
+            "lower",
+            "trim",
+            "slug",
+            "eq",
+            "ne",
+            "not",
+            "is_string",
+            "is_number",
+            "is_integer",
+            "is_boolean",
+            "in"
+          ],
           "allowed_roots": [
             "inputs",
             "probe",
@@ -3433,14 +3546,21 @@
             "not",
             "parentheses"
           ],
-          "forbidden_features": [
-            "value_expression_filters",
-            "value_expression_builtins"
-          ]
+          "representation_adapter_policy": {
+            "forbidden_write_surface": "->...",
+            "read_only_allowed": true,
+            "write_paths_forbidden": true
+          },
+          "result_contract": {
+            "non_boolean_result": "error",
+            "required_output_type": "boolean"
+          }
         },
         "runtime_value_surface": {
           "allowed_builtins": [
-            "format"
+            "format",
+            "is_missing",
+            "is_present"
           ],
           "allowed_filters": [
             "lower",
@@ -3448,7 +3568,12 @@
             "slug",
             "eq",
             "ne",
-            "not"
+            "not",
+            "is_string",
+            "is_number",
+            "is_integer",
+            "is_boolean",
+            "in"
           ],
           "allowed_roots": [
             "inputs",
@@ -3482,6 +3607,12 @@
           "required": false,
           "type": "object",
           "unknown_input_policy": "reject_unknown_inputs"
+        },
+        {
+          "authoring_role": "declares_workflow_local_named_expressions",
+          "name": "let",
+          "required": false,
+          "type": "object"
         },
         {
           "name": "state_needs",

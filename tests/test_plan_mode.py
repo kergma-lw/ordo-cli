@@ -17,7 +17,7 @@ class PlanModeTest(unittest.TestCase):
             version=0,
             workflow="open-task",
             guards=(Guard(OperationRef("git.worktree")),),
-            steps=(Step(name="inspect", operation=OperationRef("gh.project.issue.status.set")),),
+            steps=(Step(name="inspect", operation=OperationRef("gh.project.issue.field_single_select.set")),),
         )
 
         result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -27,7 +27,7 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.plan.guard_checks, ("git.worktree",))
         self.assertEqual(result.outputs["step_items"][0]["effect"], "effectful")
         self.assertEqual(result.outputs["step_items"][0]["eligibility"], "eligible")
-        self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], ["gh.*"])
+        self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], ["gh.project.issue"])
 
     def test_plan_reports_known_blockers(self) -> None:
         workflow = Workflow(
@@ -605,6 +605,52 @@ class PlanModeTest(unittest.TestCase):
                 "probe": "git.range",
                 "with": {"base": "@{upstream}", "head": {"expression": "step.branch_name.outputs.value"}},
                 "fields": [],
+            },
+        )
+
+    def test_plan_surfaces_structural_recommendations_for_guardless_effectful_block(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repository": "string", "issue_number": "number", "project_id": "string"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "${inputs.repository}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "Status",
+                                    "option": "In review",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["step_items"][0]["preflight_support"]["strength"], "weak")
+        self.assertEqual(
+            result.outputs["step_items"][0]["preflight_support"]["missing_observations"][2],
+            {
+                "probe": "gh.project.field.option",
+                "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status", "option": "In review"},
+                "fields": ["exists"],
+            },
+        )
+        self.assertEqual(
+            result.outputs["step_items"][0]["preflight_support"]["missing_observations"][1],
+            {
+                "probe": "gh.project.field",
+                "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status"},
+                "fields": ["exists"],
             },
         )
 

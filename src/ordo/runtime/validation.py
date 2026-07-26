@@ -24,7 +24,7 @@ from .local_expressions import (
     parse_local_expression,
     validate_parsed_local_expression,
 )
-from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_yaml_document
+from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_workflow_payload, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .local_expression_engine.core import (
     BinaryNode,
@@ -726,6 +726,26 @@ def _load_run_target_workflow_for_validation(
         except LoadError:
             return exc.diagnostics[0]
 
+    if isinstance(payload, dict) and "version" in payload and "workflow" in payload:
+        try:
+            nested_workflow = load_workflow_payload(payload, source=str(run_path), launch_dir=launch_dir)
+        except LoadError as exc:
+            return exc.diagnostics[0]
+        return Workflow(
+            version=nested_workflow.version,
+            workflow=f"{workflow.workflow}::{nested_workflow.workflow}",
+            inputs={**nested_workflow.inputs, **workflow.inputs},
+            declared_inputs={**workflow.declared_inputs, **nested_workflow.declared_inputs},
+            let_bindings={**workflow.let_bindings, **nested_workflow.let_bindings},
+            state_needs={**workflow.state_needs, **nested_workflow.state_needs},
+            state_bindings={**workflow.state_bindings, **nested_workflow.state_bindings, **dict(step.run_state_bindings)},
+            states={**workflow.states, **nested_workflow.states, **dict(step.run_states)},
+            step_results=workflow.step_results,
+            blocks=nested_workflow.blocks,
+            source_path=nested_workflow.source_path,
+            launch_dir=nested_workflow.launch_dir,
+        )
+
     if isinstance(payload, list):
         blocks_payload = payload
     elif isinstance(payload, dict) and "blocks" in payload:
@@ -759,6 +779,7 @@ def _load_run_target_workflow_for_validation(
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
         states=workflow.states,
+        step_results=workflow.step_results,
         blocks=blocks,
         source_path=str(run_path),
         launch_dir=str(launch_dir),

@@ -1283,6 +1283,24 @@ class _ConditionEvaluator:
                 return "probe_failed", None
             self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="builtin", status="ok", value=value))
             return "ok", value
+        if isinstance(node, (PipelineNode, AdapterInvocationNode)):
+            from ordo.runtime.local_expression_contexts import LocalExpressionContext
+
+            try:
+                value = _evaluate_node(
+                    node,
+                    parsed=self._parsed,
+                    workflow=self._workflow,
+                    context=LocalExpressionContext.GUARD,
+                    step_results=self._step_results,
+                    observation_session=self._observation_session,
+                )
+            except ValueExpressionEvaluationError as exc:
+                self._diagnostics.append(exc.to_diagnostic())
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="value", status="probe_failed", value=None))
+                return "probe_failed", None
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="value", status="ok", value=value))
+            return "ok", value
         if isinstance(node, UnaryNode):
             status, value = self._evaluate(node.operand)
             if status != "ok":
@@ -1405,7 +1423,7 @@ class _ConditionEvaluator:
         return "ok", result
 
     def _expr(self, node: ValueExpressionNode) -> str:
-        return self._parsed.source[node.start : node.end]
+        return render_expression_text(node, source=self._parsed.source)
 
 
 def _tokenize(text: str) -> tuple[_Token, ...]:
@@ -1830,7 +1848,7 @@ def _resolve_input_reference(parts: tuple[str, ...], *, workflow: Workflow) -> J
 
 
 def _resolve_state_reference(node: StateReferenceNode, *, parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:
-    expression = parsed.source[node.start : node.end]
+    expression = render_expression_text(node, source=parsed.source)
     try:
         target = resolve_state_target(expression, workflow)
     except RuntimeStateError as exc:
@@ -2446,13 +2464,62 @@ def _is_reference_missing(
         return False
     if isinstance(node, StateReferenceNode):
         try:
-            target = resolve_state_target(parsed.source[node.start : node.end], workflow)
+            target = resolve_state_target(render_expression_text(node, source=parsed.source), workflow)
             document = read_state_document(target.location)
             value = read_state_value(document, key=target.key, fields=target.fields)
             return value is None
         except RuntimeStateError:
             return True
     return True
+
+
+def render_expression_text(node: ValueExpressionNode, *, source: str) -> str:
+    if isinstance(node, LiteralNode):
+        return json.dumps(node.value)
+    if isinstance(node, ReferenceNode):
+        return ".".join(node.parts)
+    if isinstance(node, StateReferenceNode):
+        key_reference = ".".join(node.key_reference)
+        suffix = "" if not node.fields else "." + ".".join(node.fields)
+        return f"state.{node.state_role}[{key_reference}]{suffix}"
+    if isinstance(node, StepReferenceNode):
+        suffix = "" if not node.fields else "." + ".".join(node.fields)
+        return f"step.{node.register}{suffix}"
+    if isinstance(node, ListNode):
+        return "[" + ", ".join(render_expression_text(item, source=source) for item in node.items) + "]"
+    if isinstance(node, CallArgumentNode):
+        return f"{node.name}=" + render_expression_text(node.value, source=source)
+    if isinstance(node, CallNode):
+        args = ", ".join(render_expression_text(argument, source=source) for argument in node.arguments)
+        suffix = "" if not node.fields else "." + ".".join(node.fields)
+        target = ".".join(node.target.parts)
+        return f"{target}({args}){suffix}"
+    if isinstance(node, FilterApplicationNode):
+        if not node.arguments:
+            return node.name
+        args = ", ".join(render_expression_text(argument, source=source) for argument in node.arguments)
+        return f"{node.name}({args})"
+    if isinstance(node, PipelineNode):
+        parts = [render_expression_text(node.source, source=source)]
+        parts.extend(render_expression_text(filter_node, source=source) for filter_node in node.filters)
+        return " | ".join(parts)
+    if isinstance(node, BuiltinCallNode):
+        args = ", ".join(render_expression_text(argument, source=source) for argument in node.arguments)
+        return f"{node.name}({args})"
+    if isinstance(node, UnaryNode):
+        return f"{node.operator} " + render_expression_text(node.operand, source=source)
+    if isinstance(node, BinaryNode):
+        left = render_expression_text(node.left, source=source)
+        right = render_expression_text(node.right, source=source)
+        return f"{left} {node.operator} {right}"
+    if isinstance(node, AdapterBindingNode):
+        return f"{node.name}=" + render_expression_text(node.value, source=source)
+    if isinstance(node, AdapterInvocationNode):
+        bindings = ""
+        if node.bindings:
+            bindings = "(" + ", ".join(render_expression_text(binding, source=source) for binding in node.bindings) + ")"
+        return f"{node.family}{bindings} -> {node.body}"
+    return source[node.start : node.end]
 
 VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_registry(
     ValueExpressionFilterSpec(name="lower", input_type="string", output_type="string", argument_count=0, handler=_apply_lower_filter),

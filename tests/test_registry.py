@@ -9,7 +9,7 @@ class ConnectorRegistryTest(unittest.TestCase):
 
         self.assertEqual(
             tuple(connector.namespace for connector in registry.list_connectors()),
-            ("git", "gh", "shell"),
+            ("runtime", "git", "gh", "shell"),
         )
 
     def test_registry_exposes_discoverable_operation_metadata(self) -> None:
@@ -81,17 +81,18 @@ class ConnectorRegistryTest(unittest.TestCase):
         self.assertEqual(project_issue_add.outputs["item_id"], "string")
         self.assertIn("project_not_found", project_issue_add.failure_modes)
 
-        project_issue_status_set = registry.get_operation("gh.project.issue.status.set")
-        self.assertIsNotNone(project_issue_status_set)
-        self.assertEqual(project_issue_status_set.kind, "action")
-        self.assertEqual(project_issue_status_set.inputs["repository"], "string")
-        self.assertEqual(project_issue_status_set.inputs["issue_number"], "integer")
-        self.assertEqual(project_issue_status_set.inputs["project_id"], "string")
-        self.assertEqual(project_issue_status_set.inputs["status"], "string")
-        self.assertEqual(project_issue_status_set.outputs["changed"], "boolean")
-        self.assertIn("status_not_found", project_issue_status_set.failure_modes)
+        project_issue_field_single_select_set = registry.get_operation("gh.project.issue.field_single_select.set")
+        self.assertIsNotNone(project_issue_field_single_select_set)
+        self.assertEqual(project_issue_field_single_select_set.kind, "action")
+        self.assertEqual(project_issue_field_single_select_set.inputs["repository"], "string")
+        self.assertEqual(project_issue_field_single_select_set.inputs["issue_number"], "integer")
+        self.assertEqual(project_issue_field_single_select_set.inputs["project_id"], "string")
+        self.assertEqual(project_issue_field_single_select_set.inputs["field"], "string")
+        self.assertEqual(project_issue_field_single_select_set.inputs["option"], "string")
+        self.assertEqual(project_issue_field_single_select_set.outputs["changed"], "boolean")
+        self.assertIn("option_not_found", project_issue_field_single_select_set.failure_modes)
 
-        project_issue_iteration_set = registry.get_operation("gh.project.issue.iteration.set")
+        project_issue_iteration_set = registry.get_operation("gh.project.issue.field_iteration.set")
         self.assertIsNotNone(project_issue_iteration_set)
         self.assertEqual(project_issue_iteration_set.kind, "action")
         self.assertEqual(project_issue_iteration_set.inputs["repository"], "string")
@@ -101,67 +102,38 @@ class ConnectorRegistryTest(unittest.TestCase):
         self.assertEqual(project_issue_iteration_set.outputs["changed"], "boolean")
         self.assertIn("iteration_not_found", project_issue_iteration_set.failure_modes)
 
-        project_issue_priority_set = registry.get_operation("gh.project.issue.priority.set")
-        self.assertIsNotNone(project_issue_priority_set)
-        self.assertEqual(project_issue_priority_set.kind, "action")
-        self.assertEqual(project_issue_priority_set.inputs["repository"], "string")
-        self.assertEqual(project_issue_priority_set.inputs["issue_number"], "integer")
-        self.assertEqual(project_issue_priority_set.inputs["project_id"], "string")
-        self.assertEqual(project_issue_priority_set.inputs["priority"], "string")
-        self.assertEqual(project_issue_priority_set.outputs["changed"], "boolean")
-        self.assertIn("priority_not_found", project_issue_priority_set.failure_modes)
-
-        project_issue_type_set = registry.get_operation("gh.project.issue.type.set")
-        self.assertIsNotNone(project_issue_type_set)
-        self.assertEqual(project_issue_type_set.kind, "action")
-        self.assertEqual(project_issue_type_set.inputs["repository"], "string")
-        self.assertEqual(project_issue_type_set.inputs["issue_number"], "integer")
-        self.assertEqual(project_issue_type_set.inputs["project_id"], "string")
-        self.assertEqual(project_issue_type_set.inputs["type"], "string")
-        self.assertEqual(project_issue_type_set.outputs["changed"], "boolean")
-        self.assertIn("type_not_found", project_issue_type_set.failure_modes)
-
-        project_issue_size_set = registry.get_operation("gh.project.issue.size.set")
-        self.assertIsNotNone(project_issue_size_set)
-        self.assertEqual(project_issue_size_set.kind, "action")
-        self.assertEqual(project_issue_size_set.inputs["repository"], "string")
-        self.assertEqual(project_issue_size_set.inputs["issue_number"], "integer")
-        self.assertEqual(project_issue_size_set.inputs["project_id"], "string")
-        self.assertEqual(project_issue_size_set.inputs["size"], "string")
-        self.assertEqual(project_issue_size_set.outputs["changed"], "boolean")
-        self.assertIn("size_not_found", project_issue_size_set.failure_modes)
-
-        project_issue_estimate_set = registry.get_operation("gh.project.issue.estimate.set")
-        self.assertIsNotNone(project_issue_estimate_set)
-        self.assertEqual(project_issue_estimate_set.kind, "action")
-        self.assertEqual(project_issue_estimate_set.inputs["repository"], "string")
-        self.assertEqual(project_issue_estimate_set.inputs["issue_number"], "integer")
-        self.assertEqual(project_issue_estimate_set.inputs["project_id"], "string")
-        self.assertEqual(project_issue_estimate_set.inputs["estimate"], "number")
-        self.assertEqual(project_issue_estimate_set.outputs["changed"], "boolean")
-        self.assertIn("estimate_invalid", project_issue_estimate_set.failure_modes)
+        project_issue_field_number_set = registry.get_operation("gh.project.issue.field_number.set")
+        self.assertIsNotNone(project_issue_field_number_set)
+        self.assertEqual(project_issue_field_number_set.kind, "action")
+        self.assertEqual(project_issue_field_number_set.inputs["repository"], "string")
+        self.assertEqual(project_issue_field_number_set.inputs["issue_number"], "integer")
+        self.assertEqual(project_issue_field_number_set.inputs["project_id"], "string")
+        self.assertEqual(project_issue_field_number_set.inputs["field"], "string")
+        self.assertEqual(project_issue_field_number_set.inputs["value"], "number")
+        self.assertEqual(project_issue_field_number_set.outputs["changed"], "boolean")
+        self.assertIn("field_value_invalid", project_issue_field_number_set.failure_modes)
 
     def test_registry_contract_is_public_json_shaped_surface(self) -> None:
         registry = get_public_connector_registry()
 
         contract = registry.to_contract()
 
-        self.assertEqual(contract["connectors"][0]["namespace"], "git")
+        self.assertEqual(contract["connectors"][0]["namespace"], "runtime")
         self.assertIn(
             "issue",
-            {operation["name"] for operation in contract["connectors"][1]["operations"]},
+            {operation["name"] for operation in contract["connectors"][2]["operations"]},
         )
         self.assertIn(
             "project.issue",
-            {operation["name"] for operation in contract["connectors"][1]["operations"]},
+            {operation["name"] for operation in contract["connectors"][2]["operations"]},
         )
         self.assertNotIn(
             "issue.view",
-            {operation["name"] for operation in contract["connectors"][1]["operations"]},
+            {operation["name"] for operation in contract["connectors"][2]["operations"]},
         )
         self.assertIn(
             "action",
-            {operation["kind"] for operation in contract["connectors"][2]["operations"]},
+            {operation["kind"] for operation in contract["connectors"][3]["operations"]},
         )
 
 

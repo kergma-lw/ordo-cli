@@ -9,15 +9,32 @@ states:
   common_state:
     path: .ordo.json
   shared_state:
-    path: /home/ww/projects/ordo/.ordo/repo.json
+    path: /home/ww/projects/check-list.life/repo.json
 workflows:
   create-task:
     file: workflows/create-task.yml
-    description: Create a new project task in the active profile context
+    description: Create a new Task issue in the selected non-meta profile context
     state_bindings:
       shared_state: shared_state
-  open-task:
-    file: workflows/open-task.yml
+  create-story:
+    file: workflows/create-story.yml
+    description: Create a new Story issue in the meta profile with a Tasks section
+    state_bindings:
+      shared_state: shared_state
+  task-to-ready:
+    file: workflows/task-to-ready.yml
+    description: Validate one task or bug and set its project status to Ready
+  task-to-in-progress:
+    file: workflows/task-to-in-progress.yml
+    description: Set one task or bug project status to In progress
+  task-to-review:
+    file: workflows/task-to-review.yml
+    description: Prepare the active task for review and set its project status to In review
+    state_bindings:
+      common_state: common_state
+  set-active-task:
+    file: workflows/set-active-task.yml
+    description: Prepare local work on one task or story issue
     state_bindings:
       common_state: common_state
       shared_state: shared_state
@@ -26,9 +43,30 @@ workflows:
     state_bindings:
       common_state: common_state
       shared_state: shared_state
+  story-tasks-show:
+    file: workflows/story-tasks-show.yml
+    description: Show the raw Tasks section for one story issue
+    state_bindings:
+      shared_state: shared_state
+  story-task-add:
+    file: workflows/story-task-add.yml
+    description: Add one task reference to the Tasks section of a story issue
+    state_bindings:
+      shared_state: shared_state
+  story-tasks-ready:
+    file: workflows/story-tasks-ready.yml
+    description: Show Ready tasks referenced from a story Tasks section
+    state_bindings:
+      shared_state: shared_state
   set-task-size:
     file: workflows/set-task-size.yml
     description: Update the project Size field for one open task in this repository
+  set-task-estimate:
+    file: workflows/set-task-estimate.yml
+    description: Update the project Estimate field for one open task in this repository
+  set-task-iteration:
+    file: workflows/set-task-iteration.yml
+    description: Update the project Iteration field for one open task in this repository
   set-task-priority:
     file: workflows/set-task-priority.yml
     description: Update the project Priority field for one open task in this repository

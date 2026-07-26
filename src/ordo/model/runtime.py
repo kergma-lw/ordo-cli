@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from .diagnostic import Diagnostic
-from .json import JSONObject
+from .json import JSONObject, JSONValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +112,8 @@ class RuntimeResult:
     diagnostics: tuple[Diagnostic, ...] = ()
     plan: ExecutionPlan | None = None
     outputs: JSONObject = field(default_factory=dict)
+    results: tuple[JSONValue, ...] = ()
+    published: tuple[JSONValue, ...] = ()
     operation_results: tuple[OperationResult, ...] = ()
     failed_guard: str | None = None
     failed_step: str | None = None
@@ -126,6 +128,8 @@ class RuntimeResult:
             "diagnostics": [diagnostic.to_contract() for diagnostic in self.diagnostics],
             "plan": None if self.plan is None else self.plan.to_contract(),
             "outputs": dict(self.outputs),
+            "results": list(self.results),
+            "published": list(self.published),
             "operation_results": [result.to_contract() for result in self.operation_results],
             "failed_guard": self.failed_guard,
             "failed_step": self.failed_step,

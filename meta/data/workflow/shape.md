@@ -5,6 +5,7 @@
 - `version`
 - `workflow`
 - `inputs`
+- `let`
 - `state_needs`
 - `blocks`
 
@@ -15,6 +16,7 @@ Compatibility-only top-level fields:
 
 The stable assembled execution shape is block-based.
 Top-level `guards` and `steps` remain compatibility inputs that normalize to `blocks`.
+Top-level `let` is one workflow-level local-expression binding surface rather than a block kind.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow data shape itself.
 
@@ -27,6 +29,26 @@ An assembly instruction is a source-level workflow construct that shapes workflo
 `include` is the initial assembly instruction for static workflow composition.
 
 Assembly may still carry caller-scoped bindings into expanded material. In particular, `include.with` may bind caller-scoped expressions before the expanded fragment payload is validated as assembled workflow material.
+
+Source workflow material may also declare a workflow-level `let` mapping for workflow-local named local expressions.
+
+Stable `let` form:
+
+```yaml
+let:
+  issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+  issue_open: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
+```
+
+`let` rules:
+
+- `let` is optional and, when present, is an object mapping binding names to local expressions;
+- `let` is allowed only at workflow top level;
+- each binding name must be unique within the workflow;
+- reserved roots such as `inputs`, `args`, `state`, and `step` must not be reused as `let` binding names;
+- each binding value is parsed as one ordinary local expression rather than as text substitution;
+- a `let` binding may not reference another `let` binding;
+- `let` bindings do not normalize into `blocks` and do not form an execution block kind of their own.
 
 ## Stable assembled block shape
 

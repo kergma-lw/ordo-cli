@@ -2621,10 +2621,10 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Status", "option": "In progress"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
-        resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2638,7 +2638,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["item_id"], "PVTI_7")
-        self.assertEqual(result.outputs["status"], "In progress")
+        self.assertEqual(result.outputs["option"], "In progress")
         self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_status_set_is_noop_for_same_status(self) -> None:
@@ -2646,32 +2646,33 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Status", "option": "In progress"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
-        resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
                 self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"In progress","field":{"name":"Status"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_1","name":"Status","options":[{"id":"OPT_1","name":"Backlog"},{"id":"OPT_2","name":"In progress"}]}]}}}}', stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
         self.assertFalse(result.outputs["changed"])
-        self.assertEqual(result.summary, "GitHub project issue status is already set")
+        self.assertEqual(result.summary, "GitHub project field 'Status' is already set")
 
-    def test_gh_project_issue_status_set_reports_status_not_found(self) -> None:
+    def test_gh_project_issue_status_set_reports_option_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "Done"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Status", "option": "Done"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
-        resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2682,18 +2683,18 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "status_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_status_set.status_not_found")
+        self.assertEqual(result.status, "option_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.option_not_found")
 
     def test_gh_project_issue_status_set_reports_project_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "field": "Status", "option": "In progress"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
-        resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2705,17 +2706,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "project_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_status_set.project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.project_not_found")
 
     def test_gh_project_issue_status_set_reports_issue_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "field": "Status", "option": "In progress"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
-        resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2726,17 +2727,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "issue_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_status_set.issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.issue_not_found")
 
-    def test_gh_project_issue_status_set_reports_status_blocked(self) -> None:
+    def test_gh_project_issue_status_set_reports_field_update_blocked(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.status.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "status": "In progress"})),),
+            steps=(Step(name="set-status", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Status", "option": "In progress"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.status.set")
-        resolved = ResolvedOperation("gh.project.issue.status.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2748,18 +2749,18 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "status_blocked")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_status_set.command_failed")
+        self.assertEqual(result.status, "field_update_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.command_failed")
 
     def test_gh_project_issue_iteration_set_updates_project_iteration(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.field_iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Iteration", "iteration": "Sprint 12"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
-        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.field_iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2781,32 +2782,33 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.field_iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Iteration", "iteration": "Sprint 12"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
-        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.field_iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
                 self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 12","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTIF_1","name":"Iteration","configuration":{"iterations":[{"id":"IT_12","title":"Sprint 12","startDate":"2026-07-15","duration":14}]}}]}}}}', stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
         self.assertFalse(result.outputs["changed"])
-        self.assertEqual(result.summary, "GitHub project issue iteration is already set")
+        self.assertEqual(result.summary, "GitHub project field 'Iteration' is already set")
 
     def test_gh_project_issue_iteration_set_reports_iteration_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 13"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.field_iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Iteration", "iteration": "Sprint 13"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
-        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.field_iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2818,17 +2820,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "iteration_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.iteration_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_iteration_set.iteration_not_found")
 
     def test_gh_project_issue_iteration_set_reports_project_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.field_iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "field": "Iteration", "iteration": "Sprint 12"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
-        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.field_iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2840,17 +2842,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "project_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_iteration_set.project_not_found")
 
     def test_gh_project_issue_iteration_set_reports_issue_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.field_iteration.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "field": "Iteration", "iteration": "Sprint 12"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
-        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.field_iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2861,17 +2863,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "issue_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_iteration_set.issue_not_found")
 
-    def test_gh_project_issue_iteration_set_reports_iteration_blocked(self) -> None:
+    def test_gh_project_issue_iteration_set_reports_field_update_blocked(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "iteration": "Sprint 12"})),),
+            steps=(Step(name="set-iteration", operation=OperationRef("gh.project.issue.field_iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Iteration", "iteration": "Sprint 12"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.iteration.set")
-        resolved = ResolvedOperation("gh.project.issue.iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.field_iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2883,18 +2885,18 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "iteration_blocked")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_iteration_set.command_failed")
+        self.assertEqual(result.status, "field_update_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_iteration_set.command_failed")
 
     def test_gh_project_issue_priority_set_updates_priority(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "option": "P1"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
-        resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2908,7 +2910,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["item_id"], "PVTI_7")
-        self.assertEqual(result.outputs["priority"], "P1")
+        self.assertEqual(result.outputs["option"], "P1")
         self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_priority_set_is_noop_for_same_priority(self) -> None:
@@ -2916,32 +2918,33 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "option": "P1"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
-        resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
                 self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"P1","field":{"name":"Priority"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_P","name":"Priority","options":[{"id":"OPT_P1","name":"P1"},{"id":"OPT_P2","name":"P2"}]}]}}}}', stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
         self.assertFalse(result.outputs["changed"])
-        self.assertEqual(result.summary, "GitHub project issue priority is already set")
+        self.assertEqual(result.summary, "GitHub project field 'Priority' is already set")
 
-    def test_gh_project_issue_priority_set_reports_priority_not_found(self) -> None:
+    def test_gh_project_issue_priority_set_reports_option_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P0"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "option": "P0"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
-        resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2952,18 +2955,18 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "priority_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_priority_set.priority_not_found")
+        self.assertEqual(result.status, "option_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.option_not_found")
 
     def test_gh_project_issue_priority_set_reports_project_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "field": "Priority", "option": "P1"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
-        resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2975,17 +2978,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "project_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_priority_set.project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.project_not_found")
 
     def test_gh_project_issue_priority_set_reports_issue_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "field": "Priority", "option": "P1"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
-        resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -2996,17 +2999,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "issue_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_priority_set.issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.issue_not_found")
 
-    def test_gh_project_issue_priority_set_reports_priority_blocked(self) -> None:
+    def test_gh_project_issue_priority_set_reports_field_update_blocked(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.priority.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "priority": "P1"})),),
+            steps=(Step(name="set-priority", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "option": "P1"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.priority.set")
-        resolved = ResolvedOperation("gh.project.issue.priority.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3018,18 +3021,18 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "priority_blocked")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_priority_set.command_failed")
+        self.assertEqual(result.status, "field_update_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.command_failed")
 
     def test_gh_project_issue_type_set_updates_type(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Bug"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Type", "option": "Bug"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
-        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3043,7 +3046,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["item_id"], "PVTI_7")
-        self.assertEqual(result.outputs["type"], "Bug")
+        self.assertEqual(result.outputs["option"], "Bug")
         self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_type_set_is_noop_for_same_type(self) -> None:
@@ -3051,32 +3054,10 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Task"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Type", "option": "Task"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
-        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"Task","field":{"name":"Type"}}]}}]}}}}}', stderr=""),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "ok")
-        self.assertFalse(result.outputs["changed"])
-        self.assertEqual(result.summary, "GitHub project issue type is already set")
-
-    def test_gh_project_issue_type_set_reports_type_not_found(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Story"})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
-        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3087,18 +3068,41 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "type_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.type_not_found")
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.outputs["changed"])
+        self.assertEqual(result.summary, "GitHub project field 'Type' is already set")
+
+    def test_gh_project_issue_type_set_reports_option_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Type", "option": "Story"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"Task","field":{"name":"Type"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_T","name":"Type","options":[{"id":"OPT_TASK","name":"Task"},{"id":"OPT_BUG","name":"Bug"}]}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "option_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.option_not_found")
 
     def test_gh_project_issue_type_set_reports_project_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "type": "Task"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "field": "Type", "option": "Task"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
-        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3110,17 +3114,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "project_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.project_not_found")
 
     def test_gh_project_issue_type_set_reports_issue_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "type": "Task"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "field": "Type", "option": "Task"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
-        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3131,17 +3135,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "issue_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.issue_not_found")
 
-    def test_gh_project_issue_type_set_reports_type_blocked(self) -> None:
+    def test_gh_project_issue_type_set_reports_field_update_blocked(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.type.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "type": "Bug"})),),
+            steps=(Step(name="set-type", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Type", "option": "Bug"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.type.set")
-        resolved = ResolvedOperation("gh.project.issue.type.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3153,18 +3157,18 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "type_blocked")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_type_set.command_failed")
+        self.assertEqual(result.status, "field_update_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.command_failed")
 
     def test_gh_project_issue_size_set_updates_size(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "L"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Size", "option": "L"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
-        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3178,7 +3182,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["item_id"], "PVTI_7")
-        self.assertEqual(result.outputs["size"], "L")
+        self.assertEqual(result.outputs["option"], "L")
         self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_size_set_membership_query_is_graphql_complete(self) -> None:
@@ -3186,10 +3190,10 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "L"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Size", "option": "L"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
-        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3215,32 +3219,10 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "M"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Size", "option": "M"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
-        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"M","field":{"name":"Size"}}]}}]}}}}}', stderr=""),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "ok")
-        self.assertFalse(result.outputs["changed"])
-        self.assertEqual(result.summary, "GitHub project issue size is already set")
-
-    def test_gh_project_issue_size_set_reports_size_not_found(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "XL"})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
-        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3251,18 +3233,41 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "size_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.size_not_found")
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.outputs["changed"])
+        self.assertEqual(result.summary, "GitHub project field 'Size' is already set")
+
+    def test_gh_project_issue_size_set_reports_option_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Size", "option": "XL"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"M","field":{"name":"Size"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_S","name":"Size","options":[{"id":"OPT_M","name":"M"},{"id":"OPT_L","name":"L"}]}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "option_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.option_not_found")
 
     def test_gh_project_issue_size_set_reports_project_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "size": "M"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "field": "Size", "option": "M"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
-        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3274,17 +3279,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "project_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.project_not_found")
 
     def test_gh_project_issue_size_set_reports_issue_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "size": "M"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "field": "Size", "option": "M"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
-        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3295,17 +3300,17 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "issue_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.issue_not_found")
 
-    def test_gh_project_issue_size_set_reports_size_blocked(self) -> None:
+    def test_gh_project_issue_size_set_reports_field_update_blocked(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.size.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "size": "L"})),),
+            steps=(Step(name="set-size", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Size", "option": "L"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.size.set")
-        resolved = ResolvedOperation("gh.project.issue.size.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3317,18 +3322,18 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "size_blocked")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_size_set.command_failed")
+        self.assertEqual(result.status, "field_update_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_single_select_set.command_failed")
 
     def test_gh_project_issue_estimate_set_updates_estimate(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": 5})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.field_number.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 5})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
-        resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_number.set")
+        resolved = ResolvedOperation("gh.project.issue.field_number.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3342,7 +3347,7 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["item_id"], "PVTI_7")
-        self.assertEqual(result.outputs["estimate"], 5)
+        self.assertEqual(result.outputs["value"], 5)
         self.assertTrue(result.outputs["changed"])
 
     def test_gh_project_issue_estimate_set_is_noop_for_same_estimate(self) -> None:
@@ -3350,168 +3355,10 @@ class OperationTest(unittest.TestCase):
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": 3})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.field_number.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 3})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
-        resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"number":3,"field":{"name":"Estimate"}}]}}]}}}}}', stderr=""),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "ok")
-        self.assertFalse(result.outputs["changed"])
-        self.assertEqual(result.summary, "GitHub project issue estimate is already set")
-
-    def test_gh_project_issue_estimate_set_reports_project_not_found(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "estimate": 3})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
-        resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "project_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_estimate_set.project_not_found")
-
-    def test_gh_project_issue_estimate_set_reports_issue_not_found(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "estimate": 3})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
-        resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=1, stdout="", stderr="issue not found"),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "issue_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_estimate_set.issue_not_found")
-
-    def test_gh_project_issue_estimate_set_reports_estimate_invalid_for_bad_input(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": True})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
-        resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [self._completed(returncode=0, stdout="authenticated\n", stderr="")]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "estimate_invalid")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_estimate_set.estimate_invalid")
-
-    def test_gh_project_issue_field_set_updates_single_select_field(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "value": "P1"})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"P2","field":{"name":"Priority"}}]}}]}}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_P","name":"Priority","options":[{"id":"OPT_P1","name":"P1"},{"id":"OPT_P2","name":"P2"}]},{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(result.outputs["field_kind"], "single_select")
-        self.assertEqual(result.outputs["value"], "P1")
-        self.assertTrue(result.outputs["changed"])
-
-    def test_gh_project_issue_field_set_updates_number_field(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 5})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"number":3,"field":{"name":"Estimate"}}]}}]}}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(result.outputs["field_kind"], "number")
-        self.assertEqual(result.outputs["value"], 5)
-        self.assertTrue(result.outputs["changed"])
-
-    def test_gh_project_issue_field_set_updates_iteration_field(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Iteration", "value": "Sprint 12"})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
-
-        with patch("subprocess.run") as run:
-            run.side_effect = [
-                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 11","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTIF_1","name":"Iteration","configuration":{"iterations":[{"id":"IT_11","title":"Sprint 11","startDate":"2026-07-01","duration":14},{"id":"IT_12","title":"Sprint 12","startDate":"2026-07-15","duration":14}]}}]}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
-            ]
-
-            result = execute_action(resolved, workflow)
-
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(result.outputs["field_kind"], "iteration")
-        self.assertEqual(result.outputs["value"], "Sprint 12")
-        self.assertTrue(result.outputs["changed"])
-
-    def test_gh_project_issue_field_set_is_noop_for_same_value(self) -> None:
-        workflow = Workflow(
-            version=0,
-            workflow="demo",
-            guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 3})),),
-        )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_number.set")
+        resolved = ResolvedOperation("gh.project.issue.field_number.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3526,103 +3373,151 @@ class OperationTest(unittest.TestCase):
         self.assertFalse(result.outputs["changed"])
         self.assertEqual(result.summary, "GitHub project field 'Estimate' is already set")
 
-    def test_gh_project_issue_field_set_reports_field_not_found(self) -> None:
+    def test_gh_project_issue_estimate_set_reports_project_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Story Points", "value": 5})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.field_number.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_missing", "field": "Estimate", "value": 3})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_number.set")
+        resolved = ResolvedOperation("gh.project.issue.field_number.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[]}}]}}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "field_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_not_found")
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_number_set.project_not_found")
 
-    def test_gh_project_issue_field_set_reports_field_kind_unsupported(self) -> None:
+    def test_gh_project_issue_estimate_set_reports_issue_not_found(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Summary", "value": "Hello"})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.field_number.set", with_={"repository": "owner/repo", "issue_number": 999, "project_id": "PVT_demo", "field": "Estimate", "value": 3})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_number.set")
+        resolved = ResolvedOperation("gh.project.issue.field_number.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[]}}]}}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTTXT_1","name":"Summary","dataType":"TEXT"}]}}}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="issue not found"),
             ]
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "field_kind_unsupported")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_kind_unsupported")
+        self.assertEqual(result.status, "issue_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_number_set.issue_not_found")
 
-    def test_gh_project_issue_field_set_reports_field_value_invalid(self) -> None:
+    def test_gh_project_issue_estimate_set_reports_field_value_invalid_for_bad_input(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": True})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.field_number.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": True})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_number.set")
+        resolved = ResolvedOperation("gh.project.issue.field_number.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="authenticated\n", stderr="")]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "field_value_invalid")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_number_set.field_value_invalid")
+
+    def test_gh_project_issue_field_single_select_set_updates_single_select_field(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field_single_select.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "option": "P1"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_single_select.set")
+        resolved = ResolvedOperation("gh.project.issue.field_single_select.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"P2","field":{"name":"Priority"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_P","name":"Priority","options":[{"id":"OPT_P1","name":"P1"},{"id":"OPT_P2","name":"P2"}]},{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["field"], "Priority")
+        self.assertEqual(result.outputs["option"], "P1")
+        self.assertTrue(result.outputs["changed"])
+
+    def test_gh_project_issue_field_number_set_updates_number_field(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field_number.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 5})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_number.set")
+        resolved = ResolvedOperation("gh.project.issue.field_number.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
                 self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"number":3,"field":{"name":"Estimate"}}]}}]}}}}}', stderr=""),
                 self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "field_value_invalid")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_value_invalid")
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["field"], "Estimate")
+        self.assertEqual(result.outputs["value"], 5)
+        self.assertTrue(result.outputs["changed"])
 
-    def test_gh_project_issue_field_set_reports_field_value_not_found(self) -> None:
+    def test_gh_project_issue_field_iteration_set_updates_iteration_field(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "value": "P0"})),),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field_iteration.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Iteration", "iteration": "Sprint 12"})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
-        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_iteration.set")
+        resolved = ResolvedOperation("gh.project.issue.field_iteration.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"P2","field":{"name":"Priority"}}]}}]}}}}}', stderr=""),
-                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_P","name":"Priority","options":[{"id":"OPT_P1","name":"P1"},{"id":"OPT_P2","name":"P2"}]}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 11","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTIF_1","name":"Iteration","configuration":{"iterations":[{"id":"IT_11","title":"Sprint 11","startDate":"2026-07-01","duration":14},{"id":"IT_12","title":"Sprint 12","startDate":"2026-07-15","duration":14}]}}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "field_value_not_found")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_value_not_found")
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["item_id"], "PVTI_7")
+        self.assertEqual(result.outputs["iteration"], "Sprint 12")
+        self.assertTrue(result.outputs["changed"])
 
-    def test_gh_project_issue_estimate_set_reports_estimate_blocked(self) -> None:
+    def test_gh_project_issue_estimate_set_reports_field_update_blocked(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="demo",
             guards=(),
-            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.estimate.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "estimate": 5})),),
+            steps=(Step(name="set-estimate", operation=OperationRef("gh.project.issue.field_number.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 5})),),
         )
-        operation = get_public_connector_registry().get_operation("gh.project.issue.estimate.set")
-        resolved = ResolvedOperation("gh.project.issue.estimate.set", "gh", operation, "public")  # type: ignore[arg-type]
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field_number.set")
+        resolved = ResolvedOperation("gh.project.issue.field_number.set", "gh", operation, "public")  # type: ignore[arg-type]
 
         with patch("subprocess.run") as run:
             run.side_effect = [
@@ -3634,8 +3529,8 @@ class OperationTest(unittest.TestCase):
 
             result = execute_action(resolved, workflow)
 
-        self.assertEqual(result.status, "estimate_blocked")
-        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_estimate_set.command_failed")
+        self.assertEqual(result.status, "field_update_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_number_set.command_failed")
 
     def test_git_branch_probe_returns_branch_value_for_expression_surface(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(), steps=())
@@ -3720,6 +3615,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(
             result.outputs,
             {
+                "exists": True,
                 "root": "/tmp/demo-repo",
                 "git_dir": "/tmp/demo-repo/.git",
                 "inside_work_tree": True,

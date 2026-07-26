@@ -9,26 +9,30 @@ inputs:
   project_id: {}
   size:
     hint: Use one of XS, S, M, L, XL
+let:
+  issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
 blocks:
   - guards:
-      - git.repo
-      - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state == "OPEN"
-      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists
-      - gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).size != inputs.size
+      - git.repo.exists
+      - issue.state == "OPEN"
+      - project_issue.exists
+      - project_issue.size != inputs.size
 
   - steps:
       - name: Set task size
-        uses: gh.project.issue.size.set
+        uses: gh.project.issue.field_single_select.set
         register: size_update
         with:
           repository: ${inputs.repository}
           issue_number: ${inputs.issue_number}
           project_id: ${inputs.project_id}
-          size: ${inputs.size}
+          field: Size
+          option: ${inputs.size}
 
       - name: Publish task size result
-        result:
+        publish:
           summary: Task size updated
           issue_ref: ${step.size_update.outputs.issue_ref}
-          size: ${step.size_update.outputs.size}
+          size: ${step.size_update.outputs.option}
           changed: ${step.size_update.outputs.changed}

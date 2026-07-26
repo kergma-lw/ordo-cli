@@ -13,7 +13,7 @@ from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, resolve_workflow_let_reference_node
-from .local_expression_engine.core import BinaryNode, CallNode, ListNode, LiteralNode, ParsedLocalExpressionTree, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode
+from .local_expression_engine.core import BinaryNode, CallNode, ListNode, LiteralNode, ParsedLocalExpressionTree, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, render_expression_text
 from .providers import ConnectorProvider, get_default_connector_provider
 
 
@@ -317,7 +317,7 @@ def _resolve_guard_expression(
                     connector_namespace=resolved.connector_namespace,
                     operation=resolved.operation,
                     source=resolved.source,
-                    expression_text=expression[node.start : node.end],
+                    expression_text=render_expression_text(node, source=expression),
                     fields=fields,
                 )
             )
@@ -354,7 +354,7 @@ def _resolve_guard_expression(
                     connector_namespace=resolved.connector_namespace,
                     operation=resolved.operation,
                     source=resolved.source,
-                    expression_text=expression[node.start : node.end],
+                    expression_text=render_expression_text(node, source=expression),
                     fields=node.fields,
                     arguments=tuple((argument.name, argument.value) for argument in node.arguments),
                 )

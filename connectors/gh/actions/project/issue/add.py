@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh.actions._shared import PROJECT_ISSUE_INVALIDATION
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
@@ -15,6 +16,7 @@ def info():
         effects=("add GitHub issue to project",),
         outputs={"issue_ref": "string", "project_id": "string", "item_id": "string", "added": "boolean"},
         failure_modes=("issue_not_found", "project_not_found", "add_blocked"),
+        invalidates_observations=PROJECT_ISSUE_INVALIDATION,
         handler=run,
     )
 
@@ -68,7 +70,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 "api",
                 "graphql",
                 "-f",
-                "mutation($project:ID!,$content:ID!){addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}",
+                "query=mutation($project:ID!,$content:ID!){addProjectV2ItemById(input:{projectId:$project,contentId:$content}){item{id}}}",
                 "-f",
                 f"project={project_id}",
                 "-f",

@@ -19,9 +19,10 @@ steps:
 
   - name: set-task-status
     if: args.status | ne("")
-    uses: gh.project.issue.status.set
+    uses: gh.project.issue.field_single_select.set
     with:
       repository: ${inputs.repository}
       issue_number: ${args.issue_number}
       project_id: ${inputs.project_id}
-      status: ${args.status}
+      field: Status
+      option: ${args.status}

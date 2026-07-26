@@ -31,6 +31,8 @@ An operation contract must define:
 - outputs;
 - failure modes.
 
+An action contract may also expose advisory metadata that helps runtime reason about preflight support quality, for example observation invalidation scopes and recommended preflight-observation templates.
+
 ## Explainability and result discipline
 
 Every connector operation must:
@@ -106,6 +108,7 @@ An action is ready when:
 - its documented `failure_modes` describe expected contract-level non-success rather than exceptional runtime breakdown;
 - its result is understandable from structured outcome fields without relying on raw transport output as the primary contract;
 - it would still make sense if invoked from a different workflow with different surrounding policy.
+- if it declares recommended preflight observations, those recommendations remain advisory explainability support rather than hidden executability rules.
 
 Useful review questions:
 
@@ -128,6 +131,7 @@ Useful review questions:
 - is any workflow or approval logic leaking into the action;
 - can the result be explained without scraping stdout or stderr;
 - would this action still look clean if another workflow reused it under a different safety policy.
+- if this action advertises recommended preflight observations, do they help `check`, `plan`, and `explain` without assuming one specific workflow-local value source.
 
 ## Action input norms
 

@@ -113,3 +113,36 @@ Why this matters:
 - relevant read-only observations may live behind step flow rather than direct guard probes;
 - runtime should be able to strengthen guard coverage without turning `check` into hidden execution;
 - a dedicated contract keeps richer preflight behavior reviewable.
+
+## CHECK-MODE-013 — Advisory preflight-observation metadata may strengthen explainability without becoming a prerequisite
+
+When an effectful action declares advisory preflight-observation templates, runtime may use them to evaluate how well the workflow's current pre-execution basis supports explanation of that step's applicability and expected effect.
+
+Missing advisory observations must not by themselves make the workflow inapplicable.
+They may weaken preflight-support quality, explanation strength, or authoring guidance, but they must not silently become hidden executability rules.
+
+Why this matters:
+- some actions remain semantically clear while still benefiting from richer preflight observation basis;
+- runtime needs a way to distinguish execution validity from explanation strength;
+- advisory templates allow connector families to help `check`, `plan`, and `explain` without moving workflow-policy logic into connector actions.
+
+## CHECK-MODE-014 — Author-facing recommendations should preserve workflow expression shape when possible
+
+When runtime renders a recommended preflight observation from action metadata, it should prefer the workflow expressions that currently supply the referenced action arguments rather than only the resolved runtime values.
+
+Why this matters:
+- author-facing recommendations are more useful when they resemble the workflow that must be edited;
+- expression-shaped guidance remains stable across runs better than one-shot resolved values;
+- this keeps long or awkward rendered expressions attributable to workflow authoring quality rather than pushing beautification burden into `check`.
+
+## CHECK-MODE-015 — Recommended-observation matching must stay exact and structural
+
+When runtime compares advisory preflight-observation templates against observations already established by the workflow, that comparison must remain deterministic and structural.
+
+Covered means runtime can prove the same canonical probe reference, the same relevant field selection when applicable, and the same action-argument-relative workflow expressions after rendering.
+Runtime must not use heuristic near-matching, guessed semantic equivalence, or value-level similarity to claim that a recommendation is already covered.
+
+Why this matters:
+- deterministic matching keeps `check` predictable for humans and agents;
+- exact structural comparison avoids false positives that would hide genuinely missing observations;
+- workflows that want readable stable matching can introduce early `let` bindings rather than relying on runtime guesswork.

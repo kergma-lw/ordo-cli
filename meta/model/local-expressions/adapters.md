@@ -119,6 +119,17 @@ At minimum the model expects support for:
 
 The model also distinguishes host-side failures that occur while resolving the outer binding surface from adapter-side failures that occur after resolved parameter values have been supplied to the adapter family.
 
+### Presence-oriented reuse of read invocation
+
+The model allows one product-owned presence-check helper to reuse read-only adapter invocation as a special argument class without changing ordinary adapter outcome semantics.
+
+In that reuse:
+
+- successful read invocation is interpreted by the presence helper as present;
+- adapter `not_found` is interpreted by the presence helper as missing;
+- adapter outcomes other than `not_found` continue to fail evaluation;
+- write invocation is outside the allowed presence-check argument class.
+
 ## Read-versus-write model
 
 The model distinguishes two invocation kinds.

@@ -35,8 +35,8 @@ Default output is intended to be concise:
   - active blockers
 
 Examples:
-  ordo-playbook explain open-task
-  ordo-playbook --profile backend --input issue_number=42 explain open-task
+  ordo-playbook explain set-active-task
+  ordo-playbook --profile backend --input issue_number=42 explain set-active-task
   ordo-playbook explain close-task --json
 """
 
@@ -49,8 +49,8 @@ Default output is intended to be concise:
   - if planning is blocked: a short note to use explain for details
 
 Examples:
-  ordo-playbook plan open-task
-  ordo-playbook --profile backend --input issue_number=42 plan open-task
+  ordo-playbook plan set-active-task
+  ordo-playbook --profile backend --input issue_number=42 plan set-active-task
   ordo-playbook plan close-task --json
 """
 
@@ -65,8 +65,8 @@ Default output is intended to be concise:
   - missing facts
 
 Examples:
-  ordo-playbook check open-task
-  ordo-playbook --profile backend --input issue_number=42 check open-task
+  ordo-playbook check set-active-task
+  ordo-playbook --profile backend --input issue_number=42 check set-active-task
   ordo-playbook check close-task --json
 """
 
@@ -241,14 +241,16 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
 def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[str, object]:
     if command_mode == "run":
         if result.status is RuntimeStatus.OK:
-            raw_results = result.outputs.get("results", [])
-            results = list(raw_results) if isinstance(raw_results, list) else []
+            results = list(result.results)
             if not results:
                 results = [_fallback_run_result()]
-            return {
+            payload = {
                 "status": "ok",
                 "results": results,
             }
+            if result.published:
+                payload["published"] = list(result.published)
+            return payload
         return {
             "status": result.status.value,
             "failed_guard": result.failed_guard,
@@ -260,7 +262,7 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
 
 def _fallback_run_result() -> dict[str, object]:
     return {
-        "summary": "Workflow completed without publishing an explicit result",
+        "summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results.",
     }
 
 

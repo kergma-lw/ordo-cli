@@ -55,6 +55,8 @@
 - A read invocation must not create missing structure.
 - A read invocation must not persist change.
 - A read invocation result is the selected or derived value produced by the adapter family.
+- When a product-owned presence-check helper explicitly admits read-only adapter invocation as an argument form, successful read invocation may be interpreted by that helper as presence and adapter `not_found` may be interpreted by that helper as absence.
+- Such helper semantics must not change the ordinary standalone read-invocation rule that adapter `not_found` is an adapter failure outcome rather than an implicit null-like value.
 
 ## Write invocation contract
 
@@ -107,6 +109,7 @@
 - A read path ends in value selection or value derivation.
 - A write path ends in a terminal mutation and returns an updated root value.
 - Adapter-specific middle syntax may vary, but adapter families should not blur the boundary between read-only navigation and root-transforming update.
+- Any product-owned presence-check helper that admits adapter invocation must admit read paths only and must reject write paths explicitly rather than evaluating them for boolean presence.
 
 ## Shared auto-creation boundary
 

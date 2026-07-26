@@ -9,28 +9,37 @@ inputs:
   repository: {}
   project_id: {}
   title: {}
-  body: {}
-  type: {}
-  priority:
-    hint: Use one of P0, P1, P2, P3 or omit the input
-  size:
-    hint: Use one of XS, S, M, L, XL or omit the input
+  body:
+    hint: Use plain task body text only; do not include a '## Tasks' section
 state_needs:
   shared_state: {}
+let:
+  project: gh.project(project_id=inputs.project_id)
+  status_field: gh.project.field(project_id=inputs.project_id, field="Status")
+  backlog_status_option: gh.project.field.option(project_id=inputs.project_id, field="Status", option="Backlog")
+  type_field: gh.project.field(project_id=inputs.project_id, field="Type")
+  task_type_option: gh.project.field.option(project_id=inputs.project_id, field="Type", option="Task")
 blocks:
   - guards:
-      - git.repo
-      - state.shared_state[inputs.active_profile_key] == inputs.profile
-      - gh.project(project_id=inputs.project_id).exists
-      - gh.project.field(project_id=inputs.project_id, field="Status").exists
-      - gh.project.field.option(project_id=inputs.project_id, field="Status", option="Backlog").exists
-      - gh.project.field(project_id=inputs.project_id, field="Type").exists
-      - not (inputs.repo_kind == "meta") or inputs.type == "Story"
-      - not (inputs.repo_kind == "meta") or gh.project.field.option(project_id=inputs.project_id, field="Type", option="Story").exists
-      - inputs.repo_kind == "meta" or inputs.type == "Task" or inputs.type == "Bug"
-      - inputs.repo_kind == "meta" or gh.project.field.option(project_id=inputs.project_id, field="Type", option=inputs.type).exists
-      - is_missing(inputs.priority) or gh.project.field.option(project_id=inputs.project_id, field="Priority", option=inputs.priority).exists
-      - is_missing(inputs.size) or gh.project.field.option(project_id=inputs.project_id, field="Size", option=inputs.size).exists
+      - git.repo.exists
+      - inputs.profile == "backend" or inputs.profile == "frontend"
+
+  - steps:
+      - name: Switch runtime profile
+        profile_switch: ${inputs.profile}
+
+      - name: Remember active profile
+        state_set:
+          state.shared_state[inputs.active_profile_key]: ${inputs.profile}
+
+  - guards:
+      - inputs.repo_kind != "meta"
+      - project.exists
+      - status_field.exists
+      - backlog_status_option.exists
+      - type_field.exists
+      - task_type_option.exists
+      - 'is_missing(markdown["Tasks"] with{root: inputs.body})'
 
   - steps:
       - name: Create issue
@@ -49,45 +58,28 @@ blocks:
           project_id: ${inputs.project_id}
 
       - name: Set task status
-        uses: gh.project.issue.status.set
+        uses: gh.project.issue.field_single_select.set
         with:
           repository: ${inputs.repository}
           issue_number: ${step.created_issue.outputs.number}
           project_id: ${inputs.project_id}
-          status: Backlog
+          field: Status
+          option: Backlog
 
       - name: Set task type
-        uses: gh.project.issue.type.set
+        uses: gh.project.issue.field_single_select.set
         with:
           repository: ${inputs.repository}
           issue_number: ${step.created_issue.outputs.number}
           project_id: ${inputs.project_id}
-          type: ${inputs.type}
-
-      - name: Set task priority
-        if: ${is_present(inputs.priority)}
-        uses: gh.project.issue.priority.set
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${step.created_issue.outputs.number}
-          project_id: ${inputs.project_id}
-          priority: ${inputs.priority}
-
-      - name: Set task size
-        if: ${is_present(inputs.size)}
-        uses: gh.project.issue.size.set
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${step.created_issue.outputs.number}
-          project_id: ${inputs.project_id}
-          size: ${inputs.size}
+          field: Type
+          option: Task
 
       - name: Publish created task
-        result:
+        publish:
           summary: Task created
           issue_ref: ${step.created_issue.outputs.issue_ref}
           issue_number: ${step.created_issue.outputs.number}
-          profile: ${inputs.profile}
-          type: ${inputs.type}
-          priority: ${inputs.priority}
-          size: ${inputs.size}
+          url: ${step.created_issue.outputs.url}
+          active_profile: ${inputs.profile}
+          type: Task

@@ -270,7 +270,7 @@ Current important limits:
 
 ## 11. Runtime state example
 
-`examples/open-task-from-gitx.yaml` now shows one small runtime state use:
+`examples/set-active-task-from-gitx.yaml` now shows one small runtime state use:
 
 - declare a logical `state_needs` role and bind it through the playbook layer;
 - write `state.task_memory[inputs.task_key].branch` with `state_set`;

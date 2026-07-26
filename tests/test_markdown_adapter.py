@@ -70,6 +70,54 @@ class MarkdownAdapterTest(unittest.TestCase):
             },
         )
 
+    def test_read_path_supports_indexing_into_list_items(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={
+                "body": "# Overview\n\n## Tasks\n- ship\n- verify\n",
+            },
+        )
+
+        value = resolve_runtime_value(
+            '${markdown["Tasks"].list[1] with{root: inputs.body}}',
+            workflow,
+        )
+
+        self.assertEqual(value, "verify")
+
+    def test_read_path_supports_list_items_collection_view(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={
+                "body": "# Overview\n\n## Tasks\n- ship\n- verify\n",
+            },
+        )
+
+        value = resolve_runtime_value(
+            '${markdown["Tasks"].list_items with{root: inputs.body}}',
+            workflow,
+        )
+
+        self.assertEqual(value, ["ship", "verify"])
+
+    def test_read_path_supports_task_list_items_collection_view(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={
+                "body": "## Checklist\n- [ ] ship\n- [x] verify\n",
+            },
+        )
+
+        value = resolve_runtime_value(
+            '${markdown["Checklist"].task_list_items with{root: inputs.body}}',
+            workflow,
+        )
+
+        self.assertEqual(value, ["ship", "verify"])
+
     def test_read_path_reports_not_found_for_missing_section(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "## Notes\n- ship\n"})
 

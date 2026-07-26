@@ -23,6 +23,9 @@ Its role is to capture:
 - candidate data that runtime may need to compute and retain;
 - open questions that should remain visible during iteration.
 
+One such candidate concerns advisory `preflight_observations` declared by effectful actions.
+Those structured probe templates are not part of the minimal normative `check` contract today, but they are a plausible source of richer verdict-basis and author-guidance data.
+
 This document is intentionally more speculative than the normative runtime docs.
 
 ## Problem statement
@@ -54,6 +57,7 @@ In that direction, `check` would still emit a simple public verdict surface, but
 - which of those guards were actually evaluated;
 - which were not yet evaluable and why;
 - which observations were used to evaluate those guards;
+- which recommended preflight observations for later effectful steps were already matched or remain absent;
 - which later effectful steps would invalidate or weaken those observations;
 - how strong the basis of the current verdict is.
 
@@ -205,7 +209,10 @@ Useful step annotations could include:
 - `conditional`;
 - `condition_expression`;
 - `declared_effect_class`;
-- `currently_reachable_if_prior_guards_pass`.
+- `currently_reachable_if_prior_guards_pass`;
+- `preflight_observations`;
+- `matched_preflight_observations`;
+- `missing_preflight_observations`.
 
 This is still preflight structure, not execution simulation.
 
@@ -244,10 +251,23 @@ Possible summary fields:
 - `incomplete_reasons`;
 - `used_observation_domains`;
 - `potential_invalidation_domains`;
+- `preflight_support_strength`;
+- `missing_recommended_observations`;
 - `coverage_strength` or `verdict_basis_strength`.
 
 This summary exists for quick consumption by callers.
 The tree or graph exists so that the summary remains explainable rather than magical.
+
+## Rendering recommendations back into workflow form
+
+If action contracts expose advisory `preflight_observations` over action-argument names, one promising implementation strategy is:
+
+- keep the action's canonical structured template objects in connector metadata;
+- map each template placeholder to the workflow expression currently supplying that action argument;
+- render author-facing guidance from those workflow expressions rather than only from resolved runtime values.
+
+This would not require runtime to prove full semantic equivalence between arbitrary expressions.
+It would merely require runtime to preserve and substitute the authored argument expressions that it already knows at the checked step boundary.
 
 ## Observation domains and invalidation domains
 

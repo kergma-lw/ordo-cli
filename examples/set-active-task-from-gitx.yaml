@@ -1,7 +1,7 @@
 version: 0
-workflow: open-task
+workflow: set-active-task
 
-# First-pass extraction of the gitx open-task ritual.
+# First-pass extraction of the gitx set-active-task ritual.
 #
 # Current runtime limits intentionally shape this example:
 # - issue_number / issue_title / issue_type arrive as inputs because step outputs
@@ -139,12 +139,13 @@ blocks:
               - ${inputs.issue_number}
 
       - name: move-issue-to-in-progress
-        uses: gh.project.issue.status.set
+        uses: gh.project.issue.field_single_select.set
         with:
           repository: ${inputs.repository}
           issue_number: ${inputs.issue_number}
           project_id: ${inputs.project_id}
-          status: In progress
+          field: Status
+          option: In progress
 
       - name: create-or-switch-task-branch
         uses: shell.command

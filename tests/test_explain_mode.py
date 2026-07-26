@@ -250,6 +250,53 @@ class ExplainModeTest(unittest.TestCase):
             },
         )
 
+    def test_explain_surfaces_structural_recommendations_for_guardless_effectful_block(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repository": "string", "issue_number": "number", "project_id": "string"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "${inputs.repository}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "Status",
+                                    "option": "In review",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["explanation"]["category"], "ok")
+        self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["name"], "set-status")
+        self.assertEqual(
+            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_observations"][2],
+            {
+                "probe": "gh.project.field.option",
+                "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status", "option": "In review"},
+                "fields": ["exists"],
+            },
+        )
+        self.assertEqual(
+            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_observations"][1],
+            {
+                "probe": "gh.project.field",
+                "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status"},
+                "fields": ["exists"],
+            },
+        )
+
     def test_explain_preserves_expanded_run_reasoning(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
