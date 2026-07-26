@@ -1599,6 +1599,15 @@ Baseline modes are distinct runtime questions, not necessarily wholly separate e
 They may share observations, diagnostics, and blocked-state facts, but they differ in primary intent.
 
 Detailed `check` rules live in `meta/model/runtime/check-semantics.md`.
+The shared internal analysis-tree model lives in `meta/model/runtime/analysis-tree.md`.
+
+### `review`
+
+Answers whether the authored workflow is structurally strong and explicit enough for humans and agents.
+
+It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
+
+Its primary value is authoring-quality review rather than executability truth.
 
 ### `check`
 
@@ -1657,7 +1666,7 @@ The runtime needs modes that:
 
 ## Runtime ownership of mode semantics
 
-The runtime owns `check`, `plan`, `execute`, `explain`, and future next-safe-action semantics.
+The runtime owns `review`, `check`, `plan`, `execute`, `explain`, and future next-safe-action semantics.
 Connector operations should not each reimplement those modes locally.
 
 Runtime may derive these modes from a shared internal decision model.
@@ -1667,8 +1676,20 @@ Instead, runtime should derive higher-level execution meaning from structured op
 
 Implications:
 - connector operations may provide local observations, effect summaries, diagnostics, and supplementary raw detail;
-- runtime combines those local results with workflow block structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
+- runtime combines those local results with workflow block structure, guard evaluation, profiles, and policy to determine authoring findings, blocked state, plan shape, explanation, and next safe action;
 - richer runtime modes should come from stronger structured operation surfaces rather than from pushing orchestration logic down into connector implementations.
+
+## Shared analysis-tree boundary
+
+Runtime should prefer one shared context-aware analysis tree rather than separate ad hoc pipelines for `review` and `check`.
+
+That shared tree may preserve partial knowledge under missing inputs, safe read-only observations, structural halt boundaries, and advisory recommendation coverage.
+
+`review` and `check` are sibling projections over that tree:
+- `review` reads it for authoring-quality findings;
+- `check` reads it for allowed/blocked/unknown runtime truth.
+
+`plan`, `explain`, and `next` should later reuse retained evidence from the same tree rather than reconstructing it from weaker mode summaries.
 
 ## Connector dependency direction
 
@@ -2886,6 +2907,8 @@ The runtime should preserve the difference between:
 
 `check` is the runtime's pre-execution verdict surface over currently available knowledge.
 It exists to answer whether execution may proceed safely without executing effectful business steps.
+
+`check` may share its underlying analysis basis with other mode projections such as `review`, but its published verdict must remain a runtime-executability answer rather than an authoring-quality score.
 
 ## CHECK-MODE-001 — Pre-execution verdict over currently available knowledge
 
@@ -5768,6 +5791,8 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
 - When effectful actions publish advisory preflight-observation templates, authoring diagnostics should be able to surface those templates back in workflow-shaped expressions.
 - If those rendered recommendations become awkward or long, that is an authoring signal to name important values earlier rather than a reason to hide workflow structure from diagnostics.
+- Authoring diagnostics may reuse the same shared context-aware analysis tree as runtime preflight, so long as authoring findings remain distinct from executability blockers.
+- The shared analysis tree should preserve enough structural evidence for later `plan`, `explain`, and `next` work rather than discarding it after the first `review` or `check` projection.
 
 <!-- source: verification/runtime/guard-evaluation.md -->
 

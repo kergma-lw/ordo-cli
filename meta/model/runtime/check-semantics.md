@@ -5,6 +5,8 @@
 `check` is the runtime's pre-execution verdict surface over currently available knowledge.
 It exists to answer whether execution may proceed safely without executing effectful business steps.
 
+`check` may share its underlying analysis basis with other mode projections such as `review`, but its published verdict must remain a runtime-executability answer rather than an authoring-quality score.
+
 ## CHECK-MODE-001 — Pre-execution verdict over currently available knowledge
 
 `check` must report its verdict only over knowledge that is available before effectful step execution in the current run.

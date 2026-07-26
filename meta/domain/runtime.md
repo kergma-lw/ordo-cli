@@ -6,6 +6,15 @@ Baseline modes are distinct runtime questions, not necessarily wholly separate e
 They may share observations, diagnostics, and blocked-state facts, but they differ in primary intent.
 
 Detailed `check` rules live in `meta/model/runtime/check-semantics.md`.
+The shared internal analysis-tree model lives in `meta/model/runtime/analysis-tree.md`.
+
+### `review`
+
+Answers whether the authored workflow is structurally strong and explicit enough for humans and agents.
+
+It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
+
+Its primary value is authoring-quality review rather than executability truth.
 
 ### `check`
 
@@ -64,7 +73,7 @@ The runtime needs modes that:
 
 ## Runtime ownership of mode semantics
 
-The runtime owns `check`, `plan`, `execute`, `explain`, and future next-safe-action semantics.
+The runtime owns `review`, `check`, `plan`, `execute`, `explain`, and future next-safe-action semantics.
 Connector operations should not each reimplement those modes locally.
 
 Runtime may derive these modes from a shared internal decision model.
@@ -74,8 +83,20 @@ Instead, runtime should derive higher-level execution meaning from structured op
 
 Implications:
 - connector operations may provide local observations, effect summaries, diagnostics, and supplementary raw detail;
-- runtime combines those local results with workflow block structure, guard evaluation, profiles, and policy to determine blocked state, plan shape, explanation, and next safe action;
+- runtime combines those local results with workflow block structure, guard evaluation, profiles, and policy to determine authoring findings, blocked state, plan shape, explanation, and next safe action;
 - richer runtime modes should come from stronger structured operation surfaces rather than from pushing orchestration logic down into connector implementations.
+
+## Shared analysis-tree boundary
+
+Runtime should prefer one shared context-aware analysis tree rather than separate ad hoc pipelines for `review` and `check`.
+
+That shared tree may preserve partial knowledge under missing inputs, safe read-only observations, structural halt boundaries, and advisory recommendation coverage.
+
+`review` and `check` are sibling projections over that tree:
+- `review` reads it for authoring-quality findings;
+- `check` reads it for allowed/blocked/unknown runtime truth.
+
+`plan`, `explain`, and `next` should later reuse retained evidence from the same tree rather than reconstructing it from weaker mode summaries.
 
 ## Connector dependency direction
 

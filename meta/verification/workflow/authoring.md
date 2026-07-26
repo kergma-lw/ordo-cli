@@ -17,3 +17,5 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.
 - When effectful actions publish advisory preflight-observation templates, authoring diagnostics should be able to surface those templates back in workflow-shaped expressions.
 - If those rendered recommendations become awkward or long, that is an authoring signal to name important values earlier rather than a reason to hide workflow structure from diagnostics.
+- Authoring diagnostics may reuse the same shared context-aware analysis tree as runtime preflight, so long as authoring findings remain distinct from executability blockers.
+- The shared analysis tree should preserve enough structural evidence for later `plan`, `explain`, and `next` work rather than discarding it after the first `review` or `check` projection.
