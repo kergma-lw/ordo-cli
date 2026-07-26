@@ -419,6 +419,7 @@ def _build_step_items(
                         "condition_status": _condition_status_for_step(step, preflight_item),
                         "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
+                        "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
                         "launcher": step.launcher,
                     }
                 )
@@ -439,6 +440,7 @@ def _build_step_items(
                         "condition_status": condition_status,
                         "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
+                        "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
                         "launcher": None,
                         "fan_out": _fan_out_info_for_step(step, workflow, condition_status=condition_status),
                     }
@@ -459,6 +461,7 @@ def _build_step_items(
                     "condition_status": _condition_status_for_step(step, preflight_item),
                     "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                     "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
+                    "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
                     "launcher": step.launcher,
                 }
             )
@@ -479,6 +482,7 @@ def _build_step_items(
                 "condition_status": None if step.if_ is None else "unknown",
                 "observation_scopes": [],
                 "invalidates_scopes": [],
+                "preflight_support": None,
                 "launcher": step.launcher if step.operation is not None else None,
                 "fan_out": _fan_out_info_for_step(step, workflow, condition_status=None),
             }

@@ -147,6 +147,7 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
             "blockers": [],
             "incomplete_reasons": incomplete_reasons,
             "preflight_halts": preflight_halts,
+            "preflight_support_steps": _preflight_support_steps(result),
             "fan_out_items": fan_out_items,
         }
 
@@ -155,8 +156,30 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         "allowed": allowed_state == "allowed" if isinstance(allowed_state, str) else bool(result.outputs.get("can_execute", True)),
         "why": "No known blocker prevents execution now",
         "blockers": [],
+        "preflight_support_steps": _preflight_support_steps(result),
         "fan_out_items": [item for item in result.outputs.get("run_items", []) if isinstance(item, dict) and isinstance(item.get("fan_out"), dict)],
     }
+
+
+def _preflight_support_steps(result: RuntimeResult) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for item in result.outputs.get("step_items", []):
+        if not isinstance(item, dict):
+            continue
+        support = item.get("preflight_support")
+        if not isinstance(support, dict):
+            continue
+        strength = support.get("strength")
+        if not isinstance(strength, str) or strength == "not_applicable":
+            continue
+        items.append(
+            {
+                "name": item.get("name"),
+                "reference": item.get("reference"),
+                "preflight_support": dict(support),
+            }
+        )
+    return items
 
 
 def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:

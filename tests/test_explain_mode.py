@@ -123,6 +123,100 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["preflight_halts"][0]["reason"], "effectful_step_encountered")
         self.assertEqual(result.outputs["preflight_step_items"][1]["condition_status"], "true")
 
+    def test_explain_reports_partial_preflight_support_with_rendered_recommendations(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"branch": "feature/demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch", operation=OperationRef("git.branch"), register="branch"),
+                        Step(name="upstream", operation=OperationRef("git.upstream"), register="upstream"),
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="range",
+                            operation=OperationRef("git.range", with_={"base": "@{upstream}", "head": "${inputs.branch}"}),
+                            register="range",
+                        ),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "git.branch": {"value": "feature/demo"},
+                "git.upstream": {"configured": True, "branch": "feature/demo", "remote": "origin"},
+                "git.range": {"ahead_count": 1, "behind_count": 0},
+                "git.worktree": {"clean": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support_step = result.outputs["explanation"]["preflight_support_steps"][0]
+        self.assertEqual(support_step["name"], "push")
+        self.assertEqual(support_step["preflight_support"]["strength"], "partial")
+        self.assertEqual(
+            support_step["preflight_support"]["missing_observations"],
+            [
+                {
+                    "probe": "git.range",
+                    "with": {"base": "@{upstream}", "head": {"expression": "step.branch_name.outputs.value"}},
+                    "fields": [],
+                }
+            ],
+        )
+
+    def test_explain_keeps_preflight_support_consistent_with_plan(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"branch": "feature/demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch", operation=OperationRef("git.branch"), register="branch"),
+                        Step(name="upstream", operation=OperationRef("git.upstream"), register="upstream"),
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="range",
+                            operation=OperationRef(
+                                "git.range",
+                                with_={"base": "@{upstream}", "head": "${step.branch_name.outputs.value}"},
+                            ),
+                            register="range",
+                        ),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "git.branch": {"value": "feature/demo"},
+                "git.upstream": {"configured": True, "branch": "feature/demo", "remote": "origin"},
+                "git.range": {"ahead_count": 1, "behind_count": 0},
+                "git.worktree": {"clean": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        explain_result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(explain_result.outputs["step_items"][4]["preflight_support"]["strength"], "strong")
+        self.assertEqual(explain_result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["strength"], "strong")
+
     def test_explain_preserves_expanded_run_reasoning(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
