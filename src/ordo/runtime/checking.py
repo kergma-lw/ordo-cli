@@ -719,19 +719,23 @@ def _interpret_step_block_for_check(
             incomplete_reasons.append(halt.reason)
             halt_item = halt.to_contract()
             step_items.append(
-                {
-                    "block_index": block_index,
-                    "step_index": step_index,
-                    "name": step.name,
-                    "reference": resolved_step.reference,
-                    "preflight_classification": classify_preflight_step(step, resolved_step),
-                    "status": "halted",
-                    "conditional": step.if_ is not None,
-                    "condition": step.if_,
-                    "condition_status": "unknown",
-                    "halt_reason": halt.reason,
-                    "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
-                }
+                _structural_step_item(
+                    block_index=block_index,
+                    step_index=step_index,
+                    step=step,
+                    resolved_step=resolved_step,
+                    status="halted",
+                    condition_status="unknown",
+                    halt_reason=halt.reason,
+                )
+            )
+            _append_structural_tail_items(
+                block_index=block_index,
+                start_step_index=step_index + 1,
+                block=block,
+                resolved_block=resolved_block,
+                step_items=step_items,
+                known_observations=known_observations,
             )
             break
         if condition is None:
@@ -753,19 +757,23 @@ def _interpret_step_block_for_check(
             incomplete_reasons.append(halt.reason)
             halt_item = halt.to_contract()
             step_items.append(
-                {
-                    "block_index": block_index,
-                    "step_index": step_index,
-                    "name": step.name,
-                    "reference": resolved_step.reference,
-                    "preflight_classification": classify_preflight_step(step, resolved_step),
-                    "status": "halted",
-                    "conditional": step.if_ is not None,
-                    "condition": step.if_,
-                    "condition_status": "unknown",
-                    "halt_reason": halt.reason,
-                    "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
-                }
+                _structural_step_item(
+                    block_index=block_index,
+                    step_index=step_index,
+                    step=step,
+                    resolved_step=resolved_step,
+                    status="halted",
+                    condition_status="unknown",
+                    halt_reason=halt.reason,
+                )
+            )
+            _append_structural_tail_items(
+                block_index=block_index,
+                start_step_index=step_index + 1,
+                block=block,
+                resolved_block=resolved_block,
+                step_items=step_items,
+                known_observations=known_observations,
             )
             break
         if condition is False:
@@ -821,6 +829,14 @@ def _interpret_step_block_for_check(
                         "halt_reason": halt.reason,
                         "operation_status": result.status,
                     }
+                )
+                _append_structural_tail_items(
+                    block_index=block_index,
+                    start_step_index=step_index + 1,
+                    block=block,
+                    resolved_block=resolved_block,
+                    step_items=step_items,
+                    known_observations=known_observations,
                 )
                 break
             if step.register is not None:
@@ -1175,6 +1191,57 @@ def _action_call_from_resolved_operation(resolved: ResolvedOperation) -> dict[st
         "reference": resolved.reference,
         "with": {name: _normalize_authored_value(value) for name, value in (resolved.declared_with or {}).items()},
     }
+
+
+def _structural_step_item(
+    *,
+    block_index: int,
+    step_index: int,
+    step: Step,
+    resolved_step: ResolvedStep,
+    status: str,
+    condition_status: str | None,
+    halt_reason: str | None = None,
+) -> dict[str, object]:
+    item: dict[str, object] = {
+        "block_index": block_index,
+        "step_index": step_index,
+        "name": step.name,
+        "reference": resolved_step.reference,
+        "preflight_classification": classify_preflight_step(step, resolved_step),
+        "status": status,
+        "conditional": step.if_ is not None,
+        "condition": step.if_,
+        "condition_status": condition_status,
+        "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
+    }
+    if halt_reason is not None:
+        item["halt_reason"] = halt_reason
+    return item
+
+
+def _append_structural_tail_items(
+    *,
+    block_index: int,
+    start_step_index: int,
+    block: StepBlock,
+    resolved_block: ResolvedStepBlock,
+    step_items: list[dict[str, object]],
+    known_observations: list[dict[str, object]],
+) -> None:
+    for tail_step_index in range(start_step_index, min(len(block.steps), len(resolved_block.steps))):
+        tail_step = block.steps[tail_step_index]
+        tail_resolved = resolved_block.steps[tail_step_index]
+        step_items.append(
+            _structural_step_item(
+                block_index=block_index,
+                step_index=tail_step_index,
+                step=tail_step,
+                resolved_step=tail_resolved,
+                status="pending",
+                condition_status="unknown" if tail_step.if_ is not None else None,
+            )
+        )
 
 
 def _render_preflight_observation(template, *, action_call: dict[str, object] | None) -> dict[str, object]:

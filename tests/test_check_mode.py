@@ -701,6 +701,39 @@ class CheckModeTest(unittest.TestCase):
             ],
         )
 
+    def test_check_preserves_later_action_call_shape_when_missing_input_halts_preflight(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"branch": "string"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertIn("read_only_step_failed", result.outputs["incomplete_reasons"])
+        self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "pending")
+        self.assertEqual(
+            result.outputs["preflight_step_items"][1]["action_call"],
+            {
+                "reference": "git.sync.push",
+                "with": {"branch": {"expression": "step.branch_name.outputs.value"}},
+            },
+        )
+
+
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())
         seen: list[str] = []
