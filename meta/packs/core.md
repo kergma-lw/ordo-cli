@@ -687,7 +687,7 @@
 
 ## Runtime behavior
 
-- The runtime must support at least `check`, `plan`, `execute`, and `explain`.
+- The runtime must support at least `review`, `check`, `plan`, `execute`, and `explain`.
 - The runtime must return structured results, not only raw stdout/stderr.
 - `plan` must describe what would be checked and executed, including known blockers.
 - `explain` must return runtime reasoning in a structured form, not merely debug logs or traceback text.
@@ -712,7 +712,7 @@
   - whether execution is allowed now;
   - why execution is blocked when blocked;
   - what next safe action is available when it can be inferred safely.
-- `check`, `plan`, and `explain` must remain baseline decision-support modes rather than optional UX sugar around `execute`.
+- `review`, `check`, `plan`, and `explain` must remain baseline decision-support modes rather than optional UX sugar around `execute`.
 
 ## Explainability
 

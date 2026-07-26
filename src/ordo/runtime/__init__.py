@@ -22,6 +22,7 @@ from .local_expressions import (
 )
 from .loading import LoadError, load_profile_file, load_profile_text, load_workflow_document_file, load_workflow_file, load_workflow_text, load_yaml_document
 from .planning import plan_workflow
+from .reviewing import review_workflow
 from .profiles import ProfileCompositionResult, WorkflowProfileApplicationResult, apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, compose_profiles
 from .providers import ConnectorProvider, GuardProbe, StepExecutor, clear_default_connector_provider, get_default_connector_provider, set_default_connector_provider
 from .resolution import ResolvedOperation, WorkflowResolution, resolve_workflow_references
@@ -54,6 +55,7 @@ __all__ = [
     "parse_embedded_local_expression",
     "parse_local_expression",
     "plan_workflow",
+    "review_workflow",
     "apply_profile_defaults_to_subsequent_steps",
     "apply_profile_to_workflow",
     "compose_profiles",

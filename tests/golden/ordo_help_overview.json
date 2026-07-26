@@ -18,6 +18,7 @@
   ],
   "execution_concepts": {
     "modes": [
+      "review",
       "check",
       "plan",
       "execute",

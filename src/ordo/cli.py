@@ -9,7 +9,7 @@ import sys
 
 import yaml
 
-from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, set_default_connector_provider
+from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
 
@@ -70,10 +70,27 @@ Examples:
   ordo-playbook check close-task --json
 """
 
+REVIEW_MODE_HELP = """usage: ordo-playbook [options] review WORKFLOW
+
+Review authoring-quality findings for the selected workflow without making changes.
+
+Default output is intended to be concise:
+  - overall review status
+  - finding count
+  - top findings
+
+Examples:
+  ordo-playbook review set-active-task
+  ordo-playbook --profile backend --input issue_number=42 review set-active-task
+  ordo-playbook review close-task --json
+"""
+
 
 def main() -> int:
-    if len(sys.argv) >= 3 and sys.argv[1] in {"check", "plan", "explain"} and sys.argv[2] in {"-h", "--help"}:
-        if sys.argv[1] == "check":
+    if len(sys.argv) >= 3 and sys.argv[1] in {"review", "check", "plan", "explain"} and sys.argv[2] in {"-h", "--help"}:
+        if sys.argv[1] == "review":
+            print(REVIEW_MODE_HELP)
+        elif sys.argv[1] == "check":
             print(CHECK_MODE_HELP)
         elif sys.argv[1] == "plan":
             print(PLAN_MODE_HELP)
@@ -88,6 +105,9 @@ def main() -> int:
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "check":
         print(CHECK_MODE_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "review":
+        print(REVIEW_MODE_HELP)
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "workflows" and sys.argv[2] in {"-h", "--help"}:
         print(WORKFLOWS_HELP)
@@ -106,6 +126,7 @@ def main() -> int:
             "discovery:\n"
             "  workflows  list workflow entries or show one workflow contract summary\n\n"
             "execution:\n"
+            "  review   review authoring-quality findings without making changes\n"
             "  check    check whether the workflow can be run now, without making changes\n"
             "  plan     show what the workflow would do, without making changes\n"
             "  explain  explain why the workflow can or cannot be run right now\n"
@@ -139,7 +160,7 @@ def main() -> int:
         parser.error("missing command")
     if command[0] == "workflows":
         return _run_workflow_discovery_args(args, command[1:], parser=parser)
-    if command[0] not in {"check", "plan", "explain", "run", "next"}:
+    if command[0] not in {"review", "check", "plan", "explain", "run", "next"}:
         parser.error(f"unknown command: {command[0]}")
     args.mode = command[0]
     args.workflow = _resolve_execution_workflow_name(args, parser=parser)
@@ -208,6 +229,8 @@ def main() -> int:
             payload = _summarize_plan_payload(payload)
         if args.mode == "check" and not args.json:
             payload = _summarize_check_payload(payload)
+        if args.mode == "review" and not args.json:
+            payload = _summarize_review_payload(payload)
 
         if args.json:
             json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -223,6 +246,8 @@ def main() -> int:
 
 
 def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_working_directories=None) -> RuntimeResult:
+    if mode == "review":
+        return review_workflow(workflow, profile=profile, available_profiles=available_profiles)
     if mode == "check":
         return check_workflow(workflow, profile=profile, available_profiles=available_profiles)
     if mode == "plan":
@@ -236,6 +261,28 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
         )
     explained = explain_workflow(workflow, profile=profile, available_profiles=available_profiles)
     return explained
+
+
+def _summarize_review_payload(payload: dict[str, object]) -> dict[str, object]:
+    findings = [item for item in payload.get("outputs", {}).get("findings", []) if isinstance(item, dict)]
+    top_findings = [
+        {
+            "code": item.get("code"),
+            "category": item.get("category"),
+            "message": item.get("message"),
+        }
+        for item in findings[:5]
+    ]
+    return {
+        "mode": payload.get("mode"),
+        "status": payload.get("status"),
+        "workflow": payload.get("workflow"),
+        "profile": payload.get("profile"),
+        "review_status": payload.get("outputs", {}).get("review_status"),
+        "finding_count": payload.get("outputs", {}).get("finding_count"),
+        "top_findings": top_findings,
+        "diagnostics": payload.get("diagnostics", []),
+    }
 
 
 def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[str, object]:

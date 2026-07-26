@@ -67,6 +67,10 @@
       ],
       "modes": [
         {
+          "name": "review <workflow>",
+          "summary": "review authoring-quality findings without making changes"
+        },
+        {
           "name": "check <workflow>",
           "summary": "check whether the workflow can be run now, without making changes"
         },

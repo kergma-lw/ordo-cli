@@ -47,6 +47,7 @@ class PreflightDecisionModel:
 class Mode(StrEnum):
     """Baseline runtime modes promised by the v0 contract."""
 
+    REVIEW = "review"
     CHECK = "check"
     PLAN = "plan"
     EXECUTE = "execute"

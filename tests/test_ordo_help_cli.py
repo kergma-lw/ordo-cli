@@ -447,7 +447,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         flags = {item["name"]: item for item in playbook["flags"]}
         self.assertEqual(playbook["usage"], "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>")
         self.assertEqual(playbook["discovery_commands"][0]["name"], "workflows list")
-        self.assertEqual(playbook["modes"][0]["name"], "check <workflow>")
+        self.assertEqual(playbook["modes"][0]["name"], "review <workflow>")
+        self.assertEqual(playbook["modes"][1]["name"], "check <workflow>")
         self.assertEqual(playbook["run_success_surface"], "successful run emits workflow-local results, may also surface global published values, and may synthesize one fallback result when no explicit result was produced")
         self.assertIn("ordo-playbook workflows list", playbook["examples"])
         self.assertIn("ordo-playbook plan inspect-issue", playbook["examples"])

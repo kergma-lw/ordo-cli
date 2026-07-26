@@ -1950,7 +1950,7 @@ class PlaybookActivationTest(unittest.TestCase):
             outputs={},
         )
 
-        for mode in ("check", "plan", "explain", "next"):
+        for mode in ("review", "check", "plan", "explain", "next"):
             with self.subTest(mode=mode):
                 with patch("sys.argv", ["ordo-playbook", mode, "inspect-issue"]):
                     with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:

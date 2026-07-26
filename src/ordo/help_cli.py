@@ -500,6 +500,7 @@ def build_command_line_response() -> JSONObject:
                     {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata and root-declared inputs"},
                 ],
                 "modes": [
+                    {"name": "review <workflow>", "summary": "review authoring-quality findings without making changes"},
                     {"name": "check <workflow>", "summary": "check whether the workflow can be run now, without making changes"},
                     {"name": "plan <workflow>", "summary": "show what the workflow would do, without making changes"},
                     {"name": "explain <workflow>", "summary": "explain why the workflow can or cannot be run right now"},
