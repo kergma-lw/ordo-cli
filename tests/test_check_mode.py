@@ -7,7 +7,7 @@ from ordo.model.profile import Override, Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import check_workflow
-from ordo.runtime.checking import _build_check_analysis_tree
+from ordo.runtime.checking import _build_check_analysis_tree, _project_check_runtime_result
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -963,6 +963,62 @@ class CheckModeTest(unittest.TestCase):
                 },
             ],
         )
+
+    def test_check_runtime_projection_keeps_preflight_support_non_blocking(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"branch": "feature/demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch", operation=OperationRef("git.branch"), register="branch"),
+                        Step(name="upstream", operation=OperationRef("git.upstream"), register="upstream"),
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="range",
+                            operation=OperationRef(
+                                "git.range",
+                                with_={"base": "@{upstream}", "head": "${step.branch_name.outputs.value}"},
+                            ),
+                            register="range",
+                        ),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "git.branch": {"value": "feature/demo"},
+                "git.upstream": {"configured": True, "branch": "feature/demo", "remote": "origin"},
+                "git.range": {"ahead_count": 1, "behind_count": 0},
+                "git.worktree": {"clean": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        analysis = _build_check_analysis_tree(
+            workflow=workflow,
+            active_profile=None,
+            current_profile=None,
+            available_profiles=None,
+            active_overrides=(),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            guard_probe=probe,
+        )
+
+        self.assertFalse(isinstance(analysis, RuntimeResult))
+        result = _project_check_runtime_result(analysis)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "unknown")
+        self.assertEqual(result.outputs["preflight_step_items"][4]["preflight_support"]["strength"], "strong")
+        self.assertIn("effectful_step_encountered", result.outputs["incomplete_reasons"])
 
 
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:

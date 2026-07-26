@@ -280,6 +280,10 @@ def check_workflow(
     if isinstance(analysis, RuntimeResult):
         return analysis
 
+    return _project_check_runtime_result(analysis)
+
+
+def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult:
     effective_workflow = analysis.workflow
 
     if analysis.blockers:
