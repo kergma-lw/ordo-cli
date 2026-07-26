@@ -1020,6 +1020,48 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["preflight_step_items"][4]["preflight_support"]["strength"], "strong")
         self.assertIn("effectful_step_encountered", result.outputs["incomplete_reasons"])
 
+    def test_check_analysis_tree_classifies_control_effect_and_unused_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="review-inputs",
+            declared_inputs={
+                "profile": {},
+                "repository": {},
+                "unused": {},
+            },
+            blocks=(
+                GuardBlock(guards=(Guard(expr='inputs.profile == "backend"'),)),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="inspect",
+                            operation=OperationRef("gh.issue", with_={"repository": "${inputs.repository}", "issue_number": 7}),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        analysis = _build_check_analysis_tree(
+            workflow=workflow,
+            active_profile=None,
+            current_profile=None,
+            available_profiles=None,
+            active_overrides=(),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            guard_probe=None,
+        )
+
+        self.assertFalse(isinstance(analysis, RuntimeResult))
+        classifications = {item["input"]: item for item in analysis.input_usages}
+
+        self.assertEqual(classifications["profile"]["classification"], "control_input")
+        self.assertEqual(classifications["profile"]["evidence"][0]["site_kind"], "guard_expr")
+        self.assertEqual(classifications["repository"]["classification"], "effect_target_input")
+        self.assertEqual(classifications["repository"]["evidence"][0]["site_kind"], "operation_target")
+        self.assertEqual(classifications["unused"]["classification"], "unused_input")
+        self.assertEqual(classifications["unused"]["evidence"], [])
+
 
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())

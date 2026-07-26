@@ -26,6 +26,7 @@ from .validation import validate_workflow_document, validate_workflow_semantics
 
 
 _ACTION_PLACEHOLDER_PATTERN = re.compile(r"^\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+_INPUT_REFERENCE_PATTERN = re.compile(r"\binputs\.([A-Za-z_][A-Za-z0-9_]*)\b")
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +48,7 @@ class _CheckAnalysisTree:
     bootstrap_details: tuple[dict[str, object], ...]
     incomplete_reasons: tuple[str, ...]
     observed_probe_calls: tuple[dict[str, object], ...]
+    input_usages: tuple[dict[str, object], ...]
     failed_guard: str | None = None
 
 
@@ -606,8 +608,166 @@ def _build_check_analysis_tree(
         bootstrap_details=tuple(bootstrap_details),
         incomplete_reasons=tuple(incomplete_reasons),
         observed_probe_calls=tuple(observed_probe_calls),
+        input_usages=_classify_declared_input_usage(
+            effective_workflow,
+            connector_provider=connector_provider,
+            active_overrides=resolved_overrides,
+        ),
         failed_guard=failed_guard,
     )
+
+
+def _classify_declared_input_usage(
+    workflow: Workflow,
+    *,
+    connector_provider: ConnectorProvider | None,
+    active_overrides,
+) -> tuple[dict[str, object], ...]:
+    declared_inputs = [name for name in workflow.declared_inputs if isinstance(name, str)]
+    if not declared_inputs:
+        return ()
+
+    evidence_by_input: dict[str, list[dict[str, object]]] = {name: [] for name in declared_inputs}
+    classification_rank = {"unused_input": 0, "effect_target_input": 1, "control_input": 2}
+    classification_by_input = {name: "unused_input" for name in declared_inputs}
+
+    def record(input_name: str, classification: str, *, site_kind: str, path: tuple[object, ...], detail: str) -> None:
+        if input_name not in evidence_by_input:
+            return
+        evidence_by_input[input_name].append(
+            {
+                "site_kind": site_kind,
+                "path": [str(part) for part in path],
+                "detail": detail,
+            }
+        )
+        if classification_rank[classification] > classification_rank[classification_by_input[input_name]]:
+            classification_by_input[input_name] = classification
+
+    resolution = resolve_workflow_references(
+        workflow,
+        connector_provider=connector_provider,
+        active_overrides=active_overrides,
+    )
+    resolved_blocks = resolution.blocks if resolution.ok else ()
+
+    for block_index, block in enumerate(workflow.blocks):
+        resolved_block = resolved_blocks[block_index] if block_index < len(resolved_blocks) else None
+        if isinstance(block, GuardBlock):
+            for guard_index, guard in enumerate(block.guards):
+                for input_name in _extract_input_names(guard.expr):
+                    record(
+                        input_name,
+                        "control_input",
+                        site_kind="guard_expr",
+                        path=("blocks", block_index, "guards", guard_index),
+                        detail=guard.reference,
+                    )
+                if guard.operation is not None:
+                    for input_name in _extract_input_names(guard.operation.with_):
+                        record(
+                            input_name,
+                            "control_input",
+                            site_kind="guard_target",
+                            path=("blocks", block_index, "guards", guard_index, "with"),
+                            detail=guard.operation.uses,
+                        )
+            continue
+        if isinstance(block, StepBlock):
+            resolved_steps = resolved_block.steps if isinstance(resolved_block, ResolvedStepBlock) else ()
+            for step_index, step in enumerate(block.steps):
+                resolved_step = resolved_steps[step_index] if step_index < len(resolved_steps) else None
+                for input_name in _extract_input_names(step.if_):
+                    record(
+                        input_name,
+                        "control_input",
+                        site_kind="step_condition",
+                        path=("blocks", block_index, "steps", step_index, "if"),
+                        detail=step.name,
+                    )
+                if step.profile_switch is not None:
+                    for input_name in _extract_input_names(step.profile_switch):
+                        record(
+                            input_name,
+                            "control_input",
+                            site_kind="profile_switch",
+                            path=("blocks", block_index, "steps", step_index, "profile_switch"),
+                            detail=step.name,
+                        )
+                if step.state_set is not None:
+                    for input_name in _extract_input_names(step.state_set):
+                        record(
+                            input_name,
+                            "control_input",
+                            site_kind="state_set",
+                            path=("blocks", block_index, "steps", step_index, "state_set"),
+                            detail=step.name,
+                        )
+                if step.publish is not None:
+                    for input_name in _extract_input_names(step.publish):
+                        record(
+                            input_name,
+                            "control_input",
+                            site_kind="publish",
+                            path=("blocks", block_index, "steps", step_index, "publish"),
+                            detail=step.name,
+                        )
+                if step.result is not None:
+                    for input_name in _extract_input_names(step.result):
+                        record(
+                            input_name,
+                            "control_input",
+                            site_kind="result",
+                            path=("blocks", block_index, "steps", step_index, "result"),
+                            detail=step.name,
+                        )
+                if step.run is not None:
+                    for input_name in _extract_input_names(step.run_with):
+                        record(
+                            input_name,
+                            "effect_target_input",
+                            site_kind="run_with",
+                            path=("blocks", block_index, "steps", step_index, "with"),
+                            detail=step.name,
+                        )
+                if step.operation is not None:
+                    step_kind = resolved_step.operation.kind if isinstance(resolved_step, ResolvedOperation) else "unknown"
+                    for input_name in _extract_input_names(step.operation.with_):
+                        record(
+                            input_name,
+                            "effect_target_input",
+                            site_kind="operation_target",
+                            path=("blocks", block_index, "steps", step_index, "with"),
+                            detail=f"{step.operation.uses}:{step_kind}",
+                        )
+
+    return tuple(
+        {
+            "input": input_name,
+            "classification": classification_by_input[input_name],
+            "evidence": evidence_by_input[input_name],
+        }
+        for input_name in declared_inputs
+    )
+
+
+def _extract_input_names(value: JSONValue | dict[str, object] | None) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, str):
+        return set(_INPUT_REFERENCE_PATTERN.findall(value))
+    if isinstance(value, dict):
+        names: set[str] = set()
+        for key, nested in value.items():
+            names.update(_extract_input_names(key))
+            names.update(_extract_input_names(cast(JSONValue, nested)))
+        return names
+    if isinstance(value, list):
+        names: set[str] = set()
+        for nested in value:
+            names.update(_extract_input_names(cast(JSONValue, nested)))
+        return names
+    return set()
 
 
 def _collect_bootstrap_details(operation_results: list[OperationResult]) -> list[dict[str, object]]:
