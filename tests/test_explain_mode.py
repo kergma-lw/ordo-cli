@@ -217,6 +217,39 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(explain_result.outputs["step_items"][4]["preflight_support"]["strength"], "strong")
         self.assertEqual(explain_result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["strength"], "strong")
 
+    def test_explain_surfaces_structural_recommendations_when_inputs_are_missing(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"branch": "string"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertIn("read_only_step_failed", result.outputs["explanation"]["incomplete_reasons"])
+        self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["name"], "push")
+        self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["strength"], "weak")
+        self.assertEqual(
+            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_observations"][2],
+            {
+                "probe": "git.range",
+                "with": {"base": "@{upstream}", "head": {"expression": "step.branch_name.outputs.value"}},
+                "fields": [],
+            },
+        )
+
     def test_explain_preserves_expanded_run_reasoning(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
