@@ -13,7 +13,7 @@ class ReviewModeTest(unittest.TestCase):
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            declared_inputs={"repository": "string"},
+            declared_inputs={"repository": "string", "unused": "string"},
             steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"repository": "${inputs.repository}", "issue_number": 7})),),
         )
 
@@ -22,6 +22,22 @@ class ReviewModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["review_status"], "needs_attention")
         self.assertTrue(any(item["code"] == "review.workflow.input_validation_missing" for item in result.outputs["findings"]))
+        validation = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.input_validation_missing")
+        self.assertEqual(validation["evidence"]["classification"], "effect_target_input")
+
+    def test_review_reports_unused_declared_input_separately(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repository": "string", "unused": "string"},
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"repository": "${inputs.repository}", "issue_number": 7})),),
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        unused = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.input_declared_but_unused")
+        self.assertEqual(unused["path"], ["inputs", "unused"])
+        self.assertEqual(unused["evidence"]["classification"], "unused_input")
 
     def test_review_reports_missing_recommended_observations(self) -> None:
         workflow = Workflow(

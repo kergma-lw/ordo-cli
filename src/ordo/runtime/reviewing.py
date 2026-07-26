@@ -79,6 +79,7 @@ def review_workflow(
 def _build_review_findings(workflow: Workflow, check_result: RuntimeResult, *, profile: Profile | None) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
+    findings.extend(_find_unused_declared_inputs(check_result, profile=profile))
     findings.extend(_find_missing_recommended_observations(check_result))
     return findings
 
@@ -149,6 +150,33 @@ def _review_input_classification(usage: dict[str, object], *, profile: Profile |
     if profile is not None and input_name in profile.inputs and base != "control_input":
         return "ambient_profile_context"
     return base
+
+
+def _find_unused_declared_inputs(check_result: RuntimeResult, *, profile: Profile | None) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for usage in _input_usages_from_result(check_result):
+        input_name = usage.get("input")
+        if not isinstance(input_name, str):
+            continue
+        classification = _review_input_classification(usage, profile=profile)
+        if classification != "unused_input":
+            continue
+        findings.append(
+            {
+                "code": "review.workflow.input_declared_but_unused",
+                "level": "warning",
+                "category": "input_surface",
+                "message": f"Input '{input_name}' is declared but not used by the workflow",
+                "path": ["inputs", input_name],
+                "evidence": {
+                    "input": input_name,
+                    "classification": classification,
+                    "usage_sites": [dict(site) for site in usage.get("evidence", []) if isinstance(site, dict)],
+                    "reason": "no control, effect-target, or contract-shaping usage was found in the analyzed workflow",
+                },
+            }
+        )
+    return findings
 
 
 def _find_missing_recommended_observations(check_result: RuntimeResult) -> list[dict[str, object]]:
