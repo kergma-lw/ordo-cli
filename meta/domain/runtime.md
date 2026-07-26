@@ -14,6 +14,8 @@ Answers whether the authored workflow is structurally strong and explicit enough
 
 It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
 
+For input-related findings, `review` should distinguish between inputs that drive control/effect semantics, profile-carried ambient context, and declared-but-unused inputs rather than treating every declared input as equal validation debt.
+
 Its primary value is authoring-quality review rather than executability truth.
 
 ### `check`

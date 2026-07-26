@@ -15,6 +15,7 @@ The same analysis tree may retain:
 - validation and semantic-validation outcomes;
 - activated profile, override, and playbook context;
 - known versus missing activation inputs when structure is still analyzable;
+- declared-input usage classification and evidence for why each input was treated as control-bearing, effect-targeting, ambient profile context, or unused;
 - ordered block, guard, and step structure;
 - read-only observations and their canonical shapes;
 - advisory preflight-observation recommendations together with matched and missing coverage;
@@ -38,6 +39,11 @@ Authoring guidance and runtime executability semantics must remain distinct even
 In particular:
 - advisory recommendation gaps may weaken authoring guidance, explanation strength, or preflight-support quality;
 - those same gaps must not by themselves become hidden blockers or implicit workflow prerequisites.
+
+Input-classification advice follows the same boundary:
+- a declared input that meaningfully drives applicability, control flow, profile switching, state writes, publish shape, or effectful target selection may justify a missing-validation finding;
+- a declared input that is merely carried in from profile defaults as stable repository or project context is not automatically missing-validation debt;
+- a declared input that is not meaningfully used at all should surface as unused declaration debt rather than as missing validation.
 
 ## Preservation rule
 

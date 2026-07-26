@@ -28,6 +28,7 @@
   - why execution is blocked when blocked;
   - what next safe action is available when it can be inferred safely.
 - `review`, `check`, `plan`, and `explain` must remain baseline decision-support modes rather than optional UX sugar around `execute`.
+- `review` must not treat every declared workflow input as automatic missing-validation debt; it should distinguish meaningful control/effect inputs, profile-carried ambient context, and unused declarations.
 
 ## Explainability
 
