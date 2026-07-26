@@ -56,6 +56,7 @@ def explain_runtime_result(result: RuntimeResult) -> RuntimeResult:
         failed_guard=result.failed_guard,
         failed_step=result.failed_step,
         preflight_decision=result.preflight_decision,
+        analysis_tree=result.analysis_tree,
     )
 
 

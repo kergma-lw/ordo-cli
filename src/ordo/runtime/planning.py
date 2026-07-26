@@ -125,11 +125,16 @@ def _freshness_state_for_scopes(scopes: list[str], weakened_scopes: set[str]) ->
 
 
 def _build_preflight_step_items(check_result: RuntimeResult) -> list[dict[str, object]]:
+    analysis_tree = getattr(check_result, "analysis_tree", None)
+    if analysis_tree is not None and hasattr(analysis_tree, "preflight_step_items"):
+        raw_items = getattr(analysis_tree, "preflight_step_items")
+    else:
+        raw_items = check_result.outputs.get("preflight_step_items", [])
     weakened_scopes = {
         scope for scope in check_result.outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)
     }
     items: list[dict[str, object]] = []
-    for raw_item in check_result.outputs.get("preflight_step_items", []):
+    for raw_item in raw_items:
         if not isinstance(raw_item, dict):
             continue
         item = dict(raw_item)
@@ -305,6 +310,7 @@ def plan_workflow(
         failed_guard=check_result.failed_guard,
         failed_step=check_result.failed_step,
         preflight_decision=check_result.preflight_decision,
+        analysis_tree=check_result.analysis_tree,
     )
 
 

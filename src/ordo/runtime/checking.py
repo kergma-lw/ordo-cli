@@ -318,6 +318,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
             operation_results=analysis.operation_results,
             failed_guard=analysis.failed_guard,
             preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
+            analysis_tree=analysis,
         )
 
     outputs = {
@@ -355,6 +356,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
         outputs=outputs,
         operation_results=analysis.operation_results,
         preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
+        analysis_tree=analysis,
     )
 
 

@@ -118,6 +118,7 @@ class RuntimeResult:
     failed_guard: str | None = None
     failed_step: str | None = None
     preflight_decision: PreflightDecisionModel | None = None
+    analysis_tree: object | None = None
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped runtime result contract."""

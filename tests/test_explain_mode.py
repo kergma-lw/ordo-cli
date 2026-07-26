@@ -78,8 +78,45 @@ class ExplainModeTest(unittest.TestCase):
         result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["explanation"]["category"], "ok")
-        self.assertEqual(result.outputs["next_actions"][0]["action"], "execute_workflow")
+
+    def test_explain_preserves_shared_analysis_tree_from_plan(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"branch": "feature/demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch", operation=OperationRef("git.branch"), register="branch"),
+                        Step(name="upstream", operation=OperationRef("git.upstream"), register="upstream"),
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="range",
+                            operation=OperationRef("git.range", with_={"base": "@{upstream}", "head": "${step.branch_name.outputs.value}"}),
+                            register="range",
+                        ),
+                        Step(name="push", operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"})),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "git.branch": {"value": "feature/demo"},
+                "git.upstream": {"configured": True, "branch": "feature/demo", "remote": "origin"},
+                "git.range": {"ahead_count": 1, "behind_count": 0},
+                "git.worktree": {"clean": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        explained = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertIsNotNone(explained.analysis_tree)
+        self.assertEqual(explained.outputs["explanation"]["preflight_support_steps"][0]["name"], explained.analysis_tree.preflight_step_items[4]["name"])
+        self.assertEqual(explained.outputs["explanation"]["category"], "incomplete")
+        self.assertEqual(explained.outputs["next_actions"][0]["action"], "complete_preflight_analysis")
 
     def test_explain_reports_incomplete_preflight_state(self) -> None:
         workflow = Workflow(

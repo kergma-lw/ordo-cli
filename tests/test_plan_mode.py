@@ -58,6 +58,47 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_items"][0]["status"], "blocked")
         self.assertEqual(result.outputs["step_items"][0]["eligibility"], "blocked")
 
+    def test_plan_preserves_shared_analysis_tree_evidence(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"branch": "feature/demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch", operation=OperationRef("git.branch"), register="branch"),
+                        Step(name="upstream", operation=OperationRef("git.upstream"), register="upstream"),
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="range",
+                            operation=OperationRef(
+                                "git.range",
+                                with_={"base": "@{upstream}", "head": "${step.branch_name.outputs.value}"},
+                            ),
+                            register="range",
+                        ),
+                        Step(name="push", operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"})),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "git.branch": {"value": "feature/demo"},
+                "git.upstream": {"configured": True, "branch": "feature/demo", "remote": "origin"},
+                "git.range": {"ahead_count": 1, "behind_count": 0},
+                "git.worktree": {"clean": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertIsNotNone(result.analysis_tree)
+        self.assertEqual(result.analysis_tree.incomplete_reasons, ("effectful_step_encountered", "relevant_guard_coverage_incomplete"))
+        self.assertEqual(result.outputs["preflight_step_items"][4]["name"], result.analysis_tree.preflight_step_items[4]["name"])
+
     def test_plan_reports_undeclared_root_input_inside_run_target_as_validation_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
