@@ -3428,6 +3428,192 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "estimate_invalid")
         self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_estimate_set.estimate_invalid")
 
+    def test_gh_project_issue_field_set_updates_single_select_field(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "value": "P1"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"P2","field":{"name":"Priority"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_P","name":"Priority","options":[{"id":"OPT_P1","name":"P1"},{"id":"OPT_P2","name":"P2"}]},{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["field_kind"], "single_select")
+        self.assertEqual(result.outputs["value"], "P1")
+        self.assertTrue(result.outputs["changed"])
+
+    def test_gh_project_issue_field_set_updates_number_field(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 5})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"number":3,"field":{"name":"Estimate"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["field_kind"], "number")
+        self.assertEqual(result.outputs["value"], 5)
+        self.assertTrue(result.outputs["changed"])
+
+    def test_gh_project_issue_field_set_updates_iteration_field(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Iteration", "value": "Sprint 12"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"title":"Sprint 11","field":{"name":"Iteration"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTIF_1","name":"Iteration","configuration":{"iterations":[{"id":"IT_11","title":"Sprint 11","startDate":"2026-07-01","duration":14},{"id":"IT_12","title":"Sprint 12","startDate":"2026-07-15","duration":14}]}}]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_7"}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["field_kind"], "iteration")
+        self.assertEqual(result.outputs["value"], "Sprint 12")
+        self.assertTrue(result.outputs["changed"])
+
+    def test_gh_project_issue_field_set_is_noop_for_same_value(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": 3})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"number":3,"field":{"name":"Estimate"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.outputs["changed"])
+        self.assertEqual(result.summary, "GitHub project field 'Estimate' is already set")
+
+    def test_gh_project_issue_field_set_reports_field_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Story Points", "value": 5})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "field_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_not_found")
+
+    def test_gh_project_issue_field_set_reports_field_kind_unsupported(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Summary", "value": "Hello"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTTXT_1","name":"Summary","dataType":"TEXT"}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "field_kind_unsupported")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_kind_unsupported")
+
+    def test_gh_project_issue_field_set_reports_field_value_invalid(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Estimate", "value": True})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"number":3,"field":{"name":"Estimate"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTNF_E","name":"Estimate","dataType":"NUMBER"}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "field_value_invalid")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_value_invalid")
+
+    def test_gh_project_issue_field_set_reports_field_value_not_found(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="set-field", operation=OperationRef("gh.project.issue.field.set", with_={"repository": "owner/repo", "issue_number": 7, "project_id": "PVT_demo", "field": "Priority", "value": "P0"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.issue.field.set")
+        resolved = ResolvedOperation("gh.project.issue.field.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"fieldValues":{"nodes":[{"name":"P2","field":{"name":"Priority"}}]}}]}}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Checklists","fields":{"nodes":[{"id":"PVTSSF_P","name":"Priority","options":[{"id":"OPT_P1","name":"P1"},{"id":"OPT_P2","name":"P2"}]}]}}}}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "field_value_not_found")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_field_set.field_value_not_found")
+
     def test_gh_project_issue_estimate_set_reports_estimate_blocked(self) -> None:
         workflow = Workflow(
             version=0,

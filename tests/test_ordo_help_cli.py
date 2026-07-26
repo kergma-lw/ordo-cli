@@ -446,6 +446,27 @@ class OrdoHelpCliTest(unittest.TestCase):
             ],
         )
 
+    def test_operation_topic_publishes_preflight_observations_for_generic_project_field_setter(self) -> None:
+        payload = json.loads(self.run_help("operation", "gh.project.issue.field.set", "--json").stdout)
+
+        self.assertEqual(
+            payload["operation"]["preflight_observations"],
+            [
+                {
+                    "probe": "gh.project.issue",
+                    "with": {
+                        "repository": "{repository}",
+                        "issue_number": "{issue_number}",
+                        "project_id": "{project_id}",
+                    },
+                },
+                {
+                    "probe": "gh.project.field",
+                    "with": {"project_id": "{project_id}", "field": "{field}"},
+                },
+            ],
+        )
+
     def test_examples_topic_publishes_launcher_step_example(self) -> None:
         payload = json.loads(self.run_help("examples", "--json").stdout)
 
