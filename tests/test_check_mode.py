@@ -516,6 +516,105 @@ class CheckModeTest(unittest.TestCase):
             {"reference": "gh.issue.close", "with": {}},
         )
 
+    def test_check_reports_strong_preflight_support_when_recommended_observations_match_exactly(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"branch": "feature/demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch", operation=OperationRef("git.branch"), register="branch"),
+                        Step(name="upstream", operation=OperationRef("git.upstream"), register="upstream"),
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="range",
+                            operation=OperationRef(
+                                "git.range",
+                                with_={"base": "@{upstream}", "head": "${step.branch_name.outputs.value}"},
+                            ),
+                            register="range",
+                        ),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "git.branch": {"value": "feature/demo"},
+                "git.upstream": {"configured": True, "branch": "feature/demo", "remote": "origin"},
+                "git.range": {"ahead_count": 1, "behind_count": 0},
+                "git.worktree": {"clean": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support = result.outputs["preflight_step_items"][4]["preflight_support"]
+        self.assertEqual(support["strength"], "strong")
+        self.assertEqual(len(support["matched_observations"]), 3)
+        self.assertEqual(support["missing_observations"], [])
+
+    def test_check_keeps_preflight_observation_matching_exact_without_expression_guessing(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"branch": "feature/demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="branch", operation=OperationRef("git.branch"), register="branch"),
+                        Step(name="upstream", operation=OperationRef("git.upstream"), register="upstream"),
+                        Step(name="branch_name", value="${inputs.branch}", register="branch_name"),
+                        Step(
+                            name="range",
+                            operation=OperationRef(
+                                "git.range",
+                                with_={"base": "@{upstream}", "head": "${inputs.branch}"},
+                            ),
+                            register="range",
+                        ),
+                        Step(
+                            name="push",
+                            operation=OperationRef("git.sync.push", with_={"branch": "${step.branch_name.outputs.value}"}),
+                        ),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.worktree")),)),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "git.branch": {"value": "feature/demo"},
+                "git.upstream": {"configured": True, "branch": "feature/demo", "remote": "origin"},
+                "git.range": {"ahead_count": 1, "behind_count": 0},
+                "git.worktree": {"clean": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support = result.outputs["preflight_step_items"][4]["preflight_support"]
+        self.assertEqual(support["strength"], "partial")
+        self.assertEqual(len(support["matched_observations"]), 2)
+        self.assertEqual(
+            support["missing_observations"],
+            [
+                {
+                    "probe": "git.range",
+                    "with": {"base": "@{upstream}", "head": {"expression": "step.branch_name.outputs.value"}},
+                    "fields": [],
+                }
+            ],
+        )
+
     def test_check_uses_shared_read_only_engine_for_preflight_values_and_conditions(self) -> None:
         workflow = Workflow(
             version=0,

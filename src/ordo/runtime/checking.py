@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import cast
 
@@ -22,6 +23,9 @@ from .providers import ConnectorProvider, GuardProbe, get_default_connector_prov
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 from .validation import validate_workflow_document, validate_workflow_semantics
+
+
+_ACTION_PLACEHOLDER_PATTERN = re.compile(r"^\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
 
 def _base_verdict_outputs(
@@ -284,6 +288,7 @@ def check_workflow(
     bootstrap_details: list[dict[str, object]] = []
     failed_guard: str | None = None
     incomplete_reasons: list[str] = []
+    observed_probe_calls: list[dict[str, object]] = []
 
     halted = False
     for block_index, declared_block in enumerate(effective_workflow.blocks):
@@ -317,6 +322,7 @@ def check_workflow(
                 guard_details.append(detail)
                 block_guard_details.append(detail)
                 checked_guards.append(resolved_guard.reference)
+                observed_probe_calls.extend(item for item in detail.get("observations", []) if isinstance(item, dict))
                 bootstrap_details = _collect_bootstrap_details(operation_results)
                 if result.status != "ok":
                     blockers.append(resolved_guard.reference)
@@ -418,6 +424,7 @@ def check_workflow(
                 connector_provider=connector_provider,
                 probe=probe,
                 active_overrides=active_overrides,
+                observed_probe_calls=observed_probe_calls,
             )
             if interpreted_step_block is not None:
                 if interpreted_step_block.get("resolution_error") is not None:
@@ -674,6 +681,7 @@ def _interpret_step_block_for_check(
     connector_provider: ConnectorProvider | None,
     probe: GuardProbe,
     active_overrides,
+    observed_probe_calls: list[dict[str, object]],
 ) -> dict[str, object] | None:
     resolved_block = _resolve_step_block(
         workflow,
@@ -691,6 +699,7 @@ def _interpret_step_block_for_check(
     halt_item: dict[str, object] | None = None
     step_items: list[dict[str, object]] = []
     observation_session = _build_preflight_observation_session(workflow, probe=probe, connector_provider=connector_provider)
+    known_observations = [dict(item) for item in observed_probe_calls if isinstance(item, dict)]
 
     for step_index, (step, resolved_step) in enumerate(zip(block.steps, resolved_block.steps, strict=False)):
         condition = evaluate_preflight_step_condition(
@@ -761,6 +770,7 @@ def _interpret_step_block_for_check(
             break
         if condition is False:
             skipped_steps.append(step.name)
+            step_observations = [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else []
             step_items.append(
                 {
                     "block_index": block_index,
@@ -772,10 +782,11 @@ def _interpret_step_block_for_check(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": "false",
-                    "observations": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
+                    "observations": step_observations,
                     "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
+            known_observations.extend(step_observations)
             continue
 
         classification = classify_preflight_step(step, resolved_step)
@@ -815,6 +826,7 @@ def _interpret_step_block_for_check(
             if step.register is not None:
                 store_preflight_register_output(step.register, result, step_results=workflow.step_results)
             interpreted_steps.append(step.name)
+            step_observations = [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else []
             step_items.append(
                 {
                     "block_index": block_index,
@@ -831,12 +843,15 @@ def _interpret_step_block_for_check(
                     "summary": result.summary,
                     "outputs": dict(result.outputs),
                     "observation_scopes": [resolved_step.reference] if isinstance(resolved_step, ResolvedOperation) else [],
-                    "observations": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
+                    "observations": step_observations,
                     "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
+            known_observations.extend(step_observations)
             continue
 
+        action_call = _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None
+        preflight_support = _build_preflight_support(resolved_step, action_call=action_call, known_observations=known_observations)
         halt = build_preflight_halt(
             "effectful_step_encountered" if classification == "effectful" else "preflight_step_not_analyzable",
             step=step,
@@ -862,7 +877,8 @@ def _interpret_step_block_for_check(
                 "condition_status": "true" if step.if_ is not None else None,
                 "halt_reason": halt.reason,
                 "observations": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
-                "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
+                "action_call": action_call,
+                "preflight_support": preflight_support,
             }
         )
         break
@@ -1158,6 +1174,61 @@ def _action_call_from_resolved_operation(resolved: ResolvedOperation) -> dict[st
     return {
         "reference": resolved.reference,
         "with": {name: _normalize_authored_value(value) for name, value in (resolved.declared_with or {}).items()},
+    }
+
+
+def _render_preflight_observation(template, *, action_call: dict[str, object] | None) -> dict[str, object]:
+    rendered_with: dict[str, object] = {}
+    template_with = template.with_
+    action_inputs = {} if action_call is None else action_call.get("with", {})
+    if not isinstance(action_inputs, dict):
+        action_inputs = {}
+    for name, value in template_with.items():
+        if isinstance(value, str):
+            match = _ACTION_PLACEHOLDER_PATTERN.fullmatch(value)
+            if match is not None:
+                rendered_with[name] = action_inputs.get(match.group(1), value)
+                continue
+        rendered_with[name] = _normalize_authored_value(value)
+    return {
+        "probe": template.probe,
+        "with": rendered_with,
+        "fields": list(template.fields),
+    }
+
+
+def _canonical_observation_key(observation: dict[str, object]) -> str:
+    import json
+
+    return json.dumps(observation, sort_keys=True, separators=(",", ":"))
+
+
+def _build_preflight_support(
+    resolved_step: ResolvedStep,
+    *,
+    action_call: dict[str, object] | None,
+    known_observations: list[dict[str, object]],
+) -> dict[str, object] | None:
+    if not isinstance(resolved_step, ResolvedOperation) or resolved_step.operation.kind != "action":
+        return None
+    templates = list(resolved_step.operation.preflight_observations)
+    if not templates:
+        return {
+            "strength": "not_applicable",
+            "recommended_observations": [],
+            "matched_observations": [],
+            "missing_observations": [],
+        }
+    recommended = [_render_preflight_observation(template, action_call=action_call) for template in templates]
+    known_keys = {_canonical_observation_key(item) for item in known_observations}
+    matched = [item for item in recommended if _canonical_observation_key(item) in known_keys]
+    missing = [item for item in recommended if _canonical_observation_key(item) not in known_keys]
+    strength = "strong" if len(matched) == len(recommended) else "weak" if not matched else "partial"
+    return {
+        "strength": strength,
+        "recommended_observations": recommended,
+        "matched_observations": matched,
+        "missing_observations": missing,
     }
 
 
