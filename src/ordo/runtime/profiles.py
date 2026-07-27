@@ -204,8 +204,11 @@ def apply_profile_defaults_to_subsequent_steps(workflow: Workflow, profile: Prof
     """Apply profile missing-input defaults forward-only for subsequent execution."""
 
     merged_inputs = dict(workflow.inputs)
+    explicit_keys = set(workflow.explicit_input_keys)
     for key, value in profile.inputs.items():
-        merged_inputs.setdefault(key, value)
+        if key in explicit_keys:
+            continue
+        merged_inputs[key] = value
 
     return WorkflowProfileApplicationResult(
         status=RuntimeStatus.OK,
