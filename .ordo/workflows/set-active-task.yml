@@ -2,6 +2,7 @@ version: 0
 workflow: set-active-task
 inputs:
   active_profile_key: active_profile
+  profile: {}
   issue_number: {}
   repo_kind: {}
   repo_dir: {}
@@ -15,9 +16,23 @@ let:
   project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
 blocks:
   - guards:
-      - git.repo.exists
-      - inputs.repo_kind == "meta" or git.worktree.clean == true
-      - issue.state == "OPEN"
+      - inputs.active_profile_key != ""
+      - inputs.profile == "frontend" or inputs.profile == "backend" or inputs.profile == "meta"
+      - inputs.issue_number | is_integer
+
+  - steps:
+      - name: Switch runtime profile
+        profile_switch: ${inputs.profile}
+
+  - guards:
+      - inputs.repository != ""
+      - inputs.project_id != ""
+
+  - steps:
+      - name: Remember active profile
+        state_set:
+          state.shared_state[inputs.active_profile_key]: ${inputs.profile}
+
   - steps:
       - name: load-issue
         uses: gh.issue
@@ -51,6 +66,9 @@ blocks:
         register: project
 
   - guards:
+      - git.repo.exists
+      - inputs.repo_kind == "meta" or git.worktree.clean == true
+      - issue.state == "OPEN"
       - project_issue.exists
       - project_issue.status != "Done"
       - inputs.repo_kind != "meta" or project_issue.type == "Story"
