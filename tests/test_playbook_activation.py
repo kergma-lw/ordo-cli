@@ -528,6 +528,92 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.workflow.inputs["repository"], "acme/backend")
         self.assertEqual(activated.workflow.inputs["project_id"], "PVT_demo")
         self.assertEqual(activated.input_analysis.surplus_profile_inputs, ("repo_dir", "repo_kind"))
+        self.assertTrue(any(diagnostic.code == "playbook.profile.surplus_inputs_ignored" for diagnostic in activated.diagnostics))
+
+    def test_cli_review_reaches_analysis_when_profile_supplies_surplus_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      issue-view:
+                        file: issue-view.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "issue-view.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: issue-view
+                    inputs:
+                      profile: {}
+                      number: {}
+                      repository: {}
+                      project_id: {}
+                    blocks:
+                      - steps:
+                          - name: load issue
+                            uses: gh.issue
+                            with:
+                              repository: ${inputs.repository}
+                              issue_number: ${inputs.number}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: backend
+                    inputs:
+                      repo_kind: backend
+                      repo_dir: /tmp/backend
+                      repository: acme/backend
+                      project_id: PVT_demo
+                    checks: []
+                    overrides: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            with patch("sys.argv", [
+                "ordo-playbook",
+                "--file",
+                str(root / ".ordo" / "ordo.yaml"),
+                "--profile",
+                "backend",
+                "--input",
+                "profile=backend",
+                "--input",
+                "number=42",
+                "--json",
+                "review",
+                "issue-view",
+            ]):
+                with contextlib.redirect_stdout(stdout):
+                    exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["mode"], "review")
+        self.assertTrue(any(item["code"] == "playbook.profile.surplus_inputs_ignored" for item in payload["diagnostics"]))
+        self.assertIn("findings", payload["outputs"])
 
     def test_activate_playbook_accepts_empty_string_and_null_as_present_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

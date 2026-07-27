@@ -366,6 +366,7 @@ def activate_playbook(
         workflow_name=workflow_name,
         playbook_path=path,
         workflow=workflow,
+        profile=profile,
         working_directory=working_directory,
         input_analysis=input_analysis,
     )
@@ -914,6 +915,7 @@ def _activation_diagnostics(
     workflow_name: str,
     playbook_path: Path,
     workflow: Workflow,
+    profile: Profile | None,
     working_directory: Path | None,
     input_analysis: ActivationInputAnalysis | None,
 ) -> tuple[Diagnostic, ...]:
@@ -940,12 +942,13 @@ def _activation_diagnostics(
                 code="playbook.profile.surplus_inputs_ignored",
                 level="info",
                 message="Profile supplied additional context inputs that this workflow does not consume",
-                path=("profiles", input_analysis.supplied_profile_inputs[0] if input_analysis.supplied_profile_inputs else "<profile>"),
+                path=("profiles", profile.name if profile is not None else "<profile>", "inputs"),
                 details={
                     "stage": "activation",
                     "category": "inputs",
                     "playbook": str(playbook_path),
                     "workflow": workflow.workflow,
+                    "profile": None if profile is None else profile.name,
                     "surplus_profile_inputs": list(input_analysis.surplus_profile_inputs),
                     "consumed_profile_inputs": list(input_analysis.consumed_profile_inputs),
                 },
