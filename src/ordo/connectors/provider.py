@@ -6,7 +6,7 @@ from functools import lru_cache
 
 from ordo.runtime.providers import ConnectorProvider
 
-from .operations import evaluate_probe, execute_action
+from .operations import evaluate_probe, execute_operation
 from .registry import get_public_connector_registry
 
 
@@ -17,5 +17,5 @@ def get_public_connector_provider() -> ConnectorProvider:
     return ConnectorProvider(
         registry=get_public_connector_registry(),
         guard_probe=evaluate_probe,
-        step_executor=execute_action,
+        step_executor=execute_operation,
     )

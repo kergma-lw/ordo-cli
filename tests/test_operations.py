@@ -2,7 +2,7 @@ import importlib
 import unittest
 from unittest.mock import patch
 
-from ordo.connectors.operations import evaluate_probe, execute_action
+from ordo.connectors.operations import evaluate_probe, execute_action, execute_operation
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
 from ordo.runtime import check_workflow
@@ -13,6 +13,40 @@ from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class OperationTest(unittest.TestCase):
+    def test_execute_operation_dispatches_probe_steps_by_kind(self) -> None:
+        workflow = Workflow(version=0, workflow="demo")
+        registry = get_public_connector_registry()
+        resolved = ResolvedOperation(
+            reference="gh.issue",
+            connector_namespace="gh",
+            operation=registry.get_operation("gh.issue"),
+            source="public",
+        )
+
+        with patch("ordo.connectors.operations.evaluate_probe") as evaluate_probe_mock:
+            evaluate_probe_mock.return_value = OperationResult(status="ok", summary="probe")
+            result = execute_operation(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        evaluate_probe_mock.assert_called_once_with(resolved, workflow)
+
+    def test_execute_operation_dispatches_action_steps_by_kind(self) -> None:
+        workflow = Workflow(version=0, workflow="demo")
+        registry = get_public_connector_registry()
+        resolved = ResolvedOperation(
+            reference="shell.command",
+            connector_namespace="shell",
+            operation=registry.get_operation("shell.command"),
+            source="public",
+        )
+
+        with patch("ordo.connectors.operations.execute_action") as execute_action_mock:
+            execute_action_mock.return_value = OperationResult(status="ok", summary="action")
+            result = execute_operation(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        execute_action_mock.assert_called_once_with(resolved, workflow)
+
     def test_migrated_git_probe_modules_publish_through_info_hook(self) -> None:
         git_repo_module = importlib.import_module("connectors.git.probes.repo")
         git_branch_module = importlib.import_module("connectors.git.probes.branch")

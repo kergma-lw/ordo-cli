@@ -15,6 +15,15 @@ def execute_action(resolved_step, workflow):
     return handler(resolved_step, workflow)
 
 
+def execute_operation(resolved_step, workflow):
+    """Execute a resolved step operation according to its declared kind."""
+
+    kind = resolved_step.operation.kind
+    if kind == "probe":
+        return evaluate_probe(resolved_step, workflow)
+    return execute_action(resolved_step, workflow)
+
+
 def evaluate_probe(resolved_guard, workflow):
     """Evaluate a supported probe operation with structured outputs."""
 
