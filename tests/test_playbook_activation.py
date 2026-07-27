@@ -452,6 +452,83 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.input_analysis.consumed_profile_inputs, ("repository",))
         self.assertEqual(activated.input_analysis.surplus_profile_inputs, ("repo_dir", "repo_kind"))
 
+    def test_activate_playbook_tolerates_profile_surplus_inputs_when_workflow_does_not_consume_them(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      issue-view:
+                        file: issue-view.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "issue-view.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: issue-view
+                    inputs:
+                      profile: {}
+                      number: {}
+                      repository: {}
+                      project_id: {}
+                    blocks:
+                      - steps:
+                          - name: load issue
+                            uses: gh.issue
+                            with:
+                              repository: ${inputs.repository}
+                              issue_number: ${inputs.number}
+                          - name: load project item
+                            uses: gh.project.issue
+                            with:
+                              repository: ${inputs.repository}
+                              issue_number: ${inputs.number}
+                              project_id: ${inputs.project_id}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: backend
+                    inputs:
+                      repo_kind: backend
+                      repo_dir: /tmp/backend
+                      repository: acme/backend
+                      project_id: PVT_demo
+                    checks: []
+                    overrides: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(
+                workflow_name="issue-view",
+                profile_name="backend",
+                input_overrides={"profile": "backend", "number": 42},
+                cwd=root,
+            )
+
+        self.assertEqual(activated.workflow.inputs["repository"], "acme/backend")
+        self.assertEqual(activated.workflow.inputs["project_id"], "PVT_demo")
+        self.assertEqual(activated.input_analysis.surplus_profile_inputs, ("repo_dir", "repo_kind"))
+
     def test_activate_playbook_accepts_empty_string_and_null_as_present_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
