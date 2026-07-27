@@ -7,6 +7,7 @@ output = "packs/core.md"
 sources = [
   "requirements/authoring/core.md",
   "requirements/connector/core.md",
+  "requirements/connector/gh-project-items.md",
   "requirements/local-expressions/core.md",
   "requirements/local-expressions/adapters.md",
   "requirements/local-expressions/contexts.md",
@@ -45,6 +46,7 @@ sources = [
   "model/runtime/guard-evaluation.md",
   "model/runtime/package-layout.md",
   "model/connector/contract.md",
+  "model/connector/gh-project-items.md",
   "model/connector/authoring-surface.md",
   "model/connector/bootstrap-api.md",
   "model/connector/plugin-sdk.md",

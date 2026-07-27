@@ -64,6 +64,12 @@ EXAMPLES_CATALOG: JSONObject = {
             "shows": ["type_predicate_filters", "membership_filter", "embedded_value_boolean_flow"],
             "related_topics": ["model", "examples"],
         },
+        {
+            "name": "project-items-let",
+            "path": "examples/project-items-let.yaml",
+            "shows": ["project_collection_probe", "let_bound_probe_usage", "field_based_project_filtering"],
+            "related_topics": ["operations", "examples", "model"],
+        },
     ],
 }
 

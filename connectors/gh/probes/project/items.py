@@ -41,6 +41,22 @@ def info():
         failure_modes=("project_not_found", "unknown_field", "ambiguous_field", "unsupported_field_type", "invalid_filter_value", "probe_failed"),
         handler=run,
         summary="Return normalized GitHub Project items for one project membership scan",
+        examples=(
+            {
+                "reference": "gh.project.items",
+                "inputs": {"project_id": "PVT_demo"},
+                "why": "Load normalized project membership facts without mutating project state.",
+            },
+            {
+                "reference": "gh.project.items",
+                "inputs": {
+                    "project_id": "PVT_demo",
+                    "content_kind": "Issue",
+                    "filters": [{"field": "Status", "value": "Ready"}],
+                },
+                "why": "Narrow one project scan to issue-like items whose Status field equals Ready.",
+            },
+        ),
     )
 
 

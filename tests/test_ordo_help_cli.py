@@ -475,6 +475,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["operation"]["outputs"]["items"][0]["text"], "string")
         self.assertEqual(payload["operation"]["outputs"]["items"][0]["author_name"], "string")
 
+    def test_operation_topic_publishes_gh_project_items_examples_and_filter_shape(self) -> None:
+        payload = json.loads(self.run_help("operation", "gh.project.items", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "operation")
+        self.assertEqual(payload["operation"]["inputs"]["content_kind"], "string")
+        self.assertEqual(payload["operation"]["inputs"]["filters"][0]["field"], "string")
+        self.assertTrue(any(example["reference"] == "gh.project.items" for example in payload["operation"]["examples"]))
+
     def test_operation_topic_publishes_preflight_observations_for_declaring_action(self) -> None:
         payload = json.loads(self.run_help("operation", "git.sync.push", "--json").stdout)
 
@@ -515,6 +523,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertTrue(any(item["name"] == "launcher-step" for item in payload["examples"]))
         self.assertTrue(any(item["name"] == "text-adapter" for item in payload["examples"]))
+        self.assertTrue(any(item["name"] == "project-items-let" for item in payload["examples"]))
 
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
