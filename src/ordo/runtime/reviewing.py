@@ -110,9 +110,9 @@ def _find_missing_input_validation(
         if not isinstance(input_name, str):
             continue
         classification = _review_input_classification(usage, profile=profile)
-        if classification == "ambient_profile_context":
+        if classification in {"ambient_profile_context", "trusted_profile_input"}:
             continue
-        if classification not in {"control_input", "effect_target_input"}:
+        if classification not in {"control_input", "effect_target_input", "contract_input"}:
             continue
         needle = f"inputs.{input_name}"
         if any(needle in expression for expression in early_guard_expressions):

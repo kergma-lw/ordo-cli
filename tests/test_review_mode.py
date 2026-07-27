@@ -171,3 +171,36 @@ class ReviewModeTest(unittest.TestCase):
         self.assertEqual(_review_input_classification(repository_usage, profile=profile), "trusted_profile_input")
         self.assertEqual(_review_input_classification(project_usage, profile=profile), "trusted_profile_input")
         self.assertEqual(result.status, RuntimeStatus.OK)
+
+    def test_review_does_not_warn_for_trusted_profile_provided_consumed_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="issue-view",
+            declared_inputs={"profile": {}, "number": {}, "repository": {}, "project_id": {}},
+            blocks=(
+                GuardBlock(guards=(Guard(expr='inputs.profile == "backend"'), Guard(expr="inputs.number | is_integer"))),
+                StepBlock(
+                    steps=(
+                        Step(name="load issue", operation=OperationRef("gh.issue", with_={"repository": "${inputs.repository}", "issue_number": "${inputs.number}"})),
+                        Step(name="publish", publish={"repository": "${inputs.repository}", "project_id": "${inputs.project_id}"}),
+                    )
+                ),
+            ),
+        )
+        profile = Profile(name="backend", inputs={"repository": "acme/backend", "project_id": "PVT_demo"})
+
+        result = review_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertFalse(any(item["code"] == "review.workflow.input_validation_missing" for item in result.outputs["findings"]))
+
+    def test_review_keeps_missing_validation_for_user_driven_effect_target_input(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repository": "string"},
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"repository": "${inputs.repository}", "issue_number": 7})),),
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertTrue(any(item["code"] == "review.workflow.input_validation_missing" for item in result.outputs["findings"]))
