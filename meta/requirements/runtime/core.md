@@ -32,6 +32,7 @@
 - `review` must treat trusted profile-provided consumed context separately from user-driven validation candidates and must not require early re-validation of that context by default.
 - Profile-supplied surplus context must not force workflows to declare unused values merely to activate successfully.
 - The runtime must distinguish profile-supplied surplus context from explicit user-supplied unknown inputs.
+- Default `review` and `check` outputs must not surface ordinary expected profile-surplus context as user-facing diagnostics.
 
 ## Explainability
 

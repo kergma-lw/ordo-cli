@@ -51,6 +51,7 @@ Activation-context advice follows a related boundary:
 - profiles may provide more ambient context than one workflow uses;
 - profile-supplied surplus context should remain non-blocking unless the workflow actually depends on it;
 - explicit caller-supplied unknown inputs remain separately diagnosable because they express direct user intent rather than reusable profile breadth.
+- expected profile surplus should remain preserved as internal analysis evidence rather than promoted to ordinary default review/check diagnostics.
 
 ## Preservation rule
 

@@ -136,6 +136,8 @@ Activation should therefore distinguish between:
 
 Profile-supplied surplus context is not, by itself, an activation error.
 Workflows should not need to declare unused profile values merely to tolerate reusable profiles with wider context surfaces.
+Because such surplus is expected rather than actionable, default `review` and `check` outputs should not promote ordinary profile surplus to user-facing diagnostics.
+Surplus-context evidence may remain available internally or in future verbose/debug/explain-oriented surfaces.
 
 This boundary does not erase explicit caller intent.
 User-supplied unknown activation inputs remain distinct from profile surplus and should stay diagnosable as explicit caller mistakes or mismatches.
