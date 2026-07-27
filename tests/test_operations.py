@@ -230,7 +230,9 @@ class OperationTest(unittest.TestCase):
 
         self.assertIsNotNone(gh_project_items)
         self.assertEqual(gh_project_items.kind, "probe")
-        self.assertEqual(gh_project_items.inputs, {"project_id": "string"})
+        self.assertEqual(gh_project_items.inputs["project_id"], "string")
+        self.assertEqual(gh_project_items.inputs["content_kind"], "string")
+        self.assertEqual(gh_project_items.inputs["filters"][0]["field"], "string")
         self.assertEqual(gh_project_items.outputs["count"], "integer")
         self.assertEqual(gh_project_items.outputs["items"][0]["content_kind"], "string")
 
@@ -306,6 +308,176 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "project_not_found")
         self.assertEqual(result.diagnostics[0].code, "probe.gh_project_items.project_not_found")
+
+    def test_gh_project_items_probe_filters_by_content_kind(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo", "content_kind": "Issue"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_issue","content":{"__typename":"Issue","number":7,"title":"Issue","url":"https://github.com/owner/repo/issues/7","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[]}}, {"id":"PVTI_pr","content":{"__typename":"PullRequest","number":8,"title":"PR","url":"https://github.com/owner/repo/pull/8","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[]}}]}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 1)
+        self.assertEqual(result.outputs["items"][0]["content_kind"], "Issue")
+
+    def test_gh_project_items_probe_applies_multiple_field_filters_with_and_semantics(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(
+                Guard(
+                    OperationRef(
+                        "gh.project.items",
+                        with_={
+                            "project_id": "PVT_demo",
+                            "filters": [
+                                {"field": "Status", "value": "Ready"},
+                                {"field": "Estimate", "value": 3},
+                            ],
+                        },
+                    )
+                ),
+            ),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_match","content":{"__typename":"Issue","number":7,"title":"Match","url":"https://github.com/owner/repo/issues/7","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Ready","field":{"id":"F_status","name":"Status"}},{"__typename":"ProjectV2ItemFieldNumberValue","number":3,"field":{"id":"F_estimate","name":"Estimate"}}]}}, {"id":"PVTI_miss","content":{"__typename":"Issue","number":8,"title":"Miss","url":"https://github.com/owner/repo/issues/8","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Ready","field":{"id":"F_status","name":"Status"}},{"__typename":"ProjectV2ItemFieldNumberValue","number":5,"field":{"id":"F_estimate","name":"Estimate"}}]}}]}}}}',
+                    stderr="",
+                ),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[{"__typename":"ProjectV2SingleSelectField","id":"F_status","name":"Status","options":[{"id":"O_ready","name":"Ready"}]},{"__typename":"ProjectV2Field","id":"F_estimate","name":"Estimate","dataType":"NUMBER"}]}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 1)
+        self.assertEqual(result.outputs["items"][0]["item_id"], "PVTI_match")
+
+    def test_gh_project_items_probe_reports_unknown_field(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo", "filters": [{"field": "Size", "value": "M"}] })),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}', stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[]}}}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "unknown_field")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_project_items.unknown_field")
+
+    def test_gh_project_items_probe_reports_ambiguous_field(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo", "filters": [{"field": "Status", "value": "Ready"}] })),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}', stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[{"__typename":"ProjectV2SingleSelectField","id":"F_status_1","name":"Status","options":[]},{"__typename":"ProjectV2SingleSelectField","id":"F_status_2","name":"Status","options":[]}]}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ambiguous_field")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_project_items.ambiguous_field")
+
+    def test_gh_project_items_probe_reports_unsupported_field_type(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo", "filters": [{"field": "Repository", "value": "owner/repo"}] })),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}', stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[{"__typename":"ProjectV2Field","id":"F_repo","name":"Repository","dataType":"REPOSITORY"}]}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "unsupported_field_type")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_project_items.unsupported_field_type")
+
+    def test_gh_project_items_probe_reports_invalid_filter_value(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo", "filters": [{"field": "Estimate", "value": "three"}] })),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}', stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[{"__typename":"ProjectV2Field","id":"F_estimate","name":"Estimate","dataType":"NUMBER"}]}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "invalid_filter_value")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_project_items.invalid_filter_value")
 
     def test_gh_issue_comments_probe_returns_structured_comment_nodes(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue.comments", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 471})),), steps=())
