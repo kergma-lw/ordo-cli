@@ -46,7 +46,11 @@ def review_workflow(
             analysis_tree=check_result.analysis_tree,
         )
 
-    findings = _build_review_findings(workflow, check_result, profile=profile)
+    effective_profile = profile
+    active_profile_name = check_result.outputs.get("active_profile")
+    if isinstance(active_profile_name, str) and available_profiles is not None and active_profile_name in available_profiles:
+        effective_profile = available_profiles[active_profile_name]
+    findings = _build_review_findings(workflow, check_result, profile=effective_profile)
     outputs = {
         "review_status": "clean" if not findings else "needs_attention",
         "finding_count": len(findings),
@@ -79,7 +83,7 @@ def review_workflow(
 def _build_review_findings(workflow: Workflow, check_result: RuntimeResult, *, profile: Profile | None) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
-    findings.extend(_find_unused_declared_inputs(check_result, profile=profile))
+    findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
     findings.extend(_find_missing_recommended_observations(check_result))
     return findings
 
@@ -109,7 +113,7 @@ def _find_missing_input_validation(
         input_name = usage.get("input")
         if not isinstance(input_name, str):
             continue
-        classification = _review_input_classification(usage, profile=profile)
+        classification = _review_input_classification(usage, workflow=workflow, profile=profile)
         if classification in {"ambient_profile_context", "trusted_profile_input"}:
             continue
         if classification not in {"control_input", "effect_target_input", "contract_input"}:
@@ -142,11 +146,13 @@ def _input_usages_from_result(check_result: RuntimeResult) -> list[dict[str, obj
     return [dict(item) for item in getattr(analysis_tree, "input_usages") if isinstance(item, dict)]
 
 
-def _review_input_classification(usage: dict[str, object], *, profile: Profile | None) -> str:
+def _review_input_classification(usage: dict[str, object], *, workflow: Workflow, profile: Profile | None) -> str:
     base = usage.get("classification")
     input_name = usage.get("input")
     if not isinstance(base, str) or not isinstance(input_name, str):
         return "unknown"
+    if input_name in workflow.explicit_input_keys:
+        return base
     if profile is not None and input_name in profile.inputs and base in {"effect_target_input", "contract_input"}:
         return "trusted_profile_input"
     if profile is not None and input_name in profile.inputs and base != "control_input":
@@ -154,13 +160,13 @@ def _review_input_classification(usage: dict[str, object], *, profile: Profile |
     return base
 
 
-def _find_unused_declared_inputs(check_result: RuntimeResult, *, profile: Profile | None) -> list[dict[str, object]]:
+def _find_unused_declared_inputs(workflow: Workflow, check_result: RuntimeResult, *, profile: Profile | None) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     for usage in _input_usages_from_result(check_result):
         input_name = usage.get("input")
         if not isinstance(input_name, str):
             continue
-        classification = _review_input_classification(usage, profile=profile)
+        classification = _review_input_classification(usage, workflow=workflow, profile=profile)
         if classification != "unused_input":
             continue
         findings.append(
