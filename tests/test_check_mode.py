@@ -1062,6 +1062,38 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(classifications["unused"]["classification"], "unused_input")
         self.assertEqual(classifications["unused"]["evidence"], [])
 
+    def test_check_analysis_tree_classifies_publish_inputs_as_contract_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish-inputs",
+            declared_inputs={"repository": {}, "profile": {}},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="publish",
+                            publish={"repository": "${inputs.repository}", "profile": "${inputs.profile}"},
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        analysis = _build_check_analysis_tree(
+            workflow=workflow,
+            active_profile=None,
+            current_profile=None,
+            available_profiles=None,
+            active_overrides=(),
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            guard_probe=None,
+        )
+
+        self.assertFalse(isinstance(analysis, RuntimeResult))
+        classifications = {item["input"]: item for item in analysis.input_usages}
+        self.assertEqual(classifications["repository"]["classification"], "contract_input")
+        self.assertEqual(classifications["profile"]["classification"], "contract_input")
+
 
     def test_check_evaluates_not_and_or_with_short_circuit_for_expr(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='not git.worktree.clean or git.branch.value == "release"'),), steps=())

@@ -628,7 +628,7 @@ def _classify_declared_input_usage(
         return ()
 
     evidence_by_input: dict[str, list[dict[str, object]]] = {name: [] for name in declared_inputs}
-    classification_rank = {"unused_input": 0, "effect_target_input": 1, "control_input": 2}
+    classification_rank = {"unused_input": 0, "effect_target_input": 1, "contract_input": 2, "control_input": 3}
     classification_by_input = {name: "unused_input" for name in declared_inputs}
 
     def record(input_name: str, classification: str, *, site_kind: str, path: tuple[object, ...], detail: str) -> None:
@@ -707,7 +707,7 @@ def _classify_declared_input_usage(
                     for input_name in _extract_input_names(step.publish):
                         record(
                             input_name,
-                            "control_input",
+                            "contract_input",
                             site_kind="publish",
                             path=("blocks", block_index, "steps", step_index, "publish"),
                             detail=step.name,
@@ -716,7 +716,7 @@ def _classify_declared_input_usage(
                     for input_name in _extract_input_names(step.result):
                         record(
                             input_name,
-                            "control_input",
+                            "contract_input",
                             site_kind="result",
                             path=("blocks", block_index, "steps", step_index, "result"),
                             detail=step.name,

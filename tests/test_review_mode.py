@@ -4,6 +4,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import review_workflow
+from ordo.runtime.reviewing import _review_input_classification
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -134,3 +135,39 @@ class ReviewModeTest(unittest.TestCase):
         self.assertFalse(any("repo_dir" in message for message in messages))
         self.assertFalse(any("repository" in message for message in messages))
         self.assertFalse(any("project_id" in message for message in messages))
+
+    def test_review_classifies_profile_provided_consumed_inputs_as_trusted(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="issue-view",
+            declared_inputs={"profile": {}, "number": {}, "repository": {}, "project_id": {}},
+            blocks=(
+                GuardBlock(guards=(Guard(expr='inputs.profile == "backend"'), Guard(expr="inputs.number | is_integer"))),
+                StepBlock(
+                    steps=(
+                        Step(name="load issue", operation=OperationRef("gh.issue", with_={"repository": "${inputs.repository}", "issue_number": "${inputs.number}"})),
+                        Step(name="publish", publish={"repository": "${inputs.repository}", "project_id": "${inputs.project_id}"}),
+                    )
+                ),
+            ),
+        )
+        profile = Profile(
+            name="backend",
+            inputs={
+                "repository": "acme/backend",
+                "project_id": "PVT_demo",
+            },
+        )
+
+        result = review_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        all_classifications = {
+            item["input"]: item["classification"]
+            for item in result.analysis_tree.input_usages
+        }
+        self.assertEqual(all_classifications["repository"], "contract_input")
+        repository_usage = next(item for item in result.analysis_tree.input_usages if item["input"] == "repository")
+        project_usage = next(item for item in result.analysis_tree.input_usages if item["input"] == "project_id")
+        self.assertEqual(_review_input_classification(repository_usage, profile=profile), "trusted_profile_input")
+        self.assertEqual(_review_input_classification(project_usage, profile=profile), "trusted_profile_input")
+        self.assertEqual(result.status, RuntimeStatus.OK)

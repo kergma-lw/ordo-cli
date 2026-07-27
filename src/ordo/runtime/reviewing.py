@@ -147,6 +147,8 @@ def _review_input_classification(usage: dict[str, object], *, profile: Profile |
     input_name = usage.get("input")
     if not isinstance(base, str) or not isinstance(input_name, str):
         return "unknown"
+    if profile is not None and input_name in profile.inputs and base in {"effect_target_input", "contract_input"}:
+        return "trusted_profile_input"
     if profile is not None and input_name in profile.inputs and base != "control_input":
         return "ambient_profile_context"
     return base
