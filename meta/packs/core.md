@@ -714,6 +714,7 @@
   - what next safe action is available when it can be inferred safely.
 - `review`, `check`, `plan`, and `explain` must remain baseline decision-support modes rather than optional UX sugar around `execute`.
 - `review` must not treat every declared workflow input as automatic missing-validation debt; it should distinguish meaningful control/effect inputs, profile-carried ambient context, and unused declarations.
+- `review` must treat trusted profile-provided consumed context separately from user-driven validation candidates and must not require early re-validation of that context by default.
 - Profile-supplied surplus context must not force workflows to declare unused values merely to activate successfully.
 - The runtime must distinguish profile-supplied surplus context from explicit user-supplied unknown inputs.
 
@@ -1610,7 +1611,10 @@ Answers whether the authored workflow is structurally strong and explicit enough
 
 It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
 
-For input-related findings, `review` should distinguish between inputs that drive control/effect semantics, profile-carried ambient context, and declared-but-unused inputs rather than treating every declared input as equal validation debt.
+For input-related findings, `review` should distinguish between inputs that drive control/effect semantics, trusted profile-provided consumed context, profile-carried ambient surplus, and declared-but-unused inputs rather than treating every declared input as equal validation debt.
+
+Profile-provided consumed context is still meaningful workflow input, but it is not automatically user-driven validation debt.
+When a workflow consumes a value such as `repository` from the selected profile as trusted execution context, `review` should not require the workflow to re-validate that context in early guards unless the value also acts as an explicit control-bearing choice.
 
 Its primary value is authoring-quality review rather than executability truth.
 
