@@ -936,24 +936,6 @@ def _activation_diagnostics(
                 },
             )
         )
-    if input_analysis is not None and input_analysis.surplus_profile_inputs:
-        diagnostics.append(
-            Diagnostic(
-                code="playbook.profile.surplus_inputs_ignored",
-                level="info",
-                message="Profile supplied additional context inputs that this workflow does not consume",
-                path=("profiles", profile.name if profile is not None else "<profile>", "inputs"),
-                details={
-                    "stage": "activation",
-                    "category": "inputs",
-                    "playbook": str(playbook_path),
-                    "workflow": workflow.workflow,
-                    "profile": None if profile is None else profile.name,
-                    "surplus_profile_inputs": list(input_analysis.surplus_profile_inputs),
-                    "consumed_profile_inputs": list(input_analysis.consumed_profile_inputs),
-                },
-            )
-        )
     return tuple(diagnostics)
 
 
