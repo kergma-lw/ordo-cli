@@ -57,8 +57,6 @@ def _apply_format_rules(value: JSONValue, *, context: StaticExpressionRuleContex
     args = value.get("args", [])
     if not isinstance(template, str) or not isinstance(args, list):
         return []
-    if any(_value_is_dynamic(item) for item in args):
-        return []
     return [
         Diagnostic(
             code="validation.workflow.value_expr.format.placeholder_count",
@@ -105,8 +103,6 @@ def _diagnose_builtin_node(node: ValueExpressionNode, *, context: StaticExpressi
 
 def _diagnose_format_builtin_call(node: BuiltinCallNode, *, context: StaticExpressionRuleContext) -> list[Diagnostic]:
     if not node.arguments or not isinstance(node.arguments[0], LiteralNode) or not isinstance(node.arguments[0].value, str):
-        return []
-    if any(not isinstance(argument, LiteralNode) for argument in node.arguments[1:]):
         return []
     template = node.arguments[0].value
     arguments = len(node.arguments) - 1

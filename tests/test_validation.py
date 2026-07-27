@@ -1211,6 +1211,49 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.format.args_type")
 
+    def test_invalid_yaml_format_placeholder_count_fails_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: publish
+                        publish:
+                          issue_ref:
+                            format: "%s#%s"
+                            args:
+                              - owner/repo
+                              - 42
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.format.placeholder_count")
+
+    def test_dynamic_format_placeholder_case_does_not_fail_validation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  repository: owner/repo
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: publish
+                        publish:
+                          issue_ref: ${format("{}#{}", inputs.repository, 42)}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_step_if_accepts_bare_condition(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

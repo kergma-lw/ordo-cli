@@ -43,6 +43,7 @@ from .local_expression_engine.core import (
     ValueExpressionNode,
     collect_step_references,
 )
+from .static_expression_diagnostics import collect_static_expression_diagnostics
 
 LET_RESERVED_NAMES = frozenset({"inputs", "args", "state", "step"})
 
@@ -1395,7 +1396,7 @@ def _validate_runtime_value_surface(
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
-    diagnostics: list[Diagnostic] = []
+    diagnostics: list[Diagnostic] = collect_static_expression_diagnostics(value, path=path, source=source)
     if _is_format_value_object(value):
         diagnostics.extend(
             _validate_format_value_object(
