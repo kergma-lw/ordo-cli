@@ -390,6 +390,68 @@ class PlaybookActivationTest(unittest.TestCase):
 
         self.assertEqual(ctx.exception.diagnostics[0].code, "playbook.workflow.input_unknown")
 
+    def test_activate_playbook_tracks_consumed_and_surplus_profile_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      repository: {}
+                    blocks:
+                      - steps:
+                          - name: inspect
+                            uses: gh.issue
+                            with:
+                              repository: ${inputs.repository}
+                              issue_number: 7
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: backend
+                    inputs:
+                      repository: acme/repo
+                      repo_dir: /tmp/repo
+                      repo_kind: backend
+                    checks: []
+                    overrides: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", profile_name="backend", cwd=root)
+
+        self.assertEqual(activated.input_analysis.relevant_inputs, ("repository",))
+        self.assertEqual(activated.input_analysis.consumed_profile_inputs, ("repository",))
+        self.assertEqual(activated.input_analysis.surplus_profile_inputs, ("repo_dir", "repo_kind"))
+
     def test_activate_playbook_accepts_empty_string_and_null_as_present_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

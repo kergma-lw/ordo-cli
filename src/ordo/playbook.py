@@ -6,6 +6,7 @@ import contextlib
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import re
 import yaml
 
 from ordo.model.diagnostic import Diagnostic
@@ -39,6 +40,7 @@ PROFILE_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["profile_entry_fie
 STATE_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["state_entry_fields"])
 WORKFLOW_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["workflow_entry_fields"])
 PRE_RUN_ENTRY_ALLOWED_FIELDS = _field_names(PLAYBOOK_CONTRACT["pre_run_entry_fields"])
+_INPUT_REFERENCE_PATTERN = re.compile(r"\binputs\.([A-Za-z_][A-Za-z0-9_]*)\b")
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +68,21 @@ class ActivatedPlaybook:
     profile_working_directories: dict[str, Path | None] | None = None
     working_directory: Path | None = None
     diagnostics: tuple[Diagnostic, ...] = ()
+    input_analysis: "ActivationInputAnalysis | None" = None
+
+
+@dataclass(frozen=True, slots=True)
+class ActivationInputAnalysis:
+    """Activation-time view of workflow-relevant and surplus inputs."""
+
+    declared_inputs: tuple[str, ...]
+    consumed_inputs: tuple[str, ...]
+    relevant_inputs: tuple[str, ...]
+    supplied_profile_inputs: tuple[str, ...]
+    consumed_profile_inputs: tuple[str, ...]
+    surplus_profile_inputs: tuple[str, ...]
+    explicit_user_inputs: tuple[str, ...]
+    explicit_user_unknown_inputs: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,12 +356,18 @@ def activate_playbook(
     semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
     if not semantic_report.ok:
         raise PlaybookError(semantic_report.diagnostics)
+    input_analysis = _analyze_activation_inputs(
+        workflow,
+        profile=profile,
+        input_overrides=None,
+    )
     activation_diagnostics = _activation_diagnostics(
         workflow_entry,
         workflow_name=workflow_name,
         playbook_path=path,
         workflow=workflow,
         working_directory=working_directory,
+        input_analysis=input_analysis,
     )
 
     return ActivatedPlaybook(
@@ -359,6 +382,7 @@ def activate_playbook(
         profile_working_directories=profile_working_directories,
         working_directory=working_directory,
         diagnostics=activation_diagnostics,
+        input_analysis=input_analysis,
     )
 
 
@@ -368,6 +392,12 @@ def _apply_input_overrides(
     *,
     input_overrides: dict[str, object] | None,
 ) -> tuple[Workflow, Profile | None]:
+    input_analysis = _analyze_activation_inputs(
+        workflow,
+        profile=profile,
+        input_overrides=input_overrides,
+    )
+
     merged_workflow_inputs = dict(workflow.inputs)
     if profile is not None:
         for key, value in profile.inputs.items():
@@ -375,7 +405,7 @@ def _apply_input_overrides(
     if input_overrides:
         merged_workflow_inputs.update(input_overrides)
 
-    _validate_activation_inputs(workflow, merged_workflow_inputs)
+    _validate_activation_inputs(workflow, merged_workflow_inputs, input_analysis=input_analysis)
 
     overridden_workflow = Workflow(
         version=workflow.version,
@@ -408,10 +438,16 @@ def _apply_input_overrides(
     return overridden_workflow, overridden_profile
 
 
-def _validate_activation_inputs(workflow: Workflow, inputs: dict[str, object]) -> None:
+def _validate_activation_inputs(
+    workflow: Workflow,
+    inputs: dict[str, object],
+    *,
+    input_analysis: ActivationInputAnalysis | None = None,
+) -> None:
     declared_keys = set(workflow.declared_inputs)
     missing = sorted(key for key in declared_keys if key not in inputs)
-    unknown = sorted(key for key in inputs if key not in declared_keys)
+    surplus_profile_inputs = set() if input_analysis is None else set(input_analysis.surplus_profile_inputs)
+    unknown = sorted(key for key in inputs if key not in declared_keys and key not in surplus_profile_inputs)
     diagnostics: list[Diagnostic] = []
     for key in missing:
         diagnostics.append(
@@ -879,6 +915,7 @@ def _activation_diagnostics(
     playbook_path: Path,
     workflow: Workflow,
     working_directory: Path | None,
+    input_analysis: ActivationInputAnalysis | None,
 ) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     has_state_bindings = isinstance(workflow_entry.get("state_bindings"), dict) and bool(workflow_entry.get("state_bindings"))
@@ -897,7 +934,102 @@ def _activation_diagnostics(
                 },
             )
         )
+    if input_analysis is not None and input_analysis.surplus_profile_inputs:
+        diagnostics.append(
+            Diagnostic(
+                code="playbook.profile.surplus_inputs_ignored",
+                level="info",
+                message="Profile supplied additional context inputs that this workflow does not consume",
+                path=("profiles", input_analysis.supplied_profile_inputs[0] if input_analysis.supplied_profile_inputs else "<profile>"),
+                details={
+                    "stage": "activation",
+                    "category": "inputs",
+                    "playbook": str(playbook_path),
+                    "workflow": workflow.workflow,
+                    "surplus_profile_inputs": list(input_analysis.surplus_profile_inputs),
+                    "consumed_profile_inputs": list(input_analysis.consumed_profile_inputs),
+                },
+            )
+        )
     return tuple(diagnostics)
+
+
+def _analyze_activation_inputs(
+    workflow: Workflow,
+    *,
+    profile: Profile | None,
+    input_overrides: dict[str, object] | None,
+) -> ActivationInputAnalysis:
+    declared_inputs = tuple(key for key in workflow.declared_inputs if isinstance(key, str))
+    consumed_inputs = tuple(sorted(_workflow_consumed_inputs(workflow)))
+    relevant_inputs = tuple(sorted(set(declared_inputs) | set(consumed_inputs)))
+    supplied_profile_inputs = tuple(sorted(profile.inputs)) if profile is not None else ()
+    consumed_profile_inputs = tuple(sorted(key for key in supplied_profile_inputs if key in relevant_inputs))
+    surplus_profile_inputs = tuple(sorted(key for key in supplied_profile_inputs if key not in relevant_inputs))
+    explicit_user_inputs = tuple(sorted((input_overrides or {}).keys()))
+    explicit_user_unknown_inputs = tuple(sorted(key for key in explicit_user_inputs if key not in workflow.declared_inputs))
+    return ActivationInputAnalysis(
+        declared_inputs=declared_inputs,
+        consumed_inputs=consumed_inputs,
+        relevant_inputs=relevant_inputs,
+        supplied_profile_inputs=supplied_profile_inputs,
+        consumed_profile_inputs=consumed_profile_inputs,
+        surplus_profile_inputs=surplus_profile_inputs,
+        explicit_user_inputs=explicit_user_inputs,
+        explicit_user_unknown_inputs=explicit_user_unknown_inputs,
+    )
+
+
+def _workflow_consumed_inputs(workflow: Workflow) -> set[str]:
+    consumed = set(_extract_input_names(workflow.let_bindings))
+    consumed.update(_extract_input_names(workflow.state_needs))
+    consumed.update(_extract_input_names(workflow.state_bindings))
+    consumed.update(_extract_input_names(workflow.states))
+    for block in workflow.blocks:
+        if isinstance(block, StepBlock):
+            for step in block.steps:
+                consumed.update(_extract_input_names(step.if_))
+                consumed.update(_extract_input_names(step.run))
+                consumed.update(_extract_input_names(step.run_with))
+                consumed.update(_extract_input_names(step.profile_switch))
+                consumed.update(_extract_input_names(step.value))
+                consumed.update(_extract_input_names(step.result))
+                consumed.update(_extract_input_names(step.publish))
+                consumed.update(_extract_input_names(step.state_set))
+                consumed.update(_extract_input_names(step.state_delete))
+                if step.operation is not None:
+                    consumed.update(_extract_input_names(step.operation.with_))
+            continue
+        guards = getattr(block, "guards", None)
+        if guards is not None:
+            for guard in guards:
+                consumed.update(_extract_input_names(guard.expr))
+                if guard.operation is not None:
+                    consumed.update(_extract_input_names(guard.operation.with_))
+            continue
+        block_with = getattr(block, "with_", None)
+        consumed.update(_extract_input_names(block_with))
+        consumed.update(_extract_input_names(getattr(block, "if_", None)))
+    return consumed
+
+
+def _extract_input_names(value) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, str):
+        return set(_INPUT_REFERENCE_PATTERN.findall(value))
+    if isinstance(value, dict):
+        names: set[str] = set()
+        for key, nested in value.items():
+            names.update(_extract_input_names(key))
+            names.update(_extract_input_names(nested))
+        return names
+    if isinstance(value, (list, tuple)):
+        names: set[str] = set()
+        for nested in value:
+            names.update(_extract_input_names(nested))
+        return names
+    return set()
 
 
 def _evaluate_working_directory_expression(
