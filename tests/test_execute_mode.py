@@ -467,6 +467,51 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["skipped_steps"], [])
         self.assertEqual(result.outputs["execution_tree"], None)
 
+    def test_execute_runs_probe_step_without_execution_tree(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-issue",
+            inputs={"repository": "kergma-lw/ordo-cli", "issue_number": 471},
+            steps=(
+                Step(
+                    name="load-issue",
+                    operation=OperationRef(
+                        "gh.issue",
+                        with_={"repository": "${inputs.repository}", "issue_number": "${inputs.issue_number}"},
+                    ),
+                    register="issue",
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.failed_step, None)
+        self.assertEqual(result.outputs["executed_steps"], ["load-issue"])
+        self.assertEqual(result.outputs["execution_tree"], None)
+        self.assertIn("issue", workflow.step_results)
+
+    def test_execute_probe_step_no_longer_fails_as_action_not_implemented(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-issue",
+            inputs={"repository": "kergma-lw/ordo-cli", "issue_number": 471},
+            steps=(
+                Step(
+                    name="load-issue",
+                    operation=OperationRef(
+                        "gh.issue",
+                        with_={"repository": "${inputs.repository}", "issue_number": "${inputs.issue_number}"},
+                    ),
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertFalse(any(diagnostic.code == "operation.not_implemented" and diagnostic.details.get("kind") == "action" for diagnostic in result.diagnostics))
+
     def test_execute_surfaces_markdown_adapter_failure_from_value_step(self) -> None:
         workflow = Workflow(
             version=0,

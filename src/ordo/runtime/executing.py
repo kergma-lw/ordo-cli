@@ -1091,8 +1091,9 @@ def _mark_execution_tree_step_runtime(
                 runtime = dict(result.outputs)
                 child["runtime_observation"] = runtime
                 planned = child.get("planned_observation")
-                child["divergence_status"] = "matched" if planned in (None, runtime) else "diverged"
-                child["divergence_reason"] = None if planned in (None, runtime) else "runtime_observation_mismatch"
+                matches = planned in (None, {}, runtime)
+                child["divergence_status"] = "matched" if matches else "diverged"
+                child["divergence_reason"] = None if matches else "runtime_observation_mismatch"
             child["runtime_status"] = runtime_status
             _refresh_execution_tree_block_runtime(block)
             return
