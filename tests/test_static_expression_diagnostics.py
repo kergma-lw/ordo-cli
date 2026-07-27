@@ -22,3 +22,31 @@ class StaticExpressionDiagnosticsTest(unittest.TestCase):
         )
 
         self.assertEqual(diagnostics, [])
+
+    def test_does_not_report_when_format_object_placeholder_count_matches(self) -> None:
+        diagnostics = collect_static_expression_diagnostics(
+            {"format": "{}#{}", "args": ["repo", 7]},
+            path=("blocks", "0", "steps", "0", "publish", "issue_ref"),
+            source="demo.yml",
+        )
+
+        self.assertEqual(diagnostics, [])
+
+    def test_collects_statically_known_embedded_format_mismatch(self) -> None:
+        diagnostics = collect_static_expression_diagnostics(
+            "${format(\"{}\", \"repo\", 7)}",
+            path=("blocks", "0", "steps", "0", "value"),
+            source="demo.yml",
+        )
+
+        self.assertEqual(len(diagnostics), 1)
+        self.assertEqual(diagnostics[0].code, "validation.workflow.value_expr.format.placeholder_count")
+
+    def test_does_not_report_dynamic_embedded_format_case(self) -> None:
+        diagnostics = collect_static_expression_diagnostics(
+            "${format(\"{}#{}\", inputs.repository, 7)}",
+            path=("blocks", "0", "steps", "0", "value"),
+            source="demo.yml",
+        )
+
+        self.assertEqual(diagnostics, [])
