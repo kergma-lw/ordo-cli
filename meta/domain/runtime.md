@@ -122,3 +122,17 @@ This layer may:
 - use the standard built-in connector provider;
 - combine the built-in provider with local or project-specific connectors;
 - run with no built-in connector provider at all.
+
+## Activation context boundary
+
+Profiles may carry broader ambient context than any single workflow consumes.
+
+Activation should therefore distinguish between:
+- workflow-relevant inputs that the workflow declares or actually consumes;
+- surplus profile-carried context that remains available to the run environment but is not part of the workflow's effective input contract.
+
+Profile-supplied surplus context is not, by itself, an activation error.
+Workflows should not need to declare unused profile values merely to tolerate reusable profiles with wider context surfaces.
+
+This boundary does not erase explicit caller intent.
+User-supplied unknown activation inputs remain distinct from profile surplus and should stay diagnosable as explicit caller mistakes or mismatches.

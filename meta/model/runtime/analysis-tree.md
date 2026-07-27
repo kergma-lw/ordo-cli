@@ -15,6 +15,7 @@ The same analysis tree may retain:
 - validation and semantic-validation outcomes;
 - activated profile, override, and playbook context;
 - known versus missing activation inputs when structure is still analyzable;
+- workflow-relevant versus surplus profile-supplied activation context;
 - declared-input usage classification and evidence for why each input was treated as control-bearing, effect-targeting, ambient profile context, or unused;
 - ordered block, guard, and step structure;
 - read-only observations and their canonical shapes;
@@ -44,6 +45,11 @@ Input-classification advice follows the same boundary:
 - a declared input that meaningfully drives applicability, control flow, profile switching, state writes, publish shape, or effectful target selection may justify a missing-validation finding;
 - a declared input that is merely carried in from profile defaults as stable repository or project context is not automatically missing-validation debt;
 - a declared input that is not meaningfully used at all should surface as unused declaration debt rather than as missing validation.
+
+Activation-context advice follows a related boundary:
+- profiles may provide more ambient context than one workflow uses;
+- profile-supplied surplus context should remain non-blocking unless the workflow actually depends on it;
+- explicit caller-supplied unknown inputs remain separately diagnosable because they express direct user intent rather than reusable profile breadth.
 
 ## Preservation rule
 
