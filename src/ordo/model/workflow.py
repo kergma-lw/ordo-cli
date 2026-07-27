@@ -188,6 +188,7 @@ class Workflow:
     workflow: str
     inputs: JSONObject = field(default_factory=dict)
     declared_inputs: JSONObject = field(default_factory=dict)
+    explicit_input_keys: tuple[str, ...] = ()
     let_bindings: dict[str, str] = field(default_factory=dict)
     state_needs: JSONObject = field(default_factory=dict)
     state_bindings: JSONObject = field(default_factory=dict)
@@ -204,6 +205,7 @@ class Workflow:
         workflow: str,
         inputs: JSONObject | None = None,
         declared_inputs: JSONObject | None = None,
+        explicit_input_keys: tuple[str, ...] = (),
         let_bindings: dict[str, str] | None = None,
         state_needs: JSONObject | None = None,
         state_bindings: JSONObject | None = None,
@@ -233,6 +235,7 @@ class Workflow:
         declared = {key: {} for key in runtime_inputs} if declared_inputs is None else dict(declared_inputs)
         object.__setattr__(self, "inputs", runtime_inputs)
         object.__setattr__(self, "declared_inputs", declared)
+        object.__setattr__(self, "explicit_input_keys", tuple(explicit_input_keys))
         object.__setattr__(self, "let_bindings", {} if let_bindings is None else dict(let_bindings))
         object.__setattr__(self, "state_needs", {} if state_needs is None else dict(state_needs))
         object.__setattr__(self, "state_bindings", {} if state_bindings is None else dict(state_bindings))

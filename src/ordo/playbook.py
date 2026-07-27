@@ -413,6 +413,7 @@ def _apply_input_overrides(
         workflow=workflow.workflow,
         inputs=merged_workflow_inputs,
         declared_inputs=workflow.declared_inputs,
+        explicit_input_keys=tuple(sorted((input_overrides or {}).keys())),
         let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
@@ -640,6 +641,7 @@ def _prepend_pre_run_workflows(
         workflow=workflow.workflow,
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
+        explicit_input_keys=workflow.explicit_input_keys,
         let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
@@ -900,6 +902,7 @@ def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Work
         workflow=workflow.workflow,
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
+        explicit_input_keys=workflow.explicit_input_keys,
         let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
@@ -1097,13 +1100,14 @@ def _working_directory_activation_workflow(
 
     template = workflow
     if template is None:
-        return Workflow(version=0, workflow="activation", inputs=merged_inputs, let_bindings={}, state_needs={}, state_bindings={}, states={}, step_results={}, blocks=())
+        return Workflow(version=0, workflow="activation", inputs=merged_inputs, explicit_input_keys=tuple(sorted((input_overrides or {}).keys())), let_bindings={}, state_needs={}, state_bindings={}, states={}, step_results={}, blocks=())
 
     return Workflow(
         version=template.version,
         workflow=template.workflow,
         inputs=merged_inputs,
         declared_inputs=template.declared_inputs,
+        explicit_input_keys=template.explicit_input_keys,
         let_bindings=template.let_bindings,
         state_needs=template.state_needs,
         state_bindings=template.state_bindings,
@@ -1218,6 +1222,7 @@ def _resolve_profile_working_directory(
         workflow=workflow.workflow,
         inputs=profile_inputs,
         declared_inputs=workflow.declared_inputs,
+        explicit_input_keys=workflow.explicit_input_keys,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
         states=workflow.states,

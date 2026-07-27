@@ -11,14 +11,93 @@ from unittest.mock import patch
 
 from ordo.cli import main as cli_main
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, RuntimeResult, RuntimeStatus
+from ordo.model.workflow import Workflow
 from ordo.runtime import check_workflow, execute_workflow, plan_workflow
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, discover_playbook_path
+from ordo.runtime.profiles import apply_profile_defaults_to_subsequent_steps
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class PlaybookActivationTest(unittest.TestCase):
+    def test_activate_playbook_records_explicit_input_keys_on_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      repository: {}
+                      issue_number: {}
+                    blocks:
+                      - guards: []
+                      - steps: []
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles").mkdir()
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: backend
+                    inputs:
+                      repository: owner/backend
+                      repo_kind: backend
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(
+                workflow_name="inspect-issue",
+                profile_name="backend",
+                input_overrides={"issue_number": 42, "repository": "override/repo"},
+                cwd=root,
+            )
+
+        self.assertEqual(activated.workflow.explicit_input_keys, ("issue_number", "repository"))
+
+    def test_apply_profile_defaults_to_subsequent_steps_preserves_explicit_input_keys(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-issue",
+            inputs={"repository": "override/repo", "issue_number": 42},
+            declared_inputs={"repository": {}, "issue_number": {}, "profile": {}},
+            explicit_input_keys=("repository",),
+            blocks=(),
+        )
+        profile = Profile(name="backend", inputs={"repository": "owner/backend", "project_id": "PVT_demo"})
+
+        applied = apply_profile_defaults_to_subsequent_steps(workflow, profile)
+
+        self.assertTrue(applied.ok)
+        assert applied.workflow is not None
+        self.assertEqual(applied.workflow.explicit_input_keys, ("repository",))
+
     def test_discover_playbook_missing_returns_structured_discovery_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaises(PlaybookError) as ctx:
