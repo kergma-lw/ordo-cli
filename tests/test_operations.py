@@ -212,12 +212,156 @@ class OperationTest(unittest.TestCase):
         registry = get_public_connector_registry()
 
         gh_issue = registry.get_operation("gh.issue")
+        gh_issue_comments = registry.get_operation("gh.issue.comments")
+        gh_project_items = registry.get_operation("gh.project.items")
         gh_close = registry.get_operation("gh.issue.close")
         shell_command = registry.get_operation("shell.command")
 
         self.assertEqual(gh_issue.failure_modes, ("issue_not_found", "probe_failed"))
+        self.assertEqual(gh_issue_comments.failure_modes, ("issue_not_found", "limit_invalid", "probe_failed"))
+        self.assertEqual(gh_project_items.failure_modes, ("project_not_found", "probe_failed"))
         self.assertEqual(gh_close.failure_modes, ("issue_not_found", "close_blocked"))
         self.assertEqual(shell_command.failure_modes, ("command_failed", "action_failed"))
+
+    def test_gh_project_items_probe_contract_publishes_normalized_collection_shape(self) -> None:
+        registry = get_public_connector_registry()
+
+        gh_project_items = registry.get_operation("gh.project.items")
+
+        self.assertIsNotNone(gh_project_items)
+        self.assertEqual(gh_project_items.kind, "probe")
+        self.assertEqual(gh_project_items.inputs, {"project_id": "string"})
+        self.assertEqual(gh_project_items.outputs["count"], "integer")
+        self.assertEqual(gh_project_items.outputs["items"][0]["content_kind"], "string")
+
+    def test_gh_project_items_probe_returns_normalized_items(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_issue","content":{"__typename":"Issue","number":7,"title":"Implement items probe","url":"https://github.com/owner/repo/issues/7","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[]}}, {"id":"PVTI_draft","content":{"__typename":"DraftIssue"},"fieldValues":{"nodes":[]}}]}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 2)
+        self.assertEqual(result.outputs["items"][0]["item_id"], "PVTI_issue")
+        self.assertEqual(result.outputs["items"][0]["content_kind"], "Issue")
+        self.assertEqual(result.outputs["items"][0]["repository"], "owner/repo")
+        self.assertEqual(result.outputs["items"][0]["number"], 7)
+        self.assertEqual(result.outputs["items"][1]["item_id"], "PVTI_draft")
+        self.assertEqual(result.outputs["items"][1]["content_kind"], "DraftIssue")
+        self.assertIsNone(result.outputs["items"][1]["repository"])
+        self.assertIsNone(result.outputs["items"][1]["number"])
+
+    def test_gh_project_items_probe_paginates_without_per_item_followup_fetches(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":true,"endCursor":"CURSOR_1"},"nodes":[{"id":"PVTI_1","content":{"__typename":"Issue","number":1,"title":"First","url":"https://github.com/owner/repo/issues/1","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[]}}]}}}}',
+                    stderr="",
+                ),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_2","content":{"__typename":"PullRequest","number":2,"title":"Second","url":"https://github.com/owner/repo/pull/2","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[]}}]}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 2)
+        self.assertEqual(len(result.outputs["items"]), 2)
+        self.assertEqual(run.call_count, 3)
+        second_query = run.call_args_list[2].args[0]
+        self.assertIn("after=CURSOR_1", second_query)
+
+    def test_gh_project_items_probe_reports_missing_project(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_missing"})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"node":null}}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "project_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_project_items.project_not_found")
+
+    def test_gh_issue_comments_probe_returns_structured_comment_nodes(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue.comments", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 471})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.issue.comments")
+        resolved = ResolvedOperation("gh.issue.comments", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"issue":{"comments":{"totalCount":2,"nodes":[{"id":"IC_1","url":"https://github.com/kergma-lw/ordo-cli/issues/471#issuecomment-1","body":"First","createdAt":"2026-07-27T10:00:00Z","updatedAt":"2026-07-27T10:00:00Z","author":{"login":"kergma-lw"}},{"id":"IC_2","url":"https://github.com/kergma-lw/ordo-cli/issues/471#issuecomment-2","body":"Second","createdAt":"2026-07-27T11:00:00Z","updatedAt":"2026-07-27T11:00:00Z","author":{"login":"ww"}}]}}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["issue_ref"], "kergma-lw/ordo-cli#471")
+        self.assertEqual(result.outputs["total_count"], 2)
+        self.assertEqual(len(result.outputs["comments"]), 2)
+        self.assertEqual(result.outputs["comments"][0]["body"], "First")
+
+    def test_gh_issue_comments_probe_rejects_invalid_limit(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue.comments", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 471, "limit": 0})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.issue.comments")
+        resolved = ResolvedOperation("gh.issue.comments", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="authenticated\n", stderr="")]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "limit_invalid")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_issue_comments.invalid_limit")
+
+    def test_gh_issue_comments_probe_accepts_large_limit(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue.comments", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 471, "limit": 250})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.issue.comments")
+        resolved = ResolvedOperation("gh.issue.comments", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"issue":{"comments":{"totalCount":0,"nodes":[]}}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["total_count"], 0)
 
     def test_git_worktree_returns_structured_probe_outputs(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.worktree")),), steps=())
