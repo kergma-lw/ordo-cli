@@ -19,6 +19,7 @@ The same analysis tree may retain:
 - declared-input usage classification and evidence for why each input was treated as control-bearing, trusted profile-provided consumed context, ambient profile context, effect-targeting, or unused;
 - ordered block, guard, and step structure;
 - read-only observations and their canonical shapes;
+- step-level operation kind information needed to keep probe-versus-action semantics aligned across analysis and execution;
 - advisory preflight-observation recommendations together with matched and missing coverage;
 - incomplete, weakened, or halted analysis reasons.
 

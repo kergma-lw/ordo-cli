@@ -12,6 +12,7 @@
 - At minimum, the structured runtime result must preserve a human-readable message and a machine-readable code when non-success detail matters.
 - The model should support fail-safe behavior for local operational rituals where risk reduction matters more than maximum flexibility.
 - The runtime must expose a machine-usable decision surface, not only an execution surface.
+- The runtime must respect connector-declared operation kind consistently in step context; probe operations used as steps remain probe operations during `execute`.
 
 ## Runtime serialization requirements
 

@@ -697,6 +697,7 @@
 - At minimum, the structured runtime result must preserve a human-readable message and a machine-readable code when non-success detail matters.
 - The model should support fail-safe behavior for local operational rituals where risk reduction matters more than maximum flexibility.
 - The runtime must expose a machine-usable decision surface, not only an execution surface.
+- The runtime must respect connector-declared operation kind consistently in step context; probe operations used as steps remain probe operations during `execute`.
 
 ## Runtime serialization requirements
 
@@ -1648,6 +1649,10 @@ Its primary value is execution preview, not merely blocked-versus-allowed status
 ### `execute`
 
 Executes the workflow.
+
+Connector-declared operation kind remains semantically relevant in step context.
+A step that references a probe operation is still a read-only probe step and must be dispatched through probe-capable execution semantics rather than through action-only fallback behavior.
+Correct probe-step dispatch must not depend on whether execution-tree output is present.
 
 ### `explain`
 

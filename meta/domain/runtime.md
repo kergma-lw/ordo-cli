@@ -51,6 +51,10 @@ Its primary value is execution preview, not merely blocked-versus-allowed status
 
 Executes the workflow.
 
+Connector-declared operation kind remains semantically relevant in step context.
+A step that references a probe operation is still a read-only probe step and must be dispatched through probe-capable execution semantics rather than through action-only fallback behavior.
+Correct probe-step dispatch must not depend on whether execution-tree output is present.
+
 ### `explain`
 
 Answers why the runtime reached its current decision.
