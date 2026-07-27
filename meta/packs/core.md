@@ -4310,7 +4310,7 @@ let:
 
 blocks:
   - guards:
-      - ready_items.count > 0
+      - ready_items.count != 0
 ```
 
 ### Direct filtered call

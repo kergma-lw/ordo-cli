@@ -1,6 +1,8 @@
 import unittest
 from pathlib import Path
 import tempfile
+import subprocess
+from unittest.mock import patch
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.launcher import Launcher
@@ -27,6 +29,10 @@ from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 class ExecuteModeTest(unittest.TestCase):
+    @staticmethod
+    def _completed(*, returncode: int, stdout: str, stderr: str = "") -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=["cmd"], returncode=returncode, stdout=stdout, stderr=stderr)
+
     def test_prepare_tree_driven_step_context_marks_reusable_value_step(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="flag", value=True, register="flag"),))
         plan_result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -276,6 +282,69 @@ class ExecuteModeTest(unittest.TestCase):
                 list(result.results),
                 [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]],
             )
+
+    def test_execute_can_use_gh_project_items_let_binding_for_guard_fan_out_and_publish(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={
+                "project_id": "PVT_demo",
+                "filters": [{"field": "Status", "value": "Ready"}],
+            },
+            let_bindings={
+                "ready_items": "gh.project.items(project_id=inputs.project_id, filters=inputs.filters)",
+            },
+            blocks=(
+                GuardBlock(guards=(Guard(expr="ready_items.count != 0"),)),
+                StepBlock(
+                    steps=(
+                        Step(name="load-items", operation=OperationRef("gh.project.items", with_={"project_id": "${inputs.project_id}", "filters": "${inputs.filters}"}), register="loaded_items"),
+                        Step(name="copy", result="${step.loaded_items.outputs.items}"),
+                        Step(name="publish-count", publish={"summary": "matched", "count": "${step.loaded_items.outputs.count}"}),
+                    )
+                ),
+            ),
+        )
+
+        items_payload = '{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_1","content":{"__typename":"Issue","number":7,"title":"First ready item","url":"https://github.com/owner/repo/issues/7","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Ready","field":{"id":"F_status","name":"Status"}}]}},{"id":"PVTI_2","content":{"__typename":"Issue","number":8,"title":"Second ready item","url":"https://github.com/owner/repo/issues/8","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Ready","field":{"id":"F_status","name":"Status"}}]}}]}}}}'
+        fields_payload = '{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[{"__typename":"ProjectV2SingleSelectField","id":"F_status","name":"Status","options":[{"id":"O_ready","name":"Ready"}]}]}}}}'
+
+        def run_side_effect(argv, **kwargs):
+            if argv[:3] == ["gh", "auth", "status"]:
+                return self._completed(returncode=0, stdout="authenticated\n")
+            command_text = " ".join(argv)
+            if "items(first:100" in command_text:
+                return self._completed(returncode=0, stdout=items_payload)
+            if "fields(first:100" in command_text:
+                return self._completed(returncode=0, stdout=fields_payload)
+            raise AssertionError(f"Unexpected command: {argv!r}")
+
+        with patch("subprocess.run", side_effect=run_side_effect):
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(
+            list(result.results),
+            [[
+                {
+                    "item_id": "PVTI_1",
+                    "content_kind": "Issue",
+                    "repository": "owner/repo",
+                    "number": 7,
+                    "title": "First ready item",
+                    "url": "https://github.com/owner/repo/issues/7",
+                },
+                {
+                    "item_id": "PVTI_2",
+                    "content_kind": "Issue",
+                    "repository": "owner/repo",
+                    "number": 8,
+                    "title": "Second ready item",
+                    "url": "https://github.com/owner/repo/issues/8",
+                },
+            ]],
+        )
+        self.assertEqual(list(result.published), [{"summary": "matched", "count": 2}])
 
     def test_execute_fan_out_registers_empty_results_for_empty_array(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
