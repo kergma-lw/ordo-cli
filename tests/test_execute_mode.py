@@ -512,6 +512,38 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertFalse(any(diagnostic.code == "operation.not_implemented" and diagnostic.details.get("kind") == "action" for diagnostic in result.diagnostics))
 
+    def test_execute_keeps_probe_revalidation_bookkeeping_with_execution_tree(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-issue",
+            inputs={"repository": "kergma-lw/ordo-cli", "issue_number": 471},
+            steps=(
+                Step(
+                    name="load-issue",
+                    operation=OperationRef(
+                        "gh.issue",
+                        with_={"repository": "${inputs.repository}", "issue_number": "${inputs.issue_number}"},
+                    ),
+                    register="issue",
+                ),
+            ),
+        )
+        probe = lambda resolved_guard, _workflow: OperationResult(status="ok", outputs={"exists": True})
+        plan_result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        result = execute_workflow(
+            workflow,
+            guard_probe=probe,
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            execution_tree=plan_result.outputs["execution_tree"],
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        child = result.outputs["execution_tree"]["blocks"][0]["children"][0]
+        self.assertEqual(child["runtime_status"], "revalidated")
+        self.assertEqual(child["revalidated"], True)
+        self.assertIn(child["divergence_status"], {"matched", "diverged"})
+
     def test_execute_surfaces_markdown_adapter_failure_from_value_step(self) -> None:
         workflow = Workflow(
             version=0,
