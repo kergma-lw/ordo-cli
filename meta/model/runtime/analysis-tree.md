@@ -20,6 +20,7 @@ The same analysis tree may retain:
 - ordered block, guard, and step structure;
 - read-only observations and their canonical shapes;
 - step-level operation kind information needed to keep probe-versus-action semantics aligned across analysis and execution;
+- statically knowable expression diagnostics for builtin misuse that can be proven before execution;
 - advisory preflight-observation recommendations together with matched and missing coverage;
 - incomplete, weakened, or halted analysis reasons.
 
@@ -41,6 +42,11 @@ Authoring guidance and runtime executability semantics must remain distinct even
 In particular:
 - advisory recommendation gaps may weaken authoring guidance, explanation strength, or preflight-support quality;
 - those same gaps must not by themselves become hidden blockers or implicit workflow prerequisites.
+
+Expression-diagnostic advice follows the same boundary:
+- a builtin misuse that is statically certain from authored workflow structure should surface before execution where practical;
+- canonical examples include wrong builtin arity or a `format` expression whose placeholder count cannot match its argument count;
+- dynamic or unresolved expressions that are not statically decidable should remain runtime-only rather than produce false positives.
 
 Input-classification advice follows the same boundary:
 - a declared input that meaningfully drives applicability, control flow, profile switching, state writes, publish shape, or effectful target selection may justify a missing-validation finding;

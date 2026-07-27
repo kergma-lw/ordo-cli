@@ -21,6 +21,9 @@ When a workflow consumes a value such as `repository` from the selected profile 
 
 Its primary value is authoring-quality review rather than executability truth.
 
+Statically knowable expression mistakes should ideally surface here or in adjacent validation surfaces before `execute` is needed.
+For example, a builtin `format` expression whose placeholder count cannot match its argument count is an authoring-time problem, not merely a runtime surprise.
+
 ### `check`
 
 Answers whether execution may proceed safely.

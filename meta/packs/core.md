@@ -698,6 +698,7 @@
 - The model should support fail-safe behavior for local operational rituals where risk reduction matters more than maximum flexibility.
 - The runtime must expose a machine-usable decision surface, not only an execution surface.
 - The runtime must respect connector-declared operation kind consistently in step context; probe operations used as steps remain probe operations during `execute`.
+- The runtime should diagnose statically knowable builtin-expression misuse before `execute` when the misuse is certain from authored workflow structure.
 
 ## Runtime serialization requirements
 
@@ -1619,6 +1620,9 @@ Profile-provided consumed context is still meaningful workflow input, but it is 
 When a workflow consumes a value such as `repository` from the selected profile as trusted execution context, `review` should not require the workflow to re-validate that context in early guards unless the value also acts as an explicit control-bearing choice.
 
 Its primary value is authoring-quality review rather than executability truth.
+
+Statically knowable expression mistakes should ideally surface here or in adjacent validation surfaces before `execute` is needed.
+For example, a builtin `format` expression whose placeholder count cannot match its argument count is an authoring-time problem, not merely a runtime surprise.
 
 ### `check`
 

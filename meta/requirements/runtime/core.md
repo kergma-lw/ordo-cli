@@ -13,6 +13,7 @@
 - The model should support fail-safe behavior for local operational rituals where risk reduction matters more than maximum flexibility.
 - The runtime must expose a machine-usable decision surface, not only an execution surface.
 - The runtime must respect connector-declared operation kind consistently in step context; probe operations used as steps remain probe operations during `execute`.
+- The runtime should diagnose statically knowable builtin-expression misuse before `execute` when the misuse is certain from authored workflow structure.
 
 ## Runtime serialization requirements
 
