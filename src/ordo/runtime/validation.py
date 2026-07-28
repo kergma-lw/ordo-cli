@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,8 @@ from .local_expressions import (
 from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_workflow_payload, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .local_expression_engine.core import (
+    _FieldPathSyntaxError,
+    _parse_field_path,
     BinaryNode,
     CallArgumentNode,
     CallNode,
@@ -1812,6 +1815,35 @@ def _infer_filter_result_type(
         return "string", diagnostics
     if filter_node.name in {"eq", "ne", "is_string", "is_number", "is_integer", "is_boolean", "in"}:
         return "boolean", diagnostics
+    if filter_node.name == "field":
+        if filter_node.arguments and isinstance(filter_node.arguments[0], LiteralNode):
+            argument = filter_node.arguments[0]
+            if not isinstance(argument.value, str):
+                diagnostics.append(
+                    _diagnostic(
+                        "validation.workflow.step.if_expr.field_path_type",
+                        "Filter 'field' requires a string path argument",
+                        path,
+                        source,
+                        filter="field",
+                        actual_type=type(argument.value).__name__,
+                    )
+                )
+            else:
+                try:
+                    _parse_field_path(argument.value)
+                except _FieldPathSyntaxError as exc:
+                    diagnostics.append(
+                        _diagnostic(
+                            "validation.workflow.step.if_expr.field_path_invalid",
+                            exc.message,
+                            path,
+                            source,
+                            filter="field",
+                            field_path=argument.value,
+                        )
+                    )
+        return "unknown", diagnostics
     if filter_node.name == "not":
         if input_type not in {"boolean", "unknown"}:
             diagnostics.append(
@@ -2283,6 +2315,25 @@ def _warning(code: str, message: str, path: tuple[str, ...], source: str, **deta
 
 
 def _report(document_kind: str, diagnostics: list[Diagnostic]) -> ValidationReport:
-    if any(diagnostic.level == "error" for diagnostic in diagnostics):
-        return ValidationReport(document_kind=document_kind, status=RuntimeStatus.VALIDATION_ERROR, diagnostics=tuple(diagnostics))
-    return ValidationReport(document_kind=document_kind, status=RuntimeStatus.OK, diagnostics=tuple(diagnostics))
+    deduplicated = _deduplicate_diagnostics(diagnostics)
+    if any(diagnostic.level == "error" for diagnostic in deduplicated):
+        return ValidationReport(document_kind=document_kind, status=RuntimeStatus.VALIDATION_ERROR, diagnostics=tuple(deduplicated))
+    return ValidationReport(document_kind=document_kind, status=RuntimeStatus.OK, diagnostics=tuple(deduplicated))
+
+
+def _deduplicate_diagnostics(diagnostics: list[Diagnostic]) -> list[Diagnostic]:
+    seen: set[tuple[str, str, str, tuple[str, ...], str]] = set()
+    deduplicated: list[Diagnostic] = []
+    for diagnostic in diagnostics:
+        key = (
+            diagnostic.code,
+            diagnostic.level,
+            diagnostic.message,
+            diagnostic.path,
+            json.dumps(diagnostic.details, sort_keys=True, default=str),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append(diagnostic)
+    return deduplicated

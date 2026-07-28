@@ -390,6 +390,76 @@ blocks:
 
         self.assertIs(evaluate_local_expression_tree(parsed, workflow), False)
 
+    def test_evaluate_field_filter_projects_object_value(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"payload": {"results": [{"value": 7}]}} ,
+        )
+
+        parsed = parse_local_expression_tree('inputs.payload | field("results[0].value")')
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), 7)
+
+    def test_evaluate_field_filter_projects_array_values_with_null_for_missing_items(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={
+                "payload": [
+                    {"results": [{"value": 7}]},
+                    {"other": "nope"},
+                    {"results": [{"value": 9}]},
+                ]
+            },
+        )
+
+        parsed = parse_local_expression_tree('inputs.payload | field("results[0].value")')
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), [7, None, 9])
+
+    def test_evaluate_field_filter_rejects_missing_object_path(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"payload": {"other": "nope"}},
+        )
+
+        parsed = parse_local_expression_tree('inputs.payload | field("results[0]")')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.field_path_missing")
+
+    def test_evaluate_field_filter_rejects_non_collection_input(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"payload": "text"},
+        )
+
+        parsed = parse_local_expression_tree('inputs.payload | field("results")')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
+    def test_evaluate_field_filter_rejects_invalid_path_syntax(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"payload": {"results": [{"value": 7}]}} ,
+        )
+
+        parsed = parse_local_expression_tree('inputs.payload | field("results[")')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.field_path_invalid")
+
     def test_evaluate_is_missing_returns_true_for_missing_input(self) -> None:
         workflow = load_workflow_text(
             """

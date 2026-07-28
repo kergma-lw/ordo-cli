@@ -203,9 +203,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         filters = {item["name"]: item for item in model["local_expressions"]["pipeline_filters"]}
 
         self.assertIn("lower", filters)
+        self.assertIn("field", filters)
         self.assertIn("is_integer", filters)
         self.assertIn("in", filters)
         self.assertEqual(filters["lower"]["argument_count"], 0)
+        self.assertEqual(filters["field"]["argument_count"], 1)
         self.assertEqual(filters["eq"]["argument_count"], 1)
         self.assertEqual(filters["is_boolean"]["output_type"], "boolean")
         self.assertEqual(filters["in"]["input_type"], "json")

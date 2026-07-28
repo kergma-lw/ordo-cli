@@ -2,7 +2,7 @@ import textwrap
 import unittest
 
 from ordo.model.runtime import RuntimeStatus
-from ordo.runtime import validate_profile_text, validate_workflow_text
+from ordo.runtime import load_workflow_text, validate_profile_text, validate_workflow_semantics, validate_workflow_text
 
 
 class ValidationTest(unittest.TestCase):
@@ -1254,6 +1254,40 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_semantic_validation_deduplicates_static_format_diagnostics(self) -> None:
+        workflow_text = textwrap.dedent(
+            """
+            version: 0
+            workflow: issue-view
+            inputs:
+              profile: {}
+              number: {}
+              repository: {}
+              project_id: {}
+            blocks:
+              - guards: []
+              - steps:
+                  - name: Publish issue view
+                    publish:
+                      issue_ref:
+                        format: "%s#%s"
+                        args:
+                          - ${inputs.repository}
+                          - ${inputs.number}
+            """
+        )
+        workflow = load_workflow_text(workflow_text, source="issue-view.yml")
+
+        report = validate_workflow_semantics(workflow, source="issue-view.yml")
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        matching = [
+            diagnostic
+            for diagnostic in report.diagnostics
+            if diagnostic.code == "validation.workflow.value_expr.format.placeholder_count"
+        ]
+        self.assertEqual(len(matching), 1)
+
     def test_step_if_accepts_bare_condition(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -1499,6 +1533,28 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_step_if_rejects_invalid_field_filter_path_literal(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  payload:
+                    title: ok
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if: ${inputs.payload | field("title[") | is_string}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.field_path_invalid")
 
     def test_step_if_rejects_non_boolean_and_operand(self) -> None:
         report = validate_workflow_text(

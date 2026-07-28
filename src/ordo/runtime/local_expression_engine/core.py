@@ -245,6 +245,16 @@ LocalExpressionNode = ValueExpressionNode
 ParsedValueExpression = ParsedLocalExpressionTree
 ValueExpressionParseError = LocalExpressionParseError
 ValueExpressionEvaluationError = LocalExpressionEvaluationError
+
+
+@dataclass(frozen=True, slots=True)
+class _FieldPathSyntaxError(Exception):
+    message: str
+    position: int
+
+
+FieldPathSegment = str | int
+_FIELD_PATH_MISSING = object()
 ValueExpressionValidationError = LocalExpressionValidationIssue
 ValueExpressionDependency = LocalExpressionDependency
 
@@ -1164,6 +1174,26 @@ class _SemanticValidator:
                 f"Filter '{node.name}' requires exactly {spec.argument_count} argument(s)",
                 node,
             )
+            return
+        if node.name != "field":
+            return
+        argument = node.arguments[0]
+        if isinstance(argument, LiteralNode):
+            if not isinstance(argument.value, str):
+                self._error(
+                    "validation.workflow.value_expr.field_path_type",
+                    "Filter 'field' requires a string path argument",
+                    argument,
+                )
+                return
+            try:
+                _parse_field_path(argument.value)
+            except _FieldPathSyntaxError as exc:
+                self._error(
+                    "validation.workflow.value_expr.field_path_invalid",
+                    exc.message,
+                    argument,
+                )
 
     def _error(self, code: str, message: str, node: ValueExpressionNode) -> None:
         self._errors.append(ValueExpressionValidationError(code=code, message=message, start=node.start, end=node.end))
@@ -2200,6 +2230,99 @@ def _slugify(value: str) -> str:
     return normalized.strip("-")
 
 
+def _parse_field_path(path: str) -> tuple[FieldPathSegment, ...]:
+    if not path:
+        raise _FieldPathSyntaxError("Filter 'field' requires a non-empty path", 0)
+    segments: list[FieldPathSegment] = []
+    position = 0
+    length = len(path)
+
+    def consume_identifier(start: int) -> tuple[str, int]:
+        if start >= length or not (path[start].isalpha() or path[start] == "_"):
+            raise _FieldPathSyntaxError("Filter 'field' path must start with an identifier", start)
+        end = start + 1
+        while end < length and (path[end].isalnum() or path[end] == "_"):
+            end += 1
+        return path[start:end], end
+
+    identifier, position = consume_identifier(position)
+    segments.append(identifier)
+    while position < length:
+        char = path[position]
+        if char == ".":
+            identifier, position = consume_identifier(position + 1)
+            segments.append(identifier)
+            continue
+        if char == "[":
+            closing = path.find("]", position + 1)
+            if closing == -1:
+                raise _FieldPathSyntaxError("Filter 'field' path index is missing a closing bracket", position)
+            raw_index = path[position + 1 : closing]
+            if not raw_index or any(not item.isdigit() for item in raw_index):
+                raise _FieldPathSyntaxError("Filter 'field' path indexes must be zero-based integers", position + 1)
+            segments.append(int(raw_index))
+            position = closing + 1
+            continue
+        raise _FieldPathSyntaxError("Filter 'field' path contains unsupported syntax", position)
+    return tuple(segments)
+
+
+def _resolve_field_path(value: JSONValue, path: tuple[FieldPathSegment, ...]) -> JSONValue | object:
+    current: JSONValue | object = value
+    for segment in path:
+        if isinstance(segment, str):
+            if not isinstance(current, dict) or segment not in current:
+                return _FIELD_PATH_MISSING
+            current = current[segment]
+            continue
+        if not isinstance(current, list) or segment < 0 or segment >= len(current):
+            return _FIELD_PATH_MISSING
+        current = current[segment]
+    return current
+
+
+def _require_list(value: JSONValue, *, filter_name: str, parsed: ParsedValueExpression) -> list[JSONValue]:
+    if isinstance(value, list):
+        return value
+    raise ValueExpressionEvaluationError(
+        code="runtime.value.filter_type_invalid",
+        message=f"Filter '{filter_name}' requires an array input",
+        details={"expression": parsed.source, "filter": filter_name, "actual_type": type(value).__name__},
+    )
+
+
+def _require_field_path(
+    filter_node: FilterApplicationNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    evaluation_context: dict[str, object],
+) -> tuple[str, tuple[FieldPathSegment, ...]]:
+    raw_path = _evaluate_filter_argument(
+        filter_node,
+        0,
+        parsed=parsed,
+        workflow=workflow,
+        context=_context_local_expression_context(evaluation_context),
+        step_results=_context_step_results(evaluation_context),
+        observation_session=_context_observation_session(evaluation_context),
+    )
+    if not isinstance(raw_path, str):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.filter_arg_type_invalid",
+            message="Filter 'field' requires a string path argument",
+            details={"expression": parsed.source, "filter": "field", "actual_type": type(raw_path).__name__},
+        )
+    try:
+        return raw_path, _parse_field_path(raw_path)
+    except _FieldPathSyntaxError as exc:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.field_path_invalid",
+            message=exc.message,
+            details={"expression": parsed.source, "filter": "field", "path": raw_path, "position": exc.position},
+        ) from exc
+
+
 def _apply_lower_filter(
     value: JSONValue,
     _filter_node: FilterApplicationNode,
@@ -2403,6 +2526,42 @@ def _apply_in_filter(
     return any(_json_strict_equal(value, item) for item in container)
 
 
+def _apply_field_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
+    raw_path, path = _require_field_path(
+        filter_node,
+        parsed=parsed,
+        workflow=workflow,
+        evaluation_context=evaluation_context,
+    )
+    if isinstance(value, dict):
+        resolved = _resolve_field_path(value, path)
+        if resolved is _FIELD_PATH_MISSING:
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.field_path_missing",
+                message="Filter 'field' could not resolve the addressed path on object input",
+                details={"expression": parsed.source, "filter": "field", "path": raw_path},
+            )
+        return resolved
+    if isinstance(value, list):
+        projected: list[JSONValue] = []
+        for item in value:
+            resolved = _resolve_field_path(item, path)
+            projected.append(None if resolved is _FIELD_PATH_MISSING else resolved)
+        return projected
+    raise ValueExpressionEvaluationError(
+        code="runtime.value.filter_type_invalid",
+        message="Filter 'field' requires an object or array input",
+        details={"expression": parsed.source, "filter": "field", "actual_type": type(value).__name__},
+    )
+
+
 def _apply_not_filter(
     value: JSONValue,
     filter_node: FilterApplicationNode,
@@ -2533,6 +2692,7 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
     ValueExpressionFilterSpec(name="is_integer", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_integer_filter),
     ValueExpressionFilterSpec(name="is_boolean", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_boolean_filter),
     ValueExpressionFilterSpec(name="in", input_type="json", output_type="boolean", argument_count=1, handler=_apply_in_filter),
+    ValueExpressionFilterSpec(name="field", input_type="json", output_type="json", argument_count=1, handler=_apply_field_filter),
 )
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(
