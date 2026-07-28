@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 from pathlib import Path
@@ -40,7 +41,7 @@ def resolve_routine_entry(*, workflow: Workflow, routine_id: str) -> tuple[Routi
 def routine_operation_contract(entry: RoutineEntry):
     """Return the temporary operation contract used for routine resolution."""
 
-    return build_routine_operation_contract(entry)
+    return build_routine_operation_contract(entry, use_declared_kind=True)
 
 
 def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
@@ -75,6 +76,15 @@ def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
         )
     stdout_tail = _read_log_tail(stdout_path)
     stderr_tail = _read_log_tail(stderr_path)
+    output_mode = entry.outputs.get("mode") if isinstance(entry.outputs, dict) else None
+    if entry.kind == "probe" and output_mode == "data" and completed.returncode == 0:
+        return _probe_data_result(
+            routine_id=routine_id,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            stdout_tail=stdout_tail,
+            stderr_tail=stderr_tail,
+        )
     outputs = {
         "routine_id": routine_id,
         "exit_code": completed.returncode,
@@ -84,8 +94,43 @@ def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
     }
     raw = {"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)}
     if completed.returncode == 0:
-        return OperationResult(status="ok", summary=f"Routine '{routine_id}' completed successfully", outputs=outputs, raw=raw)
+        summary = f"Routine '{routine_id}' completed successfully"
+        if entry.kind == "probe":
+            summary = f"Routine probe '{routine_id}' completed successfully"
+        return OperationResult(status="ok", summary=summary, outputs=outputs, raw=raw)
     return OperationResult(status="routine_failed", summary=f"Routine '{routine_id}' failed", outputs=outputs, raw=raw)
+
+
+def _probe_data_result(
+    *,
+    routine_id: str,
+    stdout_path: Path,
+    stderr_path: Path,
+    stdout_tail: str,
+    stderr_tail: str,
+) -> OperationResult:
+    try:
+        payload = json.loads(stdout_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        diagnostic = Diagnostic(
+            code="runtime.routine.probe_output_invalid",
+            level="error",
+            message="Routine probe did not produce valid JSON output",
+            details={"routine_id": routine_id, "error": str(exc), "stdout_path": str(stdout_path)},
+        )
+        return OperationResult(
+            status="execution_error",
+            summary=f"Routine probe '{routine_id}' returned invalid structured output",
+            diagnostics=(diagnostic,),
+            outputs={"routine_id": routine_id, "log_path": str(stdout_path), "stdout_tail": stdout_tail, "stderr_tail": stderr_tail},
+            raw={"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)},
+        )
+    return OperationResult(
+        status="ok",
+        summary=f"Routine probe '{routine_id}' returned structured data",
+        outputs={"routine_id": routine_id, "log_path": str(stdout_path), "data": payload},
+        raw={"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)},
+    )
 
 
 def _materialize_routine_argv(entry: RoutineEntry, declared_with: dict[str, object], workflow: Workflow) -> list[str]:

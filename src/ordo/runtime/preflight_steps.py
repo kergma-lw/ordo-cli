@@ -22,6 +22,8 @@ def classify_preflight_step(step: Step, resolved_step: ResolvedStep | None = Non
 
     if resolved_step is not None:
         if isinstance(resolved_step, ResolvedOperation):
+            if resolved_step.connector_namespace == "routine" and resolved_step.operation.kind == "probe":
+                return "read_only_unanalyzable"
             return "read_only_analyzable" if resolved_step.operation.kind == "probe" else "effectful"
         if isinstance(resolved_step, ResolvedBuiltinStep):
             return _classify_builtin_name(resolved_step.builtin)

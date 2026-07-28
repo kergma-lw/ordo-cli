@@ -104,6 +104,85 @@ class RoutineExecutionTest(unittest.TestCase):
         self.assertEqual(result.status.value, "validation_error")
         self.assertEqual(result.diagnostics[0].code, "routine.discovery.missing")
 
+    def test_execute_probe_data_returns_structured_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "scripts").mkdir(parents=True)
+            script = root / ".ordo" / "scripts" / "demo-probe.py"
+            script.write_text(
+                "import json\nprint(json.dumps({'exists': True, 'count': 2}))\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "routines.yaml").write_text(
+                textwrap.dedent(
+                    f"""
+                    version: 1
+                    routines:
+                      demo.probe:
+                        kind: probe
+                        summary: Return probe data.
+                        implementation:
+                          argv: ["/usr/bin/python3", "{script}"]
+                        outputs:
+                          mode: data
+                          format: json
+                        failure_modes: [probe_failed]
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="demo",
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.probe"})),)),),
+                launch_dir=str(root),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status.value, "ok")
+        self.assertEqual(result.operation_results[0].status, "ok")
+        self.assertEqual(result.operation_results[0].outputs["data"], {"exists": True, "count": 2})
+
+    def test_execute_probe_with_invalid_json_returns_execution_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "scripts").mkdir(parents=True)
+            script = root / ".ordo" / "scripts" / "demo-probe.py"
+            script.write_text("print('not json')\n", encoding="utf-8")
+            (root / ".ordo" / "routines.yaml").write_text(
+                textwrap.dedent(
+                    f"""
+                    version: 1
+                    routines:
+                      demo.probe:
+                        kind: probe
+                        summary: Return probe data.
+                        implementation:
+                          argv: ["/usr/bin/python3", "{script}"]
+                        outputs:
+                          mode: data
+                          format: json
+                        failure_modes: [probe_failed]
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="demo",
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.probe"})),)),),
+                launch_dir=str(root),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status.value, "execution_error")
+        self.assertEqual(result.operation_results[0].status, "execution_error")
+        self.assertEqual(result.operation_results[0].diagnostics[0].code, "runtime.routine.probe_output_invalid")
+
 
 if __name__ == "__main__":
     unittest.main()

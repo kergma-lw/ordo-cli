@@ -103,18 +103,27 @@ def build_routine_operation_contract(entry: RoutineEntry, *, use_declared_kind: 
     """Project one routine entry into a temporary operation contract."""
 
     kind = entry.kind if use_declared_kind and entry.kind in {"probe", "action"} else "action"
+    output_mode = entry.outputs.get("mode") if isinstance(entry.outputs, dict) else None
+    outputs: dict[str, object] = {
+        "routine_id": "string",
+        "log_path": "string",
+    }
+    if kind == "probe" and output_mode == "data":
+        outputs["data"] = dict(entry.outputs)
+    else:
+        outputs.update(
+            {
+                "exit_code": "integer",
+                "stdout_tail": "string",
+                "stderr_tail": "string",
+            }
+        )
     return OperationContract(
         name=entry.id,
         kind=kind,
         summary=entry.summary,
         inputs={name: arg.type_name for name, arg in entry.args.items()},
-        outputs={
-            "routine_id": "string",
-            "exit_code": "integer",
-            "log_path": "string",
-            "stdout_tail": "string",
-            "stderr_tail": "string",
-        },
+        outputs=outputs,
         failure_modes=entry.failure_modes,
         tags=("routine", kind),
     )
@@ -282,6 +291,13 @@ def load_routine_registry(*, path: str | Path | None = None, cwd: str | Path | N
 def _load_routine_entry(entry_payload: dict[str, object], *, routine_id: str, registry_path: Path) -> RoutineEntry:
     _validate_unknown_fields(entry_payload, ROUTINE_ENTRY_ALLOWED_FIELDS, source=str(registry_path), path=("routines", routine_id))
     kind = _require_non_empty_string(entry_payload, "kind", registry_path=registry_path, path=("routines", routine_id, "kind"))
+    if kind not in {"probe", "action"}:
+        raise _routine_error(
+            "routine.registry.kind_value",
+            "Routine field 'kind' must be either 'probe' or 'action'",
+            path=("routines", routine_id, "kind"),
+            details={"path": str(registry_path), "id": routine_id, "actual": kind},
+        )
     summary = _require_non_empty_string(entry_payload, "summary", registry_path=registry_path, path=("routines", routine_id, "summary"))
     args_payload = entry_payload.get("args", {})
     if not isinstance(args_payload, dict):
@@ -320,6 +336,14 @@ def _load_routine_entry(entry_payload: dict[str, object], *, routine_id: str, re
     implementation = _load_routine_implementation(entry_payload.get("implementation"), routine_id=routine_id, registry_path=registry_path)
     failure_modes = _require_non_empty_string_array(entry_payload.get("failure_modes"), routine_id=routine_id, registry_path=registry_path)
     outputs = _optional_object(entry_payload, "outputs", routine_id=routine_id, registry_path=registry_path)
+    mode = outputs.get("mode")
+    if mode is not None and mode not in {"data", "verify"}:
+        raise _routine_error(
+            "routine.registry.outputs.mode",
+            "Routine outputs field 'mode' must be either 'data' or 'verify' when present",
+            path=("routines", routine_id, "outputs", "mode"),
+            details={"path": str(registry_path), "id": routine_id, "actual": mode},
+        )
     log_hints = _optional_object(entry_payload, "log_hints", routine_id=routine_id, registry_path=registry_path)
     return RoutineEntry(
         id=routine_id,

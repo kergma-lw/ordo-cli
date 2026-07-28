@@ -1330,7 +1330,12 @@ def _prepare_tree_driven_step_context(
 
 
 def _is_execute_probe_step(execution_tree: dict[str, object] | None, resolved_step: object) -> bool:
-    return execution_tree is not None and isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe"
+    return (
+        execution_tree is not None
+        and isinstance(resolved_step, ResolvedOperation)
+        and resolved_step.operation.kind == "probe"
+        and resolved_step.connector_namespace != "routine"
+    )
 
 
 def _is_execute_run_step(resolved_step: object) -> bool:
