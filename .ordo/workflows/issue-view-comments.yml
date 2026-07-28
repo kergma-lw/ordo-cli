@@ -1,0 +1,49 @@
+version: 0
+workflow: issue-view-comments
+inputs:
+  number:
+    description: Issue number
+  repository:
+    description: Repository from the selected profile context
+  limit:
+    description: Max comments to load
+blocks:
+  - guards:
+      - inputs.number | is_integer
+      - inputs.limit | is_integer
+
+  - guards:
+      - git.repo.exists
+
+  - steps:
+      - name: Load issue
+        uses: gh.issue
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.number}
+        register: issue
+
+      - name: Load issue comments
+        uses: gh.issue.comments
+        with:
+          repository: ${inputs.repository}
+          issue_number: ${inputs.number}
+          limit: ${inputs.limit}
+        register: issue_comments
+
+      - name: Publish issue comment view
+        publish:
+          summary: Issue comments loaded
+          repository: ${inputs.repository}
+          issue_number: ${step.issue.outputs.number}
+          issue_ref:
+            format: "{}#{}"
+            args:
+              - ${inputs.repository}
+              - ${step.issue.outputs.number}
+          title: ${step.issue.outputs.title}
+          state: ${step.issue.outputs.state}
+          url: ${step.issue.outputs.url}
+          requested_limit: ${inputs.limit}
+          total_comment_count: ${step.issue_comments.outputs.total_count}
+          comments: ${step.issue_comments.outputs.comments}

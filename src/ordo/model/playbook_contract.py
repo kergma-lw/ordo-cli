@@ -27,6 +27,20 @@ PLAYBOOK_CONTRACT: JSONObject = {
             "documentation_role": "project_local_workflow_summary",
         },
         {
+            "name": "category",
+            "required": False,
+            "type": "string",
+            "documentation_role": "project_local_workflow_catalog_group",
+            "runtime_effect": "published_metadata_only",
+        },
+        {
+            "name": "when",
+            "required": False,
+            "type": "string",
+            "documentation_role": "operator_workflow_selection_guidance",
+            "runtime_effect": "published_metadata_only",
+        },
+        {
             "name": "working_directory",
             "required": False,
             "type": "string",
@@ -76,7 +90,7 @@ PLAYBOOK_CONTRACT: JSONObject = {
         },
         "workflow_entries": {
             "requires": ["file"],
-            "optional": ["description", "working_directory", "state_bindings"],
+            "optional": ["description", "category", "when", "working_directory", "state_bindings"],
         },
         "pre_run": {
             "item_type": "pre_run_entry",

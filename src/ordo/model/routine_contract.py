@@ -10,12 +10,20 @@ ROUTINE_CONTRACT: JSONObject = {
     "document_kind": "routine_registry",
     "version": 1,
     "discovery": {"path": ".ordo/routines.yaml"},
+    "authoring_status": "exception_path",
+    "authoring_guidance": {
+        "default_recommendation": "avoid_by_default",
+        "role": "bounded_project_local_opaque_automation",
+        "not_a_connector_family": True,
+        "use_when": "no richer public surface exists and the remaining gap is mechanical or intentionally project-local",
+        "avoid_when": "the remaining gap is semantic or a reusable connector model should exist instead",
+    },
     "top_level_fields": [
         {"name": "version", "required": True, "type": "integer"},
         {"name": "routines", "required": True, "type": "object"},
     ],
     "routine_entry_fields": [
-        {"name": "kind", "required": True, "type": "string"},
+        {"name": "kind", "required": True, "type": "string", "authoring_status": "exception_path"},
         {"name": "summary", "required": True, "type": "string"},
         {"name": "args", "required": False, "type": "object"},
         {"name": "implementation", "required": True, "type": "object"},
@@ -24,7 +32,7 @@ ROUTINE_CONTRACT: JSONObject = {
         {"name": "log_hints", "required": False, "type": "object"},
     ],
     "implementation_fields": [
-        {"name": "argv", "required": True, "type": "array"},
+        {"name": "argv", "required": True, "type": "array", "authoring_status": "bounded_execution_only"},
     ],
 }
 

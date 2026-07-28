@@ -1,0 +1,38 @@
+version: 0
+workflow: stories-in-progress
+inputs:
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+blocks:
+  - guards:
+      - inputs.project_id != ""
+
+  - steps:
+      - name: Switch runtime profile to meta
+        profile_switch: meta
+
+  - steps:
+      - name: Load active stories
+        uses: gh.project.items
+        register: active_stories
+        with:
+          project_id: ${inputs.project_id}
+          content_kind: Issue
+          filters:
+            - field: Type
+              value: Story
+            - field: Status
+              value: In progress
+
+      - name: Load active story labels
+        run: fragments/publish-story-with-labels.yml
+        for_each: ${step.active_stories.outputs.items | field("url")}
+        register: active_story_details
+
+      - name: Publish active stories
+        publish:
+          summary: Active stories loaded
+          count: ${step.active_stories.outputs.count}
+          stories: ${step.active_story_details.results | field("results[0]")}

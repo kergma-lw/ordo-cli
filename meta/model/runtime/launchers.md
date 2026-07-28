@@ -4,6 +4,8 @@
 
 A launcher is a named execution wrapper that may be selected explicitly for a step.
 
+This model is deprecated as a primary workflow-authoring surface.
+
 Launchers exist to support rare execution environments for shell-like steps without turning workflow authoring into a language-specific connector matrix.
 
 ## Why launchers exist
@@ -49,4 +51,8 @@ The model should avoid hidden launcher auto-selection based on command text heur
 
 Launchers are an exception path for rare toolchain wrappers.
 
+Routine-backed project-local automation is now the preferred bounded surface for most former launcher use cases.
+
 If most workflow steps require launchers, that is a signal that runtime primitives or project-local operations are missing.
+
+If a launcher remains necessary, that should be treated as a compatibility or migration case rather than the preferred steady-state authoring model.

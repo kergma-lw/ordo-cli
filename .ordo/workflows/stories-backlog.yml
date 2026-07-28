@@ -1,0 +1,38 @@
+version: 0
+workflow: stories-backlog
+inputs:
+  repo_kind: {}
+  repo_dir: {}
+  repository: {}
+  project_id: {}
+blocks:
+  - guards:
+      - inputs.project_id != ""
+
+  - steps:
+      - name: Switch runtime profile to meta
+        profile_switch: meta
+
+  - steps:
+      - name: Load backlog stories
+        uses: gh.project.items
+        register: backlog_stories
+        with:
+          project_id: ${inputs.project_id}
+          content_kind: Issue
+          filters:
+            - field: Type
+              value: Story
+            - field: Status
+              value: Backlog
+
+      - name: Load backlog story labels
+        run: fragments/publish-story-with-labels.yml
+        for_each: ${step.backlog_stories.outputs.items | field("url")}
+        register: backlog_story_details
+
+      - name: Publish backlog stories
+        publish:
+          summary: Backlog stories loaded
+          count: ${step.backlog_stories.outputs.count}
+          stories: ${step.backlog_story_details.results | field("results[0]")}

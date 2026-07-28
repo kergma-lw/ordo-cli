@@ -24,7 +24,7 @@ PROFILE_CONTRACT: JSONObject = {
         },
         {"name": "checks", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
         {"name": "overrides", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
-        {"name": "launchers", "required": False, "type": "object", "runtime_effect": "publishes_profile_scoped_launchers"},
+        {"name": "launchers", "required": False, "type": "object", "runtime_effect": "publishes_profile_scoped_launchers", "status": "deprecated", "preferred_alternative": "published_routines"},
     ],
     "override_fields": [
         {"name": "target", "required": True, "type": "string"},
@@ -58,6 +58,7 @@ PROFILE_CONTRACT: JSONObject = {
             "strategy": "first_writer_wins",
             "conflict": "validation_error",
             "conflict_key": "launcher_name",
+            "status": "deprecated",
         },
     },
     "workflow_apply_semantics": {
@@ -80,6 +81,7 @@ PROFILE_CONTRACT: JSONObject = {
         "launchers": {
             "mutates_workflow_steps": False,
             "published_as_explicit_metadata": True,
+            "status": "deprecated",
         },
     },
 }

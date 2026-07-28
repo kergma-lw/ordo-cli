@@ -102,6 +102,8 @@ class PlaybookWorkflowCatalogEntry:
     workflow_name: str
     workflow_path: Path
     workflow_description: str | None = None
+    workflow_category: str | None = None
+    workflow_when: str | None = None
     working_directory: str | None = None
     inputs: tuple[WorkflowCatalogInput, ...] = ()
 
@@ -154,8 +156,7 @@ def list_playbook_workflows(*, playbook_path: str | Path | None = None, cwd: str
     playbook_dir = path.parent
     workflows = _require_mapping(payload, "workflows", playbook_path=path)
     entries: list[PlaybookWorkflowCatalogEntry] = []
-    for workflow_name in sorted(workflows):
-        workflow_entry = workflows.get(workflow_name)
+    for workflow_name, workflow_entry in workflows.items():
         if not isinstance(workflow_name, str) or not isinstance(workflow_entry, dict):
             continue
         _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
@@ -167,6 +168,8 @@ def list_playbook_workflows(*, playbook_path: str | Path | None = None, cwd: str
                 workflow_name=workflow_name,
                 workflow_path=workflow_path,
                 workflow_description=_optional_non_empty_string(workflow_entry, "description"),
+                workflow_category=_optional_non_empty_string(workflow_entry, "category"),
+                workflow_when=_optional_non_empty_string(workflow_entry, "when"),
                 working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
             )
         )
@@ -209,7 +212,7 @@ def inspect_playbook_workflow(
         playbook_path=path,
     )
     try:
-        workflow = load_workflow_text(yaml.safe_dump(compiled_workflow, sort_keys=False), source=str(workflow_path))
+        workflow = load_workflow_text(yaml.safe_dump(compiled_workflow, sort_keys=False), source=str(workflow_path.resolve()))
     except LoadError as exc:
         raise PlaybookError(exc.diagnostics) from exc
     semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
@@ -220,6 +223,8 @@ def inspect_playbook_workflow(
         workflow_name=workflow_name,
         workflow_path=workflow_path,
         workflow_description=_optional_non_empty_string(workflow_entry, "description"),
+        workflow_category=_optional_non_empty_string(workflow_entry, "category"),
+        workflow_when=_optional_non_empty_string(workflow_entry, "when"),
         working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
         inputs=tuple(_catalog_input_from_declared_input(name, schema) for name, schema in workflow.declared_inputs.items() if isinstance(name, str)),
     )
@@ -303,7 +308,7 @@ def activate_playbook(
         playbook_path=path,
     )
     try:
-        workflow = load_workflow_text(yaml.safe_dump(compiled_workflow, sort_keys=False), source=str(workflow_path))
+        workflow = load_workflow_text(yaml.safe_dump(compiled_workflow, sort_keys=False), source=str(workflow_path.resolve()))
     except LoadError as exc:
         raise PlaybookError(exc.diagnostics) from exc
 
@@ -420,6 +425,8 @@ def _apply_input_overrides(
         states=workflow.states,
         step_results=workflow.step_results,
         blocks=workflow.blocks,
+        source_path=workflow.source_path,
+        launch_dir=workflow.launch_dir,
     )
 
     if profile is None:
@@ -789,6 +796,22 @@ def _validate_workflow_entry_fields(workflow_entry: dict[str, object], *, workfl
             path=("workflows", workflow_name, "description"),
             details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(description).__name__},
         )
+    category = workflow_entry.get("category")
+    if category is not None and (not isinstance(category, str) or not category):
+        raise _playbook_error(
+            "playbook.workflow.category_invalid",
+            "Workflow entry field 'category' must be a non-empty string when present",
+            path=("workflows", workflow_name, "category"),
+            details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(category).__name__},
+        )
+    when = workflow_entry.get("when")
+    if when is not None and (not isinstance(when, str) or not when):
+        raise _playbook_error(
+            "playbook.workflow.when_invalid",
+            "Workflow entry field 'when' must be a non-empty string when present",
+            path=("workflows", workflow_name, "when"),
+            details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(when).__name__},
+        )
 
 
 def _optional_non_empty_string(payload: dict[str, object], key: str) -> str | None:
@@ -909,6 +932,8 @@ def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Work
         states=resolved_states,
         step_results=workflow.step_results,
         blocks=workflow.blocks,
+        source_path=workflow.source_path,
+        launch_dir=workflow.launch_dir,
     )
 
 
@@ -1114,6 +1139,8 @@ def _working_directory_activation_workflow(
         states=template.states,
         step_results={},
         blocks=template.blocks,
+        source_path=template.source_path,
+        launch_dir=template.launch_dir,
     )
 
 

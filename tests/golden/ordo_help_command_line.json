@@ -1,6 +1,21 @@
 {
   "commands": [
     {
+      "authoring_passes": {
+        "passes": [
+          {
+            "mode": "check <workflow>",
+            "purpose": "Validate applicability, observations, and execution readiness",
+            "question": "Can this workflow run now?"
+          },
+          {
+            "mode": "review <workflow>",
+            "purpose": "Surface workflow authoring-quality findings",
+            "question": "Is this workflow well-authored?"
+          }
+        ],
+        "rule": "When authoring or modifying workflows, run both check and review. Neither replaces the other."
+      },
       "discovery_commands": [
         {
           "name": "workflows list",
@@ -93,7 +108,7 @@
       ],
       "name": "ordo-playbook",
       "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
-      "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one fallback result when no explicit result was produced",
+      "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
       "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
     }
   ],

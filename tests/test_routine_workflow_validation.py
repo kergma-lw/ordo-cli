@@ -13,7 +13,7 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "demo",
-                "blocks": [{"guards": []}, {"steps": [{"name": "run-check", "uses": "routine", "with": {"id": "demo.check", "args": {"enabled": True}}}]}],
+                "blocks": [{"guards": []}, {"steps": [{"name": "run-check", "uses": "routine.demo.check", "with": {"args": {"enabled": True}}}]}],
             }
         )
 
@@ -24,7 +24,7 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "demo",
-                "blocks": [{"guards": []}, {"steps": [{"name": "run-check", "uses": "routine", "with": {"command": "echo nope"}}]}],
+                "blocks": [{"guards": []}, {"steps": [{"name": "run-check", "uses": "routine.demo.check", "with": {"command": "echo nope"}}]}],
             }
         )
 
@@ -36,12 +36,12 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "demo",
-                "blocks": [{"guards": []}, {"steps": [{"name": "run-check", "uses": "routine", "with": {"args": {}}}]}],
+                "blocks": [{"guards": []}, {"steps": [{"name": "run-check", "uses": "routine."}]}],
             }
         )
 
         self.assertEqual(report.status.name, "VALIDATION_ERROR")
-        self.assertEqual(report.diagnostics[0].code, "validation.id.type")
+        self.assertEqual(report.diagnostics[0].code, "validation.uses.pattern")
 
     def test_routine_semantics_reject_unknown_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -73,9 +73,7 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
                       - guards: []
                       - steps:
                           - name: run-check
-                            uses: routine
-                            with:
-                              id: demo.missing
+                            uses: routine.demo.missing
                     """
                 ).strip()
             )
@@ -108,9 +106,7 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
               - guards: []
               - steps:
                   - name: run-check
-                    uses: routine
-                    with:
-                      id: demo.check
+                    uses: routine.demo.check
             """,
         )
 
@@ -137,9 +133,8 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
               - guards: []
               - steps:
                   - name: run-check
-                    uses: routine
+                    uses: routine.demo.check
                     with:
-                      id: demo.check
                       args:
                         nope: true
             """,
@@ -172,9 +167,8 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
               - guards: []
               - steps:
                   - name: run-check
-                    uses: routine
+                    uses: routine.demo.check
                     with:
-                      id: demo.check
                       args:
                         count: nope
             """,
@@ -183,6 +177,34 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
         report = validate_workflow_semantics(workflow, routine_registry=registry)
 
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.routine.arg_type")
+
+    def test_routine_semantics_emit_exception_path_warning(self) -> None:
+        registry, workflow = self._registry_and_workflow(
+            registry_body="""
+            version: 1
+            routines:
+              demo.check:
+                kind: action
+                summary: Run one check.
+                implementation:
+                  argv: [".ordo/scripts/demo-check"]
+                failure_modes: [check_failed]
+            """,
+            workflow_body="""
+            version: 0
+            workflow: demo
+            blocks:
+              - guards: []
+              - steps:
+                  - name: run-check
+                    uses: routine.demo.check
+            """,
+        )
+
+        report = validate_workflow_semantics(workflow, routine_registry=registry)
+
+        self.assertTrue(report.ok)
+        self.assertTrue(any(d.code == "validation.workflow.routine.exception_path" for d in report.diagnostics))
 
     def _registry_and_workflow(self, *, registry_body: str, workflow_body: str):
         temp_dir = tempfile.TemporaryDirectory()

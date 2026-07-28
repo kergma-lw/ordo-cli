@@ -4,11 +4,13 @@
 
 - A workflow file must be writable by both humans and agents.
 - Workflow authoring from existing public operations is a primary product path rather than a niche expert path.
+- Workflow authoring may also compose intentionally published project-local routine entries when no richer reusable connector surface exists.
 - Validation must fail on unknown fields in stable workflow schema.
 - A human reviewer must be able to locate policy and guardrails in the declaration itself rather than reconstructing them from implementation code alone.
 - An agent author must be able to predict whether a workflow is valid, resolvable, and likely executable from schema, examples, and connector contracts.
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
+- Workflow use of project-local routines must stay at the level of routine identifiers and declared arguments rather than embedding local command text directly into the workflow.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
 - A workflow may declare workflow-local named expressions through a top-level `let` surface when that keeps long local expressions readable.
 - Reusable workflow fragments should support explicit local argument contracts.

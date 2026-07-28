@@ -14,6 +14,9 @@ Workflow files hold orchestration intent.
 They may sequence checks, guards, steps, and explicit local composition surfaces,
 but they are not the place where non-trivial transformation algorithms should be implemented.
 
+Workflows may invoke both public connector operations and intentionally published project-local routines,
+but workflow files do not own the implementation logic of either surface.
+
 ## What is acceptable in a workflow
 
 - ordered guard and step blocks;

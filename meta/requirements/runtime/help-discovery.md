@@ -40,3 +40,9 @@
 - The root discovery surface must explain what `ordo-help` is, what it can describe, how to ask for it, and what to query first.
 - The root discovery surface must recommend an initial bootstrap sequence for zero-knowledge callers.
 - That bootstrap sequence must start from the public topics rather than from Python function names.
+
+## Workflow authoring guidance exposure
+
+- `ordo-help` must explain that `ordo-playbook check <workflow>` and `ordo-playbook review <workflow>` serve different authoring purposes.
+- `ordo-help` must not imply that `check` alone is sufficient workflow-authoring sign-off when a workflow was added or changed.
+- The `overview`, `workflow-authoring`, and `command-line` topics must make the paired use of `check` and `review` explicit for workflow authoring work.

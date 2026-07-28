@@ -85,15 +85,18 @@ class RoutineCatalogEntry:
     failure_modes: tuple[str, ...] = ()
 
 
+ROUTINE_REFERENCE_PREFIX = "routine."
+
+
 def workflow_uses_routine(workflow: Workflow) -> bool:
     """Return whether the workflow references the routine surface."""
 
     for block in workflow.blocks:
         if hasattr(block, "steps"):
-            if any(step.operation is not None and step.operation.uses == "routine" for step in block.steps):
+            if any(step.operation is not None and step.operation.uses.startswith(ROUTINE_REFERENCE_PREFIX) for step in block.steps):
                 return True
         if hasattr(block, "guards"):
-            if any(guard.operation is not None and guard.operation.uses == "routine" for guard in block.guards):
+            if any(guard.operation is not None and guard.operation.uses.startswith(ROUTINE_REFERENCE_PREFIX) for guard in block.guards):
                 return True
     return False
 
@@ -101,14 +104,14 @@ def workflow_uses_routine(workflow: Workflow) -> bool:
 def load_workflow_routine_registry(workflow: Workflow) -> RoutineRegistry:
     """Load the routine registry associated with one workflow."""
 
-    if workflow.launch_dir is not None:
-        return load_routine_registry(cwd=workflow.launch_dir)
     if workflow.source_path is not None:
         source = Path(workflow.source_path).resolve()
         for candidate_root in (source.parent,) + tuple(source.parents):
             candidate = candidate_root / ROUTINE_REGISTRY_DISCOVERY_PATH
             if candidate.exists():
                 return load_routine_registry(path=candidate)
+    if workflow.launch_dir is not None:
+        return load_routine_registry(cwd=workflow.launch_dir)
     return load_routine_registry()
 
 
@@ -150,10 +153,10 @@ def validate_workflow_routine_invocations(workflow: Workflow, registry: RoutineR
         if not hasattr(block, "steps"):
             continue
         for step_index, step in enumerate(block.steps):
-            if step.operation is None or step.operation.uses != "routine":
+            if step.operation is None or not step.operation.uses.startswith(ROUTINE_REFERENCE_PREFIX):
                 continue
             step_path = ("blocks", str(block_index), "steps", str(step_index), "with")
-            routine_id = step.operation.with_.get("id")
+            routine_id = step.operation.uses.removeprefix(ROUTINE_REFERENCE_PREFIX)
             args_payload = step.operation.with_.get("args", {})
             if not isinstance(routine_id, str) or not routine_id:
                 continue
@@ -214,6 +217,15 @@ def validate_workflow_routine_invocations(workflow: Workflow, registry: RoutineR
                         )
                     )
     return tuple(diagnostics)
+
+
+def parse_routine_reference(reference: str) -> str | None:
+    """Return the routine id from one routine reference."""
+
+    if not reference.startswith(ROUTINE_REFERENCE_PREFIX):
+        return None
+    routine_id = reference.removeprefix(ROUTINE_REFERENCE_PREFIX)
+    return routine_id or None
 
 
 def list_routines(*, path: str | Path | None = None, cwd: str | Path | None = None) -> tuple[RoutineCatalogEntry, ...]:

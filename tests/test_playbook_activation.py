@@ -2466,7 +2466,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["results"], [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}])
+            self.assertEqual(payload["results"], [{"summary": "Workflow completed with no explicit result or published output."}])
 
     def test_cli_reports_missing_workflow_for_execution_command(self) -> None:
         stdout = io.StringIO()
@@ -2525,9 +2525,13 @@ class PlaybookActivationTest(unittest.TestCase):
                     workflows:
                       zeta-task:
                         file: zeta-task.yml
+                        category: lifecycle
+                        when: Use after finishing implementation work
                       inspect-issue:
                         file: inspect-issue.yml
                         description: Inspect one issue and prepare local context
+                        category: inspect
+                        when: Use when you need issue details without changing state
                     profiles: {}
                     states: {}
                     """
@@ -2554,8 +2558,12 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["mode"], "workflows.list")
-            self.assertEqual([item["workflow"] for item in payload["workflows"]], ["inspect-issue", "zeta-task"])
-            self.assertEqual(payload["workflows"][0]["description"], "Inspect one issue and prepare local context")
+            self.assertEqual([item["category"] for item in payload["categories"]], ["lifecycle", "inspect"])
+            self.assertEqual([item["workflow"] for item in payload["categories"][0]["workflows"]], ["zeta-task"])
+            self.assertEqual([item["workflow"] for item in payload["categories"][1]["workflows"]], ["inspect-issue"])
+            self.assertEqual(payload["categories"][1]["workflows"][0]["description"], "Inspect one issue and prepare local context")
+            self.assertEqual(payload["categories"][1]["workflows"][0]["when"], "Use when you need issue details without changing state")
+            self.assertEqual(payload["categories"][0]["workflows"][0]["when"], "Use after finishing implementation work")
 
     def test_cli_workflows_show_returns_declared_inputs_and_description(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2569,6 +2577,8 @@ class PlaybookActivationTest(unittest.TestCase):
                       inspect-issue:
                         file: inspect-issue.yml
                         description: Inspect one issue and prepare local context
+                        category: inspect
+                        when: Use when you need issue details without changing state
                         working_directory: ../repo
                     profiles: {}
                     states: {}
@@ -2610,11 +2620,13 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["mode"], "workflows.show")
             self.assertEqual(payload["workflow"], "inspect-issue")
             self.assertEqual(payload["description"], "Inspect one issue and prepare local context")
+            self.assertEqual(payload["category"], "inspect")
+            self.assertEqual(payload["when"], "Use when you need issue details without changing state")
             self.assertEqual(payload["working_directory"], "../repo")
             self.assertEqual(payload["inputs"][0], {"name": "repository", "description": "GitHub repository slug", "hint": "Use owner/name format"})
-            self.assertEqual(payload["inputs"][1], {"name": "issue_number", "description": "Numeric issue id", "hint": None})
+            self.assertEqual(payload["inputs"][1], {"name": "issue_number", "description": "Numeric issue id"})
 
-    def test_cli_workflows_show_omits_only_hint_values_when_not_declared(self) -> None:
+    def test_cli_workflows_show_omits_empty_values_when_not_declared(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
@@ -2636,7 +2648,11 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["inputs"][0]["hint"], None)
+            self.assertNotIn("hint", payload["inputs"][0])
+            self.assertNotIn("description", payload)
+            self.assertNotIn("category", payload)
+            self.assertNotIn("when", payload)
+            self.assertNotIn("working_directory", payload)
 
     def test_cli_workflows_show_reports_unknown_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2752,7 +2768,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["status"], "ok")
-            self.assertEqual(payload["results"], [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}])
+            self.assertEqual(payload["results"], [{"summary": "Workflow completed with no explicit result or published output."}])
 
     def test_cli_run_mode_surfaces_published_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2776,7 +2792,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}], "published": [{"summary": "done", "changed": True}]})
+            self.assertEqual(payload, {"status": "ok", "published": [{"summary": "done", "changed": True}]})
 
     def test_cli_run_mode_uses_compact_failure_payload(self) -> None:
         activated = SimpleNamespace(
@@ -2874,7 +2890,7 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results."}]})
+            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed with no explicit result or published output."}]})
 
     def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(

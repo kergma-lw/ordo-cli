@@ -1,0 +1,27 @@
+version: 0
+workflow: issue-view
+inputs:
+  profile:
+    description: Target profile name
+  number:
+    description: Issue number
+  repository: {}
+  project_id: {}
+blocks:
+  - guards:
+      - inputs.profile == "frontend" or inputs.profile == "backend" or inputs.profile == "meta"
+      - inputs.number | is_integer
+
+  - steps:
+      - name: Switch runtime profile
+        profile_switch: ${inputs.profile}
+
+  - guards:
+      - git.repo.exists
+
+  - include: fragments/publish-issue-project-context.yml
+    with:
+      repository: ${inputs.repository}
+      issue_number: ${inputs.number}
+      project_id: ${inputs.project_id}
+      active_profile: ${inputs.profile}

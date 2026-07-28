@@ -17,9 +17,9 @@ from ordo.model.json import JSONObject
 PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "overview", "summary": "Start with the Ordo world map"},
     {"name": "model", "summary": "Inspect the main authoring contracts"},
-    {"name": "workflow-authoring", "summary": "Inspect preferred workflow authoring patterns, shell fallback cautions, early guards, and let usage"},
+    {"name": "workflow-authoring", "summary": "Inspect preferred workflow authoring patterns, paired check/review passes, routine cautions, early guards, and let usage"},
     {"name": "capabilities", "summary": "Inspect supported and unsupported surfaces"},
-    {"name": "command-line", "summary": "Inspect the public command-line launch surface"},
+    {"name": "command-line", "summary": "Inspect the public command-line launch surface, including distinct check and review roles"},
     {"name": "operations", "summary": "Inspect the public connector catalog"},
     {"name": "examples", "summary": "Inspect verified repository examples"},
     {"name": "operation", "summary": "Inspect one public operation by reference"},
@@ -32,14 +32,56 @@ DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "model", "workflow-authoring"
 RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
     {"command": "ordo-help overview --json", "purpose": "Get the Ordo world map"},
     {"command": "ordo-help model --json", "purpose": "Learn the main DSL surfaces"},
-    {"command": "ordo-help workflow-authoring --json", "purpose": "Learn preferred workflow authoring patterns and cautions"},
+    {"command": "ordo-help workflow-authoring --json", "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"},
     {"command": "ordo-help capabilities --json", "purpose": "Learn capability boundaries"},
-    {"command": "ordo-help command-line --json", "purpose": "Inspect public launch commands and flags"},
+    {"command": "ordo-help command-line --json", "purpose": "Inspect public launch commands, flags, and distinct check/review roles"},
     {"command": "ordo-help operations --json", "purpose": "Inspect the public operation catalog"},
     {"command": "ordo-help examples --json", "purpose": "Inspect verified repository examples"},
 )
 
 WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
+    {
+        "name": "paired_authoring_passes",
+        "priority": "critical_authoring_loop",
+        "guidance_level": "required_default",
+        "rule": "After adding or changing a workflow, run both ordo-playbook check <workflow> and ordo-playbook review <workflow>. Treat them as complementary authoring passes, not substitutes.",
+        "why": [
+            "check answers whether the workflow is applicable and execution-ready now",
+            "review answers whether the workflow still has authoring-quality findings",
+            "using both makes it harder to mistake execution readiness for authoring completeness",
+        ],
+        "prefer": [
+            "use check to surface guard, observation, and applicability gaps",
+            "use review to surface workflow authoring-quality findings",
+            "report both results when presenting workflow changes as complete",
+        ],
+        "avoid": [
+            "treating check as sufficient workflow-authoring sign-off",
+            "treating review as optional polish after the real validation is done",
+            "skipping one pass because the other already returned clean results",
+        ],
+    },
+    {
+        "name": "minimal_publish_payload",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Keep publish payloads minimal and intentional. Publish only the outward-facing fields the caller needs, while respecting any stricter local agent or project rules.",
+        "why": [
+            "compact published outputs are easier to read, review, and trust",
+            "copying large action outputs into publish by default turns success payloads into noise",
+            "local agent or project rules may intentionally require an even smaller success surface",
+        ],
+        "prefer": [
+            "publish the smallest useful confirmation surface such as a summary, url, or compact identifier",
+            "keep extra detail in step-local outputs unless it is truly needed outward-facing",
+            "follow stricter local payload rules when the project or agent guidance defines them",
+        ],
+        "avoid": [
+            "mirroring full action outputs into publish just because those fields are available",
+            "treating publish as a general-purpose debug dump",
+            "adding outward-facing fields that the caller did not ask for and downstream steps do not need",
+        ],
+    },
     {
         "name": "decision_order",
         "priority": "critical_decision_policy",
@@ -84,35 +126,64 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
     {
         "name": "shell.command",
         "priority": "critical_caution",
-        "guidance_level": "forbidden_by_default",
-        "rule": "shell.command is forbidden by default. Use it only as a last resort after explicitly proving that no published structured workflow surface can express the required behavior.",
+        "guidance_level": "forbidden",
+        "rule": "shell.command is forbidden as a workflow authoring surface. Do not use it for new authoring work.",
         "why": [
-            "shell.command is the coarsest and riskiest public execution surface",
-            "shell usage is harder to validate, explain, and keep environment-stable",
-            "shell-first workflows can hide missing product surface that should be discussed explicitly",
-            "a partial public-surface match is not permission to encode the semantic remainder in shell.command",
-            "shell fallback changes the workflow contract, not just its implementation detail",
+            "shell.command is the coarsest and riskiest legacy execution surface",
+            "arbitrary inline shell makes workflows harder to validate, explain, and keep environment-stable",
+            "routine publication now provides a more reviewable bounded local-automation surface than inline shell text",
+        ],
+        "prefer": [
+            "prefer published connector operations first",
+            "prefer published routine.<id> entries over any legacy shell fallback when bounded project-local automation is still necessary",
+            "treat any remaining shell.command mention as migration or compatibility work rather than a valid new design choice",
+        ],
+        "avoid": [
+            "introducing new shell.command steps in workflows",
+            "treating shell.command as an acceptable shortcut just because it already exists in older material",
+            "using shell.command to avoid publishing a routine or discussing a richer missing connector surface",
+        ],
+        "stop_when": [
+            "the proposed authoring change still depends on adding a new shell.command step",
+            "the only argument for shell.command is speed, familiarity, or historical precedent",
+        ],
+    },
+    {
+        "name": "routine.*",
+        "priority": "critical_caution",
+        "guidance_level": "strong_restriction",
+        "rule": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
+        "why": [
+            "routine.* can still hide project-local semantics that should not silently become product truth",
+            "routine publication is safer than inline shell but still acts as a controlled fallback rather than a rich public domain model",
+            "routine-heavy workflows can hide missing connector surface that should be discussed explicitly",
+            "a partial public-surface match is not permission to encode the semantic remainder in a routine",
+            "routine fallback changes the workflow contract, not just its implementation detail",
+            "routine.* is an exception path, so frequent routine use is itself a design smell",
         ],
         "prefer": [
             "check whether one published public operation fits directly",
             "otherwise check whether multiple published public operations compose cleanly",
-            "before using shell.command, explicitly name which published operations were considered, why no direct operation fits, why no clean composition fits, and what exact capability gap remains",
-            "use shell.command only when the remaining gap is mechanical rather than semantic",
-            "if the remaining gap is semantic, stop and clarify with the user instead of preserving semantics through shell.command",
-            "keep unavoidable shell usage narrow, explicit, and easy to reason about",
+            "before using routine.*, explicitly name which published operations were considered, why no direct operation fits, why no clean composition fits, and what exact capability gap remains",
+            "use routine.* only when the remaining gap is mechanical or intentionally project-local rather than semantic",
+            "if the remaining gap is semantic, stop and clarify with the user instead of preserving semantics through routine.*",
+            "keep routine usage narrow, reviewable, and easy to reason about",
+            "treat repeated routine usage as pressure to discuss richer connector publication",
         ],
         "avoid": [
-            "using shell.command as a first-choice implementation tool",
-            "using shell.command for routine inspection, transformation, or orchestration when structured surfaces already exist",
-            "using shell.command to wrap repository-local automation without first exhausting public operations",
-            "using shell.command merely because a nearby local script already implements something similar",
-            "bridging a partial public-surface match with shell.command without explicit justification",
-            "silently preserving repository-local semantics through shell.command when the public model does not define those semantics",
+            "using routine.* as a first-choice implementation tool",
+            "using routine.* for inspection, transformation, or orchestration when structured connector surfaces already exist",
+            "using routine.* to wrap repository-local automation without first exhausting public operations",
+            "using routine.* merely because a nearby local script already implements something similar",
+            "bridging a partial public-surface match with routine.* without explicit justification",
+            "silently preserving repository-local semantics through routine.* when the public model does not define those semantics",
+            "treating routine.* as a cheerful general extension API",
         ],
         "stop_when": [
             "no explicit capability-gap statement has been made",
-            "the remaining gap is semantic rather than mechanical",
-            "shell.command is being chosen mainly because it is faster, familiar, or already available locally",
+            "the remaining gap is semantic rather than mechanical or intentionally project-local",
+            "routine.* is being chosen mainly because it is faster, familiar, or already available locally",
+            "routine.* is starting to look like the default implementation path rather than a narrow exception",
         ],
     },
     {
@@ -155,11 +226,11 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "treating the existence of a local script as sufficient reason to make it the workflow implementation surface",
             "copying repository-local behavior into a workflow without checking whether it matches the public model",
             "inferring that a repository-local script defines preferred workflow semantics",
-            "wrapping a local helper in shell.command just because it already works in this repository",
+            "wrapping a local helper in routine.* just because it already works in this repository",
             "preserving local script semantics silently when those semantics are not published in the public workflow model",
         ],
         "must_not_infer": [
-            "there is a script for this => shell.command is acceptable here",
+            "there is a script for this => routine.* is acceptable here",
             "the repo already does it this way => this is the correct workflow contract",
             "a local helper covers the semantic gap => no clarification is needed",
         ],
@@ -327,7 +398,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "workflows are easier for agents to author correctly when required context is visible",
         ],
         "prefer": [
-            "express special execution setup through profiles, launchers, or explicit guards",
+            "express special execution setup through routines, profiles, or explicit guards",
             "fail early when required execution context is missing",
         ],
         "avoid": [
@@ -427,6 +498,19 @@ def build_overview_response() -> JSONObject:
             "modes": [mode.value for mode in Mode],
             "statuses": [status.value for status in RuntimeStatus],
         },
+        "workflow_authoring_passes": {
+            "rule": "Use both check and review after adding or changing a workflow; neither replaces the other.",
+            "passes": [
+                {
+                    "command": "ordo-playbook check <workflow>",
+                    "purpose": "Validate workflow applicability and execution readiness",
+                },
+                {
+                    "command": "ordo-playbook review <workflow>",
+                    "purpose": "Review workflow authoring-quality findings",
+                },
+            ],
+        },
         "connector_namespaces": [connector["namespace"] for connector in operations["connectors"]],
         "published_topics": [topic["name"] for topic in PUBLIC_TOPICS],
         "recommended_next_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS[1:]],
@@ -469,7 +553,10 @@ def build_workflow_authoring_response() -> JSONObject:
             "validate both the request shape and the observed target context",
             "name important values early",
             "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",
-            "use structured Ordo surfaces before falling back to shell",
+            "use ordo-playbook review <workflow> during authoring to catch workflow authoring-quality findings early",
+            "after adding or changing a workflow, run both check and review before calling the work complete",
+            "keep publish payloads minimal and follow stricter local agent or project output rules when they exist",
+            "use structured Ordo surfaces before falling back to routines",
             "treat semantic ambiguity as a reason to clarify rather than improvise",
         ],
         "rules": [dict(rule) for rule in WORKFLOW_AUTHORING_RULES],
@@ -507,7 +594,22 @@ def build_command_line_response() -> JSONObject:
                     {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
                     {"name": "next <workflow>", "summary": "suggest the next workflow step to run now"},
                 ],
-                "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one fallback result when no explicit result was produced",
+                "authoring_passes": {
+                    "rule": "When authoring or modifying workflows, run both check and review. Neither replaces the other.",
+                    "passes": [
+                        {
+                            "mode": "check <workflow>",
+                            "question": "Can this workflow run now?",
+                            "purpose": "Validate applicability, observations, and execution readiness",
+                        },
+                        {
+                            "mode": "review <workflow>",
+                            "question": "Is this workflow well-authored?",
+                            "purpose": "Surface workflow authoring-quality findings",
+                        },
+                    ],
+                },
+                "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
                 "flags": playbook_flags,
                 "input_override_precedence": [
                     f"workflow.inputs declares the allowed activation keys; declared keys are required at activation={str(input_contract['declared_keys_required_at_activation']).lower()}",
@@ -985,6 +1087,10 @@ def render_overview_text(payload: JSONObject) -> str:
             f"- modes: {', '.join(payload['execution_concepts']['modes'])}",
             f"- statuses: {', '.join(payload['execution_concepts']['statuses'])}",
             "",
+            "Workflow authoring passes:",
+            f"- rule: {payload['workflow_authoring_passes']['rule']}",
+            *[f"- {item['command']}: {item['purpose']}" for item in payload['workflow_authoring_passes']['passes']],
+            "",
             "Connector namespaces:",
         ]
     )
@@ -1059,7 +1165,20 @@ def render_command_line_text(payload: JSONObject) -> str:
 
     lines = ["command-line", "Public launch commands and stable flags.", ""]
     for command in payload["commands"]:
-        lines.extend([command["name"], command["purpose"], f"usage: {command['usage']}", f"modes: {', '.join(command['modes'])}", "", "flags:"])
+        lines.extend(
+            [
+                command["name"],
+                command["purpose"],
+                f"usage: {command['usage']}",
+                f"modes: {', '.join(item['name'] for item in command['modes'])}",
+            ]
+        )
+        authoring_passes = command.get("authoring_passes")
+        if isinstance(authoring_passes, dict):
+            lines.extend(["", "workflow authoring passes:", f"- rule: {authoring_passes['rule']}"])
+            for item in authoring_passes.get("passes", []):
+                lines.append(f"- {item['mode']}: {item['purpose']} ({item['question']})")
+        lines.extend(["", "flags:"])
         for flag in command["flags"]:
             suffix = f" {flag.get('value_shape', '')}".rstrip()
             lines.append(f"- {flag['name']}{suffix}: {flag['summary']}")

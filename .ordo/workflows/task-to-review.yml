@@ -25,18 +25,11 @@ blocks:
 
   - steps:
       - name: Render and open review diff
-        uses: shell.command
+        uses: routine.review.render-open-diff
         register: review_html
         with:
-          command:
-            format: |
-              set -euo pipefail
-              out="/tmp/ordo-review-%s.html"
-              { printf '<!doctype html><html><body><h1>Branch diff vs main</h1><pre>'; git diff main...HEAD; printf '</pre></body></html>'; } > "$out"
-              xdg-open "$out" >/dev/null 2>&1 || true
-              printf '%s' "$out"
-            args:
-              - ${stored_issue_number}
+          args:
+            issue_number: ${stored_issue_number}
 
       - name: Set task status to In review
         uses: gh.project.issue.field_single_select.set
@@ -54,4 +47,4 @@ blocks:
           issue_ref: ${step.review_update.outputs.issue_ref}
           issue_number: ${stored_issue_number}
           status: In review
-          review_html: ${step.review_html.outputs.stdout}
+          review_html: ${step.review_html.outputs.data.path}

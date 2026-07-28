@@ -20,6 +20,7 @@
 - When both playbook defaults and profile-level working-directory declarations are present, profile-level declaration must win unless the active workflow entry supplies a more specific working-directory declaration.
 - Future runtime-scoped execution wrappers or launchers, if standardized, should attach through profiles or workflow entries rather than through hidden global process state.
 - When profiles participate in launcher selection, that participation must remain explicit enough for a reviewer to see which execution wrapper context is active.
+- New profile authoring should prefer routine-compatible execution context over launcher-specific wrapper setup whenever the workflow can move to a published routine surface instead.
 - Runtime profile switching should be represented by an engine-level construct such as `profile_switch`, not by an ordinary connector action.
 - `profile_switch` must change only subsequent execution context within the current run unless the public model later standardizes stronger semantics.
 - `profile_switch` should apply the newly active profile's input defaults to subsequent steps using the same missing-input discipline as activation-time profile application.

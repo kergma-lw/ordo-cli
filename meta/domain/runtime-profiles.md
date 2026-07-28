@@ -8,7 +8,9 @@ They exist to answer questions such as:
 - which workflow-entry execution location should this run activate;
 - which approved runtime-facing modifiers belong to this run.
 
-This makes profiles the natural project-local place to bind execution-facing context such as launcher selection inputs, while still keeping launcher usage explicit at the step level.
+Historically this made profiles the natural project-local place to bind execution-facing context such as launcher selection inputs, while still keeping launcher usage explicit at the step level.
+
+With routine publication available, launcher-centric profile context is now legacy-oriented rather than the preferred steady-state path.
 
 It also makes profile switching a plausible runtime-owned context surface, as long as switching remains explicit, inspectable, and separate from workflow-owned business state.
 

@@ -194,6 +194,8 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
             states=workflow.states,
             step_results=workflow.step_results,
             blocks=workflow.blocks,
+            source_path=workflow.source_path,
+            launch_dir=workflow.launch_dir,
         ),
         active_profile=profile.name,
         active_overrides=profile.overrides,

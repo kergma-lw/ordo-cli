@@ -57,6 +57,7 @@
         "profile_scoped_launchers",
         "shell_wrapper_example"
       ],
+      "status": "legacy_compatibility_example",
       "verified": true
     },
     {

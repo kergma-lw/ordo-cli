@@ -31,9 +31,13 @@ defaults:
 workflows:
   inspect-issue:
     file: inspect-issue.yml
+    category: inspect
+    when: Use when you need issue details without changing project state.
 
   close-task:
     file: close-task.yml
+    category: lifecycle
+    when: Use after review is complete and the active task is ready to land.
     working_directory: ${inputs.repo_root}
     state_bindings:
       task_memory: repo_task_state
@@ -70,9 +74,14 @@ A workflow entry gives a stable project-local name to a workflow file.
 
 It may additionally declare:
 
+- a short project-local `category` string for top-level workflow catalog grouping;
+- a short project-local `when` string that explains when an operator should choose that workflow from the launch surface;
 - state bindings from workflow logical roles to concrete playbook state entries;
 - an explicit execution `working_directory` for runs of that workflow entry, expressed either as a literal path string or as an activation-time-safe `${...}` embedded-value local expression;
 - future launch metadata that remains project-local rather than workflow-semantic.
+
+`category` and `when` are launch-surface metadata.
+They help humans and agents choose among named workflows, but they must not change workflow execution semantics, workflow resolution, or guard truth.
 
 ## Defaults role
 

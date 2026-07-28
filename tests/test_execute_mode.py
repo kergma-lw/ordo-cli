@@ -202,7 +202,7 @@ class ExecuteModeTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(list(result.results), [{"summary": "parent"}])
 
-    def test_execute_does_not_emit_fallback_results_for_nested_run_without_explicit_results(self) -> None:
+    def test_execute_emits_named_fallback_results_for_nested_run_without_explicit_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             fragment = root / "nested.yml"
@@ -216,7 +216,7 @@ class ExecuteModeTest(unittest.TestCase):
                 blocks=(
                     StepBlock(
                         steps=(
-                            Step(name="expand", run="nested.yml", resolved_run_path=str(fragment)),
+                            Step(name="expand", run="nested.yml", register="nested_run", resolved_run_path=str(fragment)),
                             Step(name="remember", value="done"),
                         )
                     ),
@@ -227,6 +227,7 @@ class ExecuteModeTest(unittest.TestCase):
 
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(list(result.results), [])
+            self.assertEqual(workflow.step_results["nested_run"], {"results": [{"summary": 'Run-invoked workflow "nested" completed without explicit result.', "workflow": "nested"}]})
 
     def test_execute_registers_results_from_run_step(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1510,7 +1511,7 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["active_profile"], "frontend")
-        self.assertEqual(seen_inputs[0]["repository"], "explicit/repo")
+        self.assertEqual(seen_inputs[0]["repository"], "profile/repo")
         self.assertEqual(seen_inputs[0]["repo_dir"], "/tmp/frontend")
 
     def test_execute_profile_switch_injects_profile_inputs_when_not_explicitly_overridden(self) -> None:

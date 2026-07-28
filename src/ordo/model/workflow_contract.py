@@ -142,6 +142,8 @@ WORKFLOW_CONTRACT: JSONObject = {
             "required_fields": ["name", "uses"],
             "optional_fields": ["if", "with", "register", "launcher"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+            "deprecated_optional_fields": ["launcher"],
+            "preferred_alternatives": {"launcher": "routine_or_profile_context"},
         },
         {
             "name": "run_invocation",

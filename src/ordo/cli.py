@@ -291,7 +291,7 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
             results = list(result.results)
             published = list(result.published)
             if not results and not published:
-                results = [_fallback_run_result()]
+                results = [_top_level_missing_output_result()]
             payload = {
                 "status": "ok",
             }
@@ -309,9 +309,9 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
     return result.to_contract()
 
 
-def _fallback_run_result() -> dict[str, object]:
+def _top_level_missing_output_result() -> dict[str, object]:
     return {
-        "summary": "Workflow completed with no explicit published output. Prefer publish: for intentional outward-facing results.",
+        "summary": "Workflow completed with no explicit result or published output.",
     }
 
 
@@ -322,6 +322,10 @@ def _resolve_execution_workflow_name(args, *, parser: argparse.ArgumentParser) -
     if len(command) != 2:
         parser.error(f"{command[0]} requires a workflow name")
     return command[1]
+
+
+def _compact_mapping(**items: object) -> dict[str, object]:
+    return {key: value for key, value in items.items() if value is not None}
 
 
 def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.ArgumentParser) -> int:
@@ -337,38 +341,49 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
     try:
         if argv[0] == "list":
             entries = list_playbook_workflows(playbook_path=args.playbook_file)
+            categories: list[dict[str, object]] = []
+            categories_by_name: dict[str, dict[str, object]] = {}
+            for entry in entries:
+                category_name = entry.workflow_category if isinstance(entry.workflow_category, str) and entry.workflow_category else "Non-category"
+                bucket = categories_by_name.get(category_name)
+                if bucket is None:
+                    bucket = {"category": category_name, "workflows": []}
+                    categories_by_name[category_name] = bucket
+                    categories.append(bucket)
+                bucket["workflows"].append(
+                    _compact_mapping(
+                        workflow=entry.workflow_name,
+                        description=entry.workflow_description,
+                        when=entry.workflow_when,
+                    )
+                )
             payload = {
                 "mode": "workflows.list",
                 "status": "ok",
                 "playbook": str(entries[0].playbook_path) if entries else str(args.playbook_file) if args.playbook_file else None,
-                "workflows": [
-                    {
-                        "workflow": entry.workflow_name,
-                        "description": entry.workflow_description,
-                        "file": str(entry.workflow_path),
-                    }
-                    for entry in entries
-                ],
+                "categories": categories,
             }
         else:
             entry = inspect_playbook_workflow(argv[1], playbook_path=args.playbook_file)
-            payload = {
-                "mode": "workflows.show",
-                "status": "ok",
-                "playbook": str(entry.playbook_path),
-                "workflow": entry.workflow_name,
-                "description": entry.workflow_description,
-                "file": str(entry.workflow_path),
-                "working_directory": entry.working_directory,
-                "inputs": [
-                    {
-                        "name": item.name,
-                        "description": item.description,
-                        "hint": item.hint,
-                    }
+            payload = _compact_mapping(
+                mode="workflows.show",
+                status="ok",
+                playbook=str(entry.playbook_path),
+                workflow=entry.workflow_name,
+                description=entry.workflow_description,
+                category=entry.workflow_category,
+                when=entry.workflow_when,
+                file=str(entry.workflow_path),
+                working_directory=entry.working_directory,
+                inputs=[
+                    _compact_mapping(
+                        name=item.name,
+                        description=item.description,
+                        hint=item.hint,
+                    )
                     for item in entry.inputs
                 ],
-            }
+            )
     except PlaybookError as exc:
         return _emit_error(exc, as_json=args.json)
 

@@ -11,69 +11,123 @@ states:
   shared_state:
     path: /home/ww/projects/check-list.life/repo.json
 workflows:
+  set-active-task:
+    file: workflows/set-active-task.yml
+    description: Prepare local work on one task or story issue
+    category: context
+    when: Use before starting local work on the current task or story.
+    state_bindings:
+      common_state: common_state
+      shared_state: shared_state
+  set-active-profile:
+    file: workflows/set-active-profile.yml
+    description: Switch the active profile and remember it in shared state
+    category: context
+    when: Use when you need to switch between backend, frontend, and meta work.
+    state_bindings:
+      shared_state: shared_state
+  current-task-context:
+    file: workflows/current-task-context.yml
+    description: Show the stored active task or story context for the selected profile
+    category: context
+    when: Use when you want to inspect the remembered active work context.
+    state_bindings:
+      common_state: common_state
+      shared_state: shared_state
+  issue-view:
+    file: workflows/issue-view.yml
+    description: Show one issue from the selected profile context without changing state
+    category: inspect
+  issue-view-comments:
+    file: workflows/issue-view-comments.yml
+    description: Show comments for one issue from the selected profile context without changing state
+    category: inspect
+  issue-comment:
+    file: workflows/issue-comment.yml
+    description: Add a comment to one issue from the selected profile context
+    category: collaboration
+    when: Use when you need to leave a comment on a task, bug, or story issue.
+  stories-backlog:
+    file: workflows/stories-backlog.yml
+    description: Show Story issues that are in Backlog in the meta project
+    category: inspect
+  stories-in-progress:
+    file: workflows/stories-in-progress.yml
+    description: Show Story issues that are In progress in the meta project
+    category: inspect
   create-task:
     file: workflows/create-task.yml
     description: Create a new Task issue in the selected non-meta profile context
+    category: create
+    when: Use when you need a new frontend or backend task.
     state_bindings:
       shared_state: shared_state
   create-story:
     file: workflows/create-story.yml
     description: Create a new Story issue in the meta profile with a Tasks section
+    category: create
+    when: Use when you need a new meta story with a Tasks section.
     state_bindings:
-      shared_state: shared_state
-  task-to-ready:
-    file: workflows/task-to-ready.yml
-    description: Validate one task or bug and set its project status to Ready
-  task-to-in-progress:
-    file: workflows/task-to-in-progress.yml
-    description: Set one task or bug project status to In progress
-  task-to-review:
-    file: workflows/task-to-review.yml
-    description: Prepare the active task for review and set its project status to In review
-    state_bindings:
-      common_state: common_state
-  set-active-task:
-    file: workflows/set-active-task.yml
-    description: Prepare local work on one task or story issue
-    state_bindings:
-      common_state: common_state
-      shared_state: shared_state
-  close-task:
-    file: workflows/close-task.yml
-    state_bindings:
-      common_state: common_state
       shared_state: shared_state
   story-tasks-show:
     file: workflows/story-tasks-show.yml
     description: Show the raw Tasks section for one story issue
+    category: story
     state_bindings:
       shared_state: shared_state
   story-task-add:
     file: workflows/story-task-add.yml
     description: Add one task reference to the Tasks section of a story issue
+    category: story
     state_bindings:
       shared_state: shared_state
   story-tasks-ready:
     file: workflows/story-tasks-ready.yml
     description: Show Ready tasks referenced from a story Tasks section
+    category: story
     state_bindings:
+      shared_state: shared_state
+  task-to-ready:
+    file: workflows/task-to-ready.yml
+    description: Validate one task or bug and set its project status to Ready
+    category: lifecycle
+    when: Use when a task or bug is ready to move into Ready.
+  task-to-in-progress:
+    file: workflows/task-to-in-progress.yml
+    description: Set one task or bug project status to In progress
+    category: lifecycle
+    when: Use when you are starting implementation on a Ready task.
+  task-to-review:
+    file: workflows/task-to-review.yml
+    description: Prepare the active task for review and set its project status to In review
+    category: lifecycle
+    when: Use when implementation is complete and the active task is ready for review.
+    state_bindings:
+      common_state: common_state
+  close-task:
+    file: workflows/close-task.yml
+    description: Close the active reviewed task and clear remembered task context
+    category: lifecycle
+    when: Use when the active reviewed task is ready to land and close.
+    state_bindings:
+      common_state: common_state
       shared_state: shared_state
   set-task-size:
     file: workflows/set-task-size.yml
     description: Update the project Size field for one open task in this repository
+    category: field-update
   set-task-estimate:
     file: workflows/set-task-estimate.yml
     description: Update the project Estimate field for one open task in this repository
+    category: field-update
   set-task-iteration:
     file: workflows/set-task-iteration.yml
     description: Update the project Iteration field for one open task in this repository
+    category: field-update
   set-task-priority:
     file: workflows/set-task-priority.yml
     description: Update the project Priority field for one open task in this repository
-  set-active-profile:
-    file: workflows/set-active-profile.yml
-    state_bindings:
-      shared_state: shared_state
+    category: field-update
 profiles:
   frontend:
     file: profiles/frontend.yml

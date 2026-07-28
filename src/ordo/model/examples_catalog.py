@@ -33,6 +33,7 @@ EXAMPLES_CATALOG: JSONObject = {
             "path": "examples/launcher-step.yaml",
             "shows": ["step_launcher_selection", "profile_scoped_launchers", "shell_wrapper_example"],
             "related_topics": ["capabilities", "model", "examples"],
+            "status": "legacy_compatibility_example",
         },
         {
             "name": "include-plain",

@@ -1,0 +1,29 @@
+version: 1
+routines:
+  set-active-task.finalize-frontend:
+    kind: action
+    summary: Regenerate frontend API artifacts, run checks, and create the regeneration commit when changes were produced.
+    implementation:
+      argv: [".ordo/scripts/finalize-frontend.sh"]
+    failure_modes:
+      - dependency_bootstrap_failed
+      - checks_failed
+      - commit_failed
+      - runtime_unavailable
+
+  review.render-open-diff:
+    kind: probe
+    summary: Render the current branch diff versus main into a temporary HTML file and try to open it locally.
+    args:
+      issue_number:
+        type: string
+        required: true
+    implementation:
+      argv: [".ordo/scripts/render-review-diff.py", "{issue_number}"]
+    outputs:
+      mode: data
+      format: json
+    failure_modes:
+      - diff_render_failed
+      - viewer_launch_failed
+      - runtime_unavailable

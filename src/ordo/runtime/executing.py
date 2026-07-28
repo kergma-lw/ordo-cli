@@ -34,6 +34,8 @@ def execute_workflow(
     step_executor: StepExecutor | None = None,
     connector_provider: ConnectorProvider | None = None,
     execution_tree: dict[str, object] | None = None,
+    invoked_by_run: bool = False,
+    invoked_run_reference: str | None = None,
 ) -> RuntimeResult:
     """Execute steps only after validation, resolution, and guards succeed."""
 
@@ -436,6 +438,8 @@ def execute_workflow(
                             guard_probe=guard_probe,
                             step_executor=step_executor,
                             connector_provider=connector_provider,
+                            invoked_by_run=True,
+                            invoked_run_reference=step.run,
                         )
                     run_results.append(run_result)
                     diagnostics.extend(run_result.diagnostics)
@@ -699,6 +703,10 @@ def execute_workflow(
             skipped_steps=block_skipped,
         )
 
+    results = tuple(workflow_results)
+    if invoked_by_run and not results:
+        results = (_nested_run_missing_result(workflow.workflow, run_reference=invoked_run_reference),)
+
     return RuntimeResult(
         mode=Mode.EXECUTE,
         status=RuntimeStatus.OK,
@@ -720,10 +728,18 @@ def execute_workflow(
             guard_details=guard_details,
             block_items=block_items,
         ),
-        results=tuple(workflow_results),
+        results=results,
         published=tuple(published_results),
         operation_results=tuple(operation_results),
     )
+
+
+def _nested_run_missing_result(workflow_name: str, *, run_reference: str | None = None) -> JSONValue:
+    display_name = Path(run_reference).stem if isinstance(run_reference, str) and run_reference else workflow_name
+    return {
+        "summary": f'Run-invoked workflow "{display_name}" completed without explicit result.',
+        "workflow": display_name,
+    }
 
 
 def _evaluate_step_condition(step, workflow: Workflow, *, observation_session=None) -> bool | Diagnostic:

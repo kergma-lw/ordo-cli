@@ -8,12 +8,17 @@ class IntrospectionRoutineContractTest(unittest.TestCase):
         payload = describe_routine_contract()
 
         self.assertEqual(payload["discovery"]["path"], ".ordo/routines.yaml")
+        self.assertEqual(payload["authoring_status"], "exception_path")
+        self.assertEqual(payload["authoring_guidance"]["default_recommendation"], "avoid_by_default")
+        self.assertTrue(payload["authoring_guidance"]["not_a_connector_family"])
         top_level_fields = {field["name"] for field in payload["top_level_fields"]}
         routine_entry_fields = {field["name"] for field in payload["routine_entry_fields"]}
         self.assertEqual(top_level_fields, {"version", "routines"})
         self.assertIn("kind", routine_entry_fields)
         self.assertIn("implementation", routine_entry_fields)
         self.assertIn("failure_modes", routine_entry_fields)
+        implementation_argv = next(field for field in payload["implementation_fields"] if field["name"] == "argv")
+        self.assertEqual(implementation_argv["authoring_status"], "bounded_execution_only")
 
     def test_root_introspection_publishes_routine_contract_section(self) -> None:
         payload = describe_system()

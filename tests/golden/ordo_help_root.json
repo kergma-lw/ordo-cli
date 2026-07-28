@@ -19,6 +19,7 @@
       "playbook_contract",
       "plugin_surface_contract",
       "profile_contract",
+      "routine_contract",
       "state_contract",
       "workflow_contract"
     ],
@@ -40,7 +41,7 @@
     },
     {
       "command": "ordo-help workflow-authoring --json",
-      "purpose": "Learn preferred workflow authoring patterns and cautions"
+      "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
     },
     {
       "command": "ordo-help capabilities --json",
@@ -48,7 +49,7 @@
     },
     {
       "command": "ordo-help command-line --json",
-      "purpose": "Inspect public launch commands and flags"
+      "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
     },
     {
       "command": "ordo-help operations --json",
@@ -71,7 +72,7 @@
     },
     {
       "name": "workflow-authoring",
-      "summary": "Inspect preferred workflow authoring patterns, shell fallback cautions, early guards, and let usage"
+      "summary": "Inspect preferred workflow authoring patterns, paired check/review passes, routine cautions, early guards, and let usage"
     },
     {
       "name": "capabilities",
@@ -79,7 +80,7 @@
     },
     {
       "name": "command-line",
-      "summary": "Inspect the public command-line launch surface"
+      "summary": "Inspect the public command-line launch surface, including distinct check and review roles"
     },
     {
       "name": "operations",

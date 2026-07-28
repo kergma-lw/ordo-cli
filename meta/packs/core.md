@@ -736,11 +736,13 @@
 
 - A workflow file must be writable by both humans and agents.
 - Workflow authoring from existing public operations is a primary product path rather than a niche expert path.
+- Workflow authoring may also compose intentionally published project-local routine entries when no richer reusable connector surface exists.
 - Validation must fail on unknown fields in stable workflow schema.
 - A human reviewer must be able to locate policy and guardrails in the declaration itself rather than reconstructing them from implementation code alone.
 - An agent author must be able to predict whether a workflow is valid, resolvable, and likely executable from schema, examples, and connector contracts.
 - The contract must minimize hidden shell semantics that change workflow meaning without explicit declaration.
 - The default authoring path should favor composition of existing operations and profiles over creation of new connector semantics.
+- Workflow use of project-local routines must stay at the level of routine identifiers and declared arguments rather than embedding local command text directly into the workflow.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
 - A workflow may declare workflow-local named expressions through a top-level `let` surface when that keeps long local expressions readable.
 - Reusable workflow fragments should support explicit local argument contracts.
@@ -927,6 +929,7 @@ Ordo is not only meant to execute workflows. It must also be understandable and 
 The primary extension path in early Ordo is:
 
 - compose workflows from existing public operations;
+- compose workflows from intentionally published project-local routines only when no richer reusable connector surface exists yet;
 - compose profiles from explicit presets and policy choices;
 - adapt projects through explicit declarative configuration.
 
@@ -965,7 +968,8 @@ It should preserve:
 - visible policy;
 - reviewability;
 - stable public semantics;
-- minimal dependence on hidden shell behavior.
+- minimal dependence on hidden shell behavior;
+- bounded use of project-local opaque routines where those routines remain explicitly published and reviewable.
 
 <!-- source: domain/connector.md -->
 
@@ -1521,12 +1525,32 @@ Playbook files hold project-local launch intent and resolution context.
 They may select, name, and parameterize workflows through explicit catalogs, defaults, and state bindings,
 but they must not absorb workflow business-step logic.
 
+## Playbook-owned routine surface
+
+The playbook domain may also own a project-local routine catalog.
+
+That catalog answers the question:
+
+> which bounded project-local automation entries are intentionally published for workflow invocation in this project.
+
+Routine entries are:
+
+- project-local;
+- named and reviewable;
+- intentionally published rather than discovered from arbitrary repository scripts;
+- opaque local automation boundaries rather than rich connector semantics.
+
+Routines exist to provide a bounded invocation surface for project-local automation that would otherwise leak hidden shell-first behavior into workflow files.
+They are not connector families and they do not create a second orchestration language.
+
 ## What a playbook owns
 
 - project-local workflow catalog;
+- project-local routine catalog;
 - named profile catalog for playbook-run profile selection;
 - named runtime state declarations shared across project workflows;
 - bindings from workflow-level logical state roles to concrete project state declarations;
+- project-local workflow-catalog navigation metadata such as category and operator-oriented usage timing;
 - explicit execution working directory defaults and overrides for project-local launch context;
 - explicit project-local pre-run workflow orchestration before the requested workflow executes;
 - explicit playbook-owned dependency bindings for that pre-run launch phase;
@@ -1541,11 +1565,13 @@ but they must not absorb workflow business-step logic.
 - runtime mode semantics such as `check`, `plan`, `execute`, or `explain`;
 - hidden shell-first execution logic.
 
+The playbook domain may publish named routines for workflow use, but routine implementation detail must remain outside workflow files and must not silently widen into arbitrary command execution.
+
 ## Relationship to adjacent domains
 
 - A workflow defines guarded operational intent.
 - A profile defines reusable parameters, explicit overrides, and profile-scoped execution context.
-- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults and overrides.
+- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, routines, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults and overrides.
 - Runtime still owns mode behavior and execution semantics after playbook discovery and resolution complete.
 
 ## Quality bar
@@ -1554,6 +1580,7 @@ A good playbook:
 
 - can be discovered predictably by both humans and agents;
 - gives stable names to common project operations;
+- gives stable names to intentionally published local automation when rich connector semantics are not yet available;
 - keeps project-local launch concerns out of generic workflow logic;
 - keeps pre-run launch dependencies in the playbook layer rather than leaking them into unrelated workflow state contracts;
 - makes workflow, profile, and state resolution explicit enough for review;
@@ -1566,6 +1593,9 @@ A playbook is not a workflow.
 It is a project-level composition and launch document.
 It may select, name, and parameterize workflows through explicit catalogs and defaults,
 but it must not absorb the inner business-step logic that belongs in workflow files.
+
+Project-local catalog metadata such as workflow `category` and operator-facing `when` guidance belongs to the playbook layer when it helps humans and agents choose the right workflow from the top-level launch surface.
+That metadata must remain navigational and launch-oriented rather than becoming a second place to restate workflow step logic.
 
 <!-- source: domain/workflow.md -->
 
@@ -1584,6 +1614,9 @@ It must not answer the question:
 Workflow files hold orchestration intent.
 They may sequence checks, guards, steps, and explicit local composition surfaces,
 but they are not the place where non-trivial transformation algorithms should be implemented.
+
+Workflows may invoke both public connector operations and intentionally published project-local routines,
+but workflow files do not own the implementation logic of either surface.
 
 ## What is acceptable in a workflow
 
@@ -2803,9 +2836,13 @@ defaults:
 workflows:
   inspect-issue:
     file: inspect-issue.yml
+    category: inspect
+    when: Use when you need issue details without changing project state.
 
   close-task:
     file: close-task.yml
+    category: lifecycle
+    when: Use after review is complete and the active task is ready to land.
     working_directory: ${inputs.repo_root}
     state_bindings:
       task_memory: repo_task_state
@@ -2842,9 +2879,14 @@ A workflow entry gives a stable project-local name to a workflow file.
 
 It may additionally declare:
 
+- a short project-local `category` string for top-level workflow catalog grouping;
+- a short project-local `when` string that explains when an operator should choose that workflow from the launch surface;
 - state bindings from workflow logical roles to concrete playbook state entries;
 - an explicit execution `working_directory` for runs of that workflow entry, expressed either as a literal path string or as an activation-time-safe `${...}` embedded-value local expression;
 - future launch metadata that remains project-local rather than workflow-semantic.
+
+`category` and `when` are launch-surface metadata.
+They help humans and agents choose among named workflows, but they must not change workflow execution semantics, workflow resolution, or guard truth.
 
 ## Defaults role
 
@@ -6037,6 +6079,7 @@ Playbook must provide a deterministic and reviewable project-local launch surfac
 - `.ordo/ordo.yaml` discovery behavior is documented and testable.
 - Missing playbook, missing workflow entry, and missing profile entry fail with distinct structured outcomes.
 - Workflow names are unique within the playbook workflow catalog.
+- Routine identifiers are unique within the project-local routine registry when that registry is present.
 - Profile names are unique within the playbook profile catalog.
 - State names are unique within the playbook state catalog.
 - Workflow state-binding role names are unique within a workflow entry.
@@ -6046,7 +6089,9 @@ Playbook must provide a deterministic and reviewable project-local launch surfac
 - Every declared workflow logical state role has a binding in the active playbook workflow entry.
 - No playbook workflow entry provides extra state bindings for undeclared workflow logical state roles.
 - No silent fallback resolves a missing named workflow or profile to an arbitrary nearby file.
+- No silent fallback resolves a missing routine identifier to an arbitrary nearby script or command.
 - Workflow business logic remains in workflow files rather than being duplicated as playbook-only execution semantics.
+- Project-local routine publication remains explicit rather than being inferred from arbitrary repository script locations.
 
 <!-- source: verification/workflow/authoring.md -->
 

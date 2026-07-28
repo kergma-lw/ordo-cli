@@ -13,6 +13,7 @@
     "playbook",
     "plugin_surface_contract",
     "profile",
+    "routine_registry",
     "state_contract",
     "workflow"
   ],
@@ -52,7 +53,7 @@
     },
     {
       "command": "ordo-help workflow-authoring --json",
-      "purpose": "Learn preferred workflow authoring patterns and cautions"
+      "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
     },
     {
       "command": "ordo-help capabilities --json",
@@ -60,7 +61,7 @@
     },
     {
       "command": "ordo-help command-line --json",
-      "purpose": "Inspect public launch commands and flags"
+      "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
     },
     {
       "command": "ordo-help operations --json",
@@ -70,5 +71,18 @@
       "command": "ordo-help examples --json",
       "purpose": "Inspect verified repository examples"
     }
-  ]
+  ],
+  "workflow_authoring_passes": {
+    "passes": [
+      {
+        "command": "ordo-playbook check <workflow>",
+        "purpose": "Validate workflow applicability and execution readiness"
+      },
+      {
+        "command": "ordo-playbook review <workflow>",
+        "purpose": "Review workflow authoring-quality findings"
+      }
+    ],
+    "rule": "Use both check and review after adding or changing a workflow; neither replaces the other."
+  }
 }

@@ -15,7 +15,7 @@ from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, resolve_workflow_let_reference_node
 from .local_expression_engine.core import BinaryNode, CallNode, ListNode, LiteralNode, ParsedLocalExpressionTree, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, render_expression_text
 from .providers import ConnectorProvider, get_default_connector_provider
-from .routines import resolve_routine_entry, routine_operation_contract
+from .routines import parse_routine_reference, resolve_routine_entry, routine_operation_contract
 
 
 @dataclass(frozen=True, slots=True)
@@ -414,9 +414,9 @@ def _resolve_reference(
     local_registry: ConnectorRegistry,
     declared_with: JSONObject | None = None,
 ) -> ResolvedOperation | Diagnostic:
-    if reference == "routine":
-        routine_id = None if not isinstance(declared_with, dict) else declared_with.get("id")
-        if not isinstance(routine_id, str) or not routine_id:
+    routine_id = parse_routine_reference(reference)
+    if routine_id is not None:
+        if not routine_id:
             return _diagnostic(
                 code="resolution.routine.missing_id",
                 message="Routine invocations must declare a non-empty routine id",

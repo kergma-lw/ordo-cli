@@ -10,7 +10,7 @@ from pathlib import Path
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
-from ordo.routines import RoutineEntry, RoutineRegistry, build_routine_operation_contract, load_workflow_routine_registry
+from ordo.routines import RoutineEntry, RoutineRegistry, build_routine_operation_contract, load_workflow_routine_registry, parse_routine_reference
 
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -47,7 +47,7 @@ def routine_operation_contract(entry: RoutineEntry):
 def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
     """Execute one resolved routine step with bounded log output."""
 
-    routine_id = resolved_step.declared_with.get("id") if isinstance(resolved_step.declared_with, dict) else None
+    routine_id = parse_routine_reference(resolved_step.reference)
     if not isinstance(routine_id, str) or not routine_id:
         return OperationResult(status="execution_error", summary="Routine step is missing a resolved routine identifier")
     resolved = resolve_routine_entry(workflow=workflow, routine_id=routine_id)

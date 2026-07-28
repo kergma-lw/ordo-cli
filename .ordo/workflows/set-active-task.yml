@@ -165,10 +165,7 @@ blocks:
 
       - name: Finalize frontend
         if: inputs.repo_kind | eq("frontend")
-        uses: shell.command
-        launcher: shell_frontend
-        with:
-          command: 'set -euo pipefail; npm run openapi; npm run errors:sync; npm run check; if ! git diff --quiet || ! git diff --cached --quiet; then git add -A && git commit -m "chore(openapi): regenerate api types"; fi'
+        uses: routine.set-active-task.finalize-frontend
 
       - name: Remember issue number
         state_set:

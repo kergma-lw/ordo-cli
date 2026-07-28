@@ -9,7 +9,7 @@ from ordo.model.json import JSONObject
 
 from .local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 
-CapabilityStatus = Literal["supported", "unsupported", "planned"]
+CapabilityStatus = Literal["supported", "unsupported", "planned", "deprecated"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,19 +126,27 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.step.value", status="supported", scope="workflow.step"),
     CapabilitySpec(
         name="runtime.launchers",
-        status="supported",
+        status="deprecated",
         scope="runtime",
         related_capabilities=("workflow.step.launcher",),
         related_negative_rules=("workflow_step.launcher_requires_uses",),
         related_model_nodes=("profile.launchers", "workflow.step.launcher", "workflow.step_forms.operation_call"),
+        must_not_infer=(
+            "launcher support means launcher-centric workflow authoring is still preferred",
+            "a launcher is safer than a published routine by default",
+        ),
     ),
     CapabilitySpec(
         name="workflow.step.launcher",
-        status="supported",
+        status="deprecated",
         scope="workflow.step",
         related_capabilities=("runtime.launchers",),
         related_negative_rules=("workflow_step.launcher_requires_uses",),
         related_model_nodes=("workflow.step.launcher", "profile.launchers", "workflow.step_forms.operation_call"),
+        must_not_infer=(
+            "step-level launcher selection is a preferred new authoring path",
+            "launchers should be chosen over routine publication for new project-local automation",
+        ),
     ),
     CapabilitySpec(
         name="workflow.step.condition",

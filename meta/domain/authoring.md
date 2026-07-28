@@ -11,6 +11,7 @@ Ordo is not only meant to execute workflows. It must also be understandable and 
 The primary extension path in early Ordo is:
 
 - compose workflows from existing public operations;
+- compose workflows from intentionally published project-local routines only when no richer reusable connector surface exists yet;
 - compose profiles from explicit presets and policy choices;
 - adapt projects through explicit declarative configuration.
 
@@ -49,4 +50,5 @@ It should preserve:
 - visible policy;
 - reviewability;
 - stable public semantics;
-- minimal dependence on hidden shell behavior.
+- minimal dependence on hidden shell behavior;
+- bounded use of project-local opaque routines where those routines remain explicitly published and reviewable.

@@ -12,7 +12,7 @@ from ordo.model.json import JSONObject, JSONValue
 from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import StepBlock, Workflow
-from ordo.routines import RoutineRegistry, RoutineRegistryError, load_workflow_routine_registry, validate_workflow_routine_invocations, workflow_uses_routine
+from ordo.routines import ROUTINE_REFERENCE_PREFIX, RoutineRegistry, RoutineRegistryError, load_workflow_routine_registry, parse_routine_reference, validate_workflow_routine_invocations, workflow_uses_routine
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .local_expression_contexts import LocalExpressionContext
@@ -681,6 +681,7 @@ def validate_workflow_semantics(
                 diagnostics.extend(exc.diagnostics)
         if effective_registry is not None:
             diagnostics.extend(validate_workflow_routine_invocations(workflow, effective_registry))
+        diagnostics.extend(_warn_on_routine_exception_path_usage(workflow, source=effective_source))
     return _report("workflow", diagnostics)
 
 
@@ -859,7 +860,7 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
                     source,
                 )
             )
-            if item.get("uses") == "routine":
+            if isinstance(item.get("uses"), str) and item.get("uses", "").startswith(ROUTINE_REFERENCE_PREFIX):
                 diagnostics.append(
                     _diagnostic(
                         "validation.workflow.guard.routine_forbidden",
@@ -1349,9 +1350,11 @@ def _validate_call(
     diagnostics.extend(_require_non_empty_string(value, "uses", path=path + ("uses",), source=source, pattern=USES_PATTERN, pattern_message="Operation reference must match the stable connector operation pattern"))
     diagnostics.extend(_require_object_field(value, "with", path=path + ("with",), source=source, required=False))
     with_payload = value.get("with")
+    uses_value = value.get("uses")
+    if isinstance(uses_value, str) and uses_value.startswith(ROUTINE_REFERENCE_PREFIX):
+        diagnostics.extend(_validate_routine_reference_shape(uses_value, path=path + ("uses",), source=source))
     if isinstance(with_payload, dict):
-        uses_value = value.get("uses")
-        if uses_value == "routine":
+        if isinstance(uses_value, str) and uses_value.startswith(ROUTINE_REFERENCE_PREFIX):
             diagnostics.extend(_validate_routine_call_shape(with_payload, path=path + ("with",), source=source))
         diagnostics.extend(
             _validate_runtime_value_surface(
@@ -1368,9 +1371,46 @@ def _validate_call(
 
 def _validate_routine_call_shape(value: JSONObject, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
-    diagnostics.extend(_validate_unknown_fields(value, frozenset({"id", "args"}), path=path, source=source))
-    diagnostics.extend(_require_non_empty_string(value, "id", path=path + ("id",), source=source))
+    diagnostics.extend(_validate_unknown_fields(value, frozenset({"args"}), path=path, source=source))
     diagnostics.extend(_require_object_field(value, "args", path=path + ("args",), source=source, required=False))
+    return diagnostics
+
+
+def _validate_routine_reference_shape(value: str, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if parse_routine_reference(value) is None:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.routine.reference",
+                "Routine references must use the form 'routine.<id>' with a non-empty published routine id",
+                path,
+                source,
+                reference=value,
+            )
+        )
+    return diagnostics
+
+
+def _warn_on_routine_exception_path_usage(workflow: Workflow, *, source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    for block_index, block in enumerate(workflow.blocks):
+        if not isinstance(block, StepBlock):
+            continue
+        for step_index, step in enumerate(block.steps):
+            if step.operation is None:
+                continue
+            routine_id = parse_routine_reference(step.operation.uses)
+            if routine_id is None:
+                continue
+            diagnostics.append(
+                _warning(
+                    "validation.workflow.routine.exception_path",
+                    f"Routine '{routine_id}' is a constrained exception path; prefer richer connector or composed public surfaces when available",
+                    ("blocks", str(block_index), "steps", str(step_index), "uses"),
+                    source,
+                    routine_id=routine_id,
+                )
+            )
     return diagnostics
 
 

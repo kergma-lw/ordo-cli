@@ -102,6 +102,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         example_result = json.loads(self.run_help("search", "set-active-task", "--json").stdout)
         input_file_result = json.loads(self.run_help("search", "input-file", "--json").stdout)
         working_directory_result = json.loads(self.run_help("search", "working_directory", "--json").stdout)
+        category_result = json.loads(self.run_help("search", "category", "--json").stdout)
         launcher_result = json.loads(self.run_help("search", "launcher", "--json").stdout)
         run_result = json.loads(self.run_help("search", "run", "--json").stdout)
         pre_run_result = json.loads(self.run_help("search", "pre_run", "--json").stdout)
@@ -112,6 +113,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "example" and item["name"] == "set-active-task-from-gitx" for item in example_result["facts"]))
         self.assertTrue(any(item["kind"] == "command_line_field" and item["name"] == "command-line.ordo-playbook.flag.input_file" for item in input_file_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.workflows.working_directory" for item in working_directory_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.workflows.category" for item in category_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "profile.launchers" for item in launcher_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.step.launcher" for item in launcher_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.run_contract" for item in run_result["facts"]))
@@ -152,9 +154,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(profile_fields["checks"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["overrides"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(profile_fields["launchers"]["runtime_effect"], "publishes_profile_scoped_launchers")
+        self.assertEqual(profile_fields["launchers"]["status"], "deprecated")
+        self.assertEqual(profile_fields["launchers"]["preferred_alternative"], "published_routines")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
         self.assertEqual(defaults_fields["working_directory"]["runtime_effect"], "sets_default_execution_working_directory")
         self.assertEqual(workflow_inputs["authoring_role"], "declares_global_activation_inputs")
+        self.assertEqual(workflow_entry_fields["category"]["runtime_effect"], "published_metadata_only")
+        self.assertEqual(workflow_entry_fields["when"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(workflow_entry_fields["working_directory"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(workflow_entry_fields["working_directory"]["resolution_base"], "playbook_dir")
         self.assertEqual(workflow_entry_fields["working_directory"]["expression_syntax"], "${...}")
@@ -174,6 +180,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_forms["publish"]["required_fields"], ["name", "publish"])
         self.assertIn("register", step_forms["value"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["optional_fields"])
+        self.assertIn("launcher", step_forms["operation_call"]["deprecated_optional_fields"])
 
     def test_model_publishes_workflow_input_hint_metadata(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -254,8 +261,9 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(branching["status"], "supported")
         self.assertEqual(branching["must_not_infer"], [])
-        self.assertEqual(launchers["status"], "supported")
+        self.assertEqual(launchers["status"], "deprecated")
         self.assertIn("workflow.step.launcher", launchers["related_model_nodes"])
+        self.assertTrue(any("preferred" in item for item in launchers["must_not_infer"]))
 
     def test_describe_resolves_capability_and_model_nodes(self) -> None:
         capability_node = json.loads(self.run_help("describe", "workflow.branching", "--json").stdout)
@@ -264,6 +272,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         run_contract_node = json.loads(self.run_help("describe", "workflow.run_contract", "--json").stdout)
         command_line_node = json.loads(self.run_help("describe", "command-line.ordo-playbook.flag.input_file", "--json").stdout)
         working_directory_node = json.loads(self.run_help("describe", "playbook.workflows.working_directory", "--json").stdout)
+        category_node = json.loads(self.run_help("describe", "playbook.workflows.category", "--json").stdout)
         launcher_node = json.loads(self.run_help("describe", "profile.launchers", "--json").stdout)
         pre_run_node = json.loads(self.run_help("describe", "playbook.pre_run_contract", "--json").stdout)
         missing = self.run_help("describe", "missing.node", "--json")
@@ -291,9 +300,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(working_directory_node["name"], "playbook.workflows.working_directory")
         self.assertEqual(working_directory_node["metadata"]["runtime_effect"], "sets_execution_working_directory")
         self.assertEqual(working_directory_node["metadata"]["expression_syntax"], "${...}")
+        self.assertEqual(category_node["document_kind"], "model_node")
+        self.assertEqual(category_node["name"], "playbook.workflows.category")
+        self.assertEqual(category_node["metadata"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(launcher_node["document_kind"], "model_node")
         self.assertEqual(launcher_node["name"], "profile.launchers")
         self.assertEqual(launcher_node["metadata"]["runtime_effect"], "publishes_profile_scoped_launchers")
+        self.assertEqual(launcher_node["metadata"]["status"], "deprecated")
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
 
@@ -337,6 +350,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_search_indexes_workflow_authoring_rules(self) -> None:
         shell_result = json.loads(self.run_help("search", "shell.command", "--json").stdout)
+        routine_result = json.loads(self.run_help("search", "routine.*", "--json").stdout)
         guards_result = json.loads(self.run_help("search", "runner", "--json").stdout)
         input_validation_result = json.loads(self.run_help("search", "missing input validation", "--json").stdout)
         adapters_result = json.loads(self.run_help("search", "published results", "--json").stdout)
@@ -348,6 +362,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         let_result = json.loads(self.run_help("search", "repetition", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.shell.command" for item in shell_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.routine.*" for item in routine_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_guards" for item in guards_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.input_validation_default" for item in input_validation_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.representation_adapters" for item in adapters_result["facts"]))
@@ -358,7 +373,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.delegated_applicability" for item in delegated_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_let" for item in let_result["facts"]))
 
-    def test_workflow_authoring_topic_prioritizes_shell_command_and_early_guards(self) -> None:
+    def test_workflow_authoring_topic_prioritizes_routine_caution_and_early_guards(self) -> None:
         payload = json.loads(self.run_help("workflow-authoring", "--json").stdout)
 
         self.assertEqual(payload["document_kind"], "workflow_authoring")
@@ -370,6 +385,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")
         structured_rule = next(item for item in payload["rules"] if item["name"] == "structured_surface_bias")
         shell_rule = next(item for item in payload["rules"] if item["name"] == "shell.command")
+        routine_rule = next(item for item in payload["rules"] if item["name"] == "routine.*")
         ambiguity_rule = next(item for item in payload["rules"] if item["name"] == "semantic_ambiguity")
         local_rule = next(item for item in payload["rules"] if item["name"] == "local_artifacts_are_context")
         guards_rule = next(item for item in payload["rules"] if item["name"] == "early_guards")
@@ -388,18 +404,34 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(structured_rule["priority"], "strong_recommendation")
         self.assertTrue(any("product terms" in item for item in structured_rule["why"]))
         self.assertEqual(shell_rule["priority"], "critical_caution")
-        self.assertEqual(shell_rule["guidance_level"], "forbidden_by_default")
+        self.assertEqual(shell_rule["guidance_level"], "forbidden")
         self.assertTrue(any("riskiest" in reason for reason in shell_rule["why"]))
-        self.assertTrue(any("repository-local automation" in item for item in shell_rule["avoid"]))
-        self.assertTrue(any("partial public-surface match" in item for item in shell_rule["why"]))
-        self.assertTrue(any("capability gap remains" in item for item in shell_rule["prefer"]))
-        self.assertTrue(any("remaining gap is semantic" in item for item in shell_rule["prefer"]))
+        self.assertTrue(any("legacy" in reason for reason in shell_rule["why"]))
+        self.assertTrue(any("routine.<id>" in item for item in shell_rule["prefer"]))
+        self.assertTrue(any("legacy shell fallback" in item for item in shell_rule["prefer"]))
         self.assertEqual(
             shell_rule["stop_when"],
             [
+                "the proposed authoring change still depends on adding a new shell.command step",
+                "the only argument for shell.command is speed, familiarity, or historical precedent",
+            ],
+        )
+        self.assertEqual(routine_rule["priority"], "critical_caution")
+        self.assertEqual(routine_rule["guidance_level"], "strong_restriction")
+        self.assertTrue(any("project-local semantics" in reason for reason in routine_rule["why"]))
+        self.assertTrue(any("exception path" in reason or "exception surface" in routine_rule["rule"] for reason in routine_rule["why"]))
+        self.assertTrue(any("capability gap remains" in item for item in routine_rule["prefer"]))
+        self.assertTrue(any("remaining gap is semantic" in item for item in routine_rule["prefer"]))
+        self.assertTrue(any("connector publication" in item for item in routine_rule["prefer"]))
+        self.assertTrue(any("repository-local automation" in item for item in routine_rule["avoid"]))
+        self.assertTrue(any("general extension API" in item for item in routine_rule["avoid"]))
+        self.assertEqual(
+            routine_rule["stop_when"],
+            [
                 "no explicit capability-gap statement has been made",
-                "the remaining gap is semantic rather than mechanical",
-                "shell.command is being chosen mainly because it is faster, familiar, or already available locally",
+                "the remaining gap is semantic rather than mechanical or intentionally project-local",
+                "routine.* is being chosen mainly because it is faster, familiar, or already available locally",
+                "routine.* is starting to look like the default implementation path rather than a narrow exception",
             ],
         )
         self.assertEqual(ambiguity_rule["priority"], "strong_recommendation")
@@ -408,11 +440,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(local_rule["guidance_level"], "strong_restriction")
         self.assertTrue(any("public model" in item for item in local_rule["why"] + local_rule["prefer"]))
         self.assertTrue(any("implementation approval" in item for item in local_rule["prefer"]))
-        self.assertTrue(any("shell.command" in item for item in local_rule["avoid"]))
+        self.assertTrue(any("routine.*" in item for item in local_rule["avoid"]))
         self.assertEqual(
             local_rule["must_not_infer"],
             [
-                "there is a script for this => shell.command is acceptable here",
+                "there is a script for this => routine.* is acceptable here",
                 "the repo already does it this way => this is the correct workflow contract",
                 "a local helper covers the semantic gap => no clarification is needed",
             ],
@@ -448,7 +480,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(state_rule["priority"], "recommended_caution")
         self.assertTrue(any("lifecycle" in item for item in [state_rule["rule"], *state_rule["why"], *state_rule["prefer"]]))
         self.assertEqual(context_rule["priority"], "strong_recommendation")
-        self.assertTrue(any("launchers" in item for item in context_rule["prefer"]))
+        self.assertTrue(any("routines" in item for item in context_rule["prefer"]))
         self.assertEqual(control_rule["priority"], "strong_recommendation")
         self.assertTrue(any("step-local" in item for item in control_rule["prefer"]))
         self.assertEqual(let_rule["priority"], "recommended_readability_pattern")
@@ -466,7 +498,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(playbook["discovery_commands"][0]["name"], "workflows list")
         self.assertEqual(playbook["modes"][0]["name"], "review <workflow>")
         self.assertEqual(playbook["modes"][1]["name"], "check <workflow>")
-        self.assertEqual(playbook["run_success_surface"], "successful run emits workflow-local results, may also surface global published values, and may synthesize one fallback result when no explicit result was produced")
+        self.assertEqual(playbook["run_success_surface"], "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced")
         self.assertIn("ordo-playbook workflows list", playbook["examples"])
         self.assertIn("ordo-playbook plan inspect-issue", playbook["examples"])
         self.assertNotIn("--workflow", flags)
@@ -539,6 +571,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         payload = json.loads(self.run_help("examples", "--json").stdout)
 
         self.assertTrue(any(item["name"] == "launcher-step" for item in payload["examples"]))
+        launcher_example = next(item for item in payload["examples"] if item["name"] == "launcher-step")
+        self.assertEqual(launcher_example["status"], "legacy_compatibility_example")
         self.assertTrue(any(item["name"] == "text-adapter" for item in payload["examples"]))
         self.assertTrue(any(item["name"] == "project-items-let" for item in payload["examples"]))
 

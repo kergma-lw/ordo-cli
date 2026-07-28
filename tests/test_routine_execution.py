@@ -39,7 +39,7 @@ class RoutineExecutionTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="demo",
-                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.pass"})),)),),
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine.demo.pass")),)),),
                 launch_dir=str(root),
             )
 
@@ -80,7 +80,7 @@ class RoutineExecutionTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="demo",
-                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.fail"})),)),),
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine.demo.fail")),)),),
                 launch_dir=str(root),
             )
 
@@ -97,7 +97,7 @@ class RoutineExecutionTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="demo",
-                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.pass"})),)),),
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine.demo.pass")),)),),
                 launch_dir=str(root),
             )
 
@@ -138,7 +138,7 @@ class RoutineExecutionTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="demo",
-                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.probe"})),)),),
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine.demo.probe")),)),),
                 launch_dir=str(root),
             )
 
@@ -177,7 +177,7 @@ class RoutineExecutionTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="demo",
-                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.probe"})),)),),
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine.demo.probe")),)),),
                 launch_dir=str(root),
             )
 
