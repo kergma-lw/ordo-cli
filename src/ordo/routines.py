@@ -73,6 +73,18 @@ class RoutineRegistry:
     routines: dict[str, RoutineEntry]
 
 
+@dataclass(frozen=True, slots=True)
+class RoutineCatalogEntry:
+    """Discovery metadata for one published routine."""
+
+    registry_path: Path
+    id: str
+    kind: str
+    summary: str
+    args: tuple[str, ...] = ()
+    failure_modes: tuple[str, ...] = ()
+
+
 def workflow_uses_routine(workflow: Workflow) -> bool:
     """Return whether the workflow references the routine surface."""
 
@@ -202,6 +214,38 @@ def validate_workflow_routine_invocations(workflow: Workflow, registry: RoutineR
                         )
                     )
     return tuple(diagnostics)
+
+
+def list_routines(*, path: str | Path | None = None, cwd: str | Path | None = None) -> tuple[RoutineCatalogEntry, ...]:
+    """Return discovery metadata for all published routines."""
+
+    registry = load_routine_registry(path=path, cwd=cwd)
+    return tuple(
+        RoutineCatalogEntry(
+            registry_path=registry.path,
+            id=entry.id,
+            kind=entry.kind,
+            summary=entry.summary,
+            args=tuple(entry.args),
+            failure_modes=entry.failure_modes,
+        )
+        for entry in registry.routines.values()
+    )
+
+
+def inspect_routine(routine_id: str, *, path: str | Path | None = None, cwd: str | Path | None = None) -> RoutineEntry:
+    """Return the declared contract for one published routine."""
+
+    registry = load_routine_registry(path=path, cwd=cwd)
+    entry = registry.routines.get(routine_id)
+    if entry is None:
+        raise _routine_error(
+            "routine.registry.missing_id",
+            f"Routine '{routine_id}' is not declared in the routine registry",
+            path=("routines", routine_id),
+            details={"path": str(registry.path), "id": routine_id},
+        )
+    return entry
 
 
 def discover_routine_registry_path(*, cwd: str | Path | None = None) -> Path:
