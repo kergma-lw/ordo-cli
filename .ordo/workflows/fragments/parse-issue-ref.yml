@@ -1,0 +1,45 @@
+version: 0
+workflow: parse-issue-ref
+args:
+  item: string
+
+blocks:
+  - steps:
+      - name: Parse issue repository
+        value: '${text.before("#") with{root: args.item}}'
+        register: parsed_repository
+
+      - name: Parse issue number
+        value: '${text.after("#") with{root: args.item}}'
+        register: parsed_issue_number
+
+      - name: Return parsed backend issue ref
+        if: '${step.parsed_repository.outputs.value | eq("kergma-lw/checklist-backend")}'
+        result:
+          issue_ref: ${args.item}
+          repository: ${step.parsed_repository.outputs.value}
+          issue_number: ${step.parsed_issue_number.outputs.value}
+          profile: backend
+
+      - name: Return parsed frontend issue ref
+        if: '${step.parsed_repository.outputs.value | eq("kergma-lw/checklist-frontend")}'
+        result:
+          issue_ref: ${args.item}
+          repository: ${step.parsed_repository.outputs.value}
+          issue_number: ${step.parsed_issue_number.outputs.value}
+          profile: frontend
+
+      - name: Return parsed meta issue ref
+        if: '${step.parsed_repository.outputs.value | eq("kergma-lw/checklist-meta")}'
+        result:
+          issue_ref: ${args.item}
+          repository: ${step.parsed_repository.outputs.value}
+          issue_number: ${step.parsed_issue_number.outputs.value}
+          profile: meta
+
+      - name: Return parsed generic issue ref
+        if: '${not ((step.parsed_repository.outputs.value | eq("kergma-lw/checklist-backend")) or (step.parsed_repository.outputs.value | eq("kergma-lw/checklist-frontend")) or (step.parsed_repository.outputs.value | eq("kergma-lw/checklist-meta")))}'
+        result:
+          issue_ref: ${args.item}
+          repository: ${step.parsed_repository.outputs.value}
+          issue_number: ${step.parsed_issue_number.outputs.value}

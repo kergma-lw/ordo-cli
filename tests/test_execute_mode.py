@@ -11,6 +11,7 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, plan_workflow
+from ordo.runtime.loading import load_workflow_file
 from ordo.runtime.executing import (
     _append_execution_error_block_item,
     _append_execution_ok_block_item,
@@ -346,6 +347,45 @@ class ExecuteModeTest(unittest.TestCase):
         )
         self.assertEqual(list(result.published), [{"summary": "matched", "count": 2}])
 
+    def test_execute_publish_can_consume_probe_backed_let_binding(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={
+                "project_id": "PVT_demo",
+                "filters": [{"field": "Status", "value": "Ready"}],
+            },
+            let_bindings={
+                "ready_count": "gh.project.items(project_id=inputs.project_id, filters=inputs.filters).count",
+            },
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="publish-count", publish={"summary": "matched", "count": "${ready_count}"}),
+                    )
+                ),
+            ),
+        )
+
+        items_payload = '{"data":{"node":{"items":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"id":"PVTI_1","content":{"__typename":"Issue","number":7,"title":"First ready item","url":"https://github.com/owner/repo/issues/7","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Ready","field":{"id":"F_status","name":"Status"}}]}},{"id":"PVTI_2","content":{"__typename":"Issue","number":8,"title":"Second ready item","url":"https://github.com/owner/repo/issues/8","repository":{"nameWithOwner":"owner/repo"}},"fieldValues":{"nodes":[{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"Ready","field":{"id":"F_status","name":"Status"}}]}}]}}}}'
+        fields_payload = '{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[{"__typename":"ProjectV2SingleSelectField","id":"F_status","name":"Status","options":[{"id":"O_ready","name":"Ready"}]}]}}}}'
+
+        def run_side_effect(argv, **kwargs):
+            if argv[:3] == ["gh", "auth", "status"]:
+                return self._completed(returncode=0, stdout="authenticated\n")
+            command_text = " ".join(argv)
+            if "items(first:100" in command_text:
+                return self._completed(returncode=0, stdout=items_payload)
+            if "fields(first:100" in command_text:
+                return self._completed(returncode=0, stdout=fields_payload)
+            raise AssertionError(f"Unexpected command: {argv!r}")
+
+        with patch("subprocess.run", side_effect=run_side_effect):
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.published), [{"summary": "matched", "count": 2}])
+
     def test_execute_fan_out_registers_empty_results_for_empty_array(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -372,6 +412,166 @@ class ExecuteModeTest(unittest.TestCase):
 
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(list(result.results), [[]])
+
+    def test_execute_run_with_args_passes_fragment_arguments(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nargs:\n  item: string\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item}\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                inputs={"item": "demo-ref"},
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(
+                                name="expand",
+                                run="nested.yml",
+                                run_with={"item": "${inputs.item}"},
+                                register="nested_run",
+                                resolved_run_path=str(fragment),
+                            ),
+                            Step(name="copy", result="${step.nested_run.results}"),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(list(result.results), [[{"summary": "demo-ref"}]])
+
+    def test_execute_run_with_args_in_for_each_passes_current_item_to_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nargs:\n  item: string\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item}\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                inputs={"items": ["one", "two"]},
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(
+                                name="expand",
+                                run="nested.yml",
+                                for_each="${inputs.items}",
+                                run_with={"item": "${item}"},
+                                register="nested_run",
+                                resolved_run_path=str(fragment),
+                            ),
+                            Step(name="copy", result="${step.nested_run.results}"),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(list(result.results), [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]])
+
+    def test_execute_file_loaded_run_with_args_in_for_each_passes_current_item_to_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragments = root / "fragments"
+            fragments.mkdir()
+            fragment = fragments / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nargs:\n  item: string\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item}\n",
+                encoding="utf-8",
+            )
+            caller = root / "caller.yml"
+            caller.write_text(
+                "version: 0\nworkflow: caller\ninputs:\n  items: []\nblocks:\n  - steps:\n      - name: expand\n        run: fragments/nested.yml\n        for_each: ${inputs.items}\n        with:\n          item: ${item}\n        register: nested_run\n      - name: copy\n        result: ${step.nested_run.results}\n",
+                encoding="utf-8",
+            )
+
+            loaded = load_workflow_file(caller, launch_dir=root)
+            workflow = Workflow(
+                version=loaded.version,
+                workflow=loaded.workflow,
+                inputs={**loaded.inputs, "items": ["one", "two"]},
+                declared_inputs=loaded.declared_inputs,
+                let_bindings=loaded.let_bindings,
+                state_needs=loaded.state_needs,
+                state_bindings=loaded.state_bindings,
+                states=loaded.states,
+                step_results=loaded.step_results,
+                blocks=loaded.blocks,
+                source_path=loaded.source_path,
+                launch_dir=loaded.launch_dir,
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(list(result.results), [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]])
+
+    def test_execute_real_parse_issue_ref_fragment_with_story_tasks_show_step_shape(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        caller = root / ".ordo" / "workflows" / "story-tasks-show.yml"
+        loaded = load_workflow_file(caller, launch_dir=root / ".ordo")
+        workflow = Workflow(
+            version=loaded.version,
+            workflow=loaded.workflow,
+            inputs={
+                **loaded.inputs,
+                "active_profile_key": "active_profile",
+                "issue_number": 87,
+                "repo_kind": "meta",
+                "repo_dir": str(root),
+                "repository": "kergma-lw/checklist-meta",
+                "project_id": "PVT_demo",
+            },
+            declared_inputs=loaded.declared_inputs,
+            let_bindings={
+                **loaded.let_bindings,
+                "active_profile": '"meta"',
+                "story_body": '"## Tasks\\n- owner/repo#1\\n- owner/repo#2"',
+            },
+            state_needs=loaded.state_needs,
+            state_bindings=loaded.state_bindings,
+            states=loaded.states,
+            step_results=loaded.step_results,
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="Parse story task refs",
+                            run="fragments/parse-issue-ref.yml",
+                            for_each='${markdown["Tasks"].list_items with{root: story_body}}',
+                            run_with={"item": "${item}"},
+                            register="parsed_task_refs",
+                            resolved_run_path=str(root / ".ordo" / "workflows" / "fragments" / "parse-issue-ref.yml"),
+                        ),
+                        Step(name="copy", result='${step.parsed_task_refs.results | field("results[0]")}'),
+                    )
+                ),
+            ),
+            source_path=loaded.source_path,
+            launch_dir=loaded.launch_dir,
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(
+            list(result.results),
+            [[
+                {"issue_ref": "owner/repo#1", "repository": "owner/repo", "issue_number": "1"},
+                {"issue_ref": "owner/repo#2", "repository": "owner/repo", "issue_number": "2"},
+            ]],
+        )
 
     def test_execute_fan_out_fails_strictly_when_one_item_run_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1313,11 +1513,46 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(seen_inputs[0]["repository"], "explicit/repo")
         self.assertEqual(seen_inputs[0]["repo_dir"], "/tmp/frontend")
 
-    def test_execute_profile_switch_applies_profile_inputs_to_subsequent_steps(self) -> None:
+    def test_execute_profile_switch_injects_profile_inputs_when_not_explicitly_overridden(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="open-task",
             inputs={"repository": "explicit/repo"},
+            guards=(),
+            steps=(
+                Step(name="switch", profile_switch="frontend"),
+                Step(name="main", operation=OperationRef("shell.command", with_={"command": "echo hi"})),
+            ),
+        )
+        backend = Profile(name="backend")
+        frontend = Profile(name="frontend", inputs={"repository": "profile/repo", "repo_dir": "/tmp/frontend"})
+        seen_inputs = []
+
+        def executor(_resolved_step, runtime_workflow):
+            seen_inputs.append(dict(runtime_workflow.inputs))
+            return OperationResult(status="ok", summary="Executed")
+
+        result = execute_workflow(
+            workflow,
+            profile=backend,
+            available_profiles={"backend": backend, "frontend": frontend},
+            profile_working_directories={"backend": None, "frontend": None},
+            step_executor=executor,
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+        self.assertEqual(seen_inputs[0]["repository"], "profile/repo")
+        self.assertEqual(seen_inputs[0]["repo_dir"], "/tmp/frontend")
+
+    def test_execute_profile_switch_preserves_explicit_input_overrides(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "explicit/repo"},
+            declared_inputs={"repository": {}},
+            explicit_input_keys=("repository",),
             guards=(),
             steps=(
                 Step(name="switch", profile_switch="frontend"),

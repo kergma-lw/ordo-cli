@@ -289,14 +289,16 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
     if command_mode == "run":
         if result.status is RuntimeStatus.OK:
             results = list(result.results)
-            if not results:
+            published = list(result.published)
+            if not results and not published:
                 results = [_fallback_run_result()]
             payload = {
                 "status": "ok",
-                "results": results,
             }
-            if result.published:
-                payload["published"] = list(result.published)
+            if results:
+                payload["results"] = results
+            if published:
+                payload["published"] = published
             return payload
         return {
             "status": result.status.value,

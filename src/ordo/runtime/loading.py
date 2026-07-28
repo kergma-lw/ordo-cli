@@ -16,7 +16,7 @@ from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression
-from ordo.runtime.local_expression_engine.core import BinaryNode, BuiltinCallNode, FilterApplicationNode, LocalExpressionNode, ParsedLocalExpressionTree, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, parse_local_expression_tree
+from ordo.runtime.local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, FilterApplicationNode, ListNode, LocalExpressionNode, ParsedLocalExpressionTree, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, parse_local_expression_tree
 
 
 @dataclass(frozen=True, slots=True)
@@ -969,6 +969,17 @@ def _ensure_fragment_has_no_external_step_references(
 
 def _walk_value_expression_nodes(node: LocalExpressionNode) -> list[LocalExpressionNode]:
     nodes = [node]
+    if isinstance(node, ListNode):
+        for item in node.items:
+            nodes.extend(_walk_value_expression_nodes(item))
+        return nodes
+    if isinstance(node, CallArgumentNode):
+        nodes.extend(_walk_value_expression_nodes(node.value))
+        return nodes
+    if isinstance(node, CallNode):
+        for item in node.arguments:
+            nodes.extend(_walk_value_expression_nodes(item))
+        return nodes
     if isinstance(node, PipelineNode):
         nodes.extend(_walk_value_expression_nodes(node.source))
         for item in node.filters:
@@ -988,6 +999,13 @@ def _walk_value_expression_nodes(node: LocalExpressionNode) -> list[LocalExpress
     if isinstance(node, BinaryNode):
         nodes.extend(_walk_value_expression_nodes(node.left))
         nodes.extend(_walk_value_expression_nodes(node.right))
+        return nodes
+    if isinstance(node, AdapterBindingNode):
+        nodes.extend(_walk_value_expression_nodes(node.value))
+        return nodes
+    if isinstance(node, AdapterInvocationNode):
+        for item in node.bindings:
+            nodes.extend(_walk_value_expression_nodes(item))
         return nodes
     return nodes
 

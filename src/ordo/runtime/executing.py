@@ -12,7 +12,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
-from .checking import GuardProbe, _build_guard_detail, _default_guard_probe, _evaluate_guard_expression, check_workflow
+from .checking import GuardProbe, _build_guard_detail, _build_preflight_observation_session, _default_guard_probe, _evaluate_guard_expression, check_workflow
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
 from .launchers import apply_launcher_to_step
 from .preflight_interpreter import evaluate_preflight_step_condition, evaluate_preflight_value_step
@@ -89,6 +89,12 @@ def execute_workflow(
 
     resolution = resolve_workflow_references(effective_workflow, connector_provider=connector_provider, active_overrides=active_overrides)
     executor = step_executor or _default_step_executor(provider=connector_provider)
+    resolved_guard_probe = guard_probe or _default_guard_probe(provider=connector_provider)
+    observation_session = _build_preflight_observation_session(
+        effective_workflow,
+        probe=resolved_guard_probe,
+        connector_provider=connector_provider,
+    )
     diagnostics: list[Diagnostic] = list(check_result.diagnostics)
     operation_results: list[OperationResult] = list(check_result.operation_results)
     executed_steps: list[str] = []
@@ -127,10 +133,10 @@ def execute_workflow(
             for resolved_guard in resolved_block.guards:
                 if isinstance(resolved_guard, ResolvedConditionExpression):
                     with _execution_working_directory(current_working_directory):
-                        result = _evaluate_guard_expression(resolved_guard, effective_workflow, guard_probe or _default_guard_probe(provider=connector_provider))
+                        result = _evaluate_guard_expression(resolved_guard, effective_workflow, resolved_guard_probe)
                 else:
                     with _execution_working_directory(current_working_directory):
-                        result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_guard, effective_workflow)
+                        result = resolved_guard_probe(resolved_guard, effective_workflow)
                 operation_results.append(result)
                 diagnostics.extend(result.diagnostics)
                 detail = _build_guard_detail(resolved_guard.reference, result)
@@ -197,7 +203,7 @@ def execute_workflow(
             reused_preflight = step_context["reused_preflight"]
             condition_source = step_context["condition_source"]
             if step.if_ is not None:
-                condition_result = _evaluate_step_condition(step, effective_workflow)
+                condition_result = _evaluate_step_condition(step, effective_workflow, observation_session=observation_session)
                 if isinstance(condition_result, Diagnostic):
                     step_condition_details.append(
                         {
@@ -267,7 +273,7 @@ def execute_workflow(
                 continue
             if _is_execute_probe_step(execution_tree_output, resolved_step):
                 with _execution_working_directory(current_working_directory):
-                    result = (guard_probe or _default_guard_probe(provider=connector_provider))(resolved_step, effective_workflow)
+                    result = resolved_guard_probe(resolved_step, effective_workflow)
                 if step.register is not None:
                     pass
                 _record_step_runtime_result(
@@ -357,7 +363,13 @@ def execute_workflow(
                         failed_step=step.name,
                     )
 
-                fan_out_items = _evaluate_run_for_each_items(step, effective_workflow, block_index=block_index, step_index=step_index)
+                fan_out_items = _evaluate_run_for_each_items(
+                    step,
+                    effective_workflow,
+                    block_index=block_index,
+                    step_index=step_index,
+                    observation_session=observation_session,
+                )
                 if isinstance(fan_out_items, Diagnostic):
                     diagnostics.append(fan_out_items)
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed")
@@ -554,7 +566,7 @@ def execute_workflow(
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done", result=result)
                     continue
                 with _execution_working_directory(current_working_directory):
-                    result = _execute_builtin_step(step, effective_workflow)
+                    result = _execute_builtin_step(step, effective_workflow, observation_session=observation_session)
             else:
                 if _is_execute_profile_switch_operation(resolved_step):
                     result, current_profile, current_profile_name, active_profile, active_overrides, current_working_directory, effective_workflow = _execute_profile_switch_step(
@@ -713,8 +725,13 @@ def execute_workflow(
     )
 
 
-def _evaluate_step_condition(step, workflow: Workflow) -> bool | Diagnostic:
-    value = evaluate_preflight_step_condition(step, workflow, step_results=workflow.step_results)
+def _evaluate_step_condition(step, workflow: Workflow, *, observation_session=None) -> bool | Diagnostic:
+    value = evaluate_preflight_step_condition(
+        step,
+        workflow,
+        step_results=workflow.step_results,
+        observation_session=observation_session,
+    )
     if isinstance(value, bool):
         return value
     if isinstance(value, ValueResolutionError):
@@ -728,11 +745,23 @@ def _evaluate_step_condition(step, workflow: Workflow) -> bool | Diagnostic:
     )
 
 
-def _evaluate_run_for_each_items(step: Step, workflow: Workflow, *, block_index: int, step_index: int) -> list[JSONValue] | Diagnostic:
+def _evaluate_run_for_each_items(
+    step: Step,
+    workflow: Workflow,
+    *,
+    block_index: int,
+    step_index: int,
+    observation_session=None,
+) -> list[JSONValue] | Diagnostic:
     if step.for_each is None:
         return [None]
     try:
-        value = resolve_runtime_value(step.for_each, workflow, allow_boolean_composition=True)
+        value = resolve_runtime_value(
+            step.for_each,
+            workflow,
+            allow_boolean_composition=True,
+            observation_session=observation_session,
+        )
     except ValueResolutionError as exc:
         return exc.to_diagnostic(path=("blocks", str(block_index), "steps", str(step_index), "for_each"))
     if not isinstance(value, list):
@@ -937,16 +966,16 @@ def _execution_working_directory(target: Path | None):
         os.chdir(previous)
 
 
-def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
+def _execute_builtin_step(step, workflow: Workflow, *, observation_session=None) -> OperationResult:
     try:
         if step.value is not None:
-            return _execute_value_step(step.name, step.value, workflow)
+            return _execute_value_step(step.name, step.value, workflow, observation_session=observation_session)
         if step.result is not None:
-            return _execute_result_step(step.name, step.result, workflow)
+            return _execute_result_step(step.name, step.result, workflow, observation_session=observation_session)
         if step.publish is not None:
-            return _execute_publish_step(step.name, step.publish, workflow)
+            return _execute_publish_step(step.name, step.publish, workflow, observation_session=observation_session)
         if step.state_set is not None:
-            return _execute_state_set(step.name, step.state_set, workflow)
+            return _execute_state_set(step.name, step.state_set, workflow, observation_session=observation_session)
         if step.state_delete is not None:
             return _execute_state_delete(step.name, step.state_delete, workflow)
     except RuntimeStateError as exc:
@@ -956,12 +985,16 @@ def _execute_builtin_step(step, workflow: Workflow) -> OperationResult:
     return OperationResult(status="state_error", summary="Unknown builtin step form")
 
 
-def _execute_value_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
-    return evaluate_preflight_value_step(Step(name=step_name, value=raw_value), workflow)
+def _execute_value_step(step_name: str, raw_value: JSONValue, workflow: Workflow, *, observation_session=None) -> OperationResult:
+    return evaluate_preflight_value_step(
+        Step(name=step_name, value=raw_value),
+        workflow,
+        observation_session=observation_session,
+    )
 
 
-def _execute_publish_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
-    value = resolve_runtime_value(raw_value, workflow)
+def _execute_publish_step(step_name: str, raw_value: JSONValue, workflow: Workflow, *, observation_session=None) -> OperationResult:
+    value = resolve_runtime_value(raw_value, workflow, observation_session=observation_session)
     return OperationResult(
         status="ok",
         summary=f"Published workflow output for step '{step_name}'",
@@ -969,8 +1002,8 @@ def _execute_publish_step(step_name: str, raw_value: JSONValue, workflow: Workfl
     )
 
 
-def _execute_result_step(step_name: str, raw_value: JSONValue, workflow: Workflow) -> OperationResult:
-    value = resolve_runtime_value(raw_value, workflow)
+def _execute_result_step(step_name: str, raw_value: JSONValue, workflow: Workflow, *, observation_session=None) -> OperationResult:
+    value = resolve_runtime_value(raw_value, workflow, observation_session=observation_session)
     return OperationResult(
         status="ok",
         summary=f"Recorded workflow result for step '{step_name}'",
@@ -978,10 +1011,10 @@ def _execute_result_step(step_name: str, raw_value: JSONValue, workflow: Workflo
     )
 
 
-def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow: Workflow) -> OperationResult:
+def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow: Workflow, *, observation_session=None) -> OperationResult:
     target_expr, raw_value = next(iter(state_set.items()))
     target = resolve_state_target(target_expr, workflow)
-    value = resolve_runtime_value(raw_value, workflow)
+    value = resolve_runtime_value(raw_value, workflow, observation_session=observation_session)
     document = read_state_document(target.location)
     write_state_value(document, key=target.key, fields=target.fields, value=value)
     write_state_document(target.location, document)

@@ -21,9 +21,16 @@ blocks:
       - story_project_issue.type == "Story"
 
   - steps:
+      - name: Parse story task refs
+        run: fragments/parse-issue-ref.yml
+        for_each: '${markdown["Tasks"].list_items with{root: story_body}}'
+        with:
+          item: ${item}
+        register: parsed_task_refs
+
       - name: Publish story task items
         publish:
           summary: Story task items loaded
           repository: ${inputs.repository}
           issue_number: ${inputs.issue_number}
-          task_items: '${markdown["Tasks"].list_items with{root: story_body}}'
+          task_items: ${step.parsed_task_refs.results | field("results[0]")}

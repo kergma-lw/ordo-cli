@@ -412,6 +412,13 @@ def resolve_condition_local_expression(
             step_results=step_results,
         )
         if evaluation.status != "ok":
+            if evaluation.diagnostics:
+                first = evaluation.diagnostics[0]
+                raise ValueResolutionError(
+                    code=first.code,
+                    message=first.message,
+                    details=first.details,
+                )
             raise ValueResolutionError(
                 code="runtime.local_expression.probe_failed",
                 message="Condition local expression could not be evaluated safely",
