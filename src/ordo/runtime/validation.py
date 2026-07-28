@@ -1844,6 +1844,10 @@ def _infer_filter_result_type(
                         )
                     )
         return "unknown", diagnostics
+    if filter_node.name == "length":
+        return "number", diagnostics
+    if filter_node.name in {"flatten", "first", "last"}:
+        return "unknown", diagnostics
     if filter_node.name == "not":
         if input_type not in {"boolean", "unknown"}:
             diagnostics.append(

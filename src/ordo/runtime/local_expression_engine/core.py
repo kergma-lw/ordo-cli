@@ -2562,6 +2562,65 @@ def _apply_field_filter(
     )
 
 
+def _apply_flatten_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    items = _require_list(value, filter_name="flatten", parsed=parsed)
+    flattened: list[JSONValue] = []
+    for item in items:
+        if isinstance(item, list):
+            flattened.extend(item)
+        else:
+            flattened.append(item)
+    return flattened
+
+
+def _apply_first_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    items = _require_list(value, filter_name="first", parsed=parsed)
+    return items[0] if items else None
+
+
+def _apply_last_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    items = _require_list(value, filter_name="last", parsed=parsed)
+    return items[-1] if items else None
+
+
+def _apply_length_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    if isinstance(value, (list, str, dict)):
+        return len(value)
+    raise ValueExpressionEvaluationError(
+        code="runtime.value.filter_type_invalid",
+        message="Filter 'length' requires an array, object, or string input",
+        details={"expression": parsed.source, "filter": "length", "actual_type": type(value).__name__},
+    )
+
+
 def _apply_not_filter(
     value: JSONValue,
     filter_node: FilterApplicationNode,
@@ -2693,6 +2752,10 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
     ValueExpressionFilterSpec(name="is_boolean", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_boolean_filter),
     ValueExpressionFilterSpec(name="in", input_type="json", output_type="boolean", argument_count=1, handler=_apply_in_filter),
     ValueExpressionFilterSpec(name="field", input_type="json", output_type="json", argument_count=1, handler=_apply_field_filter),
+    ValueExpressionFilterSpec(name="flatten", input_type="json", output_type="json", argument_count=0, handler=_apply_flatten_filter),
+    ValueExpressionFilterSpec(name="first", input_type="json", output_type="json", argument_count=0, handler=_apply_first_filter),
+    ValueExpressionFilterSpec(name="last", input_type="json", output_type="json", argument_count=0, handler=_apply_last_filter),
+    ValueExpressionFilterSpec(name="length", input_type="json", output_type="number", argument_count=0, handler=_apply_length_filter),
 )
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(

@@ -460,6 +460,78 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.field_path_invalid")
 
+    def test_evaluate_flatten_filter_flattens_one_level(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": [[1, 2], [3], 4]},
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | flatten")
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), [1, 2, 3, 4])
+
+    def test_evaluate_flatten_filter_rejects_non_array_input(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": "text"},
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | flatten")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
+    def test_evaluate_first_filter_returns_null_for_empty_array(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": []},
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | first")
+
+        self.assertIsNone(evaluate_local_expression_tree(parsed, workflow))
+
+    def test_evaluate_last_filter_returns_last_array_item(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": [1, 2, 3]},
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | last")
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), 3)
+
+    def test_evaluate_length_filter_counts_arrays_objects_and_strings(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": [1, 2, 3], "payload": {"a": 1, "b": 2}, "title": "hello"},
+        )
+
+        self.assertEqual(evaluate_local_expression_tree(parse_local_expression_tree("inputs.items | length"), workflow), 3)
+        self.assertEqual(evaluate_local_expression_tree(parse_local_expression_tree("inputs.payload | length"), workflow), 2)
+        self.assertEqual(evaluate_local_expression_tree(parse_local_expression_tree("inputs.title | length"), workflow), 5)
+
+    def test_evaluate_length_filter_rejects_other_input_shapes(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"enabled": True},
+        )
+
+        parsed = parse_local_expression_tree("inputs.enabled | length")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
     def test_evaluate_is_missing_returns_true_for_missing_input(self) -> None:
         workflow = load_workflow_text(
             """
