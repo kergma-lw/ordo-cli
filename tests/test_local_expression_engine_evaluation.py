@@ -532,6 +532,60 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
 
+    def test_evaluate_unique_filter_preserves_first_occurrence_order(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": ["a", "b", "a", "c", "b"]},
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | unique")
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), ["a", "b", "c"])
+
+    def test_evaluate_unique_filter_ignores_object_key_order_but_preserves_array_order_significance(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={
+                "items": [
+                    {"a": 1, "b": 2},
+                    {"b": 2, "a": 1},
+                    [1, 2],
+                    [2, 1],
+                ]
+            },
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | unique")
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), [{"a": 1, "b": 2}, [1, 2], [2, 1]])
+
+    def test_evaluate_unique_filter_keeps_numeric_forms_distinct(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": [1, 1.0, 1, 1.0]},
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | unique")
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), [1, 1.0])
+
+    def test_evaluate_unique_filter_rejects_non_array_input(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"items": {"a": 1}},
+        )
+
+        parsed = parse_local_expression_tree("inputs.items | unique")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
     def test_evaluate_is_missing_returns_true_for_missing_input(self) -> None:
         workflow = load_workflow_text(
             """

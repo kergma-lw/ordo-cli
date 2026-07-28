@@ -2621,6 +2621,30 @@ def _apply_length_filter(
     )
 
 
+def _json_normalized_key(value: JSONValue) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _apply_unique_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    items = _require_list(value, filter_name="unique", parsed=parsed)
+    seen: set[str] = set()
+    unique_items: list[JSONValue] = []
+    for item in items:
+        key = _json_normalized_key(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_items.append(item)
+    return unique_items
+
+
 def _apply_not_filter(
     value: JSONValue,
     filter_node: FilterApplicationNode,
@@ -2756,6 +2780,7 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
     ValueExpressionFilterSpec(name="first", input_type="json", output_type="json", argument_count=0, handler=_apply_first_filter),
     ValueExpressionFilterSpec(name="last", input_type="json", output_type="json", argument_count=0, handler=_apply_last_filter),
     ValueExpressionFilterSpec(name="length", input_type="json", output_type="number", argument_count=0, handler=_apply_length_filter),
+    ValueExpressionFilterSpec(name="unique", input_type="json", output_type="json", argument_count=0, handler=_apply_unique_filter),
 )
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(
