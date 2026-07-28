@@ -210,7 +210,7 @@
 ## Canonical core boundary
 
 - The canonical local-expression core should include shared non-effectful constructs for observation, comparison, composition, and value derivation.
-- Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
+- Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, representation-adapter operations, and bounded collection-shaping filters.
 - Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
 
 ## Product-defined pipeline filter surface
@@ -229,14 +229,41 @@
   - `is_number`;
   - `is_integer`;
   - `is_boolean`;
-  - `in(container)`.
+  - `in(container)`;
+  - `field(path)`;
+  - `flatten`;
+  - `first`;
+  - `last`;
+  - `length`;
+  - `unique`.
 - `lower`, `trim`, and `slug` are string-to-string transforming filters.
 - `eq(...)`, `ne(...)`, `not`, `is_string`, `is_number`, `is_integer`, `is_boolean`, and `in(container)` are boolean-producing filters.
+- `field(path)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
 - Predicate-style filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must accept any already evaluated local-expression value and return `true` or `false` without implicit coercion.
 - `eq(...)` and `ne(...)` compare without implicit coercion.
 - `in(container)` must evaluate its argument as a container expression and must require that container to produce a list value.
 - `in(container)` must compare the pipeline input against list members without implicit coercion.
 - `in(container)` must fail when the container expression does not produce a list rather than silently reinterpreting strings, objects, or scalars as membership containers.
+- `field(path)` must support object input and array input.
+- `field(path)` on an object must return the addressed field value and must fail when the addressed path is missing.
+- `field(path)` on an array must return an array of per-item addressed values.
+- `field(path)` on an array must yield `null` for an item whose addressed path is missing rather than failing the whole filter.
+- `field(path)` must fail on scalar or `null` input rather than silently coercing it into an object or singleton list.
+- `field(path)` path syntax must support at least dotted field access and zero-based list indexing, for example `results` and `results[0]`.
+- `flatten` must require array input and must flatten exactly one list nesting level.
+- `flatten` must fail on non-array input.
+- `first` and `last` must require array input.
+- `first` and `last` must return `null` on an empty array rather than failing.
+- `first` and `last` must fail on non-array input.
+- `length` must accept array, object, and string input.
+- `length` over an array returns item count, over an object returns key count, and over a string returns character count.
+- `length` must fail on other input shapes rather than silently coercing them.
+- `unique` must require array input and must fail on non-array input.
+- `unique` must preserve encounter order and keep the first occurrence of each value.
+- `unique` equality must follow normalized JSON value equality without implicit coercion.
+- `unique` must ignore object key order when comparing objects.
+- `unique` must treat array element order as significant when comparing arrays.
+- `unique` must treat numerically distinct forms such as `1` and `1.0` as different values.
 
 ## Probe-call execution model
 
@@ -1230,6 +1257,7 @@ This domain owns:
 - workflow-local naming of local expressions through a top-level `let` surface;
 - the local data surfaces that expressions may read;
 - the idea that expressions may derive intermediate values from already available values;
+- the idea that expressions may perform small declarative collection-shaping over already available JSON-shaped values;
 - product-defined representation adapters for pure value interpretation and transformation;
 - the semantic distinction between expression contexts;
 - the boundary between local expression evaluation and connector operation execution;
@@ -1278,6 +1306,19 @@ A local expression may derive one value from another already available value and
 
 Such intermediate values remain inside local-expression semantics.
 They do not by themselves introduce connector execution, workflow control, or storage ownership.
+
+### Collection-shaping value
+
+A local expression may also reshape already available collection values through product-defined pipeline filters when that work remains declarative, reviewable, and JSON-local.
+
+Such shaping is meant for small workflow-visible normalization steps such as selecting one field from step-result collections, flattening one level of nested lists, taking a first or last element, counting entries, or removing duplicate JSON values.
+
+Collection shaping remains part of local-expression semantics only when it:
+
+- operates over already available JSON-shaped values;
+- stays pure and deterministic;
+- does not introduce hidden workflow control or open-ended iteration semantics;
+- preserves reviewability as data shaping rather than turning the surface into a general scripting layer.
 
 ### Workflow-local binding
 
@@ -1366,6 +1407,7 @@ That core includes stable value and condition constructs such as:
 - read-only probe observations;
 - boolean composition and comparison;
 - pipelines, built-ins, and representation-adapter operations.
+- bounded collection-shaping filters over already available values.
 
 It excludes:
 
@@ -2064,6 +2106,21 @@ A derived value is a value produced from already available local-expression inpu
 
 Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
 
+### Collection-shaping filter
+
+A collection-shaping filter is a product-defined pipeline filter that reshapes already available JSON-shaped values without introducing a per-item expression sublanguage or hidden workflow control semantics.
+
+The initial modeled collection-shaping filter set is:
+
+- `field(path)`;
+- `flatten`;
+- `first`;
+- `last`;
+- `length`;
+- `unique`.
+
+These filters exist to cover common workflow-local normalization needs such as extracting one field from a step-result collection, collapsing one nesting level, selecting one edge item, counting entries, or removing duplicate JSON values.
+
 ### Workflow-local binding
 
 A workflow-local binding is one authored `let` entry that gives a local expression a workflow-scoped name.
@@ -2157,7 +2214,8 @@ The modeled filter families include:
 - boolean comparison filters such as `eq(...)` and `ne(...)`;
 - boolean predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean`;
 - boolean membership filters such as `in(container)`;
-- boolean negation filters such as `not`.
+- boolean negation filters such as `not`;
+- collection-shaping filters such as `field(path)`, `flatten`, `first`, `last`, `length`, and `unique`.
 
 The modeled predicate-filter semantics are:
 
@@ -2171,6 +2229,50 @@ The modeled membership-filter semantics are:
 - the container argument must evaluate to a list value;
 - membership is determined by strict element comparison without implicit coercion;
 - a non-list container remains a filter misuse failure rather than a false result.
+
+The modeled collection-shaping semantics are:
+
+- collection-shaping filters operate only on already evaluated JSON-shaped values;
+- they remain pure value transformations and do not introduce a nested item-scope expression model by themselves;
+- each filter contract explicitly defines which input shapes are accepted and whether missing data becomes `null` or a failure;
+- collection-shaping filters fail on unsupported input shapes rather than applying implicit coercion.
+
+The modeled `field(path)` semantics are:
+
+- object input returns the addressed field value;
+- object input with a missing addressed path fails;
+- array input returns an array of per-item addressed values;
+- a missing addressed path within one array element yields `null` for that element rather than failing the whole projection;
+- scalar or `null` input fails;
+- the initial path model supports dotted field navigation and zero-based list indexing such as `results` and `results[0]`.
+
+The modeled `flatten` semantics are:
+
+- input must be an array;
+- flattening removes exactly one nesting level;
+- non-array input fails.
+
+The modeled `first` and `last` semantics are:
+
+- input must be an array;
+- empty-array input yields `null`;
+- non-array input fails.
+
+The modeled `length` semantics are:
+
+- array input yields item count;
+- object input yields key count;
+- string input yields character count;
+- other input shapes fail.
+
+The modeled `unique` semantics are:
+
+- input must be an array;
+- output preserves encounter order and keeps the first occurrence of each value;
+- equality uses normalized JSON value equality without implicit coercion;
+- object key order is ignored for equality;
+- array element order remains significant for equality;
+- numerically distinct forms such as `1` and `1.0` remain distinct.
 
 ### Probe-observation execution contract
 
@@ -5897,6 +5999,12 @@ If a change breaks any invariant, `meta/` must be updated explicitly in the same
 - Predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must remain boolean-only and must not silently introduce coercion semantics.
 - Membership filters such as `in(container)` must preserve explicit list-container discipline rather than silently treating arbitrary strings, objects, or scalars as containers.
 - Boolean-producing filters must keep stable boolean result shape across contexts.
+- Collection-shaping filters must remain bounded data-shaping helpers over already available JSON-shaped values rather than drifting into a nested collection-programming sublanguage.
+- Collection-shaping filters must fail on unsupported input shapes unless the documented contract explicitly defines a different outcome for that filter and shape.
+- `field(path)` must preserve the hybrid missing-path rule: object input with a missing path fails, while array input yields `null` for an item with a missing path.
+- `flatten` must remain single-level rather than silently becoming recursive.
+- `first` and `last` must keep the documented empty-array outcome of `null`.
+- `unique` must remain stable, must keep first occurrence, and must preserve strict normalized JSON equality including the distinction between `1` and `1.0`.
 
 ## Workflow-local binding discipline
 

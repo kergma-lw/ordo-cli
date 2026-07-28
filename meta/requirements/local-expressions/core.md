@@ -53,7 +53,7 @@
 ## Canonical core boundary
 
 - The canonical local-expression core should include shared non-effectful constructs for observation, comparison, composition, and value derivation.
-- Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, and representation-adapter operations.
+- Shared non-effectful constructs may include literals, lists, local-root references, read-only probe observations, boolean operators, comparison operators, pipelines, built-ins, representation-adapter operations, and bounded collection-shaping filters.
 - Effectful connector operations must remain outside the canonical local-expression core even when they are part of the wider connector surface.
 
 ## Product-defined pipeline filter surface
@@ -72,14 +72,41 @@
   - `is_number`;
   - `is_integer`;
   - `is_boolean`;
-  - `in(container)`.
+  - `in(container)`;
+  - `field(path)`;
+  - `flatten`;
+  - `first`;
+  - `last`;
+  - `length`;
+  - `unique`.
 - `lower`, `trim`, and `slug` are string-to-string transforming filters.
 - `eq(...)`, `ne(...)`, `not`, `is_string`, `is_number`, `is_integer`, `is_boolean`, and `in(container)` are boolean-producing filters.
+- `field(path)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
 - Predicate-style filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must accept any already evaluated local-expression value and return `true` or `false` without implicit coercion.
 - `eq(...)` and `ne(...)` compare without implicit coercion.
 - `in(container)` must evaluate its argument as a container expression and must require that container to produce a list value.
 - `in(container)` must compare the pipeline input against list members without implicit coercion.
 - `in(container)` must fail when the container expression does not produce a list rather than silently reinterpreting strings, objects, or scalars as membership containers.
+- `field(path)` must support object input and array input.
+- `field(path)` on an object must return the addressed field value and must fail when the addressed path is missing.
+- `field(path)` on an array must return an array of per-item addressed values.
+- `field(path)` on an array must yield `null` for an item whose addressed path is missing rather than failing the whole filter.
+- `field(path)` must fail on scalar or `null` input rather than silently coercing it into an object or singleton list.
+- `field(path)` path syntax must support at least dotted field access and zero-based list indexing, for example `results` and `results[0]`.
+- `flatten` must require array input and must flatten exactly one list nesting level.
+- `flatten` must fail on non-array input.
+- `first` and `last` must require array input.
+- `first` and `last` must return `null` on an empty array rather than failing.
+- `first` and `last` must fail on non-array input.
+- `length` must accept array, object, and string input.
+- `length` over an array returns item count, over an object returns key count, and over a string returns character count.
+- `length` must fail on other input shapes rather than silently coercing them.
+- `unique` must require array input and must fail on non-array input.
+- `unique` must preserve encounter order and keep the first occurrence of each value.
+- `unique` equality must follow normalized JSON value equality without implicit coercion.
+- `unique` must ignore object key order when comparing objects.
+- `unique` must treat array element order as significant when comparing arrays.
+- `unique` must treat numerically distinct forms such as `1` and `1.0` as different values.
 
 ## Probe-call execution model
 

@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_FILTERS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "ordo-help"
@@ -219,6 +221,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(filters["length"]["output_type"], "number")
         self.assertEqual(filters["is_boolean"]["output_type"], "boolean")
         self.assertEqual(filters["in"]["input_type"], "json")
+
+    def test_model_filter_surface_follows_runtime_registry(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+
+        self.assertEqual([item["name"] for item in model["local_expressions"]["pipeline_filters"]], list(VALUE_EXPRESSION_FILTERS))
 
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)

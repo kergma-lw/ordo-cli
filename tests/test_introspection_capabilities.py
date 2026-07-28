@@ -1,6 +1,7 @@
 import unittest
 
 from ordo.introspection import describe_capabilities, describe_system
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_FILTERS
 
 
 class IntrospectionCapabilitiesTest(unittest.TestCase):
@@ -33,6 +34,15 @@ class IntrospectionCapabilitiesTest(unittest.TestCase):
         self.assertEqual(surfaces["embedded_value_expression"]["boolean_operators"], ["and", "or", "not", "parentheses"])
         self.assertEqual(surfaces["guard_expression"]["boolean_operators"], ["and", "or", "not", "parentheses"])
         self.assertIn("step", surfaces["embedded_value_expression"]["roots"])
+
+    def test_capability_filter_lists_follow_runtime_registry(self) -> None:
+        payload = describe_capabilities()
+        surfaces = {item["name"]: item for item in payload["expression_surfaces"]}
+        published_filters = list(VALUE_EXPRESSION_FILTERS)
+
+        self.assertEqual(surfaces["guard_expression"]["filters"], published_filters)
+        self.assertEqual(surfaces["step_condition"]["filters"], published_filters)
+        self.assertEqual(surfaces["embedded_value_expression"]["filters"], published_filters)
 
     def test_describe_capabilities_publishes_high_value_negative_rules(self) -> None:
         payload = describe_capabilities()

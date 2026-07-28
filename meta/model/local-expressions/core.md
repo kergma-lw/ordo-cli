@@ -59,6 +59,21 @@ A derived value is a value produced from already available local-expression inpu
 
 Derived values may flow into later local-expression operations so long as the surrounding context permits the dependencies used to produce them.
 
+### Collection-shaping filter
+
+A collection-shaping filter is a product-defined pipeline filter that reshapes already available JSON-shaped values without introducing a per-item expression sublanguage or hidden workflow control semantics.
+
+The initial modeled collection-shaping filter set is:
+
+- `field(path)`;
+- `flatten`;
+- `first`;
+- `last`;
+- `length`;
+- `unique`.
+
+These filters exist to cover common workflow-local normalization needs such as extracting one field from a step-result collection, collapsing one nesting level, selecting one edge item, counting entries, or removing duplicate JSON values.
+
 ### Workflow-local binding
 
 A workflow-local binding is one authored `let` entry that gives a local expression a workflow-scoped name.
@@ -152,7 +167,8 @@ The modeled filter families include:
 - boolean comparison filters such as `eq(...)` and `ne(...)`;
 - boolean predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean`;
 - boolean membership filters such as `in(container)`;
-- boolean negation filters such as `not`.
+- boolean negation filters such as `not`;
+- collection-shaping filters such as `field(path)`, `flatten`, `first`, `last`, `length`, and `unique`.
 
 The modeled predicate-filter semantics are:
 
@@ -166,6 +182,50 @@ The modeled membership-filter semantics are:
 - the container argument must evaluate to a list value;
 - membership is determined by strict element comparison without implicit coercion;
 - a non-list container remains a filter misuse failure rather than a false result.
+
+The modeled collection-shaping semantics are:
+
+- collection-shaping filters operate only on already evaluated JSON-shaped values;
+- they remain pure value transformations and do not introduce a nested item-scope expression model by themselves;
+- each filter contract explicitly defines which input shapes are accepted and whether missing data becomes `null` or a failure;
+- collection-shaping filters fail on unsupported input shapes rather than applying implicit coercion.
+
+The modeled `field(path)` semantics are:
+
+- object input returns the addressed field value;
+- object input with a missing addressed path fails;
+- array input returns an array of per-item addressed values;
+- a missing addressed path within one array element yields `null` for that element rather than failing the whole projection;
+- scalar or `null` input fails;
+- the initial path model supports dotted field navigation and zero-based list indexing such as `results` and `results[0]`.
+
+The modeled `flatten` semantics are:
+
+- input must be an array;
+- flattening removes exactly one nesting level;
+- non-array input fails.
+
+The modeled `first` and `last` semantics are:
+
+- input must be an array;
+- empty-array input yields `null`;
+- non-array input fails.
+
+The modeled `length` semantics are:
+
+- array input yields item count;
+- object input yields key count;
+- string input yields character count;
+- other input shapes fail.
+
+The modeled `unique` semantics are:
+
+- input must be an array;
+- output preserves encounter order and keeps the first occurrence of each value;
+- equality uses normalized JSON value equality without implicit coercion;
+- object key order is ignored for equality;
+- array element order remains significant for equality;
+- numerically distinct forms such as `1` and `1.0` remain distinct.
 
 ### Probe-observation execution contract
 

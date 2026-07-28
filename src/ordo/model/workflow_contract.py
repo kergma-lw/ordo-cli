@@ -5,6 +5,11 @@ from __future__ import annotations
 from copy import deepcopy
 
 from .json import JSONObject
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
+
+
+_PUBLISHED_FILTERS = list(VALUE_EXPRESSION_FILTERS)
+_PUBLISHED_BUILTINS = list(VALUE_EXPRESSION_BUILTINS)
 
 WORKFLOW_CONTRACT: JSONObject = {
     "document_kind": "workflow",
@@ -184,8 +189,8 @@ WORKFLOW_CONTRACT: JSONObject = {
     "surface_constraints": {
         "guard_expression": {
             "allowed_roots": ["inputs", "probe", "state"],
-            "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not", "is_string", "is_number", "is_integer", "is_boolean", "in"],
-            "allowed_builtins": ["format", "is_missing", "is_present"],
+            "allowed_filters": list(_PUBLISHED_FILTERS),
+            "allowed_builtins": list(_PUBLISHED_BUILTINS),
             "boolean_operators": ["and", "or", "not", "parentheses"],
             "representation_adapter_policy": {
                 "read_only_allowed": True,
@@ -199,8 +204,8 @@ WORKFLOW_CONTRACT: JSONObject = {
         },
         "runtime_value_surface": {
             "allowed_roots": ["inputs", "args", "state", "step"],
-            "allowed_builtins": ["format", "is_missing", "is_present"],
-            "allowed_filters": ["lower", "trim", "slug", "eq", "ne", "not", "is_string", "is_number", "is_integer", "is_boolean", "in"],
+            "allowed_builtins": list(_PUBLISHED_BUILTINS),
+            "allowed_filters": list(_PUBLISHED_FILTERS),
             "boolean_operators": ["and", "or", "not", "parentheses"],
         },
     },

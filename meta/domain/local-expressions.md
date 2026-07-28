@@ -14,6 +14,7 @@ This domain owns:
 - workflow-local naming of local expressions through a top-level `let` surface;
 - the local data surfaces that expressions may read;
 - the idea that expressions may derive intermediate values from already available values;
+- the idea that expressions may perform small declarative collection-shaping over already available JSON-shaped values;
 - product-defined representation adapters for pure value interpretation and transformation;
 - the semantic distinction between expression contexts;
 - the boundary between local expression evaluation and connector operation execution;
@@ -62,6 +63,19 @@ A local expression may derive one value from another already available value and
 
 Such intermediate values remain inside local-expression semantics.
 They do not by themselves introduce connector execution, workflow control, or storage ownership.
+
+### Collection-shaping value
+
+A local expression may also reshape already available collection values through product-defined pipeline filters when that work remains declarative, reviewable, and JSON-local.
+
+Such shaping is meant for small workflow-visible normalization steps such as selecting one field from step-result collections, flattening one level of nested lists, taking a first or last element, counting entries, or removing duplicate JSON values.
+
+Collection shaping remains part of local-expression semantics only when it:
+
+- operates over already available JSON-shaped values;
+- stays pure and deterministic;
+- does not introduce hidden workflow control or open-ended iteration semantics;
+- preserves reviewability as data shaping rather than turning the surface into a general scripting layer.
 
 ### Workflow-local binding
 
@@ -150,6 +164,7 @@ That core includes stable value and condition constructs such as:
 - read-only probe observations;
 - boolean composition and comparison;
 - pipelines, built-ins, and representation-adapter operations.
+- bounded collection-shaping filters over already available values.
 
 It excludes:
 

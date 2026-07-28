@@ -34,6 +34,12 @@
 - Predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must remain boolean-only and must not silently introduce coercion semantics.
 - Membership filters such as `in(container)` must preserve explicit list-container discipline rather than silently treating arbitrary strings, objects, or scalars as containers.
 - Boolean-producing filters must keep stable boolean result shape across contexts.
+- Collection-shaping filters must remain bounded data-shaping helpers over already available JSON-shaped values rather than drifting into a nested collection-programming sublanguage.
+- Collection-shaping filters must fail on unsupported input shapes unless the documented contract explicitly defines a different outcome for that filter and shape.
+- `field(path)` must preserve the hybrid missing-path rule: object input with a missing path fails, while array input yields `null` for an item with a missing path.
+- `flatten` must remain single-level rather than silently becoming recursive.
+- `first` and `last` must keep the documented empty-array outcome of `null`.
+- `unique` must remain stable, must keep first occurrence, and must preserve strict normalized JSON equality including the distinction between `1` and `1.0`.
 
 ## Workflow-local binding discipline
 

@@ -1,6 +1,7 @@
 import unittest
 
 from ordo.introspection import describe_system, describe_workflow_contract
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_FILTERS
 from ordo.runtime.validation import STEP_ALLOWED_FIELDS, WORKFLOW_ALLOWED_FIELDS
 
 
@@ -50,6 +51,13 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
             step_fields.update(form["optional_fields"])
         self.assertEqual(field_names, set(WORKFLOW_ALLOWED_FIELDS))
         self.assertEqual(step_fields | {"__run_path__"}, set(STEP_ALLOWED_FIELDS))
+
+    def test_workflow_contract_filter_lists_follow_runtime_registry(self) -> None:
+        payload = describe_workflow_contract()
+        published_filters = list(VALUE_EXPRESSION_FILTERS)
+
+        self.assertEqual(payload["surface_constraints"]["guard_expression"]["allowed_filters"], published_filters)
+        self.assertEqual(payload["surface_constraints"]["runtime_value_surface"]["allowed_filters"], published_filters)
 
     def test_root_introspection_publishes_workflow_contract_section(self) -> None:
         payload = describe_system()
