@@ -16,19 +16,20 @@ class RoutineExecutionTest(unittest.TestCase):
             (root / ".ordo" / "scripts").mkdir(parents=True)
             script = root / ".ordo" / "scripts" / "demo-pass.py"
             script.write_text(
-                "import sys\nprint('line 1')\nprint('line 2')\nprint('line 3')\n",
+                "#!/usr/bin/env python3\nprint('line 1')\nprint('line 2')\nprint('line 3')\n",
                 encoding="utf-8",
             )
+            script.chmod(0o755)
             (root / ".ordo" / "routines.yaml").write_text(
                 textwrap.dedent(
-                    f"""
+                    """
                     version: 1
                     routines:
                       demo.pass:
                         kind: action
                         summary: Run the demo pass routine.
                         implementation:
-                          argv: ["/usr/bin/python3", "{script}"]
+                          argv: [".ordo/scripts/demo-pass.py"]
                         failure_modes: [routine_failed]
                     """
                 ).strip()
@@ -56,19 +57,20 @@ class RoutineExecutionTest(unittest.TestCase):
             (root / ".ordo" / "scripts").mkdir(parents=True)
             script = root / ".ordo" / "scripts" / "demo-fail.py"
             script.write_text(
-                "import sys\nprint('before fail')\nprint('boom', file=sys.stderr)\nsys.exit(3)\n",
+                "#!/usr/bin/env python3\nimport sys\nprint('before fail')\nprint('boom', file=sys.stderr)\nsys.exit(3)\n",
                 encoding="utf-8",
             )
+            script.chmod(0o755)
             (root / ".ordo" / "routines.yaml").write_text(
                 textwrap.dedent(
-                    f"""
+                    """
                     version: 1
                     routines:
                       demo.fail:
                         kind: action
                         summary: Run the demo failing routine.
                         implementation:
-                          argv: ["/usr/bin/python3", "{script}"]
+                          argv: [".ordo/scripts/demo-fail.py"]
                         failure_modes: [routine_failed]
                     """
                 ).strip()
@@ -110,19 +112,20 @@ class RoutineExecutionTest(unittest.TestCase):
             (root / ".ordo" / "scripts").mkdir(parents=True)
             script = root / ".ordo" / "scripts" / "demo-probe.py"
             script.write_text(
-                "import json\nprint(json.dumps({'exists': True, 'count': 2}))\n",
+                "#!/usr/bin/env python3\nimport json\nprint(json.dumps({'exists': True, 'count': 2}))\n",
                 encoding="utf-8",
             )
+            script.chmod(0o755)
             (root / ".ordo" / "routines.yaml").write_text(
                 textwrap.dedent(
-                    f"""
+                    """
                     version: 1
                     routines:
                       demo.probe:
                         kind: probe
                         summary: Return probe data.
                         implementation:
-                          argv: ["/usr/bin/python3", "{script}"]
+                          argv: [".ordo/scripts/demo-probe.py"]
                         outputs:
                           mode: data
                           format: json
@@ -150,17 +153,18 @@ class RoutineExecutionTest(unittest.TestCase):
             root = Path(temp_dir)
             (root / ".ordo" / "scripts").mkdir(parents=True)
             script = root / ".ordo" / "scripts" / "demo-probe.py"
-            script.write_text("print('not json')\n", encoding="utf-8")
+            script.write_text("#!/usr/bin/env python3\nprint('not json')\n", encoding="utf-8")
+            script.chmod(0o755)
             (root / ".ordo" / "routines.yaml").write_text(
                 textwrap.dedent(
-                    f"""
+                    """
                     version: 1
                     routines:
                       demo.probe:
                         kind: probe
                         summary: Return probe data.
                         implementation:
-                          argv: ["/usr/bin/python3", "{script}"]
+                          argv: [".ordo/scripts/demo-probe.py"]
                         outputs:
                           mode: data
                           format: json

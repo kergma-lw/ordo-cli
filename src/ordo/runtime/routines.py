@@ -153,7 +153,11 @@ def _materialize_routine_argv(entry: RoutineEntry, declared_with: dict[str, obje
                 argv.append(str(resolved_value))
             continue
         argv.append(item)
-    return [part for part in argv if part != ""]
+    materialized = [part for part in argv if part != ""]
+    if materialized and materialized[0].startswith(".ordo/scripts/"):
+        root = Path(workflow.launch_dir) if workflow.launch_dir is not None else Path.cwd()
+        materialized[0] = str((root / materialized[0]).resolve())
+    return materialized
 
 
 def _run_with_log_capture(argv: list[str], *, stdout_path: Path, stderr_path: Path) -> subprocess.CompletedProcess[str]:

@@ -235,6 +235,32 @@ class RoutineRegistryTest(unittest.TestCase):
 
         self.assertEqual(ctx.exception.diagnostics[0].code, "routine.registry.outputs.mode")
 
+    def test_load_routine_registry_rejects_entrypoints_outside_published_script_area(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo").mkdir(parents=True)
+            (root / ".ordo" / "routines.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    routines:
+                      inspect.issue:
+                        kind: probe
+                        summary: Inspect one issue.
+                        implementation:
+                          argv: ["scripts/inspect-issue"]
+                        failure_modes: [helper_failed]
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(RoutineRegistryError) as ctx:
+                load_routine_registry(cwd=root)
+
+        self.assertEqual(ctx.exception.diagnostics[0].code, "routine.registry.implementation.entrypoint")
+
 
 if __name__ == "__main__":
     unittest.main()

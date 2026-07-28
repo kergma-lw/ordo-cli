@@ -23,6 +23,7 @@ ROUTINE_REGISTRY_DISCOVERY_PATH = ROUTINE_CONTRACT["discovery"]["path"]
 ROUTINE_REGISTRY_ALLOWED_FIELDS = _field_names(ROUTINE_CONTRACT["top_level_fields"])
 ROUTINE_ENTRY_ALLOWED_FIELDS = _field_names(ROUTINE_CONTRACT["routine_entry_fields"])
 ROUTINE_IMPLEMENTATION_ALLOWED_FIELDS = _field_names(ROUTINE_CONTRACT["implementation_fields"])
+ROUTINE_SCRIPT_PREFIX = ".ordo/scripts/"
 
 
 @dataclass(frozen=True, slots=True)
@@ -384,6 +385,13 @@ def _load_routine_implementation(value: object, *, routine_id: str, registry_pat
                 details={"path": str(registry_path), "id": routine_id, "actual_type": type(item).__name__},
             )
         normalized.append(item)
+    if not normalized[0].startswith(ROUTINE_SCRIPT_PREFIX):
+        raise _routine_error(
+            "routine.registry.implementation.entrypoint",
+            f"Routine implementation entrypoint must live under '{ROUTINE_SCRIPT_PREFIX}'",
+            path=("routines", routine_id, "implementation", "argv", "0"),
+            details={"path": str(registry_path), "id": routine_id, "actual": normalized[0]},
+        )
     return RoutineImplementation(argv=tuple(normalized))
 
 
