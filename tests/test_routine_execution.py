@@ -1,0 +1,109 @@
+import tempfile
+import textwrap
+import unittest
+from pathlib import Path
+
+from ordo.model.workflow import OperationRef, Step, StepBlock, Workflow
+from ordo.runtime import execute_workflow
+
+from tests.support import STANDARD_CONNECTOR_PROVIDER
+
+
+class RoutineExecutionTest(unittest.TestCase):
+    def test_execute_runs_routine_and_returns_compact_log_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "scripts").mkdir(parents=True)
+            script = root / ".ordo" / "scripts" / "demo-pass.py"
+            script.write_text(
+                "import sys\nprint('line 1')\nprint('line 2')\nprint('line 3')\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "routines.yaml").write_text(
+                textwrap.dedent(
+                    f"""
+                    version: 1
+                    routines:
+                      demo.pass:
+                        kind: action
+                        summary: Run the demo pass routine.
+                        implementation:
+                          argv: ["/usr/bin/python3", "{script}"]
+                        failure_modes: [routine_failed]
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="demo",
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.pass"})),)),),
+                launch_dir=str(root),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status.value, "ok")
+        self.assertEqual(result.operation_results[0].status, "ok")
+        self.assertEqual(result.operation_results[0].outputs["routine_id"], "demo.pass")
+        self.assertTrue(result.operation_results[0].outputs["log_path"].endswith(".stdout.log"))
+        self.assertIn("line 3", result.operation_results[0].outputs["stdout_tail"])
+
+    def test_execute_returns_routine_failed_for_nonzero_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "scripts").mkdir(parents=True)
+            script = root / ".ordo" / "scripts" / "demo-fail.py"
+            script.write_text(
+                "import sys\nprint('before fail')\nprint('boom', file=sys.stderr)\nsys.exit(3)\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "routines.yaml").write_text(
+                textwrap.dedent(
+                    f"""
+                    version: 1
+                    routines:
+                      demo.fail:
+                        kind: action
+                        summary: Run the demo failing routine.
+                        implementation:
+                          argv: ["/usr/bin/python3", "{script}"]
+                        failure_modes: [routine_failed]
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="demo",
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.fail"})),)),),
+                launch_dir=str(root),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status.value, "execution_error")
+        self.assertEqual(result.operation_results[0].status, "routine_failed")
+        self.assertEqual(result.operation_results[0].outputs["exit_code"], 3)
+        self.assertIn("boom", result.operation_results[0].outputs["stderr_tail"])
+
+    def test_execute_reports_missing_registry_before_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            workflow = Workflow(
+                version=0,
+                workflow="demo",
+                blocks=(StepBlock(steps=(Step(name="run-routine", operation=OperationRef("routine", with_={"id": "demo.pass"})),)),),
+                launch_dir=str(root),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status.value, "validation_error")
+        self.assertEqual(result.diagnostics[0].code, "routine.discovery.missing")
+
+
+if __name__ == "__main__":
+    unittest.main()

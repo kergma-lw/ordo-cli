@@ -15,6 +15,7 @@ from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, resolve_workflow_let_reference_node
 from .local_expression_engine.core import BinaryNode, CallNode, ListNode, LiteralNode, ParsedLocalExpressionTree, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, render_expression_text
 from .providers import ConnectorProvider, get_default_connector_provider
+from .routines import resolve_routine_entry, routine_operation_contract
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +170,7 @@ def resolve_workflow_references(
                 resolved = _resolve_reference(
                     guard.operation.uses,
                     path=("blocks", str(block_index), "guards", str(guard_index), "uses"),
+                    workflow=workflow,
                     public_registry=public_registry,
                     local_registry=local_registry,
                     declared_with=guard.operation.with_,
@@ -205,6 +207,7 @@ def resolve_workflow_references(
             resolved = _resolve_reference(
                 step.operation.uses,
                 path=("blocks", str(block_index), "steps", str(step_index), "uses"),
+                workflow=workflow,
                 public_registry=public_registry,
                 local_registry=local_registry,
                 declared_with=step.operation.with_,
@@ -291,6 +294,7 @@ def _resolve_guard_expression(
             resolved = _resolve_reference(
                 resolved_reference,
                 path=path,
+                workflow=workflow,
                 public_registry=public_registry,
                 local_registry=local_registry,
             )
@@ -328,6 +332,7 @@ def _resolve_guard_expression(
             resolved = _resolve_reference(
                 ".".join(node.target.parts),
                 path=path,
+                workflow=workflow,
                 public_registry=public_registry,
                 local_registry=local_registry,
             )
@@ -404,10 +409,37 @@ def _resolve_reference(
     reference: str,
     *,
     path: tuple[str, ...],
+    workflow: Workflow,
     public_registry: ConnectorRegistry,
     local_registry: ConnectorRegistry,
     declared_with: JSONObject | None = None,
 ) -> ResolvedOperation | Diagnostic:
+    if reference == "routine":
+        routine_id = None if not isinstance(declared_with, dict) else declared_with.get("id")
+        if not isinstance(routine_id, str) or not routine_id:
+            return _diagnostic(
+                code="resolution.routine.missing_id",
+                message="Routine invocations must declare a non-empty routine id",
+                path=path,
+                reference=reference,
+            )
+        resolved = resolve_routine_entry(workflow=workflow, routine_id=routine_id)
+        if isinstance(resolved, Diagnostic):
+            return Diagnostic(
+                code=resolved.code,
+                level=resolved.level,
+                message=resolved.message,
+                path=path,
+                details=dict(resolved.details),
+            )
+        _registry, entry = resolved
+        return ResolvedOperation(
+            reference=f"routine.{routine_id}",
+            connector_namespace="routine",
+            operation=routine_operation_contract(entry),
+            source="routine",
+            declared_with={} if declared_with is None else dict(declared_with),
+        )
     public_operation = public_registry.get_operation(reference)
     local_operation = local_registry.get_operation(reference)
 

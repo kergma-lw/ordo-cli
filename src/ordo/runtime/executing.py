@@ -19,6 +19,7 @@ from .preflight_interpreter import evaluate_preflight_step_condition, evaluate_p
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
+from .routines import execute_routine_step
 from .state import RuntimeStateError, delete_state_value, read_state_document, resolve_state_target, write_state_document, write_state_value
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -779,6 +780,8 @@ def _default_step_executor(*, provider: ConnectorProvider | None):
     """Default executor backed by canonical connector operations."""
 
     def execute(resolved_step: ResolvedOperation, workflow: Workflow) -> OperationResult:
+        if resolved_step.connector_namespace == "routine":
+            return execute_routine_step(resolved_step, workflow)
         resolved_provider = provider or get_default_connector_provider()
         return resolved_provider.step_executor(resolved_step, workflow)
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from ordo.model.connector import OperationContract
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.routine_contract import ROUTINE_CONTRACT
 from ordo.model.workflow import Workflow
@@ -69,6 +70,54 @@ class RoutineRegistry:
 
     path: Path
     routines: dict[str, RoutineEntry]
+
+
+def workflow_uses_routine(workflow: Workflow) -> bool:
+    """Return whether the workflow references the routine surface."""
+
+    for block in workflow.blocks:
+        if hasattr(block, "steps"):
+            if any(step.operation is not None and step.operation.uses == "routine" for step in block.steps):
+                return True
+        if hasattr(block, "guards"):
+            if any(guard.operation is not None and guard.operation.uses == "routine" for guard in block.guards):
+                return True
+    return False
+
+
+def load_workflow_routine_registry(workflow: Workflow) -> RoutineRegistry:
+    """Load the routine registry associated with one workflow."""
+
+    if workflow.launch_dir is not None:
+        return load_routine_registry(cwd=workflow.launch_dir)
+    if workflow.source_path is not None:
+        source = Path(workflow.source_path).resolve()
+        for candidate_root in (source.parent,) + tuple(source.parents):
+            candidate = candidate_root / ROUTINE_REGISTRY_DISCOVERY_PATH
+            if candidate.exists():
+                return load_routine_registry(path=candidate)
+    return load_routine_registry()
+
+
+def build_routine_operation_contract(entry: RoutineEntry, *, use_declared_kind: bool = False) -> OperationContract:
+    """Project one routine entry into a temporary operation contract."""
+
+    kind = entry.kind if use_declared_kind and entry.kind in {"probe", "action"} else "action"
+    return OperationContract(
+        name=entry.id,
+        kind=kind,
+        summary=entry.summary,
+        inputs={name: arg.type_name for name, arg in entry.args.items()},
+        outputs={
+            "routine_id": "string",
+            "exit_code": "integer",
+            "log_path": "string",
+            "stdout_tail": "string",
+            "stderr_tail": "string",
+        },
+        failure_modes=entry.failure_modes,
+        tags=("routine", kind),
+    )
 
 
 def validate_workflow_routine_invocations(workflow: Workflow, registry: RoutineRegistry) -> tuple[Diagnostic, ...]:

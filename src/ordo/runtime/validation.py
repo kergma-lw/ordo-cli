@@ -12,7 +12,7 @@ from ordo.model.json import JSONObject, JSONValue
 from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import StepBlock, Workflow
-from ordo.routines import RoutineRegistry, validate_workflow_routine_invocations
+from ordo.routines import RoutineRegistry, RoutineRegistryError, load_workflow_routine_registry, validate_workflow_routine_invocations, workflow_uses_routine
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .local_expression_contexts import LocalExpressionContext
@@ -673,8 +673,14 @@ def validate_workflow_semantics(
     diagnostics = list(document_report.diagnostics)
     if document_report.ok:
         diagnostics.extend(validate_workflow_run_target_inputs(workflow))
-        if routine_registry is not None:
-            diagnostics.extend(validate_workflow_routine_invocations(workflow, routine_registry))
+        effective_registry = routine_registry
+        if effective_registry is None and workflow_uses_routine(workflow):
+            try:
+                effective_registry = load_workflow_routine_registry(workflow)
+            except RoutineRegistryError as exc:
+                diagnostics.extend(exc.diagnostics)
+        if effective_registry is not None:
+            diagnostics.extend(validate_workflow_routine_invocations(workflow, effective_registry))
     return _report("workflow", diagnostics)
 
 
@@ -853,6 +859,15 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
                     source,
                 )
             )
+            if item.get("uses") == "routine":
+                diagnostics.append(
+                    _diagnostic(
+                        "validation.workflow.guard.routine_forbidden",
+                        "Routine invocations are not allowed in guard blocks",
+                        item_path + ("uses",),
+                        source,
+                    )
+                )
         diagnostics.extend(_validate_call(item, path=item_path, source=source))
     return diagnostics
 
