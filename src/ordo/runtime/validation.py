@@ -12,6 +12,7 @@ from ordo.model.json import JSONObject, JSONValue
 from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import StepBlock, Workflow
+from ordo.routines import RoutineRegistry, validate_workflow_routine_invocations
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .local_expression_contexts import LocalExpressionContext
@@ -659,7 +660,12 @@ def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -
     return _report("profile", diagnostics)
 
 
-def validate_workflow_semantics(workflow: Workflow, *, source: str | None = None) -> ValidationReport:
+def validate_workflow_semantics(
+    workflow: Workflow,
+    *,
+    source: str | None = None,
+    routine_registry: RoutineRegistry | None = None,
+) -> ValidationReport:
     """Validate shared post-assembly workflow semantics for all runtime entrypoints."""
 
     effective_source = source or workflow.source_path or "<memory>"
@@ -667,6 +673,8 @@ def validate_workflow_semantics(workflow: Workflow, *, source: str | None = None
     diagnostics = list(document_report.diagnostics)
     if document_report.ok:
         diagnostics.extend(validate_workflow_run_target_inputs(workflow))
+        if routine_registry is not None:
+            diagnostics.extend(validate_workflow_routine_invocations(workflow, routine_registry))
     return _report("workflow", diagnostics)
 
 
@@ -1327,6 +1335,9 @@ def _validate_call(
     diagnostics.extend(_require_object_field(value, "with", path=path + ("with",), source=source, required=False))
     with_payload = value.get("with")
     if isinstance(with_payload, dict):
+        uses_value = value.get("uses")
+        if uses_value == "routine":
+            diagnostics.extend(_validate_routine_call_shape(with_payload, path=path + ("with",), source=source))
         diagnostics.extend(
             _validate_runtime_value_surface(
                 with_payload,
@@ -1337,6 +1348,14 @@ def _validate_call(
                 declared_registers=declared_registers,
             )
         )
+    return diagnostics
+
+
+def _validate_routine_call_shape(value: JSONObject, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    diagnostics.extend(_validate_unknown_fields(value, frozenset({"id", "args"}), path=path, source=source))
+    diagnostics.extend(_require_non_empty_string(value, "id", path=path + ("id",), source=source))
+    diagnostics.extend(_require_object_field(value, "args", path=path + ("args",), source=source, required=False))
     return diagnostics
 
 

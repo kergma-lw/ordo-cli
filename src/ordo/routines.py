@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import yaml
+
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.routine_contract import ROUTINE_CONTRACT
+from ordo.model.workflow import Workflow
 from ordo.runtime.loading import LoadError, load_yaml_document
-import yaml
 
 
 def _field_names(items: list[dict[str, object]]) -> frozenset[str]:
@@ -67,6 +69,80 @@ class RoutineRegistry:
 
     path: Path
     routines: dict[str, RoutineEntry]
+
+
+def validate_workflow_routine_invocations(workflow: Workflow, registry: RoutineRegistry) -> tuple[Diagnostic, ...]:
+    """Validate workflow routine references against one loaded registry."""
+
+    diagnostics: list[Diagnostic] = []
+    for block_index, block in enumerate(workflow.blocks):
+        if not hasattr(block, "steps"):
+            continue
+        for step_index, step in enumerate(block.steps):
+            if step.operation is None or step.operation.uses != "routine":
+                continue
+            step_path = ("blocks", str(block_index), "steps", str(step_index), "with")
+            routine_id = step.operation.with_.get("id")
+            args_payload = step.operation.with_.get("args", {})
+            if not isinstance(routine_id, str) or not routine_id:
+                continue
+            if not isinstance(args_payload, dict):
+                continue
+            entry = registry.routines.get(routine_id)
+            if entry is None:
+                diagnostics.append(
+                    Diagnostic(
+                        code="validation.workflow.routine.unknown_id",
+                        level="error",
+                        message=f"Routine '{routine_id}' is not declared in the routine registry",
+                        path=step_path + ("id",),
+                        details={"routine_id": routine_id, "registry": str(registry.path)},
+                    )
+                )
+                continue
+            extra_args = sorted(name for name in args_payload if name not in entry.args)
+            for arg_name in extra_args:
+                diagnostics.append(
+                    Diagnostic(
+                        code="validation.workflow.routine.arg_unknown",
+                        level="error",
+                        message=f"Routine '{routine_id}' does not declare argument '{arg_name}'",
+                        path=step_path + ("args", arg_name),
+                        details={"routine_id": routine_id, "arg": arg_name, "registry": str(registry.path)},
+                    )
+                )
+            for arg_name, arg in entry.args.items():
+                if arg.required and arg_name not in args_payload:
+                    diagnostics.append(
+                        Diagnostic(
+                            code="validation.workflow.routine.arg_missing",
+                            level="error",
+                            message=f"Routine '{routine_id}' requires argument '{arg_name}'",
+                            path=step_path + ("args", arg_name),
+                            details={"routine_id": routine_id, "arg": arg_name, "registry": str(registry.path)},
+                        )
+                    )
+                    continue
+                if arg_name not in args_payload:
+                    continue
+                actual = args_payload[arg_name]
+                if not _matches_routine_arg_type(actual, arg.type_name):
+                    diagnostics.append(
+                        Diagnostic(
+                            code="validation.workflow.routine.arg_type",
+                            level="error",
+                            message=f"Routine '{routine_id}' argument '{arg_name}' must have type '{arg.type_name}'",
+                            path=step_path + ("args", arg_name),
+                            details={
+                                "routine_id": routine_id,
+                                "arg": arg_name,
+                                "expected_type": arg.type_name,
+                                "actual_type": type(actual).__name__,
+                                "registry": str(registry.path),
+                            },
+                        )
+                    )
+    return tuple(diagnostics)
 
 
 def discover_routine_registry_path(*, cwd: str | Path | None = None) -> Path:
@@ -329,3 +405,19 @@ def _detect_duplicate_routine_ids(text: str, *, source: str) -> None:
 def _routine_error(code: str, message: str, *, path: tuple[str, ...] = (), details: dict[str, object] | None = None) -> RoutineRegistryError:
     payload = {"category": "routine_registry", **(details or {})}
     return RoutineRegistryError((Diagnostic(code=code, level="error", message=message, path=path, details=payload),))
+
+
+def _matches_routine_arg_type(value: object, type_name: str) -> bool:
+    if type_name == "string":
+        return isinstance(value, str)
+    if type_name == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if type_name == "boolean":
+        return isinstance(value, bool)
+    if type_name == "object":
+        return isinstance(value, dict)
+    if type_name == "array":
+        return isinstance(value, list)
+    if type_name == "string_list":
+        return isinstance(value, list) and all(isinstance(item, str) for item in value)
+    return True
