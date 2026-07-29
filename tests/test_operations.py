@@ -57,6 +57,8 @@ class OperationTest(unittest.TestCase):
         git_commits_module = importlib.import_module("connectors.git.probes.commits")
         git_state_module = importlib.import_module("connectors.git.probes.state")
         git_ref_module = importlib.import_module("connectors.git.probes.ref")
+        git_tag_module = importlib.import_module("connectors.git.probes.tag")
+        git_tags_module = importlib.import_module("connectors.git.probes.tags")
         git_upstream_module = importlib.import_module("connectors.git.probes.upstream")
         git_range_module = importlib.import_module("connectors.git.probes.range")
         repo_info = git_repo_module.info()
@@ -68,6 +70,8 @@ class OperationTest(unittest.TestCase):
         commits_info = git_commits_module.info()
         state_info = git_state_module.info()
         ref_info = git_ref_module.info()
+        tag_info = git_tag_module.info()
+        tags_info = git_tags_module.info()
         upstream_info = git_upstream_module.info()
         range_info = git_range_module.info()
 
@@ -98,6 +102,12 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(ref_info.name, "ref")
         self.assertEqual(ref_info.kind, "probe")
         self.assertIs(ref_info.handler, git_ref_module.run)
+        self.assertEqual(tag_info.name, "tag")
+        self.assertEqual(tag_info.kind, "probe")
+        self.assertIs(tag_info.handler, git_tag_module.run)
+        self.assertEqual(tags_info.name, "tags")
+        self.assertEqual(tags_info.kind, "probe")
+        self.assertIs(tags_info.handler, git_tags_module.run)
         self.assertEqual(upstream_info.name, "upstream")
         self.assertEqual(upstream_info.kind, "probe")
         self.assertIs(upstream_info.handler, git_upstream_module.run)
@@ -1268,6 +1278,166 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "probe_failed")
         self.assertEqual(result.diagnostics[0].code, "probe.git_ref.empty_symbolic_target")
+
+    def test_git_tag_probe_returns_existing_tag_facts(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.tag", with_={"name": "v1.2.3"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.tag")
+        resolved = ResolvedOperation("git.tag", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="2222222222222222222222222222222222222222\n", stderr=""),
+                self._completed(returncode=0, stdout="tag\n", stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(
+            result.outputs,
+            {
+                "name": "v1.2.3",
+                "ref": "refs/tags/v1.2.3",
+                "exists": True,
+                "oid": "2222222222222222222222222222222222222222",
+                "annotated": True,
+                "repository_root": "/tmp/demo-repo",
+            },
+        )
+
+    def test_git_tag_probe_returns_missing_tag_as_exists_false(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.tag", with_={"name": "v9.9.9"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.tag")
+        resolved = ResolvedOperation("git.tag", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=128, stdout="", stderr="fatal: Needed a single revision\n"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["name"], "v9.9.9")
+        self.assertEqual(result.outputs["ref"], "refs/tags/v9.9.9")
+        self.assertFalse(result.outputs["exists"])
+        self.assertIsNone(result.outputs["oid"])
+        self.assertIsNone(result.outputs["annotated"])
+
+    def test_git_tags_probe_returns_filtered_inventory_and_latest(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.tags", with_={"match": "v1.*"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.tags")
+        resolved = ResolvedOperation("git.tags", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout=(
+                        "refs/tags/v2.0.0\tv2.0.0\tcommit\t3333333333333333333333333333333333333333\t\n"
+                        "refs/tags/v1.10.0\tv1.10.0\tcommit\t2222222222222222222222222222222222222222\t\n"
+                        "refs/tags/v1.2.0\tv1.2.0\ttag\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\t1111111111111111111111111111111111111111\n"
+                    ),
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 2)
+        self.assertEqual(result.outputs["repository_root"], "/tmp/demo-repo")
+        self.assertEqual(
+            result.outputs["items"],
+            [
+                {
+                    "name": "v1.10.0",
+                    "ref": "refs/tags/v1.10.0",
+                    "oid": "2222222222222222222222222222222222222222",
+                    "annotated": False,
+                },
+                {
+                    "name": "v1.2.0",
+                    "ref": "refs/tags/v1.2.0",
+                    "oid": "1111111111111111111111111111111111111111",
+                    "annotated": True,
+                },
+            ],
+        )
+        self.assertEqual(result.outputs["latest"], result.outputs["items"][0])
+
+    def test_git_tags_probe_supports_regex_match_kind(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(
+                Guard(
+                    OperationRef(
+                        "git.tags",
+                        with_={"match": r"^v?[0-9]+\.[0-9]+\.[0-9]+$", "match_kind": "regex"},
+                    )
+                ),
+            ),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.tags")
+        resolved = ResolvedOperation("git.tags", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout=(
+                        "refs/tags/v2.0.0\tv2.0.0\tcommit\t3333333333333333333333333333333333333333\t\n"
+                        "refs/tags/release-2026-07\trelease-2026-07\tcommit\t2222222222222222222222222222222222222222\t\n"
+                        "refs/tags/1.4.1\t1.4.1\tcommit\t1111111111111111111111111111111111111111\t\n"
+                    ),
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 2)
+        self.assertEqual([item["name"] for item in result.outputs["items"]], ["v2.0.0", "1.4.1"])
+
+    def test_git_tags_probe_rejects_invalid_regex(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.tags", with_={"match": "(", "match_kind": "regex"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.tags")
+        resolved = ResolvedOperation("git.tags", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr="")]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "probe_failed")
+        self.assertEqual(result.diagnostics[0].code, "probe.git_tags.invalid_match")
 
     def test_git_upstream_probe_returns_tracking_facts(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.upstream")),), steps=())
