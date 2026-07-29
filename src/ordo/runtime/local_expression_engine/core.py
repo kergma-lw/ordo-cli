@@ -551,11 +551,16 @@ def _try_parse_adapter_invocation_at(
     probe = family_end
     while probe < len(expression) and expression[probe].isspace():
         probe += 1
-    if probe >= len(expression) or expression[probe] not in "[{.-":
+    if probe >= len(expression):
         return None
-    if expression[probe] in ".-" and not has_representation_adapter(family):
+    if text_starts := expression.startswith("with{", probe):
+        if not has_representation_adapter(family):
+            return None
+    elif expression[probe] not in "[{.-":
         return None
-    if expression[probe] == "-" and not expression.startswith("->", probe):
+    if not text_starts and expression[probe] in ".-" and not has_representation_adapter(family):
+        return None
+    if not text_starts and expression[probe] == "-" and not expression.startswith("->", probe):
         return None
 
     body, bindings, end = _split_adapter_body_and_bindings(

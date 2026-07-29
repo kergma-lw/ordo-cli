@@ -335,6 +335,22 @@ blocks:
 
         self.assertEqual(value, "hello:done")
 
+    def test_resolve_runtime_value_supports_adapter_invocation_with_empty_body(self) -> None:
+        seen: list[RepresentationAdapterInvocation] = []
+
+        def handle(invocation: RepresentationAdapterInvocation):
+            seen.append(invocation)
+            return adapter_read_result(invocation.root_value)
+
+        register_representation_adapter("fixture_empty", handle)
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello"})
+
+        value = resolve_runtime_value('${fixture_empty with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, "hello")
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0].body, "")
+
     def test_execute_resolves_registered_step_output_in_later_step_block(self) -> None:
         workflow = load_workflow_text(
             """
