@@ -6,6 +6,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Override, Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
+from connectors._shared import evaluate_argument_value
 from ordo.runtime import check_workflow, load_workflow_text
 from ordo.runtime.checking import _build_check_analysis_tree, _project_check_runtime_result
 
@@ -172,7 +173,7 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.preflight_decision.guard_nodes[0].reference, "git.worktree")
         self.assertEqual(result.preflight_decision.block_nodes[0].block_type, "guards")
 
-    def test_check_marks_verdict_basis_weakened_when_later_action_invalidates_used_observation(self) -> None:
+    def test_check_keeps_guard_verdict_stable_when_later_action_invalidates_same_scope(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="open-task",
@@ -186,7 +187,7 @@ class CheckModeTest(unittest.TestCase):
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertTrue(result.outputs["verdict_basis_weakened"])
+        self.assertFalse(result.outputs["verdict_basis_weakened"])
         self.assertIn("git.branch", result.outputs["used_observation_scopes"])
         self.assertIn("git.branch", result.outputs["weakened_observation_scopes"])
         self.assertIn("git.branch", result.outputs["potential_invalidation_scopes"])
@@ -205,7 +206,7 @@ class CheckModeTest(unittest.TestCase):
 
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-        self.assertTrue(result.outputs["verdict_basis_weakened"])
+        self.assertFalse(result.outputs["verdict_basis_weakened"])
         self.assertIn("gh.issue", result.outputs["used_observation_scopes"])
         self.assertIn("gh.*", result.outputs["potential_invalidation_scopes"])
 
@@ -738,12 +739,14 @@ blocks:
 """
         )
         seen: list[str] = []
+        captured: dict[str, object] = {}
 
         def probe(resolved_guard, _workflow):
             seen.append(resolved_guard.reference)
             if resolved_guard.reference == "gh.issue":
                 return OperationResult(status="ok", outputs={"body": "owner/repo#7\nowner/repo#8"})
             if resolved_guard.reference == "gh.project.items.details":
+                captured.update({name: evaluate_argument_value(value, _workflow) for name, value in resolved_guard.arguments})
                 return OperationResult(status="ok", outputs={"count": 0, "items": []})
             return OperationResult(status="ok", outputs={})
 
@@ -751,6 +754,8 @@ blocks:
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(seen, ["gh.issue", "gh.project.items.details"])
+        self.assertEqual(captured["content_refs"], ["owner/repo#7", "owner/repo#8"])
+        self.assertEqual(captured["filters"], [{"field": "State", "value": "OPEN"}])
 
     def test_check_preserves_later_action_call_shape_when_missing_input_halts_preflight(self) -> None:
         workflow = Workflow(

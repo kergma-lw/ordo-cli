@@ -699,6 +699,52 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["count"], 1)
         self.assertEqual(result.outputs["items"][0]["item_id"], "PVTI_issue")
 
+    def test_gh_project_items_details_probe_combines_content_and_project_filters_in_subset_mode(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(
+                Guard(
+                    OperationRef(
+                        "gh.project.items.details",
+                        with_={
+                            "project_id": "PVT_demo",
+                            "content_kind": "Issue",
+                            "filters": [
+                                {"field": "State", "value": "OPEN"},
+                                {"field": "Priority", "value": "P1"},
+                            ],
+                            "content_refs": ["owner/repo#7", "owner/repo#8", "owner/repo#9"],
+                        },
+                    )
+                ),
+            ),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items.details")
+        resolved = ResolvedOperation("gh.project.items.details", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"node":{"id":"PVT_demo","title":"Demo","fields":{"nodes":[{"__typename":"ProjectV2SingleSelectField","id":"F_priority","name":"Priority","options":[{"id":"O_p1","name":"P1"},{"id":"O_p2","name":"P2"}]}]}}}}',
+                    stderr="",
+                ),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repo_0":{"issue_0":{"__typename":"Issue","number":7,"title":"Issue 7","state":"OPEN","url":"https://github.com/owner/repo/issues/7","repository":{"nameWithOwner":"owner/repo"},"labels":{"nodes":[]},"projectItems":{"nodes":[{"id":"PVTI_7","project":{"id":"PVT_demo"},"field_0":{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"P1"}}]}}},"repo_1":{"issue_1":{"__typename":"Issue","number":8,"title":"Issue 8","state":"CLOSED","url":"https://github.com/owner/repo/issues/8","repository":{"nameWithOwner":"owner/repo"},"labels":{"nodes":[]},"projectItems":{"nodes":[{"id":"PVTI_8","project":{"id":"PVT_demo"},"field_0":{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"P1"}}]}}},"repo_2":{"issue_2":{"__typename":"Issue","number":9,"title":"Issue 9","state":"OPEN","url":"https://github.com/owner/repo/issues/9","repository":{"nameWithOwner":"owner/repo"},"labels":{"nodes":[]},"projectItems":{"nodes":[{"id":"PVTI_9","project":{"id":"PVT_demo"},"field_0":{"__typename":"ProjectV2ItemFieldSingleSelectValue","name":"P2"}}]}}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["count"], 1)
+        self.assertEqual(result.outputs["items"][0]["item_id"], "PVTI_7")
+
     def test_gh_issue_comments_probe_returns_structured_comment_nodes(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue.comments", with_={"repository": "kergma-lw/ordo-cli", "issue_number": 471})),), steps=())
         operation = get_public_connector_registry().get_operation("gh.issue.comments")

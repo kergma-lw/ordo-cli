@@ -12,13 +12,16 @@
 
 - `project_id` is required.
 - `content_kind` is optional and narrows the result by structural content kind.
-- `filters` is optional and narrows the result by project field values.
+- `filters` is optional and narrows the result by returned item attributes.
 - `content_refs` is optional and narrows the result by explicit GitHub content references using `OWNER/REPO#NUMBER` format.
 
 ## Filter contract
 
 - `filters` is an ordered list of objects shaped as `{field, value}`.
-- `field` names one project field by public project-local name.
+- `field` names one returned item attribute.
+- Item attributes may come either from:
+  - exact public GitHub Project field names such as `Status` or `Priority`;
+  - connector-owned canonical output attributes such as `repository`, `number`, `title`, `url`, and, for `gh.project.items.details`, `state`.
 - `value` is a scalar filter value.
 - `content_refs` is an ordered list of `OWNER/REPO#NUMBER` strings.
 - `content_refs` composes with `content_kind` and `filters` through AND semantics.
@@ -50,7 +53,8 @@
 ## Retrieval rule
 
 - The probe should use one connector-owned bulk project retrieval path.
-- The probe should translate supported structural and field-equality constraints into the backend project item query before paginating results.
+- The probe should translate supported structural and project-field equality constraints into the backend project item query before paginating results.
+- The probe may apply connector-owned item-attribute filters client-side after one connector-owned bulk retrieval pass.
 - When `content_refs` is present, the probe should use one bulk content-addressed GraphQL retrieval path without per-ref follow-up requests.
 - Ordinary pagination is allowed.
 - The implementation may fetch project field metadata once to validate filter names and kinds.

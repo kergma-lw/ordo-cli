@@ -72,9 +72,18 @@ The public help surface should present this pairing in at least the `overview`, 
 
 `ordo-help workflow-authoring` should also warn against overstuffed `publish` payloads.
 
-- Prefer the minimum outward-facing payload needed by the caller or downstream operator.
+- Treat extra published fields as an authoring smell, not as harmless bonus detail.
+- Publish only the minimum outward-facing payload needed by the caller or by one downstream workflow that must make a decision from it.
+- If one field already identifies the result well enough, do not also publish redundant confirmation fields beside it.
 - Do not mirror large action outputs into `publish` by default just because they are available.
+- Do not publish `repository`, `issue_number`, `changed`, `closed`, or similar step-level confirmation fields when `url` or `issue_ref` already identifies the result sufficiently.
+- If one field is not needed by a downstream workflow or by the user to make a decision, do not publish it.
 - Respect stricter local agent or project rules when they ask for an even smaller success surface.
+
+`ordo-help workflow-authoring` should show one short contrastive example:
+
+- bad: `summary + repository + issue_number + changed + closed + url`
+- good: `summary + url`
 
 The goal is to keep authored success output compact, legible, and intentional rather than turning `publish` into a noisy dump of whatever the workflow happened to observe.
 

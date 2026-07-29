@@ -72,6 +72,48 @@ class ReviewModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertTrue(any(item["code"] == "review.workflow.missing_recommended_observations" for item in result.outputs["findings"]))
 
+    def test_review_recognizes_recommended_observations_from_let_bound_guard_probes(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="close-story",
+            declared_inputs={"repository": {}, "issue_number": {}, "project_id": {}},
+            let_bindings={
+                "story_project_issue": "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)"
+            },
+            blocks=(
+                GuardBlock(
+                    guards=(
+                        Guard(expr="story_project_issue.exists"),
+                        Guard(expr='gh.project.field(project_id=inputs.project_id, field="Status").exists'),
+                        Guard(expr='gh.project.field.option(project_id=inputs.project_id, field="Status", option="Done").exists'),
+                    )
+                ),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "${inputs.repository}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "Status",
+                                    "option": "Done",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            inputs={"repository": "acme/repo", "issue_number": 7, "project_id": "PVT_demo"},
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_observations" for item in result.outputs["findings"]))
+
     def test_review_reports_clean_when_no_findings_exist(self) -> None:
         workflow = Workflow(
             version=0,

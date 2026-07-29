@@ -24,6 +24,20 @@ class _FilterSpec(tuple[str, object]):
         return self[1]
 
 
+class _ItemFilterSpec(tuple[str, str, object]):
+    @property
+    def field(self) -> str:
+        return self[0]
+
+    @property
+    def attribute(self) -> str:
+        return self[1]
+
+    @property
+    def value(self) -> object:
+        return self[2]
+
+
 class _ContentRef(tuple[str, str, str, str, int]):
     @property
     def value(self) -> str:
@@ -44,6 +58,27 @@ class _ContentRef(tuple[str, str, str, str, int]):
     @property
     def number(self) -> int:
         return self[4]
+
+
+_ITEM_FILTER_ALIASES = {
+    "itemid": "item_id",
+    "contentkind": "content_kind",
+    "repository": "repository",
+    "number": "number",
+    "title": "title",
+    "url": "url",
+    "state": "state",
+}
+
+_ITEM_FILTER_TYPES = {
+    "item_id": "string",
+    "content_kind": "string",
+    "repository": "string",
+    "number": "number",
+    "title": "string",
+    "url": "string",
+    "state": "string",
+}
 
 
 def info():
@@ -129,18 +164,24 @@ def run(ctx: OperationContext):
 
     requested_kind = None if content_kind is _MISSING else str(content_kind)
     raw: dict[str, object] = {}
+    project_filters: tuple[_FilterSpec, ...] = ()
     field_lookup: dict[str, dict[str, object]] = {}
+    item_filters: tuple[_ItemFilterSpec, ...] = ()
     if parsed_filters:
         fetched_fields = fetch_project_fields(ctx, project_id, diagnostic_prefix="probe.gh_project_items")
         if not isinstance(fetched_fields, tuple):
             return fetched_fields
         project, field_raw = fetched_fields
         raw = {**raw, "fields": field_raw}
-        field_lookup_outcome = _build_field_lookup(ctx, project_id=project_id, project=project, filters=parsed_filters)
+        classified_filters = _classify_item_filters(ctx, project_id=project_id, project=project, filters=parsed_filters, supported_item_attributes={"item_id", "content_kind", "repository", "number", "title", "url"})
+        if not isinstance(classified_filters, tuple):
+            return classified_filters
+        project_filters, item_filters = classified_filters
+        field_lookup_outcome = _build_field_lookup(ctx, project_id=project_id, project=project, filters=project_filters)
         if not isinstance(field_lookup_outcome, dict):
             return field_lookup_outcome
         field_lookup = field_lookup_outcome
-        search_query = _build_server_side_query(requested_kind=requested_kind, filters=parsed_filters, field_lookup=field_lookup)
+        search_query = _build_server_side_query(requested_kind=requested_kind, filters=project_filters, field_lookup=field_lookup)
     else:
         search_query = _build_server_side_query(requested_kind=requested_kind, filters=(), field_lookup={})
 
@@ -167,7 +208,9 @@ def run(ctx: OperationContext):
         item = normalize_project_item(node)
         if requested_kind is not None and item.get("content_kind") != requested_kind:
             continue
-        if parsed_filters and parsed_content_refs and not _matches_selected_filters(node, parsed_filters, field_lookup):
+        if project_filters and parsed_content_refs and not _matches_selected_filters(node, project_filters, field_lookup):
+            continue
+        if item_filters and not _matches_item_filters(item, item_filters):
             continue
         items.append(item)
     return ok(
@@ -223,6 +266,51 @@ def _parse_filters(ctx: OperationContext, *, project_id: str, filters_value: obj
             )
         parsed.append(_FilterSpec((field, item.get("value"))))
     return tuple(parsed)
+
+
+def _classify_item_filters(
+    ctx: OperationContext,
+    *,
+    project_id: str,
+    project: dict[str, object],
+    filters: Sequence[_FilterSpec],
+    supported_item_attributes: set[str],
+) -> tuple[tuple[_FilterSpec, ...], tuple[_ItemFilterSpec, ...]] | object:
+    project_field_names = {
+        node.get("name")
+        for node in field_nodes(project)
+        if isinstance(node, dict) and isinstance(node.get("name"), str)
+    }
+    project_filters: list[_FilterSpec] = []
+    item_filters: list[_ItemFilterSpec] = []
+    for filter_spec in filters:
+        if filter_spec.field in project_field_names:
+            project_filters.append(filter_spec)
+            continue
+        attribute = _canonical_item_filter_attribute(filter_spec.field)
+        if attribute is None or attribute not in supported_item_attributes:
+            return fail(
+                code="unknown_field",
+                summary=f"GitHub project field '{filter_spec.field}' was not found",
+                diagnostics=(
+                    Diagnostic(
+                        code="probe.gh_project_items.unknown_field",
+                        level="error",
+                        message="GitHub project field was not found",
+                        details={"reference": ctx.reference, "project_id": project_id, "field": filter_spec.field},
+                    ),
+                ),
+            )
+        normalized_value = _normalize_item_filter_value(ctx, project_id=project_id, field=filter_spec.field, attribute=attribute, value=filter_spec.value)
+        if isinstance(normalized_value, OperationOutcome):
+            return normalized_value
+        item_filters.append(_ItemFilterSpec((filter_spec.field, attribute, normalized_value)))
+    return tuple(project_filters), tuple(item_filters)
+
+
+def _canonical_item_filter_attribute(field: str) -> str | None:
+    normalized = field.replace("_", "").replace(" ", "").casefold()
+    return _ITEM_FILTER_ALIASES.get(normalized)
 
 
 def _parse_content_refs(ctx: OperationContext, *, project_id: str, content_refs_value: object) -> tuple[_ContentRef, ...] | object:
@@ -366,6 +454,20 @@ def _matches_selected_filters(node: dict[str, object], filters: Sequence[_Filter
     return True
 
 
+def _matches_item_filters(item: dict[str, object], filters: Sequence[_ItemFilterSpec]) -> bool:
+    for filter_spec in filters:
+        actual = item.get(filter_spec.attribute)
+        if filter_spec.attribute == "number":
+            if not isinstance(actual, (int, float)) or isinstance(actual, bool):
+                return False
+            if float(actual) != float(filter_spec.value):
+                return False
+            continue
+        if actual != filter_spec.value:
+            return False
+    return True
+
+
 def _extract_selected_field_value(value: object) -> object | None:
     if not isinstance(value, dict):
         return None
@@ -435,6 +537,33 @@ def _normalize_filter_value(ctx: OperationContext, *, project_id: str, field: st
         project_id=project_id,
         message=f"GitHub project field '{field}' requires a string filter value",
         details={"field": field, "kind": kind, "value": value},
+    )
+
+
+def _normalize_item_filter_value(ctx: OperationContext, *, project_id: str, field: str, attribute: str, value: object) -> object:
+    kind = _ITEM_FILTER_TYPES[attribute]
+    if kind == "number":
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            try:
+                return float(stripped)
+            except ValueError:
+                pass
+        return _invalid_filter_value(
+            ctx,
+            project_id=project_id,
+            message=f"GitHub item attribute '{field}' requires a numeric filter value",
+            details={"field": field, "attribute": attribute, "value": value},
+        )
+    if isinstance(value, str):
+        return value
+    return _invalid_filter_value(
+        ctx,
+        project_id=project_id,
+        message=f"GitHub item attribute '{field}' requires a string filter value",
+        details={"field": field, "attribute": attribute, "value": value},
     )
 
 

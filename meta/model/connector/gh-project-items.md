@@ -42,11 +42,14 @@
 ## Filtering semantics
 
 - `content_kind` is a structural filter.
-- `filters` match project fields by field name.
+- `filters` match returned item attributes by equality.
+- Item-attribute filters may target either:
+  - project-backed fields, using the exact public GitHub Project field name such as `Status` or `Priority`;
+  - connector-owned item attributes, using canonical item output names such as `repository`, `number`, `title`, or `url`.
 - `content_refs` narrows the result to project items whose GitHub content matches one explicit set of repository-number references.
 - Each filter compares one field value by equality.
 - Multiple filters compose with AND semantics.
-- The connector should push supported constraints into the GitHub Project item query instead of hydrating all field values for all items.
+- The connector should push supported project-field constraints into the GitHub Project item query whenever possible, then apply any remaining item-attribute filters client-side over the normalized item shape.
 - When `content_refs` is present, the connector should switch to one bulk content-addressed retrieval path rather than a project-wide item scan.
 
 ## Discovery examples

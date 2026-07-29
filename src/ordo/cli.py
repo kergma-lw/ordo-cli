@@ -561,11 +561,12 @@ def _collect_missing_facts(outputs: dict[str, object]) -> list[str]:
     facts: list[str] = []
     seen: set[str] = set()
 
-    weakened_scopes = outputs.get("weakened_observation_scopes")
-    if isinstance(weakened_scopes, list):
-        for scope in weakened_scopes:
-            if isinstance(scope, str) and scope:
-                _append_unique(facts, seen, f"fresh facts unavailable for {scope}")
+    if outputs.get("verdict_basis_weakened"):
+        weakened_scopes = outputs.get("weakened_observation_scopes")
+        if isinstance(weakened_scopes, list):
+            for scope in weakened_scopes:
+                if isinstance(scope, str) and scope:
+                    _append_unique(facts, seen, f"fresh facts unavailable for {scope}")
 
     unevaluated_guards = outputs.get("unevaluated_relevant_guards")
     if isinstance(unevaluated_guards, list):

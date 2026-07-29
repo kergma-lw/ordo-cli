@@ -10,7 +10,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
-from ordo.runtime.local_expression_engine.core import ListNode, LiteralNode, ReferenceNode, StateReferenceNode, ValueExpressionNode as GuardExpressionNode
+from ordo.runtime.local_expression_engine.core import ListNode, LiteralNode, ObjectEntryNode, ObjectNode, ReferenceNode, StateReferenceNode, ValueExpressionNode as GuardExpressionNode
 from ordo.runtime.state import RuntimeStateError, read_state_document, read_state_value, resolve_state_target
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -110,6 +110,16 @@ def evaluate_argument_value(node: GuardExpressionNode, workflow: Workflow) -> JS
             if value is _MISSING:
                 return _MISSING
             values.append(value)  # type: ignore[arg-type]
+        return values
+    if isinstance(node, ObjectEntryNode):
+        return evaluate_argument_value(node.value, workflow)
+    if isinstance(node, ObjectNode):
+        values: dict[str, JSONValue] = {}
+        for entry in node.entries:
+            value = evaluate_argument_value(entry.value, workflow)
+            if value is _MISSING:
+                return _MISSING
+            values[entry.key] = value  # type: ignore[assignment]
         return values
     return _MISSING
 

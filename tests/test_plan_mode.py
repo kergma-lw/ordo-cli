@@ -393,9 +393,9 @@ class PlanModeTest(unittest.TestCase):
 
         result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-        self.assertEqual(result.outputs["guard_items"][0]["freshness_state"], "stale")
+        self.assertEqual(result.outputs["guard_items"][0]["freshness_state"], "fresh")
         self.assertEqual(result.outputs["step_items"][0]["freshness_state"], "not_applicable")
-        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["freshness_state"], "stale")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["freshness_state"], "fresh")
         self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], ["gh.*"])
 
     def test_plan_builds_ready_to_run_frontier(self) -> None:

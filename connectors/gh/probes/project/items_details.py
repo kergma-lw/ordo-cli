@@ -9,8 +9,10 @@ from connectors.gh.probes.project._items import (
 )
 from connectors.gh.probes.project.items import (
     _MISSING,
+    _classify_item_filters,
     _build_field_lookup,
     _build_server_side_query,
+    _matches_item_filters,
     _matches_selected_filters,
     _optional_input,
     _parse_content_refs,
@@ -96,7 +98,9 @@ def run(ctx: OperationContext):
 
     requested_kind = None if content_kind is _MISSING else str(content_kind)
     raw: dict[str, object] = {}
+    project_filters = ()
     field_lookup: dict[str, dict[str, object]] = {}
+    item_filters = ()
     if parsed_filters:
         from connectors.gh.probes.project._fields import fetch_project_fields
 
@@ -105,11 +109,21 @@ def run(ctx: OperationContext):
             return fetched_fields
         project, field_raw = fetched_fields
         raw = {**raw, "fields": field_raw}
-        field_lookup_outcome = _build_field_lookup(ctx, project_id=project_id, project=project, filters=parsed_filters)
+        classified_filters = _classify_item_filters(
+            ctx,
+            project_id=project_id,
+            project=project,
+            filters=parsed_filters,
+            supported_item_attributes={"item_id", "content_kind", "repository", "number", "title", "url", "state"},
+        )
+        if not isinstance(classified_filters, tuple):
+            return classified_filters
+        project_filters, item_filters = classified_filters
+        field_lookup_outcome = _build_field_lookup(ctx, project_id=project_id, project=project, filters=project_filters)
         if not isinstance(field_lookup_outcome, dict):
             return field_lookup_outcome
         field_lookup = field_lookup_outcome
-        search_query = _build_server_side_query(requested_kind=requested_kind, filters=parsed_filters, field_lookup=field_lookup)
+        search_query = _build_server_side_query(requested_kind=requested_kind, filters=project_filters, field_lookup=field_lookup)
     else:
         search_query = _build_server_side_query(requested_kind=requested_kind, filters=(), field_lookup={})
 
@@ -143,7 +157,9 @@ def run(ctx: OperationContext):
         item = normalize_project_item_details(node)
         if requested_kind is not None and item.get("content_kind") != requested_kind:
             continue
-        if parsed_filters and parsed_content_refs and not _matches_selected_filters(node, parsed_filters, field_lookup):
+        if project_filters and parsed_content_refs and not _matches_selected_filters(node, project_filters, field_lookup):
+            continue
+        if item_filters and not _matches_item_filters(item, item_filters):
             continue
         items.append(item)
     return ok(

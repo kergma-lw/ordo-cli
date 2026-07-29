@@ -68,21 +68,25 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "name": "minimal_publish_payload",
         "priority": "strong_recommendation",
         "guidance_level": "recommended",
-        "rule": "Keep publish payloads minimal and intentional. Publish only the outward-facing fields the caller needs, while respecting any stricter local agent or project rules.",
+        "rule": "Treat extra publish fields as an authoring smell. If one field is not needed by the caller or by a downstream workflow to make a decision, do not publish it.",
         "why": [
             "compact published outputs are easier to read, review, and trust",
             "copying large action outputs into publish by default turns success payloads into noise",
             "local agent or project rules may intentionally require an even smaller success surface",
         ],
         "prefer": [
-            "publish the smallest useful confirmation surface such as a summary, url, or compact identifier",
-            "keep extra detail in step-local outputs unless it is truly needed outward-facing",
+            "publish the smallest useful confirmation surface such as a summary, url, issue_ref, or compact identifier",
+            "keep extra detail in step-local outputs unless a user or downstream workflow truly needs it to make a decision",
+            "prefer one sufficient outward-facing identifier instead of several overlapping confirmation fields",
+            "prefer a compact result such as summary + url over broader confirmation bundles",
             "follow stricter local payload rules when the project or agent guidance defines them",
         ],
         "avoid": [
             "mirroring full action outputs into publish just because those fields are available",
             "treating publish as a general-purpose debug dump",
             "adding outward-facing fields that the caller did not ask for and downstream steps do not need",
+            "publishing repository, issue_number, changed, closed, or similar step-level confirmation fields when url or issue_ref already identifies the result sufficiently",
+            "using summary + repository + issue_number + changed + closed + url when summary + url already communicates the outcome",
         ],
     },
     {

@@ -13,7 +13,7 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBl
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
-from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ListNode, LiteralNode, ReadOnlyObservationSession, ValueExpressionNode, evaluate_condition_expression
+from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ListNode, LiteralNode, ObjectEntryNode, ObjectNode, ReadOnlyObservationSession, ValueExpressionNode, evaluate_condition_expression, render_expression_text
 from .local_expressions import extract_embedded_local_expression
 from .launchers import validate_step_launchers
 from .preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, store_preflight_register_output
@@ -1403,7 +1403,7 @@ def _build_observation_basis_outputs(
         "used_observation_scopes": used_scopes,
         "potential_invalidation_scopes": invalidation_scopes,
         "weakened_observation_scopes": weakened_scopes,
-        "verdict_basis_weakened": bool(weakened_scopes),
+        "verdict_basis_weakened": False,
     }
 
 
@@ -1425,7 +1425,11 @@ def _normalize_expression_node(node: ValueExpressionNode, *, source: str) -> JSO
         return node.value
     if isinstance(node, ListNode):
         return [_normalize_expression_node(item, source=source) for item in node.items]
-    return {"expression": source[node.start : node.end]}
+    if isinstance(node, ObjectEntryNode):
+        return _normalize_expression_node(node.value, source=source)
+    if isinstance(node, ObjectNode):
+        return {entry.key: _normalize_expression_node(entry.value, source=source) for entry in node.entries}
+    return {"expression": render_expression_text(node, source=source)}
 
 
 def _observed_probe_call_from_resolved_operation(resolved: ResolvedOperation) -> dict[str, object]:
@@ -1746,7 +1750,16 @@ class _ResolvedGuardObserver:
             raise ValueError(
                 f"Resolved probe metadata missing for expression segment: {request.expression_text} ({request.fields})"
             )
-        result = self.probe(probe_spec, self.workflow)
+        runtime_probe_spec = ResolvedExpressionProbe(
+            reference=probe_spec.reference,
+            connector_namespace=probe_spec.connector_namespace,
+            operation=probe_spec.operation,
+            source=probe_spec.source,
+            expression_text=probe_spec.expression_text,
+            fields=probe_spec.fields,
+            arguments=tuple((name, _json_value_to_expression_node(value)) for name, value in request.arguments),
+        )
+        result = self.probe(runtime_probe_spec, self.workflow)
         if result.status != "ok":
             return ConditionObservationResult(status="probe_failed", value=None, diagnostics=result.diagnostics, reference=probe_spec.reference)
 
@@ -1767,6 +1780,21 @@ class _ResolvedGuardObserver:
             )
 
         return ConditionObservationResult(status="ok", value=value, diagnostics=result.diagnostics, reference=probe_spec.reference)
+
+
+def _json_value_to_expression_node(value: JSONValue) -> ValueExpressionNode:
+    if isinstance(value, list):
+        return ListNode(start=0, end=0, items=tuple(_json_value_to_expression_node(item) for item in value))
+    if isinstance(value, dict):
+        return ObjectNode(
+            start=0,
+            end=0,
+            entries=tuple(
+                ObjectEntryNode(start=0, end=0, key=key, value=_json_value_to_expression_node(item))
+                for key, item in value.items()
+            ),
+        )
+    return LiteralNode(start=0, end=0, value=value)
 
 
 def _build_guard_expression_result(expr: str, evaluation: ConditionEvaluationResult) -> OperationResult:

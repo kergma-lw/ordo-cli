@@ -251,7 +251,7 @@ def plan_workflow(
     supporting_steps_by_scope = _supporting_step_names_by_scope(preflight_step_items)
     supporting_value_paths_by_scope = _supporting_value_paths_by_scope(preflight_step_items)
     weakened_scopes = {scope for scope in base_outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)}
-    guard_items = _build_guard_items(check_result, resolution, supporting_steps_by_scope, supporting_value_paths_by_scope, weakened_scopes)
+    guard_items = _build_guard_items(check_result, resolution, supporting_steps_by_scope, supporting_value_paths_by_scope)
     step_items = _build_step_items(check_result, resolution, effective_workflow)
     run_items = _build_run_items(check_result, resolution, effective_workflow)
     block_items = _build_block_items(check_result, resolution, effective_workflow)
@@ -319,7 +319,6 @@ def _build_guard_items(
     resolution: WorkflowResolution | None,
     supporting_steps_by_scope: dict[str, list[str]],
     supporting_value_paths_by_scope: dict[str, list[str]],
-    weakened_scopes: set[str],
 ) -> list[dict[str, object]]:
     guard_items: list[dict[str, object]] = []
     coverage_items = [item for item in check_result.outputs.get("guard_coverage", []) if isinstance(item, dict)]
@@ -345,10 +344,9 @@ def _build_guard_items(
                         "failure_kind": detail.get("failure_kind") if isinstance(detail, dict) else None,
                         "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
                         "supporting_value_paths": _supporting_value_paths_for_guard(resolved_guard.reference, supporting_value_paths_by_scope),
-                        "freshness_state": _freshness_state_for_scopes(
-                            [scope for scope in detail.get("observation_scopes", []) if isinstance(scope, str)] if isinstance(detail, dict) else [],
-                            weakened_scopes,
-                        ),
+                        "freshness_state": "fresh"
+                        if bool(coverage.get("evaluated", False)) and isinstance(detail, dict) and any(isinstance(scope, str) for scope in detail.get("observation_scopes", []))
+                        else "not_applicable",
                     }
                 )
                 continue
@@ -364,7 +362,7 @@ def _build_guard_items(
                         "operation_status": None if operation_result is None else operation_result.status,
                         "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
                         "supporting_value_paths": _supporting_value_paths_for_guard(resolved_guard.reference, supporting_value_paths_by_scope),
-                        "freshness_state": _freshness_state_for_scopes([resolved_guard.reference], weakened_scopes),
+                        "freshness_state": "fresh" if bool(coverage.get("evaluated", False)) else "not_applicable",
                     }
                 )
         return guard_items
@@ -382,7 +380,7 @@ def _build_guard_items(
                 "operation_status": None,
                 "supporting_step_names": _supporting_step_names_for_guard(cast(str, reference), supporting_steps_by_scope),
                 "supporting_value_paths": _supporting_value_paths_for_guard(cast(str, reference), supporting_value_paths_by_scope),
-                "freshness_state": _freshness_state_for_scopes([cast(str, reference)], weakened_scopes),
+                "freshness_state": "fresh" if bool(coverage.get("evaluated", False)) else "not_applicable",
             }
         )
     return guard_items
