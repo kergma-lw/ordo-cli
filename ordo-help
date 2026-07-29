@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(CDPATH='' cd -P -- "$(dirname -- "$SOURCE")" && pwd)"
+  SOURCE="$(readlink -- "$SOURCE")"
+  if [[ "$SOURCE" != /* ]]; then
+    SOURCE="$DIR/$SOURCE"
+  fi
+done
+
+ROOT_DIR="$(CDPATH='' cd -P -- "$(dirname -- "$SOURCE")" && pwd)"
 VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
 HELP_MODULE_PATH="$ROOT_DIR/src/ordo/help_cli.py"
 PYTHONPATH_VALUE="$ROOT_DIR/src:$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
