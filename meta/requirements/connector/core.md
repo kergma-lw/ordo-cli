@@ -3,7 +3,7 @@
 ## Public connector contract
 
 - A workflow must reference stable public connector operations.
-- The initial fixed connector domains are `git`, `gh`, and `shell`.
+- The initial fixed connector domains are `git`, `gh`, `shell`, and `fs`.
 - Connector resolution must preserve stable public semantics independent of local implementation details.
 - Project-local profiles and overrides must not silently change the public meaning of a referenced global connector operation.
 - Connector operation kinds fixed so far are `probe` and `action`, and they exist only inside connector families.

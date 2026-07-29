@@ -32,7 +32,7 @@
 ## Public connector contract
 
 - A workflow must reference stable public connector operations.
-- The initial fixed connector domains are `git`, `gh`, and `shell`.
+- The initial fixed connector domains are `git`, `gh`, `shell`, and `fs`.
 - Connector resolution must preserve stable public semantics independent of local implementation details.
 - Project-local profiles and overrides must not silently change the public meaning of a referenced global connector operation.
 - Connector operation kinds fixed so far are `probe` and `action`, and they exist only inside connector families.
@@ -92,6 +92,64 @@
   - `git.range(base=..., head=...)`
 - This set should be preferred over adding many narrower git probes for local rituals.
 - Older specialized policy-shaped probes should not be used as the preferred long-term public surface when the same intent can be expressed through canonical git facts and guard composition.
+
+<!-- source: requirements/connector/fs-file.md -->
+
+# Filesystem file probe requirements
+
+## Role
+
+- `fs.file` is the public `fs` connector probe for observing one filesystem path as one file snapshot.
+
+## Required question
+
+- The probe must answer what file snapshot is observed at one requested path.
+
+## Required input
+
+- `path` is required.
+- `path` must be a non-empty string.
+
+## Output contract
+
+- A successful result must return structured file-snapshot fields rather than raw transport text.
+- The MVP output shape must include at least:
+  - `path`
+  - `exists`
+  - `kind`
+  - `content`
+- The MVP may additionally expose file-snapshot metadata that belongs naturally to the same observed file, for example:
+  - `size`
+  - `owner`
+  - `group`
+  - `permissions`
+  - `modified_at`
+  - `line_count`
+
+## Snapshot semantics
+
+- `content` is part of the probe contract rather than an optional side channel.
+- `kind` must describe filesystem-entry kind rather than content classification.
+- `kind` must not depend on the external `file` utility or on MIME/magic classification heuristics.
+- `line_count`, when exposed, is derived from `content`.
+
+## Failure contract
+
+- Missing paths must fail explicitly as `path_not_found`.
+- Non-file paths must fail explicitly as `not_a_file`.
+- Content-read or content-decode failures must fail explicitly as `content_unavailable`.
+- Any remaining implementation-local breakdown must normalize to `probe_failed`.
+
+## Boundary contract
+
+- The probe must stay focused on one path and one file snapshot.
+- The probe must not absorb tree search, directory listing, config parsing, content classification, or mutation semantics.
+- The probe must not become a generic filesystem API bundle.
+
+## Discovery rule
+
+- The public contract should be discoverable through `ordo-help operation fs.file`.
+- Discovery material should make clear that `fs.file` is the canonical public filesystem read probe in the MVP.
 
 <!-- source: requirements/connector/gh-project-items.md -->
 
@@ -1303,6 +1361,7 @@ Operation modules should expose a uniform publication hook so family-local assem
 - `git.*`
 - `gh.*`
 - `shell.*`
+- `fs.*`
 
 ## Canonical git probe surface direction
 
@@ -1327,7 +1386,6 @@ Specialized policy-shaped names such as `git.branch_not_main` are not part of th
 
 - `run.*`
 - `ansible.*`
-- `fs.*`
 - `obsidian.*`
 
 ## Local extension namespaces
@@ -4556,6 +4614,69 @@ Examples:
 ## Rule
 
 Shared prerequisites should not be duplicated in every operation contract if they are already owned by connector bootstrap.
+
+<!-- source: model/connector/fs-file.md -->
+
+# Filesystem file probe model
+
+## Public reference
+
+- `fs.file`
+
+## Kind
+
+- `probe`
+
+## Mental model
+
+- This probe resolves one path into one file-oriented snapshot.
+- It is the public `fs` read surface for file content and closely related file metadata.
+- It is not a search probe, parser probe, or mutation surface.
+
+## Input shape
+
+- `path: string`
+
+## Output shape
+
+```json
+{
+  "path": "/workspace/app.env",
+  "exists": true,
+  "kind": "file",
+  "content": "HOST=localhost\nPORT=5432\n",
+  "size": 25,
+  "owner": "ww",
+  "group": "ww",
+  "permissions": "0644",
+  "modified_at": "2026-07-29T18:30:00Z",
+  "line_count": 2
+}
+```
+
+## Modeled semantics
+
+- `exists` reports whether the requested path resolved to an existing file snapshot in the success case.
+- `kind` uses connector-owned filesystem-entry vocabulary rather than content-type or MIME vocabulary.
+- `content` is the canonical payload of the snapshot rather than a raw-detail afterthought.
+- `size`, `owner`, `group`, `permissions`, `modified_at`, and `line_count` are file-snapshot facts, not parsing or policy results.
+
+## Failure model
+
+- `path_not_found` means the requested path did not resolve to an existing entry.
+- `not_a_file` means the path resolved to an entry that the probe does not treat as a file snapshot target.
+- `content_unavailable` means the path resolved but the connector could not produce the required content field.
+- `probe_failed` remains the residual normalized failure for other local breakdown.
+
+## Boundary model
+
+- The probe owns one file snapshot only.
+- It does not own:
+  - directory enumeration;
+  - tree search;
+  - format parsing;
+  - MIME/magic classification;
+  - file mutation.
 
 <!-- source: model/connector/gh-project-items.md -->
 

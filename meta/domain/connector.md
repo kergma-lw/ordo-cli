@@ -236,6 +236,7 @@ Operation modules should expose a uniform publication hook so family-local assem
 - `git.*`
 - `gh.*`
 - `shell.*`
+- `fs.*`
 
 ## Canonical git probe surface direction
 
@@ -260,7 +261,6 @@ Specialized policy-shaped names such as `git.branch_not_main` are not part of th
 
 - `run.*`
 - `ansible.*`
-- `fs.*`
 - `obsidian.*`
 
 ## Local extension namespaces
