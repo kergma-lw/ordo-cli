@@ -10,73 +10,80 @@ from ordo.runtime.resolution import ResolvedOperation
 
 
 class FsConnectorTest(unittest.TestCase):
-    def test_fs_text_probe_module_publishes_through_info_hook(self) -> None:
-        fs_text_module = importlib.import_module("connectors.fs.probes.text")
-        text_info = fs_text_module.info()
+    def test_fs_file_probe_module_publishes_through_info_hook(self) -> None:
+        fs_file_module = importlib.import_module("connectors.fs.probes.file")
+        text_info = fs_file_module.info()
 
-        self.assertEqual(text_info.name, "text")
+        self.assertEqual(text_info.name, "file")
         self.assertEqual(text_info.kind, "probe")
-        self.assertIs(text_info.handler, fs_text_module.run)
+        self.assertIs(text_info.handler, fs_file_module.run)
 
-    def test_fs_connector_contract_publishes_text_probe(self) -> None:
-        operation = get_public_connector_registry().get_operation("fs.text")
+    def test_fs_connector_contract_publishes_file_probe(self) -> None:
+        operation = get_public_connector_registry().get_operation("fs.file")
 
         self.assertIsNotNone(operation)
+        self.assertIsNone(get_public_connector_registry().get_operation("fs.text"))
         self.assertEqual(operation.kind, "probe")
         self.assertEqual(operation.inputs["path"], "string")
-        self.assertEqual(operation.outputs["text"], "string")
-        self.assertEqual(operation.failure_modes, ("path_not_found", "not_a_file", "not_text", "probe_failed"))
+        self.assertEqual(operation.outputs["content"], "string")
+        self.assertEqual(operation.outputs["kind"], "string")
+        self.assertEqual(operation.failure_modes, ("path_not_found", "not_a_file", "content_unavailable", "probe_failed"))
 
-    def test_fs_text_probe_reads_plain_text_file(self) -> None:
+    def test_fs_file_probe_reads_file_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "config.txt"
             path.write_text("alpha: one\nbeta: two\n", encoding="utf-8")
-            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.text", with_={"path": str(path)})),), steps=())
-            operation = get_public_connector_registry().get_operation("fs.text")
-            resolved = ResolvedOperation("fs.text", "fs", operation, "public")  # type: ignore[arg-type]
+            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.file", with_={"path": str(path)})),), steps=())
+            operation = get_public_connector_registry().get_operation("fs.file")
+            resolved = ResolvedOperation("fs.file", "fs", operation, "public")  # type: ignore[arg-type]
 
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["path"], str(path))
-        self.assertEqual(result.outputs["text"], "alpha: one\nbeta: two\n")
+        self.assertTrue(result.outputs["exists"])
+        self.assertEqual(result.outputs["kind"], "file")
+        self.assertEqual(result.outputs["content"], "alpha: one\nbeta: two\n")
+        self.assertEqual(result.outputs["size"], len("alpha: one\nbeta: two\n".encode("utf-8")))
+        self.assertRegex(result.outputs["permissions"], r"^[0-7]{4}$")
+        self.assertTrue(result.outputs["modified_at"].endswith("Z"))
         self.assertEqual(result.outputs["line_count"], 2)
 
-    def test_fs_text_probe_reports_missing_path(self) -> None:
+    def test_fs_file_probe_reports_missing_path(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "missing.txt"
-            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.text", with_={"path": str(path)})),), steps=())
-            operation = get_public_connector_registry().get_operation("fs.text")
-            resolved = ResolvedOperation("fs.text", "fs", operation, "public")  # type: ignore[arg-type]
+            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.file", with_={"path": str(path)})),), steps=())
+            operation = get_public_connector_registry().get_operation("fs.file")
+            resolved = ResolvedOperation("fs.file", "fs", operation, "public")  # type: ignore[arg-type]
 
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "path_not_found")
-        self.assertEqual(result.diagnostics[0].code, "probe.fs_text.path_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.fs_file.path_not_found")
 
-    def test_fs_text_probe_rejects_directory_paths(self) -> None:
+    def test_fs_file_probe_rejects_directory_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.text", with_={"path": temp_dir})),), steps=())
-            operation = get_public_connector_registry().get_operation("fs.text")
-            resolved = ResolvedOperation("fs.text", "fs", operation, "public")  # type: ignore[arg-type]
+            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.file", with_={"path": temp_dir})),), steps=())
+            operation = get_public_connector_registry().get_operation("fs.file")
+            resolved = ResolvedOperation("fs.file", "fs", operation, "public")  # type: ignore[arg-type]
 
             result = evaluate_probe(resolved, workflow)
 
         self.assertEqual(result.status, "not_a_file")
-        self.assertEqual(result.diagnostics[0].code, "probe.fs_text.not_a_file")
+        self.assertEqual(result.diagnostics[0].code, "probe.fs_file.not_a_file")
 
-    def test_fs_text_probe_rejects_non_utf8_files(self) -> None:
+    def test_fs_file_probe_reports_content_unavailable_for_non_utf8_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "binary.bin"
             path.write_bytes(b"\xff\xfe\x00\x00")
-            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.text", with_={"path": str(path)})),), steps=())
-            operation = get_public_connector_registry().get_operation("fs.text")
-            resolved = ResolvedOperation("fs.text", "fs", operation, "public")  # type: ignore[arg-type]
+            workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("fs.file", with_={"path": str(path)})),), steps=())
+            operation = get_public_connector_registry().get_operation("fs.file")
+            resolved = ResolvedOperation("fs.file", "fs", operation, "public")  # type: ignore[arg-type]
 
             result = evaluate_probe(resolved, workflow)
 
-        self.assertEqual(result.status, "not_text")
-        self.assertEqual(result.diagnostics[0].code, "probe.fs_text.not_text")
+        self.assertEqual(result.status, "content_unavailable")
+        self.assertEqual(result.diagnostics[0].code, "probe.fs_file.content_unavailable")
 
 
 if __name__ == "__main__":
