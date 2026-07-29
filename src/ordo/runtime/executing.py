@@ -451,6 +451,8 @@ def execute_workflow(
                         current_working_directory = None if profile_working_directories is None else profile_working_directories.get(propagated_profile)
                         active_profile = propagated_profile
                         active_overrides = current_profile.overrides
+                        applied = apply_profile_defaults_to_subsequent_steps(effective_workflow, current_profile)
+                        effective_workflow = effective_workflow if applied.workflow is None else applied.workflow
                     executed_steps.extend([name for name in run_result.outputs.get("executed_steps", []) if isinstance(name, str)])
                     skipped_steps.extend([name for name in run_result.outputs.get("skipped_steps", []) if isinstance(name, str)])
                     step_condition_details.extend([detail for detail in run_result.outputs.get("step_condition_details", []) if isinstance(detail, dict)])

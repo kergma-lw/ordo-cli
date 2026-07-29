@@ -1465,7 +1465,7 @@ class ExecuteModeTest(unittest.TestCase):
             seen = []
 
             def executor(resolved_step, _workflow):
-                seen.append((resolved_step.reference, Path.cwd(), resolved_step.declared_with.get("command")))
+                seen.append((resolved_step.reference, Path.cwd(), resolved_step.declared_with.get("command"), dict(_workflow.inputs)))
                 return OperationResult(status="ok", summary="Executed")
 
             result = execute_workflow(
@@ -1480,6 +1480,46 @@ class ExecuteModeTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(result.outputs["active_profile"], "frontend")
             self.assertEqual(seen[0][1], frontend_dir)
+            self.assertEqual(seen[0][3]["repo_dir"], "../frontend")
+
+    def test_execute_pre_run_profile_switch_reapplies_profile_inputs_to_parent_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "meta"}\n', encoding="utf-8")
+            (root / ".ordo" / "ordo.yaml").write_text(
+                "version: 1\npre_run:\n  - file: workflows/switch-active-profile.yml\n    state_bindings:\n      shared_state: shared_state\ndefaults:\n  profile: backend\nworkflows:\n  inspect-issue:\n    file: inspect-issue.yml\n    state_bindings:\n      shared_state: shared_state\nprofiles:\n  backend:\n    file: backend.yml\n  meta:\n    file: meta.yml\nstates:\n  shared_state:\n    path: repo.json\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${active_profile}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == \"kergma-lw/checklist-meta\"\n  - steps:\n      - name: main\n        value: ok\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                "name: backend\ninputs:\n  repository: kergma-lw/checklist-backend\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "meta.yml").write_text(
+                "name: meta\ninputs:\n  repository: kergma-lw/checklist-meta\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", cwd=root)
+            result = execute_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["active_profile"], "meta")
+            self.assertIn("main", result.outputs["executed_steps"])
 
     def test_runtime_profile_use_applies_profile_inputs_to_subsequent_steps(self) -> None:
         workflow = Workflow(
