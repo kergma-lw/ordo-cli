@@ -12,6 +12,7 @@ from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagno
 def info():
     return probe(
         name="file",
+        summary="Observe one filesystem path as one file snapshot with canonical content and file metadata.",
         inputs={"path": "string"},
         outputs={
             "path": "string",
@@ -26,6 +27,12 @@ def info():
             "line_count": "integer",
         },
         failure_modes=("path_not_found", "not_a_file", "content_unavailable", "probe_failed"),
+        examples=(
+            {
+                "reference": "fs.file",
+                "inputs": {"path": "/workspace/app.env"},
+            },
+        ),
         handler=run,
     )
 

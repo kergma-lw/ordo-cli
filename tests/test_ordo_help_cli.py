@@ -193,10 +193,12 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_model_publishes_representation_adapter_surface(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         adapter_surface = model["representation_adapters"]
+        fs_connector = next(item for item in model["connectors"] if item["namespace"] == "fs")
         key_value = next(item for item in adapter_surface["families"] if item["name"] == "key_value")
         markdown = next(item for item in adapter_surface["families"] if item["name"] == "markdown")
         text = next(item for item in adapter_surface["families"] if item["name"] == "text")
 
+        self.assertTrue(any(item["name"] == "file" and item["kind"] == "probe" for item in fs_connector["operations"]))
         self.assertEqual(adapter_surface["shared_seam"]["outer_binding_form"], " with{...}")
         self.assertIn("literal separator parameter", key_value["summary"])
         self.assertEqual(key_value["selectors"], [])
@@ -334,6 +336,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("lines", text_node["metadata"]["selectors"])
         self.assertIn("remove", text_node["metadata"]["actions"])
 
+    def test_describe_resolves_connector_family_and_operation_model_nodes(self) -> None:
+        connector_node = json.loads(self.run_help("describe", "connector.fs", "--json").stdout)
+        file_node = json.loads(self.run_help("describe", "connector.fs.file", "--json").stdout)
+
+        self.assertEqual(connector_node["document_kind"], "model_node")
+        self.assertEqual(connector_node["node_kind"], "connector_family")
+        self.assertEqual(connector_node["metadata"]["namespace"], "fs")
+        self.assertTrue(any(item["name"] == "file" for item in connector_node["metadata"]["operations"]))
+        self.assertEqual(file_node["document_kind"], "model_node")
+        self.assertEqual(file_node["node_kind"], "connector_operation")
+        self.assertEqual(file_node["metadata"]["name"], "file")
+        self.assertEqual(file_node["metadata"]["kind"], "probe")
+        self.assertIn("content", file_node["metadata"]["outputs"])
+
     def test_describe_resolves_local_expression_filter_model_nodes(self) -> None:
         surface_node = json.loads(self.run_help("describe", "workflow.local_expression.filter_surface", "--json").stdout)
         filter_node = json.loads(self.run_help("describe", "workflow.local_expression.filter.is_integer", "--json").stdout)
@@ -348,10 +364,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = json.loads(self.run_help("search", "markdown", "--json").stdout)
         key_value_result = json.loads(self.run_help("search", "separator", "--json").stdout)
         text_result = json.loads(self.run_help("search", "text", "--json").stdout)
+        fs_result = json.loads(self.run_help("search", "filesystem", "--json").stdout)
+        file_result = json.loads(self.run_help("search", "content_unavailable", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.markdown" for item in result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.key_value" for item in key_value_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.text" for item in text_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "connector.fs" for item in fs_result["facts"]))
+        self.assertTrue(any(item["reference"] == "fs.file" for item in file_result["operations"]))
 
     def test_search_indexes_local_expression_filter_topics(self) -> None:
         result = json.loads(self.run_help("search", "is_integer", "--json").stdout)

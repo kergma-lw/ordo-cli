@@ -3,7 +3,8 @@
     "runtime",
     "git",
     "gh",
-    "shell"
+    "shell",
+    "fs"
   ],
   "document_kind": "overview",
   "document_kinds": [

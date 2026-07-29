@@ -533,6 +533,7 @@ def build_model_response() -> JSONObject:
         "profile": describe_profile_contract(),
         "playbook": describe_playbook_contract(),
         "state": describe_state_contract(),
+        "connectors": describe_operations()["connectors"],
         "local_expressions": describe_local_expression_surface(),
         "representation_adapters": describe_representation_adapter_surface(),
     }
@@ -856,6 +857,23 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         add_node(f"playbook.profiles.{field['name']}", contract="playbook", node_category="profile_entry_field", summary="Published playbook profile-entry field metadata", metadata=field)
     for field in model["playbook"]["state_entry_fields"]:
         add_node(f"playbook.states.{field['name']}", contract="playbook", node_category="state_entry_field", summary="Published playbook state-entry field metadata", metadata=field)
+
+    for connector in model["connectors"]:
+        add_node(
+            f"connector.{connector['namespace']}",
+            contract="connectors",
+            node_category="connector_family",
+            summary=f"Published connector family metadata for the {connector['namespace']} namespace",
+            metadata=connector,
+        )
+        for operation in connector["operations"]:
+            add_node(
+                f"connector.{connector['namespace']}.{operation['name']}",
+                contract="connectors",
+                node_category="connector_operation",
+                summary=f"Published connector operation metadata for {connector['namespace']}.{operation['name']}",
+                metadata=operation,
+            )
 
     for field_name, value in model["state"]["workflow_surface"].items():
         add_node(
@@ -1207,6 +1225,9 @@ def render_model_text(payload: JSONObject) -> str:
         f"- profile: {payload['profile']['document_kind']}",
         f"- playbook: {payload['playbook']['document_kind']}",
         f"- state: {payload['state']['document_kind']}",
+        "",
+        "Connectors:",
+        f"- published namespaces: {', '.join(item['namespace'] for item in payload['connectors'])}",
         "",
         "Local-expression pipeline filters:",
         f"- published filters: {', '.join(item['name'] for item in payload['local_expressions']['pipeline_filters'])}",
