@@ -92,7 +92,7 @@ blocks:
 
       - name: Compute branch name
         value:
-          format: "%s/%s-%s"
+          format: "{}/{}-{}"
           args:
             - ${step.branch_project.outputs.type | lower}
             - ${inputs.issue_number}
@@ -132,7 +132,7 @@ blocks:
         uses: git.ref
         with:
           ref:
-            format: "refs/heads/%s"
+            format: "refs/heads/{}"
             args:
               - ${step.branch.outputs.value}
         register: target_branch

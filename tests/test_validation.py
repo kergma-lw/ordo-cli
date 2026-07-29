@@ -49,6 +49,28 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_guard_expression_allows_list_of_object_probe_arguments(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  project_id: PVT_demo
+                  repository: owner/repo
+                  issue_number: 1
+                let:
+                  refs: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).url
+                blocks:
+                  - guards:
+                      - 'gh.project.items.details(project_id=inputs.project_id, content_kind="Issue", content_refs=[refs], filters=[{field:"State", value:"OPEN"}]).count == 0'
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_valid_publish_step_workflow_passes(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

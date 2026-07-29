@@ -5,13 +5,35 @@ from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_BUILTINS,
 
 class LocalExpressionEngineRegistryTest(unittest.TestCase):
     def test_supported_filters_are_published_in_canonical_registry(self) -> None:
-        self.assertEqual(tuple(VALUE_EXPRESSION_FILTERS), ("lower", "trim", "slug", "eq", "ne", "not"))
+        self.assertEqual(
+            tuple(VALUE_EXPRESSION_FILTERS),
+            (
+                "lower",
+                "trim",
+                "slug",
+                "eq",
+                "ne",
+                "not",
+                "is_string",
+                "is_number",
+                "is_integer",
+                "is_boolean",
+                "in",
+                "field",
+                "flatten",
+                "first",
+                "last",
+                "length",
+                "unique",
+            ),
+        )
         self.assertEqual(VALUE_EXPRESSION_FILTERS["lower"].to_contract()["input_type"], "string")
         self.assertEqual(VALUE_EXPRESSION_FILTERS["slug"].to_contract()["output_type"], "string")
         self.assertEqual(VALUE_EXPRESSION_FILTERS["not"].to_contract()["output_type"], "boolean")
+        self.assertEqual(VALUE_EXPRESSION_FILTERS["length"].to_contract()["output_type"], "number")
 
     def test_supported_builtins_are_published_in_canonical_registry(self) -> None:
-        self.assertEqual(tuple(VALUE_EXPRESSION_BUILTINS), ("format",))
+        self.assertEqual(tuple(VALUE_EXPRESSION_BUILTINS), ("format", "is_missing", "is_present"))
         self.assertEqual(VALUE_EXPRESSION_BUILTINS["format"].to_contract(), {"name": "format"})
 
 

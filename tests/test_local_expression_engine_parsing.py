@@ -11,6 +11,8 @@ from ordo.runtime.local_expression_engine.core import (
     ListNode,
     LocalExpressionParseError,
     LiteralNode,
+    ObjectEntryNode,
+    ObjectNode,
     PipelineNode,
     ReferenceNode,
     StateReferenceNode,
@@ -143,6 +145,31 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
             ),
         )
 
+    def test_parse_object_literal(self) -> None:
+        parsed = parse_local_expression_tree('{field:"State", value:"OPEN"}')
+
+        self.assertEqual(
+            parsed.root,
+            ObjectNode(
+                start=0,
+                end=29,
+                entries=(
+                    ObjectEntryNode(
+                        start=1,
+                        end=14,
+                        key="field",
+                        value=LiteralNode(start=7, end=14, value="State"),
+                    ),
+                    ObjectEntryNode(
+                        start=16,
+                        end=28,
+                        key="value",
+                        value=LiteralNode(start=22, end=28, value="OPEN"),
+                    ),
+                ),
+            ),
+        )
+
     def test_parse_comparison_expression_when_boolean_mode_enabled(self) -> None:
         parsed = parse_local_expression_tree('inputs.status == "ok"', allow_boolean_composition=True)
 
@@ -177,6 +204,19 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
                 fields=("state",),
             ),
         )
+
+    def test_parse_probe_call_with_list_of_objects_argument(self) -> None:
+        parsed = parse_local_expression_tree(
+            'gh.project.items.details(project_id=inputs.project_id, filters=[{field:"State", value:"OPEN"}]).count',
+            allow_boolean_composition=True,
+        )
+
+        self.assertIsInstance(parsed.root, CallNode)
+        self.assertEqual(parsed.root.target.parts, ("gh", "project", "items", "details"))
+        self.assertEqual(parsed.root.arguments[1].name, "filters")
+        self.assertIsInstance(parsed.root.arguments[1].value, ListNode)
+        self.assertIsInstance(parsed.root.arguments[1].value.items[0], ObjectNode)
+        self.assertEqual(parsed.root.fields, ("count",))
 
     def test_parse_negative_and_float_numbers(self) -> None:
         parsed = parse_local_expression_tree("-1.5")

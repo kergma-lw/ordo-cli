@@ -89,8 +89,8 @@ blocks:
                   )
               )
 
-              issue = ((((payload.get("data") or {}).get("repository") or {}).get("issue")) or {})
-              nodes = (((issue.get("projectItems") or {}).get("nodes")) or [])
+              issue = ((((payload.get("data") or dict()).get("repository") or dict()).get("issue")) or dict())
+              nodes = (((issue.get("projectItems") or dict()).get("nodes")) or [])
               item = next(
                   (
                       node
@@ -106,7 +106,7 @@ blocks:
                   sys.exit(1)
 
               def single_select(field_name: str):
-                  for field_value in ((item.get("fieldValues") or {}).get("nodes") or []):
+                   for field_value in ((item.get("fieldValues") or dict()).get("nodes") or []):
                       if not isinstance(field_value, dict):
                           continue
                       field = field_value.get("field")

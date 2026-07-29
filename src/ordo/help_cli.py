@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 
 from ordo.connectors import get_public_connector_registry
@@ -26,6 +27,8 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "describe", "summary": "Resolve a supported public topic"},
     {"name": "search", "summary": "Search topics, contract facts, and operation references"},
 )
+
+_SEARCH_TOKEN_RE = re.compile(r"[a-z0-9_.#:/-]+")
 
 DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "model", "workflow-authoring", "capabilities", "command-line", "operations", "examples")
 
@@ -895,27 +898,24 @@ def build_search_response(query: str) -> JSONObject:
         namespace = connector["namespace"]
         for operation in connector["operations"]:
             reference = f"{namespace}.{operation['name']}"
-            searchable = " ".join(
-                [
-                    reference,
-                    operation["name"],
-                    operation["kind"],
-                    operation.get("summary") or "",
-                ]
-            ).lower()
-            if lowered_query in searchable:
+            search_record = _operation_search_record(reference=reference, operation=operation)
+            if _query_matches(lowered_query, search_record["all"]):
                 operation_results.append(
                     {
+                        "_score": _operation_search_score(lowered_query, search_record),
                         "reference": reference,
                         "summary": operation.get("summary"),
                         "command": f"ordo-help operation {reference} --json",
                     }
                 )
+    operation_results.sort(key=lambda item: (-int(item["_score"]), str(item["reference"])))
+    for item in operation_results:
+        item.pop("_score", None)
 
     topic_results = []
     for topic in PUBLIC_TOPICS:
         searchable = f"{topic['name']} {topic['summary']}".lower()
-        if lowered_query in searchable:
+        if _query_matches(lowered_query, searchable):
             command = f"ordo-help {topic['name']} --json"
             if topic["name"] == "operation":
                 command = "ordo-help operation <reference> --json"
@@ -934,7 +934,7 @@ def build_search_response(query: str) -> JSONObject:
     fact_results = []
     for capability in describe_capabilities()["capabilities"]:
         searchable = " ".join([capability["name"], capability["scope"], capability["status"]]).lower()
-        if lowered_query in searchable:
+        if _query_matches(lowered_query, searchable):
             fact_results.append(
                 {
                     "kind": "capability",
@@ -947,7 +947,7 @@ def build_search_response(query: str) -> JSONObject:
 
     for rule in describe_capabilities()["negative_rules"]:
         searchable = " ".join([rule["name"], rule["surface"], rule["rule"], rule["reason"]]).lower()
-        if lowered_query in searchable:
+        if _query_matches(lowered_query, searchable):
             fact_results.append(
                 {
                     "kind": "negative_rule",
@@ -960,7 +960,7 @@ def build_search_response(query: str) -> JSONObject:
 
     for node_name, node in _build_model_node_lookup().items():
         searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
-        if lowered_query in searchable:
+        if _query_matches(lowered_query, searchable):
             fact_results.append(
                 {
                     "kind": "model_field",
@@ -973,7 +973,7 @@ def build_search_response(query: str) -> JSONObject:
 
     for node_name, node in _build_command_line_node_lookup().items():
         searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
-        if lowered_query in searchable:
+        if _query_matches(lowered_query, searchable):
             fact_results.append(
                 {
                     "kind": "command_line_field",
@@ -986,7 +986,7 @@ def build_search_response(query: str) -> JSONObject:
 
     for example in describe_examples_catalog()["examples"]:
         searchable = " ".join([example["name"], example["path"], *example["shows"], *example["related_topics"]]).lower()
-        if lowered_query in searchable:
+        if _query_matches(lowered_query, searchable):
             fact_results.append(
                 {
                     "kind": "example",
@@ -1010,7 +1010,7 @@ def build_search_response(query: str) -> JSONObject:
                 *rule.get("avoid", []),
             ]
         ).lower()
-        if lowered_query in searchable:
+        if _query_matches(lowered_query, searchable):
             fact_results.append(
                 {
                     "kind": "workflow_authoring_rule",
@@ -1028,6 +1028,82 @@ def build_search_response(query: str) -> JSONObject:
         "facts": fact_results,
         "operations": operation_results,
     }
+
+
+def _operation_search_record(*, reference: str, operation: JSONObject) -> dict[str, str]:
+    reference_text = reference.lower()
+    name_text = str(operation["name"]).lower()
+    summary_text = str(operation.get("summary") or "").lower()
+    inputs_text = json.dumps(operation.get("inputs") or {}, sort_keys=True).lower()
+    outputs_text = json.dumps(operation.get("outputs") or {}, sort_keys=True).lower()
+    failure_text = json.dumps(operation.get("failure_modes") or [], sort_keys=True).lower()
+    examples_text = json.dumps(operation.get("examples") or [], sort_keys=True).lower()
+    kind_text = str(operation["kind"]).lower()
+    return {
+        "reference": reference_text,
+        "name": name_text,
+        "summary": summary_text,
+        "inputs": inputs_text,
+        "outputs": outputs_text,
+        "failure_modes": failure_text,
+        "examples": examples_text,
+        "kind": kind_text,
+        "all": " ".join(
+            [reference_text, name_text, kind_text, summary_text, inputs_text, outputs_text, failure_text, examples_text]
+        ),
+    }
+
+
+def _operation_search_score(query: str, record: dict[str, str]) -> int:
+    score = 0
+    tokens = _search_tokens(query)
+    if query in record["reference"]:
+        score += 200
+    if query in record["name"]:
+        score += 160
+    if query in record["summary"]:
+        score += 120
+    if query in record["outputs"]:
+        score += 100
+    if query in record["inputs"]:
+        score += 90
+    if query in record["examples"]:
+        score += 70
+    if query in record["failure_modes"]:
+        score += 50
+    if query in record["all"]:
+        score += 20
+    for token in tokens:
+        if token in record["reference"]:
+            score += 20
+        if token in record["name"]:
+            score += 18
+        if token in record["summary"]:
+            score += 14
+        if token in record["outputs"]:
+            score += 12
+        if token in record["inputs"]:
+            score += 10
+        if token in record["examples"]:
+            score += 8
+        if token in record["failure_modes"]:
+            score += 6
+    return score
+
+
+def _query_matches(query: str, searchable: str) -> bool:
+    if not query:
+        return False
+    if query in searchable:
+        return True
+    tokens = _search_tokens(query)
+    if not tokens:
+        return False
+    return all(token in searchable for token in tokens)
+
+
+def _search_tokens(text: str) -> list[str]:
+    return _SEARCH_TOKEN_RE.findall(text.lower())
 
 
 def render_root_text() -> str:

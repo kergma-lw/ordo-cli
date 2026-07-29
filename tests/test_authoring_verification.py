@@ -15,9 +15,11 @@ class AuthoringVerificationTest(unittest.TestCase):
         contract = registry.to_contract()
 
         namespaces = [connector["namespace"] for connector in contract["connectors"]]
-        gh_ops = [op["name"] for op in contract["connectors"][1]["operations"]]
+        namespaces = [connector["namespace"] for connector in contract["connectors"]]
+        gh_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "gh")
+        gh_ops = [op["name"] for op in gh_connector["operations"]]
 
-        self.assertEqual(namespaces, ["git", "gh", "shell"])
+        self.assertEqual(namespaces, ["runtime", "git", "gh", "shell"])
         self.assertIn("issue", gh_ops)
 
     def test_agent_can_compose_non_trivial_workflow_and_profile(self) -> None:

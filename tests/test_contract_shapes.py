@@ -33,6 +33,7 @@ class ContractShapeTest(unittest.TestCase):
                 "version": 0,
                 "workflow": "open-task",
                 "inputs": {"repository": {}, "issue_number": {}},
+                "let": {},
                 "state_needs": {"task_memory": {}},
                 "blocks": [
                     {"guards": [{"uses": "git.worktree", "with": {}}]},
@@ -59,6 +60,7 @@ class ContractShapeTest(unittest.TestCase):
                 "version": 0,
                 "workflow": "open-task",
                 "inputs": {},
+                "let": {},
                 "state_needs": {},
                 "blocks": [{"guards": ['git.branch != "main"']}],
             },

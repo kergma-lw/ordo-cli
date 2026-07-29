@@ -110,12 +110,15 @@
 - `project_id` is required.
 - `content_kind` is optional and narrows the result by structural content kind.
 - `filters` is optional and narrows the result by project field values.
+- `content_refs` is optional and narrows the result by explicit GitHub content references using `OWNER/REPO#NUMBER` format.
 
 ## Filter contract
 
 - `filters` is an ordered list of objects shaped as `{field, value}`.
 - `field` names one project field by public project-local name.
 - `value` is a scalar filter value.
+- `content_refs` is an ordered list of `OWNER/REPO#NUMBER` strings.
+- `content_refs` composes with `content_kind` and `filters` through AND semantics.
 - All filter entries compose with AND semantics.
 - V1 filtering is equality-only; it must not introduce OR groups, negation trees, range syntax, or a free-form query language.
 
@@ -138,12 +141,16 @@
 - Ambiguous field names must fail explicitly as `ambiguous_field`.
 - Unsupported field kinds must fail explicitly as `unsupported_field_type`.
 - Invalid filter values must fail explicitly as `invalid_filter_value`.
+- Invalid content references must fail explicitly as `invalid_content_ref`.
 - Project lookup failure must remain distinct as `project_not_found`.
 
 ## Retrieval rule
 
 - The probe should use one connector-owned bulk project retrieval path.
+- The probe should translate supported structural and field-equality constraints into the backend project item query before paginating results.
+- When `content_refs` is present, the probe should use one bulk content-addressed GraphQL retrieval path without per-ref follow-up requests.
 - Ordinary pagination is allowed.
+- The implementation may fetch project field metadata once to validate filter names and kinds.
 - The implementation must not degrade into per-item or per-field follow-up fetches for the returned item set.
 
 ## Discovery rule
@@ -4408,7 +4415,8 @@ Shared prerequisites should not be duplicated in every operation contract if the
 
 ## Mental model
 
-- This probe enumerates one GitHub Project item collection and then applies narrow contract-owned filtering.
+- This probe resolves contract-owned filters and projects them into one GitHub Project item query whenever the backend can express them directly.
+- The connector validates project field names and filter literals before issuing the item scan.
 - It is not a policy-named derived probe such as `active_stories` or `ready_tasks`.
 
 ## Input shape
@@ -4416,6 +4424,7 @@ Shared prerequisites should not be duplicated in every operation contract if the
 - `project_id: string`
 - `content_kind: string` optional
 - `filters: [{field: string, value: scalar}]` optional
+- `content_refs: [string]` optional, where each entry uses `OWNER/REPO#NUMBER`
 
 ## Output shape
 
@@ -4439,9 +4448,11 @@ Shared prerequisites should not be duplicated in every operation contract if the
 
 - `content_kind` is a structural filter.
 - `filters` match project fields by field name.
+- `content_refs` narrows the result to project items whose GitHub content matches one explicit set of repository-number references.
 - Each filter compares one field value by equality.
 - Multiple filters compose with AND semantics.
-- Missing field values on one item mean that item does not match.
+- The connector should push supported constraints into the GitHub Project item query instead of hydrating all field values for all items.
+- When `content_refs` is present, the connector should switch to one bulk content-addressed retrieval path rather than a project-wide item scan.
 
 ## Discovery examples
 

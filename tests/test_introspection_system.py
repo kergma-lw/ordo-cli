@@ -7,8 +7,9 @@ class IntrospectionSystemTest(unittest.TestCase):
     def test_describe_operations_returns_public_connector_contract(self) -> None:
         operations = describe_operations()
 
-        self.assertEqual([connector["namespace"] for connector in operations["connectors"]], ["git", "gh", "shell"])
-        self.assertIn("issue", {operation["name"] for operation in operations["connectors"][1]["operations"]})
+        self.assertEqual([connector["namespace"] for connector in operations["connectors"]], ["runtime", "git", "gh", "shell"])
+        gh_connector = next(connector for connector in operations["connectors"] if connector["namespace"] == "gh")
+        self.assertIn("issue", {operation["name"] for operation in gh_connector["operations"]})
 
     def test_describe_system_exposes_root_discovery_and_operations(self) -> None:
         payload = describe_system()

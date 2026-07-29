@@ -80,6 +80,21 @@ class ListNode(ValueExpressionNode):
 
 
 @dataclass(frozen=True, slots=True)
+class ObjectEntryNode(ValueExpressionNode):
+    """One object-literal entry used inside a local expression."""
+
+    key: str
+    value: ValueExpressionNode
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectNode(ValueExpressionNode):
+    """Object literal used inside a local expression."""
+
+    entries: tuple[ObjectEntryNode, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class CallArgumentNode(ValueExpressionNode):
     """Named argument passed to a read-only probe call."""
 
@@ -453,6 +468,13 @@ def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[Lo
         if isinstance(current, ListNode):
             for item in current.items:
                 visit(item)
+            return
+        if isinstance(current, ObjectEntryNode):
+            visit(current.value)
+            return
+        if isinstance(current, ObjectNode):
+            for entry in current.entries:
+                visit(entry)
             return
         if isinstance(current, CallArgumentNode):
             visit(current.value)
@@ -842,6 +864,8 @@ class _Parser:
             return _with_grouped_end(node, end.end)
         if token.kind == "LBRACKET":
             return self._parse_list()
+        if token.kind == "LBRACE":
+            return self._parse_object()
         if token.kind == "STRING":
             self._advance()
             return LiteralNode(start=token.start, end=token.end, value=_decode_string(token.text, token.start))
@@ -950,6 +974,28 @@ class _Parser:
                     break
         end = self._consume("RBRACKET", "Expected ']' to close list literal").end
         return ListNode(start=start, end=end, items=tuple(items))
+
+    def _parse_object(self) -> ObjectNode:
+        start = self._consume("LBRACE", "Expected '{' to start object literal").start
+        entries: list[ObjectEntryNode] = []
+        if self._peek().kind != "RBRACE":
+            while True:
+                key_token = self._peek()
+                if key_token.kind == "IDENT":
+                    self._advance()
+                    key = key_token.text
+                elif key_token.kind == "STRING":
+                    self._advance()
+                    key = _decode_string(key_token.text, key_token.start)
+                else:
+                    raise ValueExpressionParseError("Expected object key", key_token.start, key_token.end)
+                self._consume("COLON", "Expected ':' after object key")
+                value = self._parse_or() if self._allow_boolean_composition else self._parse_pipeline()
+                entries.append(ObjectEntryNode(start=key_token.start, end=value.end, key=key, value=value))
+                if self._match("COMMA") is None:
+                    break
+        end = self._consume("RBRACE", "Expected '}' to close object literal").end
+        return ObjectNode(start=start, end=end, entries=tuple(entries))
 
     def _parse_state_reference(self) -> StateReferenceNode:
         start = self._consume("IDENT", "Expected 'state'")
@@ -1063,6 +1109,13 @@ class _SemanticValidator:
         if isinstance(node, ListNode):
             for item in node.items:
                 self._visit(item)
+            return
+        if isinstance(node, ObjectEntryNode):
+            self._visit(node.value)
+            return
+        if isinstance(node, ObjectNode):
+            for entry in node.entries:
+                self._visit(entry)
             return
         if isinstance(node, CallArgumentNode):
             self._visit(node.value)
@@ -1238,6 +1291,17 @@ class _ConditionEvaluator:
                     return status, None
                 values.append(value)
             self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="list", status="ok", value=values))
+            return "ok", values
+        if isinstance(node, ObjectEntryNode):
+            return self._evaluate(node.value)
+        if isinstance(node, ObjectNode):
+            values: dict[str, JSONValue] = {}
+            for entry in node.entries:
+                status, value = self._evaluate(entry.value)
+                if status != "ok":
+                    return status, None
+                values[entry.key] = value
+            self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="object", status="ok", value=values))
             return "ok", values
         if isinstance(node, ReferenceNode):
             from ordo.runtime.local_expression_contexts import LocalExpressionContext
@@ -1570,6 +1634,10 @@ def _with_grouped_end(node: ValueExpressionNode, end: int) -> ValueExpressionNod
         return StepReferenceNode(start=node.start, end=end, register=node.register, fields=node.fields)
     if isinstance(node, ListNode):
         return ListNode(start=node.start, end=end, items=node.items)
+    if isinstance(node, ObjectEntryNode):
+        return ObjectEntryNode(start=node.start, end=end, key=node.key, value=node.value)
+    if isinstance(node, ObjectNode):
+        return ObjectNode(start=node.start, end=end, entries=node.entries)
     if isinstance(node, CallArgumentNode):
         return CallArgumentNode(start=node.start, end=end, name=node.name, value=node.value)
     if isinstance(node, CallNode):
@@ -1606,6 +1674,10 @@ def _shift_node_offsets(node: ValueExpressionNode, *, delta: int) -> ValueExpres
         return StepReferenceNode(start=node.start + delta, end=node.end + delta, register=node.register, fields=node.fields)
     if isinstance(node, ListNode):
         return ListNode(start=node.start + delta, end=node.end + delta, items=tuple(_shift_node_offsets(item, delta=delta) for item in node.items))
+    if isinstance(node, ObjectEntryNode):
+        return ObjectEntryNode(start=node.start + delta, end=node.end + delta, key=node.key, value=_shift_node_offsets(node.value, delta=delta))
+    if isinstance(node, ObjectNode):
+        return ObjectNode(start=node.start + delta, end=node.end + delta, entries=tuple(_shift_node_offsets(entry, delta=delta) for entry in node.entries))
     if isinstance(node, CallArgumentNode):
         return CallArgumentNode(start=node.start + delta, end=node.end + delta, name=node.name, value=_shift_node_offsets(node.value, delta=delta))
     if isinstance(node, CallNode):
@@ -1717,6 +1789,27 @@ def _evaluate_node(
             )
             for item in node.items
         ]
+    if isinstance(node, ObjectEntryNode):
+        return _evaluate_node(
+            node.value,
+            parsed=parsed,
+            workflow=workflow,
+            context=context,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
+    if isinstance(node, ObjectNode):
+        return {
+            entry.key: _evaluate_node(
+                entry.value,
+                parsed=parsed,
+                workflow=workflow,
+                context=context,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
+            for entry in node.entries
+        }
     if isinstance(node, CallNode):
         return _evaluate_read_only_call(
             node,
@@ -2117,7 +2210,7 @@ def _evaluate_read_only_call(
     )
     observation = observation_session.observe(
         ConditionObservationRequest(
-            expression_text=parsed.source[node.start : node.end],
+            expression_text=render_expression_text(node, source=parsed.source),
             target=node.target.parts,
             fields=node.fields,
             arguments=arguments,
@@ -2729,6 +2822,11 @@ def render_expression_text(node: ValueExpressionNode, *, source: str) -> str:
         return f"step.{node.register}{suffix}"
     if isinstance(node, ListNode):
         return "[" + ", ".join(render_expression_text(item, source=source) for item in node.items) + "]"
+    if isinstance(node, ObjectEntryNode):
+        key = node.key if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", node.key) else json.dumps(node.key)
+        return f"{key}:" + render_expression_text(node.value, source=source)
+    if isinstance(node, ObjectNode):
+        return "{" + ", ".join(render_expression_text(entry, source=source) for entry in node.entries) + "}"
     if isinstance(node, CallArgumentNode):
         return f"{node.name}=" + render_expression_text(node.value, source=source)
     if isinstance(node, CallNode):
@@ -2802,6 +2900,13 @@ def collect_step_references(node: ValueExpressionNode) -> tuple[StepReferenceNod
         if isinstance(current, ListNode):
             for item in current.items:
                 visit(item)
+            return
+        if isinstance(current, ObjectEntryNode):
+            visit(current.value)
+            return
+        if isinstance(current, ObjectNode):
+            for entry in current.entries:
+                visit(entry)
             return
         if isinstance(current, CallArgumentNode):
             visit(current.value)

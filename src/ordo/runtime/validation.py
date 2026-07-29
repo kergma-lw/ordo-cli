@@ -38,6 +38,8 @@ from .local_expression_engine.core import (
     FilterApplicationNode,
     ListNode,
     LiteralNode,
+    ObjectEntryNode,
+    ObjectNode,
     PipelineNode,
     ReferenceNode,
     StateReferenceNode as ValueStateReferenceNode,
@@ -250,6 +252,13 @@ def _collect_direct_let_references(node: ValueExpressionNode, let_bindings: JSON
         if isinstance(current, ListNode):
             for item in current.items:
                 visit(item)
+            return
+        if isinstance(current, ObjectEntryNode):
+            visit(current.value)
+            return
+        if isinstance(current, ObjectNode):
+            for entry in current.entries:
+                visit(entry)
             return
         if isinstance(current, PipelineNode):
             visit(current.source)
@@ -2092,6 +2101,13 @@ def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
         if isinstance(current, CallArgumentNode):
             visit(current.value)
             return
+        if isinstance(current, ObjectEntryNode):
+            visit(current.value)
+            return
+        if isinstance(current, ObjectNode):
+            for entry in current.entries:
+                visit(entry)
+            return
         if isinstance(current, PipelineNode):
             visit(current.source)
             for filter_node in current.filters:
@@ -2162,6 +2178,13 @@ def _collect_value_input_references(node: ValueExpressionNode) -> set[tuple[str,
         if isinstance(current, ListNode):
             for item in current.items:
                 visit(item)
+            return
+        if isinstance(current, ObjectEntryNode):
+            visit(current.value)
+            return
+        if isinstance(current, ObjectNode):
+            for entry in current.entries:
+                visit(entry)
             return
         if isinstance(current, LiteralNode):
             return

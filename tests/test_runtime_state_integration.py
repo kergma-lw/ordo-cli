@@ -38,6 +38,7 @@ blocks:
                 version=workflow.version,
                 workflow=workflow.workflow,
                 inputs=workflow.inputs,
+                declared_inputs=workflow.declared_inputs,
                 state_needs=workflow.state_needs,
                 state_bindings={"task_memory": "repo_task_state"},
                 states={"repo_task_state": state_path},
@@ -59,6 +60,9 @@ blocks:
             """
 version: 0
 workflow: open-task
+inputs:
+  issue_ref: {}
+  branch: {}
 state_needs:
   task_memory: {}
 blocks:
@@ -75,6 +79,7 @@ blocks:
             version=workflow.version,
             workflow=workflow.workflow,
             inputs=workflow.inputs,
+            declared_inputs=workflow.declared_inputs,
             state_needs=workflow.state_needs,
             state_bindings={"task_memory": "repo_task_state"},
             states={"repo_task_state": "/tmp/task-state.json"},

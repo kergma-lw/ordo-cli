@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import re
 
-from connectors.gh.probes.project._items import fetch_project_items, normalize_project_item
+from connectors.gh.probes.project._items import fetch_project_items, fetch_project_items_by_content_refs, normalize_project_item
 from connectors.gh.probes.project._fields import fetch_project_fields, field_kind, field_nodes
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
 
 _MISSING = object()
+_SAFE_QUERY_TOKEN = re.compile(r"^[A-Za-z0-9_.@/-]+$")
+_CONTENT_REF_RE = re.compile(r"^(?P<repository>[^#/]+/[^#/]+)#(?P<number>[1-9][0-9]*)$")
 
 
 class _FilterSpec(tuple[str, object]):
@@ -21,10 +24,37 @@ class _FilterSpec(tuple[str, object]):
         return self[1]
 
 
+class _ContentRef(tuple[str, str, str, str, int]):
+    @property
+    def value(self) -> str:
+        return self[0]
+
+    @property
+    def repository(self) -> str:
+        return self[1]
+
+    @property
+    def owner(self) -> str:
+        return self[2]
+
+    @property
+    def repo(self) -> str:
+        return self[3]
+
+    @property
+    def number(self) -> int:
+        return self[4]
+
+
 def info():
     return probe(
         name="project.items",
-        inputs={"project_id": "string", "content_kind": "string", "filters": [{"field": "string", "value": "scalar"}]},
+        inputs={
+            "project_id": "string",
+            "content_kind": "string",
+            "filters": [{"field": "string", "value": "scalar"}],
+            "content_refs": ["string"],
+        },
         outputs={
             "count": "integer",
             "items": [
@@ -38,7 +68,15 @@ def info():
                 }
             ],
         },
-        failure_modes=("project_not_found", "unknown_field", "ambiguous_field", "unsupported_field_type", "invalid_filter_value", "probe_failed"),
+        failure_modes=(
+            "project_not_found",
+            "unknown_field",
+            "ambiguous_field",
+            "unsupported_field_type",
+            "invalid_filter_value",
+            "invalid_content_ref",
+            "probe_failed",
+        ),
         handler=run,
         summary="Return normalized GitHub Project items for one project membership scan",
         examples=(
@@ -56,6 +94,16 @@ def info():
                 },
                 "why": "Narrow one project scan to issue-like items whose Status field equals Ready.",
             },
+            {
+                "reference": "gh.project.items",
+                "inputs": {
+                    "project_id": "PVT_demo",
+                    "content_kind": "Issue",
+                    "filters": [{"field": "Type", "value": "Task"}],
+                    "content_refs": ["owner/repo#7", "owner/repo#8"],
+                },
+                "why": "Intersect one project item query with one explicit set of GitHub content references.",
+            },
         ),
     )
 
@@ -68,16 +116,19 @@ def run(ctx: OperationContext):
     filters_value = _optional_input(ctx, "filters")
     if isinstance(filters_value, MappedOutcomeError):
         return filters_value.outcome
-
-    fetched = fetch_project_items(ctx, project_id, diagnostic_prefix="probe.gh_project_items")
-    if not isinstance(fetched, tuple):
-        return fetched
-    nodes, raw = fetched
+    content_refs_value = _optional_input(ctx, "content_refs")
+    if isinstance(content_refs_value, MappedOutcomeError):
+        return content_refs_value.outcome
 
     parsed_filters = _parse_filters(ctx, project_id=project_id, filters_value=filters_value)
     if not isinstance(parsed_filters, tuple):
         return parsed_filters
+    parsed_content_refs = _parse_content_refs(ctx, project_id=project_id, content_refs_value=content_refs_value)
+    if not isinstance(parsed_content_refs, tuple):
+        return parsed_content_refs
 
+    requested_kind = None if content_kind is _MISSING else str(content_kind)
+    raw: dict[str, object] = {}
     field_lookup: dict[str, dict[str, object]] = {}
     if parsed_filters:
         fetched_fields = fetch_project_fields(ctx, project_id, diagnostic_prefix="probe.gh_project_items")
@@ -89,14 +140,34 @@ def run(ctx: OperationContext):
         if not isinstance(field_lookup_outcome, dict):
             return field_lookup_outcome
         field_lookup = field_lookup_outcome
+        search_query = _build_server_side_query(requested_kind=requested_kind, filters=parsed_filters, field_lookup=field_lookup)
+    else:
+        search_query = _build_server_side_query(requested_kind=requested_kind, filters=(), field_lookup={})
+
+    if parsed_content_refs:
+        include_issues, include_pull_requests = _requested_content_modes(requested_kind)
+        fetched = fetch_project_items_by_content_refs(
+            ctx,
+            project_id,
+            content_refs=[{"value": ref.value, "repository": ref.repository, "owner": ref.owner, "repo": ref.repo, "number": ref.number} for ref in parsed_content_refs],
+            include_issues=include_issues,
+            include_pull_requests=include_pull_requests,
+            field_names=list(field_lookup),
+            diagnostic_prefix="probe.gh_project_items",
+        )
+    else:
+        fetched = fetch_project_items(ctx, project_id, search_query=search_query, diagnostic_prefix="probe.gh_project_items")
+    if not isinstance(fetched, tuple):
+        return fetched
+    nodes, fetched_raw = fetched
+    raw = {**raw, **fetched_raw}
 
     items = []
-    requested_kind = None if content_kind is _MISSING else str(content_kind)
     for node in nodes:
         item = normalize_project_item(node)
         if requested_kind is not None and item.get("content_kind") != requested_kind:
             continue
-        if parsed_filters and not _matches_filters(node, parsed_filters, field_lookup):
+        if parsed_filters and parsed_content_refs and not _matches_selected_filters(node, parsed_filters, field_lookup):
             continue
         items.append(item)
     return ok(
@@ -151,6 +222,40 @@ def _parse_filters(ctx: OperationContext, *, project_id: str, filters_value: obj
                 details={"filter_index": index, "filter": item},
             )
         parsed.append(_FilterSpec((field, item.get("value"))))
+    return tuple(parsed)
+
+
+def _parse_content_refs(ctx: OperationContext, *, project_id: str, content_refs_value: object) -> tuple[_ContentRef, ...] | object:
+    if content_refs_value is _MISSING:
+        return ()
+    if not isinstance(content_refs_value, list):
+        return _invalid_content_ref(
+            ctx,
+            project_id=project_id,
+            message="GitHub project item content_refs must be a list of OWNER/REPO#NUMBER strings",
+            details={"content_refs": content_refs_value},
+        )
+
+    parsed: list[_ContentRef] = []
+    for index, item in enumerate(content_refs_value):
+        if not isinstance(item, str):
+            return _invalid_content_ref(
+                ctx,
+                project_id=project_id,
+                message="Each GitHub project item content_ref must be a string in OWNER/REPO#NUMBER format",
+                details={"content_ref_index": index, "content_ref": item},
+            )
+        match = _CONTENT_REF_RE.match(item)
+        if match is None:
+            return _invalid_content_ref(
+                ctx,
+                project_id=project_id,
+                message="Each GitHub project item content_ref must use OWNER/REPO#NUMBER format",
+                details={"content_ref_index": index, "content_ref": item},
+            )
+        repository = match.group("repository")
+        owner, repo = repository.split("/", 1)
+        parsed.append(_ContentRef((item, repository, owner, repo, int(match.group("number")))))
     return tuple(parsed)
 
 
@@ -214,11 +319,40 @@ def _build_field_lookup(
     return lookup
 
 
-def _matches_filters(node: dict[str, object], filters: Sequence[_FilterSpec], field_lookup: dict[str, dict[str, object]]) -> bool:
-    values = _item_field_values(node)
+def _build_server_side_query(
+    *,
+    requested_kind: str | None,
+    filters: Sequence[_FilterSpec],
+    field_lookup: dict[str, dict[str, object]],
+) -> str | None:
+    terms: list[str] = []
+    kind_term = _content_kind_query_term(requested_kind)
+    if kind_term is not None:
+        terms.append(kind_term)
     for filter_spec in filters:
         expected = field_lookup[filter_spec.field]
-        actual = values.get(filter_spec.field)
+        rendered = _render_query_term(filter_spec.field, expected["kind"], expected["value"])
+        if rendered:
+            terms.append(rendered)
+    if not terms:
+        return None
+    return " ".join(terms)
+
+
+def _requested_content_modes(requested_kind: str | None) -> tuple[bool, bool]:
+    if requested_kind == "Issue":
+        return True, False
+    if requested_kind == "PullRequest":
+        return False, True
+    return True, True
+
+
+def _matches_selected_filters(node: dict[str, object], filters: Sequence[_FilterSpec], field_lookup: dict[str, dict[str, object]]) -> bool:
+    selected = node.get("selected_field_values")
+    selected_values = selected if isinstance(selected, dict) else {}
+    for filter_spec in filters:
+        expected = field_lookup[filter_spec.field]
+        actual = _extract_selected_field_value(selected_values.get(filter_spec.field))
         if actual is None:
             return False
         if expected["kind"] == "number":
@@ -232,33 +366,50 @@ def _matches_filters(node: dict[str, object], filters: Sequence[_FilterSpec], fi
     return True
 
 
-def _item_field_values(node: dict[str, object]) -> dict[str, object]:
-    values: dict[str, object] = {}
-    field_values = node.get("fieldValues")
-    nodes = field_values.get("nodes") if isinstance(field_values, dict) else None
-    if not isinstance(nodes, list):
-        return values
-    for field_value in nodes:
-        if not isinstance(field_value, dict):
-            continue
-        field = field_value.get("field")
-        if not isinstance(field, dict):
-            continue
-        name = field.get("name")
-        if not isinstance(name, str) or not name:
-            continue
-        typename = field_value.get("__typename")
-        if typename == "ProjectV2ItemFieldSingleSelectValue":
-            values[name] = field_value.get("name")
-        elif typename == "ProjectV2ItemFieldIterationValue":
-            values[name] = field_value.get("title")
-        elif typename == "ProjectV2ItemFieldNumberValue":
-            values[name] = field_value.get("number")
-        elif typename == "ProjectV2ItemFieldTextValue":
-            values[name] = field_value.get("text")
-        elif typename == "ProjectV2ItemFieldDateValue":
-            values[name] = field_value.get("date")
-    return values
+def _extract_selected_field_value(value: object) -> object | None:
+    if not isinstance(value, dict):
+        return None
+    typename = value.get("__typename")
+    if typename == "ProjectV2ItemFieldSingleSelectValue":
+        return value.get("name")
+    if typename == "ProjectV2ItemFieldIterationValue":
+        return value.get("title")
+    if typename == "ProjectV2ItemFieldNumberValue":
+        return value.get("number")
+    if typename == "ProjectV2ItemFieldTextValue":
+        return value.get("text")
+    if typename == "ProjectV2ItemFieldDateValue":
+        return value.get("date")
+    return None
+
+
+def _content_kind_query_term(requested_kind: str | None) -> str | None:
+    if requested_kind == "Issue":
+        return "is:issue"
+    if requested_kind == "PullRequest":
+        return "is:pr"
+    return None
+
+
+def _render_query_term(field: str, kind: object, value: object) -> str:
+    qualifier = _quote_query_token(field)
+    if kind == "number":
+        return f"{qualifier}:{_format_number_query_value(value)}"
+    return f"{qualifier}:{_quote_query_token(str(value))}"
+
+
+def _format_number_query_value(value: object) -> str:
+    numeric = float(value)
+    if numeric.is_integer():
+        return str(int(numeric))
+    return format(numeric, "g")
+
+
+def _quote_query_token(value: str) -> str:
+    if _SAFE_QUERY_TOKEN.fullmatch(value):
+        return value
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def _normalize_filter_value(ctx: OperationContext, *, project_id: str, field: str, kind: str | None, value: object) -> object:
@@ -295,6 +446,22 @@ def _invalid_filter_value(ctx: OperationContext, *, project_id: str, message: st
         diagnostics=(
             Diagnostic(
                 code="probe.gh_project_items.invalid_filter_value",
+                level="error",
+                message=message,
+                details=payload,
+            ),
+        ),
+    )
+
+
+def _invalid_content_ref(ctx: OperationContext, *, project_id: str, message: str, details: dict[str, object]):
+    payload = {"reference": ctx.reference, "project_id": project_id, **details}
+    return fail(
+        code="invalid_content_ref",
+        summary=message,
+        diagnostics=(
+            Diagnostic(
+                code="probe.gh_project_items.invalid_content_ref",
                 level="error",
                 message=message,
                 details=payload,

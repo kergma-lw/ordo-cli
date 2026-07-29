@@ -146,12 +146,12 @@ def _input_usages_from_result(check_result: RuntimeResult) -> list[dict[str, obj
     return [dict(item) for item in getattr(analysis_tree, "input_usages") if isinstance(item, dict)]
 
 
-def _review_input_classification(usage: dict[str, object], *, workflow: Workflow, profile: Profile | None) -> str:
+def _review_input_classification(usage: dict[str, object], *, workflow: Workflow | None = None, profile: Profile | None) -> str:
     base = usage.get("classification")
     input_name = usage.get("input")
     if not isinstance(base, str) or not isinstance(input_name, str):
         return "unknown"
-    if input_name in workflow.explicit_input_keys:
+    if workflow is not None and input_name in workflow.explicit_input_keys:
         return base
     if profile is not None and input_name in profile.inputs and base in {"effect_target_input", "contract_input"}:
         return "trusted_profile_input"

@@ -13,7 +13,7 @@ from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_local_expression, resolve_workflow_let_reference_node
-from .local_expression_engine.core import BinaryNode, CallNode, ListNode, LiteralNode, ParsedLocalExpressionTree, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, render_expression_text
+from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallNode, FilterApplicationNode, ListNode, LiteralNode, ObjectEntryNode, ObjectNode, ParsedLocalExpressionTree, PipelineNode, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, render_expression_text
 from .providers import ConnectorProvider, get_default_connector_provider
 from .routines import parse_routine_reference, resolve_routine_entry, routine_operation_contract
 
@@ -370,6 +370,33 @@ def _resolve_guard_expression(
         if isinstance(node, ListNode):
             for item in node.items:
                 visit(item)
+            return
+        if isinstance(node, FilterApplicationNode):
+            for argument in node.arguments:
+                visit(argument)
+            return
+        if isinstance(node, PipelineNode):
+            visit(node.source)
+            for filter_node in node.filters:
+                visit(filter_node)
+            return
+        if isinstance(node, BuiltinCallNode):
+            for argument in node.arguments:
+                visit(argument)
+            return
+        if isinstance(node, ObjectEntryNode):
+            visit(node.value)
+            return
+        if isinstance(node, ObjectNode):
+            for entry in node.entries:
+                visit(entry)
+            return
+        if isinstance(node, AdapterBindingNode):
+            visit(node.value)
+            return
+        if isinstance(node, AdapterInvocationNode):
+            for binding in node.bindings:
+                visit(binding)
             return
         if isinstance(node, UnaryNode):
             visit(node.operand)

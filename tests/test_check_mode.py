@@ -6,7 +6,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Override, Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import check_workflow
+from ordo.runtime import check_workflow, load_workflow_text
 from ordo.runtime.checking import _build_check_analysis_tree, _project_check_runtime_result
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -719,6 +719,38 @@ class CheckModeTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_check_resolves_probe_metadata_for_guard_call_with_adapter_bound_nested_probe(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+  project_id: PVT_demo
+let:
+  story_task_refs: 'text.lines with{root: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body}'
+blocks:
+  - guards:
+      - 'gh.project.items.details(project_id=inputs.project_id, content_refs=story_task_refs, filters=[{field:"State", value:"OPEN"}]).count == 0'
+  - steps: []
+"""
+        )
+        seen: list[str] = []
+
+        def probe(resolved_guard, _workflow):
+            seen.append(resolved_guard.reference)
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"body": "owner/repo#7\nowner/repo#8"})
+            if resolved_guard.reference == "gh.project.items.details":
+                return OperationResult(status="ok", outputs={"count": 0, "items": []})
+            return OperationResult(status="ok", outputs={})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(seen, ["gh.issue", "gh.project.items.details"])
 
     def test_check_preserves_later_action_call_shape_when_missing_input_halts_preflight(self) -> None:
         workflow = Workflow(

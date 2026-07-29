@@ -84,21 +84,31 @@ blocks:
         self.assertEqual(result.outputs["executed_steps"], ["comment"])
 
     def test_execute_composed_step_condition_short_circuits_or(self) -> None:
-        workflow = load_workflow_text(
+        loaded = load_workflow_text(
             """
 version: 0
 workflow: open-task
 inputs:
-  enabled: true
+  enabled: {}
+  missing: {}
 blocks:
   - guards: []
   - steps:
       - name: comment
-        if: ${inputs.enabled or inputs.missing}
+        if: inputs.enabled or inputs.missing
         uses: shell.command
         with:
           command: printf executed
 """
+        )
+        workflow = loaded.__class__(
+            version=loaded.version,
+            workflow=loaded.workflow,
+            inputs={"enabled": True},
+            declared_inputs=loaded.declared_inputs,
+            blocks=loaded.blocks,
+            source_path=loaded.source_path,
+            launch_dir=loaded.launch_dir,
         )
 
         result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -107,10 +117,12 @@ blocks:
         self.assertEqual(result.outputs["executed_steps"], ["comment"])
 
     def test_explain_execution_result_preserves_condition_evaluation_failure(self) -> None:
-        workflow = load_workflow_text(
+        loaded = load_workflow_text(
             """
 version: 0
 workflow: open-task
+inputs:
+  enabled: {}
 blocks:
   - guards: []
   - steps:
@@ -120,6 +132,15 @@ blocks:
         with:
           command: printf executed
 """
+        )
+        workflow = loaded.__class__(
+            version=loaded.version,
+            workflow=loaded.workflow,
+            inputs={},
+            declared_inputs=loaded.declared_inputs,
+            blocks=loaded.blocks,
+            source_path=loaded.source_path,
+            launch_dir=loaded.launch_dir,
         )
 
         result = explain_execution_result(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)

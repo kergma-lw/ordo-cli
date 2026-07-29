@@ -73,7 +73,12 @@ class ProfileCompositionTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "composition.workflow.input_conflict")
 
     def test_subsequent_profile_application_fills_only_missing_inputs(self) -> None:
-        workflow = Workflow(version=0, workflow="open-task", inputs={"repository": "explicit/repo"})
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "explicit/repo"},
+            explicit_input_keys=("repository",),
+        )
         profile = Profile(name="frontend", inputs={"repository": "profile/repo", "repo_dir": "../frontend"})
 
         result = apply_profile_defaults_to_subsequent_steps(workflow, profile)

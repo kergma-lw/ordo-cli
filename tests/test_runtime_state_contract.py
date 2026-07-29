@@ -9,6 +9,9 @@ class RuntimeStateContractTest(unittest.TestCase):
             """
 version: 0
 workflow: open-task
+inputs:
+  issue_ref: {}
+  branch: {}
 state_needs:
   task_memory: {}
 blocks:
@@ -24,6 +27,9 @@ blocks:
             """
 version: 0
 workflow: open-task
+inputs:
+  issue_ref: {}
+  branch: {}
 state_needs:
   task_memory: {}
 blocks:
@@ -80,6 +86,9 @@ blocks:
             """
 version: 0
 workflow: open-task
+inputs:
+  issue_ref: {}
+  branch: {}
 state_needs:
   task_memory: {}
 blocks:

@@ -33,6 +33,7 @@ blocks:
                 version=workflow.version,
                 workflow=workflow.workflow,
                 inputs=workflow.inputs,
+                declared_inputs=workflow.declared_inputs,
                 state_needs=workflow.state_needs,
                 state_bindings={"task_memory": "repo_task_state"},
                 states={"repo_task_state": state_path},
@@ -70,6 +71,7 @@ blocks:
                 version=workflow.version,
                 workflow=workflow.workflow,
                 inputs=workflow.inputs,
+                declared_inputs=workflow.declared_inputs,
                 state_needs=workflow.state_needs,
                 state_bindings={"task_memory": "repo_task_state"},
                 states={"repo_task_state": state_path},
@@ -87,10 +89,13 @@ blocks:
             self.assertEqual(persisted, {})
 
     def test_execute_reports_state_mutation_failures_structurally(self) -> None:
-        workflow = load_workflow_text(
+        loaded = load_workflow_text(
             """
 version: 0
 workflow: open-task
+inputs:
+  issue_ref: {}
+  branch: {}
 state_needs:
   task_memory: {}
 blocks:
@@ -102,14 +107,15 @@ blocks:
 """
         )
         workflow = Workflow(
-            version=workflow.version,
-            workflow=workflow.workflow,
-            inputs=workflow.inputs,
-            state_needs=workflow.state_needs,
+            version=loaded.version,
+            workflow=loaded.workflow,
+            inputs={},
+            declared_inputs=loaded.declared_inputs,
+            state_needs=loaded.state_needs,
             state_bindings={"task_memory": "repo_task_state"},
             states={"repo_task_state": ".ordo/task-state.json"},
-            guards=workflow.guards,
-            steps=workflow.steps,
+            guards=loaded.guards,
+            steps=loaded.steps,
         )
 
         result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -123,6 +129,9 @@ blocks:
             """
 version: 0
 workflow: open-task
+inputs:
+  issue_ref: {}
+  branch: {}
 state_needs:
   task_memory: {}
 blocks:
@@ -137,6 +146,7 @@ blocks:
             version=workflow.version,
             workflow=workflow.workflow,
             inputs=workflow.inputs,
+            declared_inputs=workflow.declared_inputs,
             state_needs=workflow.state_needs,
             state_bindings={"task_memory": "repo_task_state"},
             states={"repo_task_state": "/tmp/task-state.json"},
