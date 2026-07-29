@@ -547,6 +547,34 @@ blocks:
 
         self.assertEqual(context.exception.code, "runtime.value.call_probe_failed")
 
+    def test_resolve_runtime_value_can_feed_fs_text_into_key_value_adapter(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  path: /tmp/config.txt
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        observed: list[ConditionObservationRequest] = []
+        session = ReadOnlyObservationSession(
+            lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value='alpha: one\nbeta: "two"', reference="fs.text")
+        )
+
+        value = resolve_runtime_value(
+            '${key_value with{root: fs.text(path=inputs.path).text, separator: ":"}}',
+            workflow,
+            observation_session=session,
+        )
+
+        self.assertEqual(value, {"alpha": "one", "beta": "two"})
+        self.assertEqual(observed[0].target, ("fs", "text"))
+        self.assertEqual(observed[0].fields, ("text",))
+
 
 if __name__ == "__main__":
     unittest.main()

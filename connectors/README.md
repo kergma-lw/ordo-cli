@@ -12,11 +12,11 @@ A connector owns:
 
 Fixed v0 connector domains:
 - `gh`
+- `fs`
 - `git`
 - `shell`
 
 Possible future connector domains:
 - `run`
 - `ansible`
-- `fs`
 - `obsidian`
