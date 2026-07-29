@@ -11,6 +11,8 @@ CHECKOUT_STATE_INVALIDATION: tuple[str, ...] = (
     "git.branches",
     "git.upstream",
     "git.ref.*",
+    "git.tag",
+    "git.tags",
     "git.worktree",
     "git.worktrees",
     "git.state",
@@ -20,6 +22,8 @@ CHECKOUT_STATE_INVALIDATION: tuple[str, ...] = (
 )
 FETCH_INVALIDATION: tuple[str, ...] = (
     "git.ref.*",
+    "git.tag",
+    "git.tags",
     "git.branches",
     "git.repo",
     "git.range",
@@ -28,6 +32,8 @@ FETCH_INVALIDATION: tuple[str, ...] = (
 INDEX_INVALIDATION: tuple[str, ...] = ("git.worktree", "git.state")
 COMMIT_GRAPH_INVALIDATION: tuple[str, ...] = (
     "git.ref.*",
+    "git.tag",
+    "git.tags",
     "git.worktree",
     "git.worktrees",
     "git.state",

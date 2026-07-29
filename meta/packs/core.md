@@ -83,6 +83,8 @@
   - `git.repo`
   - `git.branch`
   - `git.branches`
+  - `git.tag`
+  - `git.tags`
   - `git.worktree`
   - `git.worktrees`
   - `git.stash`
@@ -1372,6 +1374,8 @@ The main target probes are:
 - `git.repo`
 - `git.branch`
 - `git.branches`
+- `git.tag`
+- `git.tags`
 - `git.worktree`
 - `git.worktrees`
 - `git.stash`
