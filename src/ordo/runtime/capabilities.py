@@ -101,6 +101,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         related_model_nodes=(
             "workflow.local_expression.adapter_seam",
             "workflow.local_expression.adapter_binding",
+            "workflow.local_expression.adapter.key_value",
             "workflow.local_expression.adapter.markdown",
             "workflow.local_expression.adapter.text",
         ),

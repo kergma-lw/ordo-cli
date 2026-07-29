@@ -137,6 +137,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         adapter_capability = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.local_expression.adapters")
 
         self.assertEqual(adapter_capability["status"], "supported")
+        self.assertIn("workflow.local_expression.adapter.key_value", adapter_capability["related_model_nodes"])
         self.assertIn("workflow.local_expression.adapter.markdown", adapter_capability["related_model_nodes"])
         self.assertIn("workflow.local_expression.adapter.text", adapter_capability["related_model_nodes"])
 
@@ -192,10 +193,15 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_model_publishes_representation_adapter_surface(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         adapter_surface = model["representation_adapters"]
+        key_value = next(item for item in adapter_surface["families"] if item["name"] == "key_value")
         markdown = next(item for item in adapter_surface["families"] if item["name"] == "markdown")
         text = next(item for item in adapter_surface["families"] if item["name"] == "text")
 
         self.assertEqual(adapter_surface["shared_seam"]["outer_binding_form"], " with{...}")
+        self.assertIn("literal separator parameter", key_value["summary"])
+        self.assertEqual(key_value["selectors"], [])
+        self.assertEqual(key_value["actions"], [])
+        self.assertEqual(key_value["shortcuts"], [])
         self.assertIn("prelude", markdown["selectors"])
         self.assertIn('["title"]', markdown["selectors"])
         self.assertIn("add", markdown["actions"])
@@ -312,11 +318,15 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_describe_resolves_representation_adapter_model_nodes(self) -> None:
         seam_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter_seam", "--json").stdout)
+        key_value_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.key_value", "--json").stdout)
         markdown_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.markdown", "--json").stdout)
         text_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.text", "--json").stdout)
 
         self.assertEqual(seam_node["document_kind"], "model_node")
         self.assertEqual(seam_node["metadata"]["outer_binding_form"], " with{...}")
+        self.assertEqual(key_value_node["metadata"]["name"], "key_value")
+        self.assertEqual(key_value_node["metadata"]["selectors"], [])
+        self.assertEqual(key_value_node["metadata"]["actions"], [])
         self.assertEqual(markdown_node["metadata"]["name"], "markdown")
         self.assertIn("prelude", markdown_node["metadata"]["selectors"])
         self.assertIn("add", markdown_node["metadata"]["actions"])
@@ -336,9 +346,11 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_search_indexes_representation_adapter_topics(self) -> None:
         result = json.loads(self.run_help("search", "markdown", "--json").stdout)
+        key_value_result = json.loads(self.run_help("search", "separator", "--json").stdout)
         text_result = json.loads(self.run_help("search", "text", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.markdown" for item in result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.key_value" for item in key_value_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.text" for item in text_result["facts"]))
 
     def test_search_indexes_local_expression_filter_topics(self) -> None:
