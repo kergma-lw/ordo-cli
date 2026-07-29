@@ -547,7 +547,7 @@ blocks:
 
         self.assertEqual(context.exception.code, "runtime.value.call_probe_failed")
 
-    def test_resolve_runtime_value_can_feed_fs_text_into_key_value_adapter(self) -> None:
+    def test_resolve_runtime_value_can_feed_fs_file_content_into_key_value_adapter(self) -> None:
         workflow = load_workflow_text(
             """
 version: 0
@@ -562,18 +562,18 @@ blocks:
         observed: list[ConditionObservationRequest] = []
         session = ReadOnlyObservationSession(
             lambda request: observed.append(request)
-            or ConditionObservationResult(status="ok", value='alpha: one\nbeta: "two"', reference="fs.text")
+            or ConditionObservationResult(status="ok", value='alpha: one\nbeta: "two"', reference="fs.file")
         )
 
         value = resolve_runtime_value(
-            '${key_value with{root: fs.text(path=inputs.path).text, separator: ":"}}',
+            '${key_value with{root: fs.file(path=inputs.path).content, separator: ":"}}',
             workflow,
             observation_session=session,
         )
 
         self.assertEqual(value, {"alpha": "one", "beta": "two"})
-        self.assertEqual(observed[0].target, ("fs", "text"))
-        self.assertEqual(observed[0].fields, ("text",))
+        self.assertEqual(observed[0].target, ("fs", "file"))
+        self.assertEqual(observed[0].fields, ("content",))
 
 
 if __name__ == "__main__":
