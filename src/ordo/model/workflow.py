@@ -54,6 +54,7 @@ class Step:
     name: str
     operation: OperationRef | None = None
     run: str | None = None
+    steps: tuple[Step, ...] | None = None
     for_each: JSONValue | None = None
     run_with: JSONObject = field(default_factory=dict, kw_only=True)
     run_state_bindings: JSONObject = field(default_factory=dict, kw_only=True)
@@ -72,7 +73,7 @@ class Step:
     def __post_init__(self) -> None:
         forms = (
             self.operation is not None,
-            self.run is not None,
+            self.run is not None or self.steps is not None,
             self.profile_switch is not None,
             self.value is not None,
             self.result is not None,
@@ -80,8 +81,10 @@ class Step:
             self.state_set is not None,
             self.state_delete is not None,
         )
+        if self.run is not None and self.steps is not None:
+            raise ValueError("Step must not define both run and steps invocation bodies")
         if sum(forms) != 1:
-            raise ValueError("Step must define exactly one of operation, run, profile_switch, value, result, publish, state_set, or state_delete")
+            raise ValueError("Step must define exactly one of operation, run, steps, profile_switch, value, result, publish, state_set, or state_delete")
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped contract form."""
@@ -101,6 +104,15 @@ class Step:
                 contract["if"] = self.if_
             if self.run_with:
                 contract["with"] = dict(self.run_with)
+            if self.for_each is not None:
+                contract["for_each"] = self.for_each
+            if self.register is not None:
+                contract["register"] = self.register
+            return contract
+        if self.steps is not None:
+            contract = {"name": self.name, "steps": [step.to_contract() for step in self.steps]}
+            if self.if_ is not None:
+                contract["if"] = self.if_
             if self.for_each is not None:
                 contract["for_each"] = self.for_each
             if self.register is not None:

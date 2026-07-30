@@ -381,8 +381,17 @@ def _iter_input_references_from_step_item(step: JSONObject, *, block_index: int,
         if parsed is not None and parsed.value is not None:
             for reference in _collect_value_input_references(parsed.value.root):
                 references.append((reference, base_path + ("if",)))
+    if "for_each" in step:
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("for_each")), path=base_path + ("for_each",)))
     if "uses" in step or "run" in step:
         references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("with")), path=base_path + ("with",)))
+    nested_steps = step.get("steps")
+    if isinstance(nested_steps, list):
+        for nested_index, nested_step in enumerate(nested_steps):
+            if not isinstance(nested_step, dict):
+                continue
+            nested_path = base_path + ("steps", str(nested_index))
+            references.extend(_iter_input_references_from_nested_step_item(nested_step, path=nested_path))
     if "value" in step:
         references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("value")), path=base_path + ("value",)))
     if "profile_switch" in step:
@@ -407,6 +416,39 @@ def _iter_input_references_from_step_item(step: JSONObject, *, block_index: int,
     if isinstance(target_expr, str):
         for reference in _collect_input_references_from_state_path_text(target_expr):
             references.append((reference, base_path + ("state_delete",)))
+    return references
+
+
+def _iter_input_references_from_nested_step_item(step: JSONObject, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    references: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    condition = step.get("if")
+    if isinstance(condition, str):
+        try:
+            parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            parsed = None
+        if parsed is not None and parsed.value is not None:
+            for reference in _collect_value_input_references(parsed.value.root):
+                references.append((reference, path + ("if",)))
+    if "uses" in step or "run" in step:
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("with")), path=path + ("with",)))
+    if "for_each" in step:
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("for_each")), path=path + ("for_each",)))
+    if "value" in step:
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("value")), path=path + ("value",)))
+    if "profile_switch" in step:
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("profile_switch")), path=path + ("profile_switch",)))
+    if "state_set" in step and isinstance(step.get("state_set"), dict):
+        for key, item in step["state_set"].items():
+            if not isinstance(key, str):
+                continue
+            for reference in _collect_input_references_from_state_path_text(key):
+                references.append((reference, path + ("state_set", key)))
+            references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(item), path=path + ("state_set", key)))
+    target_expr = step.get("state_delete")
+    if isinstance(target_expr, str):
+        for reference in _collect_input_references_from_state_path_text(target_expr):
+            references.append((reference, path + ("state_delete",)))
     return references
 
 
@@ -642,7 +684,7 @@ def _collect_declared_registers_from_step_list(value: JSONValue | None, *, path:
         item["register"]: path + (str(index), "register")
         for index, item in enumerate(value)
         if isinstance(item, dict)
-        and ("uses" in item or "run" in item or "value" in item)
+        and ("uses" in item or "run" in item or ("steps" in item and "for_each" in item) or "value" in item)
         and isinstance(item.get("register"), str)
         and REGISTER_PATTERN.fullmatch(item["register"])
     }
@@ -890,6 +932,8 @@ def _validate_step_list(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
+    inherit_prior_register_names: bool = True,
+    extra_condition_roots: frozenset[str] = frozenset(),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, list):
@@ -897,7 +941,7 @@ def _validate_step_list(
         return diagnostics
 
     seen_names: dict[str, tuple[str, ...]] = {}
-    seen_registers = {} if prior_registers is None else dict(prior_registers)
+    seen_registers = {} if prior_registers is None or not inherit_prior_register_names else dict(prior_registers)
     effective_declared_registers = declared_registers if declared_registers is not None else _collect_declared_registers_from_step_list(value, path=path)
     for index, item in enumerate(value):
         item_path = path + (str(index),)
@@ -909,13 +953,14 @@ def _validate_step_list(
         diagnostics.extend(_require_non_empty_string(item, "name", path=item_path + ("name",), source=source))
         has_uses = "uses" in item
         has_run = "run" in item
+        has_inline_steps = "steps" in item
         has_profile_switch = "profile_switch" in item
         has_value = "value" in item
         has_result = "result" in item
         has_publish = "publish" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
-        form_count = sum((has_uses, has_run, has_profile_switch, has_value, has_result, has_publish, has_state_set, has_state_delete))
+        form_count = sum((has_uses, has_run, has_inline_steps, has_profile_switch, has_value, has_result, has_publish, has_state_set, has_state_delete))
 
         prior_registers = {name: register_path for name, register_path in seen_registers.items()}
 
@@ -923,7 +968,7 @@ def _validate_step_list(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.form",
-                    "Step must define exactly one of 'uses', 'run', 'profile_switch', 'value', 'result', 'publish', 'state_set', or 'state_delete'",
+                    "Step must define exactly one of 'uses', 'run', 'steps', 'profile_switch', 'value', 'result', 'publish', 'state_set', or 'state_delete'",
                     item_path,
                     source,
                 )
@@ -943,6 +988,17 @@ def _validate_step_list(
         elif has_run:
             diagnostics.extend(
                 _validate_run_step(
+                    item,
+                    source=source,
+                    path=item_path,
+                    let_bindings=let_bindings,
+                    prior_registers=prior_registers,
+                    declared_registers=effective_declared_registers,
+                )
+            )
+        elif has_inline_steps:
+            diagnostics.extend(
+                _validate_inline_invocation_step(
                     item,
                     source=source,
                     path=item_path,
@@ -995,11 +1051,11 @@ def _validate_step_list(
                     declared_registers=effective_declared_registers,
                 )
             )
-        if "for_each" in item and not has_run:
+        if "for_each" in item and not (has_run or has_inline_steps):
             diagnostics.append(
                 _diagnostic(
-                    "validation.workflow.step.for_each_without_run",
-                    "Step field 'for_each' is allowed only together with 'run'",
+                    "validation.workflow.step.for_each_without_invocation_body",
+                    "Step field 'for_each' is allowed only together with 'run' or inline 'steps'",
                     item_path + ("for_each",),
                     source,
                 )
@@ -1015,17 +1071,18 @@ def _validate_step_list(
             )
 
         diagnostics.extend(
-            _validate_step_condition(
-                item,
-                path=item_path,
-                source=source,
-                let_bindings=let_bindings,
-                prior_registers=prior_registers,
-                declared_registers=effective_declared_registers,
+                _validate_step_condition(
+                    item,
+                    path=item_path,
+                    source=source,
+                    let_bindings=let_bindings,
+                    prior_registers=prior_registers,
+                    declared_registers=effective_declared_registers,
+                    extra_allowed_reference_roots=extra_condition_roots,
+                )
             )
-        )
         diagnostics.extend(_validate_step_launcher(item, path=item_path, source=source, can_use_launcher=has_uses))
-        diagnostics.extend(_validate_step_register(item, path=item_path, source=source, can_register=has_uses or has_run or has_value))
+        diagnostics.extend(_validate_step_register(item, path=item_path, source=source, can_register=has_uses or has_run or has_inline_steps or has_value))
 
         if has_state_set:
             diagnostics.extend(_require_object_field(item, "state_set", path=item_path + ("state_set",), source=source, required=True))
@@ -1051,7 +1108,7 @@ def _validate_step_list(
                 seen_names[name] = item_path + ("name",)
 
         register = item.get("register")
-        if isinstance(register, str) and register and (has_uses or has_run or has_value) and REGISTER_PATTERN.fullmatch(register):
+        if isinstance(register, str) and register and (has_uses or has_run or has_inline_steps or has_value) and REGISTER_PATTERN.fullmatch(register):
             if register in seen_registers:
                 diagnostics.append(
                     _diagnostic(
@@ -1076,8 +1133,9 @@ def _validate_step_condition(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
+    extra_allowed_reference_roots: frozenset[str] = frozenset(),
 ) -> list[Diagnostic]:
-    diagnostics = _validate_invocation_condition(
+    return _validate_invocation_condition(
         value,
         path=path,
         source=source,
@@ -1089,23 +1147,8 @@ def _validate_step_condition(
         expression_code="validation.workflow.local_expression.step_condition.syntax",
         type_message="Step field 'if' must be a string-form local expression",
         expression_message="Step field 'if' must be a valid step-condition expression",
+        extra_allowed_reference_roots=extra_allowed_reference_roots,
     )
-    condition = value.get("if")
-    if condition is None:
-        return diagnostics
-    condition_path = path + ("if",)
-    if not isinstance(condition, str):
-        return diagnostics
-    if value.get("register") is not None:
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.step.if_with_register",
-                "Step fields 'if' and 'register' cannot be used together in the MVP",
-                condition_path,
-                source,
-            )
-        )
-    return diagnostics
 
 
 def _validate_invocation_condition(
@@ -1121,6 +1164,7 @@ def _validate_invocation_condition(
     expression_code: str,
     type_message: str,
     expression_message: str,
+    extra_allowed_reference_roots: frozenset[str] = frozenset(),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     condition = value.get(field_name)
@@ -1154,7 +1198,15 @@ def _validate_invocation_condition(
             declared_registers=declared_registers,
         )
     )
-    diagnostics.extend(_validate_step_condition_type(parsed.root, path=condition_path, source=source, let_bindings=let_bindings))
+    diagnostics.extend(
+        _validate_step_condition_type(
+            parsed.root,
+            path=condition_path,
+            source=source,
+            let_bindings=let_bindings,
+            extra_allowed_reference_roots=extra_allowed_reference_roots,
+        )
+    )
     diagnostics.extend(
         _validate_workflow_let_binding_uses(
             parsed.root,
@@ -1285,6 +1337,103 @@ def _validate_run_step(
                 source,
             )
         )
+    return diagnostics
+
+
+def _validate_inline_invocation_step(
+    value: JSONObject,
+    *,
+    source: str,
+    path: tuple[str, ...],
+    let_bindings: JSONObject,
+    prior_registers: dict[str, tuple[str, ...]] | None,
+    declared_registers: dict[str, tuple[str, ...]],
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    nested_steps = value.get("steps")
+    if not isinstance(nested_steps, list):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.inline_steps.type",
+                "Step field 'steps' must be a list when used as an inline repeated body",
+                path + ("steps",),
+                source,
+                actual_type=type(nested_steps).__name__,
+            )
+        )
+        return diagnostics
+    if not nested_steps:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.inline_steps.empty",
+                "Inline repeated step bodies must contain at least one step",
+                path + ("steps",),
+                source,
+            )
+        )
+    if "for_each" not in value:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.inline_steps_without_for_each",
+                "Inline repeated step bodies require 'for_each'",
+                path + ("steps",),
+                source,
+            )
+        )
+    else:
+        diagnostics.extend(
+            _validate_runtime_value_surface(
+                value.get("for_each"),
+                path=path + ("for_each",),
+                source=source,
+                let_bindings=let_bindings,
+                prior_registers={} if prior_registers is None else prior_registers,
+                declared_registers=declared_registers,
+            )
+        )
+    if "with" in value:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.inline_steps.with_forbidden",
+                "Inline repeated step bodies do not support outer 'with' bindings",
+                path + ("with",),
+                source,
+            )
+        )
+    for nested_index, nested_step in enumerate(nested_steps):
+        nested_path = path + ("steps", str(nested_index))
+        if isinstance(nested_step, dict) and "for_each" in nested_step:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.inline_steps.nested_for_each_forbidden",
+                    "Nested 'for_each' is not allowed inside inline repeated step bodies",
+                    nested_path + ("for_each",),
+                    source,
+                )
+            )
+        if isinstance(nested_step, dict) and "guards" in nested_step:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.inline_steps.nested_guards_forbidden",
+                    "Nested guard declarations are not allowed inside inline repeated step bodies",
+                    nested_path + ("guards",),
+                    source,
+                )
+            )
+    local_declared_registers = _collect_declared_registers_from_step_list(nested_steps, path=path + ("steps",))
+    combined_declared_registers = {**declared_registers, **local_declared_registers}
+    diagnostics.extend(
+        _validate_step_list(
+            nested_steps,
+            source=source,
+            path=path + ("steps",),
+            let_bindings=let_bindings,
+            prior_registers={} if prior_registers is None else prior_registers,
+            declared_registers=combined_declared_registers,
+            inherit_prior_register_names=False,
+            extra_condition_roots=frozenset({"item"}),
+        )
+    )
     return diagnostics
 
 
@@ -1724,8 +1873,22 @@ def _extract_runtime_value_expression(value: str) -> str | None:
     return None
 
 
-def _validate_step_condition_type(node: ValueExpressionNode, *, path: tuple[str, ...], source: str, let_bindings: JSONObject) -> list[Diagnostic]:
-    inferred, diagnostics = _infer_value_expression_type(node, path=path, source=source, step_condition_mode=True, let_bindings=let_bindings)
+def _validate_step_condition_type(
+    node: ValueExpressionNode,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject,
+    extra_allowed_reference_roots: frozenset[str] = frozenset(),
+) -> list[Diagnostic]:
+    inferred, diagnostics = _infer_value_expression_type(
+        node,
+        path=path,
+        source=source,
+        step_condition_mode=True,
+        let_bindings=let_bindings,
+        extra_allowed_reference_roots=extra_allowed_reference_roots,
+    )
     if inferred not in {"boolean", "unknown"}:
         diagnostics.append(
             _diagnostic(
@@ -1746,6 +1909,7 @@ def _infer_value_expression_type(
     source: str,
     step_condition_mode: bool = False,
     let_bindings: JSONObject | None = None,
+    extra_allowed_reference_roots: frozenset[str] = frozenset(),
 ) -> tuple[str, list[Diagnostic]]:
     diagnostics: list[Diagnostic] = []
     if isinstance(node, LiteralNode):
@@ -1759,7 +1923,12 @@ def _infer_value_expression_type(
             return "null", diagnostics
         return "unknown", diagnostics
     if isinstance(node, ReferenceNode):
-        if step_condition_mode and node.parts[0] != "inputs" and not (isinstance(let_bindings, dict) and node.parts[0] in let_bindings):
+        if (
+            step_condition_mode
+            and node.parts[0] != "inputs"
+            and node.parts[0] not in extra_allowed_reference_roots
+            and not (isinstance(let_bindings, dict) and node.parts[0] in let_bindings)
+        ):
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.if_expr.root",
@@ -1781,6 +1950,7 @@ def _infer_value_expression_type(
                     source=source,
                     step_condition_mode=step_condition_mode,
                     let_bindings=let_bindings,
+                    extra_allowed_reference_roots=extra_allowed_reference_roots,
                 )
                 diagnostics.extend(argument_diagnostics)
             return "string", diagnostics
@@ -1792,6 +1962,7 @@ def _infer_value_expression_type(
             source=source,
             step_condition_mode=step_condition_mode,
             let_bindings=let_bindings,
+            extra_allowed_reference_roots=extra_allowed_reference_roots,
         )
         for filter_node in node.filters:
             current_type, filter_diagnostics = _infer_filter_result_type(filter_node, input_type=current_type, path=path, source=source)
@@ -1804,6 +1975,7 @@ def _infer_value_expression_type(
             source=source,
             step_condition_mode=step_condition_mode,
             let_bindings=let_bindings,
+            extra_allowed_reference_roots=extra_allowed_reference_roots,
         )
         diagnostics.extend(operand_diagnostics)
         if operand_type not in {"boolean", "unknown"}:
@@ -1825,6 +1997,7 @@ def _infer_value_expression_type(
             source=source,
             step_condition_mode=step_condition_mode,
             let_bindings=let_bindings,
+            extra_allowed_reference_roots=extra_allowed_reference_roots,
         )
         right_type, right_diagnostics = _infer_value_expression_type(
             node.right,
@@ -1832,6 +2005,7 @@ def _infer_value_expression_type(
             source=source,
             step_condition_mode=step_condition_mode,
             let_bindings=let_bindings,
+            extra_allowed_reference_roots=extra_allowed_reference_roots,
         )
         diagnostics.extend(left_diagnostics)
         diagnostics.extend(right_diagnostics)

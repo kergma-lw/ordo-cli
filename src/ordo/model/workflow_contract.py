@@ -103,14 +103,27 @@ WORKFLOW_CONTRACT: JSONObject = {
         "authoring_role": "workflow_fragment_invocation",
         "execution_semantics": "runtime_scoped_fragment_invocation",
         "surface_kind": "step_form",
+        "body_forms": ["named_run_target", "inline_repeated_steps"],
         "call_fields": [
             {"name": "run", "required": True, "type": "string"},
+            {"name": "steps", "required": False, "type": "array", "authoring_role": "inline_repeated_body"},
             {"name": "if", "required": False, "type": "string", "authoring_role": "caller_scoped_invocation_condition"},
             {"name": "with", "required": False, "type": "object", "authoring_role": "fragment_argument_bindings"},
+            {"name": "for_each", "required": False, "type": "runtime_value", "authoring_role": "bounded_fan_out_source"},
+            {"name": "register", "required": False, "type": "string", "authoring_role": "aggregate_invocation_result"},
         ],
         "fragment_argument_access_surface": "args.name",
         "caller_scoped_condition_surface": ["inputs", "state", "step"],
         "caller_scoped_binding_surface": ["inputs", "state", "step"],
+        "fan_out_surface": {
+            "item_binding": "item",
+            "outer_if_scope": "whole_invocation_step",
+            "inner_if_scope": "per_iteration_inner_step",
+            "inner_step_scope": ["inputs", "state", "step", "item"],
+            "inner_register_scope": "iteration_local",
+            "outer_register_scope": "aggregate_results",
+            "forbidden_nested_surfaces": ["for_each", "guards"],
+        },
     },
     "block_forms": [
         {"name": "guard_block", "required_fields": ["guards"], "optional_fields": []},
@@ -125,8 +138,8 @@ WORKFLOW_CONTRACT: JSONObject = {
         {
             "name": "exactly_one_step_form",
             "kind": "exclusive_choice",
-            "fields": ["uses", "run", "profile_switch", "value", "result", "publish", "state_set", "state_delete"],
-            "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, publish, state_set, or state_delete",
+            "fields": ["uses", "run", "steps", "profile_switch", "value", "result", "publish", "state_set", "state_delete"],
+            "message": "A workflow step must define exactly one of uses, run, steps, profile_switch, value, result, publish, state_set, or state_delete",
         },
         {
             "name": "with_requires_uses",
@@ -134,6 +147,20 @@ WORKFLOW_CONTRACT: JSONObject = {
             "field": "with",
             "requires": ["uses", "run"],
             "message": "The with field is allowed only together with uses or run",
+        },
+        {
+            "name": "for_each_requires_invocation_body",
+            "kind": "dependency",
+            "field": "for_each",
+            "requires": ["run", "steps"],
+            "message": "The for_each field is allowed only together with run or inline steps",
+        },
+        {
+            "name": "inline_steps_require_for_each",
+            "kind": "dependency",
+            "field": "steps",
+            "requires": ["for_each"],
+            "message": "Inline repeated step bodies require for_each",
         },
     ],
     "step_forms": [
@@ -149,6 +176,12 @@ WORKFLOW_CONTRACT: JSONObject = {
             "name": "run_invocation",
             "required_fields": ["name", "run"],
             "optional_fields": ["if", "with", "for_each", "register"],
+            "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        },
+        {
+            "name": "inline_fan_out_invocation",
+            "required_fields": ["name", "for_each", "steps"],
+            "optional_fields": ["if", "register"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
         },
         {

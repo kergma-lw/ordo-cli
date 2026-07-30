@@ -478,6 +478,35 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_inline_fan_out_step_allows_inner_steps(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect-many
+                inputs:
+                  items: []
+                blocks:
+                  - steps:
+                      - name: inspect-many
+                        for_each: ${inputs.items}
+                        steps:
+                          - name: load
+                            uses: gh.issue
+                            with:
+                              issue_number: ${item}
+                            register: issue
+                          - name: maybe-publish
+                            value: ${step.issue.outputs.title}
+                            if: item
+                            register: title
+                        register: runs
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_for_each_rejected_on_non_run_step(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -496,7 +525,92 @@ class ValidationTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.for_each_without_run")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.for_each_without_invocation_body")
+
+    def test_inline_steps_require_for_each(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect-many
+                blocks:
+                  - steps:
+                      - name: inspect-many
+                        steps:
+                          - name: load
+                            uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.inline_steps_without_for_each")
+
+    def test_inline_steps_must_not_be_empty(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect-many
+                inputs:
+                  items: []
+                blocks:
+                  - steps:
+                      - name: inspect-many
+                        for_each: ${inputs.items}
+                        steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.inline_steps.empty")
+
+    def test_inline_steps_forbid_nested_for_each(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect-many
+                inputs:
+                  items: []
+                blocks:
+                  - steps:
+                      - name: inspect-many
+                        for_each: ${inputs.items}
+                        steps:
+                          - name: nested
+                            run: github/comment-and-set-status
+                            for_each: ${inputs.items}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.inline_steps.nested_for_each_forbidden")
+
+    def test_step_must_not_define_run_and_inline_steps(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect-many
+                inputs:
+                  items: []
+                blocks:
+                  - steps:
+                      - name: inspect-many
+                        run: github/comment-and-set-status
+                        for_each: ${inputs.items}
+                        steps:
+                          - name: nested
+                            uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.form")
 
     def test_valid_profile_launchers_pass(self) -> None:
         report = validate_profile_text(
@@ -1371,12 +1485,14 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if.type")
 
-    def test_step_if_and_register_cannot_be_used_together(self) -> None:
+    def test_step_if_and_register_can_be_used_together(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: true
                 blocks:
                   - guards: []
                   - steps:
@@ -1388,8 +1504,8 @@ class ValidationTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertIn("validation.workflow.step.if_with_register", [diagnostic.code for diagnostic in report.diagnostics])
+        self.assertEqual(report.status, RuntimeStatus.OK)
+        self.assertIn("validation.workflow.local_expression.step_condition.embedded_if_deprecated", [diagnostic.code for diagnostic in report.diagnostics])
 
     def test_forward_step_register_reference_in_if_fails(self) -> None:
         report = validate_workflow_text(

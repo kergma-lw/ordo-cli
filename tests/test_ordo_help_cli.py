@@ -176,12 +176,28 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
         self.assertIn("for_each", step_forms["run_invocation"]["optional_fields"])
         self.assertIn("register", step_forms["run_invocation"]["optional_fields"])
+        self.assertEqual(step_forms["inline_fan_out_invocation"]["required_fields"], ["name", "for_each", "steps"])
+        self.assertIn("register", step_forms["inline_fan_out_invocation"]["optional_fields"])
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
         self.assertEqual(step_forms["result"]["required_fields"], ["name", "result"])
         self.assertEqual(step_forms["publish"]["required_fields"], ["name", "publish"])
         self.assertIn("register", step_forms["value"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["deprecated_optional_fields"])
+
+    def test_model_publishes_bounded_fan_out_run_contract_metadata(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        run_contract = model["workflow"]["run_contract"]
+
+        self.assertEqual(run_contract["body_forms"], ["named_run_target", "inline_repeated_steps"])
+        fields = {item["name"]: item for item in run_contract["call_fields"]}
+        self.assertIn("steps", fields)
+        self.assertIn("for_each", fields)
+        self.assertIn("register", fields)
+        self.assertEqual(run_contract["fan_out_surface"]["item_binding"], "item")
+        self.assertEqual(run_contract["fan_out_surface"]["outer_if_scope"], "whole_invocation_step")
+        self.assertEqual(run_contract["fan_out_surface"]["inner_if_scope"], "per_iteration_inner_step")
+        self.assertEqual(run_contract["fan_out_surface"]["forbidden_nested_surfaces"], ["for_each", "guards"])
 
     def test_model_publishes_workflow_input_hint_metadata(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
