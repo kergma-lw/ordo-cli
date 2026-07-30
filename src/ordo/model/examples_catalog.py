@@ -23,6 +23,12 @@ EXAMPLES_CATALOG: JSONObject = {
             "related_topics": ["capabilities", "model", "operations"],
         },
         {
+            "name": "inspect-pr",
+            "path": "examples/inspect-pr.yaml",
+            "shows": ["pull_request_probe_composition", "orthogonal_pr_surfaces", "published_digest_inputs"],
+            "related_topics": ["operations", "examples", "model"],
+        },
+        {
             "name": "set-active-task-from-gitx",
             "path": "examples/set-active-task-from-gitx.yaml",
             "shows": ["multi_step_workflow", "state_updates", "shell_fallback"],

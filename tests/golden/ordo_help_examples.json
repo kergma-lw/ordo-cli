@@ -30,6 +30,21 @@
       "verified": true
     },
     {
+      "name": "inspect-pr",
+      "path": "examples/inspect-pr.yaml",
+      "related_topics": [
+        "operations",
+        "examples",
+        "model"
+      ],
+      "shows": [
+        "pull_request_probe_composition",
+        "orthogonal_pr_surfaces",
+        "published_digest_inputs"
+      ],
+      "verified": true
+    },
+    {
       "name": "set-active-task-from-gitx",
       "path": "examples/set-active-task-from-gitx.yaml",
       "related_topics": [

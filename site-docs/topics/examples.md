@@ -18,6 +18,13 @@ Use this page when you want concrete repository examples to inspect side by side
 - Highlights: `guard_probe_usage`, `blocked_before_execution`
 - Related topics: [Capabilities](capabilities.md), [Authoring model](model.md), [Operation catalog](operations.md)
 
+## inspect-pr
+
+- Path: `examples/inspect-pr.yaml`
+- Verified: `true`
+- Highlights: `pull_request_probe_composition`, `orthogonal_pr_surfaces`, `published_digest_inputs`
+- Related topics: [Operation catalog](operations.md), [Examples](examples.md), [Authoring model](model.md)
+
 ## set-active-task-from-gitx
 
 - Path: `examples/set-active-task-from-gitx.yaml`
@@ -106,6 +113,21 @@ Use this page when you want concrete repository examples to inspect side by side
       "shows": [
         "guard_probe_usage",
         "blocked_before_execution"
+      ],
+      "verified": true
+    },
+    {
+      "name": "inspect-pr",
+      "path": "examples/inspect-pr.yaml",
+      "related_topics": [
+        "operations",
+        "examples",
+        "model"
+      ],
+      "shows": [
+        "pull_request_probe_composition",
+        "orthogonal_pr_surfaces",
+        "published_digest_inputs"
       ],
       "verified": true
     },

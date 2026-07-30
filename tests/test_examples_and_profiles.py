@@ -1,5 +1,7 @@
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 from ordo.introspection import describe_examples_catalog
 from ordo.model.runtime import OperationResult, RuntimeStatus
@@ -13,6 +15,7 @@ class ExampleSurfaceTest(unittest.TestCase):
         for path in (
             Path("examples/minimal.yaml"),
             Path("examples/inspect-issue.yaml"),
+            Path("examples/inspect-pr.yaml"),
             Path("examples/blocked-main-branch.yaml"),
             Path("examples/launcher-step.yaml"),
             Path("examples/let-bindings.yaml"),
@@ -88,6 +91,50 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(result.outputs["executed_steps"], ["compute-membership", "announce"])
         self.assertEqual(result.operation_results[0].outputs.get("value"), True)
         self.assertEqual(result.operation_results[1].outputs.get("stdout"), "example-task")
+
+    def test_inspect_pr_example_is_published_and_executes_end_to_end(self) -> None:
+        catalog = describe_examples_catalog()
+        workflow = load_workflow_file(Path("examples/inspect-pr.yaml"))
+
+        self.assertTrue(any(item["name"] == "inspect-pr" for item in catalog["examples"]))
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                _completed(returncode=0, stdout="authenticated\n", stderr=""),
+                _completed(returncode=0, stdout='{"number":42,"title":"Add PR probes","body":"Body","state":"open","draft":false,"html_url":"https://github.com/kergma-lw/ordo-cli/pull/42","created_at":"2026-07-30T10:00:00Z","updated_at":"2026-07-30T11:00:00Z","user":{"login":"kergma-lw"},"base":{"ref":"main"},"head":{"ref":"feature/pr-probes","sha":"abc123"},"mergeable":true,"mergeable_state":"clean","review_decision":"APPROVED","additions":12,"deletions":3,"changed_files":2,"commits":4}', stderr=""),
+                _completed(returncode=0, stdout="authenticated\n", stderr=""),
+                _completed(returncode=0, stdout='{"number":42,"comments":1}', stderr=""),
+                _completed(returncode=0, stdout='[{"id":1,"body":"First","created_at":"2026-07-30T10:00:00Z","updated_at":"2026-07-30T10:00:00Z","html_url":"https://github.com/kergma-lw/ordo-cli/pull/42#issuecomment-1","user":{"login":"kergma-lw"}}]', stderr=""),
+                _completed(returncode=0, stdout="authenticated\n", stderr=""),
+                _completed(returncode=0, stdout='{"data":{"repository":{"pullRequest":{"reviews":{"totalCount":1,"nodes":[{"id":"PRR_1","url":"https://github.com/kergma-lw/ordo-cli/pull/42#pullrequestreview-1","body":"Looks good","state":"APPROVED","submittedAt":"2026-07-30T12:00:00Z","author":{"login":"ww"},"commit":{"oid":"abc123"}}]}}}}}', stderr=""),
+                _completed(returncode=0, stdout="authenticated\n", stderr=""),
+                _completed(returncode=0, stdout='{"number":42,"review_comments":1,"head":{"sha":"abc123"}}', stderr=""),
+                _completed(returncode=0, stdout='[{"id":10,"body":"Please rename this","path":"src/ordo/help_cli.py","commit_id":"def456","original_commit_id":"abc123","line":12,"original_line":12,"side":"RIGHT","in_reply_to_id":null,"created_at":"2026-07-30T13:00:00Z","updated_at":"2026-07-30T13:00:00Z","html_url":"https://github.com/kergma-lw/ordo-cli/pull/42#discussion_r10","user":{"login":"reviewer"}}]', stderr=""),
+                _completed(returncode=0, stdout="authenticated\n", stderr=""),
+                _completed(returncode=0, stdout='{"number":42,"head":{"sha":"abc123"}}', stderr=""),
+                _completed(returncode=0, stdout='{"state":"success","statuses":[{"context":"lint","state":"success","target_url":"https://example.test/lint"}]}', stderr=""),
+                _completed(returncode=0, stdout='{"total_count":1,"check_runs":[{"name":"unit","status":"completed","conclusion":"success","html_url":"https://example.test/unit"}]}', stderr=""),
+                _completed(returncode=0, stdout="authenticated\n", stderr=""),
+                _completed(returncode=0, stdout='{"number":42,"state":"open"}', stderr=""),
+                _completed(returncode=0, stdout='[{"event":"ready_for_review","created_at":"2026-07-30T10:00:00Z","actor":{"login":"kergma-lw"}}]', stderr=""),
+            ]
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        published = result.to_contract()["published"][0]
+        self.assertEqual(published["pull_ref"], "kergma-lw/ordo-cli#42")
+        self.assertEqual(published["title"], "Add PR probes")
+        self.assertEqual(published["head_sha"], "abc123")
+        self.assertEqual(published["comment_count"], 1)
+        self.assertEqual(published["review_count"], 1)
+        self.assertEqual(published["review_comment_count"], 1)
+        self.assertEqual(published["check_count"], 2)
+        self.assertEqual(published["timeline_count"], 1)
+
+
+def _completed(*, returncode: int, stdout: str, stderr: str) -> CompletedProcess[str]:
+    return CompletedProcess(args=["gh"], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
 if __name__ == "__main__":
