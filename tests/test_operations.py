@@ -223,18 +223,146 @@ class OperationTest(unittest.TestCase):
 
         gh_issue = registry.get_operation("gh.issue")
         gh_issue_comments = registry.get_operation("gh.issue.comments")
+        gh_pr = registry.get_operation("gh.pr")
+        gh_pr_comments = registry.get_operation("gh.pr.comments")
+        gh_pr_reviews = registry.get_operation("gh.pr.reviews")
+        gh_pr_review_comments = registry.get_operation("gh.pr.review_comments")
         gh_project_items = registry.get_operation("gh.project.items")
         gh_close = registry.get_operation("gh.issue.close")
         shell_command = registry.get_operation("shell.command")
 
         self.assertEqual(gh_issue.failure_modes, ("issue_not_found", "probe_failed"))
         self.assertEqual(gh_issue_comments.failure_modes, ("issue_not_found", "limit_invalid", "probe_failed"))
+        self.assertEqual(gh_pr.failure_modes, ("pull_not_found", "probe_failed"))
+        self.assertEqual(gh_pr_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
+        self.assertEqual(gh_pr_reviews.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
+        self.assertEqual(gh_pr_review_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(
             gh_project_items.failure_modes,
             ("project_not_found", "unknown_field", "ambiguous_field", "unsupported_field_type", "invalid_filter_value", "invalid_content_ref", "probe_failed"),
         )
         self.assertEqual(gh_close.failure_modes, ("issue_not_found", "close_blocked"))
         self.assertEqual(shell_command.failure_modes, ("command_failed", "action_failed"))
+
+    def test_gh_pr_probe_contract_publishes_metadata_shape(self) -> None:
+        registry = get_public_connector_registry()
+
+        operation = registry.get_operation("gh.pr")
+
+        self.assertIsNotNone(operation)
+        self.assertEqual(operation.kind, "probe")
+        self.assertEqual(operation.inputs["repository"], "string")
+        self.assertEqual(operation.inputs["pull_number"], "integer")
+        self.assertEqual(operation.outputs["head_sha"], "string")
+        self.assertEqual(operation.outputs["commits_count"], "integer")
+
+    def test_gh_pr_probe_returns_normalized_metadata(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr")
+        resolved = ResolvedOperation("gh.pr", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"number":42,"title":"Add PR probes","body":"Body","state":"open","draft":false,"html_url":"https://github.com/kergma-lw/ordo-cli/pull/42","created_at":"2026-07-30T10:00:00Z","updated_at":"2026-07-30T11:00:00Z","user":{"login":"kergma-lw"},"base":{"ref":"main"},"head":{"ref":"feature/pr-probes","sha":"abc123"},"mergeable":true,"mergeable_state":"clean","review_decision":"APPROVED","additions":12,"deletions":3,"changed_files":2,"commits":4}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["repository"], "kergma-lw/ordo-cli")
+        self.assertEqual(result.outputs["number"], 42)
+        self.assertEqual(result.outputs["author"]["login"], "kergma-lw")
+        self.assertEqual(result.outputs["head_sha"], "abc123")
+        self.assertEqual(result.outputs["commits_count"], 4)
+
+    def test_gh_pr_probe_reports_missing_pull_request(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 999})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr")
+        resolved = ResolvedOperation("gh.pr", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="gh: Not Found (HTTP 404)\n"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "pull_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_pr.not_found")
+
+    def test_gh_pr_comments_probe_returns_structured_comment_nodes(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.comments", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.comments")
+        resolved = ResolvedOperation("gh.pr.comments", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"number":42,"comments":2}', stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='[{"id":1,"body":"First","created_at":"2026-07-30T10:00:00Z","updated_at":"2026-07-30T10:00:00Z","html_url":"https://github.com/kergma-lw/ordo-cli/pull/42#issuecomment-1","user":{"login":"kergma-lw"}},{"id":2,"body":"Second","created_at":"2026-07-30T11:00:00Z","updated_at":"2026-07-30T11:00:00Z","html_url":"https://github.com/kergma-lw/ordo-cli/pull/42#issuecomment-2","user":{"login":"ww"}}]',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["pull_ref"], "kergma-lw/ordo-cli#42")
+        self.assertEqual(result.outputs["total_count"], 2)
+        self.assertEqual(result.outputs["comments"][0]["author"]["login"], "kergma-lw")
+
+    def test_gh_pr_reviews_probe_returns_structured_reviews(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.reviews", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.reviews")
+        resolved = ResolvedOperation("gh.pr.reviews", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"pullRequest":{"reviews":{"totalCount":1,"nodes":[{"id":"PRR_1","url":"https://github.com/kergma-lw/ordo-cli/pull/42#pullrequestreview-1","body":"Looks good","state":"APPROVED","submittedAt":"2026-07-30T12:00:00Z","author":{"login":"ww"},"commit":{"oid":"abc123"}}]}}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["total_count"], 1)
+        self.assertEqual(result.outputs["reviews"][0]["state"], "APPROVED")
+        self.assertEqual(result.outputs["reviews"][0]["commit_id"], "abc123")
+
+    def test_gh_pr_review_comments_probe_returns_structured_line_comments(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.review_comments", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.review_comments")
+        resolved = ResolvedOperation("gh.pr.review_comments", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"number":42,"review_comments":1}', stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='[{"id":10,"body":"Please rename this","path":"src/ordo/help_cli.py","commit_id":"def456","original_commit_id":"abc123","line":12,"original_line":12,"side":"RIGHT","in_reply_to_id":null,"created_at":"2026-07-30T13:00:00Z","updated_at":"2026-07-30T13:00:00Z","html_url":"https://github.com/kergma-lw/ordo-cli/pull/42#discussion_r10","user":{"login":"reviewer"}}]',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["total_count"], 1)
+        self.assertEqual(result.outputs["comments"][0]["path"], "src/ordo/help_cli.py")
+        self.assertEqual(result.outputs["comments"][0]["author"]["login"], "reviewer")
 
     def test_gh_project_items_probe_contract_publishes_normalized_collection_shape(self) -> None:
         registry = get_public_connector_registry()
