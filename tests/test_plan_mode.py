@@ -465,6 +465,27 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(fan_out["register_mode"], "aggregate_results")
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["fan_out"]["item_count"], 3)
 
+    def test_plan_surfaces_inline_fan_out_body_kind(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": ["one", "two"]},
+            steps=(
+                Step(
+                    name="inspect",
+                    for_each="${inputs.items}",
+                    steps=(Step(name="copy", value="${item}", register="item_value"),),
+                    register="runs",
+                ),
+            ),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["step_items"][0]["body_kind"], "inline_repeated_steps")
+        self.assertEqual(result.outputs["run_items"][0]["body_kind"], "inline_repeated_steps")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["fan_out"]["item_count"], 2)
+
     def test_plan_marks_runtime_only_fan_out_when_cardinality_is_not_statically_known(self) -> None:
         workflow = Workflow(
             version=0,

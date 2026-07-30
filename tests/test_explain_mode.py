@@ -465,6 +465,25 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["category"], "ok")
         self.assertEqual(result.outputs["explanation"]["fan_out_items"][0]["fan_out"]["source_status"], "runtime_only")
 
+    def test_explain_surfaces_inline_fan_out_body_kind(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": ["one", "two"]},
+            steps=(
+                Step(
+                    name="inspect",
+                    for_each="${inputs.items}",
+                    steps=(Step(name="copy", value="${item}", register="item_value"),),
+                    register="runs",
+                ),
+            ),
+        )
+
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["explanation"]["fan_out_items"][0]["body_kind"], "inline_repeated_steps")
+
     def test_explain_surfaces_fan_out_failure_details(self) -> None:
         execution_result = RuntimeResult(
             mode="execute",  # type: ignore[arg-type]

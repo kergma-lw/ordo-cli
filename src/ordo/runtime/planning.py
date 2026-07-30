@@ -55,7 +55,7 @@ def _invalidates_scopes_for_step(resolved_step) -> list[str]:
 
 
 def _fan_out_info_for_step(step, workflow: Workflow, *, condition_status: str | None) -> dict[str, object] | None:
-    if step.run is None or step.for_each is None:
+    if (step.run is None and step.steps is None) or step.for_each is None:
         return None
     if condition_status == "false":
         return {
@@ -90,6 +90,16 @@ def _fan_out_info_for_step(step, workflow: Workflow, *, condition_status: str | 
         "failure_policy": "strict",
         "register_mode": "aggregate_results" if step.register is not None else "none",
     }
+
+
+def _invocation_body_kind(step, resolved_step=None) -> str | None:
+    if resolved_step is not None and isinstance(resolved_step, ResolvedRunStep):
+        return resolved_step.body_kind
+    if step.run is not None:
+        return "named_run_target"
+    if step.steps is not None:
+        return "inline_repeated_steps"
+    return None
 
 
 def _fan_out_summary(fan_out: dict[str, object] | None) -> str | None:
@@ -446,6 +456,7 @@ def _build_step_items(
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
                         "launcher": None,
+                        "body_kind": _invocation_body_kind(step, resolved_step),
                         "fan_out": _fan_out_info_for_step(step, workflow, condition_status=condition_status),
                     }
                 )
@@ -488,6 +499,7 @@ def _build_step_items(
                 "invalidates_scopes": [],
                 "preflight_support": None,
                 "launcher": step.launcher if step.operation is not None else None,
+                "body_kind": _invocation_body_kind(step),
                 "fan_out": _fan_out_info_for_step(step, workflow, condition_status=None),
             }
         )
@@ -560,12 +572,13 @@ def _build_run_items(
     blocked = bool(check_result.outputs.get("blockers"))
     run_items: list[dict[str, object]] = []
     for step in workflow.steps:
-        if step.run is None:
+        if step.run is None and step.steps is None:
             continue
         run_items.append(
             {
                 "name": step.name,
-                "reference": step.run,
+                "reference": step.run or "inline_steps",
+                "body_kind": _invocation_body_kind(step),
                 "eligibility": "blocked" if blocked else "eligible",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,

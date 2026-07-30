@@ -126,6 +126,28 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertEqual(result.outputs["active_overrides"][0]["target"], "shell.command")
 
+    def test_check_surfaces_inline_fan_out_structure_in_preflight_items(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": ["one", "two"]},
+            steps=(
+                Step(
+                    name="inspect",
+                    for_each="${inputs.items}",
+                    steps=(Step(name="copy", value="${item}", register="item_value"),),
+                    register="runs",
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertIn(result.status, {RuntimeStatus.OK, RuntimeStatus.GUARD_FAILED})
+        fan_out_item = next(item for item in result.outputs["preflight_step_items"] if item["name"] == "inspect")
+        self.assertEqual(fan_out_item["body_kind"], "inline_repeated_steps")
+        self.assertEqual(fan_out_item["fan_out"], {"enabled": True})
+
     def test_check_reports_unknown_when_later_guard_region_remains_unchecked(self) -> None:
         workflow = Workflow(
             version=0,

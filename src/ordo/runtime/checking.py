@@ -20,7 +20,7 @@ from .preflight_interpreter import build_preflight_halt, evaluate_preflight_prob
 from .preflight_steps import classify_preflight_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
-from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
+from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 from .validation import validate_workflow_document, validate_workflow_semantics
 
@@ -1478,6 +1478,10 @@ def _structural_step_item(
         "condition_status": condition_status,
         "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
     }
+    if isinstance(resolved_step, ResolvedRunStep):
+        item["body_kind"] = resolved_step.body_kind
+        if step.for_each is not None:
+            item["fan_out"] = {"enabled": True}
     if halt_reason is not None:
         item["halt_reason"] = halt_reason
     if preflight_support is not None:
