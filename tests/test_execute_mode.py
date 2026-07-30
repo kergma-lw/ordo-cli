@@ -285,6 +285,94 @@ class ExecuteModeTest(unittest.TestCase):
                 [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]],
             )
 
+    def test_execute_inline_fan_out_uses_item_scope_and_iteration_local_registers(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={"items": ["one", "two"]},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(
+                                Step(name="capture", value="${item}", register="current_item"),
+                                Step(name="emit", result={"summary": "${step.current_item.outputs.value}"}),
+                            ),
+                            register="runs",
+                        ),
+                        Step(name="copy", result="${step.runs.results}"),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(
+            list(result.results),
+            [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]],
+        )
+
+    def test_execute_outer_if_false_skips_whole_inline_fan_out_step(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={"items": ["one"], "enabled": False},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(Step(name="capture", value="${item}", register="current_item"),),
+                            if_="inputs.enabled",
+                            register="runs",
+                        ),
+                        Step(name="done", result={"summary": "ok"}),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertNotIn("expand", result.outputs["executed_steps"])
+        self.assertIn("expand", result.outputs["skipped_steps"])
+        self.assertEqual(list(result.results), [{"summary": "ok"}])
+
+    def test_execute_inline_fan_out_inner_if_applies_per_iteration(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={"items": [False, True]},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(
+                                Step(name="capture", value="${item}", register="current_item"),
+                                Step(name="emit", result={"summary": "${step.current_item.outputs.value}"}, if_="step.current_item.outputs.value"),
+                            ),
+                            register="runs",
+                        ),
+                        Step(name="copy", result="${step.runs.results}"),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.results)[0][1], {"results": [{"summary": True}]})
+        self.assertEqual(list(result.results)[0][0]["results"][0]["workflow"], "publish::expand")
+
     def test_execute_can_use_gh_project_items_let_binding_for_guard_fan_out_and_publish(self) -> None:
         workflow = Workflow(
             version=0,
@@ -605,6 +693,36 @@ class ExecuteModeTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
             self.assertEqual(result.failed_step, "nested-command")
             self.assertEqual(result.outputs["fan_out_failure"]["item_index"], 1)
+
+    def test_execute_inline_fan_out_reports_failed_item_index(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={"items": ["ok", "boom"]},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(Step(name="nested-command", operation=OperationRef("shell.command", with_={"command": "ignored"})),),
+                            register="runs",
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        def executor(_resolved_step, nested_workflow):
+            if nested_workflow.inputs.get("__iteration_item__") == "boom":
+                return OperationResult(status="execution_error", summary="boom")
+            return OperationResult(status="ok", summary="ok")
+
+        result = execute_workflow(workflow, step_executor=executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.failed_step, "nested-command")
+        self.assertEqual(result.outputs["fan_out_failure"]["item_index"], 1)
 
     def test_execute_branch_classifiers_isolate_legacy_shaped_paths(self) -> None:
         probe = ResolvedOperation(reference="gh.issue", connector_namespace="gh", operation=OperationContract(name="issue", kind="probe"), source="public")

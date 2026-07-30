@@ -1926,6 +1926,7 @@ def _infer_value_expression_type(
         if (
             step_condition_mode
             and node.parts[0] != "inputs"
+            and node.parts[0] != "item"
             and node.parts[0] not in extra_allowed_reference_roots
             and not (isinstance(let_bindings, dict) and node.parts[0] in let_bindings)
         ):

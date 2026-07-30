@@ -1777,6 +1777,8 @@ def _evaluate_node(
                 step_results=step_results,
                 observation_session=observation_session,
             )
+        if node.parts[0] == "item":
+            return _resolve_iteration_item_reference(node.parts, workflow=workflow)
         return _resolve_input_reference(node.parts, workflow=workflow)
     if isinstance(node, StateReferenceNode):
         return _resolve_state_reference(node, parsed=parsed, workflow=workflow)
@@ -1973,6 +1975,25 @@ def _resolve_input_reference(parts: tuple[str, ...], *, workflow: Workflow) -> J
             message=exc.message,
             details=exc.details,
         ) from exc
+
+
+def _resolve_iteration_item_reference(parts: tuple[str, ...], *, workflow: Workflow) -> JSONValue:
+    if "__iteration_item__" not in workflow.inputs:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.input_missing",
+            message=f"Workflow input reference '{'.'.join(parts)}' is missing",
+            details={"reference": ".".join(parts)},
+        )
+    current: JSONValue = workflow.inputs["__iteration_item__"]
+    for part in parts[1:]:
+        if not isinstance(current, dict) or part not in current:
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.input_missing",
+                message=f"Workflow input reference '{'.'.join(parts)}' is missing",
+                details={"reference": ".".join(parts)},
+            )
+        current = current[part]
+    return current
 
 
 def _resolve_state_reference(node: StateReferenceNode, *, parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:

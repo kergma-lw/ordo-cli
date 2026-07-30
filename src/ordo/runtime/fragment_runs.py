@@ -32,6 +32,15 @@ def materialize_run_workflow(
 ) -> Workflow | Diagnostic:
     """Load and bind one reusable fragment run into an executable sub-workflow."""
 
+    if step.steps is not None:
+        return _materialize_inline_run_workflow(
+            step,
+            caller_workflow,
+            block_index=block_index,
+            step_index=step_index,
+            extra_bindings=extra_bindings,
+        )
+
     if step.resolved_run_path is None:
         return Diagnostic(
             code="runtime.run.unresolved_path",
@@ -41,8 +50,25 @@ def materialize_run_workflow(
             details={"reference": step.run},
         )
 
+    binding_workflow = caller_workflow
+    if extra_bindings and "item" in extra_bindings:
+        binding_workflow = Workflow(
+            version=caller_workflow.version,
+            workflow=caller_workflow.workflow,
+            inputs={**caller_workflow.inputs, "__iteration_item__": extra_bindings["item"]},
+            declared_inputs=caller_workflow.declared_inputs,
+            explicit_input_keys=caller_workflow.explicit_input_keys,
+            let_bindings=caller_workflow.let_bindings,
+            state_needs=caller_workflow.state_needs,
+            state_bindings=caller_workflow.state_bindings,
+            states=caller_workflow.states,
+            step_results=caller_workflow.step_results,
+            blocks=caller_workflow.blocks,
+            source_path=caller_workflow.source_path,
+            launch_dir=caller_workflow.launch_dir,
+        )
     try:
-        include_bindings = _evaluate_run_bindings(step.run_with, caller_workflow, block_index=block_index, step_index=step_index)
+        include_bindings = _evaluate_run_bindings(step.run_with, binding_workflow, block_index=block_index, step_index=step_index)
     except ValueResolutionError as exc:
         return exc.to_diagnostic(path=("blocks", str(block_index), "steps", str(step_index), "with"))
     if extra_bindings:
@@ -82,7 +108,7 @@ def materialize_run_workflow(
             state_needs={**caller_workflow.state_needs, **nested_workflow.state_needs},
             state_bindings={**caller_workflow.state_bindings, **nested_workflow.state_bindings, **dict(step.run_state_bindings)},
             states={**caller_workflow.states, **nested_workflow.states, **dict(step.run_states)},
-            step_results=caller_workflow.step_results,
+            step_results=dict(caller_workflow.step_results),
             blocks=nested_workflow.blocks,
             source_path=nested_workflow.source_path,
             launch_dir=nested_workflow.launch_dir,
@@ -120,10 +146,39 @@ def materialize_run_workflow(
         state_needs=caller_workflow.state_needs,
         state_bindings=step.run_state_bindings or caller_workflow.state_bindings,
         states=step.run_states or caller_workflow.states,
-        step_results=caller_workflow.step_results,
+        step_results=dict(caller_workflow.step_results),
         blocks=blocks,
         source_path=str(run_path),
         launch_dir=str(launch_dir),
+    )
+
+
+def _materialize_inline_run_workflow(
+    step: Step,
+    caller_workflow: Workflow,
+    *,
+    block_index: int,
+    step_index: int,
+    extra_bindings: JSONObject | None,
+) -> Workflow:
+    item_value = None if extra_bindings is None else extra_bindings.get("item")
+    materialized_inputs = dict(caller_workflow.inputs)
+    if extra_bindings and "item" in extra_bindings:
+        materialized_inputs["__iteration_item__"] = item_value
+    return Workflow(
+        version=caller_workflow.version,
+        workflow=f"{caller_workflow.workflow}::{step.name}",
+        inputs=materialized_inputs,
+        declared_inputs=caller_workflow.declared_inputs,
+        explicit_input_keys=caller_workflow.explicit_input_keys,
+        let_bindings=caller_workflow.let_bindings,
+        state_needs=caller_workflow.state_needs,
+        state_bindings=caller_workflow.state_bindings,
+        states=caller_workflow.states,
+        step_results=dict(caller_workflow.step_results),
+        blocks=(StepBlock(steps=tuple(step.steps or ())),),
+        source_path=caller_workflow.source_path,
+        launch_dir=caller_workflow.launch_dir,
     )
 
 
