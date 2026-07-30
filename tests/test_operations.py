@@ -224,6 +224,7 @@ class OperationTest(unittest.TestCase):
         gh_issue = registry.get_operation("gh.issue")
         gh_issue_comments = registry.get_operation("gh.issue.comments")
         gh_pr = registry.get_operation("gh.pr")
+        gh_pr_checks = registry.get_operation("gh.pr.checks")
         gh_pr_comments = registry.get_operation("gh.pr.comments")
         gh_pr_reviews = registry.get_operation("gh.pr.reviews")
         gh_pr_review_comments = registry.get_operation("gh.pr.review_comments")
@@ -234,6 +235,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(gh_issue.failure_modes, ("issue_not_found", "probe_failed"))
         self.assertEqual(gh_issue_comments.failure_modes, ("issue_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr.failure_modes, ("pull_not_found", "probe_failed"))
+        self.assertEqual(gh_pr_checks.failure_modes, ("pull_not_found", "checks_unavailable", "probe_failed"))
         self.assertEqual(gh_pr_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_reviews.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_review_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
@@ -279,6 +281,49 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["author"]["login"], "kergma-lw")
         self.assertEqual(result.outputs["head_sha"], "abc123")
         self.assertEqual(result.outputs["commits_count"], 4)
+
+    def test_gh_pr_checks_probe_returns_normalized_statuses_and_check_runs(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.checks", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.checks")
+        resolved = ResolvedOperation("gh.pr.checks", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"number":42,"head":{"sha":"abc123"}}', stderr=""),
+                self._completed(returncode=0, stdout='{"state":"pending","statuses":[{"context":"lint","state":"success","target_url":"https://example.test/lint"},{"context":"deploy","state":"pending","target_url":"https://example.test/deploy"}]}', stderr=""),
+                self._completed(returncode=0, stdout='{"total_count":2,"check_runs":[{"name":"unit","status":"completed","conclusion":"success","html_url":"https://example.test/unit"},{"name":"release","status":"completed","conclusion":"skipped","html_url":"https://example.test/release"}]}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["head_sha"], "abc123")
+        self.assertEqual(result.outputs["total_count"], 4)
+        self.assertEqual(result.outputs["success_count"], 2)
+        self.assertEqual(result.outputs["pending_count"], 1)
+        self.assertEqual(result.outputs["skipped_count"], 1)
+        self.assertEqual(result.outputs["failed_count"], 0)
+        self.assertEqual(result.outputs["overall_state"], "pending")
+        self.assertEqual(result.outputs["checks"][0]["kind"], "status")
+        self.assertEqual(result.outputs["checks"][2]["kind"], "check_run")
+
+    def test_gh_pr_checks_probe_reports_unavailable_checks(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.checks", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.checks")
+        resolved = ResolvedOperation("gh.pr.checks", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"number":42,"head":{"sha":"abc123"}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="api rate limit exceeded\n"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "checks_unavailable")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_pr_checks.statuses_failed")
 
     def test_gh_pr_probe_reports_missing_pull_request(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 999})),), steps=())
