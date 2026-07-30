@@ -121,6 +121,36 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.steps[0].for_each, "${inputs.items}")
         self.assertEqual(workflow.to_contract()["blocks"][0]["steps"][0]["for_each"], "${inputs.items}")
 
+    def test_loads_inline_fan_out_step_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: inspect
+                inputs:
+                  items:
+                    hint: demo
+                blocks:
+                  - steps:
+                      - name: inspect-many
+                        for_each: ${inputs.items}
+                        steps:
+                          - name: inspect-one
+                            uses: gh.issue
+                            with:
+                              issue_number: ${item}
+                            register: issue
+                        register: inspected
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].for_each, "${inputs.items}")
+        self.assertIsNone(workflow.steps[0].run)
+        self.assertIsNotNone(workflow.steps[0].steps)
+        self.assertEqual(workflow.steps[0].steps[0].operation.uses, "gh.issue")
+        self.assertEqual(workflow.to_contract()["blocks"][0]["steps"][0]["steps"][0]["with"]["issue_number"], "${item}")
+
     def test_loads_bare_step_if_field_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(

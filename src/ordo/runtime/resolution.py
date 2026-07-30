@@ -76,11 +76,17 @@ class ResolvedRunStep:
     """Resolved reusable fragment invocation step."""
 
     name: str
-    run: str
+    run: str | None = None
+    steps: tuple[ResolvedStep, ...] = ()
+    for_each: bool = False
+
+    @property
+    def body_kind(self) -> str:
+        return "named_run_target" if self.run is not None else "inline_repeated_steps"
 
     @property
     def reference(self) -> str:
-        return self.run
+        return self.run or "inline_steps"
 
 
 ResolvedStep = ResolvedOperation | ResolvedBuiltinStep | ResolvedRunStep
@@ -192,8 +198,16 @@ def resolve_workflow_references(
             if step.publish is not None:
                 resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="publish"))
                 continue
-            if step.run is not None:
-                resolved_steps.append(ResolvedRunStep(name=step.name, run=step.run))
+            if step.run is not None or step.steps is not None:
+                nested_steps = () if step.steps is None else _resolve_inline_invocation_steps(
+                    step.steps,
+                    workflow=workflow,
+                    base_path=("blocks", str(block_index), "steps", str(step_index), "steps"),
+                    public_registry=public_registry,
+                    local_registry=local_registry,
+                    diagnostics=diagnostics,
+                )
+                resolved_steps.append(ResolvedRunStep(name=step.name, run=step.run, steps=nested_steps, for_each=step.for_each is not None))
                 continue
             if step.profile_switch is not None:
                 resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="profile_switch"))
@@ -232,6 +246,61 @@ def resolve_workflow_references(
         blocks=tuple(resolved_blocks),
         active_overrides=active_overrides,
     )
+
+
+def _resolve_inline_invocation_steps(
+    steps,
+    *,
+    workflow: Workflow,
+    base_path: tuple[str, ...],
+    public_registry: ConnectorRegistry,
+    local_registry: ConnectorRegistry,
+    diagnostics: list[Diagnostic],
+) -> tuple[ResolvedStep, ...]:
+    resolved_steps: list[ResolvedStep] = []
+    for step_index, step in enumerate(steps):
+        if step.value is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="value"))
+            continue
+        if step.result is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="result"))
+            continue
+        if step.publish is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="publish"))
+            continue
+        if step.run is not None or step.steps is not None:
+            nested_steps = () if step.steps is None else _resolve_inline_invocation_steps(
+                step.steps,
+                workflow=workflow,
+                base_path=base_path + (str(step_index), "steps"),
+                public_registry=public_registry,
+                local_registry=local_registry,
+                diagnostics=diagnostics,
+            )
+            resolved_steps.append(ResolvedRunStep(name=step.name, run=step.run, steps=nested_steps, for_each=step.for_each is not None))
+            continue
+        if step.profile_switch is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="profile_switch"))
+            continue
+        if step.state_set is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_set"))
+            continue
+        if step.state_delete is not None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="state_delete"))
+            continue
+        resolved = _resolve_reference(
+            step.operation.uses,
+            path=base_path + (str(step_index), "uses"),
+            workflow=workflow,
+            public_registry=public_registry,
+            local_registry=local_registry,
+            declared_with=step.operation.with_,
+        )
+        if isinstance(resolved, Diagnostic):
+            diagnostics.append(resolved)
+        else:
+            resolved_steps.append(resolved)
+    return tuple(resolved_steps)
 
 
 def _validate_local_connectors(*, local_connectors: tuple[Connector, ...], public_registry: ConnectorRegistry) -> list[Diagnostic]:

@@ -38,7 +38,7 @@ def classify_preflight_step(step: Step, resolved_step: ResolvedStep | None = Non
         return "context_only"
     if step.state_set is not None or step.state_delete is not None:
         return "effectful"
-    if step.run is not None:
+    if step.run is not None or step.steps is not None:
         return "read_only_unanalyzable"
     return "unknown"
 

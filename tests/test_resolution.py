@@ -3,6 +3,7 @@ import unittest
 from ordo.model.connector import Connector, OperationContract
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Guard, OperationRef, Step, Workflow
+from ordo.runtime.resolution import ResolvedRunStep
 from ordo.runtime import resolve_workflow_references
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -169,6 +170,44 @@ class ResolutionTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "resolution.let_binding.syntax")
         self.assertEqual(result.diagnostics[0].details["binding_path"], ["let", "issue"])
+
+    def test_named_run_steps_resolve_with_body_kind_and_fan_out_metadata(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": [1, 2]},
+            guards=(),
+            steps=(Step(name="expand", run="fragment.yml", for_each="${inputs.items}"),),
+        )
+
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertIsInstance(result.resolved_steps[0], ResolvedRunStep)
+        self.assertEqual(result.resolved_steps[0].body_kind, "named_run_target")
+        self.assertTrue(result.resolved_steps[0].for_each)
+
+    def test_inline_fan_out_steps_resolve_nested_body_steps(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            guards=(),
+            steps=(
+                Step(
+                    name="expand",
+                    for_each="${inputs.items}",
+                    steps=(Step(name="inspect", operation=OperationRef("gh.issue")),),
+                ),
+            ),
+        )
+
+        result = resolve_workflow_references(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertIsInstance(result.resolved_steps[0], ResolvedRunStep)
+        self.assertEqual(result.resolved_steps[0].body_kind, "inline_repeated_steps")
+        self.assertEqual(len(result.resolved_steps[0].steps), 1)
+        self.assertEqual(result.resolved_steps[0].steps[0].reference, "gh.issue")
 
 
 if __name__ == "__main__":
