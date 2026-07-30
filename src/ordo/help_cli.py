@@ -436,6 +436,118 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         ],
     },
     {
+        "name": "bounded_fan_out_is_structured_invocation",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Treat bounded fan-out as a structured invocation surface, not as a general control-flow language.",
+        "why": [
+            "bounded fan-out should stay visible as one author-facing workflow step",
+            "structured repetition is easier to validate, explain, and review than flattened ad hoc repetition",
+            "keeping repetition on the invocation surface preserves clearer check, plan, and explain output",
+        ],
+        "prefer": [
+            "use for_each only on one invocation-shaped step",
+            "keep one explicit outer step that owns the repeated work",
+            "use the outer register only for aggregated per-item results",
+        ],
+        "avoid": [
+            "treating for_each as a general looping primitive",
+            "flattening repeated work into an unstructured sequence of top-level steps",
+            "encoding repeated control flow in a way that hides the outer repeated step from analysis surfaces",
+        ],
+        "stop_when": [
+            "the proposed repeated shape no longer reads as one explicit invocation step",
+            "the workflow starts to depend on nested repetition or other control-flow expansion not supported by the public model",
+        ],
+    },
+    {
+        "name": "run_target_vs_inline_fan_out",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Use a named run target for reusable, guard-bearing, or non-trivially sized repeated bodies. Use inline repeated steps only for short local repeated bodies.",
+        "why": [
+            "named run targets keep reusable repeated logic easier to name, review, and evolve",
+            "inline repeated steps stay readable only while the repeated body remains small, linear, and workflow-local",
+            "fragment-local guards belong in reusable workflow fragment material, not inside inline repeated bodies",
+        ],
+        "prefer": [
+            "use inline steps + for_each for one or two short local repeated steps",
+            "allow three or four inline repeated steps only when the body is linear, local, and unlikely to be reused",
+            "use run + for_each when the repeated body already exists as reusable workflow fragment material",
+            "use run + for_each when the repeated body needs fragment-local guards",
+            "use run + for_each when the repeated body has its own clear domain purpose or reuse value",
+        ],
+        "avoid": [
+            "keeping a large repeated body inline merely because it currently works",
+            "keeping reusable repeated logic inline when a named run target would express the intent more honestly",
+            "trying to place guards inside an inline repeated body",
+            "using inline repeated steps for bodies that are already large, branchy, or semantically reusable",
+        ],
+        "stop_when": [
+            "the inline repeated body grows to five or more steps",
+            "the inline repeated body needs fragment-local guards",
+            "the inline repeated body becomes branchy or hard to review as one local repeated action",
+            "the same repeated body is now needed in another workflow",
+            "the repeated body needs its own explicit name or argument contract",
+        ],
+    },
+    {
+        "name": "fan_out_scope_and_conditions",
+        "priority": "critical_applicability_policy",
+        "guidance_level": "required_default",
+        "rule": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only.",
+        "why": [
+            "explicit scope boundaries make repeated workflows easier to reason about",
+            "outer and inner conditions answer different questions and should not be conflated",
+            "iteration-local register scope prevents accidental cross-item coupling",
+        ],
+        "prefer": [
+            "use the outer if when the entire repeated step should be skipped",
+            "use inner step if only for item-local branching inside inline repeated steps",
+            "treat item as iteration-local input",
+            "treat inner step registers as visible only within the same iteration body",
+            "treat the outer register as the only caller-visible aggregate result surface for inline repeated work",
+        ],
+        "avoid": [
+            "assuming that an inner if can replace the whole-step gate of the outer if",
+            "assuming that one iteration can read another iteration's inner registers",
+            "assuming that inline repeated bodies support nested guards",
+            "assuming that nested for_each is a valid repeated-body shape",
+        ],
+        "stop_when": [
+            "the repeated body now depends on nested guards",
+            "the repeated body now depends on nested for_each",
+            "the proposed design assumes cross-iteration visibility of inner step registers",
+        ],
+    },
+    {
+        "name": "inline_fan_out_invalid_shapes",
+        "priority": "critical_shape_boundary",
+        "guidance_level": "required",
+        "rule": "Keep inline bounded fan-out inside the published shape: for_each must be array-valued, nested for_each is invalid, nested guards are invalid, and outer with belongs only to named run targets.",
+        "why": [
+            "explicit invalid-shape reminders help agents stop before drifting outside the public workflow model",
+            "inline repeated bodies are intentionally narrower than named run targets",
+            "shape errors are easier to avoid when the forbidden combinations are stated directly in authoring guidance",
+        ],
+        "prefer": [
+            "use a named run target when repeated item processing needs guard blocks",
+            "keep inline repeated bodies as step lists only",
+            "treat for_each as one array-valued repeated-item source",
+        ],
+        "avoid": [
+            "placing guards inside an inline repeated body",
+            "adding nested for_each inside the repeated body",
+            "using outer with on inline repeated steps",
+            "assuming that any non-array for_each source is valid repeated input",
+        ],
+        "stop_when": [
+            "the proposed inline repeated body now needs guards",
+            "the proposed repeated shape introduces nested for_each",
+            "the proposed inline step needs outer with bindings instead of local step inputs or item scope",
+        ],
+    },
+    {
         "name": "early_let",
         "priority": "recommended_readability_pattern",
         "guidance_level": "recommended",
@@ -560,12 +672,30 @@ def build_workflow_authoring_response() -> JSONObject:
             "when adding or changing inputs, validate them before continuing",
             "validate both the request shape and the observed target context",
             "name important values early",
+            "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
             "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",
             "use ordo-playbook review <workflow> during authoring to catch workflow authoring-quality findings early",
             "after adding or changing a workflow, run both check and review before calling the work complete",
             "keep publish payloads minimal and follow stricter local agent or project output rules when they exist",
             "use structured Ordo surfaces before falling back to routines",
             "treat semantic ambiguity as a reason to clarify rather than improvise",
+        ],
+        "bounded_fan_out_examples": [
+            {
+                "name": "named_run_target_fan_out",
+                "summary": "Use run + for_each when one reusable fragment should be invoked for each item.",
+                "yaml": "- steps:\n    - name: inspect-many\n      run: github/check-issue\n      for_each: ${inputs.items}\n      with:\n        issue_number: ${item}\n      register: inspected",
+            },
+            {
+                "name": "inline_fan_out_local_steps",
+                "summary": "Use inline steps + for_each only for short local repeated bodies.",
+                "yaml": "- steps:\n    - name: inspect-many\n      for_each: ${inputs.items}\n      steps:\n        - name: inspect\n          uses: gh.issue\n          with:\n            issue_number: ${item}",
+            },
+            {
+                "name": "inline_fan_out_inner_if",
+                "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps.",
+                "yaml": "- steps:\n    - name: inspect-many\n      if: ${inputs.enabled}\n      for_each: ${inputs.items}\n      steps:\n        - name: inspect\n          uses: gh.issue\n          with:\n            issue_number: ${item}\n        - name: publish\n          result:\n            summary: ${item}\n          if: item",
+            },
         ],
         "rules": [dict(rule) for rule in WORKFLOW_AUTHORING_RULES],
     }
@@ -1245,6 +1375,13 @@ def render_workflow_authoring_text(payload: JSONObject) -> str:
 
     lines = ["workflow-authoring", payload["purpose"], "", "Authoring heuristic:"]
     lines.extend(f"- {item}" for item in payload["authoring_heuristic"])
+    examples = payload.get("bounded_fan_out_examples")
+    if isinstance(examples, list) and examples:
+        lines.extend(["", "Bounded fan-out examples:"])
+        for example in examples:
+            if not isinstance(example, dict):
+                continue
+            lines.append(f"- {example['name']}: {example['summary']}")
     lines.extend(["", "Rules:"])
     for rule in payload["rules"]:
         lines.append(f"- {rule['name']} [{rule['priority']}]: {rule['rule']}")

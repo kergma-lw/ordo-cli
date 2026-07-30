@@ -247,11 +247,26 @@ def main() -> int:
 
 def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_working_directories=None) -> RuntimeResult:
     if mode == "review":
-        return review_workflow(workflow, profile=profile, available_profiles=available_profiles)
+        return review_workflow(
+            workflow,
+            profile=profile,
+            available_profiles=available_profiles,
+            profile_working_directories=profile_working_directories,
+        )
     if mode == "check":
-        return check_workflow(workflow, profile=profile, available_profiles=available_profiles)
+        return check_workflow(
+            workflow,
+            profile=profile,
+            available_profiles=available_profiles,
+            profile_working_directories=profile_working_directories,
+        )
     if mode == "plan":
-        return plan_workflow(workflow, profile=profile, available_profiles=available_profiles)
+        return plan_workflow(
+            workflow,
+            profile=profile,
+            available_profiles=available_profiles,
+            profile_working_directories=profile_working_directories,
+        )
     if mode == "run":
         return execute_workflow(
             workflow,
@@ -259,7 +274,12 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
             available_profiles=available_profiles,
             profile_working_directories=profile_working_directories,
         )
-    explained = explain_workflow(workflow, profile=profile, available_profiles=available_profiles)
+    explained = explain_workflow(
+        workflow,
+        profile=profile,
+        available_profiles=available_profiles,
+        profile_working_directories=profile_working_directories,
+    )
     return explained
 
 

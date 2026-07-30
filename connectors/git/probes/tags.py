@@ -13,7 +13,12 @@ from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_
 def info():
     return probe(
         name="tags",
-        inputs={"match": "string | null"},
+        summary=(
+            "Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; "
+            "for annotated tags this means the referenced object oid rather than the tag object oid. "
+            "The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date."
+        ),
+        inputs={"match": "string | null", "match_kind": "'glob' | 'regex' | null"},
         outputs={
             "count": "integer",
             "items": [
@@ -33,6 +38,10 @@ def info():
             "repository_root": "string",
         },
         failure_modes=("probe_failed",),
+        examples=(
+            {"reference": "git.tags", "inputs": {"match": "v*", "match_kind": "glob"}},
+            {"reference": "git.tags", "inputs": {"match": r"^v?[0-9]+\.[0-9]+\.[0-9]+$", "match_kind": "regex"}},
+        ),
         handler=run,
     )
 
@@ -91,7 +100,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
             "git",
             "for-each-ref",
             "--sort=-version:refname",
-            "--format=%(refname)%x09%(refname:short)%x09%(objecttype)%x09%(objectname)%x09%(*objectname)",
+            "--format=%(refname)\t%(refname:short)\t%(objecttype)\t%(objectname)\t%(*objectname)",
             "refs/tags",
         ],
         failures={"os_error": "probe_failed", "nonzero": "probe_failed"},

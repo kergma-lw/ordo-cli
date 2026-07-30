@@ -1,3 +1,4 @@
+import os
 import unittest
 import tempfile
 from pathlib import Path
@@ -359,6 +360,110 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["block_items"][1]["active_profile"], "frontend")
         assert result.preflight_decision is not None
         self.assertEqual(result.preflight_decision.block_nodes[1].active_profile, "frontend")
+
+    def test_check_uses_profile_working_directory_after_static_profile_switch(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="switch-profile", profile_switch="frontend"),)),
+                GuardBlock(guards=(Guard(OperationRef("git.branch")),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend")}
+
+        def probe(resolved_guard, _workflow):
+            value = Path.cwd().name
+            return OperationResult(
+                status="ok" if value == "frontend" else "guard_failed",
+                summary="cwd probe",
+                outputs={"value": value},
+                raw={
+                    "trace": [
+                        {"expr": "git.branch", "kind": "probe", "reference": "git.branch", "status": "ok", "value": value}
+                    ]
+                },
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            compose_dir = root / "compose"
+            frontend_dir = root / "frontend"
+            compose_dir.mkdir()
+            frontend_dir.mkdir()
+            previous = Path.cwd()
+            os.chdir(compose_dir)
+            try:
+                result = check_workflow(
+                    workflow,
+                    available_profiles=profiles,
+                    profile_working_directories={"frontend": frontend_dir},
+                    guard_probe=probe,
+                    connector_provider=STANDARD_CONNECTOR_PROVIDER,
+                )
+            finally:
+                os.chdir(previous)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+
+    def test_check_keeps_trailing_profile_switch_after_effectful_preflight_halt(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="fetch-compose", operation=OperationRef("git.sync.fetch", with_={"remote": "origin"})),
+                        Step(name="switch-profile", profile_switch="backend"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(OperationRef("git.branch")),)),
+            ),
+        )
+        profiles = {"backend": Profile(name="backend")}
+
+        def probe(resolved_guard, _workflow):
+            value = Path.cwd().name
+            return OperationResult(
+                status="ok" if value == "backend" else "guard_failed",
+                summary="cwd probe",
+                outputs={"value": value},
+                raw={
+                    "trace": [
+                        {"expr": "git.branch", "kind": "probe", "reference": "git.branch", "status": "ok", "value": value}
+                    ]
+                },
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            compose_dir = root / "compose"
+            backend_dir = root / "backend"
+            compose_dir.mkdir()
+            backend_dir.mkdir()
+            previous = Path.cwd()
+            os.chdir(compose_dir)
+            try:
+                result = check_workflow(
+                    workflow,
+                    available_profiles=profiles,
+                    profile_working_directories={"backend": backend_dir},
+                    guard_probe=probe,
+                    connector_provider=STANDARD_CONNECTOR_PROVIDER,
+                )
+            finally:
+                os.chdir(previous)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "unknown")
+        self.assertFalse(result.outputs["analysis_complete"])
+        self.assertIn("effectful_step_encountered", result.outputs["incomplete_reasons"])
+        self.assertIn("git.branch", result.outputs["checked_guards"])
+        self.assertEqual(result.outputs["active_profile"], "backend")
+        self.assertEqual(result.outputs["unevaluated_relevant_guard_count"], 0)
 
     def test_check_keeps_profile_switch_unknown_when_profile_cannot_be_resolved(self) -> None:
         workflow = Workflow(

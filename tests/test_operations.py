@@ -1621,6 +1621,34 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["count"], 2)
         self.assertEqual([item["name"] for item in result.outputs["items"]], ["v2.0.0", "1.4.1"])
 
+    def test_git_tags_probe_uses_literal_tab_delimiters_in_git_format(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("git.tags")),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("git.tags")
+        resolved = ResolvedOperation("git.tags", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout="refs/tags/v1.0.0\tv1.0.0\ttag\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\t1111111111111111111111111111111111111111\n",
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        query = run.call_args_list[1].args[0]
+        format_arg = next(arg for arg in query if isinstance(arg, str) and arg.startswith("--format="))
+        self.assertIn("\t", format_arg)
+        self.assertNotIn("%x09", format_arg)
+
     def test_git_tags_probe_rejects_invalid_regex(self) -> None:
         workflow = Workflow(
             version=0,

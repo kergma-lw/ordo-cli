@@ -8,6 +8,10 @@ from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutco
 def info():
     return probe(
         name="tag",
+        summary=(
+            "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; "
+            "for annotated tags this is the tag object's oid rather than the peeled target commit oid."
+        ),
         inputs={"name": "string"},
         outputs={
             "name": "string",
@@ -18,6 +22,10 @@ def info():
             "repository_root": "string",
         },
         failure_modes=("probe_failed",),
+        examples=(
+            {"reference": "git.tag", "inputs": {"name": "v1.2.3"}},
+            {"reference": "git.tag", "inputs": {"name": "release-2026-07"}},
+        ),
         handler=run,
     )
 

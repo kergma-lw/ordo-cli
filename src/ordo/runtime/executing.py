@@ -43,6 +43,7 @@ def execute_workflow(
         workflow,
         profile=profile,
         available_profiles=available_profiles,
+        profile_working_directories=profile_working_directories,
         guard_probe=guard_probe,
         connector_provider=connector_provider,
     )

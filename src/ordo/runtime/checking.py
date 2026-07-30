@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
+from pathlib import Path
 import re
 from dataclasses import dataclass, field
 from typing import cast
@@ -171,6 +174,7 @@ def check_workflow(
     *,
     profile: Profile | None = None,
     available_profiles: dict[str, Profile] | None = None,
+    profile_working_directories: dict[str, Path | None] | None = None,
     guard_probe: GuardProbe | None = None,
     connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
@@ -275,6 +279,7 @@ def check_workflow(
         active_profile=active_profile,
         current_profile=current_profile,
         available_profiles=available_profiles,
+        profile_working_directories=profile_working_directories,
         active_overrides=active_overrides,
         connector_provider=connector_provider,
         guard_probe=guard_probe,
@@ -368,6 +373,7 @@ def _build_check_analysis_tree(
     active_profile: str | None,
     current_profile: Profile | None,
     available_profiles: dict[str, Profile] | None,
+    profile_working_directories: dict[str, Path | None] | None = None,
     active_overrides,
     connector_provider: ConnectorProvider | None,
     guard_probe: GuardProbe | None,
@@ -389,6 +395,11 @@ def _build_check_analysis_tree(
     current_profile_name = active_profile
     effective_workflow = workflow
     resolved_overrides = active_overrides
+    current_working_directory = (
+        None
+        if current_profile_name is None or profile_working_directories is None
+        else profile_working_directories.get(current_profile_name)
+    )
     halted = False
     initial_resolution = resolve_workflow_references(
         effective_workflow,
@@ -437,9 +448,11 @@ def _build_check_analysis_tree(
             block_guard_details: list[dict[str, object]] = []
             for resolved_guard in resolved_block.guards:
                 if isinstance(resolved_guard, ResolvedConditionExpression):
-                    result = _evaluate_guard_expression(resolved_guard, effective_workflow, probe)
+                    with _checking_working_directory(current_working_directory):
+                        result = _evaluate_guard_expression(resolved_guard, effective_workflow, probe)
                 else:
-                    result = probe(resolved_guard, effective_workflow)
+                    with _checking_working_directory(current_working_directory):
+                        result = probe(resolved_guard, effective_workflow)
                 operation_results.append(result)
                 diagnostics.extend(result.diagnostics)
                 detail = _build_guard_detail(
@@ -474,7 +487,7 @@ def _build_check_analysis_tree(
             continue
 
         if _is_static_profile_switch_block(declared_block):
-            if halted:
+            if halted and blockers:
                 block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
                 continue
             transition = _apply_static_profile_switch_block(
@@ -489,6 +502,12 @@ def _build_check_analysis_tree(
                 continue
             current_profile_name, current_profile, resolved_overrides, effective_workflow = transition
             active_profile = current_profile_name
+            current_working_directory = (
+                None
+                if current_profile_name is None or profile_working_directories is None
+                else profile_working_directories.get(current_profile_name)
+            )
+            halted = False
             block_items.append(
                 {
                     "block_index": block_index,
@@ -523,6 +542,7 @@ def _build_check_analysis_tree(
                 current_profile=current_profile,
                 active_overrides=resolved_overrides,
                 available_profiles=available_profiles,
+                profile_working_directories=profile_working_directories,
                 connector_provider=connector_provider,
             )
             diagnostics.extend(expansion_outcome["diagnostics"])
@@ -537,6 +557,7 @@ def _build_check_analysis_tree(
             current_profile_name = cast(str | None, expansion_outcome["current_profile_name"])
             current_profile = cast(Profile | None, expansion_outcome["current_profile"])
             resolved_overrides = cast(tuple, expansion_outcome["active_overrides"])
+            current_working_directory = cast(Path | None, expansion_outcome.get("current_working_directory", current_working_directory))
             active_profile = current_profile_name
             if expansion_outcome["failed_guard"] is not None and failed_guard is None:
                 failed_guard = cast(str, expansion_outcome["failed_guard"])
@@ -550,9 +571,13 @@ def _build_check_analysis_tree(
                 effective_workflow,
                 block_index=block_index,
                 current_profile_name=current_profile_name,
+                current_profile=current_profile,
                 connector_provider=connector_provider,
                 probe=probe,
                 active_overrides=resolved_overrides,
+                available_profiles=available_profiles,
+                profile_working_directories=profile_working_directories,
+                current_working_directory=current_working_directory,
                 observed_probe_calls=observed_probe_calls,
             )
             if interpreted_step_block is not None:
@@ -563,6 +588,12 @@ def _build_check_analysis_tree(
                 preflight_step_items.extend(cast(list[dict[str, object]], interpreted_step_block["step_items"]))
                 preflight_halts.extend(cast(list[dict[str, object]], interpreted_step_block["halts"]))
                 incomplete_reasons.extend(interpreted_step_block["incomplete_reasons"])
+                effective_workflow = cast(Workflow, interpreted_step_block.get("workflow", effective_workflow))
+                current_profile_name = cast(str | None, interpreted_step_block.get("current_profile_name", current_profile_name))
+                current_profile = cast(Profile | None, interpreted_step_block.get("current_profile", current_profile))
+                resolved_overrides = cast(tuple, interpreted_step_block.get("active_overrides", resolved_overrides))
+                current_working_directory = cast(Path | None, interpreted_step_block.get("current_working_directory", current_working_directory))
+                active_profile = current_profile_name
                 if interpreted_step_block["halted"]:
                     halted = True
                 continue
@@ -926,9 +957,13 @@ def _interpret_step_block_for_check(
     *,
     block_index: int,
     current_profile_name: str | None,
+    current_profile: Profile | None,
     connector_provider: ConnectorProvider | None,
     probe: GuardProbe,
     active_overrides,
+    available_profiles: dict[str, Profile] | None,
+    profile_working_directories: dict[str, Path | None] | None,
+    current_working_directory: Path | None,
     observed_probe_calls: list[dict[str, object]],
 ) -> dict[str, object] | None:
     resolved_block = _resolve_step_block(
@@ -945,17 +980,24 @@ def _interpret_step_block_for_check(
     skipped_steps: list[str] = []
     incomplete_reasons: list[str] = []
     halt_item: dict[str, object] | None = None
+    resume_after_halt = False
     step_items: list[dict[str, object]] = []
+    effective_workflow = workflow
+    effective_profile_name = current_profile_name
+    effective_profile = current_profile
+    effective_overrides = active_overrides
+    effective_working_directory = current_working_directory
     observation_session = _build_preflight_observation_session(workflow, probe=probe, connector_provider=connector_provider)
     known_observations = [dict(item) for item in observed_probe_calls if isinstance(item, dict)]
 
     for step_index, (step, resolved_step) in enumerate(zip(block.steps, resolved_block.steps, strict=False)):
-        condition = evaluate_preflight_step_condition(
-            step,
-            workflow,
-            step_results=workflow.step_results,
-            observation_session=observation_session,
-        )
+        with _checking_working_directory(effective_working_directory):
+            condition = evaluate_preflight_step_condition(
+                step,
+                effective_workflow,
+                step_results=effective_workflow.step_results,
+                observation_session=observation_session,
+            )
         if isinstance(condition, ValueResolutionError):
             halt = build_preflight_halt(
                 "condition_not_computable",
@@ -1056,14 +1098,66 @@ def _interpret_step_block_for_check(
             continue
 
         classification = classify_preflight_step(step, resolved_step)
-        if classification == "read_only_analyzable":
-            result = _evaluate_analyzable_preflight_step(
-                step,
-                resolved_step,
-                workflow,
-                probe=probe,
-                observation_session=observation_session,
+        if classification == "context_only" and step.profile_switch is not None:
+            transition = _apply_static_profile_switch_block(
+                StepBlock(steps=(step,)),
+                workflow=effective_workflow,
+                available_profiles=available_profiles,
             )
+            if transition is None:
+                halt = build_preflight_halt(
+                    "profile_switch_not_resolvable_from_current_knowledge",
+                    step=step,
+                    details={"block_index": block_index, "step_index": step_index},
+                )
+                incomplete_reasons.append(halt.reason)
+                halt_item = halt.to_contract()
+                step_items.append(
+                    {
+                        "block_index": block_index,
+                        "step_index": step_index,
+                        "name": step.name,
+                        "reference": resolved_step.reference,
+                        "preflight_classification": classification,
+                        "status": "halted",
+                        "conditional": step.if_ is not None,
+                        "condition": step.if_,
+                        "condition_status": "true" if step.if_ is not None else None,
+                        "halt_reason": halt.reason,
+                    }
+                )
+                break
+            effective_profile_name, effective_profile, effective_overrides, effective_workflow = transition
+            effective_working_directory = (
+                None
+                if effective_profile_name is None or profile_working_directories is None
+                else profile_working_directories.get(effective_profile_name)
+            )
+            interpreted_steps.append(step.name)
+            step_items.append(
+                {
+                    "block_index": block_index,
+                    "step_index": step_index,
+                    "name": step.name,
+                    "reference": resolved_step.reference,
+                    "preflight_classification": classification,
+                    "status": "interpreted",
+                    "conditional": step.if_ is not None,
+                    "condition": step.if_,
+                    "condition_status": "true" if step.if_ is not None else None,
+                    "active_profile": effective_profile_name,
+                }
+            )
+            continue
+        if classification == "read_only_analyzable":
+            with _checking_working_directory(effective_working_directory):
+                result = _evaluate_analyzable_preflight_step(
+                    step,
+                    resolved_step,
+                    effective_workflow,
+                    probe=probe,
+                    observation_session=observation_session,
+                )
             diagnostics.extend(result.diagnostics)
             if result.status != "ok":
                 halt = build_preflight_halt(
@@ -1098,7 +1192,7 @@ def _interpret_step_block_for_check(
                 )
                 break
             if step.register is not None:
-                store_preflight_register_output(step.register, result, step_results=workflow.step_results)
+                store_preflight_register_output(step.register, result, step_results=effective_workflow.step_results)
             interpreted_steps.append(step.name)
             step_observations = [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else []
             step_items.append(
@@ -1155,6 +1249,37 @@ def _interpret_step_block_for_check(
                 "preflight_support": preflight_support,
             }
         )
+        trailing_profile_switches = tuple(block.steps[step_index + 1 :])
+        if trailing_profile_switches and all(candidate.profile_switch is not None and candidate.if_ is None for candidate in trailing_profile_switches):
+            trailing_transition = _apply_static_profile_switch_block(
+                StepBlock(steps=trailing_profile_switches),
+                workflow=effective_workflow,
+                available_profiles=available_profiles,
+            )
+            if trailing_transition is not None:
+                resume_after_halt = True
+                effective_profile_name, effective_profile, effective_overrides, effective_workflow = trailing_transition
+                effective_working_directory = (
+                    None
+                    if effective_profile_name is None or profile_working_directories is None
+                    else profile_working_directories.get(effective_profile_name)
+                )
+                for trailing_index, trailing_step in enumerate(trailing_profile_switches, start=step_index + 1):
+                    interpreted_steps.append(trailing_step.name)
+                    step_items.append(
+                        {
+                            "block_index": block_index,
+                            "step_index": trailing_index,
+                            "name": trailing_step.name,
+                            "reference": "profile_switch",
+                            "preflight_classification": "context_only",
+                            "status": "interpreted",
+                            "conditional": False,
+                            "condition": None,
+                            "condition_status": None,
+                            "active_profile": effective_profile_name,
+                        }
+                    )
         break
 
     if not interpreted_steps and not skipped_steps and halt_item is None:
@@ -1163,9 +1288,14 @@ def _interpret_step_block_for_check(
     return {
         "diagnostics": diagnostics,
         "incomplete_reasons": incomplete_reasons,
-        "halted": halt_item is not None,
+        "halted": halt_item is not None and not resume_after_halt,
         "step_items": step_items,
         "halts": [] if halt_item is None else [halt_item],
+        "workflow": effective_workflow,
+        "current_profile_name": effective_profile_name,
+        "current_profile": effective_profile,
+        "active_overrides": effective_overrides,
+        "current_working_directory": effective_working_directory,
         "block_item": {
             "block_index": block_index,
             "type": "steps",
@@ -1174,7 +1304,7 @@ def _interpret_step_block_for_check(
             "conditional_steps": [step.name for step in block.steps if step.if_ is not None],
             "interpreted_steps": interpreted_steps,
             "skipped_steps": skipped_steps,
-            "active_profile": current_profile_name,
+            "active_profile": effective_profile_name,
             "preflight_halt": halt_item,
         },
     }
@@ -1203,6 +1333,7 @@ def _expand_run_step_block_for_check(
     current_profile: Profile | None,
     active_overrides,
     available_profiles: dict[str, Profile] | None,
+    profile_working_directories: dict[str, Path | None] | None,
     connector_provider: ConnectorProvider | None,
 ) -> dict[str, object]:
     diagnostics: list[Diagnostic] = []
@@ -1218,6 +1349,11 @@ def _expand_run_step_block_for_check(
     current_overrides = active_overrides
     effective_profile_name = current_profile_name
     effective_profile = current_profile
+    effective_working_directory = (
+        None
+        if effective_profile_name is None or profile_working_directories is None
+        else profile_working_directories.get(effective_profile_name)
+    )
     for step, decision in expansions:
         if decision.workflow is None:
             halted = True
@@ -1227,6 +1363,7 @@ def _expand_run_step_block_for_check(
             decision.workflow,
             profile=effective_profile,
             available_profiles=available_profiles,
+            profile_working_directories=profile_working_directories,
             connector_provider=connector_provider,
         )
         diagnostics.extend(result.diagnostics)
@@ -1257,6 +1394,11 @@ def _expand_run_step_block_for_check(
             current_overrides = effective_profile.overrides
             applied = apply_profile_defaults_to_subsequent_steps(effective_workflow, effective_profile)
             effective_workflow = effective_workflow if applied.workflow is None else applied.workflow
+            effective_working_directory = (
+                None
+                if profile_working_directories is None
+                else profile_working_directories.get(next_profile_name)
+            )
     return {
         "diagnostics": diagnostics,
         "operation_results": operation_results,
@@ -1271,6 +1413,7 @@ def _expand_run_step_block_for_check(
         "current_profile_name": effective_profile_name,
         "current_profile": effective_profile,
         "active_overrides": current_overrides,
+        "current_working_directory": effective_working_directory,
     }
 
 
@@ -1305,6 +1448,20 @@ def _apply_static_profile_switch_block(
     if current_profile_name is None or current_profile is None:
         return None
     return current_profile_name, current_profile, current_overrides, current_workflow
+
+
+@contextlib.contextmanager
+def _checking_working_directory(target: Path | None):
+    if target is None:
+        yield
+        return
+
+    previous = Path.cwd()
+    os.chdir(target)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index: int = 0, active_profile: str | None = None) -> list[dict[str, object]]:

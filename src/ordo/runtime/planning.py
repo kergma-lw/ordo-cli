@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from typing import cast
 
 from ordo.model.profile import Profile
@@ -228,6 +230,7 @@ def plan_workflow(
     *,
     profile: Profile | None = None,
     available_profiles: dict[str, Profile] | None = None,
+    profile_working_directories: dict[str, Path | None] | None = None,
     guard_probe: GuardProbe | None = None,
     connector_provider: ConnectorProvider | None = None,
 ) -> RuntimeResult:
@@ -237,6 +240,7 @@ def plan_workflow(
         workflow,
         profile=profile,
         available_profiles=available_profiles,
+        profile_working_directories=profile_working_directories,
         guard_probe=guard_probe,
         connector_provider=connector_provider,
     )
