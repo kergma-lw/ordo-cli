@@ -153,6 +153,129 @@
 - The public contract should be discoverable through `ordo-help operation fs.file`.
 - Discovery material should make clear that `fs.file` is the canonical public filesystem read probe in the MVP.
 
+<!-- source: requirements/connector/gh-pr.md -->
+
+# GitHub pull request inspection probe requirements
+
+## Role
+
+- `gh.pr` is the canonical public `gh` probe for one pull request snapshot.
+- `gh.pr.comments` is the public `gh` probe for the regular conversation comments attached to one pull request.
+- `gh.pr.reviews` is the public `gh` probe for submitted pull request review events.
+- `gh.pr.review_comments` is the public `gh` probe for line-level review comments attached to one pull request diff.
+- `gh.pr.checks` is the public `gh` probe for normalized continuous-integration state on one pull request head.
+- `gh.pr.timeline` is the public `gh` probe for normalized pull request lifecycle events.
+
+## Probe split rule
+
+- Pull request inspection must not be modeled as an overload of `gh.issue` because review state, line comments, checks, and timeline events are distinct pull-request concerns.
+- Pull request inspection must not collapse into one monolithic `gh.pr.digest` probe.
+- The public surface should stay orthogonal across:
+  - PR metadata;
+  - regular conversation comments;
+  - submitted review decisions;
+  - line-level review discussion;
+  - CI/check state;
+  - lifecycle events.
+
+## Required questions
+
+- `gh.pr` must answer which stable pull-request facts are true for one requested pull request.
+- `gh.pr.comments` must answer which regular conversation comments exist on one requested pull request.
+- `gh.pr.reviews` must answer which submitted review events exist on one requested pull request.
+- `gh.pr.review_comments` must answer which line-level review comments exist on one requested pull request.
+- `gh.pr.checks` must answer which normalized check outcomes currently apply to one requested pull request head.
+- `gh.pr.timeline` must answer which normalized lifecycle events belong to one requested pull request.
+
+## Required inputs
+
+- Every probe in this family requires:
+  - `repository`
+  - `pull_number`
+- `repository` must use `OWNER/REPO` form.
+- `pull_number` must be a positive integer.
+- `limit` is optional for comment-, review-, and timeline-list probes.
+- When present, `limit` must be a positive bounded integer.
+
+## Output contract
+
+- `gh.pr` must return at least:
+  - `number`
+  - `repository`
+  - `title`
+  - `body`
+  - `author`
+  - `state`
+  - `draft`
+  - `url`
+  - `created_at`
+  - `updated_at`
+  - `base_ref`
+  - `head_ref`
+  - `head_sha`
+  - `mergeable`
+  - `mergeable_state`
+  - `review_decision`
+  - `additions`
+  - `deletions`
+  - `changed_files`
+  - `commits_count`
+- `gh.pr.comments`, `gh.pr.reviews`, `gh.pr.review_comments`, and `gh.pr.timeline` must return:
+  - `pull_ref`
+  - `total_count`
+  - one ordered list payload for the relevant entity class
+- `gh.pr.comments` items must expose stable conversation-comment facts such as identity, author, body, timestamps, and URL.
+- `gh.pr.reviews` items must expose stable submitted-review facts such as identity, reviewer, state, body, submitted time, commit identity, and URL.
+- `gh.pr.review_comments` items must expose stable line-comment facts such as identity, author, body, path, line metadata, reply linkage, timestamps, and URL.
+- `gh.pr.checks` must return at least:
+  - `pull_ref`
+  - `head_sha`
+  - `overall_state`
+  - `total_count`
+  - `success_count`
+  - `failed_count`
+  - `pending_count`
+  - `skipped_count`
+  - `checks`
+- Each `gh.pr.checks` item must expose stable normalized facts such as:
+  - `name`
+  - `kind`
+  - `status`
+  - `conclusion`
+  - `url` or `context` when available
+- `gh.pr.timeline` events must expose stable lifecycle facts such as:
+  - `event_type`
+  - `actor`
+  - `created_at`
+  - bounded event payload fields relevant to that event family
+
+## Normalization rules
+
+- Output fields must be connector-owned canonical names rather than raw GitHub transport names.
+- `gh.pr.comments` and `gh.pr.review_comments` must remain separate because ordinary conversation comments and line-level diff comments are different semantic surfaces.
+- `gh.pr.reviews` must expose review-event state separately from line-comment payloads.
+- `gh.pr.checks` must normalize legacy commit statuses and check runs into one stable result shape without exposing transport-specific stitching as workflow burden.
+- `gh.pr.timeline` must publish normalized event families rather than a free-form passthrough of every raw GitHub timeline object.
+
+## Failure contract
+
+- Missing pull requests must fail explicitly as `pull_not_found`.
+- Invalid limits must fail explicitly as `limit_invalid` on probes that accept `limit`.
+- Check retrieval failures that are specific to `gh.pr.checks` should remain distinct as `checks_unavailable`.
+- Any remaining implementation-local breakdown must normalize to `probe_failed`.
+
+## Boundary contract
+
+- These probes are observation surfaces only.
+- They must not encode merge approval policy, unresolved-thread heuristics, or workflow next-step decisions.
+- They must not absorb rendered diff presentation, patch text delivery, or one-shot narrative digest synthesis.
+- `gh.pr.timeline` should expose lifecycle facts, not a generic event archive for arbitrary downstream scraping.
+
+## Discovery rule
+
+- The public contract should be discoverable through `ordo-help operation gh.pr` and the sibling `gh.pr.*` operations.
+- Discovery material should make clear that this family is the canonical public PR inspection surface.
+
 <!-- source: requirements/connector/gh-project-items.md -->
 
 # GitHub Project items probe requirements
@@ -4681,6 +4804,180 @@ Shared prerequisites should not be duplicated in every operation contract if the
   - format parsing;
   - MIME/magic classification;
   - file mutation.
+
+<!-- source: model/connector/gh-pr.md -->
+
+# GitHub pull request inspection probe model
+
+## Public references
+
+- `gh.pr`
+- `gh.pr.comments`
+- `gh.pr.reviews`
+- `gh.pr.review_comments`
+- `gh.pr.checks`
+- `gh.pr.timeline`
+
+## Kind
+
+- `probe`
+
+## Mental model
+
+- This family exposes orthogonal read surfaces for one pull request.
+- It separates metadata, discussion, review, CI, and lifecycle concerns instead of hiding them inside one opaque digest response.
+- It stays read-only and does not encode merge policy or workflow decisions.
+
+## Shared input shape
+
+- `repository: string`
+- `pull_number: integer`
+- `limit: integer` optional on list-style probes
+
+## `gh.pr` output shape
+
+```json
+{
+  "number": 2832,
+  "repository": "go-vikunja/vikunja",
+  "title": "fix: normalize reminder scheduling for recurring tasks",
+  "body": "...",
+  "author": {
+    "login": "alice"
+  },
+  "state": "OPEN",
+  "draft": false,
+  "url": "https://github.com/go-vikunja/vikunja/pull/2832",
+  "created_at": "2026-07-28T10:00:00Z",
+  "updated_at": "2026-07-29T12:00:00Z",
+  "base_ref": "main",
+  "head_ref": "fix/reminder-scheduling",
+  "head_sha": "abc123...",
+  "mergeable": true,
+  "mergeable_state": "unstable",
+  "review_decision": "CHANGES_REQUESTED",
+  "additions": 184,
+  "deletions": 58,
+  "changed_files": 8,
+  "commits_count": 7
+}
+```
+
+## `gh.pr.comments` output shape
+
+- `pull_ref: string`
+- `total_count: integer`
+- `comments: [object]`
+- each comment exposes at least:
+  - `id`
+  - `author`
+  - `body`
+  - `created_at`
+  - `updated_at`
+  - `url`
+
+## `gh.pr.reviews` output shape
+
+- `pull_ref: string`
+- `total_count: integer`
+- `reviews: [object]`
+- each review exposes at least:
+  - `id`
+  - `author`
+  - `state`
+  - `body`
+  - `submitted_at`
+  - `commit_id`
+  - `url`
+
+## `gh.pr.review_comments` output shape
+
+- `pull_ref: string`
+- `total_count: integer`
+- `comments: [object]`
+- each review comment exposes at least:
+  - `id`
+  - `author`
+  - `body`
+  - `path`
+  - `commit_id`
+  - `original_commit_id`
+  - `line`
+  - `original_line`
+  - `side`
+  - `in_reply_to_id`
+  - `created_at`
+  - `updated_at`
+  - `url`
+
+## `gh.pr.checks` output shape
+
+```json
+{
+  "pull_ref": "go-vikunja/vikunja#2832",
+  "head_sha": "abc123...",
+  "overall_state": "success",
+  "total_count": 39,
+  "success_count": 29,
+  "failed_count": 0,
+  "pending_count": 0,
+  "skipped_count": 1,
+  "checks": [
+    {
+      "name": "Test / api-build",
+      "kind": "check_run",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/..."
+    },
+    {
+      "name": "lint",
+      "kind": "status",
+      "status": "completed",
+      "conclusion": "success",
+      "context": "lint",
+      "url": "https://github.com/..."
+    }
+  ]
+}
+```
+
+## `gh.pr.timeline` output shape
+
+- `pull_ref: string`
+- `total_count: integer`
+- `events: [object]`
+- each event exposes at least:
+  - `event_type`
+  - `actor`
+  - `created_at`
+  - optional bounded event-specific facts such as `from_value`, `to_value`, or a small `payload`
+
+## Modeled semantics
+
+- `gh.pr` is the canonical metadata snapshot for one pull request and should replace issue-shaped approximation when PR-native facts matter.
+- `gh.pr.comments` owns only ordinary conversation comments visible on the PR thread.
+- `gh.pr.reviews` owns submitted review decisions and review summary text.
+- `gh.pr.review_comments` owns line-level diff discussion, including replies.
+- `gh.pr.checks` owns normalized observation of the PR head CI surface across check runs and commit statuses.
+- `gh.pr.timeline` owns normalized lifecycle transitions such as draft conversion, review-request changes, force-pushes, base changes, labels, merge, close, and reopen events.
+
+## Failure model
+
+- `pull_not_found` means the requested repository-number pair did not resolve to a pull request visible to the connector.
+- `limit_invalid` means a list-style probe received an invalid explicit limit.
+- `checks_unavailable` means the pull request resolved but the connector could not produce the checks surface.
+- `probe_failed` remains the residual normalized failure for other local breakdown.
+
+## Boundary model
+
+- The family owns normalized observation only.
+- It does not own:
+  - rendered diff presentation;
+  - patch text retrieval as a public contract;
+  - unresolved-thread heuristics;
+  - merge recommendation synthesis;
+  - one-shot narrative PR digest generation.
 
 <!-- source: model/connector/gh-project-items.md -->
 
