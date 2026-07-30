@@ -44,11 +44,13 @@ If the product later adds bounded `for_each` on `run`, the shared tree should pr
 The tree-facing model should retain at least:
 
 - that the node is one fan-out `run` step;
+- whether the repeated body is a named `run` target or one inline short `steps` body;
 - whether the whole step condition made the fan-out eligible, skipped, or still unknown;
 - whether the source cardinality was statically known, statically zero, or runtime-only;
 - the exact item count when statically known;
 - the declared failure policy for repeated execution;
 - whether caller-side `register` expects one aggregated array of per-run workflow-local result payloads.
+- whether inner repeated-body step registers exist only as iteration-local runtime details rather than caller-visible aggregate outputs.
 
 The runtime should preserve the difference between:
 

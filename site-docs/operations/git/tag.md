@@ -1,8 +1,8 @@
 # git.tag
 
-Read tag.
+Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read tag.
+Use this when a workflow needs Git state or Git side effects. In practice: read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.
 
 - Namespace: `git`
 - Kind: `probe`
@@ -53,7 +53,15 @@ Use this when a workflow needs Git state or Git side effects. In practice: read 
 
 ```json
 {
-  "name": "string"
+  "name": "v1.2.3"
+}
+```
+
+### `git.tag`
+
+```json
+{
+  "name": "release-2026-07"
 }
 ```
 
@@ -78,7 +86,13 @@ Use this when a workflow needs Git state or Git side effects. In practice: read 
     "examples": [
       {
         "inputs": {
-          "name": "string"
+          "name": "v1.2.3"
+        },
+        "reference": "git.tag"
+      },
+      {
+        "inputs": {
+          "name": "release-2026-07"
         },
         "reference": "git.tag"
       }
@@ -104,7 +118,7 @@ Use this when a workflow needs Git state or Git side effects. In practice: read 
     "preflight_observations": [],
     "prerequisites": [],
     "replaced_by": [],
-    "summary": "Probe operation 'git.tag'",
+    "summary": "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.",
     "tags": [
       "git",
       "probe"

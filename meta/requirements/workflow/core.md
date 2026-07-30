@@ -24,9 +24,13 @@
 - Published global output values must accumulate in execution order across the enclosing run session rather than replacing prior published values.
 - A `run` step may declare `register` when the product chooses to expose the just-completed callee workflow-local `results` list back to the caller.
 - If the product later introduces `for_each` on `run`, that surface must be bounded to array-valued sources rather than to adapter-specific iterable protocols.
+- If `run` later supports `for_each`, the repeated body may be expressed either by the named `run` target or by one inline short `steps` body for author-local short cycles.
+- If `run` later supports both inline `steps` repeated body and named `run` target selection, those two forms must stay one bounded fan-out surface rather than fragmenting into unrelated looping dialects.
 - If `run` later supports `for_each`, the step-level `if` condition must still apply to the whole declared step rather than becoming one per-item filter surface.
-- If `run` later supports `for_each`, lexical nesting of `for_each` inside another `for_each` in the same authoring surface must remain invalid.
+- If `run` later supports `for_each`, nested `for_each` must remain invalid anywhere inside the repeated body, including inside inline repeated-body `steps`.
+- If `run` later supports `for_each`, nested `guards` inside the repeated body should remain invalid so workflow applicability stays separate from repeated step execution.
 - If `run` later supports both `for_each` and `register`, the registered value should preserve one array of per-run workflow-local result payloads rather than flattening all returned values into one undifferentiated list.
+- If `run` later supports `for_each` with inline `steps`, any step-local `register` declared inside the repeated body must remain iteration-local rather than leaking automatically into caller scope or sibling iterations.
 - If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
 - Workflow input declarations may carry one optional author-provided `hint` string for invocation guidance.
 - Input `hint` is guidance only, not a validation rule or runtime-inferred contract fact.

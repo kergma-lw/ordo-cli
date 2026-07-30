@@ -1,0 +1,75 @@
+version: 0
+workflow: pr-view
+inputs:
+  repository:
+    description: Pull request repository in OWNER/REPO form
+  pull_number:
+    description: Pull request number
+blocks:
+  - guards:
+      - inputs.repository | is_string
+      - inputs.repository | trim | ne("")
+      - inputs.pull_number | is_integer
+
+  - guards:
+      - git.repo.exists
+
+  - steps:
+      - name: Load pull request
+        uses: gh.pr
+        with:
+          repository: ${inputs.repository}
+          pull_number: ${inputs.pull_number}
+        register: pr
+
+      - name: Load pull request comments
+        uses: gh.pr.comments
+        with:
+          repository: ${inputs.repository}
+          pull_number: ${inputs.pull_number}
+        register: pr_comments
+
+      - name: Load pull request reviews
+        uses: gh.pr.reviews
+        with:
+          repository: ${inputs.repository}
+          pull_number: ${inputs.pull_number}
+        register: pr_reviews
+
+      - name: Load pull request review comments
+        uses: gh.pr.review_comments
+        with:
+          repository: ${inputs.repository}
+          pull_number: ${inputs.pull_number}
+        register: pr_review_comments
+
+      - name: Load pull request checks
+        uses: gh.pr.checks
+        with:
+          repository: ${inputs.repository}
+          pull_number: ${inputs.pull_number}
+        register: pr_checks
+
+      - name: Load pull request timeline
+        uses: gh.pr.timeline
+        with:
+          repository: ${inputs.repository}
+          pull_number: ${inputs.pull_number}
+        register: pr_timeline
+
+      - name: Publish pull request inspection
+        publish:
+          summary: Pull request inspection loaded
+          pull_ref:
+            format: "{}#{}"
+            args:
+              - ${inputs.repository}
+              - ${inputs.pull_number}
+          title: ${step.pr.outputs.title}
+          head_sha: ${step.pr.outputs.head_sha}
+          comments: ${step.pr_comments.outputs.total_count}
+          reviews: ${step.pr_reviews.outputs.total_count}
+          review_comments: ${step.pr_review_comments.outputs.total_count}
+          checks: ${step.pr_checks.outputs.total_count}
+          check_state: ${step.pr_checks.outputs.overall_state}
+          timeline_events: ${step.pr_timeline.outputs.total_count}

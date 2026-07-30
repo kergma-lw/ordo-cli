@@ -42,6 +42,11 @@ workflows:
     file: workflows/issue-view-comments.yml
     description: Show comments for one issue from the selected profile context without changing state
     category: inspect
+  pr-view:
+    file: workflows/pr-view.yml
+    description: Show one pull request inspection snapshot without changing state
+    category: inspect
+    when: Use when you need one normalized PR summary with comments, reviews, checks, and timeline facts.
   issue-comment:
     file: workflows/issue-comment.yml
     description: Add a comment to one issue from the selected profile context

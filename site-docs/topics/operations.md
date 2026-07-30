@@ -56,8 +56,8 @@ Operations for reading and changing local Git state.
 - [git.state](../operations/git/state.md) — Read the current Git working-state summary.
 - [git.sync.fetch](../operations/git/sync-fetch.md) — Fetch Git refs from a remote.
 - [git.sync.push](../operations/git/sync-push.md) — Push a local Git branch to a remote.
-- [git.tag](../operations/git/tag.md) — Read tag.
-- [git.tags](../operations/git/tags.md) — Inspect tags.
+- [git.tag](../operations/git/tag.md) — Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.
+- [git.tags](../operations/git/tags.md) — Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.
 - [git.upstream](../operations/git/upstream.md) — Read upstream tracking information for the current branch.
 - [git.worktree](../operations/git/worktree.md) — Read the current Git worktree state.
 - [git.worktrees](../operations/git/worktrees.md) — List Git worktrees.
@@ -1140,7 +1140,13 @@ Operations in the `fs` namespace.
           "examples": [
             {
               "inputs": {
-                "name": "string"
+                "name": "v1.2.3"
+              },
+              "reference": "git.tag"
+            },
+            {
+              "inputs": {
+                "name": "release-2026-07"
               },
               "reference": "git.tag"
             }
@@ -1166,7 +1172,7 @@ Operations in the `fs` namespace.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Probe operation 'git.tag'",
+          "summary": "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.",
           "tags": [
             "git",
             "probe"
@@ -1178,7 +1184,15 @@ Operations in the `fs` namespace.
           "examples": [
             {
               "inputs": {
-                "match": "string | null"
+                "match": "v*",
+                "match_kind": "glob"
+              },
+              "reference": "git.tags"
+            },
+            {
+              "inputs": {
+                "match": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$",
+                "match_kind": "regex"
               },
               "reference": "git.tags"
             }
@@ -1187,7 +1201,8 @@ Operations in the `fs` namespace.
             "probe_failed"
           ],
           "inputs": {
-            "match": "string | null"
+            "match": "string | null",
+            "match_kind": "'glob' | 'regex' | null"
           },
           "invalidates_observations": [],
           "kind": "probe",
@@ -1214,7 +1229,7 @@ Operations in the `fs` namespace.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Probe operation 'git.tags'",
+          "summary": "Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.",
           "tags": [
             "git",
             "probe"

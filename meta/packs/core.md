@@ -1031,9 +1031,13 @@
 - Published global output values must accumulate in execution order across the enclosing run session rather than replacing prior published values.
 - A `run` step may declare `register` when the product chooses to expose the just-completed callee workflow-local `results` list back to the caller.
 - If the product later introduces `for_each` on `run`, that surface must be bounded to array-valued sources rather than to adapter-specific iterable protocols.
+- If `run` later supports `for_each`, the repeated body may be expressed either by the named `run` target or by one inline short `steps` body for author-local short cycles.
+- If `run` later supports both inline `steps` repeated body and named `run` target selection, those two forms must stay one bounded fan-out surface rather than fragmenting into unrelated looping dialects.
 - If `run` later supports `for_each`, the step-level `if` condition must still apply to the whole declared step rather than becoming one per-item filter surface.
-- If `run` later supports `for_each`, lexical nesting of `for_each` inside another `for_each` in the same authoring surface must remain invalid.
+- If `run` later supports `for_each`, nested `for_each` must remain invalid anywhere inside the repeated body, including inside inline repeated-body `steps`.
+- If `run` later supports `for_each`, nested `guards` inside the repeated body should remain invalid so workflow applicability stays separate from repeated step execution.
 - If `run` later supports both `for_each` and `register`, the registered value should preserve one array of per-run workflow-local result payloads rather than flattening all returned values into one undifferentiated list.
+- If `run` later supports `for_each` with inline `steps`, any step-local `register` declared inside the repeated body must remain iteration-local rather than leaking automatically into caller scope or sibling iterations.
 - If the product later emits a synthetic fallback result for successful runs without explicit results, that fallback must apply only to the requested top-level workflow run rather than to internal include, `pre_run`, or nested `run` boundaries.
 - Workflow input declarations may carry one optional author-provided `hint` string for invocation guidance.
 - Input `hint` is guidance only, not a validation rule or runtime-inferred contract fact.
@@ -3117,14 +3121,17 @@ A context therefore validates dependency classes structurally rather than only c
 - A `Workflow` contains ordered `Guard` and `Step` entries.
 - A `Workflow` may include reusable `WorkflowFragment` instances through ordered include items inside its block structure.
 - A future `Workflow` surface may invoke reusable `WorkflowFragment` instances through ordered `run` step forms inside `steps` blocks.
+- A future `Workflow` surface may also express bounded `for_each` on `run` for repeated fragment invocation or repeated inline short `steps` bodies.
 - A `WorkflowFragment` may declare local `FragmentArg` entries and workflow payload content.
 - A planned `FragmentRun` would express runtime-scoped invocation of one reusable `WorkflowFragment` with an explicit caller/callee boundary while still reading like one workflow step.
+- A planned bounded fan-out `FragmentRun` would still remain one workflow step with one explicit repeated-body boundary rather than a general looping language.
 - A `Workflow` may declare logical `StateNeed` entries that are bound by the active playbook workflow entry.
 - A `Guard` references an `OperationRef`.
 - A `Step` is either an operation-call step that references an `OperationRef` or a built-in runtime step form.
 - A `Step` may declare an `if` condition that controls whether that one declared step executes or is skipped.
 - A `Step` may publish an execution-local registered result for later steps through a workflow-local `register` identifier.
 - A `run` step may expose callee workflow-local `results` back to caller-local `step...` reads through that same `register` surface.
+- A future fan-out `run` step may expose one array of per-iteration callee workflow-local `results` payloads through that same outer `register` surface.
 - A `Connector` groups operations and can own shared bootstrap/runtime prerequisites.
 - A `Profile` supplies reusable parameters or composition defaults.
 - An `Override` changes resolution explicitly, never silently.
@@ -3145,6 +3152,7 @@ A context therefore validates dependency classes structurally rather than only c
 - Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
 - Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
 - A future fragment-run boundary should keep caller-local `step...` data explicit at the call site rather than treating it as implicit fragment-body scope.
+- A future inline repeated-body boundary should keep inner step registers iteration-local rather than widening them into caller-global names.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.
 - `Diagnostic` and execution/result entities carry machine-usable analysis and runtime surfaces.
@@ -3473,11 +3481,13 @@ If the product later adds bounded `for_each` on `run`, the shared tree should pr
 The tree-facing model should retain at least:
 
 - that the node is one fan-out `run` step;
+- whether the repeated body is a named `run` target or one inline short `steps` body;
 - whether the whole step condition made the fan-out eligible, skipped, or still unknown;
 - whether the source cardinality was statically known, statically zero, or runtime-only;
 - the exact item count when statically known;
 - the declared failure policy for repeated execution;
 - whether caller-side `register` expects one aggregated array of per-run workflow-local result payloads.
+- whether inner repeated-body step registers exist only as iteration-local runtime details rather than caller-visible aggregate outputs.
 
 The runtime should preserve the difference between:
 
@@ -4169,6 +4179,7 @@ Allowed step kinds and capabilities:
 - `if` evaluation when all dependencies are already known;
 - nested `run` expansion when the callee remains preflight-analyzable;
 - future bounded `run` fan-out when the array source, whole-step eligibility, and callee analyzability remain preflight-computable;
+- future bounded `run` fan-out with inline `steps` body when the whole-step eligibility, source cardinality, and repeated-body analyzability remain preflight-computable;
 - deterministic runtime context shaping already allowed by `check` semantics.
 
 Disallowed step kinds and capabilities:
@@ -4180,6 +4191,7 @@ Disallowed step kinds and capabilities:
 - any branch whose condition truth value is not yet known;
 - any nested run that requires effectful execution or unknown step-local data.
 - any bounded `run` fan-out whose source cardinality or callee analyzability cannot be established well enough for the current preflight phase.
+- any bounded `run` fan-out whose inline repeated body contains nested `guards`, nested `for_each`, or other unsupported iteration-local topology.
 
 ## PREFLIGHT-STEP-001 — Step interpretation remains strictly non-effectful
 
@@ -4342,9 +4354,11 @@ Each interpreted step item should expose at least:
 If `run` later gains bounded `for_each`, the preflight surface should preserve one explicit fan-out run node with its own cardinality and eligibility annotations rather than pretending the repeated calls never existed.
 
 - Whole-step `if` still applies to the fan-out step as one unit.
+- The repeated body may be a named `run` target or one inline short `steps` body, but preflight should still model it as one fan-out node class.
 - Preflight may record exact item count when the array source is statically known.
 - When the array source is not statically known, preflight should record runtime-only cardinality rather than inventing a guessed count.
-- Lexical nested fan-out in one authoring surface should remain invalid and therefore does not require a nested fan-out tree shape.
+- Nested fan-out anywhere inside the repeated body should remain invalid and therefore does not require a nested fan-out tree shape.
+- Step-local registers inside an inline repeated body should remain iteration-local and should not require caller-visible aggregation in the preflight tree.
 
 ## Determinism and conservatism
 
@@ -6701,6 +6715,8 @@ Workflow and profile authoring must remain a first-class and agent-usable surfac
 - Reusable included fragments remain understandable as a static-composition `include` surface even when they declare fragment-local `args`.
 - Authoring verification should not require all reusable-fragment semantics to collapse into `include` when a later runtime-scoped invocation surface would be clearer.
 - If a future `run` surface is introduced, authoring verification should preserve a short explainable distinction between static composition and runtime-scoped fragment invocation.
+- If a future bounded `for_each` is added on `run`, authoring verification should preserve a short explainable distinction between named repeated fragment invocation and inline short repeated `steps` body without treating them as unrelated looping dialects.
+- Authoring verification should reject nested `for_each` and nested repeated-body `guards` early enough that agents and humans do not need implementation reading to predict invalidity.
 - Workflow-level `let` should help reduce repeated expression noise without hiding whether a workflow is reading inputs, runtime state, step-local data, or read-only observations.
 - Validation and diagnostics should keep `let` errors attributable both to the binding declaration and to the authored use site when that distinction matters.
 - A valid declaration is not treated as fully sufficient when it is opaque, shell-heavy, or difficult to review.

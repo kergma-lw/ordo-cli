@@ -78,11 +78,13 @@ Registered step results are not:
 
 - A `step.<register>...` reference may target only an earlier step in the same workflow.
 - A `step.<register>...` reference may target only an earlier step in the same workflow or in the same included-fragment expansion scope.
+- If bounded `for_each` later allows inline `steps`, a `step.<register>...` reference inside that repeated body may target only an earlier step in the same iteration body.
 - Forward references are invalid.
 - Register names must be unique within the workflow.
 - Missing register references are invalid.
 - Included fragments must not read caller-local registered step results across the fragment boundary in the MVP.
 - Callers must not read registered step results declared inside an included fragment across the fragment boundary in the MVP.
+- Repeated-body step registers must not leak automatically across iteration boundaries.
 
 ## Step-form restrictions
 
@@ -92,6 +94,7 @@ Registered step results are not:
 - A built-in `value` step publishes exactly one derived output value rather than an open-ended output object assembled by workflow syntax.
 - A probe operation used as a normal step may declare `register` like any other operation-call step.
 - A registered `run` invocation publishes only the just-completed callee workflow-local `results` list rather than the enclosing run session's global `published` stream.
+- If a future `run` fan-out step also declares `register`, that caller-visible register should publish one array of per-iteration callee workflow-local `results` payloads.
 
 ## Guard boundary
 

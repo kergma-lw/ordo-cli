@@ -1008,7 +1008,13 @@ Use this page when you need field-level contract details for authoring work.
           "examples": [
             {
               "inputs": {
-                "name": "string"
+                "name": "v1.2.3"
+              },
+              "reference": "git.tag"
+            },
+            {
+              "inputs": {
+                "name": "release-2026-07"
               },
               "reference": "git.tag"
             }
@@ -1034,7 +1040,7 @@ Use this page when you need field-level contract details for authoring work.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Probe operation 'git.tag'",
+          "summary": "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.",
           "tags": [
             "git",
             "probe"
@@ -1046,7 +1052,15 @@ Use this page when you need field-level contract details for authoring work.
           "examples": [
             {
               "inputs": {
-                "match": "string | null"
+                "match": "v*",
+                "match_kind": "glob"
+              },
+              "reference": "git.tags"
+            },
+            {
+              "inputs": {
+                "match": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$",
+                "match_kind": "regex"
               },
               "reference": "git.tags"
             }
@@ -1055,7 +1069,8 @@ Use this page when you need field-level contract details for authoring work.
             "probe_failed"
           ],
           "inputs": {
-            "match": "string | null"
+            "match": "string | null",
+            "match_kind": "'glob' | 'regex' | null"
           },
           "invalidates_observations": [],
           "kind": "probe",
@@ -1082,7 +1097,7 @@ Use this page when you need field-level contract details for authoring work.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Probe operation 'git.tags'",
+          "summary": "Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.",
           "tags": [
             "git",
             "probe"

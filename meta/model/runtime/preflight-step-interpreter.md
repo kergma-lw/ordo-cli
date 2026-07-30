@@ -45,6 +45,7 @@ Allowed step kinds and capabilities:
 - `if` evaluation when all dependencies are already known;
 - nested `run` expansion when the callee remains preflight-analyzable;
 - future bounded `run` fan-out when the array source, whole-step eligibility, and callee analyzability remain preflight-computable;
+- future bounded `run` fan-out with inline `steps` body when the whole-step eligibility, source cardinality, and repeated-body analyzability remain preflight-computable;
 - deterministic runtime context shaping already allowed by `check` semantics.
 
 Disallowed step kinds and capabilities:
@@ -56,6 +57,7 @@ Disallowed step kinds and capabilities:
 - any branch whose condition truth value is not yet known;
 - any nested run that requires effectful execution or unknown step-local data.
 - any bounded `run` fan-out whose source cardinality or callee analyzability cannot be established well enough for the current preflight phase.
+- any bounded `run` fan-out whose inline repeated body contains nested `guards`, nested `for_each`, or other unsupported iteration-local topology.
 
 ## PREFLIGHT-STEP-001 — Step interpretation remains strictly non-effectful
 
@@ -218,9 +220,11 @@ Each interpreted step item should expose at least:
 If `run` later gains bounded `for_each`, the preflight surface should preserve one explicit fan-out run node with its own cardinality and eligibility annotations rather than pretending the repeated calls never existed.
 
 - Whole-step `if` still applies to the fan-out step as one unit.
+- The repeated body may be a named `run` target or one inline short `steps` body, but preflight should still model it as one fan-out node class.
 - Preflight may record exact item count when the array source is statically known.
 - When the array source is not statically known, preflight should record runtime-only cardinality rather than inventing a guessed count.
-- Lexical nested fan-out in one authoring surface should remain invalid and therefore does not require a nested fan-out tree shape.
+- Nested fan-out anywhere inside the repeated body should remain invalid and therefore does not require a nested fan-out tree shape.
+- Step-local registers inside an inline repeated body should remain iteration-local and should not require caller-visible aggregation in the preflight tree.
 
 ## Determinism and conservatism
 
