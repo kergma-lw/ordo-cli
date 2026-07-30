@@ -3249,11 +3249,21 @@ Use this page when you need field-level contract details for authoring work.
     },
     "run_contract": {
       "authoring_role": "workflow_fragment_invocation",
+      "body_forms": [
+        "named_run_target",
+        "inline_repeated_steps"
+      ],
       "call_fields": [
         {
           "name": "run",
           "required": true,
           "type": "string"
+        },
+        {
+          "authoring_role": "inline_repeated_body",
+          "name": "steps",
+          "required": false,
+          "type": "array"
         },
         {
           "authoring_role": "caller_scoped_invocation_condition",
@@ -3266,6 +3276,18 @@ Use this page when you need field-level contract details for authoring work.
           "name": "with",
           "required": false,
           "type": "object"
+        },
+        {
+          "authoring_role": "bounded_fan_out_source",
+          "name": "for_each",
+          "required": false,
+          "type": "runtime_value"
+        },
+        {
+          "authoring_role": "aggregate_invocation_result",
+          "name": "register",
+          "required": false,
+          "type": "string"
         }
       ],
       "caller_scoped_binding_surface": [
@@ -3280,6 +3302,23 @@ Use this page when you need field-level contract details for authoring work.
       ],
       "directive_field": "run",
       "execution_semantics": "runtime_scoped_fragment_invocation",
+      "fan_out_surface": {
+        "forbidden_nested_surfaces": [
+          "for_each",
+          "guards"
+        ],
+        "inner_if_scope": "per_iteration_inner_step",
+        "inner_register_scope": "iteration_local",
+        "inner_step_scope": [
+          "inputs",
+          "state",
+          "step",
+          "item"
+        ],
+        "item_binding": "item",
+        "outer_if_scope": "whole_invocation_step",
+        "outer_register_scope": "aggregate_results"
+      },
       "fragment_argument_access_surface": "args.name",
       "surface_kind": "step_form"
     },
@@ -3288,6 +3327,7 @@ Use this page when you need field-level contract details for authoring work.
         "fields": [
           "uses",
           "run",
+          "steps",
           "profile_switch",
           "value",
           "result",
@@ -3296,7 +3336,7 @@ Use this page when you need field-level contract details for authoring work.
           "state_delete"
         ],
         "kind": "exclusive_choice",
-        "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, publish, state_set, or state_delete",
+        "message": "A workflow step must define exactly one of uses, run, steps, profile_switch, value, result, publish, state_set, or state_delete",
         "name": "exactly_one_step_form"
       },
       {
@@ -3307,6 +3347,25 @@ Use this page when you need field-level contract details for authoring work.
         "requires": [
           "uses",
           "run"
+        ]
+      },
+      {
+        "field": "for_each",
+        "kind": "dependency",
+        "message": "The for_each field is allowed only together with run or inline steps",
+        "name": "for_each_requires_invocation_body",
+        "requires": [
+          "run",
+          "steps"
+        ]
+      },
+      {
+        "field": "steps",
+        "kind": "dependency",
+        "message": "Inline repeated step bodies require for_each",
+        "name": "inline_steps_require_for_each",
+        "requires": [
+          "for_each"
         ]
       }
     ],
@@ -3343,6 +3402,19 @@ Use this page when you need field-level contract details for authoring work.
         "required_fields": [
           "name",
           "run"
+        ]
+      },
+      {
+        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "name": "inline_fan_out_invocation",
+        "optional_fields": [
+          "if",
+          "register"
+        ],
+        "required_fields": [
+          "name",
+          "for_each",
+          "steps"
         ]
       },
       {

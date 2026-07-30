@@ -16,13 +16,14 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
         self.assertIn("for_each", step_forms["run_invocation"]["optional_fields"])
         self.assertIn("register", step_forms["run_invocation"]["optional_fields"])
+        self.assertEqual(step_forms["inline_fan_out_invocation"]["required_fields"], ["name", "for_each", "steps"])
         self.assertEqual(step_forms["profile_switch"]["required_fields"], ["name", "profile_switch"])
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
         self.assertEqual(step_forms["result"]["required_fields"], ["name", "result"])
         self.assertEqual(step_forms["publish"]["required_fields"], ["name", "publish"])
         self.assertEqual(step_forms["state_set"]["required_fields"], ["name", "state_set"])
         self.assertEqual(step_forms["state_delete"]["required_fields"], ["name", "state_delete"])
-        self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "run", "profile_switch", "value", "result", "publish", "state_set", "state_delete"])
+        self.assertEqual(step_rules["exactly_one_step_form"]["fields"], ["uses", "run", "steps", "profile_switch", "value", "result", "publish", "state_set", "state_delete"])
         guard_surface = payload["surface_constraints"]["guard_expression"]
         self.assertIn("state", guard_surface["allowed_roots"])
         self.assertIn("is_number", guard_surface["allowed_filters"])
@@ -40,6 +41,7 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertTrue(payload["include_contract"]["fragment_argument_default_semantics"]["default_null_is_valid"])
         self.assertEqual(payload["run_contract"]["directive_field"], "run")
         self.assertIn("step", payload["run_contract"]["caller_scoped_condition_surface"])
+        self.assertEqual(payload["run_contract"]["body_forms"], ["named_run_target", "inline_repeated_steps"])
 
     def test_workflow_contract_stays_aligned_with_validator_field_sets(self) -> None:
         payload = describe_workflow_contract()
