@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import GuardBlock, Workflow
+from ordo.model.workflow import GuardBlock, StepBlock, Workflow
 
 from .checking import check_workflow
 from .providers import ConnectorProvider, GuardProbe
+from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
 def review_workflow(
@@ -85,7 +86,77 @@ def _build_review_findings(workflow: Workflow, check_result: RuntimeResult, *, p
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
     findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
     findings.extend(_find_missing_recommended_observations(check_result))
+    findings.extend(_find_bounded_fan_out_authoring_findings(workflow, check_result))
     return findings
+
+
+def _find_bounded_fan_out_authoring_findings(workflow: Workflow, check_result: RuntimeResult) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    authored_steps = _workflow_steps_by_name(workflow)
+    preflight_items = [item for item in check_result.outputs.get("preflight_step_items", []) if isinstance(item, dict)]
+    for item in preflight_items:
+        step_name = item.get("name")
+        if not isinstance(step_name, str):
+            continue
+        authored_step = authored_steps.get(step_name)
+        if authored_step is None or authored_step.for_each is None:
+            continue
+        if authored_step.steps is not None:
+            conditional_inner_steps = [inner.name for inner in authored_step.steps if inner.if_ is not None]
+            if len(authored_step.steps) > 2 or conditional_inner_steps:
+                findings.append(
+                    {
+                        "code": "review.workflow.fan_out.inline_body_complexity",
+                        "level": "warning",
+                        "category": "fan_out_authoring",
+                        "message": f"Fan-out step '{step_name}' has an inline repeated body that may be too complex to keep inline",
+                        "path": ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index"))],
+                        "evidence": {
+                            "step": step_name,
+                            "body_kind": item.get("body_kind"),
+                            "inner_step_count": len(authored_step.steps),
+                            "conditional_inner_steps": conditional_inner_steps,
+                            "reason": "large or branchy inline repeated bodies are harder to review than extracted reusable fragments",
+                        },
+                    }
+                )
+        cardinality_status = _fan_out_cardinality_status(authored_step, workflow)
+        if cardinality_status == "runtime_only":
+            findings.append(
+                {
+                    "code": "review.workflow.fan_out.runtime_only_cardinality",
+                    "level": "warning",
+                    "category": "fan_out_authoring",
+                    "message": f"Fan-out step '{step_name}' has runtime-only cardinality",
+                    "path": ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index")), "for_each"],
+                    "evidence": {
+                        "step": step_name,
+                        "body_kind": item.get("body_kind"),
+                        "for_each": authored_step.for_each,
+                        "reason": "the repeated item count cannot be determined from currently available authoring-time runtime inputs",
+                    },
+                }
+            )
+    return findings
+
+
+def _workflow_steps_by_name(workflow: Workflow) -> dict[str, object]:
+    return {
+        step.name: step
+        for block in workflow.blocks
+        if isinstance(block, StepBlock)
+        for step in block.steps
+    }
+
+
+def _fan_out_cardinality_status(step, workflow: Workflow) -> str:
+    if step.for_each is None:
+        return "not_applicable"
+    try:
+        value = resolve_runtime_value(step.for_each, workflow, allow_boolean_composition=True)
+    except ValueResolutionError:
+        return "runtime_only"
+    return "static_known" if isinstance(value, list) else "runtime_only"
 
 
 def _find_missing_input_validation(

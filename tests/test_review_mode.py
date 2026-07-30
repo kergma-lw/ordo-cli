@@ -136,6 +136,70 @@ class ReviewModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["finding_count"], 0)
         self.assertEqual(result.outputs["findings"], [])
 
+    def test_review_reports_inline_fan_out_complexity(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": ["one", "two"]},
+            steps=(
+                Step(
+                    name="inspect",
+                    for_each="${inputs.items}",
+                    steps=(
+                        Step(name="capture", value="${item}", register="item_value"),
+                        Step(name="copy", value="${step.item_value.outputs.value}", register="copied"),
+                        Step(name="publish", result={"summary": "${step.copied.outputs.value}"}, if_="step.copied.outputs.value"),
+                    ),
+                    register="runs",
+                ),
+            ),
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.fan_out.inline_body_complexity")
+        self.assertEqual(finding["evidence"]["body_kind"], "inline_repeated_steps")
+        self.assertEqual(finding["evidence"]["inner_step_count"], 3)
+
+    def test_review_reports_runtime_only_fan_out_cardinality(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            steps=(
+                Step(name="load-items", operation=OperationRef("gh.issue"), register="items"),
+                Step(
+                    name="inspect",
+                    for_each="${step.items.outputs.items}",
+                    steps=(Step(name="capture", value="${item}", register="item_value"),),
+                    register="runs",
+                ),
+            ),
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.fan_out.runtime_only_cardinality")
+        self.assertEqual(finding["path"][-1], "for_each")
+
+    def test_review_keeps_simple_inline_fan_out_clean(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            inputs={"items": ["one", "two"]},
+            steps=(
+                Step(
+                    name="inspect",
+                    for_each="${inputs.items}",
+                    steps=(Step(name="capture", value="${item}", register="item_value"),),
+                    register="runs",
+                ),
+            ),
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertFalse(any(item["code"].startswith("review.workflow.fan_out.") for item in result.outputs["findings"]))
+
     def test_review_ignores_profile_carried_ambient_context_inputs(self) -> None:
         workflow = Workflow(
             version=0,
