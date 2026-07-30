@@ -56,6 +56,8 @@ Operations for reading and changing local Git state.
 - [git.state](../operations/git/state.md) — Read the current Git working-state summary.
 - [git.sync.fetch](../operations/git/sync-fetch.md) — Fetch Git refs from a remote.
 - [git.sync.push](../operations/git/sync-push.md) — Push a local Git branch to a remote.
+- [git.tag](../operations/git/tag.md) — Read tag.
+- [git.tags](../operations/git/tags.md) — Inspect tags.
 - [git.upstream](../operations/git/upstream.md) — Read upstream tracking information for the current branch.
 - [git.worktree](../operations/git/worktree.md) — Read the current Git worktree state.
 - [git.worktrees](../operations/git/worktrees.md) — List Git worktrees.
@@ -84,6 +86,12 @@ Operations for reading and changing GitHub state.
 - [gh.issue.comment.add](../operations/gh/issue-comment-add.md) — Add a comment to a GitHub issue.
 - [gh.issue.comments](../operations/gh/issue-comments.md) — Read comments from a GitHub issue.
 - [gh.issue.create](../operations/gh/issue-create.md) — Create a GitHub issue.
+- [gh.pr](../operations/gh/pr.md) — Read pull request metadata from GitHub.
+- [gh.pr.checks](../operations/gh/pr-checks.md) — Read normalized status and check-run results from a GitHub pull request head.
+- [gh.pr.comments](../operations/gh/pr-comments.md) — Read regular conversation comments from a GitHub pull request.
+- [gh.pr.review_comments](../operations/gh/pr-review-comments.md) — Read line-level review comments from a GitHub pull request.
+- [gh.pr.reviews](../operations/gh/pr-reviews.md) — Read submitted reviews from a GitHub pull request.
+- [gh.pr.timeline](../operations/gh/pr-timeline.md) — Read normalized lifecycle events from a GitHub pull request timeline.
 - [gh.project](../operations/gh/project.md) — Read a GitHub Project.
 - [gh.project.field](../operations/gh/project-field.md) — Read metadata for a GitHub Project field.
 - [gh.project.field.option](../operations/gh/project-field-option.md) — Check whether a GitHub Project field exposes a named option.
@@ -93,6 +101,7 @@ Operations for reading and changing GitHub state.
 - [gh.project.issue.field_number.set](../operations/gh/project-issue-field-number-set.md) — Set a number field for a GitHub Project issue.
 - [gh.project.issue.field_single_select.set](../operations/gh/project-issue-field-single-select-set.md) — Set a single-select field for a GitHub Project issue.
 - [gh.project.items](../operations/gh/project-items.md) — Read normalized items from a GitHub Project.
+- [gh.project.items.details](../operations/gh/project-items-details.md) — Return normalized GitHub Project items with stable content details
 
 ## shell
 
@@ -110,6 +119,22 @@ Low-level shell execution surface.
 ### Operations
 
 - [shell.command](../operations/shell/command.md) — Run a shell command.
+
+## fs
+
+Operations in the `fs` namespace.
+
+### Requirements
+
+- None
+
+### Available context
+
+- None
+
+### Operations
+
+- [fs.file](../operations/fs/file.md) — Observe one filesystem path as one file snapshot with canonical content and file metadata.
 
 ## Full JSON reference
 
@@ -320,6 +345,8 @@ Low-level shell execution surface.
             "git.branches",
             "git.upstream",
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -405,6 +432,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -451,6 +480,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -497,6 +528,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -632,6 +665,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -678,6 +713,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -724,6 +761,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -777,6 +816,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.worktree",
             "git.worktrees",
             "git.state",
@@ -1012,6 +1053,8 @@ Low-level shell execution surface.
           },
           "invalidates_observations": [
             "git.ref.*",
+            "git.tag",
+            "git.tags",
             "git.branches",
             "git.repo",
             "git.range",
@@ -1089,6 +1132,92 @@ Low-level shell execution surface.
           "tags": [
             "git",
             "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "name": "string"
+              },
+              "reference": "git.tag"
+            }
+          ],
+          "failure_modes": [
+            "probe_failed"
+          ],
+          "inputs": {
+            "name": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "tag",
+          "outputs": {
+            "annotated": "boolean | null",
+            "exists": "boolean",
+            "name": "string",
+            "oid": "string | null",
+            "ref": "string",
+            "repository_root": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Probe operation 'git.tag'",
+          "tags": [
+            "git",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "match": "string | null"
+              },
+              "reference": "git.tags"
+            }
+          ],
+          "failure_modes": [
+            "probe_failed"
+          ],
+          "inputs": {
+            "match": "string | null"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "tags",
+          "outputs": {
+            "count": "integer",
+            "items": [
+              {
+                "annotated": "boolean",
+                "name": "string",
+                "oid": "string",
+                "ref": "string"
+              }
+            ],
+            "latest": {
+              "annotated": "boolean",
+              "name": "string",
+              "oid": "string",
+              "ref": "string"
+            },
+            "repository_root": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Probe operation 'git.tags'",
+          "tags": [
+            "git",
+            "probe"
           ]
         },
         {
@@ -1542,6 +1671,287 @@ Low-level shell execution surface.
           "tags": [
             "gh",
             "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "pull_number": 42,
+                "repository": "owner/repo"
+              },
+              "reference": "gh.pr"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "probe_failed"
+          ],
+          "inputs": {
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr",
+          "outputs": {
+            "additions": "integer",
+            "author": "object",
+            "base_ref": "string",
+            "body": "string",
+            "changed_files": "integer",
+            "commits_count": "integer",
+            "created_at": "string",
+            "deletions": "integer",
+            "draft": "boolean",
+            "head_ref": "string",
+            "head_sha": "string",
+            "mergeable": "boolean",
+            "mergeable_state": "string",
+            "number": "integer",
+            "repository": "string",
+            "review_decision": "string",
+            "state": "string",
+            "title": "string",
+            "updated_at": "string",
+            "url": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read normalized metadata from a GitHub pull request.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "reference": "gh.pr.checks"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "checks_unavailable",
+            "probe_failed"
+          ],
+          "inputs": {
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.checks",
+          "outputs": {
+            "checks": [
+              {
+                "conclusion": "string",
+                "context": "string",
+                "kind": "string",
+                "name": "string",
+                "status": "string",
+                "url": "string"
+              }
+            ],
+            "failed_count": "integer",
+            "head_sha": "string",
+            "overall_state": "string",
+            "pending_count": "integer",
+            "pull_ref": "string",
+            "skipped_count": "integer",
+            "success_count": "integer",
+            "total_count": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read normalized status and check-run results from a GitHub pull request head.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "reference": "gh.pr.comments"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "limit_invalid",
+            "probe_failed"
+          ],
+          "inputs": {
+            "limit": "integer",
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.comments",
+          "outputs": {
+            "comments": [
+              "object"
+            ],
+            "pull_ref": "string",
+            "total_count": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read regular conversation comments from a GitHub pull request.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "reference": "gh.pr.review_comments"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "limit_invalid",
+            "probe_failed"
+          ],
+          "inputs": {
+            "limit": "integer",
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.review_comments",
+          "outputs": {
+            "comments": [
+              "object"
+            ],
+            "pull_ref": "string",
+            "total_count": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read line-level review comments from a GitHub pull request.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "reference": "gh.pr.reviews"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "limit_invalid",
+            "probe_failed"
+          ],
+          "inputs": {
+            "limit": "integer",
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.reviews",
+          "outputs": {
+            "pull_ref": "string",
+            "reviews": [
+              "object"
+            ],
+            "total_count": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read submitted reviews from a GitHub pull request.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "reference": "gh.pr.timeline"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "limit_invalid",
+            "probe_failed"
+          ],
+          "inputs": {
+            "limit": "integer",
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.timeline",
+          "outputs": {
+            "events": [
+              "object"
+            ],
+            "pull_ref": "string",
+            "total_count": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read normalized lifecycle events from a GitHub pull request timeline.",
+          "tags": [
+            "gh",
+            "probe"
           ]
         },
         {
@@ -2017,6 +2427,24 @@ Low-level shell execution surface.
               },
               "reference": "gh.project.items",
               "why": "Narrow one project scan to issue-like items whose Status field equals Ready."
+            },
+            {
+              "inputs": {
+                "content_kind": "Issue",
+                "content_refs": [
+                  "owner/repo#7",
+                  "owner/repo#8"
+                ],
+                "filters": [
+                  {
+                    "field": "Type",
+                    "value": "Task"
+                  }
+                ],
+                "project_id": "PVT_demo"
+              },
+              "reference": "gh.project.items",
+              "why": "Intersect one project item query with one explicit set of GitHub content references."
             }
           ],
           "failure_modes": [
@@ -2025,10 +2453,14 @@ Low-level shell execution surface.
             "ambiguous_field",
             "unsupported_field_type",
             "invalid_filter_value",
+            "invalid_content_ref",
             "probe_failed"
           ],
           "inputs": {
             "content_kind": "string",
+            "content_refs": [
+              "string"
+            ],
             "filters": [
               {
                 "field": "string",
@@ -2058,6 +2490,89 @@ Low-level shell execution surface.
           "prerequisites": [],
           "replaced_by": [],
           "summary": "Return normalized GitHub Project items for one project membership scan",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "content_kind": "Issue",
+                "project_id": "PVT_demo"
+              },
+              "reference": "gh.project.items.details",
+              "why": "Load project-scoped issue details including state and labels."
+            },
+            {
+              "inputs": {
+                "content_kind": "Issue",
+                "content_refs": [
+                  "owner/repo#7",
+                  "owner/repo#8"
+                ],
+                "filters": [
+                  {
+                    "field": "Type",
+                    "value": "Task"
+                  }
+                ],
+                "project_id": "PVT_demo"
+              },
+              "reference": "gh.project.items.details",
+              "why": "Load detailed facts for one explicit subset of project-backed GitHub content."
+            }
+          ],
+          "failure_modes": [
+            "project_not_found",
+            "unknown_field",
+            "ambiguous_field",
+            "unsupported_field_type",
+            "invalid_filter_value",
+            "invalid_content_ref",
+            "probe_failed"
+          ],
+          "inputs": {
+            "content_kind": "string",
+            "content_refs": [
+              "string"
+            ],
+            "filters": [
+              {
+                "field": "string",
+                "value": "scalar"
+              }
+            ],
+            "project_id": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "project.items.details",
+          "outputs": {
+            "count": "integer",
+            "items": [
+              {
+                "content_kind": "string",
+                "item_id": "string",
+                "label_names": [
+                  "string"
+                ],
+                "number": "integer",
+                "repository": "string",
+                "state": "string",
+                "title": "string",
+                "url": "string"
+              }
+            ]
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Return normalized GitHub Project items with stable content details",
           "tags": [
             "gh",
             "probe"
@@ -2113,6 +2628,60 @@ Low-level shell execution surface.
           "tags": [
             "shell",
             "action"
+          ]
+        }
+      ]
+    },
+    {
+      "bootstrap": {
+        "context_fields": [],
+        "prerequisites": []
+      },
+      "namespace": "fs",
+      "operations": [
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "path": "/workspace/app.env"
+              },
+              "reference": "fs.file"
+            }
+          ],
+          "failure_modes": [
+            "path_not_found",
+            "not_a_file",
+            "content_unavailable",
+            "probe_failed"
+          ],
+          "inputs": {
+            "path": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "file",
+          "outputs": {
+            "content": "string",
+            "exists": "boolean",
+            "group": "string",
+            "kind": "string",
+            "line_count": "integer",
+            "modified_at": "string",
+            "owner": "string",
+            "path": "string",
+            "permissions": "string",
+            "size": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe one filesystem path as one file snapshot with canonical content and file metadata.",
+          "tags": [
+            "fs",
+            "probe"
           ]
         }
       ]

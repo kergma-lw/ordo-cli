@@ -25,6 +25,7 @@ Use this page first when you need to understand where to look next.
 - `git` — Operations for reading and changing local Git state.
 - `gh` — Operations for reading and changing GitHub state.
 - `shell` — Low-level shell execution surface.
+- `fs` — Operations in the `fs` namespace.
 
 ## Execution concepts
 
@@ -68,7 +69,8 @@ Use both check and review after adding or changing a workflow; neither replaces 
     "runtime",
     "git",
     "gh",
-    "shell"
+    "shell",
+    "fs"
   ],
   "document_kind": "overview",
   "document_kinds": [

@@ -24,6 +24,12 @@ class HelpCliSearchTest(unittest.TestCase):
         self.assertIn("gh.project.items", references)
         self.assertIn("gh.project.items.details", references)
 
+    def test_search_finds_pr_operations_by_pull_request_query(self) -> None:
+        payload = build_search_response("pull request metadata")
+
+        references = [entry["reference"] for entry in payload["operations"]]
+        self.assertIn("gh.pr", references)
+
 
 if __name__ == "__main__":
     unittest.main()

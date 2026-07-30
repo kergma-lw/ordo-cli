@@ -47,6 +47,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: fetch
 ## Invalidated observations
 
 - `git.ref.*`
+- `git.tag`
+- `git.tags`
 - `git.branches`
 - `git.repo`
 - `git.range`
@@ -99,6 +101,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: fetch
     },
     "invalidates_observations": [
       "git.ref.*",
+      "git.tag",
+      "git.tags",
       "git.branches",
       "git.repo",
       "git.range",

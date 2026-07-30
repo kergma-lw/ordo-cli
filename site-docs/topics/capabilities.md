@@ -16,7 +16,7 @@ Use this page when you need to know whether a surface is supported, restricted, 
 - Scope: `workflow`
 - Status: `supported`
 - Related capabilities: `workflow.local_expressions`
-- Related model nodes: `workflow.local_expression.adapter_seam`, `workflow.local_expression.adapter_binding`, `workflow.local_expression.adapter.markdown`, `workflow.local_expression.adapter.text`
+- Related model nodes: `workflow.local_expression.adapter_seam`, `workflow.local_expression.adapter_binding`, `workflow.local_expression.adapter.key_value`, `workflow.local_expression.adapter.markdown`, `workflow.local_expression.adapter.text`
 
 ### workflow.include_fragments
 
@@ -349,6 +349,7 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "related_model_nodes": [
         "workflow.local_expression.adapter_seam",
         "workflow.local_expression.adapter_binding",
+        "workflow.local_expression.adapter.key_value",
         "workflow.local_expression.adapter.markdown",
         "workflow.local_expression.adapter.text"
       ],

@@ -339,6 +339,7 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_describe_resolves_connector_family_and_operation_model_nodes(self) -> None:
         connector_node = json.loads(self.run_help("describe", "connector.fs", "--json").stdout)
         file_node = json.loads(self.run_help("describe", "connector.fs.file", "--json").stdout)
+        gh_pr_node = json.loads(self.run_help("describe", "connector.gh.pr", "--json").stdout)
 
         self.assertEqual(connector_node["document_kind"], "model_node")
         self.assertEqual(connector_node["node_kind"], "connector_family")
@@ -349,6 +350,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(file_node["metadata"]["name"], "file")
         self.assertEqual(file_node["metadata"]["kind"], "probe")
         self.assertIn("content", file_node["metadata"]["outputs"])
+        self.assertEqual(gh_pr_node["document_kind"], "model_node")
+        self.assertEqual(gh_pr_node["metadata"]["name"], "pr")
+        self.assertIn("pull_number", gh_pr_node["metadata"]["inputs"])
 
     def test_describe_resolves_local_expression_filter_model_nodes(self) -> None:
         surface_node = json.loads(self.run_help("describe", "workflow.local_expression.filter_surface", "--json").stdout)
@@ -366,12 +370,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         text_result = json.loads(self.run_help("search", "text", "--json").stdout)
         fs_result = json.loads(self.run_help("search", "filesystem", "--json").stdout)
         file_result = json.loads(self.run_help("search", "content_unavailable", "--json").stdout)
+        pr_result = json.loads(self.run_help("search", "pull request", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.markdown" for item in result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.key_value" for item in key_value_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.text" for item in text_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "connector.fs" for item in fs_result["facts"]))
         self.assertTrue(any(item["reference"] == "fs.file" for item in file_result["operations"]))
+        self.assertTrue(any(item["reference"] == "gh.pr" for item in pr_result["operations"]))
 
     def test_search_indexes_local_expression_filter_topics(self) -> None:
         result = json.loads(self.run_help("search", "is_integer", "--json").stdout)
@@ -563,6 +569,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["operation"]["inputs"]["content_kind"], "string")
         self.assertEqual(payload["operation"]["inputs"]["filters"][0]["field"], "string")
         self.assertTrue(any(example["reference"] == "gh.project.items" for example in payload["operation"]["examples"]))
+
+    def test_operation_topic_publishes_gh_pr_inputs_and_outputs(self) -> None:
+        payload = json.loads(self.run_help("operation", "gh.pr", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "operation")
+        self.assertEqual(payload["operation"]["inputs"]["repository"], "string")
+        self.assertEqual(payload["operation"]["inputs"]["pull_number"], "integer")
+        self.assertEqual(payload["operation"]["outputs"]["head_sha"], "string")
 
     def test_operation_topic_publishes_preflight_observations_for_declaring_action(self) -> None:
         payload = json.loads(self.run_help("operation", "git.sync.push", "--json").stdout)

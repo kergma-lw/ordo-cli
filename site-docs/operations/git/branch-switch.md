@@ -52,6 +52,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: switc
 - `git.branches`
 - `git.upstream`
 - `git.ref.*`
+- `git.tag`
+- `git.tags`
 - `git.worktree`
 - `git.worktrees`
 - `git.state`
@@ -111,6 +113,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: switc
       "git.branches",
       "git.upstream",
       "git.ref.*",
+      "git.tag",
+      "git.tags",
       "git.worktree",
       "git.worktrees",
       "git.state",

@@ -54,6 +54,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: rebas
 ## Invalidated observations
 
 - `git.ref.*`
+- `git.tag`
+- `git.tags`
 - `git.worktree`
 - `git.worktrees`
 - `git.state`
@@ -117,6 +119,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: rebas
     },
     "invalidates_observations": [
       "git.ref.*",
+      "git.tag",
+      "git.tags",
       "git.worktree",
       "git.worktrees",
       "git.state",

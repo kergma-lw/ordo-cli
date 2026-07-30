@@ -19,6 +19,9 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
 ```json
 {
   "content_kind": "string",
+  "content_refs": [
+    "string"
+  ],
   "filters": [
     {
       "field": "string",
@@ -58,6 +61,7 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
 - `ambiguous_field`
 - `unsupported_field_type`
 - `invalid_filter_value`
+- `invalid_content_ref`
 - `probe_failed`
 
 ## Requirements
@@ -83,6 +87,25 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
     {
       "field": "Status",
       "value": "Ready"
+    }
+  ],
+  "project_id": "PVT_demo"
+}
+```
+
+### `gh.project.items`
+
+```json
+{
+  "content_kind": "Issue",
+  "content_refs": [
+    "owner/repo#7",
+    "owner/repo#8"
+  ],
+  "filters": [
+    {
+      "field": "Type",
+      "value": "Task"
     }
   ],
   "project_id": "PVT_demo"
@@ -130,6 +153,24 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
         },
         "reference": "gh.project.items",
         "why": "Narrow one project scan to issue-like items whose Status field equals Ready."
+      },
+      {
+        "inputs": {
+          "content_kind": "Issue",
+          "content_refs": [
+            "owner/repo#7",
+            "owner/repo#8"
+          ],
+          "filters": [
+            {
+              "field": "Type",
+              "value": "Task"
+            }
+          ],
+          "project_id": "PVT_demo"
+        },
+        "reference": "gh.project.items",
+        "why": "Intersect one project item query with one explicit set of GitHub content references."
       }
     ],
     "failure_modes": [
@@ -138,10 +179,14 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
       "ambiguous_field",
       "unsupported_field_type",
       "invalid_filter_value",
+      "invalid_content_ref",
       "probe_failed"
     ],
     "inputs": {
       "content_kind": "string",
+      "content_refs": [
+        "string"
+      ],
       "filters": [
         {
           "field": "string",

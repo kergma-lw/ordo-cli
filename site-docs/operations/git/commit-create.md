@@ -48,6 +48,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: creat
 ## Invalidated observations
 
 - `git.ref.*`
+- `git.tag`
+- `git.tags`
 - `git.worktree`
 - `git.worktrees`
 - `git.state`
@@ -102,6 +104,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: creat
     },
     "invalidates_observations": [
       "git.ref.*",
+      "git.tag",
+      "git.tags",
       "git.worktree",
       "git.worktrees",
       "git.state",

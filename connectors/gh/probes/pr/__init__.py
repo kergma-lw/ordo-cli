@@ -10,7 +10,7 @@ from ordo.plugin_sdk import OperationContext, OperationOutcome, ok, probe
 def info():
     return probe(
         name="pr",
-        summary="Probe operation 'gh.pr'",
+        summary="Read normalized metadata from a GitHub pull request.",
         inputs=PULL_IDENTITY_INPUTS,
         outputs={
             "number": "integer",
