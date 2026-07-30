@@ -228,6 +228,7 @@ class OperationTest(unittest.TestCase):
         gh_pr_comments = registry.get_operation("gh.pr.comments")
         gh_pr_reviews = registry.get_operation("gh.pr.reviews")
         gh_pr_review_comments = registry.get_operation("gh.pr.review_comments")
+        gh_pr_timeline = registry.get_operation("gh.pr.timeline")
         gh_project_items = registry.get_operation("gh.project.items")
         gh_close = registry.get_operation("gh.issue.close")
         shell_command = registry.get_operation("shell.command")
@@ -239,6 +240,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(gh_pr_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_reviews.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_review_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
+        self.assertEqual(gh_pr_timeline.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(
             gh_project_items.failure_modes,
             ("project_not_found", "unknown_field", "ambiguous_field", "unsupported_field_type", "invalid_filter_value", "invalid_content_ref", "probe_failed"),
@@ -385,6 +387,31 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["total_count"], 1)
         self.assertEqual(result.outputs["reviews"][0]["state"], "APPROVED")
         self.assertEqual(result.outputs["reviews"][0]["commit_id"], "abc123")
+
+    def test_gh_pr_timeline_probe_returns_normalized_supported_events(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.timeline", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.timeline")
+        resolved = ResolvedOperation("gh.pr.timeline", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"number":42,"state":"open"}', stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='[{"event":"ready_for_review","created_at":"2026-07-30T10:00:00Z","actor":{"login":"kergma-lw"}},{"event":"review_requested","created_at":"2026-07-30T11:00:00Z","actor":{"login":"kergma-lw"},"requested_reviewer":{"login":"ww"}},{"event":"base_ref_changed","created_at":"2026-07-30T12:00:00Z","actor":{"login":"kergma-lw"},"previous_ref":"develop","current_ref":"main"},{"event":"commented","created_at":"2026-07-30T12:30:00Z","actor":{"login":"bot"}}]',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["total_count"], 3)
+        self.assertEqual(result.outputs["events"][0]["event_type"], "ready_for_review")
+        self.assertEqual(result.outputs["events"][1]["payload"]["requested_reviewer"], "ww")
+        self.assertEqual(result.outputs["events"][2]["from_value"], "develop")
+        self.assertEqual(result.outputs["events"][2]["to_value"], "main")
 
     def test_gh_pr_review_comments_probe_returns_structured_line_comments(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.review_comments", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
