@@ -8,30 +8,29 @@ inputs:
   issue_number: {}
 let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
-  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number,
+    project_id=inputs.project_id)
 blocks:
-  - guards:
-      - git.repo.exists
-      - git.worktree.clean
-      - issue.state == "OPEN"
-      - project_issue.exists
-      - project_issue.type == "Task" or project_issue.type == "Bug"
-      - project_issue.status == "Ready"
-
-  - steps:
-      - name: Set task status to In progress
-        uses: gh.project.issue.field_single_select.set
-        register: progress_update
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-          field: Status
-          option: In progress
-
-      - name: Publish in-progress task
-        publish:
-          summary: Task set to In progress
-          issue_ref: ${step.progress_update.outputs.issue_ref}
-          issue_number: ${inputs.issue_number}
-          status: In progress
+- guards:
+  - git.repo.exists
+  - git.worktree.clean
+  - issue.state == "OPEN"
+  - project_issue.exists
+  - project_issue.type == "Task" or project_issue.type == "Bug"
+  - project_issue.status == "Ready"
+- steps:
+  - name: Set task status to In progress
+    uses: gh.project.issue.field_single_select.set
+    register: progress_update
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "In progress"
+  - name: Publish in-progress task
+    publish:
+      summary: "Task set to In progress"
+      issue_ref: step.progress_update.outputs.issue_ref
+      issue_number: inputs.issue_number
+      status: "In progress"

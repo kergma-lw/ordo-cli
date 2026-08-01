@@ -14,47 +14,44 @@ args:
     type: string
     required: false
     default: null
-
 steps:
-  - name: Load issue
-    uses: gh.issue
-    with:
-      repository: ${args.repository}
-      issue_number: ${args.issue_number}
-    register: issue
-
-  - name: Load project issue
-    uses: gh.project.issue
-    with:
-      repository: ${args.repository}
-      issue_number: ${args.issue_number}
-      project_id: ${args.project_id}
-    register: project_issue
-
-  - name: Publish issue project context
-    publish:
-      summary: Issue loaded
-      active_profile: ${args.active_profile}
-      active_profile_key: ${args.active_profile_key}
-      repository: ${args.repository}
-      issue_number: ${step.issue.outputs.number}
-      issue_ref:
-        format: "{}#{}"
-        args:
-          - ${args.repository}
-          - ${step.issue.outputs.number}
-      title: ${step.issue.outputs.title}
-      state: ${step.issue.outputs.state}
-      url: ${step.issue.outputs.url}
-      stored_branch: ${args.stored_branch}
-      author: ${step.issue.outputs.author}
-      assignees: ${step.issue.outputs.assignees}
-      labels: ${step.issue.outputs.labels}
-      body: ${step.issue.outputs.body}
-      in_project: ${step.project_issue.outputs.exists}
-      project_type: ${step.project_issue.outputs.type}
-      project_status: ${step.project_issue.outputs.status}
-      project_priority: ${step.project_issue.outputs.priority}
-      project_size: ${step.project_issue.outputs.size}
-      project_estimate: ${step.project_issue.outputs.estimate}
-      project_iteration: ${step.project_issue.outputs.iteration}
+- name: Load issue
+  uses: gh.issue
+  with:
+    repository: args.repository
+    issue_number: args.issue_number
+  register: issue
+- name: Load project issue
+  uses: gh.project.issue
+  with:
+    repository: args.repository
+    issue_number: args.issue_number
+    project_id: args.project_id
+  register: project_issue
+- name: Publish issue project context
+  publish:
+    summary: "Issue loaded"
+    active_profile: args.active_profile
+    active_profile_key: args.active_profile_key
+    repository: args.repository
+    issue_number: step.issue.outputs.number
+    issue_ref:
+      format: "{}#{}"
+      args:
+      - args.repository
+      - step.issue.outputs.number
+    title: step.issue.outputs.title
+    state: step.issue.outputs.state
+    url: step.issue.outputs.url
+    stored_branch: args.stored_branch
+    author: step.issue.outputs.author
+    assignees: step.issue.outputs.assignees
+    labels: step.issue.outputs.labels
+    body: step.issue.outputs.body
+    in_project: step.project_issue.outputs.exists
+    project_type: step.project_issue.outputs.type
+    project_status: step.project_issue.outputs.status
+    project_priority: step.project_issue.outputs.priority
+    project_size: step.project_issue.outputs.size
+    project_estimate: step.project_issue.outputs.estimate
+    project_iteration: step.project_issue.outputs.iteration

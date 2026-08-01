@@ -1,8 +1,8 @@
 version: 1
 pre_run:
-  - file: workflows/switch-active-profile.yml
-    state_bindings:
-      shared_state: shared_state
+- file: workflows/switch-active-profile.yml
+  state_bindings:
+    shared_state: shared_state
 defaults:
   profile: backend
 states:
@@ -36,22 +36,27 @@ workflows:
       shared_state: shared_state
   issue-view:
     file: workflows/issue-view.yml
-    description: Show one issue from the selected profile context without changing state
+    description: Show one issue from the selected profile context without changing
+      state
     category: inspect
   issue-view-comments:
     file: workflows/issue-view-comments.yml
-    description: Show comments for one issue from the selected profile context without changing state
+    description: Show comments for one issue from the selected profile context without
+      changing state
     category: inspect
   pr-view:
     file: workflows/pr-view.yml
     description: Show one pull request inspection snapshot without changing state
     category: inspect
-    when: Use when you need one normalized PR summary with comments, reviews, checks, and timeline facts.
+    when: Use when you need one normalized PR summary with comments, reviews, checks,
+      and timeline facts.
   pr-digest:
     file: workflows/pr-digest.yml
-    description: Show a richer pull request digest with review, checks, and timeline highlights
+    description: Show a richer pull request digest with review, checks, and timeline
+      highlights
     category: inspect
-    when: Use when you need a human-oriented pull request digest rather than a compact snapshot.
+    when: Use when you need a human-oriented pull request digest rather than a compact
+      snapshot.
   issue-comment:
     file: workflows/issue-comment.yml
     description: Add a comment to one issue from the selected profile context
@@ -109,7 +114,8 @@ workflows:
     when: Use when you are starting implementation on a Ready task.
   task-to-review:
     file: workflows/task-to-review.yml
-    description: Prepare the active task for review and set its project status to In review
+    description: Prepare the active task for review and set its project status to
+      In review
     category: lifecycle
     when: Use when implementation is complete and the active task is ready for review.
     state_bindings:

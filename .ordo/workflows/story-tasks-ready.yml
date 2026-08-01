@@ -27,6 +27,6 @@ blocks:
 
       - name: Record story ready-task publication
         result:
-          summary: Story ready tasks published
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
+          summary: "Story ready tasks published"
+          repository: inputs.repository
+          issue_number: inputs.issue_number

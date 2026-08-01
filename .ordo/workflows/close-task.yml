@@ -15,37 +15,33 @@ let:
   stored_issue_number: state.common_state[inputs.repository].issue_number
   stored_branch: state.common_state[inputs.repository].branch
   issue: gh.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number)
-  project_issue: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number, project_id=inputs.project_id)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number,
+    project_id=inputs.project_id)
 blocks:
-  - guards:
-      - git.repo.exists
-      - inputs.ship == true
-      - git.worktrees.count == 1
-      - git.stash.count == 0
-
-      - issue.state == "OPEN"
-      - project_issue.exists
-      - project_issue.status == "In review"
-      - stored_branch == git.branch.value
-      - git.worktree.clean
-      - git.branch.value != "main"
-
-  - include: includes/git/merge-task-branch-into-main
-
-  - steps:
-      - name: close-issue
-        uses: gh.issue.close
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${stored_issue_number}
-
-  - steps:
-      - name: comment-and-set-status
-        run: includes/github/comment-and-set-status
-        with:
-          issue_number: ${stored_issue_number}
-          comment: ${inputs.close_comment}
-          status: Done
-
-      - name: Forget stored task
-        state_delete: state.common_state[inputs.repository]
+- guards:
+  - git.repo.exists
+  - inputs.ship == true
+  - git.worktrees.count == 1
+  - git.stash.count == 0
+  - issue.state == "OPEN"
+  - project_issue.exists
+  - project_issue.status == "In review"
+  - stored_branch == git.branch.value
+  - git.worktree.clean
+  - git.branch.value != "main"
+- include: includes/git/merge-task-branch-into-main
+- steps:
+  - name: close-issue
+    uses: gh.issue.close
+    with:
+      repository: inputs.repository
+      issue_number: stored_issue_number
+- steps:
+  - name: comment-and-set-status
+    run: includes/github/comment-and-set-status
+    with:
+      issue_number: stored_issue_number
+      comment: inputs.close_comment
+      status: "Done"
+  - name: Forget stored task
+    state_delete: state.common_state[inputs.repository]

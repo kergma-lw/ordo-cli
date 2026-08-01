@@ -13,164 +13,143 @@ state_needs:
   shared_state: {}
 let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
-  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number,
+    project_id=inputs.project_id)
 blocks:
-  - guards:
-      - inputs.active_profile_key != ""
-      - inputs.profile == "frontend" or inputs.profile == "backend" or inputs.profile == "meta"
-      - inputs.issue_number | is_integer
-
-  - steps:
-      - name: Switch runtime profile
-        profile_switch: ${inputs.profile}
-
-  - guards:
-      - inputs.repository != ""
-      - inputs.project_id != ""
-
-  - steps:
-      - name: Remember active profile
-        state_set:
-          state.shared_state[inputs.active_profile_key]: ${inputs.profile}
-
-  - steps:
-      - name: load-issue
-        uses: gh.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-        register: issue
-
-      - name: probe-project-membership
-        uses: gh.project.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-        register: project_probe
-
-      - name: add-issue-to-project
-        if: step.project_probe.outputs.exists | not
-        uses: gh.project.issue.add
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-
-      - name: load-project-fields
-        uses: gh.project.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-        register: project
-
-  - guards:
-      - git.repo.exists
-      - inputs.repo_kind == "meta" or git.worktree.clean == true
-      - issue.state == "OPEN"
-      - project_issue.exists
-      - project_issue.status != "Done"
-      - inputs.repo_kind != "meta" or project_issue.type == "Story"
-      - inputs.repo_kind == "meta" or project_issue.type == "Task" or project_issue.type == "Bug"
-
-  - steps:
-      - name: Load branch issue
-        uses: gh.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-        register: branch_issue
-
-      - name: Load branch project item
-        uses: gh.project.issue
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-        register: branch_project
-
-      - name: Compute branch name
-        value:
-          format: "{}/{}-{}"
-          args:
-            - ${step.branch_project.outputs.type | lower}
-            - ${inputs.issue_number}
-            - ${step.branch_issue.outputs.title | slug}
-        register: branch
-
-      - name: Probe local main ref
-        uses: git.ref
-        with:
-          ref: refs/heads/main
-        register: local_main
-
-      - name: Fetch origin
-        uses: git.sync.fetch
-        with:
-          remote: origin
-
-      - name: Probe remote main ref
-        uses: git.ref
-        with:
-          ref: refs/remotes/origin/main
-        register: remote_main
-
-      - name: Switch main
-        if: step.local_main.outputs.exists
-        uses: git.branch.switch
-        with:
-          branch: main
-
-      - name: Merge origin/main ff-only
-        if: step.local_main.outputs.exists and step.remote_main.outputs.exists
-        uses: git.integrate.merge_ff_only
-        with:
-          ref: refs/remotes/origin/main
-
-      - name: Probe target branch ref
-        uses: git.ref
-        with:
-          ref:
-            format: "refs/heads/{}"
-            args:
-              - ${step.branch.outputs.value}
-        register: target_branch
-
-      - name: Switch existing target branch
-        if: step.target_branch.outputs.exists
-        uses: git.branch.switch
-        with:
-          branch: ${step.branch.outputs.value}
-
-      - name: Create target branch from local main
-        if: not step.target_branch.outputs.exists and step.local_main.outputs.exists
-        uses: git.branch.create
-        with:
-          branch: ${step.branch.outputs.value}
-          start_point: refs/heads/main
-
-      - name: Create target branch from remote main
-        if: not step.target_branch.outputs.exists and not step.local_main.outputs.exists
-        uses: git.branch.create
-        with:
-          branch: ${step.branch.outputs.value}
-          start_point: refs/remotes/origin/main
-
-      - name: Switch created target branch
-        if: not step.target_branch.outputs.exists
-        uses: git.branch.switch
-        with:
-          branch: ${step.branch.outputs.value}
-
-      - name: Finalize frontend
-        if: inputs.repo_kind | eq("frontend")
-        uses: routine.set-active-task.finalize-frontend
-
-      - name: Remember issue number
-        state_set:
-          state.common_state[inputs.repository].issue_number: ${inputs.issue_number}
-
-      - name: Remember branch
-        state_set:
-          state.common_state[inputs.repository].branch: ${step.branch.outputs.value}
+- guards:
+  - inputs.active_profile_key != ""
+  - inputs.profile == "frontend" or inputs.profile == "backend" or inputs.profile
+    == "meta"
+  - inputs.issue_number | is_integer
+- steps:
+  - name: Switch runtime profile
+    profile_switch: ${inputs.profile}
+- guards:
+  - inputs.repository != ""
+  - inputs.project_id != ""
+- steps:
+  - name: Remember active profile
+    state_set:
+      state.shared_state[inputs.active_profile_key]: ${inputs.profile}
+- steps:
+  - name: load-issue
+    uses: gh.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+    register: issue
+  - name: probe-project-membership
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+    register: project_probe
+  - name: add-issue-to-project
+    if: step.project_probe.outputs.exists | not
+    uses: gh.project.issue.add
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+  - name: load-project-fields
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+    register: project
+- guards:
+  - git.repo.exists
+  - inputs.repo_kind == "meta" or git.worktree.clean == true
+  - issue.state == "OPEN"
+  - project_issue.exists
+  - project_issue.status != "Done"
+  - inputs.repo_kind != "meta" or project_issue.type == "Story"
+  - inputs.repo_kind == "meta" or project_issue.type == "Task" or project_issue.type
+    == "Bug"
+- steps:
+  - name: Load branch issue
+    uses: gh.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+    register: branch_issue
+  - name: Load branch project item
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+    register: branch_project
+  - name: Compute branch name
+    value:
+      format: "{}/{}-{}"
+      args:
+      - step.branch_project.outputs.type | lower
+      - inputs.issue_number
+      - step.branch_issue.outputs.title | slug
+    register: branch
+  - name: Probe local main ref
+    uses: git.ref
+    with:
+      ref: "refs/heads/main"
+    register: local_main
+  - name: Fetch origin
+    uses: git.sync.fetch
+    with:
+      remote: "origin"
+  - name: Probe remote main ref
+    uses: git.ref
+    with:
+      ref: "refs/remotes/origin/main"
+    register: remote_main
+  - name: Switch main
+    if: step.local_main.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: "main"
+  - name: Merge origin/main ff-only
+    if: step.local_main.outputs.exists and step.remote_main.outputs.exists
+    uses: git.integrate.merge_ff_only
+    with:
+      ref: "refs/remotes/origin/main"
+  - name: Probe target branch ref
+    uses: git.ref
+    with:
+      ref:
+        format: "refs/heads/{}"
+        args:
+        - step.branch.outputs.value
+    register: target_branch
+  - name: Switch existing target branch
+    if: step.target_branch.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: step.branch.outputs.value
+  - name: Create target branch from local main
+    if: not step.target_branch.outputs.exists and step.local_main.outputs.exists
+    uses: git.branch.create
+    with:
+      branch: step.branch.outputs.value
+      start_point: "refs/heads/main"
+  - name: Create target branch from remote main
+    if: not step.target_branch.outputs.exists and not step.local_main.outputs.exists
+    uses: git.branch.create
+    with:
+      branch: step.branch.outputs.value
+      start_point: "refs/remotes/origin/main"
+  - name: Switch created target branch
+    if: not step.target_branch.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: step.branch.outputs.value
+  - name: Finalize frontend
+    if: inputs.repo_kind | eq("frontend")
+    uses: routine.set-active-task.finalize-frontend
+  - name: Remember issue number
+    state_set:
+      state.common_state[inputs.repository].issue_number: ${inputs.issue_number}
+  - name: Remember branch
+    state_set:
+      state.common_state[inputs.repository].branch: ${step.branch.outputs.value}

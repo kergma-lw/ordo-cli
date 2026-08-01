@@ -20,7 +20,7 @@ from .local_expressions import (
     resolve_embedded_local_expression,
     validate_parsed_local_expression,
 )
-from .loading import LoadError, load_profile_file, load_profile_text, load_workflow_document_file, load_workflow_file, load_workflow_text, load_yaml_document
+from .loading import LoadError, load_profile_file, load_profile_text, load_workflow_document_file, load_workflow_file, load_workflow_payload, load_workflow_text, load_yaml_document
 from .planning import plan_workflow
 from .reviewing import review_workflow
 from .profiles import ProfileCompositionResult, WorkflowProfileApplicationResult, apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, compose_profiles
@@ -63,6 +63,7 @@ __all__ = [
     "load_profile_text",
     "load_workflow_document_file",
     "load_workflow_file",
+    "load_workflow_payload",
     "load_workflow_text",
     "load_yaml_document",
     "resolve_workflow_references",

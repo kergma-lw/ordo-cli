@@ -16,70 +16,64 @@ state_needs:
 let:
   project: gh.project(project_id=inputs.project_id)
   status_field: gh.project.field(project_id=inputs.project_id, field="Status")
-  backlog_status_option: gh.project.field.option(project_id=inputs.project_id, field="Status", option="Backlog")
+  backlog_status_option: gh.project.field.option(project_id=inputs.project_id, field="Status",
+    option="Backlog")
   type_field: gh.project.field(project_id=inputs.project_id, field="Type")
-  task_type_option: gh.project.field.option(project_id=inputs.project_id, field="Type", option="Task")
+  task_type_option: gh.project.field.option(project_id=inputs.project_id, field="Type",
+    option="Task")
 blocks:
-  - guards:
-      - git.repo.exists
-      - inputs.profile == "backend" or inputs.profile == "frontend"
-
-  - steps:
-      - name: Switch runtime profile
-        profile_switch: ${inputs.profile}
-
-      - name: Remember active profile
-        state_set:
-          state.shared_state[inputs.active_profile_key]: ${inputs.profile}
-
-  - guards:
-      - inputs.repo_kind != "meta"
-      - project.exists
-      - status_field.exists
-      - backlog_status_option.exists
-      - type_field.exists
-      - task_type_option.exists
-      - 'is_missing(markdown["Tasks"] with{root: inputs.body})'
-
-  - steps:
-      - name: Create issue
-        uses: gh.issue.create
-        register: created_issue
-        with:
-          repository: ${inputs.repository}
-          title: ${inputs.title}
-          body: ${inputs.body}
-
-      - name: Add issue to project
-        uses: gh.project.issue.add
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${step.created_issue.outputs.number}
-          project_id: ${inputs.project_id}
-
-      - name: Set task status
-        uses: gh.project.issue.field_single_select.set
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${step.created_issue.outputs.number}
-          project_id: ${inputs.project_id}
-          field: Status
-          option: Backlog
-
-      - name: Set task type
-        uses: gh.project.issue.field_single_select.set
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${step.created_issue.outputs.number}
-          project_id: ${inputs.project_id}
-          field: Type
-          option: Task
-
-      - name: Publish created task
-        publish:
-          summary: Task created
-          issue_ref: ${step.created_issue.outputs.issue_ref}
-          issue_number: ${step.created_issue.outputs.number}
-          url: ${step.created_issue.outputs.url}
-          active_profile: ${inputs.profile}
-          type: Task
+- guards:
+  - git.repo.exists
+  - inputs.profile == "backend" or inputs.profile == "frontend"
+- steps:
+  - name: Switch runtime profile
+    profile_switch: ${inputs.profile}
+  - name: Remember active profile
+    state_set:
+      state.shared_state[inputs.active_profile_key]: ${inputs.profile}
+- guards:
+  - inputs.repo_kind != "meta"
+  - project.exists
+  - status_field.exists
+  - backlog_status_option.exists
+  - type_field.exists
+  - task_type_option.exists
+  - 'is_missing(markdown["Tasks"] with{root: inputs.body})'
+- steps:
+  - name: Create issue
+    uses: gh.issue.create
+    register: created_issue
+    with:
+      repository: inputs.repository
+      title: inputs.title
+      body: inputs.body
+  - name: Add issue to project
+    uses: gh.project.issue.add
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      project_id: inputs.project_id
+  - name: Set task status
+    uses: gh.project.issue.field_single_select.set
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "Backlog"
+  - name: Set task type
+    uses: gh.project.issue.field_single_select.set
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      project_id: inputs.project_id
+      field: "Type"
+      option: "Task"
+  - name: Publish created task
+    publish:
+      summary: "Task created"
+      issue_ref: step.created_issue.outputs.issue_ref
+      issue_number: step.created_issue.outputs.number
+      url: step.created_issue.outputs.url
+      active_profile: inputs.profile
+      type: "Task"

@@ -1,13 +1,10 @@
 version: 1
 pre_run:
-  - workflows/resolve-context.yml
-
+- workflows/resolve-context.yml
 workflows:
   close-task:
     file: workflows/close-task.yml
-
 profiles:
   frontend:
     file: profiles/frontend.yml
-
 states: {}

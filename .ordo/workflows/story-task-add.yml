@@ -28,24 +28,24 @@ blocks:
   - steps:
       - name: Build task ref
         value:
-          format: "%s#%s"
+          format: "{}#{}"
           args:
-            - ${inputs.task_repository}
-            - ${inputs.task_issue_number}
+            - inputs.task_repository
+            - inputs.task_issue_number
         register: task_ref
 
       - name: Replace story body
         uses: gh.issue.body.replace
         register: body_replace
         with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
+          repository: inputs.repository
+          issue_number: inputs.issue_number
           body: '${markdown["Tasks"].list->add(item) with{root: story_body, item: step.task_ref.outputs.value}}'
 
       - name: Publish add-task result
         publish:
-          summary: Story task reference updated
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          task_ref: ${step.task_ref.outputs.value}
-          changed: ${step.body_replace.outputs.changed}
+          summary: "Story task reference updated"
+          repository: inputs.repository
+          issue_number: inputs.issue_number
+          task_ref: step.task_ref.outputs.value
+          changed: step.body_replace.outputs.changed

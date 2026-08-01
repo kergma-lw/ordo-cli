@@ -1,2 +1,2 @@
 guards:
-  - git.worktree.clean
+- git.worktree.clean

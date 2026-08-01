@@ -13,7 +13,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
 from ordo.model.workflow import Step, StepBlock, Workflow
-from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_text, load_yaml_document, validate_workflow_document, validate_workflow_semantics
+from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_payload, load_yaml_document, validate_workflow_document, validate_workflow_semantics
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
 from ordo.runtime.local_expression_engine.core import (
@@ -212,7 +212,7 @@ def inspect_playbook_workflow(
         playbook_path=path,
     )
     try:
-        workflow = load_workflow_text(yaml.safe_dump(compiled_workflow, sort_keys=False), source=str(workflow_path.resolve()))
+        workflow = load_workflow_payload(compiled_workflow, source=str(workflow_path.resolve()), launch_dir=Path.cwd() if cwd is None else Path(cwd))
     except LoadError as exc:
         raise PlaybookError(exc.diagnostics) from exc
     semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
@@ -308,7 +308,7 @@ def activate_playbook(
         playbook_path=path,
     )
     try:
-        workflow = load_workflow_text(yaml.safe_dump(compiled_workflow, sort_keys=False), source=str(workflow_path.resolve()))
+        workflow = load_workflow_payload(compiled_workflow, source=str(workflow_path.resolve()), launch_dir=Path.cwd() if cwd is None else Path(cwd))
     except LoadError as exc:
         raise PlaybookError(exc.diagnostics) from exc
 

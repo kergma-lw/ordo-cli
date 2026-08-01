@@ -8,37 +8,35 @@ inputs:
   issue_number: {}
 let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
-  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number,
+    project_id=inputs.project_id)
   issue_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
 blocks:
-  - guards:
-      - git.repo.exists
-
-  - guards:
-      - issue.state == "OPEN"
-      - project_issue.exists
-      - project_issue.type == "Task" or project_issue.type == "Bug"
-      - project_issue.status == "Backlog"
-      - 'is_present(markdown["Scope"] with{root: issue_body})'
-      - 'is_present(markdown["Verification"] with{root: issue_body})'
-
-  - steps:
-      - name: Set task status to Ready
-        uses: gh.project.issue.field_single_select.set
-        with:
-          repository: ${inputs.repository}
-          issue_number: ${inputs.issue_number}
-          project_id: ${inputs.project_id}
-          field: Status
-          option: Ready
-
-      - name: Publish ready task
-        publish:
-          summary: Task set to Ready
-          issue_ref:
-            format: "%s#%s"
-            args:
-              - ${inputs.repository}
-              - ${inputs.issue_number}
-          issue_number: ${inputs.issue_number}
-          status: Ready
+- guards:
+  - git.repo.exists
+- guards:
+  - issue.state == "OPEN"
+  - project_issue.exists
+  - project_issue.type == "Task" or project_issue.type == "Bug"
+  - project_issue.status == "Backlog"
+  - 'is_present(markdown["Scope"] with{root: issue_body})'
+  - 'is_present(markdown["Verification"] with{root: issue_body})'
+- steps:
+  - name: Set task status to Ready
+    uses: gh.project.issue.field_single_select.set
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "Ready"
+  - name: Publish ready task
+    publish:
+      summary: "Task set to Ready"
+      issue_ref:
+        format: "{}#{}"
+        args:
+        - inputs.repository
+        - inputs.issue_number
+      issue_number: inputs.issue_number
+      status: "Ready"

@@ -4,7 +4,7 @@ inputs:
   repository: {}
   issue_number: {}
 blocks:
-  - include: fragments/check-issue
-    with:
-      repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
+- include: fragments/check-issue
+  with:
+    repository: inputs.repository
+    issue_number: inputs.issue_number

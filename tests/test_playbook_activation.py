@@ -1371,11 +1371,11 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
-                "steps:\n  - name: prepare\n    value: ok\n",
+                "steps:\n  - name: prepare\n    value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: main\n        value: done\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: main\n        value: \"done\"\n",
                 encoding="utf-8",
             )
 
@@ -1416,7 +1416,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: main\n        value: done\n",
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: main\n        value: \"done\"\n",
                 encoding="utf-8",
             )
 
@@ -1448,9 +1448,9 @@ class PlaybookActivationTest(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            (root / ".ordo" / "workflows" / "resolve-context.yml").write_text("steps:\n  - name: prepare\n    value: ok\n", encoding="utf-8")
+            (root / ".ordo" / "workflows" / "resolve-context.yml").write_text("steps:\n  - name: prepare\n    value: \"ok\"\n", encoding="utf-8")
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: main\n        value: done\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: main\n        value: \"done\"\n",
                 encoding="utf-8",
             )
 
@@ -1480,7 +1480,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
-                "steps:\n  - name: prepare\n    value: ok\n",
+                "steps:\n  - name: prepare\n    value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
@@ -1495,7 +1495,7 @@ class PlaybookActivationTest(unittest.TestCase):
                           - inputs.enabled == true
                       - steps:
                           - name: main
-                            value: done
+                            value: "done"
                     """
                 ).strip()
                 + "\n",
@@ -1550,7 +1550,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-active-profile.yml").write_text(
-                "version: 0\nworkflow: set-active-profile\ninputs:\n  profile: {}\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nblocks:\n  - guards:\n      - inputs.profile == \"backend\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                "version: 0\nworkflow: set-active-profile\ninputs:\n  profile: {}\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nblocks:\n  - guards:\n      - inputs.profile == \"backend\"\n  - steps:\n      - name: remember\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\n", encoding="utf-8")
@@ -1608,7 +1608,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "close-task.yml").write_text(
-                "version: 0\nworkflow: close-task\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nstate_needs:\n  shared_state: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                "version: 0\nworkflow: close-task\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nstate_needs:\n  shared_state: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\ninputs:\n  repo_kind: frontend\n", encoding="utf-8")
@@ -1663,7 +1663,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
-                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\ninputs:\n  repo_kind: frontend\n", encoding="utf-8")
@@ -1719,7 +1719,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
-                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - guards:\n      - inputs.active_profile_key == \"active_profile\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - guards:\n      - inputs.active_profile_key == \"active_profile\"\n  - steps:\n      - name: remember\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\n", encoding="utf-8")
@@ -1777,7 +1777,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
-                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: ok\n",
+                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\ninputs:\n  repo_kind: frontend\n", encoding="utf-8")
@@ -1832,7 +1832,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
-                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: ok\n        register: marker\n",
+                "version: 0\nworkflow: set-task-size\ninputs:\n  active_profile_key: active_profile\n  repo_kind: {}\nblocks:\n  - guards:\n      - inputs.repo_kind == \"backend\"\n  - steps:\n      - name: remember\n        value: \"ok\"\n        register: marker\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text("name: frontend\ninputs:\n  repo_kind: frontend\n", encoding="utf-8")
@@ -1880,11 +1880,11 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-pre\n        publish:\n          summary: pre\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-pre\n        publish:\n          summary: \"pre\"\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "publish.yml").write_text(
-                "version: 0\nworkflow: publish\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-main\n        publish:\n          summary: main\n",
+                "version: 0\nworkflow: publish\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-main\n        publish:\n          summary: \"main\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\n", encoding="utf-8")
@@ -2779,7 +2779,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: publish\n        publish:\n          summary: done\n          changed: true\n",
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - steps:\n      - name: publish\n        publish:\n          summary: \"done\"\n          changed: true\n",
                 encoding="utf-8",
             )
 
@@ -2872,7 +2872,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "nested.yml").write_text(
-                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-value\n        value: ok\n",
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-value\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(

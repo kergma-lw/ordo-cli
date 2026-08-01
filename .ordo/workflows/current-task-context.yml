@@ -14,17 +14,17 @@ let:
   stored_issue_number: state.common_state[inputs.repository].issue_number
   stored_branch: state.common_state[inputs.repository].branch
 blocks:
-  - guards:
-      - git.repo.exists
-      - inputs.active_profile_key != ""
-      - active_profile == "frontend" or active_profile == "backend" or active_profile == "meta"
-      - stored_issue_number | is_integer
-
-  - include: fragments/publish-issue-project-context.yml
-    with:
-      repository: ${inputs.repository}
-      issue_number: ${stored_issue_number}
-      project_id: ${inputs.project_id}
-      active_profile: ${active_profile}
-      active_profile_key: ${inputs.active_profile_key}
-      stored_branch: ${stored_branch}
+- guards:
+  - git.repo.exists
+  - inputs.active_profile_key != ""
+  - active_profile == "frontend" or active_profile == "backend" or active_profile
+    == "meta"
+  - stored_issue_number | is_integer
+- include: fragments/publish-issue-project-context.yml
+  with:
+    repository: inputs.repository
+    issue_number: stored_issue_number
+    project_id: inputs.project_id
+    active_profile: active_profile
+    active_profile_key: inputs.active_profile_key
+    stored_branch: stored_branch
