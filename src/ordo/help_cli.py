@@ -602,6 +602,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "write step if conditions without ${...}",
             "write with, value, publish, result, and for_each entries as bare expressions when they are meant to evaluate",
             "quote literal strings explicitly when a value-bearing field should preserve raw text",
+            "keep ${...} only for YAML-hostile expressions that are not viable as bare plain scalars",
         ],
         "avoid": [
             "wrapping native expression contexts in ${...} just by habit",

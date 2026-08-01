@@ -68,7 +68,7 @@ def resolve_runtime_value(
         return value
 
     authored_style = authored_string_style(value)
-    if authored_style in {"single", "double", "other"}:
+    if authored_style in {"single", "double", "other"} and _extract_expression(value) is None:
         return str(value)
 
     if authored_style is None and _extract_expression(value) is None:

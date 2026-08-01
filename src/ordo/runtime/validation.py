@@ -398,7 +398,7 @@ def _iter_input_references_from_step_item(step: JSONObject, *, block_index: int,
     if "profile_switch" in step:
         references.extend(
             _pair_input_references_with_paths(
-                _collect_input_references_from_runtime_value_surface(step.get("profile_switch")),
+                _collect_input_references_from_runtime_value_surface(step.get("profile_switch"), allow_bare_strings=False),
                 path=base_path + ("profile_switch",),
             )
         )
@@ -438,7 +438,7 @@ def _iter_input_references_from_nested_step_item(step: JSONObject, *, path: tupl
     if "value" in step:
         references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("value")), path=path + ("value",)))
     if "profile_switch" in step:
-        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("profile_switch")), path=path + ("profile_switch",)))
+        references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("profile_switch"), allow_bare_strings=False), path=path + ("profile_switch",)))
     if "state_set" in step and isinstance(step.get("state_set"), dict):
         for key, item in step["state_set"].items():
             if not isinstance(key, str):
@@ -1688,6 +1688,18 @@ def _validate_runtime_value_surface(
     if parsed is None or parsed.value is None:
         return diagnostics
     expression = _runtime_value_expression_text(value, mode=mode)
+    authored_style = authored_string_style(value)
+    if mode == "embedded" and allow_bare_strings and authored_style in {"single", "double", "other"} and not _value_expression_requires_escape(expression):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.value_expr.embedded_escape_unnecessary",
+                "This quoted ${...} expression can be authored directly as a bare value. Reserve quoted ${...} only for YAML-hostile expressions that need the explicit escape form.",
+                path,
+                source,
+                expression=expression,
+            )
+        )
+        return diagnostics
     surface_diagnostics = _validate_step_references(
         collect_step_references(parsed.value.root),
         path=path,
@@ -1790,7 +1802,7 @@ def _validate_runtime_value_reference_roots(
 def _runtime_value_expression_mode(value: str, *, allow_bare_strings: bool) -> str | None:
     style = authored_string_style(value)
     if style in {"single", "double", "other"}:
-        return None
+        return "embedded" if _extract_runtime_value_expression(value) is not None else None
     if style == "plain":
         if _extract_runtime_value_expression(value) is not None:
             return "embedded"
@@ -1836,6 +1848,17 @@ def _build_runtime_value_surface_parse_diagnostics(
             parse_message=exc.message,
         )
     ]
+
+
+def _value_expression_requires_escape(expression: str) -> bool:
+    """Return whether one value expression still needs ${...} to stay YAML-safe.
+
+    Bare-first value surfaces should use plain scalars whenever possible.
+    The explicit `${...}` envelope remains available only for expression shapes
+    that are not viable as stable YAML plain scalars, such as `with{...}` maps.
+    """
+
+    return "with{" in expression
 
 
 def _validate_profile_switch_value(

@@ -190,6 +190,12 @@ Rules:
 - numeric, boolean, and null scalars keep their normal YAML meaning;
 - nested object and list leaves follow the same rule recursively.
 
+When an expression is too YAML-hostile to live safely as a bare plain scalar, `${...}` remains available as an explicit expression escape hatch rather than as the general default:
+
+```yaml
+body: '${markdown["Tasks"].list->add(item) with{root: story_body, item: step.task_ref.outputs.value}}'
+```
+
 Illustrative examples:
 
 ```yaml

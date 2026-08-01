@@ -20,7 +20,7 @@ Nested object and list leaves still follow the same rule recursively.
 
 Embedded value context models one derived value inside a larger value-bearing field.
 
-Typical surfaces include compatibility envelopes such as `${...}` and other scalar positions that still opt into an explicit embedding marker.
+Typical surfaces include explicit `${...}` escape envelopes and other scalar positions that still opt into an explicit embedding marker.
 
 It belongs to the value-oriented context family.
 
@@ -66,7 +66,7 @@ The model allows both:
 
 - native expression contexts whose primary meaning is already conditional or predicate-oriented;
 - expression-first value contexts whose primary meaning is value construction or argument binding;
-- embedded expression contexts whose expressions appear inside a broader value-bearing field only through an explicit compatibility envelope.
+- embedded expression contexts whose expressions appear inside a broader value-bearing field only through an explicit escape envelope.
 
 This distinction is about authored surface, not about separate semantic languages.
 

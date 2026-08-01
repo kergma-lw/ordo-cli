@@ -1794,6 +1794,49 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertTrue(any(item.code == "validation.workflow.value_expr.literal_string_maybe_unquoted" for item in report.diagnostics))
 
+    def test_publish_rejects_unnecessary_embedded_escape_when_bare_is_safe(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                inputs:
+                  repository: owner/repo
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: publish
+                        publish:
+                          repository: '${inputs.repository}'
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.embedded_escape_unnecessary")
+
+    def test_publish_allows_embedded_escape_for_yaml_hostile_expression(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                inputs:
+                  body: |
+                    ## Tasks
+                    - owner/repo#1
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: publish
+                        publish:
+                          tasks: '${markdown["Tasks"].list_items with{root: inputs.body}}'
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_profile_unknown_field_fails(self) -> None:
         report = validate_profile_text(
             textwrap.dedent(

@@ -714,7 +714,7 @@
 
 - A native condition context may expose expressions without an interpolation envelope.
 - An expression-first value context may expose plain scalar expressions while still preserving explicit quoted string literals.
-- An embedded value context may use a distinct authored embedding form for local expressions as a compatibility surface.
+- An embedded value context may use a distinct authored embedding form for local expressions as an explicit escape surface when the expression is not viable as a YAML plain scalar.
 - Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.
 
 <!-- source: requirements/local-expressions/json.md -->
@@ -3285,7 +3285,7 @@ Nested object and list leaves still follow the same rule recursively.
 
 Embedded value context models one derived value inside a larger value-bearing field.
 
-Typical surfaces include compatibility envelopes such as `${...}` and other scalar positions that still opt into an explicit embedding marker.
+Typical surfaces include explicit `${...}` escape envelopes and other scalar positions that still opt into an explicit embedding marker.
 
 It belongs to the value-oriented context family.
 
@@ -3331,7 +3331,7 @@ The model allows both:
 
 - native expression contexts whose primary meaning is already conditional or predicate-oriented;
 - expression-first value contexts whose primary meaning is value construction or argument binding;
-- embedded expression contexts whose expressions appear inside a broader value-bearing field only through an explicit compatibility envelope.
+- embedded expression contexts whose expressions appear inside a broader value-bearing field only through an explicit escape envelope.
 
 This distinction is about authored surface, not about separate semantic languages.
 
@@ -5979,7 +5979,7 @@ Workflow readability and portability depend on visible resolution semantics.
 
 The stable workflow contract may expose local expressions in more than one field family.
 
-The important shape distinction is between native condition contexts, expression-first value contexts, and embedded value compatibility forms.
+The important shape distinction is between native condition contexts, expression-first value contexts, and explicit embedded escape forms.
 
 ## Expression-first value form
 
@@ -6043,7 +6043,7 @@ Native-condition rules:
 - step `if: ${...}` remains supported as a deprecated compatibility form during migration;
 - `with`, `value`, `publish`, `result`, and `for_each` are expression-first value-bearing surfaces;
 - include-site `with` values are expression-first caller-scoped bindings;
-- embedded `${...}` value forms may remain available temporarily as compatibility forms while corpora migrate.
+- embedded `${...}` value forms remain available only as explicit escape forms for YAML-hostile expressions that are not viable as bare plain scalars.
 
 This file describes only authored surface categories and stable reference forms.
 
@@ -6058,7 +6058,7 @@ It does not define the full semantic restrictions of each context.
 
 ## Compatibility note
 
-Current stable authored surfaces may include context-specific compatibility forms during migration.
+Current stable authored surfaces may include context-specific escape forms where YAML plain-scalar authoring is not viable.
 
 Current compatibility decisions:
 
@@ -6066,11 +6066,9 @@ Current compatibility decisions:
 - string-form native guard entries are the preferred stable guard form;
 - step `if` prefers native bare condition entries;
 - step `if: ${...}` remains a deprecated compatibility form;
-- `${...}` inside expression-first value-bearing surfaces remains a temporary compatibility form rather than the preferred authored shape.
+- `${...}` inside expression-first value-bearing surfaces remains an explicit expression escape hatch rather than a general compatibility surface.
 
-These deprecated compatibility forms remain valid during the current v0 warning window and require an explicit future contract revision before hard removal.
-
-Those compatibility forms do not change the higher-level local-expression model or the context restrictions that define which dependencies are allowed.
+These escape forms do not change the higher-level local-expression model or the context restrictions that define which dependencies are allowed.
 
 <!-- source: data/workflow/shape.md -->
 
