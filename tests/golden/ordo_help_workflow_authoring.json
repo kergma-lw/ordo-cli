@@ -8,6 +8,7 @@
     "when adding or changing inputs, validate them before continuing",
     "validate both the request shape and the observed target context",
     "name important values early",
+    "prefer bare expressions in native expression contexts and reserve ${...} mainly for embedded value fields",
     "stage reusable payloads with value + register before emitting them through result or publish",
     "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
     "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",
@@ -580,6 +581,27 @@
         "named bindings shorten long fragments and reduce repetition",
         "named bindings improve readability across check, plan, explain, and run surfaces",
         "early let bindings make workflow intent easier to scan"
+      ]
+    },
+    {
+      "avoid": [
+        "wrapping native expression contexts in ${...} just by habit",
+        "using embedded ${...} where the authored field is already a native expression slot",
+        "mixing bare and embedded forms without a readability reason"
+      ],
+      "guidance_level": "recommended",
+      "name": "native_expression_contexts",
+      "prefer": [
+        "write let bindings as bare expressions",
+        "write step if conditions without ${...}",
+        "prefer the native bare form when the field already owns expression evaluation"
+      ],
+      "priority": "recommended_readability_pattern",
+      "rule": "Prefer bare expressions in native expression contexts such as let: and bare step if:. Use ${...} mainly for embedded value contexts.",
+      "why": [
+        "bare native expressions reduce visual noise",
+        "keeping native and embedded expression forms distinct makes workflows easier to scan",
+        "using ${...} mainly where the field embeds a value expression keeps authored surfaces more legible"
       ]
     }
   ]

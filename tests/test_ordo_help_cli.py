@@ -434,6 +434,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         scope_result = json.loads(self.run_help("search", "iteration-local", "--json").stdout)
         delegated_result = json.loads(self.run_help("search", "downstream action validation", "--json").stdout)
         let_result = json.loads(self.run_help("search", "repetition", "--json").stdout)
+        bare_result = json.loads(self.run_help("search", "bare expressions", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.shell.command" for item in shell_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.routine.*" for item in routine_result["facts"]))
@@ -450,6 +451,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.inline_fan_out_invalid_shapes" for item in inline_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.delegated_applicability" for item in delegated_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_let" for item in let_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.native_expression_contexts" for item in bare_result["facts"]))
 
     def test_workflow_authoring_topic_prioritizes_routine_caution_and_early_guards(self) -> None:
         payload = json.loads(self.run_help("workflow-authoring", "--json").stdout)
@@ -461,6 +463,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("validate both the request shape and the observed target context", payload["authoring_heuristic"])
         self.assertIn("keep bounded fan-out bodies short, structured, and explicit about scope boundaries", payload["authoring_heuristic"])
         self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early", payload["authoring_heuristic"])
+        self.assertIn("prefer bare expressions in native expression contexts and reserve ${...} mainly for embedded value fields", payload["authoring_heuristic"])
         self.assertEqual([item["name"] for item in payload["bounded_fan_out_examples"]], ["named_run_target_fan_out", "inline_fan_out_local_steps", "inline_fan_out_inner_if"])
         decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")
         structured_rule = next(item for item in payload["rules"] if item["name"] == "structured_surface_bias")
@@ -481,6 +484,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         fan_out_scope_rule = next(item for item in payload["rules"] if item["name"] == "fan_out_scope_and_conditions")
         fan_out_invalid_rule = next(item for item in payload["rules"] if item["name"] == "inline_fan_out_invalid_shapes")
         let_rule = next(item for item in payload["rules"] if item["name"] == "early_let")
+        native_expression_rule = next(item for item in payload["rules"] if item["name"] == "native_expression_contexts")
         guard_result_rule = next(item for item in payload["rules"] if item["name"] == "guard_result_contract")
 
         self.assertEqual(decision_rule["priority"], "critical_decision_policy")
@@ -581,6 +585,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any("array-valued" in item for item in [fan_out_invalid_rule["rule"], *fan_out_invalid_rule["prefer"]]))
         self.assertTrue(any("outer with" in item for item in fan_out_invalid_rule["avoid"]))
         self.assertEqual(let_rule["priority"], "recommended_readability_pattern")
+        self.assertEqual(native_expression_rule["guidance_level"], "recommended")
+        self.assertTrue(any("let bindings" in item for item in native_expression_rule["prefer"]))
+        self.assertTrue(any("step if conditions" in item for item in native_expression_rule["prefer"]))
         self.assertEqual(guard_result_rule["priority"], "critical_guard_contract")
         self.assertEqual(guard_result_rule["guidance_level"], "required")
         self.assertTrue(any("non-boolean" in item for item in guard_result_rule["prefer"] + guard_result_rule["avoid"]))

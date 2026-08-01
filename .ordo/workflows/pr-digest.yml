@@ -5,6 +5,14 @@ inputs:
     description: Pull request repository in OWNER/REPO form
   pull_number:
     description: Pull request number
+let:
+  pull_ref: format("{}#{}", inputs.pr_repository, inputs.pull_number)
+  pr: gh.pr(repository=inputs.pr_repository, pull_number=inputs.pull_number)
+  pr_comments: gh.pr.comments(repository=inputs.pr_repository, pull_number=inputs.pull_number, limit=10)
+  pr_reviews: gh.pr.reviews(repository=inputs.pr_repository, pull_number=inputs.pull_number, limit=5)
+  pr_review_comments: gh.pr.review_comments(repository=inputs.pr_repository, pull_number=inputs.pull_number, limit=20)
+  pr_checks: gh.pr.checks(repository=inputs.pr_repository, pull_number=inputs.pull_number)
+  pr_timeline: gh.pr.timeline(repository=inputs.pr_repository, pull_number=inputs.pull_number, limit=10)
 blocks:
   - guards:
       - inputs.pr_repository | is_string
@@ -15,89 +23,44 @@ blocks:
       - git.repo.exists
 
   - steps:
-      - name: Load pull request
-        uses: gh.pr
-        with:
-          repository: ${inputs.pr_repository}
-          pull_number: ${inputs.pull_number}
-        register: pr
-
-      - name: Load pull request comments
-        uses: gh.pr.comments
-        with:
-          repository: ${inputs.pr_repository}
-          pull_number: ${inputs.pull_number}
-          limit: 10
-        register: pr_comments
-
-      - name: Load pull request reviews
-        uses: gh.pr.reviews
-        with:
-          repository: ${inputs.pr_repository}
-          pull_number: ${inputs.pull_number}
-          limit: 5
-        register: pr_reviews
-
-      - name: Load pull request review comments
-        uses: gh.pr.review_comments
-        with:
-          repository: ${inputs.pr_repository}
-          pull_number: ${inputs.pull_number}
-          limit: 20
-        register: pr_review_comments
-
-      - name: Load pull request checks
-        uses: gh.pr.checks
-        with:
-          repository: ${inputs.pr_repository}
-          pull_number: ${inputs.pull_number}
-        register: pr_checks
-
-      - name: Load pull request timeline
-        uses: gh.pr.timeline
-        with:
-          repository: ${inputs.pr_repository}
-          pull_number: ${inputs.pull_number}
-          limit: 10
-        register: pr_timeline
+      - name: Build digest payload
+        value:
+          meta:
+            title: ${pr.title}
+            url: ${pr.url}
+            author: ${pr.author}
+            state: ${pr.state}
+            draft: ${pr.draft}
+            mergeable: ${pr.mergeable}
+            mergeable_state: ${pr.mergeable_state}
+            review_decision: ${pr.review_decision}
+            additions: ${pr.additions}
+            deletions: ${pr.deletions}
+            changed_files: ${pr.changed_files}
+            commits_count: ${pr.commits_count}
+            head_sha: ${pr.head_sha}
+          discussion:
+            comments_count: ${pr_comments.total_count}
+            comments: ${pr_comments.comments}
+            reviews_count: ${pr_reviews.total_count}
+            reviews: ${pr_reviews.reviews}
+            review_comments_count: ${pr_review_comments.total_count}
+            review_comments: ${pr_review_comments.comments}
+          checks:
+            overall_state: ${pr_checks.overall_state}
+            total_count: ${pr_checks.total_count}
+            success_count: ${pr_checks.success_count}
+            failed_count: ${pr_checks.failed_count}
+            pending_count: ${pr_checks.pending_count}
+            skipped_count: ${pr_checks.skipped_count}
+            checks: ${pr_checks.checks}
+          timeline:
+            events_count: ${pr_timeline.total_count}
+            events: ${pr_timeline.events}
+        register: digest
 
       - name: Publish pull request digest
         publish:
           summary: Pull request digest loaded
-          pull_ref:
-            format: "{}#{}"
-            args:
-              - ${inputs.pr_repository}
-              - ${inputs.pull_number}
-          meta:
-            title: ${step.pr.outputs.title}
-            url: ${step.pr.outputs.url}
-            author: ${step.pr.outputs.author}
-            state: ${step.pr.outputs.state}
-            draft: ${step.pr.outputs.draft}
-            mergeable: ${step.pr.outputs.mergeable}
-            mergeable_state: ${step.pr.outputs.mergeable_state}
-            review_decision: ${step.pr.outputs.review_decision}
-            additions: ${step.pr.outputs.additions}
-            deletions: ${step.pr.outputs.deletions}
-            changed_files: ${step.pr.outputs.changed_files}
-            commits_count: ${step.pr.outputs.commits_count}
-            head_sha: ${step.pr.outputs.head_sha}
-          discussion:
-            comments_count: ${step.pr_comments.outputs.total_count}
-            comments: ${step.pr_comments.outputs.comments}
-            reviews_count: ${step.pr_reviews.outputs.total_count}
-            reviews: ${step.pr_reviews.outputs.reviews}
-            review_comments_count: ${step.pr_review_comments.outputs.total_count}
-            review_comments: ${step.pr_review_comments.outputs.comments}
-          checks:
-            overall_state: ${step.pr_checks.outputs.overall_state}
-            total_count: ${step.pr_checks.outputs.total_count}
-            success_count: ${step.pr_checks.outputs.success_count}
-            failed_count: ${step.pr_checks.outputs.failed_count}
-            pending_count: ${step.pr_checks.outputs.pending_count}
-            skipped_count: ${step.pr_checks.outputs.skipped_count}
-            checks: ${step.pr_checks.outputs.checks}
-          timeline:
-            events_count: ${step.pr_timeline.outputs.total_count}
-            events: ${step.pr_timeline.outputs.events}
+          pull_ref: ${pull_ref}
+          digest: ${step.digest.outputs.value}
