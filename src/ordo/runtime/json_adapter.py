@@ -47,6 +47,13 @@ class _JsonPlan:
     steps: tuple[object, ...]
     action: _JsonAction | None = None
 
+    @property
+    def recursive_index(self) -> int | None:
+        for index, step in enumerate(self.steps):
+            if step == "..":
+                return index
+        return None
+
 
 def _register() -> None:
     register_representation_adapter(
@@ -55,7 +62,7 @@ def _register() -> None:
         metadata=RepresentationAdapterMetadata(
             name="json",
             summary="Select values from strict JSON text through exact structural paths.",
-            selectors=(".field", '["literal-key"]', "[n]"),
+            selectors=(".field", '["literal-key"]', "[n]", "..field"),
             actions=("set", "remove"),
             shortcuts=(),
         ),
@@ -95,11 +102,25 @@ def _parse_json_body(body: str) -> _JsonPlan:
             position += 1
             continue
         if char == ".":
+            if body.startswith("..", position):
+                if ".." in steps:
+                    raise RepresentationAdapterError(
+                        code="runtime.value.adapter_invalid_path",
+                        message="JSON adapter allows at most one recursive descent segment",
+                        details={"body": body, "position": position},
+                    )
+                steps.append("..")
+                position += 2
+                continue
             step, position = _parse_dot_step(body, position)
             steps.append(step)
             continue
         if char == "[":
             step, position = _parse_bracket_step(body, position)
+            steps.append(step)
+            continue
+        if steps and steps[-1] == ".." and (char.isalpha() or char == "_"):
+            step, position = _parse_bare_member_step(body, position)
             steps.append(step)
             continue
         if body.startswith("->", position):
@@ -117,6 +138,13 @@ def _parse_json_body(body: str) -> _JsonPlan:
             message="JSON adapter body has unexpected trailing syntax",
             details={"body": body, "position": trailing_start},
         )
+    recursive_index = next((index for index, step in enumerate(steps) if step == ".."), None)
+    if recursive_index is not None and recursive_index == len(steps) - 1:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_path",
+            message="JSON recursive descent must be followed by structural path steps",
+            details={"body": body, "position": len(body.rstrip()) - 2},
+        )
     return _JsonPlan(steps=tuple(steps), action=action)
 
 
@@ -129,6 +157,17 @@ def _parse_dot_step(body: str, start: int) -> tuple[_MemberStep, int]:
             details={"body": body, "position": start},
         )
     return _MemberStep(key=match.group(1)), start + len(match.group(0))
+
+
+def _parse_bare_member_step(body: str, start: int) -> tuple[_MemberStep, int]:
+    match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", body[start:])
+    if match is None:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_path",
+            message="JSON recursive descent expected a member name",
+            details={"body": body, "position": start},
+        )
+    return _MemberStep(key=match.group(1)), start + len(match.group(1))
 
 
 def _parse_bracket_step(body: str, start: int) -> tuple[object, int]:
@@ -217,8 +256,18 @@ def _parse_action_argument(argument_text: str, *, body: str, position: int) -> _
 
 
 def _evaluate_json_plan(plan: _JsonPlan, value: JSONValue) -> JSONValue:
+    recursive_index = plan.recursive_index
+    if recursive_index is not None:
+        prefix = tuple(plan.steps[:recursive_index])
+        suffix = tuple(plan.steps[recursive_index + 1 :])
+        base = _evaluate_exact_steps(prefix, value)
+        return _collect_recursive_read_matches(base, suffix)
+    return _evaluate_exact_steps(plan.steps, value)
+
+
+def _evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue) -> JSONValue:
     current = value
-    for step in plan.steps:
+    for step in steps:
         if isinstance(step, _MemberStep):
             if not isinstance(current, dict):
                 raise RepresentationAdapterError(
@@ -257,13 +306,33 @@ def _evaluate_json_plan(plan: _JsonPlan, value: JSONValue) -> JSONValue:
     return current
 
 
+def _collect_recursive_read_matches(base: JSONValue, suffix: tuple[object, ...]) -> list[JSONValue]:
+    matches: list[JSONValue] = []
+    matched = _try_evaluate_exact_steps(suffix, base)
+    if matched is not _NO_MATCH:
+        matches.append(matched)
+    for descendant in _iter_descendants(base):
+        matches.extend(_collect_recursive_read_matches(descendant, suffix))
+    return matches
+
+
 def _apply_json_action(plan: _JsonPlan, root_value: JSONValue, parameters: dict[str, JSONValue]) -> str:
     assert plan.action is not None
+    recursive_index = plan.recursive_index
     if plan.action.name == "set":
+        if recursive_index is not None:
+            raise RepresentationAdapterError(
+                code="runtime.value.adapter_invalid_action",
+                message="JSON recursive descent does not support set in the MVP",
+                details={},
+            )
         replacement = _resolve_action_argument(plan.action.arguments[0], parameters)
         updated = _apply_set(plan.steps, root_value, replacement)
         return _serialize_json(updated)
     if plan.action.name == "remove":
+        if recursive_index is not None:
+            updated = _apply_recursive_remove(plan, root_value)
+            return _serialize_json(updated)
         updated = _apply_remove(plan.steps, root_value)
         return _serialize_json(updated)
     raise RepresentationAdapterError(
@@ -380,6 +449,109 @@ def _resolve_parent_for_write(root_value: JSONValue, steps: tuple[object, ...], 
             )
         current = current[step.index]
     return current
+
+
+@dataclass(frozen=True, slots=True)
+class _TargetRef:
+    parent: object
+    step: object
+    depth: int
+
+
+_NO_MATCH = object()
+
+
+def _try_evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue) -> JSONValue | object:
+    current: JSONValue = value
+    for step in steps:
+        if isinstance(step, _MemberStep):
+            if not isinstance(current, dict) or step.key not in current:
+                return _NO_MATCH
+            current = current[step.key]
+            continue
+        if isinstance(step, _IndexStep):
+            if not isinstance(current, list) or step.index >= len(current):
+                return _NO_MATCH
+            current = current[step.index]
+            continue
+        return _NO_MATCH
+    return current
+
+
+def _iter_descendants(value: JSONValue) -> list[JSONValue]:
+    if isinstance(value, dict):
+        return list(value.values())
+    if isinstance(value, list):
+        return list(value)
+    return []
+
+
+def _apply_recursive_remove(plan: _JsonPlan, root_value: JSONValue) -> JSONValue:
+    recursive_index = plan.recursive_index
+    assert recursive_index is not None
+    prefix = tuple(plan.steps[:recursive_index])
+    suffix = tuple(plan.steps[recursive_index + 1 :])
+    base = _evaluate_exact_steps(prefix, root_value)
+    targets = _collect_recursive_remove_targets(base, suffix, depth=0)
+    if not targets:
+        return root_value
+    for target in sorted(targets, key=_target_sort_key):
+        _remove_target_ref(target)
+    return root_value
+
+
+def _collect_recursive_remove_targets(base: JSONValue, suffix: tuple[object, ...], *, depth: int) -> list[_TargetRef]:
+    targets: list[_TargetRef] = []
+    target = _try_locate_target(base, suffix)
+    if target is not None:
+        targets.append(_TargetRef(parent=target[0], step=target[1], depth=depth))
+    for descendant in _iter_descendants(base):
+        targets.extend(_collect_recursive_remove_targets(descendant, suffix, depth=depth + 1))
+    return targets
+
+
+def _try_locate_target(value: JSONValue, steps: tuple[object, ...]) -> tuple[object, object] | None:
+    if not steps:
+        return None
+    current: JSONValue = value
+    for step in steps[:-1]:
+        if isinstance(step, _MemberStep):
+            if not isinstance(current, dict) or step.key not in current:
+                return None
+            current = current[step.key]
+            continue
+        assert isinstance(step, _IndexStep)
+        if not isinstance(current, list) or step.index >= len(current):
+            return None
+        current = current[step.index]
+    final_step = steps[-1]
+    if isinstance(final_step, _MemberStep):
+        if not isinstance(current, dict) or final_step.key not in current:
+            return None
+        return current, final_step
+    assert isinstance(final_step, _IndexStep)
+    if not isinstance(current, list) or final_step.index >= len(current):
+        return None
+    return current, final_step
+
+
+def _target_sort_key(target: _TargetRef) -> tuple[int, int, int]:
+    step = target.step
+    if isinstance(step, _IndexStep):
+        return (-target.depth, 0, -step.index)
+    return (-target.depth, 1, 0)
+
+
+def _remove_target_ref(target: _TargetRef) -> None:
+    if isinstance(target.step, _MemberStep):
+        assert isinstance(target.parent, dict)
+        if target.step.key in target.parent:
+            del target.parent[target.step.key]
+        return
+    assert isinstance(target.step, _IndexStep)
+    assert isinstance(target.parent, list)
+    if target.step.index < len(target.parent):
+        target.parent.pop(target.step.index)
 
 
 def _resolve_action_argument(argument: _ActionArgument, parameters: dict[str, JSONValue]) -> JSONValue:

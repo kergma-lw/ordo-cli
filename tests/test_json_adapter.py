@@ -131,6 +131,65 @@ class JsonAdapterTest(unittest.TestCase):
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_action")
 
+    def test_recursive_read_returns_many_matches(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"field":0,"items":[{"field":1},{"nested":{"field":2}}],"other":{"field":3}}'},
+        )
+
+        value = resolve_runtime_value('${json..field with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, [0, 1, 2, 3])
+
+    def test_recursive_read_may_follow_prefix_path(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"field":1},{"nested":{"field":2}}],"field":0}'})
+
+        value = resolve_runtime_value('${json.items..field with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, [1, 2])
+
+    def test_recursive_read_returns_empty_collection_when_no_matches_exist(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":1}]}'})
+
+        value = resolve_runtime_value('${json..field with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, [])
+
+    def test_recursive_path_rejects_second_recursive_segment(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"field":1}]}'})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${json..items..field with{root: inputs.body}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_path")
+
+    def test_recursive_remove_deletes_all_matching_members(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"field":0,"items":[{"field":1},{"nested":{"field":2}}],"other":{"field":3}}'},
+        )
+
+        value = resolve_runtime_value('${json..field->remove() with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, '{"items":[{},{"nested":{}}],"other":{}}')
+
+    def test_recursive_remove_with_zero_matches_is_no_op(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":1}]}'})
+
+        value = resolve_runtime_value('${json..field->remove() with{root: inputs.body}}', workflow)
+
+        self.assertEqual(value, '{"items":[{"id":1}]}')
+
+    def test_recursive_set_is_not_supported_in_mvp(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"field":1}]}', "value": 2})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${json..field->set(value) with{root: inputs.body, value: inputs.value}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_action")
+
 
 if __name__ == "__main__":
     unittest.main()
