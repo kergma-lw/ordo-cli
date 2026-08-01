@@ -287,7 +287,7 @@ blocks:
         uses: shell.command
         register: first
         with:
-          command: printf hello
+          command: "printf hello"
       - name: replay
         uses: shell.command
         with:
@@ -446,7 +446,7 @@ blocks:
         uses: shell.command
         register: first
         with:
-          command: printf hello
+          command: "printf hello"
   - guards: []
   - steps:
       - name: replay

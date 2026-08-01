@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
-from ordo.model.json import JSONObject, JSONValue
+from ordo.model.json import JSONObject, JSONValue, authored_string_style
 from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import StepBlock, Workflow
@@ -24,6 +24,7 @@ from .local_expressions import (
     parse_embedded_value_local_expression,
     parse_embedded_local_expression,
     parse_local_expression,
+    parse_value_local_expression,
     validate_parsed_local_expression,
 )
 from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_workflow_payload, load_yaml_document
@@ -408,7 +409,7 @@ def _iter_input_references_from_step_item(step: JSONObject, *, block_index: int,
                     references.append((reference, base_path + ("state_set", key)))
                 references.extend(
                     _pair_input_references_with_paths(
-                        _collect_input_references_from_runtime_value_surface(item),
+                        _collect_input_references_from_runtime_value_surface(item, allow_bare_strings=False),
                         path=base_path + ("state_set", key),
                     )
                 )
@@ -444,7 +445,7 @@ def _iter_input_references_from_nested_step_item(step: JSONObject, *, path: tupl
                 continue
             for reference in _collect_input_references_from_state_path_text(key):
                 references.append((reference, path + ("state_set", key)))
-            references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(item), path=path + ("state_set", key)))
+            references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(item, allow_bare_strings=False), path=path + ("state_set", key)))
     target_expr = step.get("state_delete")
     if isinstance(target_expr, str):
         for reference in _collect_input_references_from_state_path_text(target_expr):
@@ -458,27 +459,27 @@ def _pair_input_references_with_paths(
     return [(reference, path) for reference in references]
 
 
-def _collect_input_references_from_runtime_value_surface(value: JSONValue | None) -> set[tuple[str, ...]]:
+def _collect_input_references_from_runtime_value_surface(value: JSONValue | None, *, allow_bare_strings: bool = True) -> set[tuple[str, ...]]:
     references: set[tuple[str, ...]] = set()
     if _is_format_value_object(value):
         for arg in value.get("args", []):
-            references.update(_collect_input_references_from_runtime_value_surface(arg))
+            references.update(_collect_input_references_from_runtime_value_surface(arg, allow_bare_strings=allow_bare_strings))
         return references
     if isinstance(value, list):
         for item in value:
-            references.update(_collect_input_references_from_runtime_value_surface(item))
+            references.update(_collect_input_references_from_runtime_value_surface(item, allow_bare_strings=allow_bare_strings))
         return references
     if isinstance(value, dict):
         for item in value.values():
-            references.update(_collect_input_references_from_runtime_value_surface(item))
+            references.update(_collect_input_references_from_runtime_value_surface(item, allow_bare_strings=allow_bare_strings))
         return references
     if not isinstance(value, str):
         return references
-    expression = _extract_runtime_value_expression(value)
-    if expression is None:
+    mode = _runtime_value_expression_mode(value, allow_bare_strings=allow_bare_strings)
+    if mode is None:
         return references
     try:
-        parsed = parse_embedded_value_local_expression(value)
+        parsed = parse_embedded_value_local_expression(value) if mode == "embedded" else parse_value_local_expression(value)
     except LOCAL_EXPRESSION_PARSE_ERRORS:
         return references
     if parsed is None or parsed.value is None:
@@ -1615,6 +1616,7 @@ def _validate_state_set_shape(
                     path=path + (key,),
                     source=source,
                     let_bindings=let_bindings,
+                    allow_bare_strings=False,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
                 )
@@ -1628,6 +1630,7 @@ def _validate_runtime_value_surface(
     path: tuple[str, ...],
     source: str,
     let_bindings: JSONObject,
+    allow_bare_strings: bool = True,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
 ) -> list[Diagnostic]:
@@ -1652,6 +1655,7 @@ def _validate_runtime_value_surface(
                     path=path + (str(index),),
                     source=source,
                     let_bindings=let_bindings,
+                    allow_bare_strings=allow_bare_strings,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
                 )
@@ -1665,6 +1669,7 @@ def _validate_runtime_value_surface(
                     path=path + (str(key),),
                     source=source,
                     let_bindings=let_bindings,
+                    allow_bare_strings=allow_bare_strings,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
                 )
@@ -1672,13 +1677,145 @@ def _validate_runtime_value_surface(
         return diagnostics
     if not isinstance(value, str):
         return diagnostics
-    expression = _extract_runtime_value_expression(value)
-    if expression is None:
+    mode = _runtime_value_expression_mode(value, allow_bare_strings=allow_bare_strings)
+    if mode is None:
         return diagnostics
     try:
-        parsed = parse_embedded_value_local_expression(value)
+        parsed = parse_embedded_value_local_expression(value) if mode == "embedded" else parse_value_local_expression(value)
     except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        diagnostics.extend(_build_runtime_value_surface_parse_diagnostics(value, path=path, source=source, exc=exc, mode=mode))
+        return diagnostics
+    if parsed is None or parsed.value is None:
+        return diagnostics
+    expression = _runtime_value_expression_text(value, mode=mode)
+    surface_diagnostics = _validate_step_references(
+        collect_step_references(parsed.value.root),
+        path=path,
+        source=source,
+        prior_registers={} if prior_registers is None else prior_registers,
+        declared_registers={} if declared_registers is None else declared_registers,
+    )
+    root_diagnostics = _validate_runtime_value_reference_roots(parsed.value.root, path=path, source=source, let_bindings=let_bindings)
+    surface_diagnostics.extend(root_diagnostics)
+    diagnostics.extend(surface_diagnostics)
+    for validation_error in validate_parsed_local_expression(parsed):
+        diagnostic = build_local_expression_validation_diagnostic(
+            validation_error,
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+            path=path,
+            source=source,
+            expression=expression,
+        )
+        diagnostics.append(diagnostic)
+        surface_diagnostics.append(diagnostic)
+    let_diagnostics = _validate_workflow_let_binding_uses(
+        parsed.value.root,
+        source=source,
+        path=path,
+        context=LocalExpressionContext.EMBEDDED_VALUE,
+        expression=expression,
+        let_bindings=let_bindings,
+    )
+    diagnostics.extend(let_diagnostics)
+    surface_diagnostics.extend(let_diagnostics)
+    if mode == "plain" and surface_diagnostics:
         diagnostics.append(
+            _warning(
+                "validation.workflow.value_expr.literal_string_maybe_unquoted",
+                "This bare string may be an intended literal string. Quote it explicitly if it should not be evaluated as an expression.",
+                path,
+                source,
+                expression=value,
+                underlying_codes=[diagnostic.code for diagnostic in surface_diagnostics],
+            )
+        )
+    return diagnostics
+
+
+def _validate_runtime_value_reference_roots(
+    node: ValueExpressionNode,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if isinstance(node, ReferenceNode):
+        root = node.parts[0] if node.parts else ""
+        if root not in {"inputs", "args", "item"} and not (isinstance(let_bindings, dict) and root in let_bindings):
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.value_expr.root",
+                    "Value-bearing workflow surfaces may reference only workflow-local value roots",
+                    path,
+                    source,
+                    root=root,
+                )
+            )
+        return diagnostics
+    if isinstance(node, (LiteralNode, ValueStateReferenceNode, StepReferenceNode)):
+        return diagnostics
+    if isinstance(node, PipelineNode):
+        diagnostics.extend(_validate_runtime_value_reference_roots(node.source, path=path, source=source, let_bindings=let_bindings))
+        for filter_node in node.filters:
+            for argument in filter_node.arguments:
+                diagnostics.extend(_validate_runtime_value_reference_roots(argument, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
+    if isinstance(node, UnaryNode):
+        diagnostics.extend(_validate_runtime_value_reference_roots(node.operand, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
+    if isinstance(node, BinaryNode):
+        diagnostics.extend(_validate_runtime_value_reference_roots(node.left, path=path, source=source, let_bindings=let_bindings))
+        diagnostics.extend(_validate_runtime_value_reference_roots(node.right, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
+    if isinstance(node, ListNode):
+        for item in node.items:
+            diagnostics.extend(_validate_runtime_value_reference_roots(item, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
+    if isinstance(node, ObjectNode):
+        for entry in node.entries:
+            diagnostics.extend(_validate_runtime_value_reference_roots(entry.value, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
+    if isinstance(node, BuiltinCallNode):
+        for argument in node.arguments:
+            diagnostics.extend(_validate_runtime_value_reference_roots(argument, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
+    if isinstance(node, CallNode):
+        for argument in node.arguments:
+            diagnostics.extend(_validate_runtime_value_reference_roots(argument.value, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
+    return diagnostics
+
+
+def _runtime_value_expression_mode(value: str, *, allow_bare_strings: bool) -> str | None:
+    style = authored_string_style(value)
+    if style in {"single", "double", "other"}:
+        return None
+    if style == "plain":
+        if _extract_runtime_value_expression(value) is not None:
+            return "embedded"
+        return "plain" if allow_bare_strings else None
+    return "embedded" if _extract_runtime_value_expression(value) is not None else None
+
+
+def _runtime_value_expression_text(value: str, *, mode: str) -> str:
+    if mode == "embedded":
+        expression = _extract_runtime_value_expression(value)
+        return value if expression is None else expression
+    return value
+
+
+def _build_runtime_value_surface_parse_diagnostics(
+    value: str,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    exc,
+    mode: str,
+) -> list[Diagnostic]:
+    if mode == "embedded":
+        expression = _runtime_value_expression_text(value, mode=mode)
+        return [
             build_local_expression_parse_diagnostic(
                 exc,
                 context=LocalExpressionContext.EMBEDDED_VALUE,
@@ -1686,40 +1823,19 @@ def _validate_runtime_value_surface(
                 source=source,
                 expression=expression,
             )
+        ]
+    return [
+        _diagnostic(
+            "validation.workflow.value_expr.bare_string_invalid",
+            "Bare strings in this value surface must be valid expressions. If you intended a literal string, quote it explicitly.",
+            path,
+            source,
+            expression=value,
+            position=exc.position,
+            end=exc.end if exc.end is not None else exc.position,
+            parse_message=exc.message,
         )
-        return diagnostics
-    if parsed is None or parsed.value is None:
-        return diagnostics
-    diagnostics.extend(
-        _validate_step_references(
-            collect_step_references(parsed.value.root),
-            path=path,
-            source=source,
-            prior_registers={} if prior_registers is None else prior_registers,
-            declared_registers={} if declared_registers is None else declared_registers,
-        )
-    )
-    for validation_error in validate_parsed_local_expression(parsed):
-        diagnostics.append(
-            build_local_expression_validation_diagnostic(
-                validation_error,
-                context=LocalExpressionContext.EMBEDDED_VALUE,
-                path=path,
-                source=source,
-                expression=expression,
-            )
-        )
-    diagnostics.extend(
-        _validate_workflow_let_binding_uses(
-            parsed.value.root,
-            source=source,
-            path=path,
-            context=LocalExpressionContext.EMBEDDED_VALUE,
-            expression=expression,
-            let_bindings=let_bindings,
-        )
-    )
-    return diagnostics
+    ]
 
 
 def _validate_profile_switch_value(

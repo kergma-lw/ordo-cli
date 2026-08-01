@@ -3,7 +3,7 @@ import unittest
 from ordo.model.profile import Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import review_workflow
+from ordo.runtime import load_workflow_text, review_workflow
 from ordo.runtime.reviewing import _review_input_classification
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -25,6 +25,26 @@ class ReviewModeTest(unittest.TestCase):
         self.assertTrue(any(item["code"] == "review.workflow.input_validation_missing" for item in result.outputs["findings"]))
         validation = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.input_validation_missing")
         self.assertEqual(validation["evidence"]["classification"], "effect_target_input")
+
+    def test_review_reports_hint_for_likely_unquoted_literal_string(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: publish-demo
+blocks:
+  - guards: []
+  - steps:
+      - name: publish
+        publish:
+          summary: done
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(result.outputs["review_status"], "unavailable")
+        self.assertTrue(any(item["code"] == "review.workflow.literal_string_maybe_unquoted" for item in result.outputs["findings"]))
 
     def test_review_reports_unused_declared_input_separately(self) -> None:
         workflow = Workflow(

@@ -33,6 +33,7 @@ def review_workflow(
         connector_provider=connector_provider,
     )
     if check_result.status in {RuntimeStatus.VALIDATION_ERROR, RuntimeStatus.RESOLUTION_ERROR}:
+        validation_findings = _find_validation_review_hints(check_result)
         return RuntimeResult(
             mode=Mode.REVIEW,
             status=check_result.status,
@@ -41,8 +42,8 @@ def review_workflow(
             outputs={
                 **dict(check_result.outputs),
                 "review_status": "unavailable",
-                "finding_count": 0,
-                "findings": [],
+                "finding_count": len(validation_findings),
+                "findings": validation_findings,
             },
             operation_results=check_result.operation_results,
             failed_guard=check_result.failed_guard,
@@ -91,6 +92,24 @@ def _build_review_findings(workflow: Workflow, check_result: RuntimeResult, *, p
     findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
     findings.extend(_find_missing_recommended_observations(check_result))
     findings.extend(_find_bounded_fan_out_authoring_findings(workflow, check_result))
+    return findings
+
+
+def _find_validation_review_hints(check_result: RuntimeResult) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for diagnostic in check_result.diagnostics:
+        if diagnostic.code != "validation.workflow.value_expr.literal_string_maybe_unquoted":
+            continue
+        findings.append(
+            {
+                "code": "review.workflow.literal_string_maybe_unquoted",
+                "level": "warning",
+                "category": "value_authoring",
+                "message": diagnostic.message,
+                "path": list(diagnostic.path),
+                "evidence": dict(diagnostic.details),
+            }
+        )
     return findings
 
 

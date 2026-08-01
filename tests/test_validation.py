@@ -21,7 +21,7 @@ class ValidationTest(unittest.TestCase):
                       - name: inspect-issue
                         uses: gh.issue
                         with:
-                          issue: repo#1
+                          issue: "repo#1"
                 """
             )
         )
@@ -84,7 +84,7 @@ class ValidationTest(unittest.TestCase):
                       - name: publish
                         publish:
                           issue_number: ${inputs.issue_number}
-                          summary: done
+                          summary: "done"
                 """
             )
         )
@@ -104,7 +104,7 @@ class ValidationTest(unittest.TestCase):
                       - name: result
                         result:
                           issue_number: ${inputs.issue_number}
-                          summary: done
+                          summary: "done"
                 """
             )
         )
@@ -308,7 +308,7 @@ class ValidationTest(unittest.TestCase):
                   - guards: []
                   - steps:
                       - name: compute
-                        value: x
+                        value: "x"
                         launcher: shell_frontend
                 """
             )
@@ -334,7 +334,7 @@ class ValidationTest(unittest.TestCase):
                         run: github/comment-and-set-status
                         if: ${step.issue.outputs.open}
                         with:
-                          comment: hello
+                          comment: "hello"
                 """
             )
         )
@@ -370,7 +370,7 @@ class ValidationTest(unittest.TestCase):
                 blocks:
                   - steps:
                       - name: prepare
-                        value: backend
+                        value: "backend"
                         register: selected
                       - name: switch-profile
                         profile_switch: ${step.selected.value}
@@ -1731,6 +1731,68 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.root")
+
+    def test_publish_accepts_bare_expressions_and_quoted_literals(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                inputs:
+                  repository: owner/repo
+                  number: 7
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: publish
+                        publish:
+                          repository: inputs.repository
+                          number: inputs.number
+                          summary: "Done"
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_publish_rejects_invalid_bare_string_with_explicit_quote_hint(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: publish
+                        publish:
+                          summary: hello world
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.bare_string_invalid")
+        self.assertIn("quote it explicitly", report.diagnostics[0].message)
+
+    def test_publish_adds_warning_for_likely_unquoted_literal_string(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: publish
+                        publish:
+                          summary: done
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertTrue(any(item.code == "validation.workflow.value_expr.literal_string_maybe_unquoted" for item in report.diagnostics))
 
     def test_profile_unknown_field_fails(self) -> None:
         report = validate_profile_text(
