@@ -15,6 +15,8 @@
 - A future `run` item should support `with` for explicit fragment-argument binding.
 - A future `run` item should support caller-scoped eligibility modifiers such as `if`.
 - `run` should reuse the existing fragment `args` contract rather than inventing a second argument language.
+- Plain scalar strings in `run.with` and `run.for_each` should follow the same expression-first authored rule as other workflow value-bearing surfaces.
+- Quoted strings in `run.with` and `run.for_each` should remain explicit string literals.
 - The author-facing `run` surface should remain step-shaped so reusable fragment invocation still reads like one workflow action.
 - If `run` later grows bounded `for_each`, that fan-out should stay part of the same `run` surface rather than introducing a second unrelated looping primitive.
 - A bounded `for_each` fan-out on `run` may use either a named reusable fragment target or one inline short `steps` body as the repeated body.

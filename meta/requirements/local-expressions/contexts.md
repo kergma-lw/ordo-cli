@@ -1,5 +1,18 @@
 # Local expression context requirements
 
+## Expression-first value context
+
+- Expression-first value contexts may use local expressions to derive one value for a surrounding field.
+- Expression-first value contexts may read `inputs...`.
+- Expression-first value contexts may read `args...` when evaluated inside a fragment instance that declared those arguments.
+- Expression-first value contexts may read `state...` only where the surrounding contract allows runtime-state reads.
+- Expression-first value contexts may read `step...` only where the surrounding contract allows execution-local step-result reads.
+- Expression-first value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
+- Expression-first value contexts must remain free of connector invocation semantics.
+- Expression-first value contexts must remain free of hidden workflow-control semantics.
+- Expression-first value contexts should treat plain scalar strings as expressions, quoted strings as explicit string literals, and YAML numeric/boolean/null scalars as ordinary literal values.
+- Nested object and list leaves in an expression-first value context must follow the same authored rule recursively.
+
 ## Embedded value context
 
 - Embedded value contexts may use local expressions to derive one value for a surrounding field.
@@ -52,6 +65,7 @@
 - Include-binding context may read caller-local roots that are valid at the include site.
 - Include-binding context must preserve the distinction between caller scope and fragment-local `args...` scope.
 - Include bindings must not implicitly grant the fragment body direct caller-local `step...` scope.
+- The preferred authored form for include-site `with` bindings should follow the expression-first value rule rather than requiring `${...}`.
 
 ## Whole-tree rule
 
@@ -61,5 +75,6 @@
 ## Native versus embedded surfaces
 
 - A native condition context may expose expressions without an interpolation envelope.
-- An embedded value context may use a distinct authored embedding form for local expressions.
+- An expression-first value context may expose plain scalar expressions while still preserving explicit quoted string literals.
+- An embedded value context may use a distinct authored embedding form for local expressions as a compatibility surface.
 - Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.

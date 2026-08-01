@@ -32,6 +32,12 @@ The `with` object belongs to the caller-side include site.
 
 Its value expressions are authored in caller scope even though they are later bound into fragment-local `args...` references.
 
+At the authored surface:
+
+- plain scalar strings are caller-scoped expressions;
+- quoted strings are explicit string literals;
+- YAML numeric, boolean, and null scalars keep their ordinary literal meaning.
+
 That binding model does not imply that `include` owns a general runtime invocation boundary.
 
 ## Fragment metadata
@@ -80,8 +86,8 @@ blocks:
       - name: inspect
         uses: gh.issue
         with:
-          repository: ${args.repository}
-          issue_number: ${args.issue_number}
+          repository: args.repository
+          issue_number: args.issue_number
         register: issue
 ```
 

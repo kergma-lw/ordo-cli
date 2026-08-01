@@ -21,14 +21,14 @@ steps:
   - name: inspect-issue
     uses: gh.issue
     with:
-      repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
+      repository: inputs.repository
+      issue_number: inputs.issue_number
     register: issue
 
   - name: comment
     uses: gh.issue.comment
     with:
-      issue_id: ${step.issue.outputs.id}
+      issue_id: step.issue.outputs.id
       body: "Looks good."
 ```
 
@@ -47,10 +47,10 @@ The initial read surface for a registered step result is:
 
 Examples:
 
-- `${step.issue.status}`
-- `${step.issue.summary}`
-- `${step.issue.outputs.id}`
-- `${step.issue.outputs.repository.nameWithOwner}`
+- `step.issue.status`
+- `step.issue.summary`
+- `step.issue.outputs.id`
+- `step.issue.outputs.repository.nameWithOwner`
 
 The `outputs` subtree is the workflow-facing projection of the structured operation result outputs.
 

@@ -19,15 +19,15 @@ steps:
   - name: inspect-issue
     uses: gh.issue
     with:
-      repository: ${inputs.repository}
-      issue_number: ${inputs.issue_number}
+      repository: inputs.repository
+      issue_number: inputs.issue_number
     register: issue
 
   - name: comment-open
     if: step.issue.outputs.open
     uses: gh.issue.comment
     with:
-      issue_id: ${step.issue.outputs.id}
+      issue_id: step.issue.outputs.id
       body: "Issue is open."
 
   - name: remember-branch

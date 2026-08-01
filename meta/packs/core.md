@@ -638,6 +638,19 @@
 
 # Local expression context requirements
 
+## Expression-first value context
+
+- Expression-first value contexts may use local expressions to derive one value for a surrounding field.
+- Expression-first value contexts may read `inputs...`.
+- Expression-first value contexts may read `args...` when evaluated inside a fragment instance that declared those arguments.
+- Expression-first value contexts may read `state...` only where the surrounding contract allows runtime-state reads.
+- Expression-first value contexts may read `step...` only where the surrounding contract allows execution-local step-result reads.
+- Expression-first value contexts may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
+- Expression-first value contexts must remain free of connector invocation semantics.
+- Expression-first value contexts must remain free of hidden workflow-control semantics.
+- Expression-first value contexts should treat plain scalar strings as expressions, quoted strings as explicit string literals, and YAML numeric/boolean/null scalars as ordinary literal values.
+- Nested object and list leaves in an expression-first value context must follow the same authored rule recursively.
+
 ## Embedded value context
 
 - Embedded value contexts may use local expressions to derive one value for a surrounding field.
@@ -690,6 +703,7 @@
 - Include-binding context may read caller-local roots that are valid at the include site.
 - Include-binding context must preserve the distinction between caller scope and fragment-local `args...` scope.
 - Include bindings must not implicitly grant the fragment body direct caller-local `step...` scope.
+- The preferred authored form for include-site `with` bindings should follow the expression-first value rule rather than requiring `${...}`.
 
 ## Whole-tree rule
 
@@ -699,7 +713,8 @@
 ## Native versus embedded surfaces
 
 - A native condition context may expose expressions without an interpolation envelope.
-- An embedded value context may use a distinct authored embedding form for local expressions.
+- An expression-first value context may expose plain scalar expressions while still preserving explicit quoted string literals.
+- An embedded value context may use a distinct authored embedding form for local expressions as a compatibility surface.
 - Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.
 
 <!-- source: requirements/local-expressions/json.md -->
@@ -1116,6 +1131,8 @@
 - Workflow use of project-local routines must stay at the level of routine identifiers and declared arguments rather than embedding local command text directly into the workflow.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
 - A workflow may declare workflow-local named expressions through a top-level `let` surface when that keeps long local expressions readable.
+- Workflow value-bearing surfaces such as `with`, `value`, `publish`, `result`, and `for_each` should prefer plain scalar expressions over `${...}` envelopes.
+- Quoted strings in those value-bearing surfaces should remain explicit string literals rather than being inferred from failed bare-expression parsing.
 - Reusable workflow fragments should support explicit local argument contracts.
 - Explicit fragment argument contracts must not by themselves force static composition and runtime-scoped invocation to collapse into one reuse primitive when their semantics diverge materially.
 - If the product later introduces both `include` and `run`, the distinction must remain brief enough for humans and agents to predict from contract docs and examples.
@@ -3248,11 +3265,27 @@ The family therefore treats empty text as having zero projected line focuses rat
 
 # Local expression contexts
 
+## Expression-first value context
+
+Expression-first value context models one derived value inside a value-bearing field whose plain authored scalars are expressions by default.
+
+Typical surfaces include workflow step `with`, `value`, `publish`, `result`, `for_each`, and include-site `with` bindings.
+
+It belongs to the value-oriented context family.
+
+Its distinctive authored rule is that:
+
+- plain scalar strings are expressions;
+- quoted strings are explicit string literals;
+- YAML numeric, boolean, and null scalars retain their native meaning.
+
+Nested object and list leaves still follow the same rule recursively.
+
 ## Embedded value context
 
 Embedded value context models one derived value inside a larger value-bearing field.
 
-Typical surfaces include step inputs, value-bearing workflow fields, include argument bindings, and other scalar positions that reuse local-expression evaluation.
+Typical surfaces include compatibility envelopes such as `${...}` and other scalar positions that still opt into an explicit embedding marker.
 
 It belongs to the value-oriented context family.
 
@@ -3290,12 +3323,15 @@ It belongs to the value-oriented context family.
 
 It may consume whatever caller-scoped roots are available at the include site.
 
+Its preferred authored shape is the same expression-first value model used by other caller-side value-bearing surfaces.
+
 ## Native and embedded authored forms
 
 The model allows both:
 
 - native expression contexts whose primary meaning is already conditional or predicate-oriented;
-- embedded expression contexts whose expressions appear inside a broader value-bearing field.
+- expression-first value contexts whose primary meaning is value construction or argument binding;
+- embedded expression contexts whose expressions appear inside a broader value-bearing field only through an explicit compatibility envelope.
 
 This distinction is about authored surface, not about separate semantic languages.
 
@@ -5943,11 +5979,31 @@ Workflow readability and portability depend on visible resolution semantics.
 
 The stable workflow contract may expose local expressions in more than one field family.
 
-The important shape distinction is between native condition contexts and embedded value contexts.
+The important shape distinction is between native condition contexts, expression-first value contexts, and embedded value compatibility forms.
+
+## Expression-first value form
+
+An expression-first value context models a value-bearing field whose authored default is still an expression rather than a literal string.
+
+Illustrative form:
+
+```yaml
+publish:
+  title: step.issue.outputs.title
+  summary: "Issue loaded"
+```
+
+Expression-first value rules:
+
+- the surrounding field remains a value-bearing field rather than a dedicated condition list;
+- plain authored scalar strings are local expressions by default;
+- quoted authored strings are explicit string literals;
+- YAML numeric, boolean, and null scalars retain their ordinary scalar meaning;
+- nested object and list leaves follow the same rule recursively.
 
 ## Embedded expression form
 
-An embedded expression appears inside a value-bearing field that is not itself a pure expression slot.
+An embedded expression appears inside a value-bearing field that still uses an explicit compatibility envelope for local expressions.
 
 Illustrative form:
 
@@ -5985,8 +6041,9 @@ Native-condition rules:
 - guard items are native condition entries;
 - step `if` is a condition-bearing field whose preferred stable authored form is the native bare-expression surface;
 - step `if: ${...}` remains supported as a deprecated compatibility form during migration;
-- include-site `with` values are embedded value entries evaluated in caller scope;
-- embedded value forms may appear in other workflow fields that reuse local-expression evaluation.
+- `with`, `value`, `publish`, `result`, and `for_each` are expression-first value-bearing surfaces;
+- include-site `with` values are expression-first caller-scoped bindings;
+- embedded `${...}` value forms may remain available temporarily as compatibility forms while corpora migrate.
 
 This file describes only authored surface categories and stable reference forms.
 
@@ -6008,7 +6065,8 @@ Current compatibility decisions:
 - object-form guard items using `uses` remain compatibility-only guard authoring surface;
 - string-form native guard entries are the preferred stable guard form;
 - step `if` prefers native bare condition entries;
-- step `if: ${...}` remains a deprecated compatibility form.
+- step `if: ${...}` remains a deprecated compatibility form;
+- `${...}` inside expression-first value-bearing surfaces remains a temporary compatibility form rather than the preferred authored shape.
 
 These deprecated compatibility forms remain valid during the current v0 warning window and require an explicit future contract revision before hard removal.
 
@@ -6254,7 +6312,7 @@ state.<role>[inputs.<key-reference>][.<field>...]
 
 Rules:
 
-- reads use this path only inside `${...}`;
+- reads use this path only inside step-local expression-bearing surfaces rather than as raw YAML path text;
 - `state_set` keys use this path text directly;
 - `state_delete` uses this path text directly;
 - the key reference inside `[...]` must use dotted `inputs...` form;
@@ -6287,8 +6345,9 @@ Unknown top-level and nested stable fields fail validation.
 ## Serialization rule
 
 - Workflow files may be authored in YAML.
-- Workflow semantics are defined over the loaded data model, not over YAML-specific syntax.
 - Stable workflow data must be representable as a losslessly JSON-serializable structure after loading.
+- Plain-versus-quoted YAML scalar style is semantically relevant only for published expression-first value-bearing surfaces such as `with`, `value`, `publish`, `result`, and `for_each`.
+- Outside those explicitly documented surfaces, YAML-specific syntax must not introduce distinct runtime semantics unless explicitly standardized.
 - YAML-specific mechanisms such as anchors, aliases, tags, or merge behavior must not introduce distinct runtime semantics unless explicitly standardized.
 
 <!-- source: data/playbook/shape.md -->

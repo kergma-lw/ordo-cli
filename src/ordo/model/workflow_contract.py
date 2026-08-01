@@ -169,6 +169,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "required_fields": ["name", "uses"],
             "optional_fields": ["if", "with", "register", "launcher"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+            "with_value_surface": "bare_first_quoted_string_literals_legacy_embedded",
             "deprecated_optional_fields": ["launcher"],
             "preferred_alternatives": {"launcher": "routine_or_profile_context"},
         },
@@ -177,12 +178,15 @@ WORKFLOW_CONTRACT: JSONObject = {
             "required_fields": ["name", "run"],
             "optional_fields": ["if", "with", "for_each", "register"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+            "with_value_surface": "bare_first_quoted_string_literals_legacy_embedded",
+            "for_each_value_surface": "bare_first_quoted_string_literals_legacy_embedded",
         },
         {
             "name": "inline_fan_out_invocation",
             "required_fields": ["name", "for_each", "steps"],
             "optional_fields": ["if", "register"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+            "for_each_value_surface": "bare_first_quoted_string_literals_legacy_embedded",
         },
         {
             "name": "profile_switch",
@@ -195,18 +199,21 @@ WORKFLOW_CONTRACT: JSONObject = {
             "required_fields": ["name", "value"],
             "optional_fields": ["if", "register"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+            "value_expression_surface": "bare_first_quoted_string_literals_legacy_embedded",
         },
         {
             "name": "result",
             "required_fields": ["name", "result"],
             "optional_fields": ["if"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+            "value_expression_surface": "bare_first_quoted_string_literals_legacy_embedded",
         },
         {
             "name": "publish",
             "required_fields": ["name", "publish"],
             "optional_fields": ["if"],
             "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+            "value_expression_surface": "bare_first_quoted_string_literals_legacy_embedded",
         },
         {
             "name": "state_set",
@@ -222,6 +229,19 @@ WORKFLOW_CONTRACT: JSONObject = {
         },
     ],
     "surface_constraints": {
+        "authored_surfaces": {
+            "literal_only_fields": ["version", "workflow", "name", "uses", "run", "register", "launcher", "state_delete"],
+            "literal_only_keyed_fields": ["state_set"],
+            "native_condition_fields": ["let", "guards", "if"],
+            "expression_first_value_fields": ["with", "value", "publish", "result", "for_each"],
+            "expression_first_value_rules": {
+                "plain_scalar_string": "local_expression",
+                "quoted_string": "literal_string",
+                "yaml_number_boolean_null": "native_literal",
+                "nested_objects_and_lists": "recursive_leaf_rule",
+                "legacy_embedded_form": "${...}",
+            },
+        },
         "guard_expression": {
             "allowed_roots": ["inputs", "probe", "state"],
             "allowed_filters": list(_PUBLISHED_FILTERS),

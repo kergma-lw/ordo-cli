@@ -13,6 +13,8 @@
 - Workflow use of project-local routines must stay at the level of routine identifiers and declared arguments rather than embedding local command text directly into the workflow.
 - Explicit workflow-owned data flow between prior and later steps should be representable without inventing connector-local storage hacks.
 - A workflow may declare workflow-local named expressions through a top-level `let` surface when that keeps long local expressions readable.
+- Workflow value-bearing surfaces such as `with`, `value`, `publish`, `result`, and `for_each` should prefer plain scalar expressions over `${...}` envelopes.
+- Quoted strings in those value-bearing surfaces should remain explicit string literals rather than being inferred from failed bare-expression parsing.
 - Reusable workflow fragments should support explicit local argument contracts.
 - Explicit fragment argument contracts must not by themselves force static composition and runtime-scoped invocation to collapse into one reuse primitive when their semantics diverge materially.
 - If the product later introduces both `include` and `run`, the distinction must remain brief enough for humans and agents to predict from contract docs and examples.

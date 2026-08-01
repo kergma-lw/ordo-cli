@@ -12,6 +12,8 @@
 - A workflow block item may include a fragment through `include`.
 - An include item may optionally declare `with` to bind fragment arguments.
 - `with` value expressions should be interpreted in caller scope before they become fragment-local `args...` bindings.
+- Plain scalar strings in include-site `with` should be interpreted as caller-scoped expressions by default.
+- Quoted strings in include-site `with` should remain explicit string literals.
 - `include` should not be treated as a general runtime-scoped call node merely because fragment arguments are present.
 - The included fragment file may declare human-facing metadata such as `description` and a fragment-local `args` contract.
 - Fragment arguments should be referenced inside the included fragment as `args.<name>`.

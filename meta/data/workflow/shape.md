@@ -236,7 +236,7 @@ state.<role>[inputs.<key-reference>][.<field>...]
 
 Rules:
 
-- reads use this path only inside `${...}`;
+- reads use this path only inside step-local expression-bearing surfaces rather than as raw YAML path text;
 - `state_set` keys use this path text directly;
 - `state_delete` uses this path text directly;
 - the key reference inside `[...]` must use dotted `inputs...` form;
@@ -269,6 +269,7 @@ Unknown top-level and nested stable fields fail validation.
 ## Serialization rule
 
 - Workflow files may be authored in YAML.
-- Workflow semantics are defined over the loaded data model, not over YAML-specific syntax.
 - Stable workflow data must be representable as a losslessly JSON-serializable structure after loading.
+- Plain-versus-quoted YAML scalar style is semantically relevant only for published expression-first value-bearing surfaces such as `with`, `value`, `publish`, `result`, and `for_each`.
+- Outside those explicitly documented surfaces, YAML-specific syntax must not introduce distinct runtime semantics unless explicitly standardized.
 - YAML-specific mechanisms such as anchors, aliases, tags, or merge behavior must not introduce distinct runtime semantics unless explicitly standardized.

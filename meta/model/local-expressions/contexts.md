@@ -1,10 +1,26 @@
 # Local expression contexts
 
+## Expression-first value context
+
+Expression-first value context models one derived value inside a value-bearing field whose plain authored scalars are expressions by default.
+
+Typical surfaces include workflow step `with`, `value`, `publish`, `result`, `for_each`, and include-site `with` bindings.
+
+It belongs to the value-oriented context family.
+
+Its distinctive authored rule is that:
+
+- plain scalar strings are expressions;
+- quoted strings are explicit string literals;
+- YAML numeric, boolean, and null scalars retain their native meaning.
+
+Nested object and list leaves still follow the same rule recursively.
+
 ## Embedded value context
 
 Embedded value context models one derived value inside a larger value-bearing field.
 
-Typical surfaces include step inputs, value-bearing workflow fields, include argument bindings, and other scalar positions that reuse local-expression evaluation.
+Typical surfaces include compatibility envelopes such as `${...}` and other scalar positions that still opt into an explicit embedding marker.
 
 It belongs to the value-oriented context family.
 
@@ -42,12 +58,15 @@ It belongs to the value-oriented context family.
 
 It may consume whatever caller-scoped roots are available at the include site.
 
+Its preferred authored shape is the same expression-first value model used by other caller-side value-bearing surfaces.
+
 ## Native and embedded authored forms
 
 The model allows both:
 
 - native expression contexts whose primary meaning is already conditional or predicate-oriented;
-- embedded expression contexts whose expressions appear inside a broader value-bearing field.
+- expression-first value contexts whose primary meaning is value construction or argument binding;
+- embedded expression contexts whose expressions appear inside a broader value-bearing field only through an explicit compatibility envelope.
 
 This distinction is about authored surface, not about separate semantic languages.
 

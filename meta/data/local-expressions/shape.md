@@ -4,11 +4,31 @@
 
 The stable workflow contract may expose local expressions in more than one field family.
 
-The important shape distinction is between native condition contexts and embedded value contexts.
+The important shape distinction is between native condition contexts, expression-first value contexts, and embedded value compatibility forms.
+
+## Expression-first value form
+
+An expression-first value context models a value-bearing field whose authored default is still an expression rather than a literal string.
+
+Illustrative form:
+
+```yaml
+publish:
+  title: step.issue.outputs.title
+  summary: "Issue loaded"
+```
+
+Expression-first value rules:
+
+- the surrounding field remains a value-bearing field rather than a dedicated condition list;
+- plain authored scalar strings are local expressions by default;
+- quoted authored strings are explicit string literals;
+- YAML numeric, boolean, and null scalars retain their ordinary scalar meaning;
+- nested object and list leaves follow the same rule recursively.
 
 ## Embedded expression form
 
-An embedded expression appears inside a value-bearing field that is not itself a pure expression slot.
+An embedded expression appears inside a value-bearing field that still uses an explicit compatibility envelope for local expressions.
 
 Illustrative form:
 
@@ -46,8 +66,9 @@ Native-condition rules:
 - guard items are native condition entries;
 - step `if` is a condition-bearing field whose preferred stable authored form is the native bare-expression surface;
 - step `if: ${...}` remains supported as a deprecated compatibility form during migration;
-- include-site `with` values are embedded value entries evaluated in caller scope;
-- embedded value forms may appear in other workflow fields that reuse local-expression evaluation.
+- `with`, `value`, `publish`, `result`, and `for_each` are expression-first value-bearing surfaces;
+- include-site `with` values are expression-first caller-scoped bindings;
+- embedded `${...}` value forms may remain available temporarily as compatibility forms while corpora migrate.
 
 This file describes only authored surface categories and stable reference forms.
 
@@ -69,7 +90,8 @@ Current compatibility decisions:
 - object-form guard items using `uses` remain compatibility-only guard authoring surface;
 - string-form native guard entries are the preferred stable guard form;
 - step `if` prefers native bare condition entries;
-- step `if: ${...}` remains a deprecated compatibility form.
+- step `if: ${...}` remains a deprecated compatibility form;
+- `${...}` inside expression-first value-bearing surfaces remains a temporary compatibility form rather than the preferred authored shape.
 
 These deprecated compatibility forms remain valid during the current v0 warning window and require an explicit future contract revision before hard removal.
 
