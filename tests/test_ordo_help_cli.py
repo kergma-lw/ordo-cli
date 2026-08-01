@@ -210,12 +210,17 @@ class OrdoHelpCliTest(unittest.TestCase):
         model = json.loads(self.run_help("model", "--json").stdout)
         adapter_surface = model["representation_adapters"]
         fs_connector = next(item for item in model["connectors"] if item["namespace"] == "fs")
+        json_adapter = next(item for item in adapter_surface["families"] if item["name"] == "json")
         key_value = next(item for item in adapter_surface["families"] if item["name"] == "key_value")
         markdown = next(item for item in adapter_surface["families"] if item["name"] == "markdown")
         text = next(item for item in adapter_surface["families"] if item["name"] == "text")
 
         self.assertTrue(any(item["name"] == "file" and item["kind"] == "probe" for item in fs_connector["operations"]))
         self.assertEqual(adapter_surface["shared_seam"]["outer_binding_form"], " with{...}")
+        self.assertIn(".field", json_adapter["selectors"])
+        self.assertIn('["literal-key"]', json_adapter["selectors"])
+        self.assertEqual(json_adapter["actions"], [])
+        self.assertEqual(json_adapter["shortcuts"], [])
         self.assertIn("literal separator parameter", key_value["summary"])
         self.assertEqual(key_value["selectors"], [])
         self.assertEqual(key_value["actions"], [])
@@ -336,12 +341,15 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_describe_resolves_representation_adapter_model_nodes(self) -> None:
         seam_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter_seam", "--json").stdout)
+        json_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.json", "--json").stdout)
         key_value_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.key_value", "--json").stdout)
         markdown_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.markdown", "--json").stdout)
         text_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.text", "--json").stdout)
 
         self.assertEqual(seam_node["document_kind"], "model_node")
         self.assertEqual(seam_node["metadata"]["outer_binding_form"], " with{...}")
+        self.assertEqual(json_node["metadata"]["name"], "json")
+        self.assertIn(".field", json_node["metadata"]["selectors"])
         self.assertEqual(key_value_node["metadata"]["name"], "key_value")
         self.assertEqual(key_value_node["metadata"]["selectors"], [])
         self.assertEqual(key_value_node["metadata"]["actions"], [])
@@ -369,6 +377,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(gh_pr_node["document_kind"], "model_node")
         self.assertEqual(gh_pr_node["metadata"]["name"], "pr")
         self.assertIn("pull_number", gh_pr_node["metadata"]["inputs"])
+
+    def test_search_finds_json_representation_adapter_model_node(self) -> None:
+        result = json.loads(self.run_help("search", "json adapter", "--json").stdout)
+
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.json" for item in result["facts"]))
 
     def test_describe_resolves_local_expression_filter_model_nodes(self) -> None:
         surface_node = json.loads(self.run_help("describe", "workflow.local_expression.filter_surface", "--json").stdout)

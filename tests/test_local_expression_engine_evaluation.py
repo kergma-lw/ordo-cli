@@ -697,6 +697,23 @@ blocks:
 
         self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
 
+    def test_evaluate_is_present_accepts_json_adapter_invocation_when_path_exists(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: '{"user":{"name":"Ada"}}'
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(json.user.name with{root: inputs.body})')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
     def test_evaluate_is_missing_accepts_adapter_invocation_when_path_absent(self) -> None:
         workflow = load_workflow_text(
             """

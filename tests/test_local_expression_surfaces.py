@@ -109,6 +109,14 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
 
         self.assertEqual(validate_parsed_local_expression(parsed), ())
 
+    def test_embedded_value_surface_accepts_presence_check_on_json_adapter_invocation(self) -> None:
+        parsed = parse_local_expression(
+            'is_present(json.user.name with{root: inputs.body})',
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+        )
+
+        self.assertEqual(validate_parsed_local_expression(parsed), ())
+
     def test_embedded_value_surface_rejects_presence_check_on_computed_expression(self) -> None:
         parsed = parse_local_expression('is_missing(format("{}", inputs.priority))', context=LocalExpressionContext.EMBEDDED_VALUE)
 
