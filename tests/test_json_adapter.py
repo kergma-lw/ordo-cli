@@ -190,6 +190,21 @@ class JsonAdapterTest(unittest.TestCase):
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_action")
 
+    def test_pipeline_may_chain_json_write_back_into_empty_body_json_read(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"field":0,"items":[{"field":1}]}'})
+
+        value = resolve_runtime_value('${inputs.body | json..field->remove() | json}', workflow)
+
+        self.assertEqual(value, {"items": [{}]})
+
+    def test_pipeline_reports_invalid_root_when_json_stage_receives_non_string(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"user":{"name":"Ada"}}'})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${inputs.body | json.user | json}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_root_value")
+
 
 if __name__ == "__main__":
     unittest.main()

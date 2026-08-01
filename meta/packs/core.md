@@ -702,6 +702,100 @@
 - An embedded value context may use a distinct authored embedding form for local expressions.
 - Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.
 
+<!-- source: requirements/local-expressions/json.md -->
+
+# JSON representation-adapter requirements
+
+## Role
+
+- The `json` representation adapter is a product-defined local-expression surface for interpreting and transforming already available JSON text.
+- This document defines json-family behavior within the shared representation-adapter invocation seam described in `requirements/local-expressions/adapters.md`.
+- The family should remain a JSON-text adapter rather than a generic structured-value navigation surface.
+
+## Compatibility target
+
+- The adapter should target strict JSON text semantics over one complete JSON value.
+- The adapter should accept ordinary JSON objects, arrays, strings, numbers, booleans, and `null`.
+- The adapter should not accept comments, trailing commas, unquoted keys, or other JSON5- or JSONC-style extensions in the MVP.
+
+## Root and result contract
+
+- The root value must be a plain-text string containing one complete JSON value.
+- A read path must parse that root text as JSON before json-family navigation begins.
+- An empty json adapter body is valid and must return the complete parsed JSON root value.
+- A successful read path may return any JSON-compatible derived value, including an object, array, scalar, or `null`.
+- A write path must return updated JSON text rather than a structured in-memory root value.
+- A root string that is not valid JSON must fail as `invalid_root_value`.
+
+## Authored path surface
+
+- JSON path syntax belongs to the json adapter contract rather than to the shared local-expression core.
+- The shared adapter seam should identify the json family and the extent of the json-owned body, while json-family parsing owns the interior json-specific selector and action syntax.
+- Optional host-derived parameterization should live outside the json-owned body through the shared adapter binding surface rather than through host references embedded directly inside json-family grammar.
+- The MVP path surface should support exact structural selection plus one recursive-descent selector.
+- The family should permit the adapter-owned body to be empty for whole-root parse-and-return behavior.
+- The family should support dotted member access such as `.name` for simple literal object keys.
+- The family should support bracketed literal member access such as `["display-name"]` when a key cannot be expressed through the simple dotted form.
+- The family should support zero-based array indexing such as `[0]`.
+- The family should support one recursive-descent selector written as `..`.
+- `..` may appear at any one position in a path.
+- A path must not contain more than one `..` segment.
+- `..` should apply only to later structural path steps rather than introducing a predicate or query sublanguage.
+- The MVP should not introduce filters, wildcard selection, or JSONPath-style predicate semantics.
+
+## Selection semantics
+
+- The shared read-versus-write boundary and shared adapter outcome vocabulary come from `requirements/local-expressions/adapters.md`.
+- Read paths must never create structure.
+- A missing object member must fail as `not_found`.
+- A missing array index must fail as `not_found`.
+- A JSON `null` value is a successful found value rather than `not_found`.
+- A path step that is not valid for the current JSON node kind, such as member selection on an array or array indexing on a scalar, must fail as `invalid_path`.
+- The adapter must not apply implicit scalar-to-object, scalar-to-array, or string-to-number coercion during path evaluation.
+- A recursive-descent segment must search for the following structural path at any deeper depth below the current focus.
+- A recursive-descent read path is many-valued.
+- A recursive-descent read path with no matches should return an empty collection rather than `not_found`.
+
+## Terminal action surface
+
+- A trailing `->action(...)` form may denote a terminal mutation over the selected JSON focus.
+- A terminal json mutation is one json-family instance of the shared adapter write-invocation rule that returns updated JSON text.
+- The MVP action surface should remain small and explicit.
+- The MVP should support `set(value)` to replace the selected value or create one eligible missing target under the write-path auto-creation rules below.
+- The MVP should support `remove()` to delete the selected object member or array element.
+- JSON action arguments should be resolved ordinary Ordo values that can be represented as JSON without adapter-specific hidden coercion.
+- If an action argument cannot be represented as JSON under the product's ordinary JSON-compatible value model, the action must fail rather than silently stringifying or dropping information.
+- A bulk `remove()` over a recursive-descent result is valid.
+- A bulk `remove()` over a recursive-descent result with no matches should succeed as a no-op and return the unchanged root text.
+
+## Write-path auto-creation
+
+- The json adapter inherits the shared write-only auto-creation boundary from `requirements/local-expressions/adapters.md`.
+- Read paths must not auto-create structure.
+- `set(value)` may auto-create missing object members only when each missing intermediate step is an unambiguous object-member step with a canonical created shape of `{}`.
+- Write-path auto-creation must not invent array elements merely to bridge a missing index.
+- Write-path auto-creation must not create through ambiguity, search-like selection, or invalid path steps.
+- `remove()` must not auto-create anything.
+
+## Array mutation boundary
+
+- `remove()` applied to an array target should remove exactly one selected element and re-close the array in ordinary JSON array order.
+- `set(value)` targeting one existing array element should replace that element in place.
+- `set(value)` targeting a missing array index must fail as `not_found` rather than creating index gaps.
+
+## Serialization discipline
+
+- A successful write path must return valid JSON text representing the updated root value.
+- The write result may normalize formatting rather than preserving the original whitespace, indentation, or line wrapping of the input text.
+- The adapter should produce deterministic serialization for the same updated JSON value under the same product version.
+- The MVP does not need to preserve source trivia or formatting style as part of the adapter contract.
+
+## Product-shape guidance
+
+- The family should remain a representation adapter over JSON text, not a second general-purpose object query language.
+- The MVP should prefer simple structural paths plus one explicit recursive-descent surface over generic filter or predicate syntax.
+- If later product needs require richer selectors such as filters or wildcard queries, they should be introduced explicitly as later json-family surface rather than implied by the MVP.
+
 <!-- source: requirements/local-expressions/key_value.md -->
 
 # Key-value representation-adapter requirements
@@ -803,6 +897,7 @@
 
 - Markdown path syntax belongs to the markdown adapter contract rather than to the shared local-expression core.
 - The shared adapter seam should identify the markdown family and the extent of the markdown-owned body, while markdown-family parsing owns the interior markdown-specific selector and action syntax.
+- The family should permit the adapter-owned body to be empty for whole-document interpretation.
 - Optional host-derived parameterization should live outside the markdown-owned body through the shared adapter binding surface rather than through host references embedded directly in markdown-family grammar.
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
 - The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
@@ -832,6 +927,7 @@
 ## Selection semantics
 
 - The shared read-versus-write boundary and shared adapter outcome vocabulary come from `requirements/local-expressions/adapters.md`.
+- An empty markdown adapter body is valid and must return the complete parsed markdown document value exposed by the markdown-family read surface.
 - Read paths must never create structure.
 - A path that yields zero matches must fail as `not_found`.
 - A path that yields multiple matches without explicit disambiguation must fail as `ambiguous`.
@@ -2802,6 +2898,123 @@ They are modeled as distinct from:
 
 Because concrete families such as `markdown` require one shared invocation seam, the product model should not describe family-specific syntax without also modeling the shared adapter invocation boundary they rely on.
 
+<!-- source: model/local-expressions/json.md -->
+
+# JSON representation-adapter model
+
+## Position
+
+The `json` adapter family models one JSON-text representation surface over a string root value.
+
+It keeps authored selection and action syntax family-specific while relying on the shared representation-adapter seam for outer ` with{...}` binding, read-versus-write distinction, and shared outcome categories.
+
+## Core modeled targets
+
+### Root text
+
+The json root value is one whole string containing one complete JSON value.
+
+### Parsed JSON value
+
+The family parses the root text into one represented JSON value before json-family navigation begins.
+
+That represented value may be an object, array, string, number, boolean, or `null`.
+
+An invocation with an empty json-owned body models whole-root interpretation only and yields that complete parsed JSON value without further narrowing.
+
+### Member focus
+
+One object-member selection yields one singular member focus.
+
+The family may expose that focus through dotted member access for simple keys or bracketed literal member access for keys that require explicit quoting.
+
+### Element focus
+
+One array-index selection yields one singular element focus.
+
+Indexing is zero-based and models direct element addressing rather than search.
+
+### Recursive-descent segment
+
+The family may expose one recursive-descent segment written as `..`.
+
+That segment does not introduce a second query language.
+It means that the following structural path should be searched at any deeper depth below the current focus.
+
+The intended model is intentionally narrow:
+
+- `..` may appear at any one position in the path;
+- only one `..` segment may appear in a single path;
+- the path following `..` still consists of ordinary structural steps such as member access, bracketed literal keys, and array indexes.
+
+The modeled result of recursive descent is many-valued.
+
+## Read-result model
+
+A successful read invocation yields the selected JSON-compatible value.
+
+That value may itself be a structured object or array, or a scalar such as a string, number, boolean, or `null`.
+
+The model therefore treats JSON `null` as one successful represented value rather than as adapter absence.
+
+When a path contains recursive descent, the modeled read result is a collection of all matching values in traversal order.
+If no recursive matches are found, the modeled read result is an empty collection rather than adapter absence.
+
+## Write-action model
+
+The MVP write surface is intentionally small.
+
+The primary modeled actions are:
+
+- `set(value)`;
+- `remove()`.
+
+Those actions operate over one selected JSON focus and return updated JSON text for the whole adapted root value.
+
+`remove()` may also operate as one bulk action over a recursive-descent result set.
+
+## Auto-creation model
+
+The family inherits the shared write-only auto-creation boundary from the shared adapter model.
+
+In the json family, the intended modeled form is narrow:
+
+- missing object members may be created by write-path `set(value)` when each missing intermediate step is one unambiguous object-member step;
+- each such created intermediate step has the canonical shape `{}`;
+- missing array indexes do not auto-create synthetic elements or gaps.
+
+## Failure model
+
+The family may fail when:
+
+- the root value is not a string containing valid JSON text;
+- a selector step is incompatible with the current JSON node kind;
+- a requested object member or array index does not exist;
+- a terminal action is not valid for the selected node kind;
+- an action argument cannot be represented in the product's ordinary JSON-compatible value model.
+
+The family does not model missing recursive-descent matches as `not_found` for read or bulk-remove behavior.
+
+The shared adapter seam should continue to distinguish adapter-family failures from host-side failures that occur while resolving outer binding values.
+
+## Serialization model
+
+The family serializes any successful write result back to JSON text.
+
+The model does not require preservation of original whitespace, indentation, or other source-format trivia.
+It only requires that the returned root text be valid JSON and deterministic for the same updated represented value under the same product version.
+
+## Boundary model
+
+The family remains a representation adapter over JSON text rather than a general-purpose query language over arbitrary structured runtime values.
+
+It is modeled as distinct from:
+
+- ordinary local-expression navigation over already structured values;
+- JSONPath-style filter or predicate semantics;
+- persistence ownership for the updated JSON text;
+- connector execution or hidden I/O.
+
 <!-- source: model/local-expressions/key_value.md -->
 
 # Key-value representation-adapter model
@@ -2888,6 +3101,8 @@ It keeps authored selection and action syntax family-specific while relying on t
 ### Document
 
 The markdown root value is one whole markdown document string.
+
+An invocation with an empty markdown-owned body models whole-document interpretation only and yields the complete parsed markdown document value exposed by the markdown-family read surface.
 
 ### Prelude
 

@@ -16,6 +16,7 @@
 
 - Markdown path syntax belongs to the markdown adapter contract rather than to the shared local-expression core.
 - The shared adapter seam should identify the markdown family and the extent of the markdown-owned body, while markdown-family parsing owns the interior markdown-specific selector and action syntax.
+- The family should permit the adapter-owned body to be empty for whole-document interpretation.
 - Optional host-derived parameterization should live outside the markdown-owned body through the shared adapter binding surface rather than through host references embedded directly in markdown-family grammar.
 - Literal title selection uses `["..."]` in authored examples, where the string is treated as a literal title or literal named selector value.
 - The adapter should expose an always-present `prelude` selector for the markdown text that appears before the first heading.
@@ -45,6 +46,7 @@
 ## Selection semantics
 
 - The shared read-versus-write boundary and shared adapter outcome vocabulary come from `requirements/local-expressions/adapters.md`.
+- An empty markdown adapter body is valid and must return the complete parsed markdown document value exposed by the markdown-family read surface.
 - Read paths must never create structure.
 - A path that yields zero matches must fail as `not_found`.
 - A path that yields multiple matches without explicit disambiguation must fail as `ambiguous`.

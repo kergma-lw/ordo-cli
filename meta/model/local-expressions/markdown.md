@@ -12,6 +12,8 @@ It keeps authored selection and action syntax family-specific while relying on t
 
 The markdown root value is one whole markdown document string.
 
+An invocation with an empty markdown-owned body models whole-document interpretation only and yields the complete parsed markdown document value exposed by the markdown-family read surface.
+
 ### Prelude
 
 The markdown prelude is the portion of the document that appears before the first heading.

@@ -358,6 +358,22 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
             ),
         )
 
+    def test_parse_pipeline_with_adapter_stages(self) -> None:
+        parsed = parse_local_expression_tree('inputs.body | json..field->remove() | json')
+
+        self.assertEqual(
+            parsed.root,
+            PipelineNode(
+                start=0,
+                end=42,
+                source=ReferenceNode(start=0, end=11, parts=("inputs", "body")),
+                filters=(
+                    AdapterInvocationNode(start=14, end=36, family="json", body="..field->remove()", bindings=()),
+                    AdapterInvocationNode(start=38, end=42, family="json", body="", bindings=()),
+                ),
+            ),
+        )
+
     def test_parse_rejects_unclosed_outer_adapter_bindings(self) -> None:
         with self.assertRaises(LocalExpressionParseError) as context:
             parse_local_expression_tree('markdown["Tasks"] with{section: inputs.section')

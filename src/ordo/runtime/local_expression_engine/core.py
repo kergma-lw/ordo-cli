@@ -124,7 +124,7 @@ class PipelineNode(ValueExpressionNode):
     """Left-to-right pipeline of built-in filters over a source value."""
 
     source: ValueExpressionNode
-    filters: tuple[FilterApplicationNode, ...] = ()
+    filters: tuple[ValueExpressionNode, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -537,6 +537,7 @@ def _try_parse_adapter_invocation_at(
     start: int,
     allow_boolean_composition: bool,
     stop_chars: str = "",
+    allow_empty_body: bool = False,
 ) -> AdapterInvocationNode | None:
     if start >= len(expression) or not (expression[start].isalpha() or expression[start] == "_"):
         return None
@@ -551,6 +552,8 @@ def _try_parse_adapter_invocation_at(
     probe = family_end
     while probe < len(expression) and expression[probe].isspace():
         probe += 1
+    if allow_empty_body and has_representation_adapter(family) and (probe >= len(expression) or (stop_chars and expression[probe] in stop_chars)):
+        return AdapterInvocationNode(start=start, end=family_end, family=family, body="", bindings=())
     if probe >= len(expression):
         return None
     if text_starts := expression.startswith("with{", probe):
@@ -843,8 +846,21 @@ class _Parser:
 
     def _parse_pipeline(self) -> ValueExpressionNode:
         source = self._parse_primary()
-        filters: list[FilterApplicationNode] = []
+        filters: list[ValueExpressionNode] = []
         while self._match("PIPE") is not None:
+            token = self._peek()
+            if token.kind == "IDENT":
+                adapter_node = _try_parse_adapter_invocation_at(
+                    self._text,
+                    start=token.start,
+                    allow_boolean_composition=self._allow_boolean_composition,
+                    stop_chars=",)]|",
+                    allow_empty_body=True,
+                )
+                if adapter_node is not None:
+                    self._advance_to_position(adapter_node.end)
+                    filters.append(adapter_node)
+                    continue
             name_token = self._consume("IDENT", "Expected filter name after '|'")
             arguments: list[ValueExpressionNode] = []
             end = name_token.end
@@ -1845,14 +1861,32 @@ def _evaluate_node(
             observation_session=observation_session,
         )
         for filter_node in node.filters:
-            value = _apply_filter(
-                filter_node,
-                value,
-                parsed=parsed,
-                workflow=workflow,
-                context=context,
-                step_results=step_results,
-                observation_session=observation_session,
+            if isinstance(filter_node, FilterApplicationNode):
+                value = _apply_filter(
+                    filter_node,
+                    value,
+                    parsed=parsed,
+                    workflow=workflow,
+                    context=context,
+                    step_results=step_results,
+                    observation_session=observation_session,
+                )
+                continue
+            if isinstance(filter_node, AdapterInvocationNode):
+                value = _evaluate_adapter_invocation_result(
+                    filter_node,
+                    parsed=parsed,
+                    workflow=workflow,
+                    context=context,
+                    step_results=step_results,
+                    observation_session=observation_session,
+                    inherited_root=value,
+                ).value
+                continue
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.pipeline_stage_invalid",
+                message="Pipeline contains an unsupported stage",
+                details={"expression": parsed.source, "stage_type": type(filter_node).__name__},
             )
         return value
     if isinstance(node, BuiltinCallNode):
@@ -2262,6 +2296,7 @@ def _evaluate_adapter_invocation_result(
     context,
     step_results: dict[str, OperationResult],
     observation_session: ReadOnlyObservationSession | None,
+    inherited_root: JSONValue | None = None,
 ) -> RepresentationAdapterResult:
     parameters: JSONObject = {}
     for binding in node.bindings:
@@ -2273,13 +2308,16 @@ def _evaluate_adapter_invocation_result(
             step_results=step_results,
             observation_session=observation_session,
         )
-    if "root" not in parameters:
+    if "root" in parameters:
+        root_value = parameters.pop("root")
+    elif inherited_root is not None:
+        root_value = inherited_root
+    else:
         raise ValueExpressionEvaluationError(
             code="runtime.value.adapter_root_missing",
             message=f"Representation-adapter family '{node.family}' requires outer binding 'root'",
             details={"expression": parsed.source, "family": node.family},
         )
-    root_value = parameters.pop("root")
     try:
         return evaluate_representation_adapter_invocation(
             RepresentationAdapterInvocation(
@@ -2944,8 +2982,11 @@ def collect_step_references(node: ValueExpressionNode) -> tuple[StepReferenceNod
         if isinstance(current, PipelineNode):
             visit(current.source)
             for filter_node in current.filters:
-                for argument in filter_node.arguments:
-                    visit(argument)
+                if isinstance(filter_node, FilterApplicationNode):
+                    for argument in filter_node.arguments:
+                        visit(argument)
+                    continue
+                visit(filter_node)
             return
         if isinstance(current, BuiltinCallNode):
             for argument in current.arguments:
