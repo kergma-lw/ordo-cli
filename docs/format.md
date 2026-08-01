@@ -121,7 +121,7 @@ Illustrative forms:
   if: step.issue.outputs.open and inputs.notify
   uses: gh.issue.comment
   with:
-    issue_id: ${step.issue.outputs.id}
+    issue_id: step.issue.outputs.id
     body: "Issue is open."
 
 - name: remember-branch
@@ -171,7 +171,7 @@ Examples:
 
 Initial restrictions:
 
-- reads use this path only inside `${...}`;
+- reads use this path only inside expression-bearing value surfaces such as `with`, `value`, `publish`, `result`, and `for_each`;
 - `state_set` keys use the path text directly;
 - `state_delete` uses the path text directly;
 - `<role>` is a logical workflow state role;
@@ -181,13 +181,20 @@ Initial restrictions:
 
 ## Value expressions
 
-Workflow values may use `${...}` for pure local value computation.
+Workflow value-bearing surfaces such as `with`, `value`, `publish`, `result`, and `for_each` use bare expressions by default.
+
+Rules:
+
+- plain scalar strings are expressions;
+- quoted strings are literal strings;
+- numeric, boolean, and null scalars keep their normal YAML meaning;
+- nested object and list leaves follow the same rule recursively.
 
 Illustrative examples:
 
 ```yaml
-${inputs.title | slug}
-${format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)}
+inputs.title | slug
+format("{}/{}-{}", inputs.type | lower, inputs.issue_number, inputs.title | slug)
 ```
 
 When an inline `format(...)` call becomes too dense, the same root form may use a structured YAML equivalent:
@@ -196,12 +203,20 @@ When an inline `format(...)` call becomes too dense, the same root form may use 
 branch:
   format: "{}/{}-{}"
   args:
-    - ${inputs.type | lower}
-    - ${inputs.issue_number}
-    - ${inputs.title | slug}
+    - inputs.type | lower
+    - inputs.issue_number
+    - inputs.title | slug
 ```
 
-This YAML form is selective rather than universal. Simple filter pipelines such as `${inputs.title | slug}` stay inline.
+This YAML form is selective rather than universal. Simple filter pipelines such as `inputs.title | slug` stay inline.
+
+Literal strings should be quoted explicitly:
+
+```yaml
+publish:
+  title: step.issue.outputs.title
+  summary: "Issue loaded"
+```
 
 `let` bindings may also shorten repeated value expressions:
 
@@ -213,7 +228,7 @@ steps:
   - name: print-branch
     uses: shell.command
     with:
-      command: ${format("printf {}", branch)}
+      command: format("printf {}", branch)
 ```
 
 ## Runtime state
