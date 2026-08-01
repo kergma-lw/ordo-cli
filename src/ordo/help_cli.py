@@ -90,6 +90,27 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         ],
     },
     {
+        "name": "value_register_before_result",
+        "priority": "critical_scope_boundary",
+        "guidance_level": "required_default",
+        "rule": "Use value + register when a built payload must be reused by later steps. Use result only to append one workflow-local result value, not to create a reusable named binding.",
+        "why": [
+            "result is an output channel for the workflow-local results list rather than a step-local variable-binding surface",
+            "value + register gives later steps one explicit reusable read path through step.<register>.outputs.value",
+            "separating payload staging from payload emission keeps workflow dataflow easier to read and review",
+        ],
+        "prefer": [
+            "stage reusable assembled payloads with value + register",
+            "emit the staged value later through result or publish when the workflow also needs a final output",
+            "treat step.<register>.outputs.value as the reusable read surface for staged workflow-owned payloads",
+        ],
+        "avoid": [
+            "treating result as a named intermediate storage surface",
+            "expecting result to support register or to create step.<register> reads",
+            "collapsing payload construction and payload emission into one result step when later steps still need the payload",
+        ],
+    },
+    {
         "name": "decision_order",
         "priority": "critical_decision_policy",
         "guidance_level": "strong_recommendation",
@@ -672,6 +693,7 @@ def build_workflow_authoring_response() -> JSONObject:
             "when adding or changing inputs, validate them before continuing",
             "validate both the request shape and the observed target context",
             "name important values early",
+            "stage reusable payloads with value + register before emitting them through result or publish",
             "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
             "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",
             "use ordo-playbook review <workflow> during authoring to catch workflow authoring-quality findings early",

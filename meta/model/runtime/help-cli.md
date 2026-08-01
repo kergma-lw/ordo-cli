@@ -87,6 +87,17 @@ The public help surface should present this pairing in at least the `overview`, 
 
 The goal is to keep authored success output compact, legible, and intentional rather than turning `publish` into a noisy dump of whatever the workflow happened to observe.
 
+## Local payload staging and result emission
+
+`ordo-help workflow-authoring` should also make the workflow-local staging boundary explicit.
+
+- Use `value + register` when one assembled payload must be reused by later steps through `step.<register>...` reads.
+- Use `result` only to append one authored value to the workflow-local `results` list.
+- Do not imply that `result` also creates a reusable registered binding.
+- When a workflow needs both internal reuse and outward or final emission, stage first with `value + register`, then emit that staged value through `result` or `publish`.
+
+The goal is to keep payload construction distinct from payload emission so authors do not treat `result` as a hidden variable-binding surface.
+
 ## Bootstrap sequence
 
 The initial recommended bootstrap sequence is:
