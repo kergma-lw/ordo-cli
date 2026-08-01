@@ -139,6 +139,29 @@ blocks:
         self.assertEqual(result.operation_results[0].status, "ok")
         self.assertEqual(result.operation_results[0].outputs.get("stdout"), "task/7-hello-world")
 
+    def test_execute_resolves_bare_expression_in_step_input(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: open-task
+inputs:
+  command: "printf bare-input"
+blocks:
+  - guards: []
+  - steps:
+      - name: run-command
+        uses: shell.command
+        with:
+          command: inputs.command
+'''
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.operation_results[0].status, "ok")
+        self.assertEqual(result.operation_results[0].outputs.get("stdout"), "bare-input")
+
     def test_execute_resolves_yaml_format_object_in_step_input(self) -> None:
         workflow = load_workflow_text(
             """
@@ -191,6 +214,66 @@ blocks:
         value = resolve_runtime_value("${branch}", workflow)
 
         self.assertEqual(value, "feat/7")
+
+    def test_resolve_runtime_value_supports_bare_authored_strings_in_expression_first_surfaces(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: bare-values
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps:
+      - name: publish
+        publish:
+          repo: inputs.repository
+          number: inputs.issue_number
+          summary: "inputs.repository"
+          nested:
+            issue_ref:
+              format: "{}#{}"
+              args:
+                - inputs.repository
+                - inputs.issue_number
+            label: "done"
+"""
+        )
+
+        value = resolve_runtime_value(workflow.steps[0].publish, workflow)
+
+        self.assertEqual(
+            value,
+            {
+                "repo": "owner/repo",
+                "number": 7,
+                "summary": "inputs.repository",
+                "nested": {"issue_ref": "owner/repo#7", "label": "done"},
+            },
+        )
+
+    def test_resolve_runtime_value_supports_bare_for_each_values(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: fanout
+inputs:
+  items:
+    - alpha
+    - beta
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect
+        run: fragment.yml
+        for_each: inputs.items
+"""
+        )
+
+        value = resolve_runtime_value(workflow.steps[0].for_each, workflow)
+
+        self.assertEqual(value, ["alpha", "beta"])
 
     def test_execute_resolves_registered_step_output_in_later_step_input(self) -> None:
         workflow = load_workflow_text(

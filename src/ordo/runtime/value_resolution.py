@@ -1,16 +1,16 @@
-"""Runtime resolution for embedded-value local-expression surfaces."""
+"""Runtime resolution for value-bearing local-expression surfaces."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from ordo.model.diagnostic import Diagnostic
-from ordo.model.json import JSONArray, JSONObject, JSONValue
+from ordo.model.json import JSONArray, JSONObject, JSONValue, authored_string_style
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
 from .local_expression_engine.core import ReadOnlyObservationSession
-from .local_expressions import resolve_embedded_value_local_expression
+from .local_expressions import resolve_embedded_value_local_expression, resolve_value_local_expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +39,7 @@ def resolve_runtime_value(
     allow_boolean_composition: bool = False,
     observation_session: ReadOnlyObservationSession | None = None,
 ) -> JSONValue:
-    """Resolve embedded-value local-expression surfaces against workflow inputs, state, and step results."""
+    """Resolve value-bearing local-expression surfaces against workflow inputs, state, and step results."""
 
     resolved_step_results = dict(workflow.step_results) if step_results is None else step_results
     if _is_format_object(value):
@@ -67,10 +67,16 @@ def resolve_runtime_value(
     if not isinstance(value, str):
         return value
 
-    if _extract_expression(value) is None:
+    authored_style = authored_string_style(value)
+    if authored_style in {"single", "double", "other"}:
+        return str(value)
+
+    if authored_style is None and _extract_expression(value) is None:
         return value
+
     try:
-        return resolve_embedded_value_local_expression(
+        resolver = resolve_value_local_expression if authored_style == "plain" else resolve_embedded_value_local_expression
+        return resolver(
             value,
             workflow,
             step_results=resolved_step_results,
@@ -78,6 +84,8 @@ def resolve_runtime_value(
             observation_session=observation_session,
         )
     except ValueResolutionError:
+        if authored_style == "plain" and _extract_expression(value) is None:
+            return str(value)
         raise
 
 

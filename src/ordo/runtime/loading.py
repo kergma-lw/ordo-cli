@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 
 from ordo.model.diagnostic import Diagnostic
-from ordo.model.json import AuthoredString, JSONArray, JSONObject, JSONScalar, JSONValue
+from ordo.model.json import AuthoredString, JSONArray, JSONObject, JSONScalar, JSONValue, authored_string_style
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
@@ -1156,7 +1156,7 @@ def _load_workflow_inputs(payload: JSONObject, *, source: str) -> tuple[JSONObje
             normalized_declarations[key] = dict(value)
             continue
         normalized_declarations[key] = {}
-        runtime_inputs[key] = value
+        runtime_inputs[key] = str(value) if authored_string_style(value) is not None else value
     return runtime_inputs, normalized_declarations
 
 

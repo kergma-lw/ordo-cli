@@ -253,6 +253,24 @@ def parse_embedded_value_local_expression(
     )
 
 
+def parse_value_local_expression(
+    value: str,
+    *,
+    context: LocalExpressionContext = LocalExpressionContext.EMBEDDED_VALUE,
+    allow_boolean_composition: bool | None = None,
+) -> ParsedLocalExpression:
+    """Parse one value-oriented local-expression surface.
+
+    Value contexts accept plain bare expressions and, for compatibility,
+    the older embedded `${...}` surface.
+    """
+
+    expression = extract_embedded_local_expression(value)
+    if expression is not None:
+        return parse_local_expression(expression, context=context, allow_boolean_composition=allow_boolean_composition)
+    return parse_local_expression(value, context=context, allow_boolean_composition=allow_boolean_composition)
+
+
 def parse_condition_local_expression(value: str, *, context: LocalExpressionContext) -> ParsedLocalExpression:
     """Parse one condition-oriented local-expression surface.
 
@@ -373,6 +391,48 @@ def resolve_embedded_value_local_expression(
         allow_boolean_composition=allow_boolean_composition,
         observation_session=observation_session,
     )
+
+
+def resolve_value_local_expression(
+    value: str,
+    workflow: Workflow,
+    *,
+    context: LocalExpressionContext = LocalExpressionContext.EMBEDDED_VALUE,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+    allow_boolean_composition: bool | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
+) -> JSONValue:
+    """Resolve one value-oriented local-expression surface.
+
+    Value contexts accept plain bare expressions and the embedded `${...}`
+    compatibility form.
+    """
+
+    from .value_resolution import ValueResolutionError
+
+    try:
+        parsed = parse_value_local_expression(
+            value,
+            context=context,
+            allow_boolean_composition=allow_boolean_composition,
+        )
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        expression = extract_embedded_local_expression(value)
+        visible = value if expression is None else expression
+        raise ValueResolutionError(
+            code="runtime.local_expression.syntax",
+            message=exc.message,
+            details={"context": context.value, "position": exc.position, "end": exc.end if exc.end is not None else exc.position, "expression": visible},
+        ) from exc
+    try:
+        return evaluate_parsed_local_expression(
+            parsed,
+            workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
+    except LocalExpressionEvaluationError as exc:
+        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
 
 
 def resolve_condition_local_expression(
