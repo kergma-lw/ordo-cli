@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 
 from ordo.model.diagnostic import Diagnostic
-from ordo.model.json import JSONArray, JSONObject, JSONScalar, JSONValue
+from ordo.model.json import AuthoredString, JSONArray, JSONObject, JSONScalar, JSONValue
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
@@ -49,6 +49,20 @@ class _BoundFragmentExpression:
 
     text: str
     allowed_caller_step_refs: frozenset[str] = frozenset()
+
+
+class _AuthoredStyleSafeLoader(yaml.SafeLoader):
+    """Safe YAML loader that preserves scalar string style."""
+
+
+def _construct_authored_string(loader: yaml.SafeLoader, node: yaml.nodes.ScalarNode) -> AuthoredString:
+    value = loader.construct_scalar(node)
+    style = {None: "plain", "'": "single", '"': "double"}.get(node.style, "other")
+    return AuthoredString(value, style=style)
+
+
+_AuthoredStyleSafeLoader.add_constructor("tag:yaml.org,2002:str", _construct_authored_string)
+yaml.SafeDumper.add_representer(AuthoredString, lambda dumper, data: dumper.represent_str(str(data)))
 
 
 def load_workflow_text(text: str, *, source: str = "<memory>") -> Workflow:
@@ -156,7 +170,7 @@ def load_yaml_document(text: str, *, source: str = "<memory>") -> JSONValue:
     """Load YAML and normalize it into canonical JSON-shaped data."""
 
     try:
-        loaded = yaml.safe_load(text)
+        loaded = yaml.load(text, Loader=_AuthoredStyleSafeLoader)
     except yaml.YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
         details: JSONObject = {"source": source}

@@ -3,6 +3,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from ordo.model.json import authored_string_style
 from ordo.model.profile import Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
@@ -10,6 +11,26 @@ from ordo.runtime import LoadError, load_profile_file, load_profile_text, load_w
 
 
 class LoadingTest(unittest.TestCase):
+    def test_load_yaml_document_preserves_plain_and_quoted_string_styles(self) -> None:
+        payload = load_yaml_document(
+            textwrap.dedent(
+                '''
+                plain: inputs.repository
+                single: 'Story created'
+                double: "Backlog"
+                nested:
+                  - step.issue.outputs.id
+                  - "Done"
+                '''
+            )
+        )
+
+        self.assertEqual(authored_string_style(payload["plain"]), "plain")
+        self.assertEqual(authored_string_style(payload["single"]), "single")
+        self.assertEqual(authored_string_style(payload["double"]), "double")
+        self.assertEqual(authored_string_style(payload["nested"][0]), "plain")
+        self.assertEqual(authored_string_style(payload["nested"][1]), "double")
+
     def test_loads_workflow_yaml_into_typed_model(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(
@@ -79,6 +100,46 @@ class LoadingTest(unittest.TestCase):
 
         self.assertEqual(workflow.steps[0].publish, {"summary": "done", "changed": True})
         self.assertEqual(workflow.to_contract()["blocks"][0]["steps"][0]["publish"], {"summary": "done", "changed": True})
+
+    def test_loads_workflow_values_with_preserved_authored_string_styles(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish
+                blocks:
+                  - steps:
+                      - name: publish
+                        publish:
+                          summary: "done"
+                          issue_ref: step.issue.outputs.id
+                      - name: inspect
+                        uses: gh.issue
+                        with:
+                          repository: inputs.repository
+                          body: 'literal body'
+                      - name: result
+                        result:
+                          profile: "meta"
+                          current: state.memory[inputs.key].branch
+                      - name: fan-out
+                        run: fragment.yml
+                        for_each: inputs.items
+                '''
+            )
+        )
+
+        publish = workflow.steps[0].publish
+        operation = workflow.steps[1].operation
+        result = workflow.steps[2].result
+        self.assertEqual(authored_string_style(publish["summary"]), "double")
+        self.assertEqual(authored_string_style(publish["issue_ref"]), "plain")
+        self.assertIsNotNone(operation)
+        self.assertEqual(authored_string_style(operation.with_["repository"]), "plain")
+        self.assertEqual(authored_string_style(operation.with_["body"]), "single")
+        self.assertEqual(authored_string_style(result["profile"]), "double")
+        self.assertEqual(authored_string_style(result["current"]), "plain")
+        self.assertEqual(authored_string_style(workflow.steps[3].for_each), "plain")
 
     def test_loads_result_step_into_typed_model(self) -> None:
         workflow = load_workflow_text(
