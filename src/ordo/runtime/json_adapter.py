@@ -31,6 +31,13 @@ class _IndexStep:
 
 
 @dataclass(frozen=True, slots=True)
+class _FilterStep:
+    mode: str
+    field: str
+    expected: _ActionArgument
+
+
+@dataclass(frozen=True, slots=True)
 class _ActionArgument:
     kind: str
     value: object
@@ -62,7 +69,7 @@ def _register() -> None:
         metadata=RepresentationAdapterMetadata(
             name="json",
             summary="Select values from strict JSON text through exact structural paths.",
-            selectors=(".field", '["literal-key"]', "[n]", "..field"),
+            selectors=(".field", '["literal-key"]', "[n]", "..field", ".one(field=value)", ".many(field=value)"),
             actions=("set", "remove"),
             shortcuts=(),
         ),
@@ -86,7 +93,7 @@ def _evaluate_json_invocation(invocation: RepresentationAdapterInvocation) -> Re
         ) from exc
     plan = _parse_json_body(invocation.body)
     if plan.action is None:
-        value = _evaluate_json_plan(plan, root_value)
+        value = _evaluate_json_plan(plan, root_value, invocation.parameters)
         return adapter_read_result(value)
     updated_root = _apply_json_action(plan, root_value, invocation.parameters)
     return adapter_write_result(updated_root)
@@ -103,6 +110,12 @@ def _parse_json_body(body: str) -> _JsonPlan:
             continue
         if char == ".":
             if body.startswith("..", position):
+                if steps and isinstance(steps[-1], _FilterStep) and steps[-1].mode == "many":
+                    raise RepresentationAdapterError(
+                        code="runtime.value.adapter_invalid_path",
+                        message="JSON recursive descent cannot immediately follow many() results",
+                        details={"body": body, "position": position},
+                    )
                 if ".." in steps:
                     raise RepresentationAdapterError(
                         code="runtime.value.adapter_invalid_path",
@@ -111,6 +124,11 @@ def _parse_json_body(body: str) -> _JsonPlan:
                     )
                 steps.append("..")
                 position += 2
+                continue
+            filter_step, next_position = _try_parse_filter_step(body, position)
+            if filter_step is not None:
+                steps.append(filter_step)
+                position = next_position
                 continue
             step, position = _parse_dot_step(body, position)
             steps.append(step)
@@ -159,6 +177,18 @@ def _parse_dot_step(body: str, start: int) -> tuple[_MemberStep, int]:
     return _MemberStep(key=match.group(1)), start + len(match.group(0))
 
 
+def _try_parse_filter_step(body: str, start: int) -> tuple[_FilterStep, int] | tuple[None, int]:
+    for mode in ("one", "many"):
+        prefix = f".{mode}("
+        if not body.startswith(prefix, start):
+            continue
+        close = _find_closing_paren(body, start + len(prefix) - 1)
+        argument_text = body[start + len(prefix) : close].strip()
+        field, expected = _parse_filter_argument(argument_text, body=body, position=start)
+        return _FilterStep(mode=mode, field=field, expected=expected), close + 1
+    return None, start
+
+
 def _parse_bare_member_step(body: str, start: int) -> tuple[_MemberStep, int]:
     match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", body[start:])
     if match is None:
@@ -168,6 +198,64 @@ def _parse_bare_member_step(body: str, start: int) -> tuple[_MemberStep, int]:
             details={"body": body, "position": start},
         )
     return _MemberStep(key=match.group(1)), start + len(match.group(1))
+
+
+def _find_closing_paren(body: str, open_paren: int) -> int:
+    position = open_paren + 1
+    depth = 1
+    quote: str | None = None
+    escape = False
+    while position < len(body):
+        char = body[position]
+        if quote is not None:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == quote:
+                quote = None
+            position += 1
+            continue
+        if char in {'"', "'"}:
+            quote = char
+            position += 1
+            continue
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return position
+        position += 1
+    raise RepresentationAdapterError(
+        code="runtime.value.adapter_invalid_path",
+        message="JSON filter expected closing ')'",
+        details={"body": body, "position": open_paren},
+    )
+
+
+def _parse_filter_argument(argument_text: str, *, body: str, position: int) -> tuple[str, _ActionArgument]:
+    if not argument_text:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_path",
+            message="JSON filter requires one field=value argument",
+            details={"body": body, "position": position},
+        )
+    field_text, separator, value_text = argument_text.partition("=")
+    if not separator:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_path",
+            message="JSON filter requires one field=value argument",
+            details={"body": body, "position": position},
+        )
+    field = field_text.strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", field):
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_path",
+            message="JSON filter field names must be simple identifiers",
+            details={"body": body, "position": position},
+        )
+    return field, _parse_action_argument(value_text.strip(), body=body, position=position)
 
 
 def _parse_bracket_step(body: str, start: int) -> tuple[object, int]:
@@ -210,13 +298,14 @@ def _parse_action(body: str, start: int) -> tuple[_JsonAction, int]:
         )
     name = match.group(1)
     open_paren = start + len(match.group(0)) - 1
-    close = body.find(")", open_paren + 1)
-    if close == -1:
+    try:
+        close = _find_closing_paren(body, open_paren)
+    except RepresentationAdapterError as exc:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_action",
             message=f"JSON {name} action expected closing ')'",
             details={"body": body, "position": start},
-        )
+        ) from exc
     argument_text = body[open_paren + 1 : close].strip()
     if name == "remove":
         if argument_text:
@@ -255,17 +344,17 @@ def _parse_action_argument(argument_text: str, *, body: str, position: int) -> _
     )
 
 
-def _evaluate_json_plan(plan: _JsonPlan, value: JSONValue) -> JSONValue:
+def _evaluate_json_plan(plan: _JsonPlan, value: JSONValue, parameters: dict[str, JSONValue]) -> JSONValue:
     recursive_index = plan.recursive_index
     if recursive_index is not None:
         prefix = tuple(plan.steps[:recursive_index])
         suffix = tuple(plan.steps[recursive_index + 1 :])
-        base = _evaluate_exact_steps(prefix, value)
-        return _collect_recursive_read_matches(base, suffix)
-    return _evaluate_exact_steps(plan.steps, value)
+        base = _evaluate_exact_steps(prefix, value, parameters)
+        return _collect_recursive_read_matches(base, suffix, parameters)
+    return _evaluate_exact_steps(plan.steps, value, parameters)
 
 
-def _evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue) -> JSONValue:
+def _evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue, parameters: dict[str, JSONValue]) -> JSONValue:
     current = value
     for step in steps:
         if isinstance(step, _MemberStep):
@@ -298,6 +387,9 @@ def _evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue) -> JSONVa
                 )
             current = current[step.index]
             continue
+        if isinstance(step, _FilterStep):
+            current = _evaluate_filter_step(step, current, parameters)
+            continue
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_path",
             message="JSON selector step is not supported",
@@ -306,19 +398,62 @@ def _evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue) -> JSONVa
     return current
 
 
-def _collect_recursive_read_matches(base: JSONValue, suffix: tuple[object, ...]) -> list[JSONValue]:
+def _collect_recursive_read_matches(base: JSONValue, suffix: tuple[object, ...], parameters: dict[str, JSONValue]) -> list[JSONValue]:
     matches: list[JSONValue] = []
-    matched = _try_evaluate_exact_steps(suffix, base)
+    matched = _try_evaluate_exact_steps(suffix, base, parameters)
     if matched is not _NO_MATCH:
         matches.append(matched)
     for descendant in _iter_descendants(base):
-        matches.extend(_collect_recursive_read_matches(descendant, suffix))
+        matches.extend(_collect_recursive_read_matches(descendant, suffix, parameters))
     return matches
+
+
+def _evaluate_filter_step(step: _FilterStep, current: JSONValue, parameters: dict[str, JSONValue]) -> JSONValue:
+    candidates = _iter_filter_candidates(current)
+    expected = _resolve_action_argument(step.expected, parameters)
+    matches = [candidate for candidate in candidates if _candidate_matches_filter(candidate, field=step.field, expected=expected)]
+    if step.mode == "many":
+        return matches
+    if not matches:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_not_found",
+            message=f"JSON one() found no child with {step.field}={expected!r}",
+            details={"field": step.field, "expected": expected},
+        )
+    if len(matches) > 1:
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_ambiguous_match",
+            message=f"JSON one() found multiple children with {step.field}={expected!r}",
+            details={"field": step.field, "expected": expected, "match_count": len(matches)},
+        )
+    return matches[0]
+
+
+def _iter_filter_candidates(current: JSONValue) -> list[JSONValue]:
+    if isinstance(current, list):
+        return list(current)
+    if isinstance(current, dict):
+        return list(current.values())
+    raise RepresentationAdapterError(
+        code="runtime.value.adapter_invalid_path",
+        message="JSON one()/many() require an object or array focus",
+        details={"actual_type": type(current).__name__},
+    )
+
+
+def _candidate_matches_filter(candidate: JSONValue, *, field: str, expected: JSONValue) -> bool:
+    return isinstance(candidate, dict) and field in candidate and candidate[field] == expected
 
 
 def _apply_json_action(plan: _JsonPlan, root_value: JSONValue, parameters: dict[str, JSONValue]) -> str:
     assert plan.action is not None
     recursive_index = plan.recursive_index
+    if any(isinstance(step, _FilterStep) for step in plan.steps):
+        raise RepresentationAdapterError(
+            code="runtime.value.adapter_invalid_action",
+            message="JSON one()/many() filters do not support write actions in the MVP",
+            details={"action": plan.action.name},
+        )
     if plan.action.name == "set":
         if recursive_index is not None:
             raise RepresentationAdapterError(
@@ -461,7 +596,7 @@ class _TargetRef:
 _NO_MATCH = object()
 
 
-def _try_evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue) -> JSONValue | object:
+def _try_evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue, parameters: dict[str, JSONValue]) -> JSONValue | object:
     current: JSONValue = value
     for step in steps:
         if isinstance(step, _MemberStep):
@@ -473,6 +608,18 @@ def _try_evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue) -> JS
             if not isinstance(current, list) or step.index >= len(current):
                 return _NO_MATCH
             current = current[step.index]
+            continue
+        if isinstance(step, _FilterStep):
+            if not isinstance(current, (dict, list)):
+                return _NO_MATCH
+            expected = _resolve_action_argument(step.expected, parameters)
+            matches = [candidate for candidate in _iter_filter_candidates(current) if _candidate_matches_filter(candidate, field=step.field, expected=expected)]
+            if step.mode == "many":
+                current = matches
+                continue
+            if len(matches) != 1:
+                return _NO_MATCH
+            current = matches[0]
             continue
         return _NO_MATCH
     return current
@@ -491,7 +638,7 @@ def _apply_recursive_remove(plan: _JsonPlan, root_value: JSONValue) -> JSONValue
     assert recursive_index is not None
     prefix = tuple(plan.steps[:recursive_index])
     suffix = tuple(plan.steps[recursive_index + 1 :])
-    base = _evaluate_exact_steps(prefix, root_value)
+    base = _evaluate_exact_steps(prefix, root_value, {})
     targets = _collect_recursive_remove_targets(base, suffix, depth=0)
     if not targets:
         return root_value

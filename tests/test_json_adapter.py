@@ -72,6 +72,85 @@ class JsonAdapterTest(unittest.TestCase):
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_root_value")
 
+    def test_one_selects_one_matching_array_element(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":1,"name":"Ada"},{"id":2,"name":"Grace"}]}', "target_id": 2})
+
+        value = resolve_runtime_value('${json.items.one(id=target_id).name with{root: inputs.body, target_id: inputs.target_id}}', workflow)
+
+        self.assertEqual(value, "Grace")
+
+    def test_one_selects_one_matching_object_value(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"x":"t","y":{"id":42,"name":"Ada"},"z":{"id":99,"name":"Grace"}}', "target_id": 42},
+        )
+
+        value = resolve_runtime_value('${json.one(id=target_id).name with{root: inputs.body, target_id: inputs.target_id}}', workflow)
+
+        self.assertEqual(value, "Ada")
+
+    def test_one_reports_not_found_when_no_matches_exist(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":1}]}', "target_id": 2})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${json.items.one(id=target_id) with{root: inputs.body, target_id: inputs.target_id}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_not_found")
+
+    def test_one_reports_ambiguous_match_when_multiple_candidates_match(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":2},{"id":2}]}', "target_id": 2})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${json.items.one(id=target_id) with{root: inputs.body, target_id: inputs.target_id}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_ambiguous_match")
+
+    def test_one_rejects_scalar_focus(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"value":"t"}'})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${json.value.one(id=1) with{root: inputs.body}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_path")
+
+    def test_many_returns_matching_children_in_traversal_order(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"items":[{"kind":"keep","name":"Ada"},3,{"kind":"drop","name":"Skip"},{"kind":"keep","name":"Grace"}]}', "target_kind": "keep"},
+        )
+
+        value = resolve_runtime_value('${json.items.many(kind=target_kind) with{root: inputs.body, target_kind: inputs.target_kind}}', workflow)
+
+        self.assertEqual(value, [{"kind": "keep", "name": "Ada"}, {"kind": "keep", "name": "Grace"}])
+
+    def test_many_may_be_followed_by_index_and_ordinary_navigation(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"items":[{"kind":"keep","name":"Ada"},{"kind":"keep","name":"Grace"}]}', "target_kind": "keep"},
+        )
+
+        value = resolve_runtime_value('${json.items.many(kind=target_kind)[1].name with{root: inputs.body, target_kind: inputs.target_kind}}', workflow)
+
+        self.assertEqual(value, "Grace")
+
+    def test_many_returns_empty_list_when_no_matches_exist(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":1}]}', "target_id": 2})
+
+        value = resolve_runtime_value('${json.items.many(id=target_id) with{root: inputs.body, target_id: inputs.target_id}}', workflow)
+
+        self.assertEqual(value, [])
+
+    def test_many_rejects_direct_recursive_descent_after_many_results(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":1}]}', "target_id": 1})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value('${json.items.many(id=target_id)..id with{root: inputs.body, target_id: inputs.target_id}}', workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_path")
+
     def test_set_updates_existing_exact_target_and_returns_compact_json_text(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"user":{"name":"Ada","age":12}}', "value": "Grace"})
 
