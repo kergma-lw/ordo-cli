@@ -6,6 +6,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import OperationResult
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
+from ordo.runtime import json_adapter as runtime_json_adapter
 from ordo.runtime import execute_workflow, load_workflow_text
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
 from ordo.runtime.local_expression_engine.core import (
@@ -28,6 +29,7 @@ class RuntimeValueResolutionTest(unittest.TestCase):
     def tearDown(self) -> None:
         unregister_representation_adapter("fixture")
         unregister_representation_adapter("json")
+        runtime_json_adapter._register()
 
     def test_execute_resolves_state_reference_in_step_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

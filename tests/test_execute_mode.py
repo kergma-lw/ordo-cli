@@ -972,6 +972,26 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.failed_step, "select")
         self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_invalid_path")
 
+    def test_execute_surfaces_json_adapter_ambiguous_match_from_value_step(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"body": '{"items":[{"id":2},{"id":2}]}'},
+            steps=(
+                Step(
+                    name="select",
+                    value='${json.items.one(id=2) with{root: inputs.body}}',
+                    register="picked",
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.failed_step, "select")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_ambiguous_match")
+
     def test_execute_accepts_plan_derived_execution_tree_input(self) -> None:
         workflow = Workflow(
             version=0,

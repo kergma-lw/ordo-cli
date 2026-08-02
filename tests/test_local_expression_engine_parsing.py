@@ -374,6 +374,33 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
             ),
         )
 
+    def test_parse_json_adapter_filter_navigation_body(self) -> None:
+        parsed = parse_local_expression_tree('json.items.many(kind=target_kind)[0].name with{root: inputs.body, target_kind: inputs.kind}')
+
+        self.assertEqual(
+            parsed.root,
+            AdapterInvocationNode(
+                start=0,
+                end=91,
+                family="json",
+                body='.items.many(kind=target_kind)[0].name',
+                bindings=(
+                    AdapterBindingNode(
+                        start=47,
+                        end=64,
+                        name="root",
+                        value=ReferenceNode(start=53, end=64, parts=("inputs", "body")),
+                    ),
+                    AdapterBindingNode(
+                        start=66,
+                        end=90,
+                        name="target_kind",
+                        value=ReferenceNode(start=79, end=90, parts=("inputs", "kind")),
+                    ),
+                ),
+            ),
+        )
+
     def test_parse_rejects_unclosed_outer_adapter_bindings(self) -> None:
         with self.assertRaises(LocalExpressionParseError) as context:
             parse_local_expression_tree('markdown["Tasks"] with{section: inputs.section')
