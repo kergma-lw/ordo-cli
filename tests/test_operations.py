@@ -226,6 +226,7 @@ class OperationTest(unittest.TestCase):
         gh_pr = registry.get_operation("gh.pr")
         gh_pr_checks = registry.get_operation("gh.pr.checks")
         gh_pr_comments = registry.get_operation("gh.pr.comments")
+        gh_pr_diff = registry.get_operation("gh.pr.diff")
         gh_pr_reviews = registry.get_operation("gh.pr.reviews")
         gh_pr_review_comments = registry.get_operation("gh.pr.review_comments")
         gh_pr_timeline = registry.get_operation("gh.pr.timeline")
@@ -238,6 +239,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(gh_pr.failure_modes, ("pull_not_found", "probe_failed"))
         self.assertEqual(gh_pr_checks.failure_modes, ("pull_not_found", "checks_unavailable", "probe_failed"))
         self.assertEqual(gh_pr_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
+        self.assertEqual(gh_pr_diff.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_reviews.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_review_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_timeline.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
@@ -283,6 +285,74 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["author"]["login"], "kergma-lw")
         self.assertEqual(result.outputs["head_sha"], "abc123")
         self.assertEqual(result.outputs["commits_count"], 4)
+
+    def test_gh_pr_diff_probe_contract_publishes_summary_shape(self) -> None:
+        registry = get_public_connector_registry()
+
+        operation = registry.get_operation("gh.pr.diff")
+
+        self.assertIsNotNone(operation)
+        self.assertEqual(operation.kind, "probe")
+        self.assertEqual(operation.inputs["repository"], "string")
+        self.assertEqual(operation.inputs["pull_number"], "integer")
+        self.assertEqual(operation.inputs["limit"], "integer")
+        self.assertEqual(operation.outputs["pull_ref"], "string")
+        self.assertEqual(operation.outputs["total_files"], "integer")
+        self.assertEqual(operation.outputs["files"][0], "object")
+
+    def test_gh_pr_diff_probe_returns_normalized_file_summaries(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.diff", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.diff")
+        resolved = ResolvedOperation("gh.pr.diff", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='[{"filename":"src/ordo/help_cli.py","status":"modified","additions":12,"deletions":3,"changes":15},{"filename":"site-docs/operations/gh/pr-diff.md","status":"added","additions":24,"deletions":0,"changes":24}]',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["pull_ref"], "kergma-lw/ordo-cli#42")
+        self.assertEqual(result.outputs["total_files"], 2)
+        self.assertEqual(result.outputs["files"][0]["path"], "src/ordo/help_cli.py")
+        self.assertEqual(result.outputs["files"][0]["status"], "modified")
+        self.assertEqual(result.outputs["files"][0]["changes"], 15)
+        self.assertEqual(result.outputs["files"][1]["status"], "added")
+
+    def test_gh_pr_diff_probe_reports_invalid_limit(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.diff", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42, "limit": 0})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.diff")
+        resolved = ResolvedOperation("gh.pr.diff", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [self._completed(returncode=0, stdout="authenticated\n", stderr="")]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "limit_invalid")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_pr_diff.invalid_limit")
+
+    def test_gh_pr_diff_probe_reports_missing_pull_request(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.diff", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 999})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.diff")
+        resolved = ResolvedOperation("gh.pr.diff", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="gh: Not Found (HTTP 404)\n"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "pull_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_pr_diff.not_found")
 
     def test_gh_pr_checks_probe_returns_normalized_statuses_and_check_runs(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.checks", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
