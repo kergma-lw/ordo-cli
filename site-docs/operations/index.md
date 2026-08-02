@@ -1,6 +1,6 @@
 # Operation reference
 
-Generated operation pages for 52 published operations.
+Generated operation pages for 53 published operations.
 
 - [Operation catalog](../topics/operations.md)
 
@@ -24,6 +24,7 @@ Operations for reading and changing GitHub state.
 - [gh.pr](gh/pr.md)
 - [gh.pr.checks](gh/pr-checks.md)
 - [gh.pr.comments](gh/pr-comments.md)
+- [gh.pr.diff](gh/pr-diff.md)
 - [gh.pr.review_comments](gh/pr-review-comments.md)
 - [gh.pr.reviews](gh/pr-reviews.md)
 - [gh.pr.timeline](gh/pr-timeline.md)

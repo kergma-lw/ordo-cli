@@ -89,6 +89,7 @@ Operations for reading and changing GitHub state.
 - [gh.pr](../operations/gh/pr.md) — Read pull request metadata from GitHub.
 - [gh.pr.checks](../operations/gh/pr-checks.md) — Read normalized status and check-run results from a GitHub pull request head.
 - [gh.pr.comments](../operations/gh/pr-comments.md) — Read regular conversation comments from a GitHub pull request.
+- [gh.pr.diff](../operations/gh/pr-diff.md) — Read normalized change content from a GitHub pull request.
 - [gh.pr.review_comments](../operations/gh/pr-review-comments.md) — Read line-level review comments from a GitHub pull request.
 - [gh.pr.reviews](../operations/gh/pr-reviews.md) — Read submitted reviews from a GitHub pull request.
 - [gh.pr.timeline](../operations/gh/pr-timeline.md) — Read normalized lifecycle events from a GitHub pull request timeline.
@@ -1835,6 +1836,48 @@ Operations in the `fs` namespace.
           "prerequisites": [],
           "replaced_by": [],
           "summary": "Read regular conversation comments from a GitHub pull request.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "pull_number": 42,
+                "repository": "owner/repo"
+              },
+              "reference": "gh.pr.diff"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "limit_invalid",
+            "probe_failed"
+          ],
+          "inputs": {
+            "limit": "integer",
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.diff",
+          "outputs": {
+            "files": [
+              "object"
+            ],
+            "pull_ref": "string",
+            "total_files": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read normalized change content from a GitHub pull request.",
           "tags": [
             "gh",
             "probe"

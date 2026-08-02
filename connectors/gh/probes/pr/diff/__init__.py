@@ -15,7 +15,7 @@ _DIFF_HEADER_RE = re.compile(r'^diff --git a/(?P<old>.+) b/(?P<new>.+)$')
 def info():
     return probe(
         name="pr.diff",
-        summary="Read normalized file-level change summaries from a GitHub pull request.",
+        summary="Read normalized change content from a GitHub pull request.",
         inputs={**PULL_IDENTITY_INPUTS, "limit": "integer"},
         outputs={"pull_ref": "string", "total_files": "integer", "files": ["object"]},
         failure_modes=("pull_not_found", "limit_invalid", "probe_failed"),

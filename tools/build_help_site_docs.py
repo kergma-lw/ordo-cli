@@ -106,6 +106,7 @@ KNOWN_OPERATION_SUMMARIES = {
     "gh.issue.create": "Create a GitHub issue.",
     "gh.pr": "Read pull request metadata from GitHub.",
     "gh.pr.comments": "Read regular conversation comments from a GitHub pull request.",
+    "gh.pr.diff": "Read normalized change content from a GitHub pull request.",
     "gh.pr.reviews": "Read submitted reviews from a GitHub pull request.",
     "gh.pr.review_comments": "Read line-level review comments from a GitHub pull request.",
     "gh.pr.checks": "Read normalized status and check-run results from a GitHub pull request head.",
