@@ -748,11 +748,14 @@
 - The shared adapter seam should identify the json family and the extent of the json-owned body, while json-family parsing owns the interior json-specific selector and action syntax.
 - Optional host-derived parameterization should live outside the json-owned body through the shared adapter binding surface rather than through host references embedded directly inside json-family grammar.
 - The MVP path surface should support exact structural selection plus one recursive-descent selector.
+- The MVP path surface should support one explicit level-local filter segment for selecting children on the current focus.
 - The family should permit the adapter-owned body to be empty for whole-root parse-and-return behavior.
 - The family should support dotted member access such as `.name` for simple literal object keys.
 - The family should support bracketed literal member access such as `["display-name"]` when a key cannot be expressed through the simple dotted form.
 - The family should support zero-based array indexing such as `[0]`.
 - The family should support one recursive-descent selector written as `..`.
+- The family should support `.one(field=value)` to select one immediate child candidate by field equality.
+- The family should support `.many(field=value)` to collect all immediate child candidates by field equality.
 - `..` may appear at any one position in a path.
 - A path must not contain more than one `..` segment.
 - `..` should apply only to later structural path steps rather than introducing a predicate or query sublanguage.
@@ -762,6 +765,11 @@
 
 - The shared read-versus-write boundary and shared adapter outcome vocabulary come from `requirements/local-expressions/adapters.md`.
 - Read paths must never create structure.
+- `.one(...)` and `.many(...)` must examine only immediate child candidates of the current focus.
+- For an array focus, those child candidates are the array elements in array order.
+- For an object focus, those child candidates are the object values in object-member traversal order.
+- For a scalar focus, `.one(...)` and `.many(...)` must fail as `invalid_path`.
+- Only child candidates that are themselves objects and contain the requested field participate in equality matching.
 - A missing object member must fail as `not_found`.
 - A missing array index must fail as `not_found`.
 - A JSON `null` value is a successful found value rather than `not_found`.
@@ -770,6 +778,11 @@
 - A recursive-descent segment must search for the following structural path at any deeper depth below the current focus.
 - A recursive-descent read path is many-valued.
 - A recursive-descent read path with no matches should return an empty collection rather than `not_found`.
+- `.one(...)` with zero matches must fail as `not_found`.
+- `.one(...)` with more than one match must fail as `ambiguous_match`.
+- `.many(...)` must return one array of matching child values, with `[]` for zero matches.
+- `.many(...)` may be followed by ordinary array indexing such as `[0]`, after which ordinary navigation rules resume.
+- Direct recursive descent immediately after `.many(...)` is out of scope for the MVP and must fail rather than implicitly flattening search results.
 
 ## Terminal action surface
 
@@ -782,6 +795,7 @@
 - If an action argument cannot be represented as JSON under the product's ordinary JSON-compatible value model, the action must fail rather than silently stringifying or dropping information.
 - A bulk `remove()` over a recursive-descent result is valid.
 - A bulk `remove()` over a recursive-descent result with no matches should succeed as a no-op and return the unchanged root text.
+- The MVP should not combine `.one(...)` or `.many(...)` with write actions.
 
 ## Write-path auto-creation
 
@@ -2951,6 +2965,25 @@ One array-index selection yields one singular element focus.
 
 Indexing is zero-based and models direct element addressing rather than search.
 
+### Level-local filter segment
+
+The family may expose one level-local filter segment written as `.one(field=value)` or `.many(field=value)`.
+
+That segment searches only immediate child candidates of the current focus rather than recursively searching descendants.
+
+The modeled child candidates are:
+
+- array elements when the current focus is one array;
+- object values when the current focus is one object.
+
+Scalar focuses do not expose child candidates and therefore reject these filter segments.
+
+Only child candidates that are themselves objects and carry the named field participate in equality matching.
+
+`.one(...)` narrows to one singular child focus.
+
+`.many(...)` yields one array-shaped focus containing all matching child values in traversal order.
+
 ### Recursive-descent segment
 
 The family may expose one recursive-descent segment written as `..`.
@@ -2977,6 +3010,11 @@ The model therefore treats JSON `null` as one successful represented value rathe
 When a path contains recursive descent, the modeled read result is a collection of all matching values in traversal order.
 If no recursive matches are found, the modeled read result is an empty collection rather than adapter absence.
 
+When a path contains `.many(...)`, the modeled read result is likewise one array-shaped JSON value.
+That many-result may later feed ordinary array indexing to recover one singular focus for additional structural navigation.
+
+The modeled `.one(...)` result remains singular, but zero matches model adapter absence and more than one match models ambiguity rather than an arbitrary first result.
+
 ## Write-action model
 
 The MVP write surface is intentionally small.
@@ -2989,6 +3027,8 @@ The primary modeled actions are:
 Those actions operate over one selected JSON focus and return updated JSON text for the whole adapted root value.
 
 `remove()` may also operate as one bulk action over a recursive-descent result set.
+
+The MVP does not model write actions through `.one(...)` or `.many(...)` filter segments.
 
 ## Auto-creation model
 
@@ -3029,6 +3069,7 @@ It is modeled as distinct from:
 
 - ordinary local-expression navigation over already structured values;
 - JSONPath-style filter or predicate semantics;
+- recursive search over many-result collections returned by `.many(...)`;
 - persistence ownership for the updated JSON text;
 - connector execution or hidden I/O.
 

@@ -32,6 +32,25 @@ One array-index selection yields one singular element focus.
 
 Indexing is zero-based and models direct element addressing rather than search.
 
+### Level-local filter segment
+
+The family may expose one level-local filter segment written as `.one(field=value)` or `.many(field=value)`.
+
+That segment searches only immediate child candidates of the current focus rather than recursively searching descendants.
+
+The modeled child candidates are:
+
+- array elements when the current focus is one array;
+- object values when the current focus is one object.
+
+Scalar focuses do not expose child candidates and therefore reject these filter segments.
+
+Only child candidates that are themselves objects and carry the named field participate in equality matching.
+
+`.one(...)` narrows to one singular child focus.
+
+`.many(...)` yields one array-shaped focus containing all matching child values in traversal order.
+
 ### Recursive-descent segment
 
 The family may expose one recursive-descent segment written as `..`.
@@ -58,6 +77,11 @@ The model therefore treats JSON `null` as one successful represented value rathe
 When a path contains recursive descent, the modeled read result is a collection of all matching values in traversal order.
 If no recursive matches are found, the modeled read result is an empty collection rather than adapter absence.
 
+When a path contains `.many(...)`, the modeled read result is likewise one array-shaped JSON value.
+That many-result may later feed ordinary array indexing to recover one singular focus for additional structural navigation.
+
+The modeled `.one(...)` result remains singular, but zero matches model adapter absence and more than one match models ambiguity rather than an arbitrary first result.
+
 ## Write-action model
 
 The MVP write surface is intentionally small.
@@ -70,6 +94,8 @@ The primary modeled actions are:
 Those actions operate over one selected JSON focus and return updated JSON text for the whole adapted root value.
 
 `remove()` may also operate as one bulk action over a recursive-descent result set.
+
+The MVP does not model write actions through `.one(...)` or `.many(...)` filter segments.
 
 ## Auto-creation model
 
@@ -110,5 +136,6 @@ It is modeled as distinct from:
 
 - ordinary local-expression navigation over already structured values;
 - JSONPath-style filter or predicate semantics;
+- recursive search over many-result collections returned by `.many(...)`;
 - persistence ownership for the updated JSON text;
 - connector execution or hidden I/O.
