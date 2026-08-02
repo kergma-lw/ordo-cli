@@ -313,6 +313,7 @@ class OperationTest(unittest.TestCase):
                     stdout='[{"filename":"src/ordo/help_cli.py","status":"modified","additions":12,"deletions":3,"changes":15},{"filename":"site-docs/operations/gh/pr-diff.md","status":"added","additions":24,"deletions":0,"changes":24}]',
                     stderr="",
                 ),
+                self._completed(returncode=0, stdout="", stderr=""),
             ]
 
             result = evaluate_probe(resolved, workflow)
@@ -323,6 +324,8 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.outputs["files"][0]["path"], "src/ordo/help_cli.py")
         self.assertEqual(result.outputs["files"][0]["status"], "modified")
         self.assertEqual(result.outputs["files"][0]["changes"], 15)
+        self.assertTrue(result.outputs["files"][0]["truncated"])
+        self.assertFalse(result.outputs["files"][0]["binary"])
         self.assertEqual(result.outputs["files"][1]["status"], "added")
 
     def test_gh_pr_diff_probe_reports_invalid_limit(self) -> None:
@@ -353,6 +356,85 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "pull_not_found")
         self.assertEqual(result.diagnostics[0].code, "probe.gh_pr_diff.not_found")
+
+    def test_gh_pr_diff_probe_returns_patch_and_rename_metadata(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.diff", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.diff")
+        resolved = ResolvedOperation("gh.pr.diff", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='[{"filename":"docs/reminders.md","previous_filename":"docs/notifications.md","status":"renamed","additions":4,"deletions":2,"changes":6}]',
+                    stderr="",
+                ),
+                self._completed(
+                    returncode=0,
+                    stdout='diff --git a/docs/notifications.md b/docs/reminders.md\nindex 1111111..2222222 100644\n--- a/docs/notifications.md\n+++ b/docs/reminders.md\n@@ -1,2 +1,4 @@\n-old\n+new\n+more\n',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["files"][0]["previous_path"], "docs/notifications.md")
+        self.assertEqual(result.outputs["files"][0]["patch"], "@@ -1,2 +1,4 @@\n-old\n+new\n+more")
+        self.assertFalse(result.outputs["files"][0]["truncated"])
+        self.assertFalse(result.outputs["files"][0]["binary"])
+
+    def test_gh_pr_diff_probe_marks_binary_files_explicitly(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.diff", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.diff")
+        resolved = ResolvedOperation("gh.pr.diff", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='[{"filename":"assets/logo.png","status":"modified","additions":0,"deletions":0,"changes":0}]',
+                    stderr="",
+                ),
+                self._completed(
+                    returncode=0,
+                    stdout='diff --git a/assets/logo.png b/assets/logo.png\nindex 1111111..2222222 100644\nBinary files a/assets/logo.png and b/assets/logo.png differ\n',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertIsNone(result.outputs["files"][0]["patch"])
+        self.assertFalse(result.outputs["files"][0]["truncated"])
+        self.assertTrue(result.outputs["files"][0]["binary"])
+
+    def test_gh_pr_diff_probe_bounds_large_patch_content(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.diff", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.pr.diff")
+        resolved = ResolvedOperation("gh.pr.diff", "gh", operation, "public")  # type: ignore[arg-type]
+        long_patch = "@@ -1 +1 @@\n" + ("+x\n" * 2500)
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='[{"filename":"src/ordo/help_cli.py","status":"modified","additions":2500,"deletions":1,"changes":2501,"patch":"' + long_patch.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') + '"}]',
+                    stderr="",
+                ),
+                self._completed(returncode=0, stdout="", stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertTrue(result.outputs["files"][0]["truncated"])
+        self.assertFalse(result.outputs["files"][0]["binary"])
+        self.assertLessEqual(len(result.outputs["files"][0]["patch"]), 4000)
 
     def test_gh_pr_checks_probe_returns_normalized_statuses_and_check_runs(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.pr.checks", with_={"repository": "kergma-lw/ordo-cli", "pull_number": 42})),), steps=())

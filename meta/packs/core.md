@@ -165,6 +165,7 @@
 - `gh.pr.review_comments` is the public `gh` probe for line-level review comments attached to one pull request diff.
 - `gh.pr.checks` is the public `gh` probe for normalized continuous-integration state on one pull request head.
 - `gh.pr.timeline` is the public `gh` probe for normalized pull request lifecycle events.
+- `gh.pr.diff` is the public `gh` probe for normalized pull-request change-content observation.
 
 ## Probe split rule
 
@@ -176,7 +177,8 @@
   - submitted review decisions;
   - line-level review discussion;
   - CI/check state;
-  - lifecycle events.
+  - lifecycle events;
+  - change content.
 
 ## Required questions
 
@@ -186,6 +188,7 @@
 - `gh.pr.review_comments` must answer which line-level review comments exist on one requested pull request.
 - `gh.pr.checks` must answer which normalized check outcomes currently apply to one requested pull request head.
 - `gh.pr.timeline` must answer which normalized lifecycle events belong to one requested pull request.
+- `gh.pr.diff` must answer which reviewable file and patch changes belong to one requested pull request.
 
 ## Required inputs
 
@@ -194,7 +197,7 @@
   - `pull_number`
 - `repository` must use `OWNER/REPO` form.
 - `pull_number` must be a positive integer.
-- `limit` is optional for comment-, review-, and timeline-list probes.
+- `limit` is optional for comment-, review-, timeline-, and diff-list probes.
 - When present, `limit` must be a positive bounded integer.
 
 ## Output contract
@@ -227,6 +230,20 @@
 - `gh.pr.comments` items must expose stable conversation-comment facts such as identity, author, body, timestamps, and URL.
 - `gh.pr.reviews` items must expose stable submitted-review facts such as identity, reviewer, state, body, submitted time, commit identity, and URL.
 - `gh.pr.review_comments` items must expose stable line-comment facts such as identity, author, body, path, line metadata, reply linkage, timestamps, and URL.
+- `gh.pr.diff` must return at least:
+  - `pull_ref`
+  - `total_files`
+  - one ordered `files` list
+- Each `gh.pr.diff` file item must expose stable change-content facts such as:
+  - `path`
+  - `previous_path` when applicable
+  - `status`
+  - `additions`
+  - `deletions`
+  - `changes`
+  - `patch` when textual patch content is available
+  - `truncated`
+  - `binary`
 - `gh.pr.checks` must return at least:
   - `pull_ref`
   - `head_sha`
@@ -254,6 +271,7 @@
 - Output fields must be connector-owned canonical names rather than raw GitHub transport names.
 - `gh.pr.comments` and `gh.pr.review_comments` must remain separate because ordinary conversation comments and line-level diff comments are different semantic surfaces.
 - `gh.pr.reviews` must expose review-event state separately from line-comment payloads.
+- `gh.pr.diff` must expose normalized change-content facts rather than rendered review UI or arbitrary raw transport payloads.
 - `gh.pr.checks` must normalize legacy commit statuses and check runs into one stable result shape without exposing transport-specific stitching as workflow burden.
 - `gh.pr.timeline` must publish normalized event families rather than a free-form passthrough of every raw GitHub timeline object.
 
@@ -268,7 +286,8 @@
 
 - These probes are observation surfaces only.
 - They must not encode merge approval policy, unresolved-thread heuristics, or workflow next-step decisions.
-- They must not absorb rendered diff presentation, patch text delivery, or one-shot narrative digest synthesis.
+- They may expose normalized pull-request change-content facts, including file-level diff summaries and bounded patch text, when those facts are part of the reviewable pull-request artifact.
+- They must not absorb rendered diff presentation, HTML-oriented review rendering, one-shot narrative digest synthesis, or arbitrary passthrough of raw GitHub response shapes.
 - `gh.pr.timeline` should expose lifecycle facts, not a generic event archive for arbitrary downstream scraping.
 
 ## Discovery rule
@@ -425,6 +444,7 @@
   - `is_boolean`;
   - `in(container)`;
   - `field(path)`;
+  - `only(field=value)` / `only(field!=value)`;
   - `flatten`;
   - `first`;
   - `last`;
@@ -432,7 +452,7 @@
   - `unique`.
 - `lower`, `trim`, and `slug` are string-to-string transforming filters.
 - `eq(...)`, `ne(...)`, `not`, `is_string`, `is_number`, `is_integer`, `is_boolean`, and `in(container)` are boolean-producing filters.
-- `field(path)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
+- `field(path)`, `only(field=value)` / `only(field!=value)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
 - Predicate-style filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must accept any already evaluated local-expression value and return `true` or `false` without implicit coercion.
 - `eq(...)` and `ne(...)` compare without implicit coercion.
 - `in(container)` must evaluate its argument as a container expression and must require that container to produce a list value.
@@ -444,6 +464,10 @@
 - `field(path)` on an array must yield `null` for an item whose addressed path is missing rather than failing the whole filter.
 - `field(path)` must fail on scalar or `null` input rather than silently coercing it into an object or singleton list.
 - `field(path)` path syntax must support at least dotted field access and zero-based list indexing, for example `results` and `results[0]`.
+- `only(field=value)` and `only(field!=value)` must require array input.
+- `only(...)` must keep only array elements whose addressed field path exists and satisfies the authored comparison.
+- `only(...)` must treat a missing addressed field path on one item as a non-match rather than as a whole-filter failure.
+- `only(...)` must fail on non-array input.
 - `flatten` must require array input and must flatten exactly one list nesting level.
 - `flatten` must fail on non-array input.
 - `first` and `last` must require array input.
@@ -754,8 +778,8 @@
 - The family should support bracketed literal member access such as `["display-name"]` when a key cannot be expressed through the simple dotted form.
 - The family should support zero-based array indexing such as `[0]`.
 - The family should support one recursive-descent selector written as `..`.
-- The family should support `.one(field=value)` to select one immediate child candidate by field equality.
-- The family should support `.many(field=value)` to collect all immediate child candidates by field equality.
+- The family should support `.one(field=value)` and `.one(field!=value)` to select one immediate child candidate by simple field comparison.
+- The family should support `.many(field=value)` and `.many(field!=value)` to collect all immediate child candidates by simple field comparison.
 - `..` may appear at any one position in a path.
 - A path must not contain more than one `..` segment.
 - `..` should apply only to later structural path steps rather than introducing a predicate or query sublanguage.
@@ -769,7 +793,7 @@
 - For an array focus, those child candidates are the array elements in array order.
 - For an object focus, those child candidates are the object values in object-member traversal order.
 - For a scalar focus, `.one(...)` and `.many(...)` must fail as `invalid_path`.
-- Only child candidates that are themselves objects and contain the requested field participate in equality matching.
+- Only child candidates that are themselves objects and contain the requested field participate in `=` or `!=` matching.
 - A missing object member must fail as `not_found`.
 - A missing array index must fail as `not_found`.
 - A JSON `null` value is a successful found value rather than `not_found`.
@@ -2554,6 +2578,7 @@ A collection-shaping filter is a product-defined pipeline filter that reshapes a
 The initial modeled collection-shaping filter set is:
 
 - `field(path)`;
+- `only(field=value)` / `only(field!=value)`;
 - `flatten`;
 - `first`;
 - `last`;
@@ -2655,6 +2680,7 @@ The modeled filter families include:
 - boolean comparison filters such as `eq(...)` and `ne(...)`;
 - boolean predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean`;
 - boolean membership filters such as `in(container)`;
+- bounded collection-selection filters such as `only(field=value)` and `only(field!=value)`;
 - boolean negation filters such as `not`;
 - collection-shaping filters such as `field(path)`, `flatten`, `first`, `last`, `length`, and `unique`.
 
@@ -2677,6 +2703,14 @@ The modeled collection-shaping semantics are:
 - they remain pure value transformations and do not introduce a nested item-scope expression model by themselves;
 - each filter contract explicitly defines which input shapes are accepted and whether missing data becomes `null` or a failure;
 - collection-shaping filters fail on unsupported input shapes rather than applying implicit coercion.
+
+The modeled `only(...)` semantics are:
+
+- input must be an array;
+- the authored predicate is one bounded field comparison using either `field=value` or `field!=value`;
+- each item is matched only when the addressed field path exists on that item;
+- a missing addressed field path on one item yields a non-match rather than a whole-filter failure;
+- the filter returns one array containing the kept original items in encounter order.
 
 The modeled `field(path)` semantics are:
 
@@ -2967,7 +3001,7 @@ Indexing is zero-based and models direct element addressing rather than search.
 
 ### Level-local filter segment
 
-The family may expose one level-local filter segment written as `.one(field=value)` or `.many(field=value)`.
+The family may expose one level-local filter segment written as `.one(field=value)`, `.one(field!=value)`, `.many(field=value)`, or `.many(field!=value)`.
 
 That segment searches only immediate child candidates of the current focus rather than recursively searching descendants.
 
@@ -2978,7 +3012,7 @@ The modeled child candidates are:
 
 Scalar focuses do not expose child candidates and therefore reject these filter segments.
 
-Only child candidates that are themselves objects and carry the named field participate in equality matching.
+Only child candidates that are themselves objects and carry the named field participate in the modeled comparison.
 
 `.one(...)` narrows to one singular child focus.
 
@@ -5123,6 +5157,7 @@ Shared prerequisites should not be duplicated in every operation contract if the
 - `gh.pr.review_comments`
 - `gh.pr.checks`
 - `gh.pr.timeline`
+- `gh.pr.diff`
 
 ## Kind
 
@@ -5131,14 +5166,14 @@ Shared prerequisites should not be duplicated in every operation contract if the
 ## Mental model
 
 - This family exposes orthogonal read surfaces for one pull request.
-- It separates metadata, discussion, review, CI, and lifecycle concerns instead of hiding them inside one opaque digest response.
+- It separates metadata, discussion, review, CI, lifecycle, and change-content concerns instead of hiding them inside one opaque digest response.
 - It stays read-only and does not encode merge policy or workflow decisions.
 
 ## Shared input shape
 
 - `repository: string`
 - `pull_number: integer`
-- `limit: integer` optional on list-style probes
+- `limit: integer` optional on list-style probes, including `gh.pr.diff`
 
 ## `gh.pr` output shape
 
@@ -5259,6 +5294,39 @@ Shared prerequisites should not be duplicated in every operation contract if the
   - `created_at`
   - optional bounded event-specific facts such as `from_value`, `to_value`, or a small `payload`
 
+## `gh.pr.diff` output shape
+
+```json
+{
+  "pull_ref": "go-vikunja/vikunja#2832",
+  "total_files": 2,
+  "files": [
+    {
+      "path": "src/reminders/scheduler.py",
+      "previous_path": null,
+      "status": "modified",
+      "additions": 18,
+      "deletions": 7,
+      "changes": 25,
+      "patch": "@@ -41,7 +41,12 @@ ...",
+      "truncated": false,
+      "binary": false
+    },
+    {
+      "path": "docs/reminders.md",
+      "previous_path": "docs/notifications.md",
+      "status": "renamed",
+      "additions": 4,
+      "deletions": 2,
+      "changes": 6,
+      "patch": "@@ -1,3 +1,5 @@ ...",
+      "truncated": false,
+      "binary": false
+    }
+  ]
+}
+```
+
 ## Modeled semantics
 
 - `gh.pr` is the canonical metadata snapshot for one pull request and should replace issue-shaped approximation when PR-native facts matter.
@@ -5267,6 +5335,7 @@ Shared prerequisites should not be duplicated in every operation contract if the
 - `gh.pr.review_comments` owns line-level diff discussion, including replies.
 - `gh.pr.checks` owns normalized observation of the PR head CI surface across check runs and commit statuses.
 - `gh.pr.timeline` owns normalized lifecycle transitions such as draft conversion, review-request changes, force-pushes, base changes, labels, merge, close, and reopen events.
+- `gh.pr.diff` owns normalized observation of reviewable PR change content, including file-level summaries and bounded patch-bearing payloads.
 
 ## Failure model
 
@@ -5280,10 +5349,11 @@ Shared prerequisites should not be duplicated in every operation contract if the
 - The family owns normalized observation only.
 - It does not own:
   - rendered diff presentation;
-  - patch text retrieval as a public contract;
+  - HTML/review-page rendering;
   - unresolved-thread heuristics;
   - merge recommendation synthesis;
   - one-shot narrative PR digest generation.
+- Patch-bearing outputs, when exposed, should use connector-owned canonical structure and bounded payload shape rather than UI-shaped or transport-shaped rendering.
 
 <!-- source: model/connector/gh-project-items.md -->
 

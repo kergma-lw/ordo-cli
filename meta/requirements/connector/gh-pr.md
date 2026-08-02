@@ -8,6 +8,7 @@
 - `gh.pr.review_comments` is the public `gh` probe for line-level review comments attached to one pull request diff.
 - `gh.pr.checks` is the public `gh` probe for normalized continuous-integration state on one pull request head.
 - `gh.pr.timeline` is the public `gh` probe for normalized pull request lifecycle events.
+- `gh.pr.diff` is the public `gh` probe for normalized pull-request change-content observation.
 
 ## Probe split rule
 
@@ -19,7 +20,8 @@
   - submitted review decisions;
   - line-level review discussion;
   - CI/check state;
-  - lifecycle events.
+  - lifecycle events;
+  - change content.
 
 ## Required questions
 
@@ -29,6 +31,7 @@
 - `gh.pr.review_comments` must answer which line-level review comments exist on one requested pull request.
 - `gh.pr.checks` must answer which normalized check outcomes currently apply to one requested pull request head.
 - `gh.pr.timeline` must answer which normalized lifecycle events belong to one requested pull request.
+- `gh.pr.diff` must answer which reviewable file and patch changes belong to one requested pull request.
 
 ## Required inputs
 
@@ -37,7 +40,7 @@
   - `pull_number`
 - `repository` must use `OWNER/REPO` form.
 - `pull_number` must be a positive integer.
-- `limit` is optional for comment-, review-, and timeline-list probes.
+- `limit` is optional for comment-, review-, timeline-, and diff-list probes.
 - When present, `limit` must be a positive bounded integer.
 
 ## Output contract
@@ -70,6 +73,20 @@
 - `gh.pr.comments` items must expose stable conversation-comment facts such as identity, author, body, timestamps, and URL.
 - `gh.pr.reviews` items must expose stable submitted-review facts such as identity, reviewer, state, body, submitted time, commit identity, and URL.
 - `gh.pr.review_comments` items must expose stable line-comment facts such as identity, author, body, path, line metadata, reply linkage, timestamps, and URL.
+- `gh.pr.diff` must return at least:
+  - `pull_ref`
+  - `total_files`
+  - one ordered `files` list
+- Each `gh.pr.diff` file item must expose stable change-content facts such as:
+  - `path`
+  - `previous_path` when applicable
+  - `status`
+  - `additions`
+  - `deletions`
+  - `changes`
+  - `patch` when textual patch content is available
+  - `truncated`
+  - `binary`
 - `gh.pr.checks` must return at least:
   - `pull_ref`
   - `head_sha`
@@ -97,6 +114,7 @@
 - Output fields must be connector-owned canonical names rather than raw GitHub transport names.
 - `gh.pr.comments` and `gh.pr.review_comments` must remain separate because ordinary conversation comments and line-level diff comments are different semantic surfaces.
 - `gh.pr.reviews` must expose review-event state separately from line-comment payloads.
+- `gh.pr.diff` must expose normalized change-content facts rather than rendered review UI or arbitrary raw transport payloads.
 - `gh.pr.checks` must normalize legacy commit statuses and check runs into one stable result shape without exposing transport-specific stitching as workflow burden.
 - `gh.pr.timeline` must publish normalized event families rather than a free-form passthrough of every raw GitHub timeline object.
 
@@ -111,7 +129,8 @@
 
 - These probes are observation surfaces only.
 - They must not encode merge approval policy, unresolved-thread heuristics, or workflow next-step decisions.
-- They must not absorb rendered diff presentation, patch text delivery, or one-shot narrative digest synthesis.
+- They may expose normalized pull-request change-content facts, including file-level diff summaries and bounded patch text, when those facts are part of the reviewable pull-request artifact.
+- They must not absorb rendered diff presentation, HTML-oriented review rendering, one-shot narrative digest synthesis, or arbitrary passthrough of raw GitHub response shapes.
 - `gh.pr.timeline` should expose lifecycle facts, not a generic event archive for arbitrary downstream scraping.
 
 ## Discovery rule
