@@ -12,7 +12,7 @@ class FragmentRunClassificationTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "profile-switch.yml"
             fragment.write_text(
-                "steps:\n  - name: switch\n    profile_switch: frontend\n",
+                "steps:\n  - name: switch\n    profile_switch: \"frontend\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(version=0, workflow="root", steps=(Step(name="expand", run="profile-switch.yml", resolved_run_path=str(fragment)),))
@@ -28,7 +28,7 @@ class FragmentRunClassificationTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "profile-switch.yml"
             fragment.write_text(
-                "steps:\n  - name: switch\n    profile_switch: frontend\n",
+                "steps:\n  - name: switch\n    profile_switch: \"frontend\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(
@@ -47,7 +47,7 @@ class FragmentRunClassificationTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "effectful.yml"
             fragment.write_text(
-                "steps:\n  - name: main\n    uses: shell.command\n    with:\n      command: echo hi\n",
+                "steps:\n  - name: main\n    uses: shell.command\n    with:\n      command: \"echo hi\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(version=0, workflow="root", steps=(Step(name="expand", run="effectful.yml", resolved_run_path=str(fragment)),))
@@ -70,7 +70,7 @@ class FragmentRunClassificationTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "switch-active-profile.yml"
             fragment.write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${active_profile}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: active_profile\n",
                 encoding="utf-8",
             )
             workflow = Workflow(

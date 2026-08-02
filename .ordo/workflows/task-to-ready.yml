@@ -1,8 +1,6 @@
 version: 0
 workflow: task-to-ready
 inputs:
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
   issue_number: {}

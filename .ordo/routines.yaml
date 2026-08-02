@@ -1,17 +1,14 @@
 version: 1
 routines:
-  set-active-task.finalize-frontend:
+  meta.build-domain-packs:
     kind: action
-    summary: Regenerate frontend API artifacts, run checks, and create the regeneration
-      commit when changes were produced.
+    summary: Regenerate derived meta packs from source docs.
     implementation:
       argv:
-      - ".ordo/scripts/finalize-frontend.sh"
+      - ".ordo/scripts/build-domain-packs.sh"
     failure_modes:
-    - dependency_bootstrap_failed
-    - checks_failed
-    - commit_failed
     - runtime_unavailable
+    - packs_build_failed
   review.render-open-diff:
     kind: probe
     summary: Render the current branch diff versus main into a temporary HTML file

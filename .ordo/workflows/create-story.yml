@@ -1,17 +1,12 @@
 version: 0
 workflow: create-story
 inputs:
-  active_profile_key: active_profile
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
   title: {}
   body:
     hint: Include a '## Tasks' section with at least two top-level bullet items, for
       example '- owner/repo#123' and '- owner/repo#124'
-state_needs:
-  shared_state: {}
 let:
   project: gh.project(project_id=inputs.project_id)
   status_field: gh.project.field(project_id=inputs.project_id, field="Status")
@@ -23,14 +18,7 @@ let:
 blocks:
 - guards:
   - git.repo.exists
-- steps:
-  - name: Switch runtime profile to meta
-    profile_switch: meta
-  - name: Remember active profile as meta
-    state_set:
-      state.shared_state[inputs.active_profile_key]: meta
 - guards:
-  - inputs.repo_kind == "meta"
   - project.exists
   - status_field.exists
   - backlog_status_option.exists
@@ -74,5 +62,4 @@ blocks:
       issue_ref: step.created_issue.outputs.issue_ref
       issue_number: step.created_issue.outputs.number
       url: step.created_issue.outputs.url
-      active_profile: "meta"
       type: "Story"

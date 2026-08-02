@@ -90,6 +90,17 @@ class JsonAdapterTest(unittest.TestCase):
 
         self.assertEqual(value, "Ada")
 
+    def test_one_supports_not_equal_filtering(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"items":[{"status":"done","name":"Ada"},{"status":"pending","name":"Grace"}]}', "target_status": "done"},
+        )
+
+        value = resolve_runtime_value('${json.items.one(status!=target_status).name with{root: inputs.body, target_status: inputs.target_status}}', workflow)
+
+        self.assertEqual(value, "Grace")
+
     def test_one_reports_not_found_when_no_matches_exist(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": '{"items":[{"id":1}]}', "target_id": 2})
 
@@ -124,6 +135,34 @@ class JsonAdapterTest(unittest.TestCase):
         value = resolve_runtime_value('${json.items.many(kind=target_kind) with{root: inputs.body, target_kind: inputs.target_kind}}', workflow)
 
         self.assertEqual(value, [{"kind": "keep", "name": "Ada"}, {"kind": "keep", "name": "Grace"}])
+
+    def test_many_supports_not_equal_filtering(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"items":[{"conclusion":"success","name":"A"},{"name":"Skip"},{"conclusion":"failure","name":"B"},{"conclusion":"cancelled","name":"C"}]}', "target_conclusion": "success"},
+        )
+
+        value = resolve_runtime_value('${json.items.many(conclusion!=target_conclusion) with{root: inputs.body, target_conclusion: inputs.target_conclusion}}', workflow)
+
+        self.assertEqual(
+            value,
+            [
+                {"conclusion": "failure", "name": "B"},
+                {"conclusion": "cancelled", "name": "C"},
+            ],
+        )
+
+    def test_not_equal_filter_does_not_match_missing_field_candidates(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"body": '{"items":[{"status":"done"},{"name":"Skip"},{"status":"pending"}]}', "target_status": "done"},
+        )
+
+        value = resolve_runtime_value('${json.items.many(status!=target_status) with{root: inputs.body, target_status: inputs.target_status}}', workflow)
+
+        self.assertEqual(value, [{"status": "pending"}])
 
     def test_many_may_be_followed_by_index_and_ordinary_navigation(self) -> None:
         workflow = Workflow(

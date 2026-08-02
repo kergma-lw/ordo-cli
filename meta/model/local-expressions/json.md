@@ -34,7 +34,7 @@ Indexing is zero-based and models direct element addressing rather than search.
 
 ### Level-local filter segment
 
-The family may expose one level-local filter segment written as `.one(field=value)` or `.many(field=value)`.
+The family may expose one level-local filter segment written as `.one(field=value)`, `.one(field!=value)`, `.many(field=value)`, or `.many(field!=value)`.
 
 That segment searches only immediate child candidates of the current focus rather than recursively searching descendants.
 
@@ -45,7 +45,7 @@ The modeled child candidates are:
 
 Scalar focuses do not expose child candidates and therefore reject these filter segments.
 
-Only child candidates that are themselves objects and carry the named field participate in equality matching.
+Only child candidates that are themselves objects and carry the named field participate in the modeled comparison.
 
 `.one(...)` narrows to one singular child focus.
 

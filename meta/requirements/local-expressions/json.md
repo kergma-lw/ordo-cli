@@ -33,8 +33,8 @@
 - The family should support bracketed literal member access such as `["display-name"]` when a key cannot be expressed through the simple dotted form.
 - The family should support zero-based array indexing such as `[0]`.
 - The family should support one recursive-descent selector written as `..`.
-- The family should support `.one(field=value)` to select one immediate child candidate by field equality.
-- The family should support `.many(field=value)` to collect all immediate child candidates by field equality.
+- The family should support `.one(field=value)` and `.one(field!=value)` to select one immediate child candidate by simple field comparison.
+- The family should support `.many(field=value)` and `.many(field!=value)` to collect all immediate child candidates by simple field comparison.
 - `..` may appear at any one position in a path.
 - A path must not contain more than one `..` segment.
 - `..` should apply only to later structural path steps rather than introducing a predicate or query sublanguage.
@@ -48,7 +48,7 @@
 - For an array focus, those child candidates are the array elements in array order.
 - For an object focus, those child candidates are the object values in object-member traversal order.
 - For a scalar focus, `.one(...)` and `.many(...)` must fail as `invalid_path`.
-- Only child candidates that are themselves objects and contain the requested field participate in equality matching.
+- Only child candidates that are themselves objects and contain the requested field participate in `=` or `!=` matching.
 - A missing object member must fail as `not_found`.
 - A missing array index must fail as `not_found`.
 - A JSON `null` value is a successful found value rather than `not_found`.

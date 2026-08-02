@@ -12,6 +12,7 @@ Use this page when you are deciding how to structure or review a workflow.
 - when adding or changing inputs, validate them before continuing
 - validate both the request shape and the observed target context
 - name important values early
+- prefer bare expressions in let, if, with, value, publish, result, and for_each; quote literal strings explicitly
 - stage reusable payloads with value + register before emitting them through result or publish
 - keep bounded fan-out bodies short, structured, and explicit about scope boundaries
 - use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early
@@ -641,6 +642,32 @@ Use this page when you are deciding how to structure or review a workflow.
 - repeating the same long inline expression across multiple guards or steps
 - hiding important intent inside one-off inline expressions when a stable let binding would clarify it
 
+## native_expression_contexts
+
+- Priority: `recommended_readability_pattern`
+- Guidance level: `recommended`
+- Rule: Prefer bare expressions in native and expression-first value contexts such as let:, bare step if:, with:, value:, publish:, result:, and for_each. Quote literal strings explicitly.
+
+### Why this exists
+
+- bare expressions reduce visual noise across the workflow surfaces that are usually expression-driven
+- quoted literals make string intent explicit without forcing the common expression case through an extra envelope
+- using one bare-first value model across with, value, publish, result, and for_each keeps authored workflow dataflow easier to scan
+
+### Prefer
+
+- write let bindings as bare expressions
+- write step if conditions without ${...}
+- write with, value, publish, result, and for_each entries as bare expressions when they are meant to evaluate
+- quote literal strings explicitly when a value-bearing field should preserve raw text
+- keep ${...} only for YAML-hostile expressions that are not viable as bare plain scalars
+
+### Avoid
+
+- wrapping native expression contexts in ${...} just by habit
+- using ${...} in value-bearing fields that now prefer bare expressions
+- leaving intended string literals unquoted in expression-first value-bearing fields
+
 ## Full JSON reference
 
 ```json
@@ -654,6 +681,7 @@ Use this page when you are deciding how to structure or review a workflow.
     "when adding or changing inputs, validate them before continuing",
     "validate both the request shape and the observed target context",
     "name important values early",
+    "prefer bare expressions in let, if, with, value, publish, result, and for_each; quote literal strings explicitly",
     "stage reusable payloads with value + register before emitting them through result or publish",
     "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
     "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",
@@ -667,17 +695,17 @@ Use this page when you are deciding how to structure or review a workflow.
     {
       "name": "named_run_target_fan_out",
       "summary": "Use run + for_each when one reusable fragment should be invoked for each item.",
-      "yaml": "- steps:\n    - name: inspect-many\n      run: github/check-issue\n      for_each: ${inputs.items}\n      with:\n        issue_number: ${item}\n      register: inspected"
+      "yaml": "- steps:\n    - name: inspect-many\n      run: github/check-issue\n      for_each: inputs.items\n      with:\n        issue_number: item\n      register: inspected"
     },
     {
       "name": "inline_fan_out_local_steps",
       "summary": "Use inline steps + for_each only for short local repeated bodies.",
-      "yaml": "- steps:\n    - name: inspect-many\n      for_each: ${inputs.items}\n      steps:\n        - name: inspect\n          uses: gh.issue\n          with:\n            issue_number: ${item}"
+      "yaml": "- steps:\n    - name: inspect-many\n      for_each: inputs.items\n      steps:\n        - name: inspect\n          uses: gh.issue\n          with:\n            issue_number: item"
     },
     {
       "name": "inline_fan_out_inner_if",
       "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps.",
-      "yaml": "- steps:\n    - name: inspect-many\n      if: ${inputs.enabled}\n      for_each: ${inputs.items}\n      steps:\n        - name: inspect\n          uses: gh.issue\n          with:\n            issue_number: ${item}\n        - name: publish\n          result:\n            summary: ${item}\n          if: item"
+      "yaml": "- steps:\n    - name: inspect-many\n      if: inputs.enabled\n      for_each: inputs.items\n      steps:\n        - name: inspect\n          uses: gh.issue\n          with:\n            issue_number: item\n        - name: publish\n          result:\n            summary: item\n          if: item"
     }
   ],
   "disclaimer": "This guidance complements the validation contract. It does not replace the formal runtime model.",
@@ -1226,6 +1254,29 @@ Use this page when you are deciding how to structure or review a workflow.
         "named bindings shorten long fragments and reduce repetition",
         "named bindings improve readability across check, plan, explain, and run surfaces",
         "early let bindings make workflow intent easier to scan"
+      ]
+    },
+    {
+      "avoid": [
+        "wrapping native expression contexts in ${...} just by habit",
+        "using ${...} in value-bearing fields that now prefer bare expressions",
+        "leaving intended string literals unquoted in expression-first value-bearing fields"
+      ],
+      "guidance_level": "recommended",
+      "name": "native_expression_contexts",
+      "prefer": [
+        "write let bindings as bare expressions",
+        "write step if conditions without ${...}",
+        "write with, value, publish, result, and for_each entries as bare expressions when they are meant to evaluate",
+        "quote literal strings explicitly when a value-bearing field should preserve raw text",
+        "keep ${...} only for YAML-hostile expressions that are not viable as bare plain scalars"
+      ],
+      "priority": "recommended_readability_pattern",
+      "rule": "Prefer bare expressions in native and expression-first value contexts such as let:, bare step if:, with:, value:, publish:, result:, and for_each. Quote literal strings explicitly.",
+      "why": [
+        "bare expressions reduce visual noise across the workflow surfaces that are usually expression-driven",
+        "quoted literals make string intent explicit without forcing the common expression case through an extra envelope",
+        "using one bare-first value model across with, value, publish, result, and for_each keeps authored workflow dataflow easier to scan"
       ]
     }
   ]

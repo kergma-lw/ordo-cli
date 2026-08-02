@@ -120,6 +120,15 @@ class FilterApplicationNode(ValueExpressionNode):
 
 
 @dataclass(frozen=True, slots=True)
+class OnlyPredicateNode(ValueExpressionNode):
+    """One bounded item-filter predicate used by ``only(...)``."""
+
+    path: str
+    operator: Literal["=", "!="]
+    expected: ValueExpressionNode
+
+
+@dataclass(frozen=True, slots=True)
 class PipelineNode(ValueExpressionNode):
     """Left-to-right pipeline of built-in filters over a source value."""
 
@@ -865,6 +874,12 @@ class _Parser:
             arguments: list[ValueExpressionNode] = []
             end = name_token.end
             if self._match("LPAREN") is not None:
+                if name_token.text == "only":
+                    if self._peek().kind != "RPAREN":
+                        arguments.append(self._parse_only_predicate())
+                    end = self._consume("RPAREN", "Expected ')' after filter arguments").end
+                    filters.append(FilterApplicationNode(start=name_token.start, end=end, name=name_token.text, arguments=tuple(arguments)))
+                    continue
                 if self._peek().kind != "RPAREN":
                     while True:
                         arguments.append(self._parse_pipeline())
@@ -875,6 +890,47 @@ class _Parser:
         if not filters:
             return source
         return PipelineNode(start=source.start, end=filters[-1].end, source=source, filters=tuple(filters))
+
+    def _parse_only_predicate(self) -> OnlyPredicateNode:
+        path_start = self._peek().start
+        path_parts: list[str] = []
+        token = self._consume("IDENT", "Filter 'only' requires a field path before '=' or '!='")
+        path_parts.append(token.text)
+        path_end = token.end
+        while True:
+            if self._match("DOT") is not None:
+                field = self._consume("IDENT", "Filter 'only' path expected an identifier after '.'")
+                path_parts.extend((".", field.text))
+                path_end = field.end
+                continue
+            if self._match("LBRACKET") is not None:
+                index = self._consume("NUMBER", "Filter 'only' path indexes must use non-negative integers")
+                if "." in index.text or index.text.startswith("-"):
+                    raise ValueExpressionParseError("Filter 'only' path indexes must use non-negative integers", index.start, index.end)
+                closing = self._consume("RBRACKET", "Filter 'only' path index is missing a closing bracket")
+                path_parts.extend(("[", index.text, "]"))
+                path_end = closing.end
+                continue
+            break
+        operator_token = self._peek()
+        if operator_token.kind == "EQUAL":
+            self._advance()
+            operator: Literal["=", "!="] = "="
+        elif operator_token.kind == "NEQ":
+            self._advance()
+            operator = "!="
+        else:
+            raise ValueExpressionParseError("Filter 'only' requires one field=value or field!=value predicate", operator_token.start, operator_token.end)
+        expected = self._parse_or() if self._allow_boolean_composition else self._parse_pipeline()
+        if self._peek().kind == "COMMA":
+            raise ValueExpressionParseError("Filter 'only' accepts exactly one field=value or field!=value predicate", self._peek().start, self._peek().end)
+        return OnlyPredicateNode(
+            start=path_start,
+            end=expected.end,
+            path="".join(path_parts),
+            operator=operator,
+            expected=expected,
+        )
 
     def _parse_primary(self) -> ValueExpressionNode:
         token = self._peek()
@@ -1148,6 +1204,9 @@ class _SemanticValidator:
             self._validate_filter(node)
             for argument in node.arguments:
                 self._visit(argument)
+            return
+        if isinstance(node, OnlyPredicateNode):
+            self._visit(node.expected)
             return
         if isinstance(node, PipelineNode):
             self._visit(node.source)
@@ -1665,6 +1724,8 @@ def _with_grouped_end(node: ValueExpressionNode, end: int) -> ValueExpressionNod
         return CallNode(start=node.start, end=end, target=node.target, arguments=node.arguments, fields=node.fields)
     if isinstance(node, PipelineNode):
         return PipelineNode(start=node.start, end=end, source=node.source, filters=node.filters)
+    if isinstance(node, OnlyPredicateNode):
+        return OnlyPredicateNode(start=node.start, end=end, path=node.path, operator=node.operator, expected=node.expected)
     if isinstance(node, BuiltinCallNode):
         return BuiltinCallNode(start=node.start, end=end, name=node.name, arguments=node.arguments)
     if isinstance(node, UnaryNode):
@@ -1715,6 +1776,14 @@ def _shift_node_offsets(node: ValueExpressionNode, *, delta: int) -> ValueExpres
             end=node.end + delta,
             name=node.name,
             arguments=tuple(_shift_node_offsets(argument, delta=delta) for argument in node.arguments),
+        )
+    if isinstance(node, OnlyPredicateNode):
+        return OnlyPredicateNode(
+            start=node.start + delta,
+            end=node.end + delta,
+            path=node.path,
+            operator=node.operator,
+            expected=_shift_node_offsets(node.expected, delta=delta),
         )
     if isinstance(node, PipelineNode):
         return PipelineNode(
@@ -2370,6 +2439,8 @@ def _is_integer_value(value: JSONValue) -> bool:
 
 
 def _json_strict_equal(left: JSONValue, right: JSONValue) -> bool:
+    if isinstance(left, str) and isinstance(right, str):
+        return str(left) == str(right)
     if type(left) is not type(right):
         return False
     if isinstance(left, list):
@@ -2802,6 +2873,44 @@ def _apply_unique_filter(
     return unique_items
 
 
+def _apply_only_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
+    predicate = filter_node.arguments[0]
+    if not isinstance(predicate, OnlyPredicateNode):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.filter_args_invalid",
+            message="Filter 'only' requires one field=value or field!=value predicate",
+            details={"expression": parsed.source, "filter": "only"},
+        )
+    items = _require_list(value, filter_name="only", parsed=parsed)
+    expected = _evaluate_node(
+        predicate.expected,
+        parsed=parsed,
+        workflow=workflow,
+        context=_context_local_expression_context(evaluation_context),
+        step_results=_context_step_results(evaluation_context),
+        observation_session=_context_observation_session(evaluation_context),
+    )
+    path = _parse_field_path(predicate.path)
+    kept: list[JSONValue] = []
+    for item in items:
+        resolved = _resolve_field_path(item, path)
+        if resolved is _FIELD_PATH_MISSING:
+            continue
+        if predicate.operator == "=" and _json_strict_equal(resolved, expected):
+            kept.append(item)
+            continue
+        if predicate.operator == "!=" and not _json_strict_equal(resolved, expected):
+            kept.append(item)
+    return kept
+
+
 def _apply_not_filter(
     value: JSONValue,
     filter_node: FilterApplicationNode,
@@ -2903,6 +3012,8 @@ def render_expression_text(node: ValueExpressionNode, *, source: str) -> str:
             return node.name
         args = ", ".join(render_expression_text(argument, source=source) for argument in node.arguments)
         return f"{node.name}({args})"
+    if isinstance(node, OnlyPredicateNode):
+        return f"{node.path}{node.operator}" + render_expression_text(node.expected, source=source)
     if isinstance(node, PipelineNode):
         parts = [render_expression_text(node.source, source=source)]
         parts.extend(render_expression_text(filter_node, source=source) for filter_node in node.filters)
@@ -2938,6 +3049,7 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
     ValueExpressionFilterSpec(name="is_boolean", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_boolean_filter),
     ValueExpressionFilterSpec(name="in", input_type="json", output_type="boolean", argument_count=1, handler=_apply_in_filter),
     ValueExpressionFilterSpec(name="field", input_type="json", output_type="json", argument_count=1, handler=_apply_field_filter),
+    ValueExpressionFilterSpec(name="only", input_type="json", output_type="json", argument_count=1, handler=_apply_only_filter, authored_form="only(field=value) / only(field!=value)"),
     ValueExpressionFilterSpec(name="flatten", input_type="json", output_type="json", argument_count=0, handler=_apply_flatten_filter),
     ValueExpressionFilterSpec(name="first", input_type="json", output_type="json", argument_count=0, handler=_apply_first_filter),
     ValueExpressionFilterSpec(name="last", input_type="json", output_type="json", argument_count=0, handler=_apply_last_filter),
@@ -2978,6 +3090,9 @@ def collect_step_references(node: ValueExpressionNode) -> tuple[StepReferenceNod
         if isinstance(current, CallNode):
             for argument in current.arguments:
                 visit(argument)
+            return
+        if isinstance(current, OnlyPredicateNode):
+            visit(current.expected)
             return
         if isinstance(current, PipelineNode):
             visit(current.source)

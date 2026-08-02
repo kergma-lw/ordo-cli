@@ -1714,6 +1714,48 @@ Use this page when you need field-level contract details for authoring work.
           "examples": [
             {
               "inputs": {
+                "pull_number": 42,
+                "repository": "owner/repo"
+              },
+              "reference": "gh.pr.diff"
+            }
+          ],
+          "failure_modes": [
+            "pull_not_found",
+            "limit_invalid",
+            "probe_failed"
+          ],
+          "inputs": {
+            "limit": "integer",
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.diff",
+          "outputs": {
+            "files": [
+              "object"
+            ],
+            "pull_ref": "string",
+            "total_files": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read normalized change content from a GitHub pull request.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
                 "limit": "integer",
                 "pull_number": "integer",
                 "repository": "string"
@@ -2646,6 +2688,13 @@ Use this page when you need field-level contract details for authoring work.
         "output_type": "json"
       },
       {
+        "argument_count": 1,
+        "authored_form": "only(field=value) / only(field!=value)",
+        "input_type": "json",
+        "name": "only",
+        "output_type": "json"
+      },
+      {
         "argument_count": 0,
         "input_type": "json",
         "name": "flatten",
@@ -2996,6 +3045,25 @@ Use this page when you need field-level contract details for authoring work.
   },
   "representation_adapters": {
     "families": [
+      {
+        "actions": [
+          "set",
+          "remove"
+        ],
+        "name": "json",
+        "selectors": [
+          ".field",
+          "[\"literal-key\"]",
+          "[n]",
+          "..field",
+          ".one(field=value)",
+          ".many(field=value)",
+          ".one(field!=value)",
+          ".many(field!=value)"
+        ],
+        "shortcuts": [],
+        "summary": "Select values from strict JSON text through exact structural paths."
+      },
       {
         "actions": [],
         "name": "key_value",
@@ -3403,9 +3471,11 @@ Use this page when you need field-level contract details for authoring work.
         "required_fields": [
           "name",
           "uses"
-        ]
+        ],
+        "with_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
+        "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
         "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
         "name": "run_invocation",
         "optional_fields": [
@@ -3417,9 +3487,11 @@ Use this page when you need field-level contract details for authoring work.
         "required_fields": [
           "name",
           "run"
-        ]
+        ],
+        "with_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
+        "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
         "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
         "name": "inline_fan_out_invocation",
         "optional_fields": [
@@ -3453,7 +3525,8 @@ Use this page when you need field-level contract details for authoring work.
         "required_fields": [
           "name",
           "value"
-        ]
+        ],
+        "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
         "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
@@ -3464,7 +3537,8 @@ Use this page when you need field-level contract details for authoring work.
         "required_fields": [
           "name",
           "result"
-        ]
+        ],
+        "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
         "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
@@ -3475,7 +3549,8 @@ Use this page when you need field-level contract details for authoring work.
         "required_fields": [
           "name",
           "publish"
-        ]
+        ],
+        "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
         "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
@@ -3501,6 +3576,40 @@ Use this page when you need field-level contract details for authoring work.
       }
     ],
     "surface_constraints": {
+      "authored_surfaces": {
+        "expression_first_value_fields": [
+          "with",
+          "value",
+          "publish",
+          "result",
+          "for_each"
+        ],
+        "expression_first_value_rules": {
+          "embedded_escape_form": "${...}",
+          "nested_objects_and_lists": "recursive_leaf_rule",
+          "plain_scalar_string": "local_expression",
+          "quoted_string": "literal_string",
+          "yaml_number_boolean_null": "native_literal"
+        },
+        "literal_only_fields": [
+          "version",
+          "workflow",
+          "name",
+          "uses",
+          "run",
+          "register",
+          "launcher",
+          "state_delete"
+        ],
+        "literal_only_keyed_fields": [
+          "state_set"
+        ],
+        "native_condition_fields": [
+          "let",
+          "guards",
+          "if"
+        ]
+      },
       "guard_expression": {
         "allowed_builtins": [
           "format",
@@ -3520,6 +3629,7 @@ Use this page when you need field-level contract details for authoring work.
           "is_boolean",
           "in",
           "field",
+          "only",
           "flatten",
           "first",
           "last",
@@ -3566,6 +3676,7 @@ Use this page when you need field-level contract details for authoring work.
           "is_boolean",
           "in",
           "field",
+          "only",
           "flatten",
           "first",
           "last",

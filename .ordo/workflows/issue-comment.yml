@@ -1,8 +1,6 @@
 version: 0
 workflow: issue-comment
 inputs:
-  profile:
-    description: Target profile name
   number:
     description: Issue number
   repository: {}
@@ -13,14 +11,9 @@ let:
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.number)
 blocks:
 - guards:
-  - inputs.profile == "frontend" or inputs.profile == "backend" or inputs.profile
-    == "meta"
   - inputs.number | is_integer
   - inputs.body | is_string
   - inputs.body | trim | ne("")
-- steps:
-  - name: Switch runtime profile
-    profile_switch: ${inputs.profile}
 - guards:
   - git.repo.exists
   - issue.state == "OPEN" or issue.state == "CLOSED"

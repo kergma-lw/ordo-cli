@@ -25,14 +25,18 @@ class ValueExpressionFilterSpec:
     output_type: str
     argument_count: int
     handler: FilterHandler
+    authored_form: str | None = None
 
     def to_contract(self) -> JSONObject:
-        return {
+        payload: JSONObject = {
             "name": self.name,
             "input_type": self.input_type,
             "output_type": self.output_type,
             "argument_count": self.argument_count,
         }
+        if self.authored_form is not None:
+            payload["authored_form"] = self.authored_form
+        return payload
 
 
 @dataclass(frozen=True, slots=True)

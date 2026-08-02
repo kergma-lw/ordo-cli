@@ -1,16 +1,11 @@
 version: 0
 workflow: stories-in-progress
 inputs:
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
 blocks:
 - guards:
   - inputs.project_id != ""
-- steps:
-  - name: Switch runtime profile to meta
-    profile_switch: meta
 - steps:
   - name: Load active stories
     uses: gh.project.items

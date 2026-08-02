@@ -1,30 +1,53 @@
 version: 0
 workflow: current-task-context
 inputs:
-  active_profile_key: active_profile
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
 state_needs:
   common_state: {}
-  shared_state: {}
 let:
-  active_profile: state.shared_state[inputs.active_profile_key]
   stored_issue_number: state.common_state[inputs.repository].issue_number
   stored_branch: state.common_state[inputs.repository].branch
 blocks:
 - guards:
   - git.repo.exists
-  - inputs.active_profile_key != ""
-  - active_profile == "frontend" or active_profile == "backend" or active_profile
-    == "meta"
   - stored_issue_number | is_integer
-- include: fragments/publish-issue-project-context.yml
-  with:
-    repository: inputs.repository
-    issue_number: stored_issue_number
-    project_id: inputs.project_id
-    active_profile: active_profile
-    active_profile_key: inputs.active_profile_key
-    stored_branch: stored_branch
+- steps:
+  - name: Load issue
+    uses: gh.issue
+    with:
+      repository: inputs.repository
+      issue_number: stored_issue_number
+    register: issue
+  - name: Load project issue
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: stored_issue_number
+      project_id: inputs.project_id
+    register: project_issue
+  - name: Publish stored issue project context
+    publish:
+      summary: "Issue loaded"
+      repository: inputs.repository
+      issue_number: step.issue.outputs.number
+      issue_ref:
+        format: "{}#{}"
+        args:
+        - inputs.repository
+        - step.issue.outputs.number
+      title: step.issue.outputs.title
+      state: step.issue.outputs.state
+      url: step.issue.outputs.url
+      stored_branch: stored_branch
+      author: step.issue.outputs.author
+      assignees: step.issue.outputs.assignees
+      labels: step.issue.outputs.labels
+      body: step.issue.outputs.body
+      in_project: step.project_issue.outputs.exists
+      project_type: step.project_issue.outputs.type
+      project_status: step.project_issue.outputs.status
+      project_priority: step.project_issue.outputs.priority
+      project_size: step.project_issue.outputs.size
+      project_estimate: step.project_issue.outputs.estimate
+      project_iteration: step.project_issue.outputs.iteration

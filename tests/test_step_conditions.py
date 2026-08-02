@@ -17,10 +17,10 @@ blocks:
   - guards: []
   - steps:
       - name: comment
-        if: ${inputs.status | eq("ok")}
+        if: inputs.status | eq("ok")
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
 
         validation = validate_workflow_text(workflow_text)
@@ -44,10 +44,10 @@ blocks:
   - guards: []
   - steps:
       - name: comment
-        if: ${inputs.status | eq("ok")}
+        if: inputs.status | eq("ok")
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
 
@@ -71,10 +71,10 @@ blocks:
   - guards: []
   - steps:
       - name: comment
-        if: ${inputs.enabled and (inputs.status | eq("ok"))}
+        if: inputs.enabled and (inputs.status | eq("ok"))
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
 
@@ -98,7 +98,7 @@ blocks:
         if: inputs.enabled or inputs.missing
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
         workflow = loaded.__class__(
@@ -127,10 +127,10 @@ blocks:
   - guards: []
   - steps:
       - name: comment
-        if: ${inputs.enabled | not}
+        if: inputs.enabled | not
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
         workflow = loaded.__class__(
@@ -164,7 +164,7 @@ blocks:
         if: inputs.enabled
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
 
@@ -189,7 +189,7 @@ blocks:
         if: should_comment
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
 
@@ -208,7 +208,7 @@ blocks:
         if: should_comment
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
         result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
@@ -233,7 +233,7 @@ blocks:
       - name: comment
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
 

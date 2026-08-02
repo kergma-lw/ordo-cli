@@ -15,6 +15,7 @@ let:
   pr_review_comments: gh.pr.review_comments(repository=inputs.pr_repository, pull_number=inputs.pull_number,
     limit=20)
   pr_checks: gh.pr.checks(repository=inputs.pr_repository, pull_number=inputs.pull_number)
+  pr_diff: gh.pr.diff(repository=inputs.pr_repository, pull_number=inputs.pull_number)
   pr_timeline: gh.pr.timeline(repository=inputs.pr_repository, pull_number=inputs.pull_number,
     limit=10)
 blocks:
@@ -42,8 +43,8 @@ blocks:
         commits_count: pr.commits_count
         head_sha: pr.head_sha
       discussion:
-        comments_count: pr_comments.total_count
-        comments: pr_comments.comments
+        comments: pr_comments.comments | only(author.login!="github-actions[bot]")
+        comments_count: pr_comments.comments | only(author.login!="github-actions[bot]") | length
         reviews_count: pr_reviews.total_count
         reviews: pr_reviews.reviews
         review_comments_count: pr_review_comments.total_count
@@ -55,10 +56,13 @@ blocks:
         failed_count: pr_checks.failed_count
         pending_count: pr_checks.pending_count
         skipped_count: pr_checks.skipped_count
-        checks: pr_checks.checks
+        checks: pr_checks.checks | only(conclusion!="success")
+      diff:
+        total_files: pr_diff.total_files
+        files: pr_diff.files
       timeline:
-        events_count: pr_timeline.total_count
-        events: pr_timeline.events
+        events: pr_timeline.events | only(event_type!="labeled")
+        events_count: pr_timeline.events | only(event_type!="labeled") | length
     register: digest
   - name: Serialize digest payload to JSON text
     value: '${json->set(value) with{root: "{}", value: step.digest.outputs.value}}'

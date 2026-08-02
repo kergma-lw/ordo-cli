@@ -4,7 +4,7 @@ inputs:
   number:
     description: Issue number
   repository:
-    description: Repository from the selected profile context
+    description: Repository from the current project context
   limit:
     description: Max comments to load
 blocks:

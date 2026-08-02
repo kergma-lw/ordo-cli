@@ -176,7 +176,7 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
 
         report = validate_workflow_semantics(workflow, routine_registry=registry)
 
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.routine.arg_type")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.value_expr.root")
 
     def test_routine_semantics_emit_exception_path_warning(self) -> None:
         registry, workflow = self._registry_and_workflow(

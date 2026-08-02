@@ -575,7 +575,7 @@ class CheckModeTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "switch.yml"
             fragment.write_text(
-                "steps:\n  - name: switch\n    profile_switch: frontend\n",
+                "steps:\n  - name: switch\n    profile_switch: \"frontend\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(

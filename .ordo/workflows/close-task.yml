@@ -1,16 +1,12 @@
 version: 0
 workflow: close-task
 inputs:
-  active_profile_key: active_profile
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
   close_comment: ""
   ship: false
 state_needs:
   common_state: {}
-  shared_state: {}
 let:
   stored_issue_number: state.common_state[inputs.repository].issue_number
   stored_branch: state.common_state[inputs.repository].branch

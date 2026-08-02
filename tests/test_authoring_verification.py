@@ -19,7 +19,7 @@ class AuthoringVerificationTest(unittest.TestCase):
         gh_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "gh")
         gh_ops = [op["name"] for op in gh_connector["operations"]]
 
-        self.assertEqual(namespaces, ["runtime", "git", "gh", "shell"])
+        self.assertEqual(namespaces, ["runtime", "git", "gh", "shell", "fs"])
         self.assertIn("issue", gh_ops)
 
     def test_agent_can_compose_non_trivial_workflow_and_profile(self) -> None:

@@ -572,6 +572,41 @@ blocks:
 
         self.assertEqual(evaluate_local_expression_tree(parsed, workflow), [1, 1.0])
 
+    def test_evaluate_only_filter_keeps_matching_items_by_field_equality(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"checks": [{"conclusion": "success", "name": "A"}, {"conclusion": "failure", "name": "B"}, {"name": "Skip"}]},
+        )
+
+        parsed = parse_local_expression_tree('inputs.checks | only(conclusion="success")')
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), [{"conclusion": "success", "name": "A"}])
+
+    def test_evaluate_only_filter_keeps_matching_items_by_field_inequality(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"checks": [{"conclusion": "success", "name": "A"}, {"conclusion": "failure", "name": "B"}, {"conclusion": "cancelled", "name": "C"}, {"name": "Skip"}]},
+        )
+
+        parsed = parse_local_expression_tree('inputs.checks | only(conclusion!="success")')
+
+        self.assertEqual(
+            evaluate_local_expression_tree(parsed, workflow),
+            [{"conclusion": "failure", "name": "B"}, {"conclusion": "cancelled", "name": "C"}],
+        )
+
+    def test_evaluate_only_filter_rejects_non_array_input(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"checks": {"conclusion": "success"}})
+
+        parsed = parse_local_expression_tree('inputs.checks | only(conclusion="success")')
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
     def test_evaluate_unique_filter_rejects_non_array_input(self) -> None:
         workflow = Workflow(
             version=0,

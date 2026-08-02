@@ -209,7 +209,7 @@ class PreflightInterpreterTest(unittest.TestCase):
     def test_expands_nested_preflight_analyzable_run_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fragment = Path(temp_dir) / "fragment.yml"
-            fragment.write_text("steps:\n  - name: switch\n    profile_switch: frontend\n", encoding="utf-8")
+            fragment.write_text("steps:\n  - name: switch\n    profile_switch: \"frontend\"\n", encoding="utf-8")
             workflow = Workflow(version=0, workflow="demo", blocks=())
             step = Step(name="expand", run="fragment.yml", resolved_run_path=str(fragment))
 

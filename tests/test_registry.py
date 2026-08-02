@@ -9,7 +9,7 @@ class ConnectorRegistryTest(unittest.TestCase):
 
         self.assertEqual(
             tuple(connector.namespace for connector in registry.list_connectors()),
-            ("runtime", "git", "gh", "shell"),
+            ("runtime", "git", "gh", "shell", "fs"),
         )
 
     def test_registry_exposes_discoverable_operation_metadata(self) -> None:

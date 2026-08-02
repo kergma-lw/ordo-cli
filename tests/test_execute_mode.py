@@ -181,7 +181,7 @@ class ExecuteModeTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "nested.yml"
             fragment.write_text(
-                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: nested\n",
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: \"nested\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(
@@ -207,7 +207,7 @@ class ExecuteModeTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "nested.yml"
             fragment.write_text(
-                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-value\n        value: ok\n",
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-value\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(
@@ -234,7 +234,7 @@ class ExecuteModeTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "nested.yml"
             fragment.write_text(
-                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: nested\n",
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: \"nested\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(
@@ -1476,7 +1476,7 @@ class ExecuteModeTest(unittest.TestCase):
             backend_dir.mkdir()
             fragment = root / "fragment.yml"
             fragment.write_text(
-                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: echo hi\n    launcher: shell_frontend\n",
+                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: \"echo hi\"\n    launcher: shell_frontend\n",
                 encoding="utf-8",
             )
             workflow = Workflow(
@@ -1518,7 +1518,7 @@ class ExecuteModeTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "fragment.yml"
             fragment.write_text(
-                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: echo hi\n",
+                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: \"echo hi\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(
@@ -1583,11 +1583,11 @@ class ExecuteModeTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
-                "steps:\n  - name: switch\n    profile_switch: frontend\n",
+                "steps:\n  - name: switch\n    profile_switch: \"frontend\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "close-task.yml").write_text(
-                "version: 0\nworkflow: close-task\ninputs:\n  repo_dir: {}\nblocks:\n  - steps:\n      - name: main\n        uses: shell.command\n        with:\n          command: echo hi\n",
+                "version: 0\nworkflow: close-task\ninputs:\n  repo_dir: {}\nblocks:\n  - steps:\n      - name: main\n        uses: shell.command\n        with:\n          command: \"echo hi\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "frontend.yml").write_text(
@@ -1631,11 +1631,11 @@ class ExecuteModeTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${active_profile}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: active_profile\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
-                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == \"kergma-lw/checklist-meta\"\n  - steps:\n      - name: main\n        value: ok\n",
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == \"kergma-lw/checklist-meta\"\n  - steps:\n      - name: main\n        value: \"ok\"\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "profiles" / "backend.yml").write_text(

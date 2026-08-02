@@ -1,0 +1,44 @@
+# Description: Close one issue directly, bypassing normal lifecycle checks.
+# When: Use only for exceptional administrative closure such as stale umbrella issues,
+# duplicates, or invalid planning artifacts. Do not use for routine task completion.
+version: 0
+workflow: force-close-issue
+inputs:
+  number:
+    description: Issue number
+  repository: {}
+  confirm_break_glass:
+    description: Type FORCE_CLOSE to confirm exceptional administrative closure
+    hint: Required safety confirmation for bypassing normal lifecycle checks
+  close_comment:
+    description: English closure comment explaining why normal lifecycle was bypassed
+    hint: Use only for exceptional administrative closure; do not use for routine task completion
+let:
+  issue: gh.issue(repository=inputs.repository, issue_number=inputs.number)
+blocks:
+- guards:
+  - inputs.number | is_integer
+  - inputs.confirm_break_glass == "FORCE_CLOSE"
+  - inputs.close_comment | is_string
+  - inputs.close_comment | trim | ne("")
+- guards:
+  - git.repo.exists
+  - issue.state == "OPEN"
+- steps:
+  - name: Add bypass explanation comment
+    uses: gh.issue.comment.add
+    register: added_comment
+    with:
+      repository: inputs.repository
+      issue_number: inputs.number
+      body: inputs.close_comment
+  - name: Close issue directly
+    uses: gh.issue.close
+    register: closed_issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.number
+  - name: Publish forced closure
+    publish:
+      summary: "Force-closed"
+      issue_ref: step.closed_issue.outputs.issue_ref

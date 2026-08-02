@@ -1,0 +1,11 @@
+version: 0
+workflow: meta-packs-build
+blocks:
+- guards:
+  - git.repo.exists
+- steps:
+  - name: Build domain packs
+    uses: routine.meta.build-domain-packs
+  - name: Publish domain pack build result
+    publish:
+      summary: "Meta packs regenerated"

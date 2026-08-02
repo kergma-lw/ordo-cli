@@ -24,7 +24,7 @@ blocks:
         value: ${inputs.status | in(inputs.allowed)}
         register: allowed_status
       - name: announce
-        if: ${step.allowed_status.outputs.value | is_boolean}
+        if: step.allowed_status.outputs.value | is_boolean
         uses: shell.command
         with:
           command: ${format("printf {}", inputs.title | slug)}
@@ -52,10 +52,10 @@ blocks:
   - guards: []
   - steps:
       - name: announce
-        if: ${inputs.status | in(inputs.allowed)}
+        if: inputs.status | in(inputs.allowed)
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
 
@@ -84,10 +84,10 @@ blocks:
         value: ${inputs.task_refs | field("results") | flatten}
         register: flattened_items
       - name: announce
-        if: ${step.flattened_items.outputs.value | length | eq(2)}
+        if: step.flattened_items.outputs.value | length | eq(2)
         uses: shell.command
         with:
-          command: printf ready
+          command: "printf ready"
 """
 
         validation = validate_workflow_text(workflow_text)
@@ -113,10 +113,10 @@ blocks:
   - guards: []
   - steps:
       - name: announce
-        if: ${inputs.task_refs | flatten | length | eq(2)}
+        if: inputs.task_refs | flatten | length | eq(2)
         uses: shell.command
         with:
-          command: printf executed
+          command: "printf executed"
 """
         )
 
@@ -125,6 +125,47 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         self.assertEqual(result.outputs["step_condition_details"][0]["reason"], "condition_evaluation_failed")
         self.assertEqual(result.outputs["step_condition_details"][0]["error_code"], "runtime.value.filter_type_invalid")
+
+    def test_execute_workflow_with_only_filter_selects_non_success_checks(self) -> None:
+        workflow_text = """
+version: 0
+workflow: local-expression-filters
+inputs:
+  checks:
+    - conclusion: success
+      name: unit
+    - conclusion: failure
+      name: lint
+    - conclusion: cancelled
+      name: docs
+    - name: skipped
+blocks:
+  - guards: []
+  - steps:
+      - name: filter-checks
+        value: ${inputs.checks | only(conclusion!="success")}
+        register: filtered_checks
+      - name: announce
+        if: step.filtered_checks.outputs.value | length | eq(2)
+        uses: shell.command
+        with:
+          command: "printf filtered"
+"""
+
+        validation = validate_workflow_text(workflow_text)
+        workflow = load_workflow_text(workflow_text)
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(validation.status, RuntimeStatus.OK)
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(
+            result.operation_results[0].outputs.get("value"),
+            [
+                {"conclusion": "failure", "name": "lint"},
+                {"conclusion": "cancelled", "name": "docs"},
+            ],
+        )
+        self.assertEqual(result.operation_results[1].outputs.get("stdout"), "filtered")
 
 
 if __name__ == "__main__":

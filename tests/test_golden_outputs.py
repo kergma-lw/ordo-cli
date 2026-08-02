@@ -201,7 +201,7 @@ class RuntimeInvariantTest(unittest.TestCase):
             root = Path(temp_dir)
             fragment = root / "fragment.yml"
             fragment.write_text(
-                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: echo hi\n",
+                "steps:\n  - name: nested-command\n    uses: shell.command\n    with:\n      command: \"echo hi\"\n",
                 encoding="utf-8",
             )
             workflow = Workflow(

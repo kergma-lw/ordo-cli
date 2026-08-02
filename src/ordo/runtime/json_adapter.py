@@ -34,6 +34,7 @@ class _IndexStep:
 class _FilterStep:
     mode: str
     field: str
+    operator: str
     expected: _ActionArgument
 
 
@@ -69,7 +70,7 @@ def _register() -> None:
         metadata=RepresentationAdapterMetadata(
             name="json",
             summary="Select values from strict JSON text through exact structural paths.",
-            selectors=(".field", '["literal-key"]', "[n]", "..field", ".one(field=value)", ".many(field=value)"),
+            selectors=(".field", '["literal-key"]', "[n]", "..field", ".one(field=value)", ".many(field=value)", ".one(field!=value)", ".many(field!=value)"),
             actions=("set", "remove"),
             shortcuts=(),
         ),
@@ -184,8 +185,8 @@ def _try_parse_filter_step(body: str, start: int) -> tuple[_FilterStep, int] | t
             continue
         close = _find_closing_paren(body, start + len(prefix) - 1)
         argument_text = body[start + len(prefix) : close].strip()
-        field, expected = _parse_filter_argument(argument_text, body=body, position=start)
-        return _FilterStep(mode=mode, field=field, expected=expected), close + 1
+        field, operator, expected = _parse_filter_argument(argument_text, body=body, position=start)
+        return _FilterStep(mode=mode, field=field, operator=operator, expected=expected), close + 1
     return None, start
 
 
@@ -234,28 +235,22 @@ def _find_closing_paren(body: str, open_paren: int) -> int:
     )
 
 
-def _parse_filter_argument(argument_text: str, *, body: str, position: int) -> tuple[str, _ActionArgument]:
+def _parse_filter_argument(argument_text: str, *, body: str, position: int) -> tuple[str, str, _ActionArgument]:
     if not argument_text:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_path",
-            message="JSON filter requires one field=value argument",
+            message="JSON filter requires one field=value or field!=value argument",
             details={"body": body, "position": position},
         )
-    field_text, separator, value_text = argument_text.partition("=")
-    if not separator:
+    match = re.fullmatch(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*(!=|=)\s*(.+?)\s*", argument_text)
+    if match is None:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_path",
-            message="JSON filter requires one field=value argument",
+            message="JSON filter requires one field=value or field!=value argument",
             details={"body": body, "position": position},
         )
-    field = field_text.strip()
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", field):
-        raise RepresentationAdapterError(
-            code="runtime.value.adapter_invalid_path",
-            message="JSON filter field names must be simple identifiers",
-            details={"body": body, "position": position},
-        )
-    return field, _parse_action_argument(value_text.strip(), body=body, position=position)
+    field, operator, value_text = match.groups()
+    return field, operator, _parse_action_argument(value_text.strip(), body=body, position=position)
 
 
 def _parse_bracket_step(body: str, start: int) -> tuple[object, int]:
@@ -411,20 +406,24 @@ def _collect_recursive_read_matches(base: JSONValue, suffix: tuple[object, ...],
 def _evaluate_filter_step(step: _FilterStep, current: JSONValue, parameters: dict[str, JSONValue]) -> JSONValue:
     candidates = _iter_filter_candidates(current)
     expected = _resolve_action_argument(step.expected, parameters)
-    matches = [candidate for candidate in candidates if _candidate_matches_filter(candidate, field=step.field, expected=expected)]
+    matches = [
+        candidate
+        for candidate in candidates
+        if _candidate_matches_filter(candidate, field=step.field, operator=step.operator, expected=expected)
+    ]
     if step.mode == "many":
         return matches
     if not matches:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_not_found",
-            message=f"JSON one() found no child with {step.field}={expected!r}",
-            details={"field": step.field, "expected": expected},
+            message=f"JSON one() found no child with {step.field}{step.operator}{expected!r}",
+            details={"field": step.field, "operator": step.operator, "expected": expected},
         )
     if len(matches) > 1:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_ambiguous_match",
-            message=f"JSON one() found multiple children with {step.field}={expected!r}",
-            details={"field": step.field, "expected": expected, "match_count": len(matches)},
+            message=f"JSON one() found multiple children with {step.field}{step.operator}{expected!r}",
+            details={"field": step.field, "operator": step.operator, "expected": expected, "match_count": len(matches)},
         )
     return matches[0]
 
@@ -441,8 +440,14 @@ def _iter_filter_candidates(current: JSONValue) -> list[JSONValue]:
     )
 
 
-def _candidate_matches_filter(candidate: JSONValue, *, field: str, expected: JSONValue) -> bool:
-    return isinstance(candidate, dict) and field in candidate and candidate[field] == expected
+def _candidate_matches_filter(candidate: JSONValue, *, field: str, operator: str, expected: JSONValue) -> bool:
+    if not isinstance(candidate, dict) or field not in candidate:
+        return False
+    actual = candidate[field]
+    if operator == "=":
+        return actual == expected
+    assert operator == "!="
+    return actual != expected
 
 
 def _apply_json_action(plan: _JsonPlan, root_value: JSONValue, parameters: dict[str, JSONValue]) -> str:
@@ -613,7 +618,11 @@ def _try_evaluate_exact_steps(steps: tuple[object, ...], value: JSONValue, param
             if not isinstance(current, (dict, list)):
                 return _NO_MATCH
             expected = _resolve_action_argument(step.expected, parameters)
-            matches = [candidate for candidate in _iter_filter_candidates(current) if _candidate_matches_filter(candidate, field=step.field, expected=expected)]
+            matches = [
+                candidate
+                for candidate in _iter_filter_candidates(current)
+                if _candidate_matches_filter(candidate, field=step.field, operator=step.operator, expected=expected)
+            ]
             if step.mode == "many":
                 current = matches
                 continue

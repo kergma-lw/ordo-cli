@@ -8,6 +8,7 @@ from ordo.runtime.local_expression_engine.core import (
     CallArgumentNode,
     CallNode,
     FilterApplicationNode,
+    OnlyPredicateNode,
     ListNode,
     LocalExpressionParseError,
     LiteralNode,
@@ -59,6 +60,30 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
                 arguments=(LiteralNode(start=19, end=23, value="ok"),),
             ),
         ))
+
+    def test_parse_only_filter_with_predicate_argument(self) -> None:
+        parsed = parse_local_expression_tree('inputs.items | only(conclusion!="success")')
+
+        self.assertIsInstance(parsed.root, PipelineNode)
+        self.assertEqual(
+            parsed.root.filters,
+            (
+                FilterApplicationNode(
+                    start=15,
+                    end=42,
+                    name="only",
+                    arguments=(
+                        OnlyPredicateNode(
+                            start=20,
+                            end=41,
+                            path="conclusion",
+                            operator="!=",
+                            expected=LiteralNode(start=32, end=41, value="success"),
+                        ),
+                    ),
+                ),
+            ),
+        )
 
     def test_parse_boolean_literal(self) -> None:
         parsed = parse_local_expression_tree("true")

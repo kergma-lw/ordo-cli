@@ -1,36 +1,34 @@
 version: 0
 workflow: story-tasks-show
 inputs:
-  active_profile_key: active_profile
   issue_number: {}
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
-state_needs:
-  shared_state: {}
 let:
-  active_profile: state.shared_state[inputs.active_profile_key]
   story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
   story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
 blocks:
   - guards:
       - git.repo.exists
-      - active_profile == "meta"
       - story_project_issue.exists
       - story_project_issue.type == "Story"
 
   - steps:
-      - name: Parse story task refs
-        run: fragments/parse-issue-ref.yml
-        for_each: '${markdown["Tasks"].list_items with{root: story_body}}'
+      - name: Extract story task refs
+        value: '${markdown["Tasks"].list_items with{root: story_body}}'
+        register: task_refs
+
+      - name: Load story task item details in batch
+        uses: gh.project.items.details
+        register: task_item_details
         with:
-          item: item
-        register: parsed_task_refs
+          project_id: inputs.project_id
+          content_kind: "Issue"
+          content_refs: step.task_refs.outputs.value
 
       - name: Publish story task items
         publish:
           summary: "Story task items loaded"
           repository: inputs.repository
           issue_number: inputs.issue_number
-          task_items: step.parsed_task_refs.results | field("results[0]")
+          task_items: step.task_item_details.outputs.items

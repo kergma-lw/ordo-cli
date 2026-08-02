@@ -13,7 +13,7 @@ blocks:
     value: inputs.status | in(inputs.allowed)
     register: allowed_status
   - name: announce
-    if: ${step.allowed_status.outputs.value | is_boolean}
+    if: step.allowed_status.outputs.value | is_boolean
     uses: shell.command
     with:
       command: format("printf {}", inputs.title | slug)

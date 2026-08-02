@@ -74,6 +74,7 @@
   - `is_boolean`;
   - `in(container)`;
   - `field(path)`;
+  - `only(field=value)` / `only(field!=value)`;
   - `flatten`;
   - `first`;
   - `last`;
@@ -81,7 +82,7 @@
   - `unique`.
 - `lower`, `trim`, and `slug` are string-to-string transforming filters.
 - `eq(...)`, `ne(...)`, `not`, `is_string`, `is_number`, `is_integer`, `is_boolean`, and `in(container)` are boolean-producing filters.
-- `field(path)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
+- `field(path)`, `only(field=value)` / `only(field!=value)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
 - Predicate-style filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must accept any already evaluated local-expression value and return `true` or `false` without implicit coercion.
 - `eq(...)` and `ne(...)` compare without implicit coercion.
 - `in(container)` must evaluate its argument as a container expression and must require that container to produce a list value.
@@ -93,6 +94,10 @@
 - `field(path)` on an array must yield `null` for an item whose addressed path is missing rather than failing the whole filter.
 - `field(path)` must fail on scalar or `null` input rather than silently coercing it into an object or singleton list.
 - `field(path)` path syntax must support at least dotted field access and zero-based list indexing, for example `results` and `results[0]`.
+- `only(field=value)` and `only(field!=value)` must require array input.
+- `only(...)` must keep only array elements whose addressed field path exists and satisfies the authored comparison.
+- `only(...)` must treat a missing addressed field path on one item as a non-match rather than as a whole-filter failure.
+- `only(...)` must fail on non-array input.
 - `flatten` must require array input and must flatten exactly one list nesting level.
 - `flatten` must fail on non-array input.
 - `first` and `last` must require array input.

@@ -1412,7 +1412,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "resolve-context.yml").write_text(
-                "steps:\n  - name: prepare\n    profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "steps:\n  - name: prepare\n    profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
@@ -1546,7 +1546,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-active-profile.yml").write_text(
@@ -1604,7 +1604,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "close-task.yml").write_text(
@@ -1659,7 +1659,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
@@ -1715,7 +1715,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${active_profile}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: active_profile\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
@@ -1773,7 +1773,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
@@ -1828,7 +1828,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "set-task-size.yml").write_text(
@@ -1880,7 +1880,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-pre\n        publish:\n          summary: \"pre\"\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: publish-pre\n        publish:\n          summary: \"pre\"\n      - name: switch\n        profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "publish.yml").write_text(
@@ -2868,7 +2868,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
-                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: ${state.shared_state[inputs.active_profile_key]}\n",
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: state.shared_state[inputs.active_profile_key]\n",
                 encoding="utf-8",
             )
             (root / ".ordo" / "workflows" / "nested.yml").write_text(

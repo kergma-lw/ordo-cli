@@ -1,10 +1,7 @@
 version: 0
 workflow: set-task-estimate
 inputs:
-  active_profile_key: active_profile
   issue_number: {}
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
   estimate:

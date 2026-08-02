@@ -1,8 +1,6 @@
 version: 0
 workflow: task-to-review
 inputs:
-  repo_kind: {}
-  repo_dir: {}
   repository: {}
   project_id: {}
 state_needs:

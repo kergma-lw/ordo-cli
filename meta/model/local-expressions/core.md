@@ -66,6 +66,7 @@ A collection-shaping filter is a product-defined pipeline filter that reshapes a
 The initial modeled collection-shaping filter set is:
 
 - `field(path)`;
+- `only(field=value)` / `only(field!=value)`;
 - `flatten`;
 - `first`;
 - `last`;
@@ -167,6 +168,7 @@ The modeled filter families include:
 - boolean comparison filters such as `eq(...)` and `ne(...)`;
 - boolean predicate filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean`;
 - boolean membership filters such as `in(container)`;
+- bounded collection-selection filters such as `only(field=value)` and `only(field!=value)`;
 - boolean negation filters such as `not`;
 - collection-shaping filters such as `field(path)`, `flatten`, `first`, `last`, `length`, and `unique`.
 
@@ -189,6 +191,14 @@ The modeled collection-shaping semantics are:
 - they remain pure value transformations and do not introduce a nested item-scope expression model by themselves;
 - each filter contract explicitly defines which input shapes are accepted and whether missing data becomes `null` or a failure;
 - collection-shaping filters fail on unsupported input shapes rather than applying implicit coercion.
+
+The modeled `only(...)` semantics are:
+
+- input must be an array;
+- the authored predicate is one bounded field comparison using either `field=value` or `field!=value`;
+- each item is matched only when the addressed field path exists on that item;
+- a missing addressed field path on one item yields a non-match rather than a whole-filter failure;
+- the filter returns one array containing the kept original items in encounter order.
 
 The modeled `field(path)` semantics are:
 

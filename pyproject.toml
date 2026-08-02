@@ -22,3 +22,6 @@ package-dir = {ordo = "src/ordo", connectors = "connectors"}
 where = ["."]
 include = ["ordo*", "connectors*"]
 exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
