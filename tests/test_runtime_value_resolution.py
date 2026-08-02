@@ -253,6 +253,39 @@ blocks:
             },
         )
 
+    def test_execute_workflow_composes_json_cleanup_pipeline_across_steps(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: json-compose
+blocks:
+  - steps:
+      - name: build
+        value:
+          title: "Demo"
+          head_sha: "abc123"
+          commit_id: 17
+        register: digest
+      - name: serialize
+        value: '${json->set(value) with{root: "{}", value: step.digest.outputs.value}}'
+        register: digest_json
+      - name: clean
+        value: step.digest_json.outputs.value
+          | json..["head_sha"]->remove()
+          | json..["commit_id"]->remove()
+        register: digest_json_clean
+      - name: publish
+        publish:
+          digest: step.digest_json_clean.outputs.value | json
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.published), [{"digest": {"title": "Demo"}}])
+        self.assertEqual(workflow.step_results["digest_json_clean"]["outputs"]["value"], '{"title":"Demo"}')
+
     def test_resolve_runtime_value_supports_bare_for_each_values(self) -> None:
         workflow = load_workflow_text(
             """

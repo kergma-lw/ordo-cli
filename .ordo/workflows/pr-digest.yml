@@ -60,8 +60,17 @@ blocks:
         events_count: pr_timeline.total_count
         events: pr_timeline.events
     register: digest
+  - name: Serialize digest payload to JSON text
+    value: '${json->set(value) with{root: "{}", value: step.digest.outputs.value}}'
+    register: digest_json
   - name: Publish pull request digest
     publish:
       summary: "Pull request digest loaded"
       pull_ref: pull_ref
-      digest: step.digest.outputs.value
+      digest: step.digest_json.outputs.value
+        | json..["head_sha"]->remove()
+        | json..["commit_id"]->remove()
+        | json..["original_commit_id"]->remove()
+        | json..["id"]->remove()
+        | json..["updated_at"]->remove()
+        | json

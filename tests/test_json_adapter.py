@@ -205,6 +205,31 @@ class JsonAdapterTest(unittest.TestCase):
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_root_value")
 
+    def test_pipeline_cleanup_json_text_may_be_parsed_back_in_later_step(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={})
+        digest_value = {"title": "Demo", "head_sha": "abc123", "commit_id": 17}
+
+        digest_json = resolve_runtime_value(
+            '${json->set(value) with{root: "{}", value: step.digest.outputs.value}}',
+            workflow,
+            step_results={"digest": {"outputs": {"value": digest_value}}},
+        )
+        self.assertEqual(digest_json, '{"commit_id":17,"head_sha":"abc123","title":"Demo"}')
+
+        digest_json_clean = resolve_runtime_value(
+            '${step.digest_json.outputs.value | json..["head_sha"]->remove() | json..["commit_id"]->remove()}',
+            workflow,
+            step_results={"digest_json": {"outputs": {"value": digest_json}}},
+        )
+        self.assertEqual(digest_json_clean, '{"title":"Demo"}')
+
+        digest = resolve_runtime_value(
+            '${json with{root: step.digest_json_clean.outputs.value}}',
+            workflow,
+            step_results={"digest_json_clean": {"outputs": {"value": digest_json_clean}}},
+        )
+        self.assertEqual(digest, {"title": "Demo"})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1837,6 +1837,63 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_publish_warns_when_quoted_string_looks_like_runtime_expression(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                blocks:
+                  - steps:
+                      - name: publish
+                        publish:
+                          digest: 'step.digest_json.outputs.value | json..["head_sha"]->remove() | json'
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+        self.assertTrue(any(item.code == "validation.workflow.value_expr.quoted_literal_looks_dynamic" for item in report.diagnostics))
+
+    def test_publish_accepts_json_adapter_pipeline_expression(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                blocks:
+                  - steps:
+                      - name: digest-json
+                        value: '{"head_sha":"abc123"}'
+                        register: digest_json
+                      - name: publish
+                        publish:
+                          digest: ${step.digest_json.outputs.value | json..["head_sha"]->remove() | json}
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_value_accepts_json_adapter_pipeline_expression(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: value-demo
+                blocks:
+                  - steps:
+                      - name: digest-json
+                        value: '{"head_sha":"abc123"}'
+                        register: digest_json
+                      - name: transformed
+                        value: ${step.digest_json.outputs.value | json..["head_sha"]->remove() | json}
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
     def test_profile_unknown_field_fails(self) -> None:
         report = validate_profile_text(
             textwrap.dedent(

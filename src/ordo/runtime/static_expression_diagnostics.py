@@ -7,7 +7,24 @@ from dataclasses import dataclass
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 
-from .local_expression_engine.core import BuiltinCallNode, LiteralNode, LocalExpressionParseError, ValueExpressionNode, parse_local_expression_tree
+from .local_expression_engine.core import (
+    AdapterBindingNode,
+    AdapterInvocationNode,
+    BinaryNode,
+    BuiltinCallNode,
+    CallArgumentNode,
+    CallNode,
+    FilterApplicationNode,
+    ListNode,
+    LiteralNode,
+    LocalExpressionParseError,
+    ObjectEntryNode,
+    ObjectNode,
+    PipelineNode,
+    UnaryNode,
+    ValueExpressionNode,
+    parse_local_expression_tree,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,17 +144,29 @@ def _diagnose_format_builtin_call(node: BuiltinCallNode, *, context: StaticExpre
 def _iter_child_nodes(node: ValueExpressionNode) -> list[ValueExpressionNode]:
     if isinstance(node, BuiltinCallNode):
         return list(node.arguments)
-    if hasattr(node, "source") and hasattr(node, "filters"):
+    if isinstance(node, PipelineNode):
         children = [node.source]
         for filter_node in node.filters:
-            children.extend(filter_node.arguments)
+            children.append(filter_node)
         return children
-    if hasattr(node, "items"):
+    if isinstance(node, FilterApplicationNode):
+        return list(node.arguments)
+    if isinstance(node, ListNode):
         return list(node.items)
-    if hasattr(node, "operand"):
+    if isinstance(node, ObjectEntryNode):
+        return [node.value]
+    if isinstance(node, ObjectNode):
+        return list(node.entries)
+    if isinstance(node, UnaryNode):
         return [node.operand]
-    if hasattr(node, "left") and hasattr(node, "right"):
+    if isinstance(node, BinaryNode):
         return [node.left, node.right]
-    if hasattr(node, "arguments"):
-        return [argument.value if hasattr(argument, "value") else argument for argument in node.arguments]
+    if isinstance(node, CallArgumentNode):
+        return [node.value]
+    if isinstance(node, CallNode):
+        return list(node.arguments)
+    if isinstance(node, AdapterBindingNode):
+        return [node.value]
+    if isinstance(node, AdapterInvocationNode):
+        return list(node.bindings)
     return []

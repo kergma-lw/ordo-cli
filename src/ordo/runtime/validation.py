@@ -30,6 +30,8 @@ from .local_expressions import (
 from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_workflow_payload, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .local_expression_engine.core import (
+    AdapterBindingNode,
+    AdapterInvocationNode,
     _FieldPathSyntaxError,
     _parse_field_path,
     BinaryNode,
@@ -260,6 +262,13 @@ def _collect_direct_let_references(node: ValueExpressionNode, let_bindings: JSON
         if isinstance(current, ObjectNode):
             for entry in current.entries:
                 visit(entry)
+            return
+        if isinstance(current, AdapterBindingNode):
+            visit(current.value)
+            return
+        if isinstance(current, AdapterInvocationNode):
+            for binding in current.bindings:
+                visit(binding)
             return
         if isinstance(current, PipelineNode):
             visit(current.source)
@@ -1677,8 +1686,11 @@ def _validate_runtime_value_surface(
         return diagnostics
     if not isinstance(value, str):
         return diagnostics
+    authored_style = authored_string_style(value)
     mode = _runtime_value_expression_mode(value, allow_bare_strings=allow_bare_strings)
     if mode is None:
+        if authored_style in {"single", "double", "other"}:
+            diagnostics.extend(_validate_quoted_literal_expression_hint(value, path=path, source=source))
         return diagnostics
     try:
         parsed = parse_embedded_value_local_expression(value) if mode == "embedded" else parse_value_local_expression(value)
@@ -1688,7 +1700,6 @@ def _validate_runtime_value_surface(
     if parsed is None or parsed.value is None:
         return diagnostics
     expression = _runtime_value_expression_text(value, mode=mode)
-    authored_style = authored_string_style(value)
     if mode == "embedded" and allow_bare_strings and authored_style in {"single", "double", "other"} and not _value_expression_requires_escape(expression):
         diagnostics.append(
             _diagnostic(
@@ -1744,6 +1755,32 @@ def _validate_runtime_value_surface(
     return diagnostics
 
 
+def _validate_quoted_literal_expression_hint(value: str, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    try:
+        parsed = parse_value_local_expression(value)
+    except LOCAL_EXPRESSION_PARSE_ERRORS:
+        return []
+    if not _node_looks_like_runtime_expression(parsed.value.root):
+        return []
+    return [
+        _warning(
+            "validation.workflow.value_expr.quoted_literal_looks_dynamic",
+            "This quoted string looks like a value expression but will be treated as a literal string at runtime. Author it as a bare expression or wrap it in ${...} if evaluation is intended.",
+            path,
+            source,
+            expression=value,
+        )
+    ]
+
+
+def _node_looks_like_runtime_expression(node: ValueExpressionNode) -> bool:
+    if isinstance(node, (PipelineNode, AdapterInvocationNode, BuiltinCallNode, CallNode, StepReferenceNode, ValueStateReferenceNode)):
+        return True
+    if isinstance(node, ReferenceNode):
+        return bool(node.parts) and node.parts[0] in {"inputs", "args", "item"}
+    return False
+
+
 def _validate_runtime_value_reference_roots(
     node: ValueExpressionNode,
     *,
@@ -1767,11 +1804,16 @@ def _validate_runtime_value_reference_roots(
         return diagnostics
     if isinstance(node, (LiteralNode, ValueStateReferenceNode, StepReferenceNode)):
         return diagnostics
+    if isinstance(node, AdapterBindingNode):
+        return _validate_runtime_value_reference_roots(node.value, path=path, source=source, let_bindings=let_bindings)
+    if isinstance(node, AdapterInvocationNode):
+        for binding in node.bindings:
+            diagnostics.extend(_validate_runtime_value_reference_roots(binding, path=path, source=source, let_bindings=let_bindings))
+        return diagnostics
     if isinstance(node, PipelineNode):
         diagnostics.extend(_validate_runtime_value_reference_roots(node.source, path=path, source=source, let_bindings=let_bindings))
         for filter_node in node.filters:
-            for argument in filter_node.arguments:
-                diagnostics.extend(_validate_runtime_value_reference_roots(argument, path=path, source=source, let_bindings=let_bindings))
+            diagnostics.extend(_validate_runtime_value_reference_roots(filter_node, path=path, source=source, let_bindings=let_bindings))
         return diagnostics
     if isinstance(node, UnaryNode):
         diagnostics.extend(_validate_runtime_value_reference_roots(node.operand, path=path, source=source, let_bindings=let_bindings))
@@ -2095,6 +2137,29 @@ def _infer_value_expression_type(
                 diagnostics.extend(argument_diagnostics)
             return "string", diagnostics
         return "unknown", diagnostics
+    if isinstance(node, AdapterBindingNode):
+        _, binding_diagnostics = _infer_value_expression_type(
+            node.value,
+            path=path,
+            source=source,
+            step_condition_mode=step_condition_mode,
+            let_bindings=let_bindings,
+            extra_allowed_reference_roots=extra_allowed_reference_roots,
+        )
+        diagnostics.extend(binding_diagnostics)
+        return "unknown", diagnostics
+    if isinstance(node, AdapterInvocationNode):
+        for binding in node.bindings:
+            _, binding_diagnostics = _infer_value_expression_type(
+                binding,
+                path=path,
+                source=source,
+                step_condition_mode=step_condition_mode,
+                let_bindings=let_bindings,
+                extra_allowed_reference_roots=extra_allowed_reference_roots,
+            )
+            diagnostics.extend(binding_diagnostics)
+        return "unknown", diagnostics
     if isinstance(node, PipelineNode):
         current_type, diagnostics = _infer_value_expression_type(
             node.source,
@@ -2408,6 +2473,13 @@ def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
         if isinstance(current, ValueStateReferenceNode):
             roles.add(current.state_role)
             return
+        if isinstance(current, AdapterBindingNode):
+            visit(current.value)
+            return
+        if isinstance(current, AdapterInvocationNode):
+            for binding in current.bindings:
+                visit(binding)
+            return
         if isinstance(current, CallNode):
             for argument in current.arguments:
                 visit(argument)
@@ -2425,8 +2497,7 @@ def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
         if isinstance(current, PipelineNode):
             visit(current.source)
             for filter_node in current.filters:
-                for argument in filter_node.arguments:
-                    visit(argument)
+                visit(filter_node)
             return
         if isinstance(current, BuiltinCallNode):
             for argument in current.arguments:
@@ -2461,6 +2532,13 @@ def _collect_value_input_references(node: ValueExpressionNode) -> set[tuple[str,
             return
         if isinstance(current, StepReferenceNode):
             return
+        if isinstance(current, AdapterBindingNode):
+            visit(current.value)
+            return
+        if isinstance(current, AdapterInvocationNode):
+            for binding in current.bindings:
+                visit(binding)
+            return
         if isinstance(current, CallNode):
             for argument in current.arguments:
                 visit(argument)
@@ -2471,8 +2549,7 @@ def _collect_value_input_references(node: ValueExpressionNode) -> set[tuple[str,
         if isinstance(current, PipelineNode):
             visit(current.source)
             for filter_node in current.filters:
-                for argument in filter_node.arguments:
-                    visit(argument)
+                visit(filter_node)
             return
         if isinstance(current, BuiltinCallNode):
             for argument in current.arguments:
