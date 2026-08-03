@@ -49,6 +49,8 @@ class RoutineExecutionTest(unittest.TestCase):
         self.assertEqual(result.operation_results[0].status, "ok")
         self.assertEqual(result.operation_results[0].outputs["routine_id"], "demo.pass")
         self.assertTrue(result.operation_results[0].outputs["log_path"].endswith(".stdout.log"))
+        self.assertTrue(result.operation_results[0].outputs["stdout_log_path"].endswith(".stdout.log"))
+        self.assertTrue(result.operation_results[0].outputs["stderr_log_path"].endswith(".stderr.log"))
         self.assertIn("line 3", result.operation_results[0].outputs["stdout_tail"])
 
     def test_execute_returns_routine_failed_for_nonzero_exit(self) -> None:
@@ -89,6 +91,8 @@ class RoutineExecutionTest(unittest.TestCase):
         self.assertEqual(result.status.value, "execution_error")
         self.assertEqual(result.operation_results[0].status, "routine_failed")
         self.assertEqual(result.operation_results[0].outputs["exit_code"], 3)
+        self.assertTrue(result.operation_results[0].outputs["stdout_log_path"].endswith(".stdout.log"))
+        self.assertTrue(result.operation_results[0].outputs["stderr_log_path"].endswith(".stderr.log"))
         self.assertIn("boom", result.operation_results[0].outputs["stderr_tail"])
 
     def test_execute_reports_missing_registry_before_execution(self) -> None:

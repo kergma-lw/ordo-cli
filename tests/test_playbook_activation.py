@@ -12,7 +12,7 @@ from unittest.mock import patch
 from ordo.cli import main as cli_main
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
-from ordo.model.runtime import ExecutionPlan, Mode, RuntimeResult, RuntimeStatus
+from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
 from ordo.runtime import check_workflow, execute_workflow, plan_workflow
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, discover_playbook_path
@@ -2836,6 +2836,104 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(payload["diagnostics"][0]["code"], "action.gh_project_issue_priority_set.priority_not_found")
         self.assertNotIn("operation_results", payload)
         self.assertNotIn("workflow", payload)
+
+    def test_cli_run_includes_routine_failure_details(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            diagnostics=(),
+            available_profiles={},
+            profile_working_directories={},
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXECUTE,
+            status=RuntimeStatus.EXECUTION_ERROR,
+            diagnostics=(),
+            failed_step="Run routine",
+            operation_results=(
+                OperationResult(
+                    status="routine_failed",
+                    summary="Routine 'demo.fail' failed",
+                    outputs={
+                        "routine_id": "demo.fail",
+                        "exit_code": 3,
+                        "stdout_log_path": "/tmp/ordo/demo.stdout.log",
+                        "stderr_log_path": "/tmp/ordo/demo.stderr.log",
+                        "stdout_tail": "before fail",
+                        "stderr_tail": "boom",
+                    },
+                ),
+            ),
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated):
+                with patch("ordo.cli._run_mode", return_value=runtime_result):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "execution_error")
+        self.assertEqual(payload["failed_step"], "Run routine")
+        self.assertEqual(payload["failure"]["kind"], "routine_failed")
+        self.assertEqual(payload["failure"]["routine_id"], "demo.fail")
+        self.assertEqual(payload["failure"]["exit_code"], 3)
+        self.assertEqual(payload["failure"]["stdout_log_path"], "/tmp/ordo/demo.stdout.log")
+        self.assertEqual(payload["failure"]["stderr_log_path"], "/tmp/ordo/demo.stderr.log")
+        self.assertEqual(payload["failure"]["stdout_tail"], "before fail")
+        self.assertEqual(payload["failure"]["stderr_tail"], "boom")
+
+    def test_cli_run_includes_routine_start_failure_details(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            diagnostics=(),
+            available_profiles={},
+            profile_working_directories={},
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXECUTE,
+            status=RuntimeStatus.EXECUTION_ERROR,
+            diagnostics=(),
+            failed_step="Run routine",
+            operation_results=(
+                OperationResult(
+                    status="execution_error",
+                    summary="Routine 'demo.fail' could not be started",
+                    outputs={
+                        "routine_id": "demo.fail",
+                        "stdout_log_path": "/tmp/ordo/demo.stdout.log",
+                        "stderr_log_path": "/tmp/ordo/demo.stderr.log",
+                        "stdout_tail": "",
+                        "stderr_tail": "",
+                    },
+                ),
+            ),
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated):
+                with patch("ordo.cli._run_mode", return_value=runtime_result):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["failure"]["kind"], "routine_start_failed")
+        self.assertEqual(payload["failure"]["routine_id"], "demo.fail")
+        self.assertEqual(payload["failure"]["message"], "Routine 'demo.fail' could not be started")
+        self.assertNotIn("exit_code", payload["failure"])
 
     def test_cli_run_emits_only_one_top_level_fallback_when_internal_layers_publish_no_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -325,8 +325,37 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
             "failed_guard": result.failed_guard,
             "failed_step": result.failed_step,
             "diagnostics": [diagnostic.to_contract() for diagnostic in result.diagnostics],
+            **({"failure": failure} if (failure := _build_run_failure_payload(result)) is not None else {}),
         }
     return result.to_contract()
+
+
+def _build_run_failure_payload(result: RuntimeResult) -> dict[str, object] | None:
+    if not result.operation_results:
+        return None
+    failed_result = result.operation_results[-1]
+    outputs = failed_result.outputs
+    raw = failed_result.raw
+    routine_id = outputs.get("routine_id")
+    if not isinstance(routine_id, str) or not routine_id:
+        return None
+    stdout_log_path = outputs.get("stdout_log_path") or outputs.get("log_path") or raw.get("stdout_path")
+    stderr_log_path = outputs.get("stderr_log_path") or raw.get("stderr_path")
+    payload: dict[str, object] = {
+        "kind": "routine_failed" if failed_result.status == "routine_failed" else "routine_start_failed",
+        "routine_id": routine_id,
+        "summary": failed_result.summary,
+        "stdout_log_path": stdout_log_path,
+        "stderr_log_path": stderr_log_path,
+        "stdout_tail": outputs.get("stdout_tail", ""),
+        "stderr_tail": outputs.get("stderr_tail", ""),
+    }
+    exit_code = outputs.get("exit_code")
+    if isinstance(exit_code, int):
+        payload["exit_code"] = exit_code
+    if failed_result.status == "execution_error" and failed_result.summary:
+        payload["message"] = failed_result.summary
+    return payload
 
 
 def _top_level_missing_output_result() -> dict[str, object]:

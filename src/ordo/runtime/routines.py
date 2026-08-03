@@ -14,7 +14,8 @@ from ordo.routines import RoutineEntry, RoutineRegistry, build_routine_operation
 
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
-_LOG_TAIL_LINE_COUNT = 20
+_STDOUT_LOG_TAIL_LINE_COUNT = 20
+_STDERR_LOG_TAIL_LINE_COUNT = 40
 
 
 def resolve_routine_entry(*, workflow: Workflow, routine_id: str) -> tuple[RoutineRegistry, RoutineEntry] | Diagnostic:
@@ -72,10 +73,18 @@ def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
             status="execution_error",
             summary=f"Routine '{routine_id}' could not be started",
             diagnostics=(diagnostic,),
+            outputs={
+                "routine_id": routine_id,
+                "log_path": str(stdout_path),
+                "stdout_log_path": str(stdout_path),
+                "stderr_log_path": str(stderr_path),
+                "stdout_tail": "",
+                "stderr_tail": "",
+            },
             raw={"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)},
         )
     stdout_tail = _read_log_tail(stdout_path)
-    stderr_tail = _read_log_tail(stderr_path)
+    stderr_tail = _read_log_tail(stderr_path, line_count=_STDERR_LOG_TAIL_LINE_COUNT)
     output_mode = entry.outputs.get("mode") if isinstance(entry.outputs, dict) else None
     if entry.kind == "probe" and output_mode == "data" and completed.returncode == 0:
         return _probe_data_result(
@@ -89,6 +98,8 @@ def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
         "routine_id": routine_id,
         "exit_code": completed.returncode,
         "log_path": str(stdout_path),
+        "stdout_log_path": str(stdout_path),
+        "stderr_log_path": str(stderr_path),
         "stdout_tail": stdout_tail,
         "stderr_tail": stderr_tail,
     }
@@ -122,13 +133,26 @@ def _probe_data_result(
             status="execution_error",
             summary=f"Routine probe '{routine_id}' returned invalid structured output",
             diagnostics=(diagnostic,),
-            outputs={"routine_id": routine_id, "log_path": str(stdout_path), "stdout_tail": stdout_tail, "stderr_tail": stderr_tail},
+            outputs={
+                "routine_id": routine_id,
+                "log_path": str(stdout_path),
+                "stdout_log_path": str(stdout_path),
+                "stderr_log_path": str(stderr_path),
+                "stdout_tail": stdout_tail,
+                "stderr_tail": stderr_tail,
+            },
             raw={"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)},
         )
     return OperationResult(
         status="ok",
         summary=f"Routine probe '{routine_id}' returned structured data",
-        outputs={"routine_id": routine_id, "log_path": str(stdout_path), "data": payload},
+        outputs={
+            "routine_id": routine_id,
+            "log_path": str(stdout_path),
+            "stdout_log_path": str(stdout_path),
+            "stderr_log_path": str(stderr_path),
+            "data": payload,
+        },
         raw={"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)},
     )
 
@@ -179,8 +203,8 @@ def _routine_log_paths(routine_id: str) -> tuple[Path, Path]:
     return stdout_path, stderr_path
 
 
-def _read_log_tail(path: Path) -> str:
+def _read_log_tail(path: Path, *, line_count: int = _STDOUT_LOG_TAIL_LINE_COUNT) -> str:
     if not path.exists():
         return ""
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    return "\n".join(lines[-_LOG_TAIL_LINE_COUNT:])
+    return "\n".join(lines[-line_count:])
