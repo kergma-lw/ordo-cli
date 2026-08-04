@@ -19,6 +19,30 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
 
         self.assertTrue(report.ok)
 
+    def test_routine_step_shape_accepts_explicit_env_reference_list(self) -> None:
+        report = validate_workflow_document(
+            {
+                "version": 0,
+                "workflow": "demo",
+                "inputs": {"review_mode": {"type": "string"}},
+                "blocks": [
+                    {"guards": []},
+                    {
+                        "steps": [
+                            {
+                                "name": "run-check",
+                                "uses": "routine.demo.check",
+                                "with": {"env": ["inputs.review_mode", "step.collect.outputs.value.path"]},
+                            }
+                        ]
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(report.status.name, "VALIDATION_ERROR")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.unknown")
+
     def test_routine_step_rejects_inline_command_fields(self) -> None:
         report = validate_workflow_document(
             {
@@ -30,6 +54,76 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status.name, "VALIDATION_ERROR")
         self.assertEqual(report.diagnostics[0].code, "validation.unknown_field")
+
+    def test_routine_step_accepts_known_step_and_input_env_references(self) -> None:
+        report = validate_workflow_document(
+            {
+                "version": 0,
+                "workflow": "demo",
+                "inputs": {"review_mode": {"type": "string"}},
+                "blocks": [
+                    {"guards": []},
+                    {
+                        "steps": [
+                            {"name": "collect", "value": {"path": "/tmp/demo.txt"}, "register": "collect"},
+                            {
+                                "name": "run-check",
+                                "uses": "routine.demo.check",
+                                "with": {"env": ["inputs.review_mode", "step.collect.outputs.value.path"]},
+                            }
+                        ]
+                    },
+                ],
+            }
+        )
+
+        self.assertTrue(report.ok)
+
+    def test_routine_step_rejects_invalid_env_reference_shape(self) -> None:
+        report = validate_workflow_document(
+            {
+                "version": 0,
+                "workflow": "demo",
+                "blocks": [
+                    {"guards": []},
+                    {
+                        "steps": [
+                            {
+                                "name": "run-check",
+                                "uses": "routine.demo.check",
+                                "with": {"env": ["step.collect.outputs.path | lower"]},
+                            }
+                        ]
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(report.status.name, "VALIDATION_ERROR")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.routine.env_reference_pattern")
+
+    def test_routine_step_rejects_non_string_env_reference_entry(self) -> None:
+        report = validate_workflow_document(
+            {
+                "version": 0,
+                "workflow": "demo",
+                "blocks": [
+                    {"guards": []},
+                    {
+                        "steps": [
+                            {
+                                "name": "run-check",
+                                "uses": "routine.demo.check",
+                                "with": {"env": [123]},
+                            }
+                        ]
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(report.status.name, "VALIDATION_ERROR")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.routine.env_reference_type")
 
     def test_routine_step_requires_id_field(self) -> None:
         report = validate_workflow_document(

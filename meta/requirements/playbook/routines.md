@@ -18,11 +18,19 @@
 ## Invocation contract
 
 - A workflow routine invocation must accept only a declared routine identifier and declared routine arguments.
+- A workflow routine invocation may also supply an explicit environment-reference list for routine execution when the list remains reviewable and derived from workflow-visible context.
 - Workflow use sites must not embed arbitrary command text as the routine invocation surface.
 - Each routine must declare its invocation kind as either `probe` or `action`.
 - Each routine must declare its accepted arguments explicitly enough for validation before effectful execution.
 - Extra routine arguments that are not declared by the routine contract must fail validation.
 - Missing required routine arguments must fail validation.
+- Routine environment injection must stay distinct from declared routine arguments so ambient execution context does not silently widen the business argument contract.
+- Routine environment injection must not automatically mirror every workflow `inputs.*` binding into process environment variables.
+- Author-authored routine environment bindings should use an explicit workflow-visible surface such as `with.env` rather than implicit name-by-name mirroring of workflow inputs.
+- `with.env` should remain a short explicit list of supported workflow reference paths such as `inputs.*`, `step.*`, or other later standardized runtime-owned roots.
+- Runtime should derive routine environment-variable names mechanically from the declared reference path rather than letting routine call sites mint custom environment-variable names ad hoc.
+- Workflow-visible routine environment bindings should be validated enough to reject malformed or unsupported reference paths and other non-reviewable hidden expansion behavior.
+- Workflow-visible routine environment bindings should be limited to references that resolve to scalar values; structured values should fail rather than being implicitly serialized into an opaque shell-facing format.
 
 ## Output discipline
 
@@ -51,3 +59,4 @@
 - Routines must not become the preferred permanent home for semantics that belong in reusable connector families.
 - When a stable cross-project domain model exists, that model should prefer connector publication over indefinite routine accretion.
 - Routine implementation may be restricted to an explicit project-owned publication area such as `.ordo/scripts/` so the registry does not silently adopt arbitrary repository history as workflow surface.
+- Ambient routine context from profiles or workflow-owned environment mappings must remain a bounded execution aid, not a back door that turns routines into hidden workflow interpreters.

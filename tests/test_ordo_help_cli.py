@@ -120,6 +120,27 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.pre_run" for item in pre_run_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "playbook.pre_run_contract" for item in pre_run_result["facts"]))
 
+    def test_model_and_search_publish_routine_env_context(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        env_result = json.loads(self.run_help("search", "ORDO_INPUTS_PROFILE", "--json").stdout)
+        mapping_result = json.loads(self.run_help("search", "scalar references", "--json").stdout)
+
+        self.assertIn("routine_contract", model)
+        self.assertTrue(model["routine_contract"]["workflow_call_surface"]["env_scalar_only"])
+        self.assertEqual(model["routine_contract"]["workflow_call_surface"]["generated_env_name_examples"]["inputs.profile"], "ORDO_INPUTS_PROFILE")
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "routine_contract.workflow_call_surface" for item in env_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "routine_contract.workflow_call_surface" for item in mapping_result["facts"]))
+
+    def test_workflow_authoring_publishes_routine_env_examples_and_anti_examples(self) -> None:
+        workflow_authoring = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+
+        examples = {item["name"]: item for item in workflow_authoring["routine_env_examples"]}
+        self.assertIn("routine_env_scalar_forwarding", examples)
+        self.assertIn("routine_env_non_scalar_rejected", examples)
+        self.assertIn("routine_env_custom_name_not_supported", examples)
+        self.assertIn("inputs.profile -> ORDO_INPUTS_PROFILE", examples["routine_env_scalar_forwarding"]["generated_env"])
+        self.assertIn("with.env is a list of reference paths, not a mapping", examples["routine_env_custom_name_not_supported"]["why_invalid"])
+
     def test_capabilities_publish_cross_links_for_branching(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         branching = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.branching")

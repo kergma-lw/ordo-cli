@@ -12,7 +12,16 @@ from ordo.model.json import JSONObject, JSONValue, authored_string_style
 from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import StepBlock, Workflow
-from ordo.routines import ROUTINE_REFERENCE_PREFIX, RoutineRegistry, RoutineRegistryError, load_workflow_routine_registry, parse_routine_reference, validate_workflow_routine_invocations, workflow_uses_routine
+from ordo.routines import (
+    ROUTINE_ENV_REFERENCE_PATTERN,
+    ROUTINE_REFERENCE_PREFIX,
+    RoutineRegistry,
+    RoutineRegistryError,
+    load_workflow_routine_registry,
+    parse_routine_reference,
+    validate_workflow_routine_invocations,
+    workflow_uses_routine,
+)
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .local_expression_contexts import LocalExpressionContext
@@ -1523,7 +1532,16 @@ def _validate_call(
         diagnostics.extend(_validate_routine_reference_shape(uses_value, path=path + ("uses",), source=source))
     if isinstance(with_payload, dict):
         if isinstance(uses_value, str) and uses_value.startswith(ROUTINE_REFERENCE_PREFIX):
-            diagnostics.extend(_validate_routine_call_shape(with_payload, path=path + ("with",), source=source))
+            diagnostics.extend(
+                _validate_routine_call_shape_with_context(
+                    with_payload,
+                    path=path + ("with",),
+                    source=source,
+                    let_bindings={} if let_bindings is None else let_bindings,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
         diagnostics.extend(
             _validate_runtime_value_surface(
                 with_payload,
@@ -1538,9 +1556,60 @@ def _validate_call(
 
 
 def _validate_routine_call_shape(value: JSONObject, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    return _validate_routine_call_shape_with_context(value, path=path, source=source, let_bindings={}, prior_registers=None, declared_registers=None)
+
+
+def _validate_routine_call_shape_with_context(
+    value: JSONObject,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject,
+    prior_registers: dict[str, tuple[str, ...]] | None,
+    declared_registers: dict[str, tuple[str, ...]] | None,
+) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
-    diagnostics.extend(_validate_unknown_fields(value, frozenset({"args"}), path=path, source=source))
+    diagnostics.extend(_validate_unknown_fields(value, frozenset({"args", "env"}), path=path, source=source))
     diagnostics.extend(_require_object_field(value, "args", path=path + ("args",), source=source, required=False))
+    diagnostics.extend(_require_list_field(value, "env", path=path + ("env",), source=source, required=False))
+    env_payload = value.get("env")
+    if isinstance(env_payload, list):
+        for index, reference in enumerate(env_payload):
+            env_path = path + ("env", str(index))
+            if not isinstance(reference, str):
+                diagnostics.append(
+                    _diagnostic(
+                        "validation.workflow.routine.env_reference_type",
+                        "Routine env entries must be string references",
+                        env_path,
+                        source,
+                        actual_type=type(reference).__name__,
+                    )
+                )
+                continue
+            if not ROUTINE_ENV_REFERENCE_PATTERN.fullmatch(reference):
+                diagnostics.append(
+                    _diagnostic(
+                        "validation.workflow.routine.env_reference_pattern",
+                        f"Routine env reference '{reference}' must use a supported reference path",
+                        env_path,
+                        source,
+                        reference=reference,
+                        pattern=ROUTINE_ENV_REFERENCE_PATTERN.pattern,
+                    )
+                )
+                continue
+            diagnostics.extend(
+                _validate_runtime_value_surface(
+                    f"${{{reference}}}",
+                    path=env_path,
+                    source=source,
+                    let_bindings=let_bindings,
+                    allow_bare_strings=True,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
     return diagnostics
 
 
@@ -2793,6 +2862,22 @@ def _require_object_field(
     value = data[key]
     if not isinstance(value, dict):
         return [_diagnostic(f"validation.{key}.type", f"Field '{key}' must be an object", path or (key,), source, actual_type=type(value).__name__)]
+    return []
+
+
+def _require_list_field(
+    data: JSONObject,
+    key: str,
+    *,
+    source: str,
+    path: tuple[str, ...] | None = None,
+    required: bool,
+) -> list[Diagnostic]:
+    if key not in data:
+        return [] if not required else [_diagnostic(f"validation.{key}.missing", f"Field '{key}' is required", path or (key,), source)]
+    value = data[key]
+    if not isinstance(value, list):
+        return [_diagnostic(f"validation.{key}.type", f"Field '{key}' must be a list", path or (key,), source, actual_type=type(value).__name__)]
     return []
 
 

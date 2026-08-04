@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
-from ordo.routines import RoutineEntry, RoutineRegistry, build_routine_operation_contract, load_workflow_routine_registry, parse_routine_reference
+from ordo.routines import (
+    RoutineEntry,
+    RoutineRegistry,
+    build_routine_operation_contract,
+    load_workflow_routine_registry,
+    parse_routine_reference,
+)
 
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -59,9 +67,13 @@ def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
         argv = _materialize_routine_argv(entry, resolved_step.declared_with or {}, workflow)
     except ValueResolutionError as exc:
         return OperationResult(status="execution_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
+    try:
+        env = _materialize_routine_env(resolved_step.declared_with or {}, workflow)
+    except ValueResolutionError as exc:
+        return OperationResult(status="execution_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
     stdout_path, stderr_path = _routine_log_paths(routine_id)
     try:
-        completed = _run_with_log_capture(argv, stdout_path=stdout_path, stderr_path=stderr_path)
+        completed = _run_with_log_capture(argv, stdout_path=stdout_path, stderr_path=stderr_path, env=env)
     except OSError as exc:
         diagnostic = Diagnostic(
             code="runtime.routine.start_failed",
@@ -184,11 +196,49 @@ def _materialize_routine_argv(entry: RoutineEntry, declared_with: dict[str, obje
     return materialized
 
 
-def _run_with_log_capture(argv: list[str], *, stdout_path: Path, stderr_path: Path) -> subprocess.CompletedProcess[str]:
+def _materialize_routine_env(
+    declared_with: dict[str, object],
+    workflow: Workflow,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    env_payload = declared_with.get("env", [])
+    if not isinstance(env_payload, list):
+        return env
+    for reference in env_payload:
+        if not isinstance(reference, str):
+            continue
+        env[_routine_env_name_for_reference(reference)] = _coerce_routine_env_scalar(
+            resolve_runtime_value(f"${{{reference}}}", workflow),
+            reference=reference,
+        )
+    return env
+
+
+def _routine_env_name_for_reference(reference: str) -> str:
+    return "ORDO_" + "_".join(segment.upper() for segment in reference.split("."))
+
+
+def _coerce_routine_env_scalar(value: JSONValue, *, reference: str) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (str, int, float)):
+        return str(value)
+    raise ValueResolutionError(
+        code="runtime.routine.env_non_scalar",
+        message=f"Routine env reference '{reference}' must resolve to a scalar value",
+        details={"reference": reference, "actual_type": type(value).__name__},
+    )
+
+
+def _run_with_log_capture(
+    argv: list[str], *, stdout_path: Path, stderr_path: Path, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     stdout_path.parent.mkdir(parents=True, exist_ok=True)
     stderr_path.parent.mkdir(parents=True, exist_ok=True)
     with stdout_path.open("w", encoding="utf-8") as stdout_handle, stderr_path.open("w", encoding="utf-8") as stderr_handle:
-        return subprocess.run(argv, check=False, text=True, stdout=stdout_handle, stderr=stderr_handle)
+        return subprocess.run(argv, check=False, text=True, stdout=stdout_handle, stderr=stderr_handle, env=env)
 
 
 def _routine_log_paths(routine_id: str) -> tuple[Path, Path]:

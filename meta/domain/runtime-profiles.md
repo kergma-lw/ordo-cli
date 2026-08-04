@@ -14,6 +14,8 @@ With routine publication available, launcher-centric profile context is now lega
 
 It also makes profile switching a plausible runtime-owned context surface, as long as switching remains explicit, inspectable, and separate from workflow-owned business state.
 
+When a workflow invokes a project-local routine, profile-carried workflow values may still influence that local process, but only through explicit workflow-owned forwarding such as `with.env` rather than through an automatic profile-name environment variable.
+
 That switching should be modeled as an engine-level construct such as `profile_switch`, not as an ordinary connector action.
 
 Profiles should stay declarative and reviewable.

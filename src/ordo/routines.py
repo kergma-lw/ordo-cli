@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 
 import yaml
 
@@ -24,6 +25,9 @@ ROUTINE_REGISTRY_ALLOWED_FIELDS = _field_names(ROUTINE_CONTRACT["top_level_field
 ROUTINE_ENTRY_ALLOWED_FIELDS = _field_names(ROUTINE_CONTRACT["routine_entry_fields"])
 ROUTINE_IMPLEMENTATION_ALLOWED_FIELDS = _field_names(ROUTINE_CONTRACT["implementation_fields"])
 ROUTINE_SCRIPT_PREFIX = ".ordo/scripts/"
+ROUTINE_ENV_REFERENCE_PATTERN = re.compile(
+    r"^(?:inputs\.[A-Za-z_][A-Za-z0-9_]*|state\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*|step\.[A-Za-z_][A-Za-z0-9_]*(?:\.(?:outputs|status)(?:\.[A-Za-z_][A-Za-z0-9_]*)*)?)$"
+)
 
 
 @dataclass(frozen=True, slots=True)

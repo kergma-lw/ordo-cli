@@ -17,6 +17,17 @@ class IntrospectionRoutineContractTest(unittest.TestCase):
         self.assertIn("kind", routine_entry_fields)
         self.assertIn("implementation", routine_entry_fields)
         self.assertIn("failure_modes", routine_entry_fields)
+        workflow_call_fields = {field["name"] for field in payload["workflow_call_surface"]["fields"]}
+        self.assertEqual(workflow_call_fields, {"args", "env"})
+        self.assertFalse(payload["workflow_call_surface"]["automatic_input_env_projection"])
+        self.assertEqual(payload["workflow_call_surface"]["env_reference_roots"], ["inputs", "step", "state"])
+        self.assertEqual(payload["workflow_call_surface"]["generated_env_name_prefix"], "ORDO_")
+        self.assertTrue(payload["workflow_call_surface"]["env_scalar_only"])
+        self.assertEqual(payload["workflow_call_surface"]["generated_env_name_examples"]["inputs.profile"], "ORDO_INPUTS_PROFILE")
+        self.assertEqual(
+            payload["workflow_call_surface"]["generated_env_name_examples"]["step.collect.outputs.value.path"],
+            "ORDO_STEP_COLLECT_OUTPUTS_VALUE_PATH",
+        )
         implementation_argv = next(field for field in payload["implementation_fields"] if field["name"] == "argv")
         self.assertEqual(implementation_argv["authoring_status"], "bounded_execution_only")
 

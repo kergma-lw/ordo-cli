@@ -86,6 +86,46 @@ implementation:
 
 This keeps the registry focused on published invocation contracts rather than becoming a second home for large embedded shell blocks.
 
+## Invocation surfaces
+
+Routine invocation has two distinct author-facing channels:
+
+- `with.args` for declared business arguments that belong to the routine contract;
+- `with.env` for explicit ambient execution context references that may influence local implementation behavior without widening the declared argument contract.
+
+Illustrative call site:
+
+```yaml
+- uses: routine.python-lint
+  with:
+    args:
+      target: inputs.target
+    env:
+      - inputs.review_mode
+      - step.collect.outputs.value.path
+```
+
+In this model:
+
+- `with.args` binds only names declared by the routine entry;
+- `with.env` binds a short explicit list of supported workflow reference paths;
+- `with.env` is a runtime execution-context surface, not part of the routine's declared business argument schema;
+- workflow-visible environment bindings remain reviewable at the call site rather than hidden inside the routine implementation;
+- runtime derives routine environment-variable names mechanically from the forwarded reference path, for example `inputs.profile` → `ORDO_INPUTS_PROFILE` and `step.collect.outputs.value.path` → `ORDO_STEP_COLLECT_OUTPUTS_VALUE_PATH`.
+
+## Runtime-generated routine environment
+
+Runtime may materialize only the references explicitly listed in `with.env` for a routine invocation.
+
+- The model intentionally does not mirror every workflow `inputs.*` name into process environment variables.
+- Broad automatic mirroring would hide routine dependencies, weaken reviewability, and make profile- or caller-provided surplus context look like a stable routine API.
+- Runtime-generated environment names should remain mechanical and predictable rather than user-authored per-call shell API.
+- Supported references should remain narrow and reviewable, beginning with roots such as `inputs.*` and `step.*` and expanding only when the runtime later standardizes additional roots.
+- Forwarded references should resolve only to scalar values.
+- If a forwarded reference resolves to an object or array, routine execution should fail rather than silently serializing structured data into an opaque shell-facing string.
+
+This keeps routine environment access intentionally a little awkward, which is appropriate for an exception-path surface.
+
 ## Result model
 
 Routine invocation returns the standard structured operation envelope, but with a bounded-output discipline.

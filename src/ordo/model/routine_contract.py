@@ -18,6 +18,22 @@ ROUTINE_CONTRACT: JSONObject = {
         "use_when": "no richer public surface exists and the remaining gap is mechanical or intentionally project-local",
         "avoid_when": "the remaining gap is semantic or a reusable connector model should exist instead",
     },
+    "workflow_call_surface": {
+        "fields": [
+            {"name": "args", "required": False, "type": "object", "role": "declared_business_arguments"},
+            {"name": "env", "required": False, "type": "list[string]", "role": "explicit_forwarded_scalar_context_references"},
+        ],
+        "automatic_input_env_projection": False,
+        "env_reference_roots": ["inputs", "step", "state"],
+        "env_reference_pattern": "supported_reference_path_only",
+        "generated_env_name_prefix": "ORDO_",
+        "generated_env_name_examples": {
+            "inputs.profile": "ORDO_INPUTS_PROFILE",
+            "step.collect.outputs.value.path": "ORDO_STEP_COLLECT_OUTPUTS_VALUE_PATH",
+        },
+        "env_scalar_only": True,
+        "env_non_scalar_behavior": "execution_error",
+    },
     "top_level_fields": [
         {"name": "version", "required": True, "type": "integer"},
         {"name": "routines", "required": True, "type": "object"},

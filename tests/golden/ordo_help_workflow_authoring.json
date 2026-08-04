@@ -16,6 +16,7 @@
     "after adding or changing a workflow, run both check and review before calling the work complete",
     "keep publish payloads minimal and follow stricter local agent or project output rules when they exist",
     "use structured Ordo surfaces before falling back to routines",
+    "when a routine truly needs ambient context, use with.env only as a short explicit list of scalar workflow references such as inputs.* or step.*",
     "treat semantic ambiguity as a reason to clarify rather than improvise"
   ],
   "bounded_fan_out_examples": [
@@ -38,6 +39,36 @@
   "disclaimer": "This guidance complements the validation contract. It does not replace the formal runtime model.",
   "document_kind": "workflow_authoring",
   "purpose": "Preferred workflow authoring patterns and discouraged design choices for Ordo authors and agents",
+  "routine_env_examples": [
+    {
+      "generated_env": [
+        "inputs.profile -> ORDO_INPUTS_PROFILE",
+        "inputs.review_mode -> ORDO_INPUTS_REVIEW_MODE",
+        "step.collect.outputs.value.path -> ORDO_STEP_COLLECT_OUTPUTS_VALUE_PATH"
+      ],
+      "name": "routine_env_scalar_forwarding",
+      "summary": "Forward a short explicit list of scalar workflow references into routine environment variables.",
+      "yaml": "- steps:\n    - name: collect\n      value:\n        path: /tmp/demo.txt\n      register: collect\n    - name: run-routine\n      uses: routine.python.lint\n      with:\n        args:\n          target: inputs.target\n        env:\n          - inputs.profile\n          - inputs.review_mode\n          - step.collect.outputs.value.path"
+    },
+    {
+      "name": "routine_env_non_scalar_rejected",
+      "summary": "Do not forward non-scalar values; object or array references fail at execution time instead of being silently serialized.",
+      "why_invalid": [
+        "step.collect.outputs.value is an object here, not a scalar",
+        "routine env forwarding rejects object and array payloads instead of inventing an opaque shell-facing serialization"
+      ],
+      "yaml": "- steps:\n    - name: collect\n      value:\n        path: /tmp/demo.txt\n      register: collect\n    - name: run-routine\n      uses: routine.python.lint\n      with:\n        env:\n          - step.collect.outputs.value"
+    },
+    {
+      "name": "routine_env_custom_name_not_supported",
+      "summary": "Do not try to mint custom environment-variable names at the workflow call site.",
+      "why_invalid": [
+        "with.env is a list of reference paths, not a mapping",
+        "runtime generates env names mechanically from the forwarded references"
+      ],
+      "yaml": "- steps:\n    - name: run-routine\n      uses: routine.python.lint\n      with:\n        env:\n          ORDO_REVIEW_MODE: inputs.review_mode"
+    }
+  ],
   "rules": [
     {
       "avoid": [
@@ -191,6 +222,7 @@
         "use routine.* only when the remaining gap is mechanical or intentionally project-local rather than semantic",
         "if the remaining gap is semantic, stop and clarify with the user instead of preserving semantics through routine.*",
         "keep routine usage narrow, reviewable, and easy to reason about",
+        "when a routine needs ambient caller context, forward it through with.env as a short explicit list of scalar references rather than as broad implicit environment mirroring",
         "treat repeated routine usage as pressure to discuss richer connector publication"
       ],
       "priority": "critical_caution",

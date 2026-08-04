@@ -8,7 +8,17 @@ import re
 import sys
 
 from ordo.connectors import get_public_connector_registry
-from ordo.introspection import describe_capabilities, describe_examples_catalog, describe_operations, describe_playbook_contract, describe_profile_contract, describe_state_contract, describe_system, describe_workflow_contract
+from ordo.introspection import (
+    describe_capabilities,
+    describe_examples_catalog,
+    describe_operations,
+    describe_playbook_contract,
+    describe_profile_contract,
+    describe_routine_contract,
+    describe_state_contract,
+    describe_system,
+    describe_workflow_contract,
+)
 from ordo.runtime.representation_adapters import describe_representation_adapter_surface
 from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_FILTERS
 from ordo.model.runtime import Mode, RuntimeStatus
@@ -196,6 +206,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "use routine.* only when the remaining gap is mechanical or intentionally project-local rather than semantic",
             "if the remaining gap is semantic, stop and clarify with the user instead of preserving semantics through routine.*",
             "keep routine usage narrow, reviewable, and easy to reason about",
+            "when a routine needs ambient caller context, forward it through with.env as a short explicit list of scalar references rather than as broad implicit environment mirroring",
             "treat repeated routine usage as pressure to discuss richer connector publication",
         ],
         "avoid": [
@@ -687,6 +698,7 @@ def build_model_response() -> JSONObject:
         "document_kind": "model",
         "workflow": describe_workflow_contract(),
         "profile": describe_profile_contract(),
+        "routine_contract": describe_routine_contract(),
         "playbook": describe_playbook_contract(),
         "state": describe_state_contract(),
         "connectors": describe_operations()["connectors"],
@@ -724,6 +736,7 @@ def build_workflow_authoring_response() -> JSONObject:
             "after adding or changing a workflow, run both check and review before calling the work complete",
             "keep publish payloads minimal and follow stricter local agent or project output rules when they exist",
             "use structured Ordo surfaces before falling back to routines",
+            "when a routine truly needs ambient context, use with.env only as a short explicit list of scalar workflow references such as inputs.* or step.*",
             "treat semantic ambiguity as a reason to clarify rather than improvise",
         ],
         "bounded_fan_out_examples": [
@@ -741,6 +754,36 @@ def build_workflow_authoring_response() -> JSONObject:
                 "name": "inline_fan_out_inner_if",
                 "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps.",
                 "yaml": "- steps:\n    - name: inspect-many\n      if: inputs.enabled\n      for_each: inputs.items\n      steps:\n        - name: inspect\n          uses: gh.issue\n          with:\n            issue_number: item\n        - name: publish\n          result:\n            summary: item\n          if: item",
+            },
+        ],
+        "routine_env_examples": [
+            {
+                "name": "routine_env_scalar_forwarding",
+                "summary": "Forward a short explicit list of scalar workflow references into routine environment variables.",
+                "yaml": "- steps:\n    - name: collect\n      value:\n        path: /tmp/demo.txt\n      register: collect\n    - name: run-routine\n      uses: routine.python.lint\n      with:\n        args:\n          target: inputs.target\n        env:\n          - inputs.profile\n          - inputs.review_mode\n          - step.collect.outputs.value.path",
+                "generated_env": [
+                    "inputs.profile -> ORDO_INPUTS_PROFILE",
+                    "inputs.review_mode -> ORDO_INPUTS_REVIEW_MODE",
+                    "step.collect.outputs.value.path -> ORDO_STEP_COLLECT_OUTPUTS_VALUE_PATH",
+                ],
+            },
+            {
+                "name": "routine_env_non_scalar_rejected",
+                "summary": "Do not forward non-scalar values; object or array references fail at execution time instead of being silently serialized.",
+                "yaml": "- steps:\n    - name: collect\n      value:\n        path: /tmp/demo.txt\n      register: collect\n    - name: run-routine\n      uses: routine.python.lint\n      with:\n        env:\n          - step.collect.outputs.value",
+                "why_invalid": [
+                    "step.collect.outputs.value is an object here, not a scalar",
+                    "routine env forwarding rejects object and array payloads instead of inventing an opaque shell-facing serialization",
+                ],
+            },
+            {
+                "name": "routine_env_custom_name_not_supported",
+                "summary": "Do not try to mint custom environment-variable names at the workflow call site.",
+                "yaml": "- steps:\n    - name: run-routine\n      uses: routine.python.lint\n      with:\n        env:\n          ORDO_REVIEW_MODE: inputs.review_mode",
+                "why_invalid": [
+                    "with.env is a list of reference paths, not a mapping",
+                    "runtime generates env names mechanically from the forwarded references",
+                ],
             },
         ],
         "rules": [dict(rule) for rule in WORKFLOW_AUTHORING_RULES],
@@ -1007,6 +1050,45 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)
     for field in model["profile"]["override_fields"]:
         add_node(f"profile.overrides.{field['name']}", contract="profile", node_category="override_field", summary="Published profile override field metadata", metadata=field)
+    for field in model["routine_contract"]["top_level_fields"]:
+        add_node(
+            f"routine_contract.{field['name']}",
+            contract="routine_contract",
+            node_category="field",
+            summary="Published routine-registry top-level field metadata",
+            metadata=field,
+        )
+    for field in model["routine_contract"]["routine_entry_fields"]:
+        add_node(
+            f"routine_contract.entry.{field['name']}",
+            contract="routine_contract",
+            node_category="routine_entry_field",
+            summary="Published routine entry field metadata",
+            metadata=field,
+        )
+    for field in model["routine_contract"].get("workflow_call_surface", {}).get("fields", []):
+        add_node(
+            f"routine_contract.workflow_call.{field['name']}",
+            contract="routine_contract",
+            node_category="routine_call_field",
+            summary="Published routine workflow-call field metadata",
+            metadata=field,
+        )
+    add_node(
+        "routine_contract.workflow_call_surface",
+        contract="routine_contract",
+        node_category="routine_call_surface",
+        summary="Published routine workflow-call surface metadata",
+        metadata=model["routine_contract"].get("workflow_call_surface", {}),
+    )
+    for field in model["routine_contract"].get("implementation_fields", []):
+        add_node(
+            f"routine_contract.implementation.{field['name']}",
+            contract="routine_contract",
+            node_category="routine_implementation_field",
+            summary="Published routine implementation field metadata",
+            metadata=field,
+        )
     for field in model["playbook"]["top_level_fields"]:
         add_node(f"playbook.{field['name']}", contract="playbook", node_category="field", summary="Published playbook field metadata", metadata=field)
     if "pre_run" in model["playbook"].get("activation_semantics", {}):
@@ -1428,6 +1510,17 @@ def render_workflow_authoring_text(payload: JSONObject) -> str:
             if not isinstance(example, dict):
                 continue
             lines.append(f"- {example['name']}: {example['summary']}")
+    routine_env_examples = payload.get("routine_env_examples")
+    if isinstance(routine_env_examples, list) and routine_env_examples:
+        lines.extend(["", "Routine with.env examples:"])
+        for example in routine_env_examples:
+            if not isinstance(example, dict):
+                continue
+            lines.append(f"- {example['name']}: {example['summary']}")
+            for generated in example.get("generated_env", []):
+                lines.append(f"  generated env: {generated}")
+            for reason in example.get("why_invalid", []):
+                lines.append(f"  invalid because: {reason}")
     lines.extend(["", "Rules:"])
     for rule in payload["rules"]:
         lines.append(f"- {rule['name']} [{rule['priority']}]: {rule['rule']}")
