@@ -138,3 +138,4 @@ from . import markdown_adapter as _markdown_adapter  # noqa: E402,F401
 from . import json_adapter as _json_adapter  # noqa: E402,F401
 from . import key_value_adapter as _key_value_adapter  # noqa: E402,F401
 from . import text_adapter as _text_adapter  # noqa: E402,F401
+from . import yaml_adapter as _yaml_adapter  # noqa: E402,F401

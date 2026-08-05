@@ -60,6 +60,30 @@ blocks:
         self.assertEqual(unused["path"], ["inputs", "unused"])
         self.assertEqual(unused["evidence"]["classification"], "unused_input")
 
+    def test_review_counts_input_used_inside_adapter_outer_binding(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: yaml-adapter-demo
+inputs:
+  body:
+    type: string
+blocks:
+  - steps:
+      - name: extract-name
+        value: 'yaml.user.name with{root: inputs.body}'
+        register: extracted
+      - name: publish-name
+        publish:
+          name: step.extracted.outputs.value
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(any(item["code"] == "review.workflow.input_declared_but_unused" for item in result.outputs["findings"]))
+
     def test_review_reports_missing_recommended_observations(self) -> None:
         workflow = Workflow(
             version=0,

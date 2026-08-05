@@ -56,8 +56,8 @@
 - Registered step results express execution-local data flow, not persistent workflow state.
 - Workflow-local `result` values and run-session-global `publish` values are distinct result channels with different scopes.
 - Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
-- Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
-- A future fragment-run boundary should keep caller-local `step...` data explicit at the call site rather than treating it as implicit fragment-body scope.
+- Static include expansion keeps one assembled workflow-local `step...` namespace across inline and included steps.
+- A future fragment-run boundary should keep caller-local and callee-local `step...` data separated unless an explicit transfer surface is introduced.
 - A future inline repeated-body boundary should keep inner step registers iteration-local rather than widening them into caller-global names.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.

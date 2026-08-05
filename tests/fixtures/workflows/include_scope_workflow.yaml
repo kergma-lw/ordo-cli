@@ -1,0 +1,13 @@
+version: 0
+workflow: include-scope-demo
+blocks:
+  - steps:
+      - name: outer
+        value: 'Ada'
+        register: outer_name
+  - include: fragments/include_scope_fragment.yaml
+  - steps:
+      - name: publish-final
+        publish:
+          before: step.outer_name.outputs.value
+          from_fragment: step.fragment_name.outputs.value

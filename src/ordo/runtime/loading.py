@@ -302,6 +302,7 @@ def _expand_include_nodes(
             depth=depth + 1,
             include_bindings=include_bindings,
             include_node_path=current_path,
+            scope_mode="include",
         )
         return included_payload
     if "run" in value:
@@ -329,6 +330,7 @@ def _load_included_fragment_payload(
     depth: int,
     include_bindings: JSONObject,
     include_node_path: tuple[str, ...],
+    scope_mode: str = "run",
 ) -> JSONValue:
     included_payload = _expand_workflow_includes(path, launch_dir=launch_dir, stack=stack, depth=depth)
     fragment_payload = _prepare_included_fragment_payload(
@@ -337,6 +339,7 @@ def _load_included_fragment_payload(
         include_chain=stack + (path.resolve(),),
         include_bindings=include_bindings,
         include_node_path=include_node_path,
+        scope_mode=scope_mode,
     )
     return _expand_include_nodes(fragment_payload, current_file=path.resolve(), launch_dir=launch_dir, stack=stack + (path.resolve(),), depth=depth)
 
@@ -348,6 +351,7 @@ def _prepare_included_fragment_payload(
     include_chain: tuple[Path, ...],
     include_bindings: JSONObject,
     include_node_path: tuple[str, ...],
+    scope_mode: str,
 ) -> JSONValue:
     description = payload.get("description")
     if description is not None and not isinstance(description, str):
@@ -371,8 +375,15 @@ def _prepare_included_fragment_payload(
 
     body = {key: value for key, value in payload.items() if key not in {"description", "args"}}
     bound = _bind_fragment_args(body, args_contract=args_contract, include_bindings=effective_bindings, source=source, include_chain=include_chain, include_node_path=include_node_path)
-    scoped = _rewrite_fragment_step_scope(bound, source=source, include_chain=include_chain, include_node_path=include_node_path)
-    _ensure_fragment_has_no_state_surface(scoped, source=source, include_chain=include_chain, include_node_path=include_node_path)
+    scoped = _rewrite_fragment_step_scope(
+        bound,
+        source=source,
+        include_chain=include_chain,
+        include_node_path=include_node_path,
+        scope_mode=scope_mode,
+    )
+    if scope_mode == "include":
+        _ensure_fragment_has_no_state_surface(scoped, source=source, include_chain=include_chain, include_node_path=include_node_path)
     if isinstance(scoped, dict) and "blocks" in scoped and set(scoped.keys()) == {"blocks"} and isinstance(scoped["blocks"], list):
         return scoped["blocks"]
     return scoped
@@ -741,8 +752,12 @@ def _rewrite_fragment_step_scope(
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
+    scope_mode: str,
 ) -> JSONValue:
+    if scope_mode == "include":
+        return _materialize_bound_fragment_values(value)
     local_registers = _collect_fragment_declared_registers(value)
+    register_map = {name: name for name in local_registers}
     if not local_registers:
         _ensure_fragment_has_no_external_step_references(
             value,
@@ -752,14 +767,13 @@ def _rewrite_fragment_step_scope(
             include_node_path=include_node_path,
         )
         return _materialize_bound_fragment_values(value)
-    scope_token = _fragment_scope_token(include_chain, include_node_path)
-    register_map = {name: f"{scope_token}_{name}" for name in local_registers}
     return _rewrite_fragment_scope_value(
         value,
         register_map=register_map,
         source=source,
         include_chain=include_chain,
         include_node_path=include_node_path,
+        scope_mode=scope_mode,
     )
 
 
@@ -858,10 +872,18 @@ def _rewrite_fragment_scope_value(
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
+    scope_mode: str,
 ) -> JSONValue:
     if isinstance(value, list):
         return [
-            _rewrite_fragment_scope_value(item, register_map=register_map, source=source, include_chain=include_chain, include_node_path=include_node_path)
+            _rewrite_fragment_scope_value(
+                item,
+                register_map=register_map,
+                source=source,
+                include_chain=include_chain,
+                include_node_path=include_node_path,
+                scope_mode=scope_mode,
+            )
             for item in value
         ]
     if isinstance(value, dict):
@@ -870,7 +892,14 @@ def _rewrite_fragment_scope_value(
             if key == "register" and isinstance(item, str) and item in register_map:
                 rewritten[key] = register_map[item]
                 continue
-            rewritten[key] = _rewrite_fragment_scope_value(item, register_map=register_map, source=source, include_chain=include_chain, include_node_path=include_node_path)
+            rewritten[key] = _rewrite_fragment_scope_value(
+                item,
+                register_map=register_map,
+                source=source,
+                include_chain=include_chain,
+                include_node_path=include_node_path,
+                scope_mode=scope_mode,
+            )
         return rewritten
     if isinstance(value, _BoundFragmentExpression):
         return _rewrite_fragment_step_reference_string(
@@ -880,6 +909,7 @@ def _rewrite_fragment_scope_value(
             source=source,
             include_chain=include_chain,
             include_node_path=include_node_path,
+            scope_mode=scope_mode,
         )
     if not isinstance(value, str):
         return value
@@ -890,6 +920,7 @@ def _rewrite_fragment_scope_value(
         source=source,
         include_chain=include_chain,
         include_node_path=include_node_path,
+        scope_mode=scope_mode,
     )
 
 
@@ -901,6 +932,7 @@ def _rewrite_fragment_step_reference_string(
     source: Path,
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
+    scope_mode: str,
 ) -> str:
     expression = _extract_runtime_expression(value)
     if expression is None:
@@ -914,12 +946,13 @@ def _rewrite_fragment_step_reference_string(
             continue
         if node.register not in register_map:
             raise _workflow_include_error(
-                code="load.workflow.include.step_scope",
-                message="Included fragments must not reference caller-local step registers",
+                code="load.workflow.run.step_scope",
+                message="Run targets must not reference caller-local step registers",
                 include_path=include_node_path,
                 include_chain=include_chain,
                 source=str(source),
                 register=node.register,
+                scope_mode=scope_mode,
             )
         rewritten = "step." + register_map[node.register]
         if node.fields:
@@ -967,6 +1000,7 @@ def _ensure_fragment_has_no_external_step_references(
             source=source,
             include_chain=include_chain,
             include_node_path=include_node_path,
+            scope_mode="run",
         )
         return
     if not isinstance(value, str):
@@ -978,6 +1012,7 @@ def _ensure_fragment_has_no_external_step_references(
         source=source,
         include_chain=include_chain,
         include_node_path=include_node_path,
+        scope_mode="run",
     )
 
 

@@ -98,13 +98,13 @@ Within an included fragment instance:
 - `args...` reads the fragment argument bindings for that instance;
 - `inputs...` still reads the caller workflow inputs;
 - `state...` still reads shared workflow state;
-- `step...` reads only registered step results inside the same fragment-expanded execution scope.
+- `step...` reads registered step results from the same assembled workflow execution scope, including earlier caller-visible inline steps and earlier included-fragment steps.
 
 An include-site `with` binding may therefore capture caller-local references, including caller `step...` results, as explicit argument inputs.
 
-That capture does not make caller `step...` part of the fragment's own direct lookup surface.
+That capture does not replace the fragment's own direct access to the assembled workflow-local `step...` surface; it only adds fragment-local named argument bindings.
 
-The `step...` surface therefore remains local to its containing workflow or fragment execution scope rather than becoming a cross-fragment namespace.
+The `step...` surface therefore remains local to the assembled workflow execution scope rather than creating one isolated namespace per included fragment.
 
 ## Expansion semantics
 

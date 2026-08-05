@@ -1,0 +1,9 @@
+version: 0
+workflow: nested
+args:
+  item: string
+blocks:
+  - steps:
+      - name: nested-result
+        result:
+          summary: ${args.item}

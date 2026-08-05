@@ -36,7 +36,8 @@
 
 - Fragment-local arguments must not overwrite or masquerade as global workflow `inputs`.
 - Persistent runtime state remains shared through `state...` across the assembled workflow.
-- Registered step results must not cross included-fragment boundaries in the MVP.
-- A reusable fragment should not depend on hidden external `step...` names declared outside that fragment.
-- Direct fragment-body references to caller-local `step...` names must remain invalid in the MVP.
-- Explicit caller-local `step...` bindings passed through include `with` are valid because the dependency stays visible at the include site rather than hidden inside the fragment body.
+- Included fragments should expand into the caller workflow execution order rather than introducing an implicit runtime invocation boundary.
+- Registered step results declared inside an included fragment must remain available to later caller-visible steps exactly as earlier inline step registers remain available.
+- Included fragment steps may read earlier caller-visible `step...` results wherever the surrounding local-expression context allows step-result access.
+- Fragment-local `args...` remain fragment-local parameter bindings and must not be treated as a replacement for caller-visible execution-local `step...` scope.
+- Duplicate register names across inline workflow steps and included fragment steps must fail validation rather than shadowing one another silently.

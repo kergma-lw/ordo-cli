@@ -1,0 +1,4 @@
+steps:
+  - name: inner
+    value: ${step.outer_name.outputs.value}
+    register: fragment_name

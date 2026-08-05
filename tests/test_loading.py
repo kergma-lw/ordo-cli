@@ -775,7 +775,7 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(len(workflow.blocks), 1)
         self.assertEqual(workflow.steps[0].operation.with_["repository"], "${inputs.repository}")
         self.assertEqual(workflow.steps[0].operation.with_["issue_number"], 7)
-        self.assertTrue(workflow.steps[0].register.startswith("inc_check_issue_0_issue"))
+        self.assertEqual(workflow.steps[0].register, "issue")
 
     def test_load_workflow_file_allows_include_with_to_capture_caller_step_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1104,7 +1104,7 @@ class LoadingTest(unittest.TestCase):
 
         self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.args.invalid_declaration")
 
-    def test_load_workflow_file_rejects_fragment_reference_to_caller_step_scope(self) -> None:
+    def test_load_workflow_file_allows_fragment_reference_to_caller_step_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             workflow_path = root / "workflow.yaml"
@@ -1131,12 +1131,13 @@ class LoadingTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with self.assertRaises(LoadError) as context:
-                load_workflow_file(workflow_path, launch_dir=root)
+            payload = load_workflow_document_file(workflow_path, launch_dir=root)
+            report = validate_workflow_document(payload, source=str(workflow_path))
 
-        self.assertEqual(context.exception.diagnostics[0].code, "load.workflow.include.step_scope")
+        self.assertTrue(report.ok)
+        self.assertEqual(payload["blocks"][1]["steps"][0]["with"]["issue_id"], "${step.outer_issue.outputs.id}")
 
-    def test_validation_rejects_caller_reference_to_fragment_local_register(self) -> None:
+    def test_validation_allows_caller_reference_to_fragment_local_register(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             workflow_path = root / "workflow.yaml"
@@ -1187,8 +1188,48 @@ class LoadingTest(unittest.TestCase):
             payload = load_workflow_document_file(workflow_path, launch_dir=root)
             report = validate_workflow_document(payload, source=str(workflow_path))
 
+        self.assertTrue(report.ok)
+
+    def test_validation_rejects_duplicate_register_name_across_include_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    blocks:
+                      - steps:
+                          - name: inspect-outer
+                            uses: gh.issue
+                            register: issue
+                      - include: fragments/check-issue
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    steps:
+                      - name: inspect-inner
+                        uses: gh.issue
+                        register: issue
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            payload = load_workflow_document_file(workflow_path, launch_dir=root)
+            report = validate_workflow_document(payload, source=str(workflow_path))
+
         self.assertFalse(report.ok)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.unknown")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.duplicate_register")
 
     def test_load_workflow_file_rejects_fragment_state_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

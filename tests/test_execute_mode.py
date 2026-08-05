@@ -535,6 +535,39 @@ class ExecuteModeTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(list(result.results), [[{"summary": "demo-ref"}]])
 
+    def test_execute_run_with_args_may_bind_caller_step_result_without_leaking_step_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nargs:\n  item: string\nblocks:\n  - steps:\n      - name: nested-result\n        result:\n          summary: ${args.item}\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="prepare", value="demo-ref", register="issue_value"),
+                            Step(
+                                name="expand",
+                                run="nested.yml",
+                                run_with={"item": "${step.issue_value.outputs.value}"},
+                                register="nested_run",
+                                resolved_run_path=str(fragment),
+                            ),
+                            Step(name="copy", result="${step.nested_run.results}"),
+                        )
+                    ),
+                ),
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(list(result.results), [[{"summary": "demo-ref"}]])
+
     def test_execute_run_with_args_in_for_each_passes_current_item_to_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

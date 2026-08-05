@@ -36,7 +36,8 @@ from .local_expressions import (
     parse_value_local_expression,
     validate_parsed_local_expression,
 )
-from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_document_file, load_workflow_payload, load_yaml_document
+from .fragment_runs import build_run_target_workflow, load_run_target_payload
+from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
 from .local_expression_engine.core import (
     AdapterBindingNode,
@@ -798,81 +799,51 @@ def _load_run_target_workflow_for_validation(
     assert step.resolved_run_path is not None
     run_path = Path(step.resolved_run_path)
     launch_dir = Path(workflow.launch_dir) if workflow.launch_dir is not None else run_path.parent
-    try:
-        payload = _load_included_fragment_payload(
-            run_path,
-            launch_dir=launch_dir,
-            stack=(),
-            depth=0,
-            include_bindings=dict(step.run_with),
-            include_node_path=("blocks", str(block_index), "steps", str(step_index), "run"),
-        )
-    except LoadError as exc:
-        if step.run_with:
-            return exc.diagnostics[0]
-        try:
-            payload = load_workflow_document_file(run_path, launch_dir=launch_dir)
-        except LoadError:
-            return exc.diagnostics[0]
-
-    if isinstance(payload, dict) and "version" in payload and "workflow" in payload:
-        try:
-            nested_workflow = load_workflow_payload(payload, source=str(run_path), launch_dir=launch_dir)
-        except LoadError as exc:
-            return exc.diagnostics[0]
-        return Workflow(
-            version=nested_workflow.version,
-            workflow=f"{workflow.workflow}::{nested_workflow.workflow}",
-            inputs={**nested_workflow.inputs, **workflow.inputs},
-            declared_inputs={**workflow.declared_inputs, **nested_workflow.declared_inputs},
-            let_bindings={**workflow.let_bindings, **nested_workflow.let_bindings},
-            state_needs={**workflow.state_needs, **nested_workflow.state_needs},
-            state_bindings={**workflow.state_bindings, **nested_workflow.state_bindings, **dict(step.run_state_bindings)},
-            states={**workflow.states, **nested_workflow.states, **dict(step.run_states)},
-            step_results=workflow.step_results,
-            blocks=nested_workflow.blocks,
-            source_path=nested_workflow.source_path,
-            launch_dir=nested_workflow.launch_dir,
-        )
-
-    if isinstance(payload, list):
-        blocks_payload = payload
-    elif isinstance(payload, dict) and "blocks" in payload:
-        blocks_payload = payload.get("blocks")
-    elif isinstance(payload, dict) and ({"steps", "guards", "run"} & set(payload.keys())):
-        blocks_payload = [payload]
-    else:
-        blocks_payload = None
-
-    if not isinstance(blocks_payload, list):
+    node_path = ("blocks", str(block_index), "steps", str(step_index), "run")
+    payload = load_run_target_payload(
+        run_path=run_path,
+        launch_dir=launch_dir,
+        bindings=_sanitize_run_validation_bindings(step.run_with, include_iteration_item=step.for_each is not None),
+        node_path=node_path,
+    )
+    if isinstance(payload, Diagnostic):
+        return payload
+    built = build_run_target_workflow(
+        payload,
+        caller_workflow=workflow,
+        step=step,
+        run_path=run_path,
+        launch_dir=launch_dir,
+        node_path=node_path,
+    )
+    if isinstance(built, Diagnostic) and built.code == "runtime.run.fragment_shape":
         return _diagnostic(
             "validation.workflow.run.fragment_shape",
             "Run fragment must normalize to workflow block content",
-            ("blocks", str(block_index), "steps", str(step_index), "run"),
+            node_path,
             workflow.source_path or "<memory>",
             reference=step.run,
-            actual_type=type(payload).__name__,
+            actual_type=built.details.get("actual_type"),
         )
+    return built
 
-    try:
-        blocks = _load_workflow_blocks({"blocks": blocks_payload}, source=str(run_path))
-    except LoadError as exc:
-        return exc.diagnostics[0]
 
-    return Workflow(
-        version=workflow.version,
-        workflow=f"{workflow.workflow}::{step.run}",
-        inputs=workflow.inputs,
-        declared_inputs=workflow.declared_inputs,
-        let_bindings=workflow.let_bindings,
-        state_needs=workflow.state_needs,
-        state_bindings=workflow.state_bindings,
-        states=workflow.states,
-        step_results=workflow.step_results,
-        blocks=blocks,
-        source_path=str(run_path),
-        launch_dir=str(launch_dir),
-    )
+def _sanitize_run_validation_bindings(bindings: JSONObject, *, include_iteration_item: bool) -> JSONObject:
+    sanitized = {key: _sanitize_run_validation_binding_value(value) for key, value in bindings.items()}
+    if include_iteration_item and "item" not in sanitized:
+        sanitized["item"] = "__ordo_run_item__"
+    return sanitized
+
+
+def _sanitize_run_validation_binding_value(value: JSONValue) -> JSONValue:
+    if isinstance(value, str):
+        expression = _extract_runtime_value_expression(value)
+        if expression is None and value and authored_string_style(value) == "plain":
+            return "__ordo_run_binding__"
+        if expression is not None:
+            return "__ordo_run_binding__"
+        return value
+    return value
 
 
 def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[str, ...] = ("guards",), let_bindings: JSONObject) -> list[Diagnostic]:

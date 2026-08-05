@@ -1,0 +1,14 @@
+version: 0
+workflow: run-scope-demo
+blocks:
+  - steps:
+      - name: outer
+        value: 'Ada'
+        register: outer_name
+      - name: invoke
+        run: fragments/run_scope_fragment.yaml
+        with:
+          item: ${step.outer_name.outputs.value}
+        register: nested_run
+      - name: copy
+        result: ${step.nested_run.results}

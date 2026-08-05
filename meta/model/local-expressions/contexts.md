@@ -52,7 +52,7 @@ Include-binding context models caller-side argument preparation for included fra
 
 The include site may evaluate caller-scoped local expressions before the expanded fragment body receives fragment-local `args...` bindings.
 
-That caller-side evaluation does not make included fragment bodies owners of caller-local `step...` scope.
+That caller-side evaluation does not erase fragment-local `args...`, but the included fragment still participates in the caller workflow's assembled execution-local `step...` scope.
 
 It belongs to the value-oriented context family.
 

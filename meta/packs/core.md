@@ -409,7 +409,7 @@
 - A `let` binding must remain workflow-local and must not participate in inheritance, export, or cross-workflow resolution.
 - A `let` binding must not reference another `let` binding.
 - `let` bindings must not relax context gating; a binding is valid only in authored contexts where the equivalent inline expression would also be valid.
-- Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
+- Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, yaml, and string.
 - Representation-adapter operations must remain pure, local, and value-producing.
 - Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
 - A context may allow read-only representation-adapter projections while still forbidding adapter write paths such as `->...`.
@@ -516,7 +516,7 @@
 ## Role
 
 - Representation adapters are product-defined local-expression surfaces for interpreting already available root values through stable representation-specific semantics.
-- They exist to let local expressions navigate, select, normalize, derive, and transform values such as markdown, html, json, or string without turning those operations into connector execution or hidden I/O.
+- They exist to let local expressions navigate, select, normalize, derive, and transform values such as markdown, html, json, yaml, or string without turning those operations into connector execution or hidden I/O.
 - A representation adapter is not just a parser choice or implementation detail. It is an authored product surface that needs one shared execution seam so adapter families can participate in local-expression evaluation consistently.
 
 ## Why a shared adapter seam is required
@@ -726,7 +726,7 @@
 - Include-binding context evaluates caller-scoped bindings for included fragment arguments.
 - Include-binding context may read caller-local roots that are valid at the include site.
 - Include-binding context must preserve the distinction between caller scope and fragment-local `args...` scope.
-- Include bindings must not implicitly grant the fragment body direct caller-local `step...` scope.
+- Include bindings provide fragment-local `args...` values but do not isolate the included fragment from the caller workflow's normal execution-local `step...` scope.
 - The preferred authored form for include-site `with` bindings should follow the expression-first value rule rather than requiring `${...}`.
 
 ## Whole-tree rule
@@ -3392,7 +3392,7 @@ Include-binding context models caller-side argument preparation for included fra
 
 The include site may evaluate caller-scoped local expressions before the expanded fragment body receives fragment-local `args...` bindings.
 
-That caller-side evaluation does not make included fragment bodies owners of caller-local `step...` scope.
+That caller-side evaluation does not erase fragment-local `args...`, but the included fragment still participates in the caller workflow's assembled execution-local `step...` scope.
 
 It belongs to the value-oriented context family.
 
@@ -3476,8 +3476,8 @@ A context therefore validates dependency classes structurally rather than only c
 - Registered step results express execution-local data flow, not persistent workflow state.
 - Workflow-local `result` values and run-session-global `publish` values are distinct result channels with different scopes.
 - Fragment arguments express local reusable-fragment binding, not global workflow input redefinition.
-- Included-fragment boundaries keep registered `step...` data local unless a later explicit export surface is introduced.
-- A future fragment-run boundary should keep caller-local `step...` data explicit at the call site rather than treating it as implicit fragment-body scope.
+- Static include expansion keeps one assembled workflow-local `step...` namespace across inline and included steps.
+- A future fragment-run boundary should keep caller-local and callee-local `step...` data separated unless an explicit transfer surface is introduced.
 - A future inline repeated-body boundary should keep inner step registers iteration-local rather than widening them into caller-global names.
 - They do not own connector implementation algorithms.
 - `Profile` and `Override` express composition and explicit local adaptation.

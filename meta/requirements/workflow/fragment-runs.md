@@ -29,7 +29,9 @@
 - `run` argument bindings should be interpreted in caller scope.
 - Caller-scoped `run` argument bindings may read prior registered caller `step...` results.
 - Fragment-local `args...` should expose only the bound invocation arguments, not unrestricted caller-local runtime scope.
-- Direct fragment-body references to caller-local `step...` names should remain invalid unless a later explicit export surface is introduced.
+- A run target should evaluate in its own callee-local execution scope rather than sharing the caller workflow step-register namespace.
+- Direct fragment-body references to caller-local `step...` names should remain invalid unless a later explicit import or export surface is introduced.
+- Callee-local `step...` registers should not become caller-local `step...` names automatically.
 - If bounded `for_each` later uses inline `steps`, any step-level `register` declared inside that repeated body should remain local to one iteration and should be visible only to later steps in that same iteration body.
 
 ## Explainability

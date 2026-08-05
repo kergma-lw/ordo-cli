@@ -64,7 +64,7 @@
 - Include-binding context evaluates caller-scoped bindings for included fragment arguments.
 - Include-binding context may read caller-local roots that are valid at the include site.
 - Include-binding context must preserve the distinction between caller scope and fragment-local `args...` scope.
-- Include bindings must not implicitly grant the fragment body direct caller-local `step...` scope.
+- Include bindings provide fragment-local `args...` values but do not isolate the included fragment from the caller workflow's normal execution-local `step...` scope.
 - The preferred authored form for include-site `with` bindings should follow the expression-first value rule rather than requiring `${...}`.
 
 ## Whole-tree rule

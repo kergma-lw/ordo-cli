@@ -16,7 +16,7 @@ from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBl
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
-from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ListNode, LiteralNode, ObjectEntryNode, ObjectNode, ReadOnlyObservationSession, ValueExpressionNode, evaluate_condition_expression, render_expression_text
+from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, ConditionObservationRequest, ConditionObservationResult, FilterApplicationNode, ListNode, LiteralNode, LocalExpressionParseError, ObjectEntryNode, ObjectNode, OnlyPredicateNode, PipelineNode, ReadOnlyObservationSession, ReferenceNode, UnaryNode, ValueExpressionNode, evaluate_condition_expression, parse_local_expression_tree, render_expression_text
 from .local_expressions import extract_embedded_local_expression
 from .launchers import validate_step_launchers
 from .preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, store_preflight_register_output
@@ -734,6 +734,15 @@ def _classify_declared_input_usage(
                             path=("blocks", block_index, "steps", step_index, "state_set"),
                             detail=step.name,
                         )
+                if step.value is not None:
+                    for input_name in _extract_input_names(step.value):
+                        record(
+                            input_name,
+                            "contract_input",
+                            site_kind="value",
+                            path=("blocks", block_index, "steps", step_index, "value"),
+                            detail=step.name,
+                        )
                 if step.publish is not None:
                     for input_name in _extract_input_names(step.publish):
                         record(
@@ -786,7 +795,7 @@ def _extract_input_names(value: JSONValue | dict[str, object] | None) -> set[str
     if value is None:
         return set()
     if isinstance(value, str):
-        return set(_INPUT_REFERENCE_PATTERN.findall(value))
+        return _extract_input_names_from_string(value)
     if isinstance(value, dict):
         names: set[str] = set()
         for key, nested in value.items():
@@ -799,6 +808,78 @@ def _extract_input_names(value: JSONValue | dict[str, object] | None) -> set[str
             names.update(_extract_input_names(cast(JSONValue, nested)))
         return names
     return set()
+
+
+def _extract_input_names_from_string(value: str) -> set[str]:
+    names = set(_INPUT_REFERENCE_PATTERN.findall(value))
+    expression = value[2:-1] if value.startswith("${") and value.endswith("}") and len(value) >= 4 else value
+    try:
+        parsed = parse_local_expression_tree(expression)
+    except LocalExpressionParseError:
+        return names
+    names.update(_collect_input_names_from_expression_node(parsed.root))
+    return names
+
+
+def _collect_input_names_from_expression_node(node: ValueExpressionNode) -> set[str]:
+    names: set[str] = set()
+
+    def visit(current: ValueExpressionNode) -> None:
+        if isinstance(current, ReferenceNode):
+            if len(current.parts) >= 2 and current.parts[0] == "inputs":
+                names.add(current.parts[1])
+            return
+        if isinstance(current, ListNode):
+            for item in current.items:
+                visit(item)
+            return
+        if isinstance(current, ObjectEntryNode):
+            visit(current.value)
+            return
+        if isinstance(current, ObjectNode):
+            for entry in current.entries:
+                visit(entry)
+            return
+        if isinstance(current, CallArgumentNode):
+            visit(current.value)
+            return
+        if isinstance(current, CallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, PipelineNode):
+            visit(current.source)
+            for item in current.filters:
+                visit(item)
+            return
+        if isinstance(current, FilterApplicationNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, OnlyPredicateNode):
+            visit(current.expected)
+            return
+        if isinstance(current, BuiltinCallNode):
+            for argument in current.arguments:
+                visit(argument)
+            return
+        if isinstance(current, UnaryNode):
+            visit(current.operand)
+            return
+        if isinstance(current, BinaryNode):
+            visit(current.left)
+            visit(current.right)
+            return
+        if isinstance(current, AdapterBindingNode):
+            visit(current.value)
+            return
+        if isinstance(current, AdapterInvocationNode):
+            for binding in current.bindings:
+                visit(binding)
+            return
+
+    visit(node)
+    return names
 
 
 def _collect_bootstrap_details(operation_results: list[OperationResult]) -> list[dict[str, object]]:

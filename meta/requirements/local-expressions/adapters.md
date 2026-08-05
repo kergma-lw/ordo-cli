@@ -3,7 +3,7 @@
 ## Role
 
 - Representation adapters are product-defined local-expression surfaces for interpreting already available root values through stable representation-specific semantics.
-- They exist to let local expressions navigate, select, normalize, derive, and transform values such as markdown, html, json, or string without turning those operations into connector execution or hidden I/O.
+- They exist to let local expressions navigate, select, normalize, derive, and transform values such as markdown, html, json, yaml, or string without turning those operations into connector execution or hidden I/O.
 - A representation adapter is not just a parser choice or implementation detail. It is an authored product surface that needs one shared execution seam so adapter families can participate in local-expression evaluation consistently.
 
 ## Why a shared adapter seam is required

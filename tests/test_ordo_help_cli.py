@@ -158,9 +158,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         adapter_capability = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.local_expression.adapters")
 
         self.assertEqual(adapter_capability["status"], "supported")
+        self.assertIn("workflow.local_expression.adapter.json", adapter_capability["related_model_nodes"])
         self.assertIn("workflow.local_expression.adapter.key_value", adapter_capability["related_model_nodes"])
         self.assertIn("workflow.local_expression.adapter.markdown", adapter_capability["related_model_nodes"])
         self.assertIn("workflow.local_expression.adapter.text", adapter_capability["related_model_nodes"])
+        self.assertIn("workflow.local_expression.adapter.yaml", adapter_capability["related_model_nodes"])
 
     def test_model_publishes_runtime_effect_metadata_for_profiles(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -215,10 +217,22 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("steps", fields)
         self.assertIn("for_each", fields)
         self.assertIn("register", fields)
+        self.assertEqual(run_contract["named_target_scope_boundary"], "isolated_callee_scope")
+        self.assertEqual(run_contract["named_target_callee_scope"]["caller_step_scope"], "not_directly_visible_inside_callee_body")
+        self.assertEqual(run_contract["named_target_callee_scope"]["caller_data_transfer"], "explicit_run_with_bindings_only")
+        self.assertEqual(run_contract["named_target_callee_scope"]["step_scope"], "callee_local_only")
         self.assertEqual(run_contract["fan_out_surface"]["item_binding"], "item")
         self.assertEqual(run_contract["fan_out_surface"]["outer_if_scope"], "whole_invocation_step")
         self.assertEqual(run_contract["fan_out_surface"]["inner_if_scope"], "per_iteration_inner_step")
+        self.assertEqual(run_contract["fan_out_surface"]["caller_step_scope"], "not_directly_visible_inside_named_run_target_body")
         self.assertEqual(run_contract["fan_out_surface"]["forbidden_nested_surfaces"], ["for_each", "guards"])
+
+    def test_model_publishes_include_contract_shared_step_scope_metadata(self) -> None:
+        model = json.loads(self.run_help("model", "--json").stdout)
+        include_contract = model["workflow"]["include_contract"]
+
+        self.assertEqual(include_contract["state_scope"], "global_across_assembled_workflow")
+        self.assertEqual(include_contract["step_scope"], "shared_across_assembled_workflow_after_include_expansion")
 
     def test_model_publishes_workflow_input_hint_metadata(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -235,6 +249,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         key_value = next(item for item in adapter_surface["families"] if item["name"] == "key_value")
         markdown = next(item for item in adapter_surface["families"] if item["name"] == "markdown")
         text = next(item for item in adapter_surface["families"] if item["name"] == "text")
+        yaml_adapter = next(item for item in adapter_surface["families"] if item["name"] == "yaml")
 
         self.assertTrue(any(item["name"] == "file" and item["kind"] == "probe" for item in fs_connector["operations"]))
         self.assertEqual(adapter_surface["shared_seam"]["outer_binding_form"], " with{...}")
@@ -262,6 +277,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn('find("literal")', text["selectors"])
         self.assertIn("append", text["actions"])
         self.assertEqual(text["shortcuts"], [])
+        self.assertIn("one YAML document", yaml_adapter["summary"])
+        self.assertEqual(
+            yaml_adapter["selectors"],
+            [
+                ".field",
+                '["literal-key"]',
+                "[n]",
+                ".one(field=value)",
+                ".one(field!=value)",
+                ".many(field=value)",
+                ".many(field!=value)",
+            ],
+        )
+        self.assertEqual(yaml_adapter["actions"], [])
+        self.assertEqual(yaml_adapter["shortcuts"], [])
 
     def test_model_publishes_local_expression_filter_surface(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -348,6 +378,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(run_contract_node["document_kind"], "model_node")
         self.assertEqual(run_contract_node["name"], "workflow.run_contract")
         self.assertEqual(run_contract_node["metadata"]["directive_field"], "run")
+        self.assertEqual(run_contract_node["metadata"]["named_target_scope_boundary"], "isolated_callee_scope")
+        self.assertEqual(run_contract_node["metadata"]["named_target_callee_scope"]["caller_step_scope"], "not_directly_visible_inside_callee_body")
         self.assertEqual(pre_run_node["document_kind"], "model_node")
         self.assertEqual(pre_run_node["name"], "playbook.pre_run_contract")
         self.assertEqual(pre_run_node["metadata"]["effect"], "executes_before_requested_workflow_in_same_runtime_session")
@@ -369,12 +401,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
 
+    def test_describe_include_contract_reports_shared_step_scope(self) -> None:
+        include_contract_node = json.loads(self.run_help("describe", "workflow.include_contract", "--json").stdout)
+
+        self.assertEqual(include_contract_node["document_kind"], "model_node")
+        self.assertEqual(include_contract_node["name"], "workflow.include_contract")
+        self.assertEqual(include_contract_node["metadata"]["step_scope"], "shared_across_assembled_workflow_after_include_expansion")
+
     def test_describe_resolves_representation_adapter_model_nodes(self) -> None:
         seam_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter_seam", "--json").stdout)
         json_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.json", "--json").stdout)
         key_value_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.key_value", "--json").stdout)
         markdown_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.markdown", "--json").stdout)
         text_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.text", "--json").stdout)
+        yaml_node = json.loads(self.run_help("describe", "workflow.local_expression.adapter.yaml", "--json").stdout)
 
         self.assertEqual(seam_node["document_kind"], "model_node")
         self.assertEqual(seam_node["metadata"]["outer_binding_form"], " with{...}")
@@ -395,6 +435,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(text_node["metadata"]["name"], "text")
         self.assertIn("lines", text_node["metadata"]["selectors"])
         self.assertIn("remove", text_node["metadata"]["actions"])
+        self.assertEqual(yaml_node["metadata"]["name"], "yaml")
+        self.assertEqual(
+            yaml_node["metadata"]["selectors"],
+            [
+                ".field",
+                '["literal-key"]',
+                "[n]",
+                ".one(field=value)",
+                ".one(field!=value)",
+                ".many(field=value)",
+                ".many(field!=value)",
+            ],
+        )
+        self.assertEqual(yaml_node["metadata"]["actions"], [])
 
     def test_describe_resolves_connector_family_and_operation_model_nodes(self) -> None:
         connector_node = json.loads(self.run_help("describe", "connector.fs", "--json").stdout)
@@ -418,6 +472,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = json.loads(self.run_help("search", "json adapter", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.json" for item in result["facts"]))
+
+    def test_search_finds_yaml_representation_adapter_model_node(self) -> None:
+        result = json.loads(self.run_help("search", "yaml adapter", "--json").stdout)
+
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.yaml" for item in result["facts"]))
 
     def test_describe_resolves_local_expression_filter_model_nodes(self) -> None:
         surface_node = json.loads(self.run_help("describe", "workflow.local_expression.filter_surface", "--json").stdout)

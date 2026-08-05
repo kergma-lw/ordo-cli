@@ -1,0 +1,5 @@
+version: 1
+workflows:
+  run-scope-demo:
+    file: workflows/run_scope_workflow.yaml
+states: {}

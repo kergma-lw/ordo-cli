@@ -14,8 +14,8 @@ class ProfileDrivenSetActiveTaskTest(unittest.TestCase):
     def test_set_active_task_reviews_clean_from_profile_plus_issue_number_entry(self) -> None:
         activated = activate_playbook(
             workflow_name="set-active-task",
-            profile_name="meta",
-            input_overrides={"profile": "backend", "issue_number": 106},
+            profile_name="ordo",
+            input_overrides={"issue_number": 106},
             cwd=ROOT,
         )
 
@@ -27,7 +27,7 @@ class ProfileDrivenSetActiveTaskTest(unittest.TestCase):
         )
 
         self.assertEqual(result.status.value, "ok")
-        self.assertEqual(result.outputs["active_profile"], "backend")
+        self.assertEqual(result.outputs["active_profile"], "ordo")
         self.assertEqual(result.outputs["review_status"], "clean")
 
 

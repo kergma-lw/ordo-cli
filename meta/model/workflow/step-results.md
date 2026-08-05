@@ -82,8 +82,9 @@ Registered step results are not:
 - Forward references are invalid.
 - Register names must be unique within the workflow.
 - Missing register references are invalid.
-- Included fragments must not read caller-local registered step results across the fragment boundary in the MVP.
-- Callers must not read registered step results declared inside an included fragment across the fragment boundary in the MVP.
+- Included-fragment expansion participates in the same workflow-local execution order and register namespace as inline steps.
+- Included fragment steps may read any earlier workflow-visible register in that assembled execution order.
+- Later caller-visible steps may read registers declared inside earlier included fragment steps in that same assembled execution order.
 - Repeated-body step registers must not leak automatically across iteration boundaries.
 
 ## Step-form restrictions

@@ -1,0 +1,5 @@
+version: 1
+workflows:
+  include-scope-demo:
+    file: workflows/include_scope_workflow.yaml
+states: {}

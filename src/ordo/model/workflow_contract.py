@@ -72,7 +72,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "omitted_argument_is_distinct_from_explicit_null_binding": True,
         },
         "state_scope": "global_across_assembled_workflow",
-        "step_scope": "local_to_workflow_or_fragment_expansion_scope",
+        "step_scope": "shared_across_assembled_workflow_after_include_expansion",
         "search_order": [
             "including_file_dir",
             "launch_dir",
@@ -115,6 +115,14 @@ WORKFLOW_CONTRACT: JSONObject = {
         "fragment_argument_access_surface": "args.name",
         "caller_scoped_condition_surface": ["inputs", "state", "step"],
         "caller_scoped_binding_surface": ["inputs", "state", "step"],
+        "named_target_scope_boundary": "isolated_callee_scope",
+        "named_target_callee_scope": {
+            "direct_roots": ["inputs", "state", "args", "step"],
+            "caller_step_scope": "not_directly_visible_inside_callee_body",
+            "caller_data_transfer": "explicit_run_with_bindings_only",
+            "step_scope": "callee_local_only",
+            "let_scope": "callee_local_only",
+        },
         "fan_out_surface": {
             "item_binding": "item",
             "outer_if_scope": "whole_invocation_step",
@@ -123,6 +131,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "inner_register_scope": "iteration_local",
             "outer_register_scope": "aggregate_results",
             "forbidden_nested_surfaces": ["for_each", "guards"],
+            "caller_step_scope": "not_directly_visible_inside_named_run_target_body",
         },
     },
     "block_forms": [

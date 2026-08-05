@@ -39,7 +39,7 @@
 - A `let` binding must remain workflow-local and must not participate in inheritance, export, or cross-workflow resolution.
 - A `let` binding must not reference another `let` binding.
 - `let` bindings must not relax context gating; a binding is valid only in authored contexts where the equivalent inline expression would also be valid.
-- Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, and string.
+- Product-defined representation adapters may interpret values through stable representations such as markdown, html, json, yaml, and string.
 - Representation-adapter operations must remain pure, local, and value-producing.
 - Representation-adapter operations may return further derived values or addressable focus values for additional pure local evaluation.
 - A context may allow read-only representation-adapter projections while still forbidding adapter write paths such as `->...`.

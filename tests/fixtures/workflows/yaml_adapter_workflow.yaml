@@ -1,0 +1,13 @@
+version: 0
+workflow: yaml-adapter-demo
+inputs:
+  body:
+    type: string
+blocks:
+  - steps:
+      - name: extract-name
+        value: 'yaml.user.name with{root: inputs.body}'
+        register: extracted
+      - name: publish-name
+        publish:
+          name: step.extracted.outputs.value
