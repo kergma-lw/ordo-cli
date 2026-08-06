@@ -214,6 +214,53 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(activated.profile.name if activated.profile else None, "review")
         self.assertEqual(activated.profile.inputs["source"], "explicit")
 
+    def test_activate_playbook_merges_playbook_and_profile_connector_contexts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    connectors:
+                      git:
+                        directory: /repos/default
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: backend
+                    connectors:
+                      git:
+                        worktree: linked
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", profile_name="backend", cwd=root)
+
+        self.assertEqual(activated.connector_contexts["git"]["directory"], "/repos/default")
+        self.assertEqual(activated.connector_contexts["git"]["worktree"], "linked")
+        self.assertEqual(activated.workflow.connector_contexts["git"]["directory"], "/repos/default")
+
     def test_activate_playbook_exposes_optional_workflow_description(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

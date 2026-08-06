@@ -9,7 +9,7 @@ class ConnectorRegistryTest(unittest.TestCase):
 
         self.assertEqual(
             tuple(connector.namespace for connector in registry.list_connectors()),
-            ("runtime", "git", "gh", "shell", "fs"),
+            ("runtime", "git", "compose", "gh", "shell", "fs"),
         )
 
     def test_registry_exposes_discoverable_operation_metadata(self) -> None:
@@ -119,21 +119,24 @@ class ConnectorRegistryTest(unittest.TestCase):
         contract = registry.to_contract()
 
         self.assertEqual(contract["connectors"][0]["namespace"], "runtime")
+        compose_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "compose")
         self.assertIn(
-            "issue",
-            {operation["name"] for operation in contract["connectors"][2]["operations"]},
+            "project",
+            {operation["name"] for operation in compose_connector["operations"]},
         )
+        gh_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "gh")
         self.assertIn(
             "project.issue",
-            {operation["name"] for operation in contract["connectors"][2]["operations"]},
+            {operation["name"] for operation in gh_connector["operations"]},
         )
         self.assertNotIn(
             "issue.view",
-            {operation["name"] for operation in contract["connectors"][2]["operations"]},
+            {operation["name"] for operation in gh_connector["operations"]},
         )
+        shell_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "shell")
         self.assertIn(
             "action",
-            {operation["kind"] for operation in contract["connectors"][3]["operations"]},
+            {operation["kind"] for operation in shell_connector["operations"]},
         )
 
 

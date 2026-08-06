@@ -46,6 +46,7 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
     diagnostics: list[Diagnostic] = []
     merged_inputs: dict[str, object] = {}
     merged_working_directory: str | None = None
+    merged_connectors: dict[str, object] = {}
     merged_checks: list[str] = []
     merged_overrides: list[Override] = []
     merged_launchers = {}
@@ -53,6 +54,7 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
     override_sources: dict[str, str] = {}
     launcher_sources: dict[str, str] = {}
     working_directory_source: str | None = None
+    connector_sources: dict[tuple[str, str], str] = {}
 
     for profile in profiles:
         for key, value in profile.inputs.items():
@@ -89,6 +91,38 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
             elif merged_working_directory is None:
                 merged_working_directory = profile.working_directory
                 working_directory_source = profile.name
+
+        for family, entry in profile.connectors.items():
+            if not isinstance(family, str) or not isinstance(entry, dict):
+                continue
+            existing_entry = merged_connectors.get(family)
+            if existing_entry is None:
+                merged_connectors[family] = dict(entry)
+                for field_name in entry:
+                    if isinstance(field_name, str):
+                        connector_sources[(family, field_name)] = profile.name
+                continue
+            if not isinstance(existing_entry, dict):
+                continue
+            for field_name, value in entry.items():
+                if not isinstance(field_name, str):
+                    continue
+                if field_name in existing_entry and existing_entry[field_name] != value:
+                    diagnostics.append(
+                        _diagnostic(
+                            code="composition.profile.connector_context_conflict",
+                            message=f"Connector context field '{family}.{field_name}' conflicts with an earlier profile value",
+                            path=("connectors", family, field_name),
+                            profile=profile.name,
+                            first_profile=connector_sources.get((family, field_name)),
+                            previous_value=existing_entry[field_name],
+                            new_value=value,
+                        )
+                    )
+                    continue
+                if field_name not in existing_entry:
+                    existing_entry[field_name] = value
+                    connector_sources[(family, field_name)] = profile.name
 
         for check in profile.checks:
             if check not in merged_checks:
@@ -141,6 +175,7 @@ def compose_profiles(*profiles: Profile, name: str | None = None) -> ProfileComp
             name=composed_name,
             inputs=merged_inputs,
             working_directory=merged_working_directory,
+            connectors=merged_connectors,
             checks=tuple(merged_checks),
             overrides=tuple(merged_overrides),
             launchers=merged_launchers,
@@ -193,6 +228,7 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
             state_bindings=workflow.state_bindings,
             states=workflow.states,
             step_results=workflow.step_results,
+            connector_contexts=profile.connectors,
             blocks=workflow.blocks,
             source_path=workflow.source_path,
             launch_dir=workflow.launch_dir,
@@ -225,6 +261,7 @@ def apply_profile_defaults_to_subsequent_steps(workflow: Workflow, profile: Prof
             state_bindings=workflow.state_bindings,
             states=workflow.states,
             step_results=workflow.step_results,
+            connector_contexts=profile.connectors,
             blocks=workflow.blocks,
             source_path=workflow.source_path,
             launch_dir=workflow.launch_dir,

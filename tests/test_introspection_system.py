@@ -7,7 +7,7 @@ class IntrospectionSystemTest(unittest.TestCase):
     def test_describe_operations_returns_public_connector_contract(self) -> None:
         operations = describe_operations()
 
-        self.assertEqual([connector["namespace"] for connector in operations["connectors"]], ["runtime", "git", "gh", "shell", "fs"])
+        self.assertEqual([connector["namespace"] for connector in operations["connectors"]], ["runtime", "git", "compose", "gh", "shell", "fs"])
         gh_connector = next(connector for connector in operations["connectors"] if connector["namespace"] == "gh")
         self.assertIn("issue", {operation["name"] for operation in gh_connector["operations"]})
 

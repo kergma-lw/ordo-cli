@@ -32,6 +32,7 @@ class Profile:
     name: str
     inputs: JSONObject = field(default_factory=dict)
     working_directory: str | None = None
+    connectors: JSONObject = field(default_factory=dict)
     checks: tuple[str, ...] = ()
     overrides: tuple[Override, ...] = ()
     launchers: dict[str, Launcher] = field(default_factory=dict)
@@ -43,6 +44,7 @@ class Profile:
             "name": self.name,
             "inputs": dict(self.inputs),
             "working_directory": self.working_directory,
+            "connectors": dict(self.connectors),
             "checks": list(self.checks),
             "overrides": [override.to_contract() for override in self.overrides],
             "launchers": {name: launcher.to_contract() for name, launcher in self.launchers.items()},

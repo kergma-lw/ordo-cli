@@ -1120,6 +1120,10 @@
 - A playbook launch surface may declare an explicit execution working directory for a run through playbook defaults, the active profile, or the active workflow entry.
 - Working-directory precedence must be deterministic and follow increasing specificity from playbook defaults to profile context to workflow-entry context.
 - Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` embedded-value local-expression surface when the expression stays within an activation-time-safe subset.
+- A playbook may declare shared connector-scoped ambient execution context through a top-level `connectors` mapping.
+- A selected profile may refine that connector context through a profile-owned `connectors` mapping.
+- Connector-context precedence must be deterministic and follow increasing specificity from playbook-level connector context to active-profile connector context.
+- Playbook- and profile-owned raw connector context must be routed to the corresponding connector bootstrap rather than exposed as generic workflow data or generic operation-call overrides.
 - A playbook may declare a `pre_run` workflow set that executes before the requested workflow in the same runtime session.
 - A `pre_run` workflow set must remain explicit, project-local, and reviewable from the playbook surface.
 - Failure in any `pre_run` workflow must prevent effectful execution of the requested workflow.
@@ -1151,6 +1155,7 @@
 - Execution working directory should remain explicit runtime context rather than hidden shell-first behavior.
 - A working-directory expression must reuse the documented embedded-value local-expression surface rather than introducing a second expression language.
 - A working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.
+- Playbook- and profile-owned connector context should remain bootstrap-owned connector execution context rather than becoming ordinary workflow-readable expression data.
 
 <!-- source: requirements/workflow/core.md -->
 
@@ -1576,6 +1581,31 @@ Examples:
 - `gh.issue.view` checks its own local contract;
 - `shell` defines supported interpreter policy, while `shell.command` executes a concrete command.
 
+## Ambient connector execution context
+
+A connector may also depend on ambient execution context that answers questions such as:
+
+- where this connector operates by default;
+- which project, directory, file set, account, host, database, or similar attachment point it should use when the operation does not spell that context out again.
+
+This context is not the same thing as connector semantics.
+It must not silently redefine the public meaning of connector operations.
+
+Examples:
+
+- `git` may use repository or worktree location context;
+- `compose` may use project directory, compose files, or project-name context;
+- `mysql` may use host, port, database, or account context.
+
+Such context should be supplied through explicit runtime-owned launch surfaces such as playbook or profile material rather than through hidden process-global assumptions.
+
+The raw family entry from that launch material should be interpreted only by the connector family's bootstrap.
+Bootstrap may validate, normalize, reject, or refine that raw input into connector-local shared context for later operations.
+Later operation execution should stay inside that connector-local boundary rather than reading raw playbook- or profile-owned connector context directly.
+
+That ambient connector context should not become an ordinary workflow-readable value namespace by default.
+Workflow policy should depend on public operation results and other reviewable workflow inputs rather than branching on hidden connector attachment details.
+
 ## Dependency layers
 
 Connector design should distinguish at least three dependency layers:
@@ -1666,6 +1696,7 @@ Specialized policy-shaped names such as `git.branch_not_main` are not part of th
 
 ## Possible future connector namespaces
 
+- `compose.*`
 - `run.*`
 - `ansible.*`
 - `obsidian.*`
@@ -1984,6 +2015,7 @@ They are not connector families and they do not create a second orchestration la
 - bindings from workflow-level logical state roles to concrete project state declarations;
 - project-local workflow-catalog navigation metadata such as category and operator-oriented usage timing;
 - explicit execution working directory defaults and overrides for project-local launch context;
+- shared connector-scoped ambient execution context for the project run surface;
 - explicit project-local pre-run workflow orchestration before the requested workflow executes;
 - explicit playbook-owned dependency bindings for that pre-run launch phase;
 - activation-time derivation of any selected execution working directory from launch-known inputs only;
@@ -2003,7 +2035,7 @@ The playbook domain may publish named routines for workflow use, but routine imp
 
 - A workflow defines guarded operational intent.
 - A profile defines reusable parameters, explicit overrides, and profile-scoped execution context.
-- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, routines, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults and overrides.
+- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, routines, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults, connector context, and overrides.
 - Runtime still owns mode behavior and execution semantics after playbook discovery and resolution complete.
 
 ## Quality bar
@@ -3515,6 +3547,13 @@ defaults:
   profile: backend-default
   working_directory: repos/default-backend
 
+connectors:
+  git:
+    directory: repos/default-backend
+  compose:
+    directory: deploy
+    file: compose.yaml
+
 workflows:
   inspect-issue:
     file: inspect-issue.yml
@@ -3540,6 +3579,7 @@ profiles:
 - `states` — named project-local runtime state declarations;
 - `workflows` — named launchable workflow entries;
 - `profiles` — named launchable profile entries;
+- `connectors` — optional playbook-level ambient execution context for named connector families;
 - `pre_run` — optional project-local launch-phase workflow set that executes before the requested workflow;
 - `defaults` — optional playbook-run defaults such as the active profile.
 
@@ -3590,10 +3630,28 @@ That context may include:
 - input bindings;
 - approved overrides;
 - a profile-scoped `working_directory` default, expressed either as a literal path string or as an activation-time-safe `${...}` embedded-value local expression;
+- a profile-scoped `connectors` mapping whose values refine playbook-level connector context for the active run;
 - future runtime-facing execution selectors that remain declarative and reviewable.
 
 Profiles do not create a second orchestration language.
 They make project-local launch context explicit and reviewable.
+
+## Connector context role
+
+The playbook may declare a top-level `connectors` mapping.
+
+That mapping gives named connector families project-local ambient execution context such as default directory, file, host, account, database, or similar attachment information.
+
+The active profile may also contribute a `connectors` mapping.
+Profile-owned connector entries refine the playbook-level connector context for the same family.
+
+This context is runtime-owned activation material.
+It exists to supply raw family-scoped bootstrap input without repeating the same attachment details on every operation call.
+
+Each connector family bootstrap interprets its own raw entry and may derive connector-local shared context for later operations.
+That derived connector-local context remains inside the connector boundary rather than exposing the raw playbook/profile mapping directly to operation calls.
+
+It must not by itself change connector semantics, and it should not become ordinary workflow-readable expression data by default.
 
 ## State entry role
 
@@ -3728,6 +3786,20 @@ The entry must resolve to exactly one workflow file.
 - When present, runtime executes the workflow with that resolved working directory as the execution working directory.
 - Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.
 - `working_directory` changes execution context only; it must not change playbook discovery, workflow/profile reference resolution, or state-path resolution.
+
+## Connector context resolution
+
+- A playbook may declare top-level connector context through `connectors.<family>`.
+- The active profile may also declare connector context through `connectors.<family>`.
+- Effective raw connector context is resolved before the first guard or step executes.
+- When both playbook and active-profile connector context exist for the same family, the active profile refines the playbook entry with higher specificity.
+- Connector-context resolution must remain deterministic.
+- Effective raw connector context is activation-time bootstrap input for the corresponding connector family.
+- Connector bootstrap interprets that raw family entry and may derive connector-local shared context for later operations.
+- If the raw family entry is invalid or insufficient, connector bootstrap should fail clearly within the connector boundary.
+- Connector context must not become ordinary workflow-readable expression context by default.
+- Raw connector context must not become generic operation-visible launch material outside the connector bootstrap boundary.
+- Connector context must not be declared as step-local ad hoc data on individual workflow steps unless a later public model standardizes that surface explicitly.
 
 ## Launch-time input overrides
 
@@ -6469,6 +6541,7 @@ Unknown top-level and nested stable fields fail validation.
 - `states`
 - `workflows`
 - `profiles`
+- `connectors`
 - `defaults`
 
 ## Stable workflow entry shape
@@ -6502,6 +6575,21 @@ pre_run:
 Optional stable top-level field:
 
 - `pre_run`
+
+## Stable connector context shape
+
+```yaml
+connectors:
+  git:
+    directory: repos/default-backend
+  compose:
+    directory: deploy
+    file: compose.yaml
+```
+
+Optional stable top-level field:
+
+- `connectors`
 
 Stable `state_bindings` shape:
 

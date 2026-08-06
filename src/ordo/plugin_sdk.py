@@ -101,8 +101,19 @@ class MappedBootstrapError(Exception):
 class BootstrapContext:
     """Minimal authoring context for executable family bootstrap."""
 
-    def command(self, argv: Sequence[str], *, failures: Mapping[str, str] | None = None) -> CommandResult:
-        return _run_command(argv, failures=failures, reference="bootstrap", error_type=MappedBootstrapError)
+    def __init__(self, *, namespace: str, family_input: JSONObject | None = None) -> None:
+        self._namespace = namespace
+        self._family_input = {} if family_input is None else dict(family_input)
+
+    def family_input(self) -> JSONObject:
+        return dict(self._family_input)
+
+    @property
+    def namespace(self) -> str:
+        return self._namespace
+
+    def command(self, argv: Sequence[str], *, failures: Mapping[str, str] | None = None, cwd: str | None = None) -> CommandResult:
+        return _run_command(argv, failures=failures, reference="bootstrap", error_type=MappedBootstrapError, cwd=cwd)
 
 
 class OperationContext:
@@ -143,8 +154,13 @@ class OperationContext:
     def call(self, name: str, *, inputs: JSONObject | None = None) -> OperationOutcome:
         return self._caller(name, inputs)
 
-    def command(self, argv: Sequence[str], *, failures: Mapping[str, str] | None = None) -> CommandResult:
-        return _run_command(argv, failures=failures, reference=self._resolved.reference, error_type=MappedOutcomeError)
+    def command(self, argv: Sequence[str], *, failures: Mapping[str, str] | None = None, cwd: str | None = None) -> CommandResult:
+        effective_cwd = cwd
+        if effective_cwd is None:
+            bootstrap_cwd = self._bootstrap.raw.get("command_working_directory")
+            if isinstance(bootstrap_cwd, str) and bootstrap_cwd.strip():
+                effective_cwd = bootstrap_cwd
+        return _run_command(argv, failures=failures, reference=self._resolved.reference, error_type=MappedOutcomeError, cwd=effective_cwd)
 
 
 def bootstrap(
@@ -439,9 +455,10 @@ def _run_command(
     failures: Mapping[str, str] | None,
     reference: str,
     error_type: type[MappedOutcomeError] | type[MappedBootstrapError],
+    cwd: str | None = None,
 ) -> CommandResult:
     try:
-        completed = subprocess.run(list(argv), capture_output=True, text=True, check=False)
+        completed = subprocess.run(list(argv), capture_output=True, text=True, check=False, cwd=cwd)
     except OSError as exc:
         code = None if failures is None else failures.get("os_error")
         if code is None:
@@ -454,7 +471,7 @@ def _run_command(
                 diagnostic_code="operation.command_os_error",
                 diagnostic_message="Command execution failed before completion",
                 details={"reference": reference, "error": str(exc)},
-                raw={"argv": list(argv), "stdout": "", "stderr": str(exc), "os_error": str(exc)},
+                raw={"argv": list(argv), "stdout": "", "stderr": str(exc), "os_error": str(exc), "cwd": cwd},
             )
         ) from exc
 
@@ -475,6 +492,7 @@ def _run_command(
                     "stdout": completed.stdout,
                     "stderr": completed.stderr,
                     "returncode": completed.returncode,
+                    "cwd": cwd,
                 },
             )
         )
@@ -488,6 +506,7 @@ def _run_command(
             "stdout": completed.stdout,
             "stderr": completed.stderr,
             "returncode": completed.returncode,
+            "cwd": cwd,
         },
     )
 

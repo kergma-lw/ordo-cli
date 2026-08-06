@@ -105,6 +105,16 @@ class ProfileCompositionTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "composition.profile.working_directory_conflict")
 
+    def test_profile_composition_merges_non_conflicting_connector_contexts(self) -> None:
+        first = Profile(name="repo-a", connectors={"git": {"directory": "/repos/a"}})
+        second = Profile(name="repo-b", connectors={"compose": {"file": "compose.yaml"}})
+
+        result = compose_profiles(first, second)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.profile.connectors["git"]["directory"], "/repos/a")
+        self.assertEqual(result.profile.connectors["compose"]["file"], "compose.yaml")
+
 
 if __name__ == "__main__":
     unittest.main()

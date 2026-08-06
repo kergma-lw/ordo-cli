@@ -34,7 +34,7 @@ def assemble_family(*, package_name: str, namespace: str, bootstrap: ConnectorBo
     probe_handlers: dict[str, ProbeHandler] = {}
     action_handlers: dict[str, ActionHandler] = {}
     operations: list[OperationContract] = []
-    bootstrap_handler = _load_bootstrap_handler(package_name)
+    bootstrap_handler = _load_bootstrap_handler(package_name, namespace=namespace)
 
     for operation in _load_operations(package_name=f"{package_name}.probes", kind="probe"):
         operations.append(operation.contract)
@@ -155,7 +155,7 @@ def _contract_from_published(published: "PublishedOperation", *, package_name: s
     )
 
 
-def _load_bootstrap_handler(package_name: str) -> BootstrapHandler | None:
+def _load_bootstrap_handler(package_name: str, *, namespace: str, raw_connector_input: dict[str, object] | None = None) -> BootstrapHandler | None:
     from ordo.plugin_sdk import BootstrapContext, MappedBootstrapError, PublishedBootstrap, adapt_bootstrap, bootstrap_ok
 
     bootstrap_module = import_module(f"{package_name}.bootstrap")
@@ -165,14 +165,14 @@ def _load_bootstrap_handler(package_name: str) -> BootstrapHandler | None:
 
     def evaluate() -> OperationResult:
         try:
-            return adapt_bootstrap(published.handler(BootstrapContext()))
+            return adapt_bootstrap(published.handler(BootstrapContext(namespace=namespace, family_input={} if raw_connector_input is None else raw_connector_input)))
         except MappedBootstrapError as exc:
             return adapt_bootstrap(exc.outcome)
 
     return evaluate
 
 
-def _evaluate_bootstrap(*, package_name: str) -> OperationResult:
+def _evaluate_bootstrap(*, package_name: str, namespace: str, raw_connector_input: dict[str, object] | None = None) -> OperationResult:
     from ordo.plugin_sdk import adapt_bootstrap, bootstrap_ok
 
     bootstrap_module = import_module(f"{package_name}.bootstrap")
@@ -185,7 +185,7 @@ def _evaluate_bootstrap(*, package_name: str) -> OperationResult:
                 context={field: None for field in bootstrap_contract.context_fields},
             )
         )
-    handler = _load_bootstrap_handler(package_name)
+    handler = _load_bootstrap_handler(package_name, namespace=namespace, raw_connector_input=raw_connector_input)
     if handler is None:
         return adapt_bootstrap(
             bootstrap_ok(
@@ -250,7 +250,13 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
             )
             return _outcome_from_runtime_result(dependency_handler(dependency_resolved, workflow))
 
-        bootstrap_result = _evaluate_bootstrap(package_name=family_package)
+        raw_connector_input = workflow.connector_contexts.get(namespace)
+        normalized_raw_connector_input = dict(raw_connector_input) if isinstance(raw_connector_input, dict) else None
+        bootstrap_result = _evaluate_bootstrap(
+            package_name=family_package,
+            namespace=namespace,
+            raw_connector_input=normalized_raw_connector_input,
+        )
         if bootstrap_result.status != "ok":
             return _attach_bootstrap_metadata(
                 bootstrap_result,

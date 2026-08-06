@@ -6,6 +6,7 @@
 - `states`
 - `workflows`
 - `profiles`
+- `connectors`
 - `defaults`
 
 ## Stable workflow entry shape
@@ -39,6 +40,21 @@ pre_run:
 Optional stable top-level field:
 
 - `pre_run`
+
+## Stable connector context shape
+
+```yaml
+connectors:
+  git:
+    directory: repos/default-backend
+  compose:
+    directory: deploy
+    file: compose.yaml
+```
+
+Optional stable top-level field:
+
+- `connectors`
 
 Stable `state_bindings` shape:
 

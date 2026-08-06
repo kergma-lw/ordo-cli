@@ -21,8 +21,11 @@
           "related_model_nodes": [
             "workflow.local_expression.adapter_seam",
             "workflow.local_expression.adapter_binding",
+            "workflow.local_expression.adapter.json",
+            "workflow.local_expression.adapter.key_value",
             "workflow.local_expression.adapter.markdown",
-            "workflow.local_expression.adapter.text"
+            "workflow.local_expression.adapter.text",
+            "workflow.local_expression.adapter.yaml"
           ],
           "related_negative_rules": [],
           "scope": "workflow",
@@ -93,7 +96,10 @@
           "status": "supported"
         },
         {
-          "must_not_infer": [],
+          "must_not_infer": [
+            "launcher support means launcher-centric workflow authoring is still preferred",
+            "a launcher is safer than a published routine by default"
+          ],
           "name": "runtime.launchers",
           "related_capabilities": [
             "workflow.step.launcher"
@@ -107,10 +113,13 @@
             "workflow_step.launcher_requires_uses"
           ],
           "scope": "runtime",
-          "status": "supported"
+          "status": "deprecated"
         },
         {
-          "must_not_infer": [],
+          "must_not_infer": [
+            "step-level launcher selection is a preferred new authoring path",
+            "launchers should be chosen over routine publication for new project-local automation"
+          ],
           "name": "workflow.step.launcher",
           "related_capabilities": [
             "runtime.launchers"
@@ -124,7 +133,7 @@
             "workflow_step.launcher_requires_uses"
           ],
           "scope": "workflow.step",
-          "status": "supported"
+          "status": "deprecated"
         },
         {
           "must_not_infer": [],
@@ -262,7 +271,14 @@
             "is_number",
             "is_integer",
             "is_boolean",
-            "in"
+            "in",
+            "field",
+            "only",
+            "flatten",
+            "first",
+            "last",
+            "length",
+            "unique"
           ],
           "name": "guard_expression",
           "roots": [
@@ -294,7 +310,14 @@
             "is_number",
             "is_integer",
             "is_boolean",
-            "in"
+            "in",
+            "field",
+            "only",
+            "flatten",
+            "first",
+            "last",
+            "length",
+            "unique"
           ],
           "name": "step_condition",
           "roots": [
@@ -328,7 +351,14 @@
             "is_number",
             "is_integer",
             "is_boolean",
-            "in"
+            "in",
+            "field",
+            "only",
+            "flatten",
+            "first",
+            "last",
+            "length",
+            "unique"
           ],
           "name": "embedded_value_expression",
           "roots": [
@@ -426,6 +456,49 @@
           "input_type": "json",
           "name": "in",
           "output_type": "boolean"
+        },
+        {
+          "argument_count": 1,
+          "input_type": "json",
+          "name": "field",
+          "output_type": "json"
+        },
+        {
+          "argument_count": 1,
+          "authored_form": "only(field=value) / only(field!=value)",
+          "input_type": "json",
+          "name": "only",
+          "output_type": "json"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "flatten",
+          "output_type": "json"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "first",
+          "output_type": "json"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "last",
+          "output_type": "json"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "length",
+          "output_type": "number"
+        },
+        {
+          "argument_count": 0,
+          "input_type": "json",
+          "name": "unique",
+          "output_type": "json"
         }
       ],
       "negative_rules": [
@@ -638,6 +711,10 @@
           "producer": "describe_profile_contract",
           "published": true
         },
+        "routine_contract": {
+          "producer": "describe_routine_contract",
+          "published": true
+        },
         "state_contract": {
           "producer": "describe_state_contract",
           "published": true
@@ -782,6 +859,21 @@
           "verified": true
         },
         {
+          "name": "inspect-pr",
+          "path": "examples/inspect-pr.yaml",
+          "related_topics": [
+            "operations",
+            "examples",
+            "model"
+          ],
+          "shows": [
+            "pull_request_probe_composition",
+            "orthogonal_pr_surfaces",
+            "published_digest_inputs"
+          ],
+          "verified": true
+        },
+        {
           "name": "set-active-task-from-gitx",
           "path": "examples/set-active-task-from-gitx.yaml",
           "related_topics": [
@@ -809,6 +901,7 @@
             "profile_scoped_launchers",
             "shell_wrapper_example"
           ],
+          "status": "legacy_compatibility_example",
           "verified": true
         },
         {
@@ -880,6 +973,21 @@
             "type_predicate_filters",
             "membership_filter",
             "embedded_value_boolean_flow"
+          ],
+          "verified": true
+        },
+        {
+          "name": "project-items-let",
+          "path": "examples/project-items-let.yaml",
+          "related_topics": [
+            "operations",
+            "examples",
+            "model"
+          ],
+          "shows": [
+            "project_collection_probe",
+            "let_bound_probe_usage",
+            "field_based_project_filtering"
           ],
           "verified": true
         }
@@ -1091,6 +1199,8 @@
                 "git.branches",
                 "git.upstream",
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1176,6 +1286,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1222,6 +1334,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1268,6 +1382,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1403,6 +1519,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1449,6 +1567,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1495,6 +1615,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1548,6 +1670,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.worktree",
                 "git.worktrees",
                 "git.state",
@@ -1672,6 +1796,7 @@
                 "bare": "boolean",
                 "common_dir": "string",
                 "default_branch": "string | null",
+                "exists": "boolean",
                 "git_dir": "string",
                 "head_ref": "string | null",
                 "inside_work_tree": "boolean",
@@ -1782,6 +1907,8 @@
               },
               "invalidates_observations": [
                 "git.ref.*",
+                "git.tag",
+                "git.tags",
                 "git.branches",
                 "git.repo",
                 "git.range",
@@ -1859,6 +1986,107 @@
               "tags": [
                 "git",
                 "action"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "name": "v1.2.3"
+                  },
+                  "reference": "git.tag"
+                },
+                {
+                  "inputs": {
+                    "name": "release-2026-07"
+                  },
+                  "reference": "git.tag"
+                }
+              ],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {
+                "name": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "tag",
+              "outputs": {
+                "annotated": "boolean | null",
+                "exists": "boolean",
+                "name": "string",
+                "oid": "string | null",
+                "ref": "string",
+                "repository_root": "string"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.",
+              "tags": [
+                "git",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "match": "v*",
+                    "match_kind": "glob"
+                  },
+                  "reference": "git.tags"
+                },
+                {
+                  "inputs": {
+                    "match": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$",
+                    "match_kind": "regex"
+                  },
+                  "reference": "git.tags"
+                }
+              ],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {
+                "match": "string | null",
+                "match_kind": "'glob' | 'regex' | null"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "tags",
+              "outputs": {
+                "count": "integer",
+                "items": [
+                  {
+                    "annotated": "boolean",
+                    "name": "string",
+                    "oid": "string",
+                    "ref": "string"
+                  }
+                ],
+                "latest": {
+                  "annotated": "boolean",
+                  "name": "string",
+                  "oid": "string",
+                  "ref": "string"
+                },
+                "repository_root": "string"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.",
+              "tags": [
+                "git",
+                "probe"
               ]
             },
             {
@@ -1970,6 +2198,202 @@
               "tags": [
                 "git",
                 "probe"
+              ]
+            }
+          ]
+        },
+        {
+          "bootstrap": {
+            "context_fields": [
+              "project_directory",
+              "compose_file",
+              "project_name"
+            ],
+            "prerequisites": [
+              "docker compose available"
+            ]
+          },
+          "namespace": "compose",
+          "operations": [
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {},
+                  "reference": "compose.project"
+                }
+              ],
+              "failure_modes": [
+                "project_invalid",
+                "orchestrator_unavailable",
+                "observation_failed"
+              ],
+              "inputs": {},
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "project",
+              "outputs": {
+                "declared_services": "array[string]",
+                "project": "string",
+                "service_counts": "object",
+                "services": "object",
+                "state": "string"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Observe one Compose project as an orchestration unit.",
+              "tags": [
+                "compose",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "service": "api"
+                  },
+                  "reference": "compose.service"
+                }
+              ],
+              "failure_modes": [
+                "service_not_declared",
+                "project_invalid",
+                "orchestrator_unavailable",
+                "observation_failed"
+              ],
+              "inputs": {
+                "service": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "service",
+              "outputs": {
+                "containers": "object",
+                "declared": "boolean",
+                "healthy": "boolean | null",
+                "published_ports": "array[string]",
+                "service": "string",
+                "state": "string"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Observe one declared Compose service as an orchestration unit.",
+              "tags": [
+                "compose",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "bring the requested Compose target into operational running state"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "service": "string | null"
+                  },
+                  "reference": "compose.start"
+                }
+              ],
+              "failure_modes": [
+                "service_not_declared",
+                "project_invalid",
+                "orchestrator_unavailable",
+                "image_unavailable",
+                "build_failed",
+                "dependency_failed",
+                "runtime_start_failed",
+                "healthcheck_failed",
+                "start_failed"
+              ],
+              "inputs": {
+                "service": "string | null"
+              },
+              "invalidates_observations": [
+                "compose.*"
+              ],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "start",
+              "outputs": {
+                "changed": "boolean",
+                "changed_services": "array[string]",
+                "state": "string",
+                "target": "string",
+                "target_kind": "string"
+              },
+              "preflight_observations": [
+                {
+                  "probe": "compose.project",
+                  "with": {}
+                }
+              ],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Bring one Compose project or service into operational running state.",
+              "tags": [
+                "compose",
+                "action"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [
+                "stop the requested Compose target"
+              ],
+              "examples": [
+                {
+                  "inputs": {
+                    "service": "string | null"
+                  },
+                  "reference": "compose.stop"
+                }
+              ],
+              "failure_modes": [
+                "service_not_declared",
+                "project_invalid",
+                "orchestrator_unavailable",
+                "dependency_stop_blocked",
+                "runtime_stop_failed",
+                "stop_failed"
+              ],
+              "inputs": {
+                "service": "string | null"
+              },
+              "invalidates_observations": [
+                "compose.*"
+              ],
+              "kind": "action",
+              "maturity": "stable",
+              "name": "stop",
+              "outputs": {
+                "changed": "boolean",
+                "changed_services": "array[string]",
+                "state": "string",
+                "target": "string",
+                "target_kind": "string"
+              },
+              "preflight_observations": [
+                {
+                  "probe": "compose.project",
+                  "with": {}
+                }
+              ],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Stop one Compose project or service.",
+              "tags": [
+                "compose",
+                "action"
               ]
             }
           ]
@@ -2226,6 +2650,49 @@
             },
             {
               "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "issue_number": "integer",
+                    "limit": "integer",
+                    "repository": "string"
+                  },
+                  "reference": "gh.issue.comments"
+                }
+              ],
+              "failure_modes": [
+                "issue_not_found",
+                "limit_invalid",
+                "probe_failed"
+              ],
+              "inputs": {
+                "issue_number": "integer",
+                "limit": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "issue.comments",
+              "outputs": {
+                "comments": [
+                  "object"
+                ],
+                "issue_ref": "string",
+                "total_count": "number"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Probe operation 'gh.issue.comments'",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
               "effects": [
                 "create GitHub issue"
               ],
@@ -2269,6 +2736,329 @@
               "tags": [
                 "gh",
                 "action"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "pull_number": 42,
+                    "repository": "owner/repo"
+                  },
+                  "reference": "gh.pr"
+                }
+              ],
+              "failure_modes": [
+                "pull_not_found",
+                "probe_failed"
+              ],
+              "inputs": {
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "pr",
+              "outputs": {
+                "additions": "integer",
+                "author": "object",
+                "base_ref": "string",
+                "body": "string",
+                "changed_files": "integer",
+                "commits_count": "integer",
+                "created_at": "string",
+                "deletions": "integer",
+                "draft": "boolean",
+                "head_ref": "string",
+                "head_sha": "string",
+                "mergeable": "boolean",
+                "mergeable_state": "string",
+                "number": "integer",
+                "repository": "string",
+                "review_decision": "string",
+                "state": "string",
+                "title": "string",
+                "updated_at": "string",
+                "url": "string"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read normalized metadata from a GitHub pull request.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "pull_number": "integer",
+                    "repository": "string"
+                  },
+                  "reference": "gh.pr.checks"
+                }
+              ],
+              "failure_modes": [
+                "pull_not_found",
+                "checks_unavailable",
+                "probe_failed"
+              ],
+              "inputs": {
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "pr.checks",
+              "outputs": {
+                "checks": [
+                  {
+                    "conclusion": "string",
+                    "context": "string",
+                    "kind": "string",
+                    "name": "string",
+                    "status": "string",
+                    "url": "string"
+                  }
+                ],
+                "failed_count": "integer",
+                "head_sha": "string",
+                "overall_state": "string",
+                "pending_count": "integer",
+                "pull_ref": "string",
+                "skipped_count": "integer",
+                "success_count": "integer",
+                "total_count": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read normalized status and check-run results from a GitHub pull request head.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "limit": "integer",
+                    "pull_number": "integer",
+                    "repository": "string"
+                  },
+                  "reference": "gh.pr.comments"
+                }
+              ],
+              "failure_modes": [
+                "pull_not_found",
+                "limit_invalid",
+                "probe_failed"
+              ],
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "pr.comments",
+              "outputs": {
+                "comments": [
+                  "object"
+                ],
+                "pull_ref": "string",
+                "total_count": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read regular conversation comments from a GitHub pull request.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "pull_number": 42,
+                    "repository": "owner/repo"
+                  },
+                  "reference": "gh.pr.diff"
+                }
+              ],
+              "failure_modes": [
+                "pull_not_found",
+                "limit_invalid",
+                "probe_failed"
+              ],
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "pr.diff",
+              "outputs": {
+                "files": [
+                  "object"
+                ],
+                "pull_ref": "string",
+                "total_files": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read normalized change content from a GitHub pull request.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "limit": "integer",
+                    "pull_number": "integer",
+                    "repository": "string"
+                  },
+                  "reference": "gh.pr.review_comments"
+                }
+              ],
+              "failure_modes": [
+                "pull_not_found",
+                "limit_invalid",
+                "probe_failed"
+              ],
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "pr.review_comments",
+              "outputs": {
+                "comments": [
+                  "object"
+                ],
+                "pull_ref": "string",
+                "total_count": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read line-level review comments from a GitHub pull request.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "limit": "integer",
+                    "pull_number": "integer",
+                    "repository": "string"
+                  },
+                  "reference": "gh.pr.reviews"
+                }
+              ],
+              "failure_modes": [
+                "pull_not_found",
+                "limit_invalid",
+                "probe_failed"
+              ],
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "pr.reviews",
+              "outputs": {
+                "pull_ref": "string",
+                "reviews": [
+                  "object"
+                ],
+                "total_count": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read submitted reviews from a GitHub pull request.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "limit": "integer",
+                    "pull_number": "integer",
+                    "repository": "string"
+                  },
+                  "reference": "gh.pr.timeline"
+                }
+              ],
+              "failure_modes": [
+                "pull_not_found",
+                "limit_invalid",
+                "probe_failed"
+              ],
+              "inputs": {
+                "limit": "integer",
+                "pull_number": "integer",
+                "repository": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "pr.timeline",
+              "outputs": {
+                "events": [
+                  "object"
+                ],
+                "pull_ref": "string",
+                "total_count": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Read normalized lifecycle events from a GitHub pull request timeline.",
+              "tags": [
+                "gh",
+                "probe"
               ]
             },
             {
@@ -2719,6 +3509,181 @@
                 "gh",
                 "action"
               ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "project_id": "PVT_demo"
+                  },
+                  "reference": "gh.project.items",
+                  "why": "Load normalized project membership facts without mutating project state."
+                },
+                {
+                  "inputs": {
+                    "content_kind": "Issue",
+                    "filters": [
+                      {
+                        "field": "Status",
+                        "value": "Ready"
+                      }
+                    ],
+                    "project_id": "PVT_demo"
+                  },
+                  "reference": "gh.project.items",
+                  "why": "Narrow one project scan to issue-like items whose Status field equals Ready."
+                },
+                {
+                  "inputs": {
+                    "content_kind": "Issue",
+                    "content_refs": [
+                      "owner/repo#7",
+                      "owner/repo#8"
+                    ],
+                    "filters": [
+                      {
+                        "field": "Type",
+                        "value": "Task"
+                      }
+                    ],
+                    "project_id": "PVT_demo"
+                  },
+                  "reference": "gh.project.items",
+                  "why": "Intersect one project item query with one explicit set of GitHub content references."
+                }
+              ],
+              "failure_modes": [
+                "project_not_found",
+                "unknown_field",
+                "ambiguous_field",
+                "unsupported_field_type",
+                "invalid_filter_value",
+                "invalid_content_ref",
+                "probe_failed"
+              ],
+              "inputs": {
+                "content_kind": "string",
+                "content_refs": [
+                  "string"
+                ],
+                "filters": [
+                  {
+                    "field": "string",
+                    "value": "scalar"
+                  }
+                ],
+                "project_id": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "project.items",
+              "outputs": {
+                "count": "integer",
+                "items": [
+                  {
+                    "content_kind": "string",
+                    "item_id": "string",
+                    "number": "integer",
+                    "repository": "string",
+                    "title": "string",
+                    "url": "string"
+                  }
+                ]
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Return normalized GitHub Project items for one project membership scan",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "content_kind": "Issue",
+                    "project_id": "PVT_demo"
+                  },
+                  "reference": "gh.project.items.details",
+                  "why": "Load project-scoped issue details including state and labels."
+                },
+                {
+                  "inputs": {
+                    "content_kind": "Issue",
+                    "content_refs": [
+                      "owner/repo#7",
+                      "owner/repo#8"
+                    ],
+                    "filters": [
+                      {
+                        "field": "Type",
+                        "value": "Task"
+                      }
+                    ],
+                    "project_id": "PVT_demo"
+                  },
+                  "reference": "gh.project.items.details",
+                  "why": "Load detailed facts for one explicit subset of project-backed GitHub content."
+                }
+              ],
+              "failure_modes": [
+                "project_not_found",
+                "unknown_field",
+                "ambiguous_field",
+                "unsupported_field_type",
+                "invalid_filter_value",
+                "invalid_content_ref",
+                "probe_failed"
+              ],
+              "inputs": {
+                "content_kind": "string",
+                "content_refs": [
+                  "string"
+                ],
+                "filters": [
+                  {
+                    "field": "string",
+                    "value": "scalar"
+                  }
+                ],
+                "project_id": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "project.items.details",
+              "outputs": {
+                "count": "integer",
+                "items": [
+                  {
+                    "content_kind": "string",
+                    "item_id": "string",
+                    "label_names": [
+                      "string"
+                    ],
+                    "number": "integer",
+                    "repository": "string",
+                    "state": "string",
+                    "title": "string",
+                    "url": "string"
+                  }
+                ]
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Return normalized GitHub Project items with stable content details",
+              "tags": [
+                "gh",
+                "probe"
+              ]
             }
           ]
         },
@@ -2773,6 +3738,60 @@
               ]
             }
           ]
+        },
+        {
+          "bootstrap": {
+            "context_fields": [],
+            "prerequisites": []
+          },
+          "namespace": "fs",
+          "operations": [
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "path": "/workspace/app.env"
+                  },
+                  "reference": "fs.file"
+                }
+              ],
+              "failure_modes": [
+                "path_not_found",
+                "not_a_file",
+                "content_unavailable",
+                "probe_failed"
+              ],
+              "inputs": {
+                "path": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "file",
+              "outputs": {
+                "content": "string",
+                "exists": "boolean",
+                "group": "string",
+                "kind": "string",
+                "line_count": "integer",
+                "modified_at": "string",
+                "owner": "string",
+                "path": "string",
+                "permissions": "string",
+                "size": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Observe one filesystem path as one file snapshot with canonical content and file metadata.",
+              "tags": [
+                "fs",
+                "probe"
+              ]
+            }
+          ]
         }
       ]
     },
@@ -2812,6 +3831,12 @@
     },
     "playbook_contract": {
       "activation_semantics": {
+        "connector_context": {
+          "consumer": "connector_bootstrap",
+          "family_entry_type": "object",
+          "profile_refinement": true,
+          "top_level_field": "connectors"
+        },
         "discovery": {
           "missing": "playbook.discovery.missing",
           "path": ".ordo/ordo.yaml",
@@ -2842,6 +3867,8 @@
         "workflow_entries": {
           "optional": [
             "description",
+            "category",
+            "when",
             "working_directory",
             "state_bindings"
           ],
@@ -2927,6 +3954,12 @@
           "type": "object"
         },
         {
+          "name": "connectors",
+          "required": false,
+          "runtime_effect": "supplies_raw_connector_bootstrap_input",
+          "type": "object"
+        },
+        {
           "name": "workflows",
           "required": true,
           "type": "object"
@@ -2948,6 +3981,20 @@
           "documentation_role": "project_local_workflow_summary",
           "name": "description",
           "required": false,
+          "type": "string"
+        },
+        {
+          "documentation_role": "project_local_workflow_catalog_group",
+          "name": "category",
+          "required": false,
+          "runtime_effect": "published_metadata_only",
+          "type": "string"
+        },
+        {
+          "documentation_role": "operator_workflow_selection_guidance",
+          "name": "when",
+          "required": false,
+          "runtime_effect": "published_metadata_only",
           "type": "string"
         },
         {
@@ -3027,6 +4074,11 @@
           "order": "left_to_right",
           "strategy": "deduplicated_union"
         },
+        "connectors": {
+          "conflict": "validation_error",
+          "conflict_key": "family_field",
+          "strategy": "shallow_merge_by_family"
+        },
         "inputs": {
           "conflict": "validation_error",
           "strategy": "first_writer_wins"
@@ -3034,6 +4086,7 @@
         "launchers": {
           "conflict": "validation_error",
           "conflict_key": "launcher_name",
+          "status": "deprecated",
           "strategy": "first_writer_wins"
         },
         "overrides": {
@@ -3114,6 +4167,12 @@
           "type": "string"
         },
         {
+          "name": "connectors",
+          "required": false,
+          "runtime_effect": "supplies_raw_connector_bootstrap_input",
+          "type": "object"
+        },
+        {
           "name": "checks",
           "required": false,
           "runtime_effect": "published_metadata_only",
@@ -3127,14 +4186,21 @@
         },
         {
           "name": "launchers",
+          "preferred_alternative": "published_routines",
           "required": false,
           "runtime_effect": "publishes_profile_scoped_launchers",
+          "status": "deprecated",
           "type": "object"
         }
       ],
       "workflow_apply_semantics": {
         "checks": {
           "mutates_workflow_contract": false
+        },
+        "connectors": {
+          "consumer": "connector_bootstrap",
+          "mutates_workflow_steps": false,
+          "published_as_explicit_metadata": false
         },
         "inputs": {
           "conflict": "validation_error",
@@ -3143,7 +4209,8 @@
         },
         "launchers": {
           "mutates_workflow_steps": false,
-          "published_as_explicit_metadata": true
+          "published_as_explicit_metadata": true,
+          "status": "deprecated"
         },
         "overrides": {
           "mutates_workflow_steps": false,
@@ -3153,6 +4220,109 @@
           "mutates_workflow_steps": false,
           "published_as_explicit_metadata": true
         }
+      }
+    },
+    "routine_contract": {
+      "authoring_guidance": {
+        "avoid_when": "the remaining gap is semantic or a reusable connector model should exist instead",
+        "default_recommendation": "avoid_by_default",
+        "not_a_connector_family": true,
+        "role": "bounded_project_local_opaque_automation",
+        "use_when": "no richer public surface exists and the remaining gap is mechanical or intentionally project-local"
+      },
+      "authoring_status": "exception_path",
+      "discovery": {
+        "path": ".ordo/routines.yaml"
+      },
+      "document_kind": "routine_registry",
+      "implementation_fields": [
+        {
+          "authoring_status": "bounded_execution_only",
+          "name": "argv",
+          "required": true,
+          "type": "array"
+        }
+      ],
+      "routine_entry_fields": [
+        {
+          "authoring_status": "exception_path",
+          "name": "kind",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "summary",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "args",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "implementation",
+          "required": true,
+          "type": "object"
+        },
+        {
+          "name": "failure_modes",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "name": "outputs",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "name": "log_hints",
+          "required": false,
+          "type": "object"
+        }
+      ],
+      "top_level_fields": [
+        {
+          "name": "version",
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "name": "routines",
+          "required": true,
+          "type": "object"
+        }
+      ],
+      "version": 1,
+      "workflow_call_surface": {
+        "automatic_input_env_projection": false,
+        "env_non_scalar_behavior": "execution_error",
+        "env_reference_pattern": "supported_reference_path_only",
+        "env_reference_roots": [
+          "inputs",
+          "step",
+          "state"
+        ],
+        "env_scalar_only": true,
+        "fields": [
+          {
+            "name": "args",
+            "required": false,
+            "role": "declared_business_arguments",
+            "type": "object"
+          },
+          {
+            "name": "env",
+            "required": false,
+            "role": "explicit_forwarded_scalar_context_references",
+            "type": "list[string]"
+          }
+        ],
+        "generated_env_name_examples": {
+          "inputs.profile": "ORDO_INPUTS_PROFILE",
+          "step.collect.outputs.value.path": "ORDO_STEP_COLLECT_OUTPUTS_VALUE_PATH"
+        },
+        "generated_env_name_prefix": "ORDO_"
       }
     },
     "state_contract": {
@@ -3325,7 +4495,7 @@
           "built_in_includes_dir"
         ],
         "state_scope": "global_across_assembled_workflow",
-        "step_scope": "local_to_workflow_or_fragment_expansion_scope",
+        "step_scope": "shared_across_assembled_workflow_after_include_expansion",
         "stops_on_first_match": true,
         "targets": "files_only",
         "validation_boundary": "assembled_workflow_after_include_expansion_and_argument_binding"
@@ -3357,11 +4527,21 @@
       },
       "run_contract": {
         "authoring_role": "workflow_fragment_invocation",
+        "body_forms": [
+          "named_run_target",
+          "inline_repeated_steps"
+        ],
         "call_fields": [
           {
             "name": "run",
             "required": true,
             "type": "string"
+          },
+          {
+            "authoring_role": "inline_repeated_body",
+            "name": "steps",
+            "required": false,
+            "type": "array"
           },
           {
             "authoring_role": "caller_scoped_invocation_condition",
@@ -3374,6 +4554,18 @@
             "name": "with",
             "required": false,
             "type": "object"
+          },
+          {
+            "authoring_role": "bounded_fan_out_source",
+            "name": "for_each",
+            "required": false,
+            "type": "runtime_value"
+          },
+          {
+            "authoring_role": "aggregate_invocation_result",
+            "name": "register",
+            "required": false,
+            "type": "string"
           }
         ],
         "caller_scoped_binding_surface": [
@@ -3388,7 +4580,38 @@
         ],
         "directive_field": "run",
         "execution_semantics": "runtime_scoped_fragment_invocation",
+        "fan_out_surface": {
+          "caller_step_scope": "not_directly_visible_inside_named_run_target_body",
+          "forbidden_nested_surfaces": [
+            "for_each",
+            "guards"
+          ],
+          "inner_if_scope": "per_iteration_inner_step",
+          "inner_register_scope": "iteration_local",
+          "inner_step_scope": [
+            "inputs",
+            "state",
+            "step",
+            "item"
+          ],
+          "item_binding": "item",
+          "outer_if_scope": "whole_invocation_step",
+          "outer_register_scope": "aggregate_results"
+        },
         "fragment_argument_access_surface": "args.name",
+        "named_target_callee_scope": {
+          "caller_data_transfer": "explicit_run_with_bindings_only",
+          "caller_step_scope": "not_directly_visible_inside_callee_body",
+          "direct_roots": [
+            "inputs",
+            "state",
+            "args",
+            "step"
+          ],
+          "let_scope": "callee_local_only",
+          "step_scope": "callee_local_only"
+        },
+        "named_target_scope_boundary": "isolated_callee_scope",
         "surface_kind": "step_form"
       },
       "step_form_rules": [
@@ -3396,6 +4619,7 @@
           "fields": [
             "uses",
             "run",
+            "steps",
             "profile_switch",
             "value",
             "result",
@@ -3404,7 +4628,7 @@
             "state_delete"
           ],
           "kind": "exclusive_choice",
-          "message": "A workflow step must define exactly one of uses, run, profile_switch, value, result, publish, state_set, or state_delete",
+          "message": "A workflow step must define exactly one of uses, run, steps, profile_switch, value, result, publish, state_set, or state_delete",
           "name": "exactly_one_step_form"
         },
         {
@@ -3416,10 +4640,32 @@
             "uses",
             "run"
           ]
+        },
+        {
+          "field": "for_each",
+          "kind": "dependency",
+          "message": "The for_each field is allowed only together with run or inline steps",
+          "name": "for_each_requires_invocation_body",
+          "requires": [
+            "run",
+            "steps"
+          ]
+        },
+        {
+          "field": "steps",
+          "kind": "dependency",
+          "message": "Inline repeated step bodies require for_each",
+          "name": "inline_steps_require_for_each",
+          "requires": [
+            "for_each"
+          ]
         }
       ],
       "step_forms": [
         {
+          "deprecated_optional_fields": [
+            "launcher"
+          ],
           "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
           "name": "operation_call",
           "optional_fields": [
@@ -3428,12 +4674,17 @@
             "register",
             "launcher"
           ],
+          "preferred_alternatives": {
+            "launcher": "routine_or_profile_context"
+          },
           "required_fields": [
             "name",
             "uses"
-          ]
+          ],
+          "with_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
         },
         {
+          "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
           "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
           "name": "run_invocation",
           "optional_fields": [
@@ -3445,6 +4696,21 @@
           "required_fields": [
             "name",
             "run"
+          ],
+          "with_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
+        },
+        {
+          "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
+          "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+          "name": "inline_fan_out_invocation",
+          "optional_fields": [
+            "if",
+            "register"
+          ],
+          "required_fields": [
+            "name",
+            "for_each",
+            "steps"
           ]
         },
         {
@@ -3468,7 +4734,8 @@
           "required_fields": [
             "name",
             "value"
-          ]
+          ],
+          "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
         },
         {
           "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
@@ -3479,7 +4746,8 @@
           "required_fields": [
             "name",
             "result"
-          ]
+          ],
+          "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
         },
         {
           "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
@@ -3490,7 +4758,8 @@
           "required_fields": [
             "name",
             "publish"
-          ]
+          ],
+          "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
         },
         {
           "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
@@ -3516,6 +4785,40 @@
         }
       ],
       "surface_constraints": {
+        "authored_surfaces": {
+          "expression_first_value_fields": [
+            "with",
+            "value",
+            "publish",
+            "result",
+            "for_each"
+          ],
+          "expression_first_value_rules": {
+            "embedded_escape_form": "${...}",
+            "nested_objects_and_lists": "recursive_leaf_rule",
+            "plain_scalar_string": "local_expression",
+            "quoted_string": "literal_string",
+            "yaml_number_boolean_null": "native_literal"
+          },
+          "literal_only_fields": [
+            "version",
+            "workflow",
+            "name",
+            "uses",
+            "run",
+            "register",
+            "launcher",
+            "state_delete"
+          ],
+          "literal_only_keyed_fields": [
+            "state_set"
+          ],
+          "native_condition_fields": [
+            "let",
+            "guards",
+            "if"
+          ]
+        },
         "guard_expression": {
           "allowed_builtins": [
             "format",
@@ -3533,7 +4836,14 @@
             "is_number",
             "is_integer",
             "is_boolean",
-            "in"
+            "in",
+            "field",
+            "only",
+            "flatten",
+            "first",
+            "last",
+            "length",
+            "unique"
           ],
           "allowed_roots": [
             "inputs",
@@ -3573,7 +4883,14 @@
             "is_number",
             "is_integer",
             "is_boolean",
-            "in"
+            "in",
+            "field",
+            "only",
+            "flatten",
+            "first",
+            "last",
+            "length",
+            "unique"
           ],
           "allowed_roots": [
             "inputs",

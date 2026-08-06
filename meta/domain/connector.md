@@ -171,6 +171,31 @@ Examples:
 - `gh.issue.view` checks its own local contract;
 - `shell` defines supported interpreter policy, while `shell.command` executes a concrete command.
 
+## Ambient connector execution context
+
+A connector may also depend on ambient execution context that answers questions such as:
+
+- where this connector operates by default;
+- which project, directory, file set, account, host, database, or similar attachment point it should use when the operation does not spell that context out again.
+
+This context is not the same thing as connector semantics.
+It must not silently redefine the public meaning of connector operations.
+
+Examples:
+
+- `git` may use repository or worktree location context;
+- `compose` may use project directory, compose files, or project-name context;
+- `mysql` may use host, port, database, or account context.
+
+Such context should be supplied through explicit runtime-owned launch surfaces such as playbook or profile material rather than through hidden process-global assumptions.
+
+The raw family entry from that launch material should be interpreted only by the connector family's bootstrap.
+Bootstrap may validate, normalize, reject, or refine that raw input into connector-local shared context for later operations.
+Later operation execution should stay inside that connector-local boundary rather than reading raw playbook- or profile-owned connector context directly.
+
+That ambient connector context should not become an ordinary workflow-readable value namespace by default.
+Workflow policy should depend on public operation results and other reviewable workflow inputs rather than branching on hidden connector attachment details.
+
 ## Dependency layers
 
 Connector design should distinguish at least three dependency layers:
@@ -261,6 +286,7 @@ Specialized policy-shaped names such as `git.branch_not_main` are not part of th
 
 ## Possible future connector namespaces
 
+- `compose.*`
 - `run.*`
 - `ansible.*`
 - `obsidian.*`

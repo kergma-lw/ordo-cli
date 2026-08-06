@@ -30,6 +30,18 @@ class HelpCliSearchTest(unittest.TestCase):
         references = [entry["reference"] for entry in payload["operations"]]
         self.assertIn("gh.pr", references)
 
+    def test_search_finds_compose_operations_by_orchestration_query(self) -> None:
+        payload = build_search_response("compose start running state")
+
+        references = [entry["reference"] for entry in payload["operations"]]
+        self.assertIn("compose.start", references)
+
+    def test_search_finds_compose_remove_by_materialized_runtime_query(self) -> None:
+        payload = build_search_response("remove stopped compose service instance")
+
+        references = [entry["reference"] for entry in payload["operations"]]
+        self.assertIn("compose.remove", references)
+
 
 if __name__ == "__main__":
     unittest.main()

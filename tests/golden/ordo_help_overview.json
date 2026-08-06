@@ -2,6 +2,7 @@
   "connector_namespaces": [
     "runtime",
     "git",
+    "compose",
     "gh",
     "shell",
     "fs"

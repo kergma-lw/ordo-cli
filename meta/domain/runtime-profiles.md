@@ -6,6 +6,7 @@ They exist to answer questions such as:
 
 - which repository-facing inputs should this run use;
 - which workflow-entry execution location should this run activate;
+- which connector-scoped ambient execution context should this run apply;
 - which approved runtime-facing modifiers belong to this run.
 
 Historically this made profiles the natural project-local place to bind execution-facing context such as launcher selection inputs, while still keeping launcher usage explicit at the step level.
@@ -21,3 +22,4 @@ That switching should be modeled as an engine-level construct such as `profile_s
 Profiles should stay declarative and reviewable.
 
 They are not meant to become a shadow workflow language or a place to hide unrelated business policy.
+They may carry connector-scoped ambient execution context, but that context should remain runtime-owned activation material rather than an ordinary workflow-readable data source.

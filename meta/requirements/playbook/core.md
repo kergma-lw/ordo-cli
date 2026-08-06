@@ -15,6 +15,10 @@
 - A playbook launch surface may declare an explicit execution working directory for a run through playbook defaults, the active profile, or the active workflow entry.
 - Working-directory precedence must be deterministic and follow increasing specificity from playbook defaults to profile context to workflow-entry context.
 - Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` embedded-value local-expression surface when the expression stays within an activation-time-safe subset.
+- A playbook may declare shared connector-scoped ambient execution context through a top-level `connectors` mapping.
+- A selected profile may refine that connector context through a profile-owned `connectors` mapping.
+- Connector-context precedence must be deterministic and follow increasing specificity from playbook-level connector context to active-profile connector context.
+- Playbook- and profile-owned raw connector context must be routed to the corresponding connector bootstrap rather than exposed as generic workflow data or generic operation-call overrides.
 - A playbook may declare a `pre_run` workflow set that executes before the requested workflow in the same runtime session.
 - A `pre_run` workflow set must remain explicit, project-local, and reviewable from the playbook surface.
 - Failure in any `pre_run` workflow must prevent effectful execution of the requested workflow.
@@ -46,3 +50,4 @@
 - Execution working directory should remain explicit runtime context rather than hidden shell-first behavior.
 - A working-directory expression must reuse the documented embedded-value local-expression surface rather than introducing a second expression language.
 - A working-directory expression must not read runtime state, registered step results, or any runtime-derived value that is unavailable at launch time.
+- Playbook- and profile-owned connector context should remain bootstrap-owned connector execution context rather than becoming ordinary workflow-readable expression data.

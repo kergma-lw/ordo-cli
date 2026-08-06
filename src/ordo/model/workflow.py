@@ -206,6 +206,7 @@ class Workflow:
     state_bindings: JSONObject = field(default_factory=dict)
     states: JSONObject = field(default_factory=dict)
     step_results: JSONObject = field(default_factory=dict)
+    connector_contexts: JSONObject = field(default_factory=dict)
     blocks: tuple[WorkflowBlock, ...] = ()
     source_path: str | None = None
     launch_dir: str | None = None
@@ -223,6 +224,7 @@ class Workflow:
         state_bindings: JSONObject | None = None,
         states: JSONObject | None = None,
         step_results: JSONObject | None = None,
+        connector_contexts: JSONObject | None = None,
         blocks: tuple[WorkflowBlock, ...] = (),
         source_path: str | None = None,
         launch_dir: str | None = None,
@@ -253,6 +255,7 @@ class Workflow:
         object.__setattr__(self, "state_bindings", {} if state_bindings is None else dict(state_bindings))
         object.__setattr__(self, "states", {} if states is None else dict(states))
         object.__setattr__(self, "step_results", {} if step_results is None else dict(step_results))
+        object.__setattr__(self, "connector_contexts", {} if connector_contexts is None else dict(connector_contexts))
         object.__setattr__(self, "blocks", normalized_blocks)
         object.__setattr__(self, "source_path", source_path)
         object.__setattr__(self, "launch_dir", launch_dir)

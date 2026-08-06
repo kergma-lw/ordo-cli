@@ -95,6 +95,25 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connectors", operations)
         self.assertEqual(examples["document_kind"], "examples_catalog")
 
+    def test_operation_topic_discovers_compose_start_automatically(self) -> None:
+        result = self.run_help("operation", "compose.start", "--json")
+
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["reference"], "compose.start")
+        self.assertEqual(payload["operation"]["kind"], "action")
+        self.assertIn("state", payload["operation"]["outputs"])
+
+    def test_operation_topic_discovers_compose_remove_automatically(self) -> None:
+        result = self.run_help("operation", "compose.remove", "--json")
+
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["reference"], "compose.remove")
+        self.assertEqual(payload["operation"]["kind"], "action")
+        self.assertIn("state", payload["operation"]["outputs"])
+        self.assertIn("service_running", payload["operation"]["failure_modes"])
+
     def test_search_indexes_capabilities_model_fields_and_examples(self) -> None:
         profile_result = json.loads(self.run_help("search", "profile", "--json").stdout)
         branching_result = json.loads(self.run_help("search", "branching", "--json").stdout)

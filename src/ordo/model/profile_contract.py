@@ -22,6 +22,7 @@ PROFILE_CONTRACT: JSONObject = {
             "expression_allowed_roots": ["inputs"],
             "expression_forbidden_roots": ["state", "step"],
         },
+        {"name": "connectors", "required": False, "type": "object", "runtime_effect": "supplies_raw_connector_bootstrap_input"},
         {"name": "checks", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
         {"name": "overrides", "required": False, "type": "array", "runtime_effect": "published_metadata_only"},
         {"name": "launchers", "required": False, "type": "object", "runtime_effect": "publishes_profile_scoped_launchers", "status": "deprecated", "preferred_alternative": "published_routines"},
@@ -45,6 +46,11 @@ PROFILE_CONTRACT: JSONObject = {
         "working_directory": {
             "strategy": "first_writer_wins",
             "conflict": "validation_error",
+        },
+        "connectors": {
+            "strategy": "shallow_merge_by_family",
+            "conflict": "validation_error",
+            "conflict_key": "family_field",
         },
         "checks": {
             "strategy": "deduplicated_union",
@@ -70,6 +76,11 @@ PROFILE_CONTRACT: JSONObject = {
         "working_directory": {
             "mutates_workflow_steps": False,
             "published_as_explicit_metadata": True,
+        },
+        "connectors": {
+            "mutates_workflow_steps": False,
+            "published_as_explicit_metadata": False,
+            "consumer": "connector_bootstrap",
         },
         "checks": {
             "mutates_workflow_contract": False,

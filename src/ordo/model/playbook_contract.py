@@ -15,6 +15,7 @@ PLAYBOOK_CONTRACT: JSONObject = {
         {"name": "pre_run", "required": False, "type": "array"},
         {"name": "states", "required": True, "type": "object"},
         {"name": "defaults", "required": False, "type": "object"},
+        {"name": "connectors", "required": False, "type": "object", "runtime_effect": "supplies_raw_connector_bootstrap_input"},
         {"name": "workflows", "required": True, "type": "object"},
         {"name": "profiles", "required": False, "type": "object"},
     ],
@@ -102,6 +103,12 @@ PLAYBOOK_CONTRACT: JSONObject = {
         },
         "profile_entries": {
             "requires": ["file"],
+        },
+        "connector_context": {
+            "top_level_field": "connectors",
+            "family_entry_type": "object",
+            "profile_refinement": True,
+            "consumer": "connector_bootstrap",
         },
         "state_entries": {
             "requires": ["path"],

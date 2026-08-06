@@ -153,6 +153,7 @@ def load_profile_text(text: str, *, source: str = "<memory>") -> Profile:
         name=_require_string(payload, "name", source=source),
         inputs=_optional_object(payload, "inputs", source=source),
         working_directory=_optional_string(payload, "working_directory", source=source),
+        connectors=_optional_connector_contexts(payload, "connectors", source=source),
         checks=tuple(_require_string_item(item, path=("checks", str(index)), source=source) for index, item in enumerate(checks_data)),
         overrides=tuple(_load_override(item, index=index, source=source) for index, item in enumerate(overrides_data)),
         launchers=_load_launchers(payload.get("launchers"), source=source),
@@ -1511,6 +1512,38 @@ def _optional_object(
         path=path or (key,),
         details={"source": source, "actual_type": type(value).__name__},
     )
+
+
+def _optional_connector_contexts(data: JSONObject, key: str, *, source: str) -> JSONObject:
+    value = data.get(key)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise _load_error(
+            code=f"load.{key}.type",
+            message=f"Field '{key}' must be an object",
+            path=(key,),
+            details={"source": source, "actual_type": type(value).__name__},
+        )
+
+    normalized: JSONObject = {}
+    for family, item in value.items():
+        if not isinstance(family, str) or not family:
+            raise _load_error(
+                code=f"load.{key}.family_name",
+                message=f"Field '{key}' must map non-empty connector family names to objects",
+                path=(key,),
+                details={"source": source, "family": family},
+            )
+        if not isinstance(item, dict):
+            raise _load_error(
+                code=f"load.{key}.family_type",
+                message=f"Connector context entry '{family}' must be an object",
+                path=(key, family),
+                details={"source": source, "family": family, "actual_type": type(item).__name__},
+            )
+        normalized[family] = dict(item)
+    return normalized
 
 
 def _require_int(data: JSONObject, key: str, *, source: str) -> int:

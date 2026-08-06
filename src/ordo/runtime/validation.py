@@ -724,6 +724,7 @@ def validate_profile_document(payload: JSONValue, *, source: str = "<memory>") -
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
     if "working_directory" in payload:
         diagnostics.extend(_require_non_empty_string(payload, "working_directory", source=source, path=("working_directory",)))
+    diagnostics.extend(_validate_connector_context_field(payload.get("connectors"), path=("connectors",), source=source))
     diagnostics.extend(_validate_checks(payload.get("checks"), source=source))
     diagnostics.extend(_validate_overrides(payload.get("overrides"), source=source))
     diagnostics.extend(_validate_launchers(payload.get("launchers"), source=source))
@@ -2761,6 +2762,40 @@ def _validate_launchers(value: JSONValue | None, *, source: str) -> list[Diagnos
             diagnostics.extend(_require_non_empty_string(item, "before", path=path + ("before",), source=source))
         if "after" in item:
             diagnostics.extend(_require_non_empty_string(item, "after", path=path + ("after",), source=source))
+    return diagnostics
+
+
+def _validate_connector_context_field(value: JSONValue | None, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    if value is None:
+        return diagnostics
+    if not isinstance(value, dict):
+        diagnostics.append(_diagnostic("validation.connector_context.type", "Connector context must be an object", path, source, actual_type=type(value).__name__))
+        return diagnostics
+    for family, entry in value.items():
+        family_path = path + (str(family),)
+        if not isinstance(family, str) or not family:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.connector_context.family_name",
+                    "Connector context keys must be non-empty strings",
+                    family_path,
+                    source,
+                    family=family,
+                )
+            )
+            continue
+        if not isinstance(entry, dict):
+            diagnostics.append(
+                _diagnostic(
+                    "validation.connector_context.family_type",
+                    f"Connector context entry '{family}' must be an object",
+                    family_path,
+                    source,
+                    family=family,
+                    actual_type=type(entry).__name__,
+                )
+            )
     return diagnostics
 
 

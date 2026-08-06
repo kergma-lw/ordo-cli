@@ -452,6 +452,21 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(profile.working_directory, "${inputs.repo_dir}")
         self.assertEqual(profile.to_contract()["working_directory"], "${inputs.repo_dir}")
 
+    def test_loads_profile_connector_contexts_into_typed_model(self) -> None:
+        profile = load_profile_text(
+            textwrap.dedent(
+                """
+                name: backend-default
+                connectors:
+                  git:
+                    directory: /repos/backend
+                """
+            )
+        )
+
+        self.assertEqual(profile.connectors["git"]["directory"], "/repos/backend")
+        self.assertEqual(profile.to_contract()["connectors"]["git"]["directory"], "/repos/backend")
+
     def test_loads_profile_launcher_from_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

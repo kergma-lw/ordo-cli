@@ -121,6 +121,42 @@ class OperationTest(unittest.TestCase):
         self.assertIsNotNone(connector)
         self.assertEqual(connector.bootstrap.context_fields, ("repository_root",))
 
+    def test_git_bootstrap_uses_connector_directory_context_for_commands(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            workflow = Workflow(version=0, workflow="demo", connector_contexts={"git": {"directory": str(directory)}})
+            operation = get_public_connector_registry().get_operation("git.branch")
+            resolved = ResolvedOperation("git.branch", "git", operation, "public")  # type: ignore[arg-type]
+
+            with patch("subprocess.run") as run:
+                run.side_effect = [
+                    self._completed(returncode=0, stdout=f"{directory}\n", stderr=""),
+                    self._completed(returncode=0, stdout="refs/heads/main\n", stderr=""),
+                ]
+
+                result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["repository_root"], str(directory))
+        self.assertEqual(run.call_args_list[0].kwargs.get("cwd"), str(directory))
+        self.assertEqual(run.call_args_list[1].kwargs.get("cwd"), str(directory))
+
+    def test_git_bootstrap_rejects_unknown_connector_context_fields(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", connector_contexts={"git": {"banana": 123}})
+        operation = get_public_connector_registry().get_operation("git.branch")
+        resolved = ResolvedOperation("git.branch", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "unknown_context_field")
+        self.assertEqual(result.diagnostics[0].code, "bootstrap.git_unknown_context_field")
+        self.assertEqual(result.raw["unknown_fields"], ["banana"])
+        run.assert_not_called()
+
     def test_git_operation_contracts_no_longer_primary_own_shared_bootstrap_failures(self) -> None:
         registry = get_public_connector_registry()
 

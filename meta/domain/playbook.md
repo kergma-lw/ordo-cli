@@ -41,6 +41,7 @@ They are not connector families and they do not create a second orchestration la
 - bindings from workflow-level logical state roles to concrete project state declarations;
 - project-local workflow-catalog navigation metadata such as category and operator-oriented usage timing;
 - explicit execution working directory defaults and overrides for project-local launch context;
+- shared connector-scoped ambient execution context for the project run surface;
 - explicit project-local pre-run workflow orchestration before the requested workflow executes;
 - explicit playbook-owned dependency bindings for that pre-run launch phase;
 - activation-time derivation of any selected execution working directory from launch-known inputs only;
@@ -60,7 +61,7 @@ The playbook domain may publish named routines for workflow use, but routine imp
 
 - A workflow defines guarded operational intent.
 - A profile defines reusable parameters, explicit overrides, and profile-scoped execution context.
-- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, routines, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults and overrides.
+- A playbook defines the project-local launch surface that selects one active profile per run and binds names to workflows, routines, profiles, state declarations, logical state-role bindings, pre-run workflow orchestration, and other explicit execution context such as working-directory defaults, connector context, and overrides.
 - Runtime still owns mode behavior and execution semantics after playbook discovery and resolution complete.
 
 ## Quality bar

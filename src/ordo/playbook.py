@@ -66,6 +66,7 @@ class ActivatedPlaybook:
     profile_path: Path | None = None
     available_profiles: dict[str, Profile] | None = None
     profile_working_directories: dict[str, Path | None] | None = None
+    connector_contexts: dict[str, object] | None = None
     working_directory: Path | None = None
     diagnostics: tuple[Diagnostic, ...] = ()
     input_analysis: "ActivationInputAnalysis | None" = None
@@ -243,6 +244,7 @@ def activate_playbook(
     path = Path(playbook_path) if playbook_path is not None else discover_playbook_path(cwd=cwd)
     payload = _load_playbook_document(path)
     playbook_dir = path.parent
+    playbook_connector_contexts = _playbook_connector_contexts(payload, playbook_path=path)
 
     workflows = _require_mapping(payload, "workflows", playbook_path=path)
     workflow_entry = workflows.get(workflow_name)
@@ -294,6 +296,7 @@ def activate_playbook(
             ) from exc
         except LoadError as exc:
             raise PlaybookError(exc.diagnostics) from exc
+        profile = _merge_profile_connector_contexts(profile, playbook_connector_contexts)
 
     raw_workflow = _load_workflow_payload(workflow_path, launch_dir=Path.cwd() if cwd is None else Path(cwd))
     validation_report = validate_workflow_document(raw_workflow, source=str(workflow_path))
@@ -311,6 +314,7 @@ def activate_playbook(
         workflow = load_workflow_payload(compiled_workflow, source=str(workflow_path.resolve()), launch_dir=Path.cwd() if cwd is None else Path(cwd))
     except LoadError as exc:
         raise PlaybookError(exc.diagnostics) from exc
+    workflow = _with_workflow_connector_contexts(workflow, profile.connectors if profile is not None else playbook_connector_contexts)
 
     workflow, profile = _apply_input_overrides(workflow, profile, input_overrides=input_overrides)
     workflow = _prepend_pre_run_workflows(
@@ -339,6 +343,7 @@ def activate_playbook(
                 ) from exc
             except LoadError as exc:
                 raise PlaybookError(exc.diagnostics) from exc
+            candidate_profile = _merge_profile_connector_contexts(candidate_profile, playbook_connector_contexts)
             available_profiles[candidate_name] = candidate_profile
             profile_working_directories[candidate_name] = _resolve_profile_working_directory(
                 candidate_name,
@@ -386,6 +391,7 @@ def activate_playbook(
         profile_path=resolved_profile_path,
         available_profiles=available_profiles,
         profile_working_directories=profile_working_directories,
+        connector_contexts=dict(workflow.connector_contexts),
         working_directory=working_directory,
         diagnostics=activation_diagnostics,
         input_analysis=input_analysis,
@@ -424,6 +430,7 @@ def _apply_input_overrides(
         state_bindings=workflow.state_bindings,
         states=workflow.states,
         step_results=workflow.step_results,
+        connector_contexts=workflow.connector_contexts,
         blocks=workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
@@ -440,6 +447,8 @@ def _apply_input_overrides(
     overridden_profile = Profile(
         name=profile.name,
         inputs=remaining_profile_inputs,
+        working_directory=profile.working_directory,
+        connectors=profile.connectors,
         checks=profile.checks,
         overrides=profile.overrides,
         launchers=profile.launchers,
@@ -654,6 +663,7 @@ def _prepend_pre_run_workflows(
         state_bindings=workflow.state_bindings,
         states=workflow.states,
         step_results=workflow.step_results,
+        connector_contexts=workflow.connector_contexts,
         blocks=tuple(pre_run_blocks) + workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
@@ -931,6 +941,7 @@ def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Work
         state_bindings=workflow.state_bindings,
         states=resolved_states,
         step_results=workflow.step_results,
+        connector_contexts=workflow.connector_contexts,
         blocks=workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
@@ -1125,7 +1136,7 @@ def _working_directory_activation_workflow(
 
     template = workflow
     if template is None:
-        return Workflow(version=0, workflow="activation", inputs=merged_inputs, explicit_input_keys=tuple(sorted((input_overrides or {}).keys())), let_bindings={}, state_needs={}, state_bindings={}, states={}, step_results={}, blocks=())
+        return Workflow(version=0, workflow="activation", inputs=merged_inputs, explicit_input_keys=tuple(sorted((input_overrides or {}).keys())), let_bindings={}, state_needs={}, state_bindings={}, states={}, step_results={}, connector_contexts=profile.connectors if profile is not None else {}, blocks=())
 
     return Workflow(
         version=template.version,
@@ -1138,6 +1149,7 @@ def _working_directory_activation_workflow(
         state_bindings=template.state_bindings,
         states=template.states,
         step_results={},
+        connector_contexts=template.connector_contexts,
         blocks=template.blocks,
         source_path=template.source_path,
         launch_dir=template.launch_dir,
@@ -1231,6 +1243,86 @@ def _working_directory_scope_code(scope: str, generic_code: str) -> str:
     return _working_directory_code(scope, generic_code.removeprefix("working_directory_"))
 
 
+def _playbook_connector_contexts(payload: dict[str, object], *, playbook_path: Path) -> dict[str, object]:
+    raw = payload.get("connectors")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise _playbook_error(
+            "playbook.connectors.invalid",
+            "Playbook field 'connectors' must be an object",
+            path=("connectors",),
+            details={"playbook": str(playbook_path), "actual_type": type(raw).__name__},
+        )
+    contexts: dict[str, object] = {}
+    for family, entry in raw.items():
+        if not isinstance(family, str) or not family:
+            raise _playbook_error(
+                "playbook.connectors.family_invalid",
+                "Playbook field 'connectors' must map non-empty connector family names to objects",
+                path=("connectors", str(family)),
+                details={"playbook": str(playbook_path), "family": family},
+            )
+        if not isinstance(entry, dict):
+            raise _playbook_error(
+                "playbook.connectors.entry_invalid",
+                f"Connector context entry '{family}' must be an object",
+                path=("connectors", family),
+                details={"playbook": str(playbook_path), "family": family, "actual_type": type(entry).__name__},
+            )
+        contexts[family] = dict(entry)
+    return contexts
+
+
+def _merge_connector_contexts(base: dict[str, object], override: dict[str, object]) -> dict[str, object]:
+    merged: dict[str, object] = {name: dict(value) if isinstance(value, dict) else value for name, value in base.items()}
+    for family, entry in override.items():
+        normalized_entry = dict(entry) if isinstance(entry, dict) else entry
+        existing = merged.get(family)
+        if isinstance(existing, dict) and isinstance(normalized_entry, dict):
+            merged[family] = {**existing, **normalized_entry}
+        else:
+            merged[family] = normalized_entry
+    return merged
+
+
+def _merge_profile_connector_contexts(profile: Profile, playbook_connector_contexts: dict[str, object]) -> Profile:
+    merged = _merge_connector_contexts(playbook_connector_contexts, profile.connectors)
+    if merged == profile.connectors:
+        return profile
+    return Profile(
+        name=profile.name,
+        inputs=profile.inputs,
+        working_directory=profile.working_directory,
+        connectors=merged,
+        checks=profile.checks,
+        overrides=profile.overrides,
+        launchers=profile.launchers,
+    )
+
+
+def _with_workflow_connector_contexts(workflow: Workflow, connector_contexts: dict[str, object]) -> Workflow:
+    normalized = {name: dict(value) if isinstance(value, dict) else value for name, value in connector_contexts.items()}
+    if normalized == workflow.connector_contexts:
+        return workflow
+    return Workflow(
+        version=workflow.version,
+        workflow=workflow.workflow,
+        inputs=workflow.inputs,
+        declared_inputs=workflow.declared_inputs,
+        explicit_input_keys=workflow.explicit_input_keys,
+        let_bindings=workflow.let_bindings,
+        state_needs=workflow.state_needs,
+        state_bindings=workflow.state_bindings,
+        states=workflow.states,
+        step_results=workflow.step_results,
+        connector_contexts=normalized,
+        blocks=workflow.blocks,
+        source_path=workflow.source_path,
+        launch_dir=workflow.launch_dir,
+    )
+
+
 def _resolve_profile_working_directory(
     profile_name: str,
     profile: Profile,
@@ -1254,6 +1346,7 @@ def _resolve_profile_working_directory(
         state_bindings=workflow.state_bindings,
         states=workflow.states,
         step_results=workflow.step_results,
+        connector_contexts=workflow.connector_contexts,
         blocks=workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,

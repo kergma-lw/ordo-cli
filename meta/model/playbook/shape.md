@@ -28,6 +28,13 @@ defaults:
   profile: backend-default
   working_directory: repos/default-backend
 
+connectors:
+  git:
+    directory: repos/default-backend
+  compose:
+    directory: deploy
+    file: compose.yaml
+
 workflows:
   inspect-issue:
     file: inspect-issue.yml
@@ -53,6 +60,7 @@ profiles:
 - `states` — named project-local runtime state declarations;
 - `workflows` — named launchable workflow entries;
 - `profiles` — named launchable profile entries;
+- `connectors` — optional playbook-level ambient execution context for named connector families;
 - `pre_run` — optional project-local launch-phase workflow set that executes before the requested workflow;
 - `defaults` — optional playbook-run defaults such as the active profile.
 
@@ -103,10 +111,28 @@ That context may include:
 - input bindings;
 - approved overrides;
 - a profile-scoped `working_directory` default, expressed either as a literal path string or as an activation-time-safe `${...}` embedded-value local expression;
+- a profile-scoped `connectors` mapping whose values refine playbook-level connector context for the active run;
 - future runtime-facing execution selectors that remain declarative and reviewable.
 
 Profiles do not create a second orchestration language.
 They make project-local launch context explicit and reviewable.
+
+## Connector context role
+
+The playbook may declare a top-level `connectors` mapping.
+
+That mapping gives named connector families project-local ambient execution context such as default directory, file, host, account, database, or similar attachment information.
+
+The active profile may also contribute a `connectors` mapping.
+Profile-owned connector entries refine the playbook-level connector context for the same family.
+
+This context is runtime-owned activation material.
+It exists to supply raw family-scoped bootstrap input without repeating the same attachment details on every operation call.
+
+Each connector family bootstrap interprets its own raw entry and may derive connector-local shared context for later operations.
+That derived connector-local context remains inside the connector boundary rather than exposing the raw playbook/profile mapping directly to operation calls.
+
+It must not by itself change connector semantics, and it should not become ordinary workflow-readable expression data by default.
 
 ## State entry role
 

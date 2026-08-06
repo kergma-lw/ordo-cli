@@ -27,6 +27,7 @@ class IntrospectionPlaybookContractTest(unittest.TestCase):
         defaults_fields = {field["name"]: field for field in payload["defaults_fields"]}
         top_level_fields = {field["name"] for field in payload["top_level_fields"]}
         self.assertIn("pre_run", top_level_fields)
+        self.assertIn("connectors", top_level_fields)
         self.assertIn("working_directory", defaults_fields)
         self.assertEqual(defaults_fields["working_directory"]["runtime_effect"], "sets_default_execution_working_directory")
         self.assertEqual(payload["activation_semantics"]["discovery"]["missing"], "playbook.discovery.missing")
@@ -37,6 +38,7 @@ class IntrospectionPlaybookContractTest(unittest.TestCase):
         self.assertEqual(payload["activation_semantics"]["pre_run"]["item_type"], "pre_run_entry")
         self.assertEqual(payload["activation_semantics"]["pre_run"]["requires"], ["file"])
         self.assertIn("state_bindings", payload["activation_semantics"]["pre_run"]["optional"])
+        self.assertEqual(payload["activation_semantics"]["connector_context"]["consumer"], "connector_bootstrap")
         self.assertEqual(payload["activation_semantics"]["state_entries"]["requires"], ["path"])
 
     def test_playbook_contract_stays_aligned_with_playbook_surface_constants(self) -> None:

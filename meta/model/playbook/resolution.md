@@ -71,6 +71,20 @@ The entry must resolve to exactly one workflow file.
 - Runtime may restore its prior process working directory after the run completes, but that restoration behavior must not be part of workflow semantics.
 - `working_directory` changes execution context only; it must not change playbook discovery, workflow/profile reference resolution, or state-path resolution.
 
+## Connector context resolution
+
+- A playbook may declare top-level connector context through `connectors.<family>`.
+- The active profile may also declare connector context through `connectors.<family>`.
+- Effective raw connector context is resolved before the first guard or step executes.
+- When both playbook and active-profile connector context exist for the same family, the active profile refines the playbook entry with higher specificity.
+- Connector-context resolution must remain deterministic.
+- Effective raw connector context is activation-time bootstrap input for the corresponding connector family.
+- Connector bootstrap interprets that raw family entry and may derive connector-local shared context for later operations.
+- If the raw family entry is invalid or insufficient, connector bootstrap should fail clearly within the connector boundary.
+- Connector context must not become ordinary workflow-readable expression context by default.
+- Raw connector context must not become generic operation-visible launch material outside the connector bootstrap boundary.
+- Connector context must not be declared as step-local ad hoc data on individual workflow steps unless a later public model standardizes that surface explicitly.
+
 ## Launch-time input overrides
 
 - A playbook run may accept explicit launch-time input overrides from the caller.

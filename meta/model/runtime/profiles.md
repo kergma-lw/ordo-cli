@@ -13,6 +13,7 @@ A profile may bind runtime-facing context such as:
 - workflow inputs;
 - approved workflow-entry overrides;
 - a profile-scoped execution `working_directory` default;
+- a profile-scoped `connectors` mapping that supplies ambient execution context for named connector families;
 - future execution modifiers such as named launchers or other runtime-scoped wrappers when standardized.
 
 Profiles may therefore act as the project-local place where launcher-relevant context is selected, as long as launcher usage remains explicit and reviewable.
@@ -41,6 +42,7 @@ The resulting run should remain explainable in terms of:
 - whether the active profile came from explicit caller choice or playbook defaults;
 - which profile-provided inputs are in force;
 - whether the profile selected the effective execution working directory or yielded to a more specific workflow-entry declaration;
+- which connector-context overrides the profile contributes;
 - which approved overrides are active.
 
 ## Runtime profile switching
@@ -66,6 +68,10 @@ Because `profile_switch` is runtime-owned context shaping rather than an ordinar
 Profile-owned behavior must remain explicit and reviewable from playbook material.
 
 If a profile changes execution-relevant context, the runtime explanation surface must be able to report that fact without requiring inspection of implementation internals.
+
+Profile-owned connector context is activation-time runtime material.
+It should reach connector families through their bootstrap surface, which may derive connector-local shared context for later operations.
+It should not automatically appear as ordinary workflow-readable expression context.
 
 ## Relationship to workflow intent
 
