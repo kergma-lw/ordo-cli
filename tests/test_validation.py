@@ -1485,6 +1485,118 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if.type")
 
+    def test_step_if_accepts_structured_list_condition(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                  ready: true
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if:
+                          - inputs.enabled
+                          - inputs.ready
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_step_if_accepts_structured_object_condition(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                  ready: true
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if:
+                          all:
+                            - inputs.enabled
+                            - any:
+                                - inputs.ready
+                                - not: inputs.enabled | not
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_step_if_rejects_unknown_structured_operator(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if:
+                          maybe:
+                            - inputs.enabled
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if.shape")
+
+    def test_step_if_rejects_non_list_all_operand(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if:
+                          all: inputs.enabled
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if.all.type")
+
+    def test_step_if_warns_for_embedded_leaf_inside_structured_condition(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if:
+                          - ${inputs.enabled}
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.step_condition.embedded_if_deprecated")
+
     def test_step_if_and_register_can_be_used_together(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -1507,6 +1619,49 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.OK)
         self.assertIn("validation.workflow.local_expression.step_condition.embedded_if_deprecated", [diagnostic.code for diagnostic in report.diagnostics])
 
+    def test_step_gate_accepts_structured_condition(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        value: true
+                        register: ready
+                      - name: comment
+                        gate:
+                          all:
+                            - step.ready.outputs.value
+                        uses: gh.issue.comment
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_self_step_register_reference_in_gate_fails(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: comment
+                        uses: gh.issue.comment
+                        register: issue
+                        gate: step.issue.outputs.open
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.forward")
+
     def test_forward_step_register_reference_in_if_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -1518,6 +1673,29 @@ class ValidationTest(unittest.TestCase):
                   - steps:
                       - name: comment
                         if: ${step.issue.outputs.open}
+                        uses: gh.issue.comment
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.forward")
+
+    def test_forward_step_register_reference_in_structured_if_fails(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: comment
+                        if:
+                          - step.issue.outputs.open
                         uses: gh.issue.comment
                       - name: inspect
                         uses: gh.issue

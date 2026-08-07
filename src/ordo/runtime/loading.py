@@ -1273,7 +1273,8 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
         publish=data.get("publish") if has_publish else None,
         state_set=state_set,
         state_delete=state_delete,
-        if_=_optional_string(data, "if", path=path + ("if",), source=source),
+        if_=_optional_condition(data, "if", path=path + ("if",), source=source),
+        gate=_optional_condition(data, "gate", path=path + ("gate",), source=source),
         register=_optional_string(data, "register", path=path + ("register",), source=source),
         launcher=_optional_string(data, "launcher", path=path + ("launcher",), source=source),
         resolved_run_path=_optional_string(data, "__run_path__", path=path + ("__run_path__",), source=source),
@@ -1591,6 +1592,26 @@ def _optional_string(
     raise _load_error(
         code=f"load.{key}.type",
         message=f"Field '{key}' must be a string",
+        path=path or (key,),
+        details={"source": source, "actual_type": type(value).__name__},
+    )
+
+
+def _optional_condition(
+    data: JSONObject,
+    key: str,
+    *,
+    path: tuple[str, ...] | None = None,
+    source: str,
+) -> JSONValue | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if isinstance(value, (str, list, dict)):
+        return value
+    raise _load_error(
+        code=f"load.{key}.type",
+        message=f"Field '{key}' must be a string, list, or object",
         path=path or (key,),
         details={"source": source, "actual_type": type(value).__name__},
     )

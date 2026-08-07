@@ -26,6 +26,13 @@ def _condition_status_for_step(step, preflight_item: dict[str, object]) -> str |
     return cast(str, status) if isinstance(status, str) else "unknown"
 
 
+def _gate_status_for_step(step, preflight_item: dict[str, object]) -> str | None:
+    if step.gate is None:
+        return None
+    status = preflight_item.get("gate_status")
+    return cast(str, status) if isinstance(status, str) else "unknown"
+
+
 def _effective_preflight_classification(
     step,
     resolved_step,
@@ -433,6 +440,10 @@ def _build_step_items(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": _condition_status_for_step(step, preflight_item),
+                        "gate_conditional": step.gate is not None,
+                        "gate": step.gate,
+                        "gate_status": _gate_status_for_step(step, preflight_item),
+                        "gate_report": preflight_item.get("gate_report") if isinstance(preflight_item.get("gate_report"), dict) else None,
                         "probe_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
@@ -454,6 +465,10 @@ def _build_step_items(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": condition_status,
+                        "gate_conditional": step.gate is not None,
+                        "gate": step.gate,
+                        "gate_status": _gate_status_for_step(step, preflight_item),
+                        "gate_report": preflight_item.get("gate_report") if isinstance(preflight_item.get("gate_report"), dict) else None,
                         "probe_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
@@ -476,6 +491,10 @@ def _build_step_items(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": _condition_status_for_step(step, preflight_item),
+                    "gate_conditional": step.gate is not None,
+                    "gate": step.gate,
+                    "gate_status": _gate_status_for_step(step, preflight_item),
+                    "gate_report": preflight_item.get("gate_report") if isinstance(preflight_item.get("gate_report"), dict) else None,
                     "probe_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                     "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                     "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
@@ -497,6 +516,10 @@ def _build_step_items(
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
                 "condition_status": None if step.if_ is None else "unknown",
+                "gate_conditional": step.gate is not None,
+                "gate": step.gate,
+                "gate_status": None if step.gate is None else "unknown",
+                "gate_report": None,
                 "probe_scopes": [],
                 "invalidates_scopes": [],
                 "preflight_support": None,
@@ -559,6 +582,7 @@ def _build_block_items(
                 "eligibility": "eligible" if not first_reachable_step_found and not check_result.outputs.get("blockers") else "pending",
                 "step_names": step_names,
                 "conditional_steps": [step.name for step in declared_block.steps if step.if_ is not None],
+                "gated_steps": [step.name for step in declared_block.steps if step.gate is not None],
             }
         )
         first_reachable_step_found = True
@@ -584,6 +608,9 @@ def _build_run_items(
                 "eligibility": "blocked" if blocked else "eligible",
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
+                "gate_conditional": step.gate is not None,
+                "gate": step.gate,
+                "gate_status": None if step.gate is None else "unknown",
                 "fan_out": _fan_out_info_for_step(step, workflow, condition_status=None),
                 "fan_out_summary": _fan_out_summary(_fan_out_info_for_step(step, workflow, condition_status=None)),
             }

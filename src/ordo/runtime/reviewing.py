@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ordo.model.json import authored_string_style
+from ordo.model.json import JSONValue, authored_string_style
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, RunBlock, Step, StepBlock, Workflow
 
 from .checking import check_workflow
+from .conditions import iter_condition_expression_leaves, normalize_condition_authoring
 from .local_expression_contexts import LocalExpressionContext
 from .local_expression_engine.core import (
     AdapterBindingNode,
@@ -126,6 +127,8 @@ def _build_review_findings(
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
     findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
     findings.extend(_find_missing_recommended_probe_coverage(check_result))
+    findings.extend(_find_string_condition_structured_form_hints(workflow))
+    findings.extend(_find_gate_recommendation_hints(workflow))
     findings.extend(_find_unnecessary_with_root_adapter_bindings(workflow))
     findings.extend(
         _find_bounded_fan_out_authoring_findings(
@@ -134,6 +137,69 @@ def _build_review_findings(
             connector_provider=connector_provider,
         )
     )
+    return findings
+
+
+def _find_string_condition_structured_form_hints(workflow: Workflow) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for path, expression in _iter_string_condition_surfaces(workflow):
+        try:
+            parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+        except LocalExpressionParseError:
+            continue
+        predicate_count, boolean_operators = _summarize_condition_complexity(parsed.value.root)
+        operator_names = sorted(boolean_operators)
+        has_mixed_boolean_operators = len(boolean_operators) > 1
+        if predicate_count <= 3 and not has_mixed_boolean_operators:
+            continue
+        findings.append(
+            {
+                "code": "review.workflow.step_condition.structured_form_preferred",
+                "level": "warning",
+                "category": "condition_authoring",
+                "message": "Long or mixed string step conditions should be rewritten as structured all/any/not form",
+                "path": list(path),
+                "evidence": {
+                    "expression": expression,
+                    "predicate_count": predicate_count,
+                    "boolean_operators": operator_names,
+                    "has_mixed_boolean_operators": has_mixed_boolean_operators,
+                    "suggested_form": "structured_if",
+                    "suggested_rewrite": _build_structured_condition_rewrite(parsed.value.root, source=parsed.source),
+                    "reason": "structured conditions are easier to review, reorder, and maintain once predicate count grows or boolean composition mixes operators",
+                },
+            }
+        )
+    return findings
+
+
+def _find_gate_recommendation_hints(workflow: Workflow) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for block_index, block in enumerate(workflow.blocks):
+        if not isinstance(block, StepBlock):
+            continue
+        for step_index, step in enumerate(block.steps):
+            if step.gate is not None or step.if_ is None or step.operation is None:
+                continue
+            leaf_expressions = [expression for _, expression, _ in _collect_condition_surface_expressions(step.if_, path=())]
+            if len(leaf_expressions) < 2:
+                continue
+            if not any("step." in expression for expression in leaf_expressions):
+                continue
+            findings.append(
+                {
+                    "code": "review.workflow.step_gate.preferred_for_readiness_check",
+                    "level": "warning",
+                    "category": "condition_authoring",
+                    "message": "Use step-level gate for runtime-derived readiness checks before a mutating step instead of encoding them as if-skip logic",
+                    "path": ["blocks", str(block_index), "steps", str(step_index), "if"],
+                    "evidence": {
+                        "step": step.name,
+                        "suggested_form": "gate",
+                        "reason": "readiness and admission failures for mutating steps should fail clearly rather than silently skip",
+                    },
+                }
+            )
     return findings
 
 
@@ -166,6 +232,7 @@ def _find_unnecessary_with_root_adapter_bindings(workflow: Workflow) -> list[dic
                         "expression": expression,
                         "adapter_expression": expression[node.start : node.end],
                         "suggested_expression": f"{render_expression_text(root_binding.value, source=parsed.source)} | {node.family}{node.body}",
+                        "suggested_rewrite": f"{render_expression_text(root_binding.value, source=parsed.source)} | {node.family}{node.body}",
                         "context": context.value,
                     },
                 }
@@ -188,7 +255,10 @@ def _find_diagnostic_review_hints(check_result: RuntimeResult) -> list[dict[str,
                 "category": "value_authoring",
                 "message": diagnostic.message,
                 "path": list(diagnostic.path),
-                "evidence": dict(diagnostic.details),
+                "evidence": {
+                    **dict(diagnostic.details),
+                    **(_literal_string_quote_hint(diagnostic.details.get("expression")) if isinstance(diagnostic.details.get("expression"), str) else {}),
+                },
             }
         )
     return findings
@@ -216,6 +286,7 @@ def _find_profile_switch_literal_string_hints(workflow: Workflow) -> list[dict[s
                     "evidence": {
                         "expression": step.profile_switch,
                         "source": "workflow",
+                        **_literal_string_quote_hint(step.profile_switch),
                     },
                 }
             )
@@ -253,6 +324,11 @@ def _find_bounded_fan_out_authoring_findings(
                             "body_kind": item.get("body_kind"),
                             "inner_step_count": len(authored_step.steps),
                             "conditional_inner_steps": conditional_inner_steps,
+                            "suggested_fix": "extract_reusable_fan_out_fragment",
+                            "suggested_rewrite": {
+                                "step": _suggested_fan_out_fragment_step(step_name, authored_step),
+                                "fragment_steps": [inner.to_contract() for inner in authored_step.steps],
+                            },
                             "reason": "large or branchy inline repeated bodies are harder to review than extracted reusable fragments",
                         },
                     }
@@ -271,12 +347,24 @@ def _find_bounded_fan_out_authoring_findings(
                     "category": "fan_out_authoring",
                     "message": f"Fan-out step '{step_name}' has runtime-only cardinality",
                     "path": ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index")), "for_each"],
-                    "evidence": {
-                        "step": step_name,
-                        "body_kind": item.get("body_kind"),
-                        "for_each": authored_step.for_each,
-                        "reason": "the repeated item count cannot be determined from currently available authoring-time runtime inputs",
-                    },
+                        "evidence": {
+                            "step": step_name,
+                            "body_kind": item.get("body_kind"),
+                            "for_each": authored_step.for_each,
+                            "suggested_fix": "materialize_or_declare_fan_out_collection",
+                            "suggested_rewrite": {
+                                "before": {
+                                    "name": "load-items",
+                                    "value": "<authoring-derivable collection>",
+                                    "register": "items",
+                                },
+                                "step": {
+                                    "name": step_name,
+                                    "for_each": "step.items.outputs.value",
+                                },
+                            },
+                            "reason": "the repeated item count cannot be determined from currently available authoring-time runtime inputs",
+                        },
                 }
             )
     return findings
@@ -317,16 +405,18 @@ def _iter_review_expression_surfaces(workflow: Workflow) -> list[tuple[tuple[str
                 surfaces.extend(_step_expression_surfaces(step, path=("blocks", str(block_index), "steps", str(step_index))))
             continue
         if isinstance(block, RunBlock):
-            if isinstance(block.if_, str):
-                surfaces.append((("blocks", str(block_index), "if"), block.if_, LocalExpressionContext.STEP_CONDITION))
+            if block.if_ is not None:
+                surfaces.extend(_collect_condition_surface_expressions(block.if_, path=("blocks", str(block_index), "if")))
             surfaces.extend(_collect_value_surface_expressions(block.with_, path=("blocks", str(block_index), "with")))
     return surfaces
 
 
 def _step_expression_surfaces(step: Step, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], str, LocalExpressionContext]]:
     surfaces: list[tuple[tuple[str, ...], str, LocalExpressionContext]] = []
-    if isinstance(step.if_, str):
-        surfaces.append((path + ("if",), step.if_, LocalExpressionContext.STEP_CONDITION))
+    if step.if_ is not None:
+        surfaces.extend(_collect_condition_surface_expressions(step.if_, path=path + ("if",)))
+    if step.gate is not None:
+        surfaces.extend(_collect_condition_surface_expressions(step.gate, path=path + ("gate",)))
     surfaces.extend(_collect_native_value_surface_expressions(step.for_each, path=path + ("for_each",)))
     if step.operation is not None:
         surfaces.extend(_collect_value_surface_expressions(step.operation.with_, path=path + ("with",)))
@@ -343,6 +433,40 @@ def _step_expression_surfaces(step: Step, *, path: tuple[str, ...]) -> list[tupl
     surfaces.extend(_collect_native_value_surface_expressions(step.publish, path=path + ("publish",)))
     surfaces.extend(_collect_value_surface_expressions(step.state_set, path=path + ("state_set",)))
     surfaces.extend(_collect_value_surface_expressions(step.state_delete, path=path + ("state_delete",)))
+    return surfaces
+
+
+def _collect_condition_surface_expressions(value: object, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], str, LocalExpressionContext]]:
+    if not isinstance(value, (str, list, dict)):
+        return []
+    try:
+        normalized = normalize_condition_authoring(value)
+    except Exception:
+        return []
+    return [(path + relative_path, expression, LocalExpressionContext.STEP_CONDITION) for relative_path, expression in iter_condition_expression_leaves(normalized)]
+
+
+def _iter_string_condition_surfaces(workflow: Workflow) -> list[tuple[tuple[str, ...], str]]:
+    surfaces: list[tuple[tuple[str, ...], str]] = []
+    for block_index, block in enumerate(workflow.blocks):
+        if isinstance(block, StepBlock):
+            for step_index, step in enumerate(block.steps):
+                surfaces.extend(_iter_string_condition_surfaces_from_step(step, path=("blocks", str(block_index), "steps", str(step_index))))
+            continue
+        if isinstance(block, RunBlock) and isinstance(block.if_, str):
+            surfaces.append((("blocks", str(block_index), "if"), block.if_))
+    return surfaces
+
+
+def _iter_string_condition_surfaces_from_step(step: Step, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], str]]:
+    surfaces: list[tuple[tuple[str, ...], str]] = []
+    if isinstance(step.if_, str):
+        surfaces.append((path + ("if",), step.if_))
+    if isinstance(step.gate, str):
+        surfaces.append((path + ("gate",), step.gate))
+    if step.steps is not None:
+        for inner_index, inner in enumerate(step.steps):
+            surfaces.extend(_iter_string_condition_surfaces_from_step(inner, path=path + ("steps", str(inner_index))))
     return surfaces
 
 
@@ -421,6 +545,72 @@ def _iter_value_expression_nodes(node: ValueExpressionNode) -> list[ValueExpress
             nodes.extend(_iter_value_expression_nodes(binding))
         return nodes
     return nodes
+
+
+def _summarize_condition_complexity(node: ValueExpressionNode) -> tuple[int, set[str]]:
+    if isinstance(node, UnaryNode) and node.operator == "not":
+        return _summarize_condition_complexity(node.operand)
+    if isinstance(node, BinaryNode) and node.operator in {"and", "or"}:
+        left_count, left_ops = _summarize_condition_complexity(node.left)
+        right_count, right_ops = _summarize_condition_complexity(node.right)
+        return left_count + right_count, left_ops | right_ops | {node.operator}
+    return 1, set()
+
+
+def _literal_string_quote_hint(value: str) -> dict[str, str]:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    quoted = f'"{escaped}"'
+    return {
+        "suggested_fix": "quote_literal_string",
+        "suggested_rewrite": quoted,
+    }
+
+
+def _suggested_fan_out_fragment_step(step_name: str, step: Step) -> dict[str, JSONValue]:
+    suggested: dict[str, JSONValue] = {
+        "name": step_name,
+        "run": "<fragment-path>",
+        "for_each": step.for_each,
+    }
+    if isinstance(step.register, str):
+        suggested["register"] = step.register
+    return suggested
+
+
+def _suggested_guard_probe_entries(missing: list[object]) -> list[dict[str, JSONValue]]:
+    guards: list[dict[str, JSONValue]] = []
+    for probe in missing:
+        if not isinstance(probe, dict):
+            continue
+        reference = probe.get("probe")
+        if not isinstance(reference, str):
+            continue
+        entry: dict[str, JSONValue] = {"uses": reference}
+        bindings = probe.get("with")
+        if isinstance(bindings, dict):
+            entry["with"] = bindings
+        guards.append(entry)
+    return guards
+
+
+def _build_structured_condition_rewrite(node: ValueExpressionNode, *, source: str) -> JSONValue:
+    if isinstance(node, UnaryNode) and node.operator == "not":
+        return {"not": _build_structured_condition_rewrite(node.operand, source=source)}
+    if isinstance(node, BinaryNode) and node.operator in {"and", "or"}:
+        items = [
+            _build_structured_condition_rewrite(item, source=source)
+            for item in _flatten_boolean_chain(node, operator=node.operator)
+        ]
+        if node.operator == "and":
+            return items
+        return {"any": items}
+    return render_expression_text(node, source=source)
+
+
+def _flatten_boolean_chain(node: ValueExpressionNode, *, operator: str) -> list[ValueExpressionNode]:
+    if isinstance(node, BinaryNode) and node.operator == operator:
+        return _flatten_boolean_chain(node.left, operator=operator) + _flatten_boolean_chain(node.right, operator=operator)
+    return [node]
 
 
 def _adapter_root_only_binding(node: AdapterInvocationNode) -> AdapterBindingNode | None:
@@ -583,6 +773,8 @@ def _find_missing_input_validation(
                     "input": input_name,
                     "classification": classification,
                     "usage_sites": [dict(site) for site in usage.get("evidence", []) if isinstance(site, dict)],
+                    "suggested_fix": "add_early_guard_validation",
+                    "suggested_rewrite": {"guards": [f"inputs.{input_name}"]},
                     "reason": "no early guard references this input before step execution begins",
                 },
             }
@@ -666,6 +858,10 @@ def _find_missing_recommended_probe_coverage(check_result: RuntimeResult) -> lis
                     "preferred_fix_kind": "guard_probe",
                     "fallback_fix_kinds": ["read_only_probe_step"],
                     "authoring_priority": ["guard_probe", "read_only_probe_step"],
+                    "suggested_fix": "add_guard_probes",
+                    "suggested_rewrite": {
+                        "guards": _suggested_guard_probe_entries(missing),
+                    },
                     "reason": "recommended preflight coverage should usually be expressed as guard probes for applicability decisions; use read-only probe steps when the observed fact must be materialized for later reuse or when a guard probe is not a good fit",
                 },
             }

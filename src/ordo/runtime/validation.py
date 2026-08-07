@@ -24,6 +24,7 @@ from ordo.routines import (
 )
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
+from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import (
     LOCAL_EXPRESSION_PARSE_ERRORS,
@@ -393,14 +394,25 @@ def _iter_input_references_from_step_item(step: JSONObject, *, block_index: int,
     references: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
     base_path = ("blocks", str(block_index), "steps", str(step_index))
     condition = step.get("if")
-    if isinstance(condition, str):
-        try:
-            parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
-        except LOCAL_EXPRESSION_PARSE_ERRORS:
-            parsed = None
-        if parsed is not None and parsed.value is not None:
-            for reference in _collect_value_input_references(parsed.value.root):
-                references.append((reference, base_path + ("if",)))
+    if isinstance(condition, (str, list, dict)):
+        for relative_path, expression in _iter_condition_leaf_expressions(condition):
+            try:
+                parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                parsed = None
+            if parsed is not None and parsed.value is not None:
+                for reference in _collect_value_input_references(parsed.value.root):
+                    references.append((reference, base_path + ("if",) + relative_path))
+    gate = step.get("gate")
+    if isinstance(gate, (str, list, dict)):
+        for relative_path, expression in _iter_condition_leaf_expressions(gate):
+            try:
+                parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                parsed = None
+            if parsed is not None and parsed.value is not None:
+                for reference in _collect_value_input_references(parsed.value.root):
+                    references.append((reference, base_path + ("gate",) + relative_path))
     if "for_each" in step:
         references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("for_each")), path=base_path + ("for_each",)))
     if "uses" in step or "run" in step:
@@ -442,14 +454,25 @@ def _iter_input_references_from_step_item(step: JSONObject, *, block_index: int,
 def _iter_input_references_from_nested_step_item(step: JSONObject, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
     references: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
     condition = step.get("if")
-    if isinstance(condition, str):
-        try:
-            parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
-        except LOCAL_EXPRESSION_PARSE_ERRORS:
-            parsed = None
-        if parsed is not None and parsed.value is not None:
-            for reference in _collect_value_input_references(parsed.value.root):
-                references.append((reference, path + ("if",)))
+    if isinstance(condition, (str, list, dict)):
+        for relative_path, expression in _iter_condition_leaf_expressions(condition):
+            try:
+                parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                parsed = None
+            if parsed is not None and parsed.value is not None:
+                for reference in _collect_value_input_references(parsed.value.root):
+                    references.append((reference, path + ("if",) + relative_path))
+    gate = step.get("gate")
+    if isinstance(gate, (str, list, dict)):
+        for relative_path, expression in _iter_condition_leaf_expressions(gate):
+            try:
+                parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                parsed = None
+            if parsed is not None and parsed.value is not None:
+                for reference in _collect_value_input_references(parsed.value.root):
+                    references.append((reference, path + ("gate",) + relative_path))
     if "uses" in step or "run" in step:
         references.extend(_pair_input_references_with_paths(_collect_input_references_from_runtime_value_surface(step.get("with")), path=path + ("with",)))
     if "for_each" in step:
@@ -1062,16 +1085,26 @@ def _validate_step_list(
             )
 
         diagnostics.extend(
-                _validate_step_condition(
-                    item,
-                    path=item_path,
-                    source=source,
-                    let_bindings=let_bindings,
-                    prior_registers=prior_registers,
-                    declared_registers=effective_declared_registers,
-                    extra_allowed_reference_roots=extra_condition_roots,
-                )
+            _validate_step_condition(
+                item,
+                path=item_path,
+                source=source,
+                let_bindings=let_bindings,
+                prior_registers=prior_registers,
+                declared_registers=effective_declared_registers,
+                extra_allowed_reference_roots=extra_condition_roots,
             )
+        )
+        diagnostics.extend(
+            _validate_step_gate(
+                item,
+                path=item_path,
+                source=source,
+                let_bindings=let_bindings,
+                prior_registers=prior_registers,
+                declared_registers=effective_declared_registers,
+            )
+        )
         diagnostics.extend(_validate_step_launcher(item, path=item_path, source=source, can_use_launcher=has_uses))
         diagnostics.extend(_validate_step_register(item, path=item_path, source=source, can_register=has_uses or has_run or has_inline_steps or has_value))
 
@@ -1136,9 +1169,33 @@ def _validate_step_condition(
         field_name="if",
         type_code="validation.workflow.step.if.type",
         expression_code="validation.workflow.local_expression.step_condition.syntax",
-        type_message="Step field 'if' must be a string-form local expression",
+        type_message="Step field 'if' must be a string-form or structured local expression",
         expression_message="Step field 'if' must be a valid step-condition expression",
         extra_allowed_reference_roots=extra_allowed_reference_roots,
+    )
+
+
+def _validate_step_gate(
+    value: JSONObject,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+) -> list[Diagnostic]:
+    return _validate_invocation_condition(
+        value,
+        path=path,
+        source=source,
+        let_bindings=let_bindings,
+        prior_registers={} if prior_registers is None else prior_registers,
+        declared_registers={} if declared_registers is None else declared_registers,
+        field_name="gate",
+        type_code="validation.workflow.step.gate.type",
+        expression_code="validation.workflow.local_expression.step_condition.syntax",
+        type_message="Step field 'gate' must be a string-form or structured local expression",
+        expression_message="Step field 'gate' must be a valid step-condition expression",
     )
 
 
@@ -1162,61 +1219,71 @@ def _validate_invocation_condition(
     if condition is None:
         return diagnostics
     condition_path = path + (field_name,)
-    if not isinstance(condition, str):
+    if not isinstance(condition, (str, list, dict)):
         diagnostics.append(_diagnostic(type_code, type_message, condition_path, source, actual_type=type(condition).__name__))
         return diagnostics
     try:
-        parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
-    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
-        expression = _extract_runtime_value_expression(condition)
+        normalized = normalize_condition_authoring(condition, path=condition_path, field_name=field_name)
+    except ConditionShapeError as exc:
         diagnostics.append(
-            build_local_expression_parse_diagnostic(
-                exc,
-                context=LocalExpressionContext.STEP_CONDITION,
-                path=condition_path,
-                source=source,
-                expression=condition if expression is None else expression,
-            )
+            Diagnostic(code=exc.code, level="error", message=exc.message, path=exc.path, details={"source": source, **dict(exc.details)})
         )
         return diagnostics
-    expression = _extract_runtime_value_expression(condition)
-    diagnostics.extend(
-        _validate_step_references(
-            collect_step_references(parsed.root),
-            path=condition_path,
-            source=source,
-            prior_registers=prior_registers,
-            declared_registers=declared_registers,
-        )
-    )
-    diagnostics.extend(
-        _validate_step_condition_type(
-            parsed.root,
-            path=condition_path,
-            source=source,
-            let_bindings=let_bindings,
-            extra_allowed_reference_roots=extra_allowed_reference_roots,
-        )
-    )
-    diagnostics.extend(
-        _validate_workflow_let_binding_uses(
-            parsed.root,
-            source=source,
-            path=condition_path,
-            context=LocalExpressionContext.STEP_CONDITION,
-            expression=condition if expression is None else expression,
-            let_bindings=let_bindings,
-        )
-    )
-    if expression is not None and not any(diagnostic.level == "error" for diagnostic in diagnostics):
-        diagnostics.append(
-            _warning(
-                "validation.workflow.local_expression.step_condition.embedded_if_deprecated",
-                "Embedded step 'if: ${...}' is deprecated; prefer a bare step-condition expression",
-                condition_path,
-                source,
+    leaf_paths = iter_condition_expression_leaves(normalized)
+    for relative_path, leaf_expression in leaf_paths:
+        leaf_path = condition_path + relative_path
+        try:
+            parsed = parse_condition_local_expression(leaf_expression, context=LocalExpressionContext.STEP_CONDITION)
+        except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+            expression = _extract_runtime_value_expression(leaf_expression)
+            diagnostics.append(
+                build_local_expression_parse_diagnostic(
+                    exc,
+                    context=LocalExpressionContext.STEP_CONDITION,
+                    path=leaf_path,
+                    source=source,
+                    expression=leaf_expression if expression is None else expression,
+                )
+            )
+            continue
+        expression = _extract_runtime_value_expression(leaf_expression)
+        diagnostics.extend(
+            _validate_step_references(
+                collect_step_references(parsed.root),
+                path=leaf_path,
+                source=source,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
             )
         )
+        diagnostics.extend(
+            _validate_step_condition_type(
+                parsed.root,
+                path=leaf_path,
+                source=source,
+                let_bindings=let_bindings,
+                extra_allowed_reference_roots=extra_allowed_reference_roots,
+            )
+        )
+        diagnostics.extend(
+            _validate_workflow_let_binding_uses(
+                parsed.root,
+                source=source,
+                path=leaf_path,
+                context=LocalExpressionContext.STEP_CONDITION,
+                expression=leaf_expression if expression is None else expression,
+                let_bindings=let_bindings,
+            )
+        )
+        if expression is not None and not any(diagnostic.level == "error" and diagnostic.path == leaf_path for diagnostic in diagnostics):
+            diagnostics.append(
+                _warning(
+                    f"validation.workflow.local_expression.step_condition.embedded_{field_name}_deprecated",
+                    f"Embedded step '{field_name}: ${{...}}' is deprecated; prefer a bare step-condition expression",
+                    leaf_path,
+                    source,
+                )
+            )
     return diagnostics
 
 
@@ -1302,8 +1369,8 @@ def _validate_run_step(
             field_name="if",
             type_code="validation.workflow.run.if.type",
             expression_code="validation.workflow.run.if.expression",
-            type_message="Run field 'if' must be a string-form value expression",
-            expression_message="Run field 'if' must use the '${...}' local-expression form",
+            type_message="Run field 'if' must be a string-form or structured local expression",
+            expression_message="Run field 'if' must be a valid step-condition expression",
         )
     )
     if "for_each" in value:
@@ -2105,6 +2172,13 @@ def _extract_runtime_value_expression(value: str) -> str | None:
     return None
 
 
+def _iter_condition_leaf_expressions(value: JSONValue) -> list[tuple[tuple[str, ...], str]]:
+    try:
+        return iter_condition_expression_leaves(normalize_condition_authoring(value))
+    except ConditionShapeError:
+        return []
+
+
 def _validate_step_condition_type(
     node: ValueExpressionNode,
     *,
@@ -2454,13 +2528,23 @@ def _collect_state_roles_from_guard_item(item: JSONValue) -> set[str]:
 def _collect_state_roles_from_step_item(step: JSONObject) -> set[str]:
     roles: set[str] = set()
     condition = step.get("if")
-    if isinstance(condition, str):
-        try:
-            parsed = parse_condition_local_expression(condition, context=LocalExpressionContext.STEP_CONDITION)
-        except LOCAL_EXPRESSION_PARSE_ERRORS:
-            parsed = None
-        if parsed is not None and parsed.value is not None:
-            roles.update(_collect_value_state_references(parsed.value.root))
+    if isinstance(condition, (str, list, dict)):
+        for _, expression in _iter_condition_leaf_expressions(condition):
+            try:
+                parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                parsed = None
+            if parsed is not None and parsed.value is not None:
+                roles.update(_collect_value_state_references(parsed.value.root))
+    gate = step.get("gate")
+    if isinstance(gate, (str, list, dict)):
+        for _, expression in _iter_condition_leaf_expressions(gate):
+            try:
+                parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                parsed = None
+            if parsed is not None and parsed.value is not None:
+                roles.update(_collect_value_state_references(parsed.value.root))
     if "uses" in step or "run" in step:
         roles.update(_collect_state_roles_from_runtime_value_surface(step.get("with")))
     if "value" in step:

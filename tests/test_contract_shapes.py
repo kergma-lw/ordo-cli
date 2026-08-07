@@ -104,6 +104,11 @@ class ContractShapeTest(unittest.TestCase):
         self.assertEqual(operation_step.to_contract()["if"], '${inputs.enabled}')
         self.assertEqual(state_step.to_contract()["if"], '${inputs.persist}')
 
+    def test_step_contract_preserves_structured_if_field(self) -> None:
+        operation_step = Step(name="inspect", operation=OperationRef("gh.issue"), if_={"all": ["inputs.enabled", {"not": "inputs.blocked"}]})
+
+        self.assertEqual(operation_step.to_contract()["if"], {"all": ["inputs.enabled", {"not": "inputs.blocked"}]})
+
     def test_run_step_contract_preserves_if_and_with(self) -> None:
         run_step = Step(name="comment-and-status", run="github/comment-and-set-status", if_="${step.issue.outputs.open}", run_with={"comment": "hello"})
 

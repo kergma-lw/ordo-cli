@@ -25,6 +25,8 @@ class ReviewModeTest(unittest.TestCase):
         self.assertTrue(any(item["code"] == "review.workflow.input_validation_missing" for item in result.outputs["findings"]))
         validation = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.input_validation_missing")
         self.assertEqual(validation["evidence"]["classification"], "effect_target_input")
+        self.assertEqual(validation["evidence"]["suggested_fix"], "add_early_guard_validation")
+        self.assertEqual(validation["evidence"]["suggested_rewrite"], {"guards": ["inputs.repository"]})
 
     def test_review_reports_hint_for_likely_unquoted_literal_string(self) -> None:
         workflow = load_workflow_text(
@@ -44,7 +46,9 @@ blocks:
 
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(result.outputs["review_status"], "unavailable")
-        self.assertTrue(any(item["code"] == "review.workflow.literal_string_maybe_unquoted" for item in result.outputs["findings"]))
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.literal_string_maybe_unquoted")
+        self.assertEqual(finding["evidence"]["suggested_fix"], "quote_literal_string")
+        self.assertEqual(finding["evidence"]["suggested_rewrite"], '"done"')
 
     def test_review_reports_hint_for_likely_unquoted_profile_switch_literal(self) -> None:
         workflow = load_workflow_text(
@@ -65,6 +69,8 @@ blocks:
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.literal_string_maybe_unquoted")
         self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "profile_switch"])
         self.assertEqual(finding["evidence"]["expression"], "meta")
+        self.assertEqual(finding["evidence"]["suggested_fix"], "quote_literal_string")
+        self.assertEqual(finding["evidence"]["suggested_rewrite"], '"meta"')
 
     def test_review_reports_unused_declared_input_separately(self) -> None:
         workflow = Workflow(
@@ -126,6 +132,7 @@ blocks:
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.adapter_pipe_style_preferred")
         self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "value"])
         self.assertEqual(finding["evidence"]["suggested_expression"], 'inputs.body | markdown["Tasks"]')
+        self.assertEqual(finding["evidence"]["suggested_rewrite"], 'inputs.body | markdown["Tasks"]')
 
     def test_review_does_not_report_with_root_when_additional_bindings_exist(self) -> None:
         workflow = load_workflow_text(
@@ -149,6 +156,191 @@ blocks:
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertFalse(any(item["code"] == "review.workflow.adapter_pipe_style_preferred" for item in result.outputs["findings"]))
+
+    def test_review_counts_inputs_used_inside_structured_if_leaves(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: markdown-if-demo
+inputs:
+  enabled:
+    type: boolean
+blocks:
+  - steps:
+      - name: extract-tasks
+        if:
+          - inputs.enabled
+        uses: shell.command
+        with:
+          command: "printf executed"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(any(item["code"] == "review.workflow.input_declared_but_unused" for item in result.outputs["findings"]))
+
+    def test_review_recommends_structured_if_for_long_string_condition(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: readiness-check
+inputs:
+  a:
+    type: boolean
+  b:
+    type: boolean
+  c:
+    type: boolean
+  d:
+    type: boolean
+blocks:
+  - steps:
+      - name: gate
+        if: inputs.a and inputs.b and inputs.c and inputs.d
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_condition.structured_form_preferred")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "if"])
+        self.assertEqual(finding["evidence"]["predicate_count"], 4)
+        self.assertEqual(finding["evidence"]["boolean_operators"], ["and"])
+        self.assertEqual(
+            finding["evidence"]["suggested_rewrite"],
+            ["inputs.a", "inputs.b", "inputs.c", "inputs.d"],
+        )
+
+    def test_review_recommends_structured_if_for_mixed_boolean_string_condition(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: readiness-check
+inputs:
+  a:
+    type: boolean
+  b:
+    type: boolean
+  c:
+    type: boolean
+blocks:
+  - steps:
+      - name: gate
+        if: inputs.a and (inputs.b or inputs.c)
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_condition.structured_form_preferred")
+        self.assertTrue(finding["evidence"]["has_mixed_boolean_operators"])
+        self.assertEqual(
+            finding["evidence"]["suggested_rewrite"],
+            ["inputs.a", {"any": ["inputs.b", "inputs.c"]}],
+        )
+
+    def test_review_does_not_recommend_structured_if_for_structured_condition(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: readiness-check
+inputs:
+  a:
+    type: boolean
+  b:
+    type: boolean
+  c:
+    type: boolean
+  d:
+    type: boolean
+blocks:
+  - steps:
+      - name: gate
+        if:
+          - inputs.a
+          - inputs.b
+          - inputs.c
+          - inputs.d
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(any(item["code"] == "review.workflow.step_condition.structured_form_preferred" for item in result.outputs["findings"]))
+
+    def test_review_recommends_gate_for_runtime_readiness_if_on_mutating_step(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: readiness-check
+blocks:
+  - steps:
+      - name: observed-a
+        value: true
+        register: observed_a
+      - name: observed-b
+        value: true
+        register: observed_b
+      - name: mutate
+        if:
+          - step.observed_a.outputs.value
+          - step.observed_b.outputs.value
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_gate.preferred_for_readiness_check")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "2", "if"])
+
+    def test_review_recommends_structured_form_for_long_string_gate(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: readiness-check
+blocks:
+  - steps:
+      - name: observed-a
+        value: true
+        register: observed_a
+      - name: observed-b
+        value: true
+        register: observed_b
+      - name: observed-c
+        value: true
+        register: observed_c
+      - name: observed-d
+        value: true
+        register: observed_d
+      - name: mutate
+        gate: step.observed_a.outputs.value and step.observed_b.outputs.value and step.observed_c.outputs.value and step.observed_d.outputs.value
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_condition.structured_form_preferred")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "4", "gate"])
 
     def test_review_reports_missing_recommended_probe_coverage(self) -> None:
         workflow = Workflow(
@@ -184,6 +376,8 @@ blocks:
         self.assertIn("prefer explicit guard probes", finding["message"])
         self.assertEqual(finding["evidence"]["preferred_fix_kind"], "guard_probe")
         self.assertEqual(finding["evidence"]["fallback_fix_kinds"], ["read_only_probe_step"])
+        self.assertEqual(finding["evidence"]["suggested_fix"], "add_guard_probes")
+        self.assertTrue(finding["evidence"]["suggested_rewrite"]["guards"])
 
     def test_review_recognizes_recommended_probe_coverage_from_let_bound_guard_probes(self) -> None:
         workflow = Workflow(
@@ -316,6 +510,8 @@ blocks:
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.fan_out.inline_body_complexity")
         self.assertEqual(finding["evidence"]["body_kind"], "inline_repeated_steps")
         self.assertEqual(finding["evidence"]["inner_step_count"], 3)
+        self.assertEqual(finding["evidence"]["suggested_fix"], "extract_reusable_fan_out_fragment")
+        self.assertEqual(finding["evidence"]["suggested_rewrite"]["step"]["run"], "<fragment-path>")
 
     def test_review_reports_runtime_only_fan_out_cardinality(self) -> None:
         workflow = Workflow(
@@ -336,6 +532,8 @@ blocks:
 
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.fan_out.runtime_only_cardinality")
         self.assertEqual(finding["path"][-1], "for_each")
+        self.assertEqual(finding["evidence"]["suggested_fix"], "materialize_or_declare_fan_out_collection")
+        self.assertEqual(finding["evidence"]["suggested_rewrite"]["before"]["register"], "items")
 
     def test_review_does_not_report_runtime_only_fan_out_when_source_is_review_derivable_collection(self) -> None:
         workflow = Workflow(

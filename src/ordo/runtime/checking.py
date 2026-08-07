@@ -15,11 +15,19 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBlockNode, PreflightDecisionModel, PreflightGuardNode, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
+from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
 from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, ConditionObservationRequest, ConditionObservationResult, FilterApplicationNode, ListNode, LiteralNode, LocalExpressionParseError, ObjectEntryNode, ObjectNode, OnlyPredicateNode, PipelineNode, ReadOnlyObservationSession, ReferenceNode, UnaryNode, ValueExpressionNode, evaluate_condition_expression, parse_local_expression_tree, render_expression_text
 from .local_expressions import extract_embedded_local_expression
 from .launchers import validate_step_launchers
-from .preflight_interpreter import build_preflight_halt, evaluate_preflight_probe_step, evaluate_preflight_step_condition, evaluate_preflight_value_step, store_preflight_register_output
+from .preflight_interpreter import (
+    build_preflight_halt,
+    evaluate_preflight_probe_step,
+    evaluate_preflight_step_condition,
+    evaluate_preflight_step_gate,
+    evaluate_preflight_value_step,
+    store_preflight_register_output,
+)
 from .preflight_steps import classify_preflight_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
@@ -292,6 +300,29 @@ def check_workflow(
 
 def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult:
     effective_workflow = analysis.workflow
+    gate_blockers = [
+        item.get("name")
+        for item in analysis.preflight_step_items
+        if isinstance(item, dict) and item.get("status") == "gate_blocked" and isinstance(item.get("name"), str)
+    ]
+    preflight_halts = [item for item in analysis.preflight_halts if isinstance(item, dict)]
+    frontier_ready_step = None
+    if (
+        not analysis.blockers
+        and not gate_blockers
+        and analysis.incomplete_reasons
+        and set(analysis.incomplete_reasons) == {"effectful_step_encountered"}
+        and preflight_halts
+        and all(item.get("reason") == "effectful_step_encountered" for item in preflight_halts)
+        and not any(isinstance(item, dict) and item.get("type") == "guards" and item.get("status") == "pending" for item in analysis.block_items)
+        and all(
+            isinstance(item.get("details"), dict)
+            and int(item["details"].get("block_index", -1)) == len(analysis.workflow.blocks) - 1
+            for item in preflight_halts
+        )
+    ):
+        step_name = preflight_halts[0].get("step_name")
+        frontier_ready_step = step_name if isinstance(step_name, str) else None
 
     if analysis.blockers:
         observation_basis = _build_observation_basis_outputs(effective_workflow, analysis.initial_resolution, list(analysis.guard_details))
@@ -328,14 +359,49 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
             analysis_tree=analysis,
         )
 
+    if gate_blockers:
+        outputs = {
+            **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+            "blockers": list(gate_blockers),
+            "gate_blockers": list(gate_blockers),
+            "checked_guards": list(analysis.checked_guards),
+            **_guard_coverage_outputs(effective_workflow, checked_guards=list(analysis.checked_guards), blockers=[]),
+            **_build_observation_basis_outputs(effective_workflow, analysis.initial_resolution, list(analysis.guard_details)),
+            "guard_details": list(analysis.guard_details),
+            "block_items": list(analysis.block_items),
+            "preflight_step_items": list(analysis.preflight_step_items),
+            "preflight_halts": list(analysis.preflight_halts),
+            "preflight_registers": dict(effective_workflow.step_results),
+            "preflight_step_results": dict(effective_workflow.step_results),
+            "active_profile": analysis.active_profile,
+            "active_overrides": [override.to_contract() for override in analysis.active_overrides],
+        }
+        if analysis.bootstrap_details:
+            outputs["bootstrap_details"] = list(analysis.bootstrap_details)
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.OK,
+            diagnostics=analysis.diagnostics,
+            plan=ExecutionPlan(
+                guard_checks=analysis.checked_guards,
+                step_names=tuple(_all_step_names(effective_workflow)),
+                blockers=tuple(gate_blockers),
+            ),
+            outputs=outputs,
+            operation_results=analysis.operation_results,
+            preflight_decision=_build_preflight_decision_model(effective_workflow, outputs),
+            analysis_tree=analysis,
+        )
+
     outputs = {
         **_base_verdict_outputs(
-            can_execute=not analysis.incomplete_reasons,
-            allowed_state="unknown" if analysis.incomplete_reasons else "allowed",
-            analysis_complete=not analysis.incomplete_reasons,
-            incomplete_reasons=list(analysis.incomplete_reasons),
+            can_execute=frontier_ready_step is not None or not analysis.incomplete_reasons,
+            allowed_state="allowed" if frontier_ready_step is not None else ("unknown" if analysis.incomplete_reasons else "allowed"),
+            analysis_complete=True if frontier_ready_step is not None else not analysis.incomplete_reasons,
+            incomplete_reasons=[] if frontier_ready_step is not None else list(analysis.incomplete_reasons),
         ),
         "blockers": [],
+        "gate_blockers": [],
         "checked_guards": list(analysis.checked_guards),
         **_guard_coverage_outputs(effective_workflow, checked_guards=list(analysis.checked_guards), blockers=[]),
         **_build_observation_basis_outputs(effective_workflow, analysis.initial_resolution, list(analysis.guard_details)),
@@ -348,6 +414,8 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
         "active_profile": analysis.active_profile,
         "active_overrides": [override.to_contract() for override in analysis.active_overrides],
     }
+    if frontier_ready_step is not None:
+        outputs["frontier_ready_step"] = frontier_ready_step
     if analysis.bootstrap_details:
         outputs["bootstrap_details"] = list(analysis.bootstrap_details)
 
@@ -515,6 +583,7 @@ def _build_check_analysis_tree(
                     "status": "context_applied",
                     "step_names": [step.name for step in declared_block.steps],
                     "conditional_steps": [step.name for step in declared_block.steps if step.if_ is not None],
+                    "gated_steps": [step.name for step in declared_block.steps if step.gate is not None],
                     "active_profile": current_profile_name,
                 }
             )
@@ -532,6 +601,7 @@ def _build_check_analysis_tree(
                     "status": "expanded",
                     "step_names": [step.name for step in declared_block.steps],
                     "conditional_steps": [],
+                    "gated_steps": [step.name for step in declared_block.steps if step.gate is not None],
                     "active_profile": current_profile_name,
                 }
             )
@@ -565,7 +635,7 @@ def _build_check_analysis_tree(
                 halted = True
             continue
 
-        if _has_later_guard_block(effective_workflow, block_index=block_index):
+        if _has_later_guard_block(effective_workflow, block_index=block_index) or any(step.gate is not None for step in declared_block.steps):
             interpreted_step_block = _interpret_step_block_for_check(
                 declared_block,
                 effective_workflow,
@@ -797,15 +867,28 @@ def _extract_input_names(value: JSONValue | dict[str, object] | None) -> set[str
     if isinstance(value, str):
         return _extract_input_names_from_string(value)
     if isinstance(value, dict):
+        try:
+            condition = normalize_condition_authoring(cast(JSONValue, value))
+        except ConditionShapeError:
+            names: set[str] = set()
+            for nested in value.values():
+                names.update(_extract_input_names(cast(JSONValue, nested)))
+            return names
         names: set[str] = set()
-        for key, nested in value.items():
-            names.update(_extract_input_names(key))
-            names.update(_extract_input_names(cast(JSONValue, nested)))
+        for _, expression in iter_condition_expression_leaves(condition):
+            names.update(_extract_input_names_from_string(expression))
         return names
     if isinstance(value, list):
+        try:
+            condition = normalize_condition_authoring(cast(JSONValue, value))
+        except ConditionShapeError:
+            names: set[str] = set()
+            for nested in value:
+                names.update(_extract_input_names(cast(JSONValue, nested)))
+            return names
         names: set[str] = set()
-        for nested in value:
-            names.update(_extract_input_names(cast(JSONValue, nested)))
+        for _, expression in iter_condition_expression_leaves(condition):
+            names.update(_extract_input_names_from_string(expression))
         return names
     return set()
 
@@ -1173,12 +1256,55 @@ def _interpret_step_block_for_check(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": "false",
+                    "gate_conditional": step.gate is not None,
+                    "gate": step.gate,
+                    "gate_status": None,
                     "probes": step_observations,
                     "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
             known_observations.extend(step_observations)
             continue
+
+        gate_report = evaluate_preflight_step_gate(
+            step,
+            effective_workflow,
+            step_results=effective_workflow.step_results,
+            observation_session=observation_session,
+        )
+        if gate_report is not None and gate_report.verdict != "passed":
+            halt_reason = "gate_failed" if gate_report.verdict == "failed" else "gate_unknown"
+            if gate_report.verdict == "unknown":
+                incomplete_reasons.append(halt_reason)
+            step_items.append(
+                {
+                    "block_index": block_index,
+                    "step_index": step_index,
+                    "name": step.name,
+                    "reference": resolved_step.reference,
+                    "preflight_classification": classify_preflight_step(step, resolved_step),
+                    "status": "gate_blocked" if gate_report.verdict == "failed" else "halted",
+                    "conditional": step.if_ is not None,
+                    "condition": step.if_,
+                    "condition_status": "true" if step.if_ is not None else None,
+                    "gate_conditional": True,
+                    "gate": step.gate,
+                    "gate_status": gate_report.verdict,
+                    "gate_report": gate_report.to_contract(),
+                    "halt_reason": halt_reason,
+                    "probes": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
+                    "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
+                }
+            )
+            _append_structural_tail_items(
+                block_index=block_index,
+                start_step_index=step_index + 1,
+                block=block,
+                resolved_block=resolved_block,
+                step_items=step_items,
+                known_observations=known_observations,
+            )
+            break
 
         classification = classify_preflight_step(step, resolved_step)
         if classification == "context_only" and step.profile_switch is not None:
@@ -1206,6 +1332,9 @@ def _interpret_step_block_for_check(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": "true" if step.if_ is not None else None,
+                        "gate_conditional": step.gate is not None,
+                        "gate": step.gate,
+                        "gate_status": "passed" if step.gate is not None else None,
                         "halt_reason": halt.reason,
                     }
                 )
@@ -1228,6 +1357,9 @@ def _interpret_step_block_for_check(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": "true" if step.if_ is not None else None,
+                    "gate_conditional": step.gate is not None,
+                    "gate": step.gate,
+                    "gate_status": "passed" if step.gate is not None else None,
                     "active_profile": effective_profile_name,
                 }
             )
@@ -1261,6 +1393,9 @@ def _interpret_step_block_for_check(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": "true" if step.if_ is not None else None,
+                        "gate_conditional": step.gate is not None,
+                        "gate": step.gate,
+                        "gate_status": "passed" if step.gate is not None else None,
                         "halt_reason": halt.reason,
                         "operation_status": result.status,
                     }
@@ -1289,6 +1424,9 @@ def _interpret_step_block_for_check(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": "true" if step.if_ is not None else None,
+                    "gate_conditional": step.gate is not None,
+                    "gate": step.gate,
+                    "gate_status": "passed" if step.gate is not None else None,
                     "register": step.register,
                     "operation_status": result.status,
                     "summary": result.summary,
@@ -1326,6 +1464,9 @@ def _interpret_step_block_for_check(
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
                 "condition_status": "true" if step.if_ is not None else None,
+                "gate_conditional": step.gate is not None,
+                "gate": step.gate,
+                "gate_status": "passed" if step.gate is not None else None,
                 "halt_reason": halt.reason,
                 "probes": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
                 "action_call": action_call,
@@ -1360,6 +1501,9 @@ def _interpret_step_block_for_check(
                             "conditional": False,
                             "condition": None,
                             "condition_status": None,
+                            "gate_conditional": trailing_step.gate is not None,
+                            "gate": trailing_step.gate,
+                            "gate_status": "passed" if trailing_step.gate is not None else None,
                             "active_profile": effective_profile_name,
                         }
                     )
@@ -1385,6 +1529,7 @@ def _interpret_step_block_for_check(
             "status": "preflight_halted" if halt_item is not None else "preflight_interpreted",
             "step_names": [step.name for step in block.steps],
             "conditional_steps": [step.name for step in block.steps if step.if_ is not None],
+            "gated_steps": [step.name for step in block.steps if step.gate is not None],
             "interpreted_steps": interpreted_steps,
             "skipped_steps": skipped_steps,
             "active_profile": effective_profile_name,
@@ -1571,6 +1716,7 @@ def _build_pending_block_items(workflow: Workflow, *, blocked: bool, start_index
                     "status": "blocked" if blocked else "pending",
                     "step_names": [step.name for step in block.steps],
                     "conditional_steps": [step.name for step in block.steps if step.if_ is not None],
+                    "gated_steps": [step.name for step in block.steps if step.gate is not None],
                     "active_profile": active_profile,
                 }
             )
@@ -1596,6 +1742,7 @@ def _pending_step_block_item_from_declared(block_index: int, declared: StepBlock
         "status": "blocked" if blocked else "pending",
         "step_names": [step.name for step in declared.steps],
         "conditional_steps": [step.name for step in declared.steps if step.if_ is not None],
+        "gated_steps": [step.name for step in declared.steps if step.gate is not None],
         "active_profile": active_profile,
     }
 
@@ -1716,6 +1863,9 @@ def _structural_step_item(
         "conditional": step.if_ is not None,
         "condition": step.if_,
         "condition_status": condition_status,
+        "gate_conditional": step.gate is not None,
+        "gate": step.gate,
+        "gate_status": "unknown" if step.gate is not None else None,
         "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
     }
     if isinstance(resolved_step, ResolvedRunStep):

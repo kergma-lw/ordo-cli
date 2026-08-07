@@ -9,6 +9,7 @@
 
 - An operation-call step may declare an optional `register` identifier.
 - A workflow step that declares `if` must not also declare `register` in the MVP.
+- A workflow step that declares `gate` may also declare `register`, but a blocked gated step must not publish a registered result.
 - A later value expression may read a prior registered result through the `step...` root.
 - The MVP registered-result surface should expose `status`, `summary`, and `outputs...`.
 - Register identifiers must be workflow-local and must not be inferred from step names.

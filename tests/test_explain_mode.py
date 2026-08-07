@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
-from ordo.model.runtime import OperationResult, RuntimeResult, RuntimeStatus
+from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow
 
@@ -131,8 +131,9 @@ class ExplainModeTest(unittest.TestCase):
         result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["explanation"]["category"], "incomplete")
-        self.assertEqual(result.outputs["next_actions"][0]["action"], "complete_preflight_analysis")
+        self.assertEqual(result.outputs["explanation"]["category"], "preflight_step")
+        self.assertEqual(result.outputs["explanation"]["blockers"], ["prepare"])
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "repair_read_only_observation")
 
     def test_explain_surfaces_preflight_halts_for_incomplete_analysis(self) -> None:
         workflow = Workflow(
@@ -211,6 +212,107 @@ class ExplainModeTest(unittest.TestCase):
             ],
         )
 
+    def test_explain_execution_result_reports_gate_block(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            steps=(
+                Step(name="ready", value=False, register="ready"),
+                Step(
+                    name="mutate",
+                    operation=OperationRef("shell.command", with_={"command": "printf executed"}),
+                    gate="step.ready.outputs.value",
+                ),
+            ),
+        )
+
+        result = explain_execution_result(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.outputs["explanation"]["category"], "gate")
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "satisfy_step_gate")
+        self.assertEqual(result.outputs["explanation"]["blockers"], ["mutate"])
+
+    def test_explain_reports_runtime_derived_gate_block_from_preflight_knowledge(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="story-to-ready-like",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-story", operation=OperationRef("gh.issue"), register="loaded_story"),
+                        Step(name="task-refs", value='${step.loaded_story.outputs.body | markdown["Tasks"].list_items}', register="task_refs"),
+                        Step(
+                            name="set-ready",
+                            operation=OperationRef("gh.issue.close"),
+                            gate={
+                                "all": [
+                                    'is_present(step.loaded_story.outputs.body | markdown["Acceptance"])',
+                                    'is_present(step.loaded_story.outputs.body | markdown["Acceptance"].list[0])',
+                                    'is_present(step.loaded_story.outputs.body | markdown["Tasks"])',
+                                    'is_present(step.loaded_story.outputs.body | markdown["Tasks"].list[1])',
+                                ]
+                            },
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"body": "# Title\n\n## Tasks\n- one"})
+            return OperationResult(status="ok", outputs={})
+
+        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["explanation"]["category"], "gate")
+        self.assertEqual(result.outputs["explanation"]["blockers"], ["set-ready"])
+        gate_detail = result.outputs["explanation"]["step_gate_details"][0]
+        self.assertEqual(gate_detail["verdict"], "failed")
+
+    def test_explain_reports_read_only_preflight_failure_clearly(self) -> None:
+        result = explain_runtime_result(
+            RuntimeResult(
+                mode=Mode.CHECK,
+                status=RuntimeStatus.OK,
+                diagnostics=(),
+                outputs={
+                    "allowed_state": "unknown",
+                    "analysis_complete": False,
+                    "incomplete_reasons": ["read_only_step_failed"],
+                    "preflight_halts": [
+                        {
+                            "reason": "read_only_step_failed",
+                            "step_name": "Load story task item details in batch",
+                            "details": {"status": "invalid_content_ref"},
+                        }
+                    ],
+                },
+            )
+        )
+
+        self.assertEqual(result.outputs["explanation"]["category"], "preflight_step")
+        self.assertEqual(result.outputs["explanation"]["blockers"], ["Load story task item details in batch"])
+
+    def test_explain_reports_frontier_ready_step_when_preflight_reaches_effectful_step(self) -> None:
+        result = explain_runtime_result(
+            RuntimeResult(
+                mode=Mode.CHECK,
+                status=RuntimeStatus.OK,
+                diagnostics=(),
+                outputs={
+                    "allowed_state": "allowed",
+                    "analysis_complete": True,
+                    "frontier_ready_step": "Set story status to Ready",
+                },
+            )
+        )
+
+        self.assertEqual(result.outputs["explanation"]["category"], "ok")
+        self.assertIn("Set story status to Ready", result.outputs["explanation"]["why"])
+
     def test_explain_keeps_preflight_support_consistent_with_plan(self) -> None:
         workflow = Workflow(
             version=0,
@@ -275,7 +377,8 @@ class ExplainModeTest(unittest.TestCase):
 
         result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-        self.assertIn("read_only_step_failed", result.outputs["explanation"]["incomplete_reasons"])
+        self.assertEqual(result.outputs["explanation"]["category"], "preflight_step")
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "repair_read_only_observation")
         self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["name"], "push")
         self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["strength"], "weak")
         self.assertEqual(

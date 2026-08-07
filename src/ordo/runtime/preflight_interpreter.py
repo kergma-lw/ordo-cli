@@ -8,10 +8,11 @@ from ordo.model.json import JSONObject, JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Step, Workflow
 
+from .conditions import ConditionEvaluationReport
 from .fragment_runs import classify_run_for_check
 from .local_expression_contexts import LocalExpressionContext
 from .local_expression_engine.core import ReadOnlyObservationSession
-from .local_expressions import resolve_condition_local_expression
+from .local_expressions import evaluate_condition_report, resolve_condition_value
 from .providers import GuardProbe
 from .resolution import ResolvedOperation
 from .value_resolution import ValueResolutionError, resolve_runtime_value
@@ -23,7 +24,7 @@ class PreflightHalt:
 
     reason: str
     step_name: str | None = None
-    branch_condition: str | None = None
+    branch_condition: JSONValue | None = None
     details: JSONObject = field(default_factory=dict)
 
     def to_contract(self) -> JSONObject:
@@ -69,7 +70,7 @@ def evaluate_preflight_step_condition(
     if step.if_ is None:
         return True
     try:
-        value = resolve_condition_local_expression(
+        value = resolve_condition_value(
             step.if_,
             workflow,
             context=LocalExpressionContext.STEP_CONDITION,
@@ -105,6 +106,27 @@ def evaluate_preflight_value_step(
     )
 
 
+def evaluate_preflight_step_gate(
+    step: Step,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
+) -> ConditionEvaluationReport | None:
+    """Evaluate one step `gate` from currently available preflight knowledge."""
+
+    if step.gate is None:
+        return None
+    return evaluate_condition_report(
+        step.gate,
+        workflow,
+        context=LocalExpressionContext.STEP_CONDITION,
+        step_results=step_results,
+        observation_session=observation_session,
+        field_name="gate",
+    )
+
+
 def store_preflight_register_output(
     register_name: str,
     result: OperationResult,
@@ -124,7 +146,7 @@ def build_preflight_halt(
     reason: str,
     *,
     step: Step | None = None,
-    branch_condition: str | None = None,
+    branch_condition: JSONValue | None = None,
     details: JSONObject | None = None,
 ) -> PreflightHalt:
     """Create a structured preflight halt record."""

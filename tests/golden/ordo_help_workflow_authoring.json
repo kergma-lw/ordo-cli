@@ -8,7 +8,7 @@
     "when adding or changing inputs, validate them before continuing",
     "validate both the request shape and the observed target context",
     "name important values early",
-    "prefer bare expressions in let, if, with, value, publish, result, and for_each; quote literal strings explicitly",
+    "prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly",
     "do not use with{root: ...} if the same adapter binding can be expressed with pipe-style syntax; use with{root: ...} only as a fallback when the pipe-style form is not valid in the current construct",
     "stage reusable payloads with value + register before emitting them through result or publish",
     "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
@@ -627,23 +627,26 @@
       "avoid": [
         "wrapping native expression contexts in ${...} just by habit",
         "using ${...} in value-bearing fields that now prefer bare expressions",
+        "packing more than three step-condition predicates into one boolean string",
         "leaving intended string literals unquoted in expression-first value-bearing fields"
       ],
       "guidance_level": "recommended",
       "name": "native_expression_contexts",
       "prefer": [
         "write let bindings as bare expressions",
-        "write step if conditions without ${...}",
+        "write short step if conditions without ${...}",
+        "rewrite step if conditions into structured all/any/not form when more than three predicates are being compared",
         "write with, value, publish, result, and for_each entries as bare expressions when they are meant to evaluate",
         "quote literal strings explicitly when a value-bearing field should preserve raw text",
         "keep ${...} only for YAML-hostile expressions that are not viable as bare plain scalars"
       ],
       "priority": "recommended_readability_pattern",
-      "rule": "Prefer bare expressions in native and expression-first value contexts such as let:, bare step if:, with:, value:, publish:, result:, and for_each. Quote literal strings explicitly.",
+      "rule": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly.",
       "why": [
         "bare expressions reduce visual noise across the workflow surfaces that are usually expression-driven",
         "quoted literals make string intent explicit without forcing the common expression case through an extra envelope",
-        "using one bare-first value model across with, value, publish, result, and for_each keeps authored workflow dataflow easier to scan"
+        "using one bare-first value model across with, value, publish, result, and for_each keeps authored workflow dataflow easier to scan",
+        "structured step conditions stay reviewable once predicate count grows beyond a small compact expression"
       ]
     }
   ]

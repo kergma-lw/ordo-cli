@@ -285,14 +285,7 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
 
 def _summarize_review_payload(payload: dict[str, object]) -> dict[str, object]:
     findings = [item for item in payload.get("outputs", {}).get("findings", []) if isinstance(item, dict)]
-    top_findings = [
-        {
-            "code": item.get("code"),
-            "category": item.get("category"),
-            "message": item.get("message"),
-        }
-        for item in findings[:5]
-    ]
+    top_findings = [_summarize_review_finding(item) for item in findings[:5]]
     return {
         "mode": payload.get("mode"),
         "status": payload.get("status"),
@@ -303,6 +296,24 @@ def _summarize_review_payload(payload: dict[str, object]) -> dict[str, object]:
         "top_findings": top_findings,
         "diagnostics": payload.get("diagnostics", []),
     }
+
+
+def _summarize_review_finding(item: dict[str, object]) -> dict[str, object]:
+    summary = {
+        "code": item.get("code"),
+        "category": item.get("category"),
+        "message": item.get("message"),
+    }
+    evidence = item.get("evidence")
+    if not isinstance(evidence, dict):
+        return summary
+    if isinstance(evidence.get("suggested_fix"), str):
+        summary["suggested_fix"] = evidence.get("suggested_fix")
+    if isinstance(evidence.get("suggested_expression"), str):
+        summary["suggested_expression"] = evidence.get("suggested_expression")
+    if evidence.get("suggested_rewrite") is not None:
+        summary["suggested_rewrite"] = evidence.get("suggested_rewrite")
+    return summary
 
 
 def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[str, object]:
@@ -565,8 +576,29 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
         "missing_facts": _collect_missing_facts(outputs),
     }
 
+    gate_blockers = [name for name in outputs.get("gate_blockers", []) if isinstance(name, str)]
+    if gate_blockers:
+        summary["blockers"] = gate_blockers
+        summary["message"] = "check blocked by step gate; use explain or --json check for full gate details"
+
     if payload.get("failed_guard") is not None:
         summary["failed_guard"] = payload.get("failed_guard")
+
+    preflight_halts = [item for item in outputs.get("preflight_halts", []) if isinstance(item, dict)]
+    if preflight_halts and "message" not in summary:
+        first = preflight_halts[0]
+        step_name = first.get("step_name") if isinstance(first.get("step_name"), str) else None
+        reason = first.get("reason") if isinstance(first.get("reason"), str) else None
+        if reason == "read_only_step_failed":
+            summary["blockers"] = [] if step_name is None else [step_name]
+            summary["message"] = "check blocked by failing read-only observation; use explain or --json check for details"
+        elif reason == "gate_unknown":
+            summary["blockers"] = [] if step_name is None else [step_name]
+            summary["message"] = "check blocked because a step gate could not yet be established from current read-only knowledge"
+
+    frontier_ready_step = outputs.get("frontier_ready_step")
+    if isinstance(frontier_ready_step, str):
+        summary["message"] = f"workflow can run now; read-only preflight reached '{frontier_ready_step}'"
 
     if outputs.get("verdict_basis_stale"):
         summary["message"] = "check incomplete; use --json check or explain for details"

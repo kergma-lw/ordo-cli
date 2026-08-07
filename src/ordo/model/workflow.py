@@ -65,7 +65,8 @@ class Step:
     publish: JSONValue | None = None
     state_set: JSONObject | None = None
     state_delete: str | None = None
-    if_: str | None = field(default=None, metadata={"contract_name": "if"})
+    if_: JSONValue | None = field(default=None, metadata={"contract_name": "if"})
+    gate: JSONValue | None = None
     register: str | None = None
     launcher: str | None = None
     resolved_run_path: str | None = field(default=None, kw_only=True)
@@ -89,19 +90,22 @@ class Step:
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped contract form."""
 
-        if self.operation is not None:
-            contract = {"name": self.name, **self.operation.to_contract()}
+        def apply_controls(contract: JSONObject) -> JSONObject:
             if self.if_ is not None:
                 contract["if"] = self.if_
+            if self.gate is not None:
+                contract["gate"] = self.gate
+            return contract
+
+        if self.operation is not None:
+            contract = apply_controls({"name": self.name, **self.operation.to_contract()})
             if self.register is not None:
                 contract["register"] = self.register
             if self.launcher is not None:
                 contract["launcher"] = self.launcher
             return contract
         if self.run is not None:
-            contract = {"name": self.name, "run": self.run}
-            if self.if_ is not None:
-                contract["if"] = self.if_
+            contract = apply_controls({"name": self.name, "run": self.run})
             if self.run_with:
                 contract["with"] = dict(self.run_with)
             if self.for_each is not None:
@@ -110,45 +114,26 @@ class Step:
                 contract["register"] = self.register
             return contract
         if self.steps is not None:
-            contract = {"name": self.name, "steps": [step.to_contract() for step in self.steps]}
-            if self.if_ is not None:
-                contract["if"] = self.if_
+            contract = apply_controls({"name": self.name, "steps": [step.to_contract() for step in self.steps]})
             if self.for_each is not None:
                 contract["for_each"] = self.for_each
             if self.register is not None:
                 contract["register"] = self.register
             return contract
         if self.profile_switch is not None:
-            contract = {"name": self.name, "profile_switch": self.profile_switch}
-            if self.if_ is not None:
-                contract["if"] = self.if_
-            return contract
+            return apply_controls({"name": self.name, "profile_switch": self.profile_switch})
         if self.value is not None:
-            contract = {"name": self.name, "value": self.value}
-            if self.if_ is not None:
-                contract["if"] = self.if_
+            contract = apply_controls({"name": self.name, "value": self.value})
             if self.register is not None:
                 contract["register"] = self.register
             return contract
         if self.result is not None:
-            contract = {"name": self.name, "result": self.result}
-            if self.if_ is not None:
-                contract["if"] = self.if_
-            return contract
+            return apply_controls({"name": self.name, "result": self.result})
         if self.publish is not None:
-            contract = {"name": self.name, "publish": self.publish}
-            if self.if_ is not None:
-                contract["if"] = self.if_
-            return contract
+            return apply_controls({"name": self.name, "publish": self.publish})
         if self.state_set is not None:
-            contract = {"name": self.name, "state_set": dict(self.state_set)}
-            if self.if_ is not None:
-                contract["if"] = self.if_
-            return contract
-        contract = {"name": self.name, "state_delete": self.state_delete}
-        if self.if_ is not None:
-            contract["if"] = self.if_
-        return contract
+            return apply_controls({"name": self.name, "state_set": dict(self.state_set)})
+        return apply_controls({"name": self.name, "state_delete": self.state_delete})
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,7 +162,7 @@ class RunBlock:
 
     run: str
     with_: JSONObject = field(default_factory=dict, kw_only=True)
-    if_: str | None = field(default=None, metadata={"contract_name": "if"})
+    if_: JSONValue | None = field(default=None, metadata={"contract_name": "if"})
     resolved_path: str | None = field(default=None, kw_only=True)
 
     def to_contract(self) -> JSONObject:

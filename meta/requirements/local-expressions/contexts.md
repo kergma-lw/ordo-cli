@@ -45,7 +45,11 @@
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
 - Step-condition context may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
-- Native bare `if` conditions are the preferred step-condition surface.
+- Native `if` conditions are the preferred step-condition surface.
+- Native step conditions may be authored either as a bare boolean expression or as a structured condition tree.
+- String-expression and structured-condition `if` forms are equal-authority step-condition surfaces.
+- List-form `if` means implicit `all`.
+- Structured step conditions may use `all`, `any`, and `not` nodes and may nest them.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
 - Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 

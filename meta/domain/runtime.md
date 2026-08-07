@@ -14,6 +14,8 @@ Answers whether the authored workflow is structurally strong and explicit enough
 
 It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
 
+It should also distinguish optional-routing step conditions from late admission gates and may recommend `gate` when a long `if` is actually expressing readiness for a mutating step.
+
 For input-related findings, `review` should distinguish between inputs that drive control/effect semantics, trusted profile-provided consumed context, profile-carried ambient surplus, and declared-but-unused inputs rather than treating every declared input as equal validation debt.
 
 Profile-provided consumed context is still meaningful workflow input, but it is not automatically user-driven validation debt.
@@ -36,6 +38,8 @@ Its primary value is a safe preflight verdict:
 - which guards or prerequisites failed;
 - which immediate blockers must be resolved first.
 
+For reachable gated steps, that verdict may also include whether the step can run, cannot run, or cannot yet be established honestly from available read-only knowledge.
+
 That verdict must remain honest about coverage and incompleteness as defined in `meta/model/runtime/check-semantics.md`.
 
 ### `plan`
@@ -47,6 +51,8 @@ It builds an explainable plan that shows:
 - which step blocks are expected to become executable;
 - which steps are expected in each step block;
 - where execution is blocked.
+
+For gated steps, `plan` should preserve that read-only observations happen before admission is evaluated and that the protected step executes only if the gate passes.
 
 Its primary value is execution preview, not merely blocked-versus-allowed status.
 
@@ -66,6 +72,7 @@ It returns an explanation of the current runtime decision state, not only of com
 - why execution is blocked or allowed;
 - why a guard block failed;
 - why a particular guard, step block, or step is relevant to the current outcome;
+- why a step was skipped by `if` versus blocked by `gate`;
 - which playbook-run profile is active;
 - whether that profile came from explicit caller choice or playbook defaults;
 - which overrides are active;

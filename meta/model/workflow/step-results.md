@@ -91,6 +91,7 @@ Registered step results are not:
 
 - The `register` field belongs only to operation-call steps that use `uses`, reusable `run` invocation steps, and built-in `value` steps.
 - A step that declares `if` must not also declare `register` in the MVP.
+- A step that declares `gate` may also declare `register`, but no registered result is published when the gate blocks execution.
 - `state_set` and `state_delete` do not publish registered step results in the MVP.
 - A built-in `value` step publishes exactly one derived output value rather than an open-ended output object assembled by workflow syntax.
 - A probe operation used as a normal step may declare `register` like any other operation-call step.

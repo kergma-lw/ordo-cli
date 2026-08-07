@@ -217,6 +217,8 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
         self.assertIn("for_each", step_forms["run_invocation"]["optional_fields"])
+        self.assertEqual(step_forms["run_invocation"]["if_structured_operators"], ["all", "any", "not"])
+        self.assertEqual(model["local_expressions"]["condition_structures"]["list_semantics"], "implicit_all")
         self.assertIn("register", step_forms["run_invocation"]["optional_fields"])
         self.assertEqual(step_forms["inline_fan_out_invocation"]["required_fields"], ["name", "for_each", "steps"])
         self.assertIn("register", step_forms["inline_fan_out_invocation"]["optional_fields"])
@@ -575,7 +577,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and explicit probe-coverage gaps early", payload["authoring_heuristic"])
         self.assertIn("for applicability decisions, prefer guard probes first; use read-only probe steps mainly when the observed fact must be reused later", payload["authoring_heuristic"])
         self.assertIn("treat 'observation' in runtime metadata as the internal term for the result of an explicit probe", payload["authoring_heuristic"])
-        self.assertIn("prefer bare expressions in let, if, with, value, publish, result, and for_each; quote literal strings explicitly", payload["authoring_heuristic"])
+        self.assertIn("prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly", payload["authoring_heuristic"])
         self.assertEqual([item["name"] for item in payload["bounded_fan_out_examples"]], ["named_run_target_fan_out", "inline_fan_out_local_steps", "inline_fan_out_inner_if"])
         decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")
         structured_rule = next(item for item in payload["rules"] if item["name"] == "structured_surface_bias")

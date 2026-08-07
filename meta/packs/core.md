@@ -707,7 +707,11 @@
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
 - Step-condition context may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
-- Native bare `if` conditions are the preferred step-condition surface.
+- Native `if` conditions are the preferred step-condition surface.
+- Native step conditions may be authored either as a bare boolean expression or as a structured condition tree.
+- String-expression and structured-condition `if` forms are equal-authority step-condition surfaces.
+- List-form `if` means implicit `all`.
+- Structured step conditions may use `all`, `any`, and `not` nodes and may nest them.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
 - Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
 
@@ -1290,6 +1294,56 @@ The runtime must be able to answer, in machine-readable form:
 - New runtime-visible surface should be added through canonical metadata first or in the same change.
 - The project should prefer one shared metadata source over separate runtime and help descriptions.
 - Introspection should fail closed for covered surfaces rather than silently omitting changed behavior.
+
+<!-- source: requirements/runtime/step-admission.md -->
+
+# Runtime requirements for step admission gates
+
+## Role
+
+- The runtime should support step-level admission control through workflow-authored `gate` conditions.
+- A `gate` should protect step execution after prerequisite observations and before the protected step begins running.
+- A `gate` should not replace workflow-entry `guards` or step-level conditional `if` semantics.
+
+## Evaluation order
+
+- When a step declares `if`, the runtime must evaluate `if` before any `gate` on the same step.
+- If `if` evaluates to `false`, the step must be skipped and the runtime must not evaluate `gate` for that step.
+- When a step declares `gate`, the runtime must evaluate `gate` immediately before step execution.
+- If `gate` evaluates to `true`, the runtime may execute the step normally.
+- If `gate` evaluates to `false`, the runtime must not execute the step and must fail the workflow on that step.
+
+## Admission boundary
+
+- `gate` is step-level admission control after observations, not early workflow blocking.
+- `gate` must be able to depend on runtime-derived read-only knowledge that was established by earlier steps.
+- `gate` must not depend on outputs of the current step it protects.
+- A blocked `gate` must not be rewritten into a silent skip.
+
+## Outcome model
+
+- The runtime should preserve a distinct step outcome for gate blocking such as `gate_failed`.
+- A gate-blocked step must remain distinguishable from ordinary execution failure even when both lead to workflow failure.
+- A gate-blocked step must not publish normal step outputs or registered results.
+
+## Check semantics
+
+- `check` should perform relevant read-only observations needed to evaluate a reachable `gate` when that can be done without effectful business execution.
+- `check` should report whether a gated step can run, cannot run, or cannot yet be established honestly from available knowledge.
+- `check` should identify which gate clauses passed, failed, or remain unknown or unobserved.
+- `check` must not execute effectful business steps to satisfy a `gate`.
+
+## Explainability
+
+- `run` and `explain` outputs should preserve that a step was blocked by `gate` rather than skipped or generally failed.
+- Runtime outputs should preserve the failing gate condition or failing subconditions when available.
+- Structured `gate` conditions should remain explainable in terms of their `all`, `any`, and `not` structure.
+
+## Planning and review projections
+
+- `plan` should show read-only observations before a gated step and should preserve that the step executes only if the `gate` passes.
+- `review` should distinguish optional-routing `if` usage from readiness or admission `gate` usage.
+- `review` should prefer structured `gate` form for multi-clause readiness checks and may flag unreadable long string-form gates as weak authoring shape.
 
 <!-- source: requirements/runtime/state.md -->
 
@@ -2094,6 +2148,7 @@ but workflow files do not own the implementation logic of either surface.
 - compact parameters;
 - workflow-local named expressions through a top-level `let` surface when they keep policy and dataflow reviewable;
 - simple step-level conditional execution when it has clear semantics.
+- simple step-level admission control when it has clear semantics.
 - simple branching when it has clear semantics.
 - explicit authored workflow-local returns through `result` steps.
 - explicit authored global publication through `publish` steps.
@@ -2213,6 +2268,8 @@ Answers whether the authored workflow is structurally strong and explicit enough
 
 It may report authoring findings such as missing validation, delegated applicability, or weak preflight-support evidence, while staying non-effectful.
 
+It should also distinguish optional-routing step conditions from late admission gates and may recommend `gate` when a long `if` is actually expressing readiness for a mutating step.
+
 For input-related findings, `review` should distinguish between inputs that drive control/effect semantics, trusted profile-provided consumed context, profile-carried ambient surplus, and declared-but-unused inputs rather than treating every declared input as equal validation debt.
 
 Profile-provided consumed context is still meaningful workflow input, but it is not automatically user-driven validation debt.
@@ -2235,6 +2292,8 @@ Its primary value is a safe preflight verdict:
 - which guards or prerequisites failed;
 - which immediate blockers must be resolved first.
 
+For reachable gated steps, that verdict may also include whether the step can run, cannot run, or cannot yet be established honestly from available read-only knowledge.
+
 That verdict must remain honest about coverage and incompleteness as defined in `meta/model/runtime/check-semantics.md`.
 
 ### `plan`
@@ -2246,6 +2305,8 @@ It builds an explainable plan that shows:
 - which step blocks are expected to become executable;
 - which steps are expected in each step block;
 - where execution is blocked.
+
+For gated steps, `plan` should preserve that read-only observations happen before admission is evaluated and that the protected step executes only if the gate passes.
 
 Its primary value is execution preview, not merely blocked-versus-allowed status.
 
@@ -2265,6 +2326,7 @@ It returns an explanation of the current runtime decision state, not only of com
 - why execution is blocked or allowed;
 - why a guard block failed;
 - why a particular guard, step block, or step is relevant to the current outcome;
+- why a step was skipped by `if` versus blocked by `gate`;
 - which playbook-run profile is active;
 - whether that profile came from explicit caller choice or playbook defaults;
 - which overrides are active;
@@ -3417,6 +3479,10 @@ Step-condition context models conditional execution of one workflow step.
 Unlike guard context, it may legitimately depend on prior execution-local registered results because it is evaluated after earlier steps may already have run.
 
 It also belongs to the condition-oriented context family.
+
+Its native authored surface may be either a bare boolean expression or a structured condition tree under `if`.
+
+In that structured form, a list means implicit `all`, while explicit `all`, `any`, and `not` nodes may nest to express boolean composition without collapsing the condition back into one string expression.
 
 ## Include-binding context
 
@@ -4781,6 +4847,154 @@ The proposal is successful only if it:
 - preserves `check` as strictly non-effectful;
 - keeps the result surface explainable without log scraping;
 - avoids turning `check` into a disguised `execute` or broad dry-run simulator.
+
+<!-- source: model/runtime/step-admission.md -->
+
+# Step admission runtime model
+
+## Role
+
+Step admission introduces one runtime-visible control point between:
+
+- reaching a step in ordered workflow execution; and
+- actually dispatching that step.
+
+It exists to model readiness and late admission checks that should fail honestly rather than disappear as optional routing.
+
+## Semantic split
+
+- `guards` answer whether workflow execution may cross an earlier workflow barrier.
+- `if` answers whether a particular step is applicable and should be skipped when false.
+- `gate` answers whether a reached step is admitted to execution and should fail when false.
+
+This distinction is semantic, not only diagnostic.
+
+## Evaluation order
+
+For one step, the runtime order is:
+
+1. resolve the step shape and dependencies;
+2. evaluate `if` when present;
+3. if `if` is `false`, mark the step skipped and stop evaluation for that step;
+4. evaluate `gate` when present;
+5. if `gate` is `false`, mark the step gate-blocked and fail the workflow;
+6. otherwise execute the step normally.
+
+`gate` is therefore a late admission boundary, not an alternate skip surface.
+
+## Typical use
+
+`gate` is most valuable when:
+
+- earlier steps established read-only observations;
+- the protected step is effectful or mutating;
+- failing readiness should be surfaced as an actionable workflow failure.
+
+Illustrative shape:
+
+```yaml
+- name: Set story status to Ready
+  uses: gh.project.issue.field_single_select.set
+  gate:
+    all:
+      - step.has_acceptance.outputs.value
+      - step.has_tasks_section.outputs.value
+      - step.has_minimum_task_count.outputs.value
+      - step.all_linked_items_ready.outputs.value
+      - step.has_no_linked_stories.outputs.value
+      - step.has_no_linked_epics.outputs.value
+```
+
+## Truth model
+
+Runtime-facing admission analysis should preserve more than one flat boolean when possible.
+
+Useful clause-level states are:
+
+- `passed`;
+- `failed`;
+- `unknown`.
+
+This matters especially for `check` and `explain`.
+
+Recommended mode interpretation:
+
+- `execute`: `unknown` is conservative and must not authorize step execution;
+- `check`: `unknown` remains explicit rather than upgraded into allowed;
+- `explain`: `unknown` should remain attributable to the exact missing or unobserved clause.
+
+## Outcome distinctions
+
+Runtime should preserve the distinction between:
+
+- skipped because `if` was false;
+- blocked because `gate` was false;
+- failed because `gate` could not be evaluated safely;
+- failed because step execution itself failed after admission.
+
+Even if public workflow status still collapses the last three cases to workflow failure, the step-level outcome should remain distinguishable.
+
+## Preflight interaction
+
+`check` may strengthen gate analysis through the preflight step interpreter defined in `meta/model/runtime/preflight-step-interpreter.md`.
+
+That means `check` may:
+
+- execute relevant read-only probe steps;
+- evaluate pure value steps;
+- materialize prior read-only `step...` facts;
+- decide whether a later gated step can be admitted.
+
+That does not allow `check` to execute the gated effectful step itself.
+
+## Projection expectations
+
+### `run`
+
+- Preserve gate evaluation in the execution trace.
+- Preserve which gate clauses failed when available.
+- Fail on the protected step without dispatching it.
+
+### `check`
+
+- Report `can run`, `cannot run`, or honest incompleteness for a gated step.
+- Preserve clause-level `passed`, `failed`, and `unknown` detail when available.
+
+### `plan`
+
+- Show that prerequisite read-only observations happen before gate evaluation.
+- Show that the protected step executes only if admission succeeds.
+
+### `explain`
+
+- Explain gate blocking distinctly from skip and generic execution failure.
+- Preserve structured condition shape closely enough to explain nested `all`, `any`, and `not` reasoning.
+
+### `review`
+
+- Recognize when a long `if` expression is actually encoding readiness or admission semantics for a later mutating step.
+- Prefer recommending structured `gate` for that case.
+
+## Authoring guidance
+
+Prefer structured `gate` form when a step has multiple readiness clauses.
+
+Preferred:
+
+```yaml
+gate:
+  all:
+    - step.a.outputs.value
+    - step.b.outputs.value
+```
+
+Discouraged:
+
+```yaml
+gate: step.a.outputs.value and step.b.outputs.value and step.c.outputs.value
+```
+
+Structured form keeps admission analysis easier to review, explain, and project across runtime modes.
 
 <!-- source: model/runtime/state.md -->
 

@@ -46,6 +46,10 @@ Unlike guard context, it may legitimately depend on prior execution-local regist
 
 It also belongs to the condition-oriented context family.
 
+Its native authored surface may be either a bare boolean expression or a structured condition tree under `if`.
+
+In that structured form, a list means implicit `all`, while explicit `all`, `any`, and `not` nodes may nest to express boolean composition without collapsing the condition back into one string expression.
+
 ## Include-binding context
 
 Include-binding context models caller-side argument preparation for included fragments.

@@ -6,7 +6,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import plan_workflow
+from ordo.runtime import load_workflow_text, plan_workflow
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -255,6 +255,27 @@ class PlanModeTest(unittest.TestCase):
         self.assertTrue(result.outputs["step_items"][0]["conditional"])
         self.assertEqual(result.outputs["step_items"][0]["condition"], "${inputs.enabled}")
         self.assertEqual(result.outputs["step_items"][0]["condition_status"], "unknown")
+
+    def test_plan_surfaces_gate_metadata_and_blocked_eligibility(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            steps=(
+                Step(name="ready", value=False, register="ready"),
+                Step(
+                    name="mutate",
+                    operation=OperationRef("shell.command", with_={"command": "printf executed"}),
+                    gate="step.ready.outputs.value",
+                ),
+            ),
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        mutate = next(item for item in result.outputs["step_items"] if item["name"] == "mutate")
+        self.assertEqual(mutate["eligibility"], "blocked")
+        self.assertTrue(mutate["gate_conditional"])
+        self.assertEqual(mutate["gate_status"], "failed")
 
     def test_plan_surfaces_preflight_step_classification(self) -> None:
         cases = [
@@ -753,6 +774,36 @@ class PlanModeTest(unittest.TestCase):
         result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["step_items"][0]["launcher"], "shell_frontend")
+
+    def test_plan_preserves_structured_condition_surface(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+  status: ok
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect
+        if:
+          all:
+            - inputs.enabled
+            - any:
+                - inputs.status | eq("ok")
+                - inputs.enabled | not
+        uses: gh.issue
+"""
+        )
+
+        result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(
+            result.outputs["step_items"][0]["condition"],
+            {"all": ["inputs.enabled", {"any": ["inputs.status | eq(\"ok\")", "inputs.enabled | not"]}]},
+        )
+        self.assertEqual(result.outputs["step_items"][0]["condition_status"], "unknown")
 
 
 if __name__ == "__main__":

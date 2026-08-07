@@ -217,6 +217,183 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["executed_steps"], ["comment"])
 
+    def test_execute_structured_list_step_condition(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+  status: ok
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if:
+          - inputs.enabled
+          - inputs.status | eq("ok")
+        uses: shell.command
+        with:
+          command: "printf executed"
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["comment"])
+
+    def test_execute_structured_any_step_condition(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: false
+  status: ok
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if:
+          any:
+            - inputs.enabled
+            - inputs.status | eq("ok")
+        uses: shell.command
+        with:
+          command: "printf executed"
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["comment"])
+
+    def test_execute_structured_not_step_condition(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: false
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if:
+          not: inputs.enabled
+        uses: shell.command
+        with:
+          command: "printf executed"
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["executed_steps"], ["comment"])
+
+    def test_execute_gate_failure_lists_all_failed_conditions(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: gate-check
+blocks:
+  - guards: []
+  - steps:
+      - name: ready-a
+        value: false
+        register: ready_a
+      - name: ready-b
+        value: false
+        register: ready_b
+      - name: ready-c
+        value: true
+        register: ready_c
+      - name: mutate
+        uses: shell.command
+        with:
+          command: "printf executed"
+        gate:
+          all:
+            - step.ready_a.outputs.value
+            - step.ready_b.outputs.value
+            - step.ready_c.outputs.value
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.outputs["executed_steps"], ["ready-a", "ready-b", "ready-c"])
+        self.assertEqual(result.outputs["gate_blockers"], ["mutate"])
+        gate_detail = result.outputs["step_gate_details"][0]
+        failed = [item["expression"] for item in gate_detail["failed"]]
+        self.assertEqual(failed, ["step.ready_a.outputs.value", "step.ready_b.outputs.value"])
+
+    def test_execute_if_false_does_not_evaluate_gate(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: gate-check
+inputs:
+  enabled: false
+blocks:
+  - guards: []
+  - steps:
+      - name: mutate
+        if: inputs.enabled
+        uses: shell.command
+        with:
+          command: "printf executed"
+        gate: inputs.enabled | not
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["skipped_steps"], ["mutate"])
+        self.assertEqual(result.outputs["step_gate_details"], [])
+
+    def test_explain_structured_condition_failure_preserves_error(self) -> None:
+        loaded = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  enabled: true
+  missing: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: comment
+        if:
+          - inputs.enabled
+          - inputs.missing
+        uses: shell.command
+        with:
+          command: "printf executed"
+"""
+        )
+
+        workflow = loaded.__class__(
+            version=loaded.version,
+            workflow=loaded.workflow,
+            inputs={"enabled": True},
+            declared_inputs=loaded.declared_inputs,
+            blocks=loaded.blocks,
+            source_path=loaded.source_path,
+            launch_dir=loaded.launch_dir,
+        )
+
+        result = explain_execution_result(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.outputs["step_condition_details"][0]["reason"], "condition_evaluation_failed")
+        self.assertEqual(result.outputs["step_condition_details"][0]["error_code"], "runtime.value.input_missing")
+
     def test_execute_guard_can_use_workflow_let_binding(self) -> None:
         workflow = load_workflow_text(
             """

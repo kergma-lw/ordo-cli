@@ -29,6 +29,7 @@ but workflow files do not own the implementation logic of either surface.
 - compact parameters;
 - workflow-local named expressions through a top-level `let` surface when they keep policy and dataflow reviewable;
 - simple step-level conditional execution when it has clear semantics.
+- simple step-level admission control when it has clear semantics.
 - simple branching when it has clear semantics.
 - explicit authored workflow-local returns through `result` steps.
 - explicit authored global publication through `publish` steps.

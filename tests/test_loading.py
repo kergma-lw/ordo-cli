@@ -233,6 +233,59 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(workflow.steps[0].if_, "inputs.enabled")
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], "inputs.enabled")
 
+    def test_loads_structured_list_step_if_field_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                  ready: true
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if:
+                          - inputs.enabled
+                          - inputs.ready
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(workflow.steps[0].if_, ["inputs.enabled", "inputs.ready"])
+        self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["if"], ["inputs.enabled", "inputs.ready"])
+
+    def test_loads_structured_object_step_if_field_into_typed_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                  ready: true
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        if:
+                          all:
+                            - inputs.enabled
+                            - any:
+                                - inputs.ready
+                                - not: inputs.enabled | not
+                        uses: gh.issue
+                """
+            )
+        )
+
+        self.assertEqual(
+            workflow.to_contract()["blocks"][1]["steps"][0]["if"],
+            {"all": ["inputs.enabled", {"any": ["inputs.ready", {"not": "inputs.enabled | not"}]}]},
+        )
+
     def test_loads_declared_workflow_inputs_without_runtime_values(self) -> None:
         workflow = load_workflow_text(
             textwrap.dedent(

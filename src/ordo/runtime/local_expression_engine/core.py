@@ -1449,7 +1449,7 @@ class _ConditionEvaluator:
                     parsed=self._parsed,
                     workflow=self._workflow,
                     context=LocalExpressionContext.GUARD,
-                    step_results={key: value for key, value in self._step_results.items() if isinstance(value, OperationResult)},
+                    step_results=self._step_results,
                     observation_session=self._observation_session,
                 )
             except ValueExpressionEvaluationError as exc:

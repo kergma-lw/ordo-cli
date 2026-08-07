@@ -16,6 +16,8 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
         self.assertIn("for_each", step_forms["run_invocation"]["optional_fields"])
         self.assertIn("register", step_forms["run_invocation"]["optional_fields"])
+        self.assertEqual(step_forms["run_invocation"]["if_structured_operators"], ["all", "any", "not"])
+        self.assertEqual(step_forms["run_invocation"]["if_list_semantics"], "implicit_all")
         self.assertEqual(step_forms["inline_fan_out_invocation"]["required_fields"], ["name", "for_each", "steps"])
         self.assertEqual(step_forms["profile_switch"]["required_fields"], ["name", "profile_switch"])
         self.assertEqual(step_forms["value"]["required_fields"], ["name", "value"])
@@ -42,6 +44,8 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(payload["run_contract"]["directive_field"], "run")
         self.assertIn("step", payload["run_contract"]["caller_scoped_condition_surface"])
         self.assertEqual(payload["run_contract"]["body_forms"], ["named_run_target", "inline_repeated_steps"])
+        self.assertEqual(payload["run_contract"]["call_fields"][2]["surface"], "expression_or_structured_condition")
+        self.assertEqual(payload["surface_constraints"]["authored_surfaces"]["condition_field_forms"]["structured_object_operators"], ["all", "any", "not"])
 
     def test_workflow_contract_stays_aligned_with_validator_field_sets(self) -> None:
         payload = describe_workflow_contract()

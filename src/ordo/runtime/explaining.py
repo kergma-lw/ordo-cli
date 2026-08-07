@@ -132,18 +132,60 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
 
     if result.status is RuntimeStatus.EXECUTION_ERROR:
         step_condition_details = [detail for detail in result.outputs.get("step_condition_details", []) if isinstance(detail, dict)]
+        step_gate_details = [detail for detail in result.outputs.get("step_gate_details", []) if isinstance(detail, dict)]
         fan_out_failure = result.outputs.get("fan_out_failure") if isinstance(result.outputs.get("fan_out_failure"), dict) else None
+        gate_blockers = [name for name in result.outputs.get("gate_blockers", []) if isinstance(name, str)]
         return {
-            "category": "execution",
+            "category": "gate" if gate_blockers else "execution",
             "allowed": False,
-            "why": "Execution started but a fan-out item failed" if fan_out_failure is not None else "Execution started but a step failed",
-            "blockers": [result.failed_step] if result.failed_step is not None else [],
+            "why": (
+                "Execution reached a gated step but admission checks did not pass"
+                if gate_blockers
+                else "Execution started but a fan-out item failed" if fan_out_failure is not None else "Execution started but a step failed"
+            ),
+            "blockers": gate_blockers or ([result.failed_step] if result.failed_step is not None else []),
             "step_condition_details": step_condition_details,
+            "step_gate_details": step_gate_details,
             "fan_out_failure": fan_out_failure,
         }
 
+    gate_blockers = [name for name in result.outputs.get("gate_blockers", []) if isinstance(name, str)]
+    if gate_blockers:
+        step_items = [item for item in result.outputs.get("preflight_step_items", []) if isinstance(item, dict)]
+        return {
+            "category": "gate",
+            "allowed": False,
+            "why": "A reachable step is blocked by admission checks established from current read-only knowledge",
+            "blockers": gate_blockers,
+            "step_gate_details": [item.get("gate_report") for item in step_items if item.get("name") in gate_blockers and isinstance(item.get("gate_report"), dict)],
+        }
+
+    preflight_halts = [item for item in result.outputs.get("preflight_halts", []) if isinstance(item, dict)]
+    if preflight_halts:
+        first = preflight_halts[0]
+        step_name = first.get("step_name") if isinstance(first.get("step_name"), str) else None
+        reason = first.get("reason") if isinstance(first.get("reason"), str) else None
+        if reason == "read_only_step_failed":
+            return {
+                "category": "preflight_step",
+                "allowed": False,
+                "why": "A read-only observation step failed before workflow readiness could be established",
+                "blockers": [] if step_name is None else [step_name],
+                "preflight_halts": preflight_halts,
+                "preflight_support_steps": _preflight_support_steps(result),
+            }
+        if reason == "gate_unknown":
+            step_items = [item for item in result.outputs.get("preflight_step_items", []) if isinstance(item, dict)]
+            return {
+                "category": "gate",
+                "allowed": False,
+                "why": "A step gate could not yet be fully established from current read-only knowledge",
+                "blockers": [] if step_name is None else [step_name],
+                "step_gate_details": [item.get("gate_report") for item in step_items if item.get("name") == step_name and isinstance(item.get("gate_report"), dict)],
+                "preflight_halts": preflight_halts,
+            }
+
     if allowed_state == "unknown" or not analysis_complete:
-        preflight_halts = [item for item in result.outputs.get("preflight_halts", []) if isinstance(item, dict)]
         fan_out_items = [item for item in result.outputs.get("run_items", []) if isinstance(item, dict) and isinstance(item.get("fan_out"), dict)]
         return {
             "category": "incomplete",
@@ -159,7 +201,11 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
     return {
         "category": "ok",
         "allowed": allowed_state == "allowed" if isinstance(allowed_state, str) else bool(result.outputs.get("can_execute", True)),
-        "why": "No known blocker prevents execution now",
+        "why": (
+            f"All read-only observations completed and the next runnable step is '{result.outputs.get('frontier_ready_step')}'"
+            if isinstance(result.outputs.get("frontier_ready_step"), str)
+            else "No known blocker prevents execution now"
+        ),
         "blockers": [],
         "preflight_support_steps": _preflight_support_steps(result),
         "fan_out_items": [item for item in result.outputs.get("run_items", []) if isinstance(item, dict) and isinstance(item.get("fan_out"), dict)],
@@ -221,12 +267,40 @@ def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:
         ]
 
     if result.status is RuntimeStatus.EXECUTION_ERROR:
+        if any(isinstance(name, str) for name in result.outputs.get("gate_blockers", [])):
+            return [
+                {
+                    "action": "satisfy_step_gate",
+                    "reason": "Resolve the failed or unknown gate conditions before retrying the blocked step",
+                }
+            ]
         return [
             {
                 "action": "repair_failed_step",
                 "reason": "Inspect the failed step result and correct the execution issue",
             }
         ]
+
+    if any(isinstance(name, str) for name in result.outputs.get("gate_blockers", [])):
+        return [
+            {
+                "action": "satisfy_step_gate",
+                "reason": "Resolve the failed admission checks before treating the gated step as runnable",
+            }
+        ]
+
+    preflight_halts = [item for item in result.outputs.get("preflight_halts", []) if isinstance(item, dict)]
+    if preflight_halts:
+        first = preflight_halts[0]
+        reason = first.get("reason")
+        step_name = first.get("step_name")
+        if reason == "read_only_step_failed":
+            return [
+                {
+                    "action": "repair_read_only_observation",
+                    "reason": f"Fix the failing read-only step '{step_name}' before retrying preflight",
+                }
+            ]
 
     if result.outputs.get("allowed_state") == "unknown" or not bool(result.outputs.get("analysis_complete", True)):
         return [

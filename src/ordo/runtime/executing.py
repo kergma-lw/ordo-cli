@@ -13,8 +13,12 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStat
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .checking import GuardProbe, _build_guard_detail, _build_preflight_observation_session, _default_guard_probe, _evaluate_guard_expression, check_workflow
+from .conditions import ConditionEvaluationReport
+from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
 from .launchers import apply_launcher_to_step
+from .local_expression_contexts import LocalExpressionContext
+from .local_expressions import evaluate_condition_report
 from .preflight_interpreter import evaluate_preflight_step_condition, evaluate_preflight_value_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
@@ -68,6 +72,7 @@ def execute_workflow(
                     reused_steps=[],
                     skipped_steps=_all_step_names(workflow),
                     step_condition_details=[],
+                    step_gate_details=[],
                     launcher_details=[],
                     checked_guards=list(check_result.outputs.get("checked_guards", [])),
                     guard_details=[dict(item) for item in check_result.outputs.get("guard_details", []) if isinstance(item, dict)],
@@ -107,6 +112,7 @@ def execute_workflow(
     workflow_results: list[JSONValue] = []
     published_results: list[JSONValue] = []
     step_condition_details: list[dict[str, object]] = []
+    step_gate_details: list[dict[str, object]] = []
     launcher_details: list[dict[str, object]] = []
     block_items: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("block_items", []) if isinstance(item, dict)]
     guard_details: list[dict[str, object]] = [dict(item) for item in check_result.outputs.get("guard_details", []) if isinstance(item, dict)]
@@ -178,6 +184,7 @@ def execute_workflow(
                         reused_steps=reused_steps,
                         skipped_steps=skipped_steps,
                         step_condition_details=step_condition_details,
+                        step_gate_details=step_gate_details,
                         launcher_details=launcher_details,
                         checked_guards=checked_guards,
                         guard_details=guard_details,
@@ -246,6 +253,7 @@ def execute_workflow(
                             reused_steps=reused_steps,
                             skipped_steps=skipped_steps,
                             step_condition_details=step_condition_details,
+                            step_gate_details=step_gate_details,
                             launcher_details=launcher_details,
                             checked_guards=checked_guards,
                             guard_details=guard_details,
@@ -270,6 +278,47 @@ def execute_workflow(
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="skipped_at_run")
                     continue
                 step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True, "source": condition_source})
+            gate_report = _evaluate_step_gate(step, effective_workflow, observation_session=observation_session)
+            if gate_report is not None:
+                step_gate_details.append(_gate_detail(step, gate_report, source=condition_source))
+                if gate_report.verdict != "passed":
+                    skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                    diagnostics.append(_gate_failure_diagnostic(step, gate_report))
+                    _append_execution_error_block_item(
+                        block_items,
+                        block_index=block_index,
+                        declared_block=declared_block,
+                        executed_steps=block_executed,
+                        skipped_steps=block_skipped,
+                        failed_step=step.name,
+                    )
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="gate_blocked")
+                    return RuntimeResult(
+                        mode=Mode.EXECUTE,
+                        status=RuntimeStatus.EXECUTION_ERROR,
+                        diagnostics=tuple(diagnostics),
+                        plan=check_result.plan,
+                        outputs=_build_execute_outputs(
+                            can_execute=False,
+                            active_profile=active_profile,
+                            active_overrides=active_overrides,
+                            execution_tree=execution_tree_output,
+                            execution_tree_mode=execution_tree_mode,
+                            execution_tree_fallback_reason=execution_tree_fallback_reason,
+                            executed_steps=executed_steps,
+                            reused_steps=reused_steps,
+                            skipped_steps=skipped_steps,
+                            step_condition_details=step_condition_details,
+                            step_gate_details=step_gate_details,
+                            launcher_details=launcher_details,
+                            checked_guards=checked_guards,
+                            guard_details=guard_details,
+                            block_items=block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                            extra={"gate_blockers": [step.name]},
+                        ),
+                        operation_results=tuple(operation_results),
+                        failed_step=step.name,
+                    )
             if reused_preflight is not None:
                 reused_steps.append(step.name)
                 block_executed.append(step.name)
@@ -314,6 +363,7 @@ def execute_workflow(
                             reused_steps=reused_steps,
                             skipped_steps=skipped_steps,
                             step_condition_details=step_condition_details,
+                            step_gate_details=step_gate_details,
                             launcher_details=launcher_details,
                             checked_guards=checked_guards,
                             guard_details=guard_details,
@@ -358,6 +408,7 @@ def execute_workflow(
                             reused_steps=reused_steps,
                             skipped_steps=skipped_steps,
                             step_condition_details=step_condition_details,
+                            step_gate_details=step_gate_details,
                             launcher_details=launcher_details,
                             checked_guards=checked_guards,
                             guard_details=guard_details,
@@ -403,6 +454,7 @@ def execute_workflow(
                             reused_steps=reused_steps,
                             skipped_steps=skipped_steps,
                             step_condition_details=step_condition_details,
+                            step_gate_details=step_gate_details,
                             launcher_details=launcher_details,
                             checked_guards=checked_guards,
                             guard_details=guard_details,
@@ -503,6 +555,7 @@ def execute_workflow(
                             reused_steps=reused_steps,
                             skipped_steps=skipped_steps,
                             step_condition_details=step_condition_details,
+                            step_gate_details=step_gate_details,
                             launcher_details=launcher_details,
                             checked_guards=checked_guards,
                             guard_details=guard_details,
@@ -561,6 +614,7 @@ def execute_workflow(
                                 reused_steps=reused_steps,
                                 skipped_steps=skipped_steps,
                                 step_condition_details=step_condition_details,
+                                step_gate_details=step_gate_details,
                                 launcher_details=launcher_details,
                                 checked_guards=checked_guards,
                                 guard_details=guard_details,
@@ -613,6 +667,7 @@ def execute_workflow(
                                 reused_steps=reused_steps,
                                 skipped_steps=skipped_steps,
                                 step_condition_details=step_condition_details,
+                                step_gate_details=step_gate_details,
                                 launcher_details=launcher_details,
                                 checked_guards=checked_guards,
                                 guard_details=guard_details,
@@ -685,6 +740,7 @@ def execute_workflow(
                         reused_steps=reused_steps,
                         skipped_steps=skipped_steps,
                         step_condition_details=step_condition_details,
+                        step_gate_details=step_gate_details,
                         launcher_details=launcher_details,
                         checked_guards=checked_guards,
                         guard_details=guard_details,
@@ -726,6 +782,7 @@ def execute_workflow(
             reused_steps=reused_steps,
             skipped_steps=skipped_steps,
             step_condition_details=step_condition_details,
+            step_gate_details=step_gate_details,
             launcher_details=launcher_details,
             checked_guards=checked_guards,
             guard_details=guard_details,
@@ -762,6 +819,53 @@ def _evaluate_step_condition(step, workflow: Workflow, *, observation_session=No
         message="Step condition must evaluate to a boolean value",
         path=("steps", step.name, "if"),
         details={"actual_type": type(value).__name__},
+    )
+
+
+def _evaluate_step_gate(step: Step, workflow: Workflow, *, observation_session=None) -> ConditionEvaluationReport | None:
+    if step.gate is None:
+        return None
+    return evaluate_condition_report(
+        step.gate,
+        workflow,
+        context=LocalExpressionContext.STEP_CONDITION,
+        step_results=workflow.step_results,
+        observation_session=observation_session,
+        field_name="gate",
+    )
+
+
+def _gate_detail(step: Step, report: ConditionEvaluationReport, *, source: str) -> dict[str, object]:
+    return {
+        "name": step.name,
+        "gate": step.gate,
+        "outcome": "passed" if report.verdict == "passed" else "blocked",
+        "verdict": report.verdict,
+        "source": source,
+        "report": report.to_contract(),
+        "failed": [node.to_contract() for node in report.failed],
+        "unknown": [node.to_contract() for node in report.unknown],
+        "passed": [node.to_contract() for node in report.passed],
+    }
+
+
+def _gate_failure_diagnostic(step: Step, report: ConditionEvaluationReport) -> Diagnostic:
+    failed = [node.expression for node in report.failed if node.expression is not None]
+    unknown = [node.expression for node in report.unknown if node.expression is not None]
+    message = f"Step gate blocked execution for '{step.name}'"
+    if report.verdict == "unknown":
+        message = f"Step gate could not be fully established for '{step.name}'"
+    return Diagnostic(
+        code="runtime.step.gate.failed" if report.verdict == "failed" else "runtime.step.gate.unknown",
+        level="error",
+        message=message,
+        path=("steps", step.name, "gate"),
+        details={
+            "step": step.name,
+            "verdict": report.verdict,
+            "failed_conditions": failed,
+            "unknown_conditions": unknown,
+        },
     )
 
 
@@ -1194,9 +1298,19 @@ def _mark_execution_tree_probe_revalidated(execution_tree: dict[str, object] | N
 def _condition_source_from_tree_state(step: Step, workflow: Workflow, execution_tree: dict[str, object] | None) -> str:
     if step.if_ is None or not isinstance(execution_tree, dict):
         return "runtime"
-    if "step." not in step.if_:
+    if not _condition_mentions_step_results(step.if_):
         return "runtime"
     return "execution_tree_state" if bool(workflow.step_results) else "runtime"
+
+
+def _condition_mentions_step_results(value: JSONValue) -> bool:
+    if isinstance(value, str):
+        return "step." in value
+    try:
+        normalized = normalize_condition_authoring(value)
+    except ConditionShapeError:
+        return False
+    return any("step." in expression for _, expression in iter_condition_expression_leaves(normalized))
 
 
 def _refresh_execution_tree_block_runtime(block: dict[str, object]) -> None:
@@ -1439,6 +1553,7 @@ def _build_execute_outputs(
     reused_steps: list[str],
     skipped_steps: list[str],
     step_condition_details: list[dict[str, object]],
+    step_gate_details: list[dict[str, object]],
     launcher_details: list[dict[str, object]],
     checked_guards: list[str],
     guard_details: list[dict[str, object]],
@@ -1451,6 +1566,7 @@ def _build_execute_outputs(
         "active_overrides": [override.to_contract() for override in active_overrides],
         **_execution_step_summaries_from_tree(execution_tree, executed_steps=executed_steps, reused_steps=reused_steps, skipped_steps=skipped_steps),
         "step_condition_details": step_condition_details,
+        "step_gate_details": step_gate_details,
         "launcher_details": launcher_details,
         "checked_guards": checked_guards,
         "guard_details": guard_details,

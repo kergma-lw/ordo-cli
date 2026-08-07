@@ -149,6 +149,84 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(fan_out_item["body_kind"], "inline_repeated_steps")
         self.assertEqual(fan_out_item["fan_out"], {"enabled": True})
 
+    def test_check_reports_gate_failure_and_all_failed_clauses(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="ready-a", value=False, register="ready_a"),
+                        Step(name="ready-b", value=False, register="ready_b"),
+                        Step(
+                            name="mutate",
+                            operation=OperationRef("shell.command", with_={"command": "printf executed"}),
+                            gate={"all": ["step.ready_a.outputs.value", "step.ready_b.outputs.value"]},
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(result.outputs["can_execute"])
+        self.assertEqual(result.outputs["allowed_state"], "blocked")
+        self.assertEqual(result.outputs["gate_blockers"], ["mutate"])
+        mutate = next(item for item in result.outputs["preflight_step_items"] if item["name"] == "mutate")
+        self.assertEqual(mutate["status"], "gate_blocked")
+        failed = [item["expression"] for item in mutate["gate_report"]["failed"]]
+        self.assertEqual(failed, ["step.ready_a.outputs.value", "step.ready_b.outputs.value"])
+
+    def test_check_reports_runtime_derived_gate_failure_from_preflight_probe_outputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="story-to-ready-like",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-story", operation=OperationRef("gh.issue"), register="loaded_story"),
+                        Step(name="task-refs", value='${step.loaded_story.outputs.body | markdown["Tasks"].list_items}', register="task_refs"),
+                        Step(
+                            name="set-ready",
+                            operation=OperationRef("gh.issue.close"),
+                            gate={
+                                "all": [
+                                    'is_present(step.loaded_story.outputs.body | markdown["Acceptance"])',
+                                    'is_present(step.loaded_story.outputs.body | markdown["Acceptance"].list[0])',
+                                    'is_present(step.loaded_story.outputs.body | markdown["Tasks"])',
+                                    'is_present(step.loaded_story.outputs.body | markdown["Tasks"].list[1])',
+                                ]
+                            },
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.issue":
+                return OperationResult(status="ok", outputs={"body": "# Title\n\n## Tasks\n- one"})
+            return OperationResult(status="ok", outputs={})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(result.outputs["can_execute"])
+        self.assertEqual(result.outputs["allowed_state"], "blocked")
+        self.assertEqual(result.outputs["gate_blockers"], ["set-ready"])
+        mutate = next(item for item in result.outputs["preflight_step_items"] if item["name"] == "set-ready")
+        self.assertEqual(mutate["status"], "gate_blocked")
+        self.assertEqual(
+            [item["expression"] for item in mutate["gate_report"]["failed"]],
+            [
+                'is_present(step.loaded_story.outputs.body | markdown["Acceptance"])',
+                'is_present(step.loaded_story.outputs.body | markdown["Acceptance"].list[0])',
+                'is_present(step.loaded_story.outputs.body | markdown["Tasks"].list[1])',
+            ],
+        )
+
     def test_check_reports_unknown_when_later_guard_region_remains_unchecked(self) -> None:
         workflow = Workflow(
             version=0,
@@ -662,6 +740,34 @@ class CheckModeTest(unittest.TestCase):
             result.outputs["preflight_step_items"][1]["action_call"],
             {"reference": "gh.issue.close", "with": {}},
         )
+
+    def test_check_marks_frontier_allowed_when_effectful_step_is_reachable_and_no_later_guards_remain(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="load-issue", operation=OperationRef("gh.issue"), register="issue"),
+                        Step(name="ready", value=True, register="ready"),
+                        Step(name="comment", operation=OperationRef("gh.issue.close"), gate="step.ready.outputs.value"),
+                    )
+                ),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            self.assertEqual(resolved_guard.reference, "gh.issue")
+            return OperationResult(status="ok", outputs={"exists": True})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertTrue(result.outputs["can_execute"])
+        self.assertEqual(result.outputs["frontier_ready_step"], "comment")
+        self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
 
     def test_check_reports_strong_preflight_support_when_recommended_probes_match_exactly(self) -> None:
         workflow = Workflow(

@@ -10,7 +10,7 @@ from ordo.model.json import JSONObject, JSONValue
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .local_expression_contexts import LocalExpressionContext
-from .local_expressions import resolve_condition_local_expression
+from .local_expressions import resolve_condition_value
 from .loading import LoadError, _load_included_fragment_payload, _load_workflow_blocks, load_workflow_payload
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
@@ -148,7 +148,7 @@ def evaluate_run_condition(step: Step, caller_workflow: Workflow, *, block_index
     if step.if_ is None:
         return True
     try:
-        value = resolve_condition_local_expression(step.if_, caller_workflow, context=LocalExpressionContext.STEP_CONDITION)
+        value = resolve_condition_value(step.if_, caller_workflow, context=LocalExpressionContext.STEP_CONDITION)
     except ValueResolutionError as exc:
         return exc.to_diagnostic(path=("blocks", str(block_index), "steps", str(step_index), "if"))
     if isinstance(value, bool):

@@ -10,6 +10,15 @@ from ordo.model.json import JSONValue
 from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 
+from .conditions import (
+    AllCondition,
+    AnyCondition,
+    ConditionEvaluationNode,
+    ConditionEvaluationReport,
+    ExpressionCondition,
+    NotCondition,
+    normalize_condition_authoring,
+)
 from .local_expression_engine.core import ConditionObservationRequest, ConditionObservationResult, ReadOnlyObservationSession
 from .local_expression_contexts import LocalExpressionContext, LocalExpressionContextFamily, LocalExpressionRoot, get_local_expression_context_policy
 from .local_expression_engine.core import (
@@ -493,3 +502,245 @@ def resolve_condition_local_expression(
         return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
     except LocalExpressionEvaluationError as exc:
         raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
+
+
+def resolve_condition_value(
+    value: JSONValue,
+    workflow: Workflow,
+    *,
+    context: LocalExpressionContext,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+    observe: Callable[[ConditionObservationRequest], ConditionObservationResult] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
+) -> JSONValue:
+    """Resolve one authored string or structured condition surface."""
+
+    return _resolve_condition_node(
+        normalize_condition_authoring(value),
+        workflow,
+        context=context,
+        step_results=step_results,
+        observe=observe,
+        observation_session=observation_session,
+    )
+
+
+def evaluate_condition_report(
+    value: JSONValue,
+    workflow: Workflow,
+    *,
+    context: LocalExpressionContext,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+    observe: Callable[[ConditionObservationRequest], ConditionObservationResult] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
+    field_name: str = "if",
+) -> ConditionEvaluationReport:
+    """Evaluate one authored condition surface with full diagnostics."""
+
+    root = _evaluate_condition_node_report(
+        normalize_condition_authoring(value, field_name=field_name),
+        workflow,
+        context=context,
+        step_results=step_results,
+        observe=observe,
+        observation_session=observation_session,
+    )
+    failed, unknown, passed = _collect_condition_leaves(root)
+    return ConditionEvaluationReport(
+        verdict=root.verdict,
+        root=root,
+        field_name=field_name,
+        failed=tuple(failed),
+        unknown=tuple(unknown),
+        passed=tuple(passed),
+    )
+
+
+def _collect_condition_leaves(
+    node: ConditionEvaluationNode,
+) -> tuple[list[ConditionEvaluationNode], list[ConditionEvaluationNode], list[ConditionEvaluationNode]]:
+    failed: list[ConditionEvaluationNode] = []
+    unknown: list[ConditionEvaluationNode] = []
+    passed: list[ConditionEvaluationNode] = []
+
+    def visit(current: ConditionEvaluationNode) -> None:
+        if not current.children:
+            if current.verdict == "failed":
+                failed.append(current)
+            elif current.verdict == "unknown":
+                unknown.append(current)
+            elif current.verdict == "passed":
+                passed.append(current)
+            return
+        for child in current.children:
+            visit(child)
+
+    visit(node)
+    return failed, unknown, passed
+
+
+def _evaluate_condition_node_report(
+    node: ExpressionCondition | AllCondition | AnyCondition | NotCondition,
+    workflow: Workflow,
+    *,
+    context: LocalExpressionContext,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+    observe: Callable[[ConditionObservationRequest], ConditionObservationResult] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
+    path: tuple[str, ...] = (),
+) -> ConditionEvaluationNode:
+    from .value_resolution import ValueResolutionError
+
+    if isinstance(node, ExpressionCondition):
+        try:
+            value = resolve_condition_local_expression(
+                node.expression,
+                workflow,
+                context=context,
+                step_results=step_results,
+                observe=observe,
+                observation_session=observation_session,
+            )
+        except ValueResolutionError as exc:
+            return ConditionEvaluationNode(
+                kind="expression",
+                verdict="unknown",
+                path=path,
+                expression=node.expression,
+                message=exc.message,
+                code=exc.code,
+            )
+        if not isinstance(value, bool):
+            return ConditionEvaluationNode(
+                kind="expression",
+                verdict="unknown",
+                path=path,
+                expression=node.expression,
+                message="Condition must evaluate to a boolean value",
+                code="runtime.step.condition.result_type",
+            )
+        return ConditionEvaluationNode(
+            kind="expression",
+            verdict="passed" if value else "failed",
+            path=path,
+            expression=node.expression,
+            value=value,
+        )
+    if isinstance(node, AllCondition):
+        child_path_prefix = () if node.implicit else ("all",)
+        children = tuple(
+            _evaluate_condition_node_report(
+                item,
+                workflow,
+                context=context,
+                step_results=step_results,
+                observe=observe,
+                observation_session=observation_session,
+                path=path + child_path_prefix + (str(index),),
+            )
+            for index, item in enumerate(node.items)
+        )
+        if any(child.verdict == "failed" for child in children):
+            verdict = "failed"
+        elif any(child.verdict == "unknown" for child in children):
+            verdict = "unknown"
+        else:
+            verdict = "passed"
+        return ConditionEvaluationNode(kind="all", verdict=verdict, path=path, children=children)
+    if isinstance(node, AnyCondition):
+        children = tuple(
+            _evaluate_condition_node_report(
+                item,
+                workflow,
+                context=context,
+                step_results=step_results,
+                observe=observe,
+                observation_session=observation_session,
+                path=path + ("any", str(index)),
+            )
+            for index, item in enumerate(node.items)
+        )
+        if any(child.verdict == "passed" for child in children):
+            verdict = "passed"
+        elif any(child.verdict == "unknown" for child in children):
+            verdict = "unknown"
+        else:
+            verdict = "failed"
+        return ConditionEvaluationNode(kind="any", verdict=verdict, path=path, children=children)
+    child = _evaluate_condition_node_report(
+        node.item,
+        workflow,
+        context=context,
+        step_results=step_results,
+        observe=observe,
+        observation_session=observation_session,
+        path=path + ("not",),
+    )
+    if child.verdict == "unknown":
+        verdict = "unknown"
+    elif child.verdict == "passed":
+        verdict = "failed"
+    else:
+        verdict = "passed"
+    return ConditionEvaluationNode(kind="not", verdict=verdict, path=path, children=(child,))
+
+
+def _resolve_condition_node(
+    node: ExpressionCondition | AllCondition | AnyCondition | NotCondition,
+    workflow: Workflow,
+    *,
+    context: LocalExpressionContext,
+    step_results: dict[str, OperationResult | JSONValue] | None = None,
+    observe: Callable[[ConditionObservationRequest], ConditionObservationResult] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
+) -> JSONValue:
+    if isinstance(node, ExpressionCondition):
+        return resolve_condition_local_expression(
+            node.expression,
+            workflow,
+            context=context,
+            step_results=step_results,
+            observe=observe,
+            observation_session=observation_session,
+        )
+    if isinstance(node, AllCondition):
+        for item in node.items:
+            result = _resolve_condition_node(
+                item,
+                workflow,
+                context=context,
+                step_results=step_results,
+                observe=observe,
+                observation_session=observation_session,
+            )
+            if not isinstance(result, bool):
+                return result
+            if result is False:
+                return False
+        return True
+    if isinstance(node, AnyCondition):
+        for item in node.items:
+            result = _resolve_condition_node(
+                item,
+                workflow,
+                context=context,
+                step_results=step_results,
+                observe=observe,
+                observation_session=observation_session,
+            )
+            if not isinstance(result, bool):
+                return result
+            if result is True:
+                return True
+        return False
+    result = _resolve_condition_node(
+        node.item,
+        workflow,
+        context=context,
+        step_results=step_results,
+        observe=observe,
+        observation_session=observation_session,
+    )
+    if not isinstance(result, bool):
+        return result
+    return not result
