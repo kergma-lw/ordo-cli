@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ordo.model.json import authored_string_style
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, StepBlock, Workflow
@@ -33,7 +34,7 @@ def review_workflow(
         connector_provider=connector_provider,
     )
     if check_result.status in {RuntimeStatus.VALIDATION_ERROR, RuntimeStatus.RESOLUTION_ERROR}:
-        validation_findings = _find_validation_review_hints(check_result)
+        validation_findings = _find_diagnostic_review_hints(check_result)
         return RuntimeResult(
             mode=Mode.REVIEW,
             status=check_result.status,
@@ -88,6 +89,8 @@ def review_workflow(
 
 def _build_review_findings(workflow: Workflow, check_result: RuntimeResult, *, profile: Profile | None) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
+    findings.extend(_find_diagnostic_review_hints(check_result))
+    findings.extend(_find_profile_switch_literal_string_hints(workflow))
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
     findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
     findings.extend(_find_missing_recommended_observations(check_result))
@@ -95,10 +98,13 @@ def _build_review_findings(workflow: Workflow, check_result: RuntimeResult, *, p
     return findings
 
 
-def _find_validation_review_hints(check_result: RuntimeResult) -> list[dict[str, object]]:
+def _find_diagnostic_review_hints(check_result: RuntimeResult) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     for diagnostic in check_result.diagnostics:
-        if diagnostic.code != "validation.workflow.value_expr.literal_string_maybe_unquoted":
+        if diagnostic.code not in {
+            "validation.workflow.value_expr.literal_string_maybe_unquoted",
+            "validation.workflow.profile_switch.literal_string_maybe_unquoted",
+        }:
             continue
         findings.append(
             {
@@ -110,6 +116,34 @@ def _find_validation_review_hints(check_result: RuntimeResult) -> list[dict[str,
                 "evidence": dict(diagnostic.details),
             }
         )
+    return findings
+
+
+def _find_profile_switch_literal_string_hints(workflow: Workflow) -> list[dict[str, object]]:
+    findings: list[dict[str, object]] = []
+    for block_index, block in enumerate(workflow.blocks):
+        if not isinstance(block, StepBlock):
+            continue
+        for step_index, step in enumerate(block.steps):
+            if not isinstance(step.profile_switch, str):
+                continue
+            if authored_string_style(step.profile_switch) != "plain":
+                continue
+            if step.profile_switch.startswith("${") and step.profile_switch.endswith("}") and len(step.profile_switch) >= 4:
+                continue
+            findings.append(
+                {
+                    "code": "review.workflow.literal_string_maybe_unquoted",
+                    "level": "warning",
+                    "category": "value_authoring",
+                    "message": "This bare profile_switch value may be an intended literal profile name. Quote it explicitly if it should not be evaluated as an expression.",
+                    "path": ["blocks", str(block_index), "steps", str(step_index), "profile_switch"],
+                    "evidence": {
+                        "expression": step.profile_switch,
+                        "source": "workflow",
+                    },
+                }
+            )
     return findings
 
 

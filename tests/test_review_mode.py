@@ -46,6 +46,26 @@ blocks:
         self.assertEqual(result.outputs["review_status"], "unavailable")
         self.assertTrue(any(item["code"] == "review.workflow.literal_string_maybe_unquoted" for item in result.outputs["findings"]))
 
+    def test_review_reports_hint_for_likely_unquoted_profile_switch_literal(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: switch-demo
+blocks:
+  - steps:
+      - name: switch
+        profile_switch: meta
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["review_status"], "needs_attention")
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.literal_string_maybe_unquoted")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "profile_switch"])
+        self.assertEqual(finding["evidence"]["expression"], "meta")
+
     def test_review_reports_unused_declared_input_separately(self) -> None:
         workflow = Workflow(
             version=0,

@@ -1975,6 +1975,16 @@ def _validate_profile_switch_value(
             )
         )
         return diagnostics
+    if authored_string_style(value) == "plain" and _extract_runtime_value_expression(value) is None:
+        diagnostics.append(
+            _warning(
+                "validation.workflow.profile_switch.literal_string_maybe_unquoted",
+                "This bare profile_switch value may be an intended literal profile name. Quote it explicitly if it should not be evaluated as an expression.",
+                path,
+                source,
+                expression=value,
+            )
+        )
     expression = _extract_runtime_value_expression(value)
     if expression is None:
         return diagnostics
