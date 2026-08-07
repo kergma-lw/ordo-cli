@@ -246,6 +246,14 @@ def _validate_state_document(payload: JSONValue, *, location: StateLocation) -> 
 def resolve_workflow_input_reference(parts: tuple[str, ...], workflow: Workflow) -> JSONValue:
     """Resolve a dotted workflow input reference such as `inputs.task_key`."""
 
+    if not parts or parts[0] != "inputs":
+        reference = ".".join(parts) if parts else "<empty>"
+        raise RuntimeStateError(
+            code="runtime.state.reference_unknown",
+            message=f"Unknown object '{parts[0]}'" if parts else "Unknown object",
+            details={"reference": reference, "object": parts[0] if parts else None},
+        )
+
     current: JSONValue = workflow.inputs
     for part in parts[1:]:
         if not isinstance(current, dict) or part not in current:

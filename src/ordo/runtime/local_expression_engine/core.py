@@ -2074,7 +2074,7 @@ def _resolve_input_reference(parts: tuple[str, ...], *, workflow: Workflow) -> J
         return resolve_workflow_input_reference(parts, workflow)
     except RuntimeStateError as exc:
         raise ValueExpressionEvaluationError(
-            code="runtime.value.input_missing",
+            code="runtime.value.reference_unknown" if exc.code == "runtime.state.reference_unknown" else "runtime.value.input_missing",
             message=exc.message,
             details=exc.details,
         ) from exc
@@ -2953,8 +2953,10 @@ def _is_reference_missing(
             return True
         if expanded is not None:
             return _is_reference_missing(expanded, parsed=parsed, workflow=workflow, context=context, step_results=step_results)
+        if not node.parts or node.parts[0] != "inputs":
+            return True
         current: JSONValue = workflow.inputs
-        parts = node.parts if node.parts[0] == "inputs" else ("inputs", *node.parts[1:])
+        parts = node.parts
         for part in parts[1:]:
             if not isinstance(current, dict) or part not in current:
                 return True

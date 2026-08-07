@@ -83,8 +83,8 @@ def resolve_runtime_value(
             allow_boolean_composition=allow_boolean_composition,
             observation_session=observation_session,
         )
-    except ValueResolutionError:
-        if authored_style == "plain" and _extract_expression(value) is None:
+    except ValueResolutionError as exc:
+        if authored_style == "plain" and _extract_expression(value) is None and exc.code != "runtime.value.reference_unknown":
             return str(value)
         raise
 

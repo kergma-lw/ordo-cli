@@ -32,10 +32,12 @@ ERROR_TAXONOMY: JSONObject = {
         {
             "name": "input_or_reference",
             "runtime_statuses": ["validation_error", "resolution_error"],
-            "code_prefixes": ["runtime.value.input_", "runtime.state.input_", "runtime.state.binding_", "runtime.state.key_"],
+            "code_prefixes": ["runtime.value.input_", "runtime.value.reference_", "runtime.state.input_", "runtime.state.reference_", "runtime.state.binding_", "runtime.state.key_"],
             "example_codes": [
                 "runtime.value.input_missing",
+                "runtime.value.reference_unknown",
                 "runtime.state.input_missing",
+                "runtime.state.reference_unknown",
                 "runtime.state.binding_missing",
                 "runtime.state.key_invalid",
             ],

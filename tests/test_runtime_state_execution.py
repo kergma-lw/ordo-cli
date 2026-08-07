@@ -124,6 +124,43 @@ blocks:
         self.assertEqual(result.operation_results[0].status, "state_error")
         self.assertEqual(result.operation_results[0].diagnostics[0].code, "runtime.state.input_missing")
 
+    def test_execute_state_set_rejects_unknown_bare_object_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state_path = f"{temp_dir}/task-state.json"
+            workflow = load_workflow_text(
+                """
+version: 0
+workflow: open-task
+inputs:
+  issue_ref: owner/repo#1
+state_needs:
+  task_memory: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: remember-profile
+        state_set:
+          state.task_memory[inputs.issue_ref].profile: meta
+"""
+            )
+            workflow = Workflow(
+                version=workflow.version,
+                workflow=workflow.workflow,
+                inputs=workflow.inputs,
+                declared_inputs=workflow.declared_inputs,
+                state_needs=workflow.state_needs,
+                state_bindings={"task_memory": "repo_task_state"},
+                states={"repo_task_state": state_path},
+                guards=workflow.guards,
+                steps=workflow.steps,
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+            self.assertEqual(result.operation_results[0].status, "state_error")
+            self.assertEqual(result.operation_results[0].diagnostics[0].code, "runtime.value.reference_unknown")
+
     def test_plan_marks_builtin_state_steps_as_effectful(self) -> None:
         workflow = load_workflow_text(
             """

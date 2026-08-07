@@ -10,7 +10,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.playbook import activate_playbook
-from ordo.runtime import execute_workflow, plan_workflow
+from ordo.runtime import execute_workflow, load_workflow_text, plan_workflow
 from ordo.runtime.loading import load_workflow_file
 from ordo.runtime.executing import (
     _append_execution_error_block_item,
@@ -1463,6 +1463,24 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["executed_steps"], [])
         self.assertEqual(result.outputs["skipped_steps"], ["second-step"])
         self.assertEqual(result.diagnostics[-1].code, "runtime.value.input_missing")
+
+    def test_execute_profile_switch_rejects_unknown_bare_object_reference(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+blocks:
+  - steps:
+      - name: switch
+        profile_switch: meta
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.failed_step, "switch")
+        self.assertEqual(result.operation_results[0].diagnostics[0].code, "runtime.value.reference_unknown")
 
     def test_execute_applies_launcher_to_shell_command(self) -> None:
         workflow = Workflow(

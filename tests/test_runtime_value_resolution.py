@@ -3,6 +3,7 @@ import tempfile
 import unittest
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.json import AuthoredString
 from ordo.model.runtime import OperationResult
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
@@ -417,6 +418,15 @@ blocks:
 
         self.assertEqual(context.exception.code, "runtime.value.input_missing")
         self.assertFalse(called)
+
+    def test_resolve_runtime_value_rejects_unknown_bare_object_reference(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello"})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value(AuthoredString("meta", style="plain"), workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.reference_unknown")
+        self.assertEqual(context.exception.message, "Unknown object 'meta'")
 
     def test_resolve_runtime_value_requires_outer_root_binding_for_adapter_dispatch(self) -> None:
         register_representation_adapter("fixture", lambda invocation: adapter_read_result(invocation.root_value))
