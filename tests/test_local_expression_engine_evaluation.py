@@ -714,6 +714,32 @@ blocks:
 
         self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
 
+    def test_evaluate_is_present_accepts_probe_derived_pipe_style_adapter_invocation(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree(
+            'is_present(gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | markdown["Tasks"])'
+        )
+        observed: list[ConditionObservationRequest] = []
+        session = ReadOnlyObservationSession(
+            lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="## Tasks\n\n- repo/name#1", reference="gh.issue")
+        )
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow, observation_session=session), True)
+        self.assertEqual(observed[0].target, ("gh", "issue"))
+        self.assertEqual(observed[0].fields, ("body",))
+
     def test_evaluate_is_present_accepts_list_item_adapter_path(self) -> None:
         workflow = load_workflow_text(
             """
@@ -808,6 +834,32 @@ blocks:
         parsed = parse_local_expression_tree('is_missing(inputs.body | markdown["Tasks"])')
 
         self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_missing_accepts_probe_derived_pipe_style_adapter_invocation(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree(
+            'is_missing(gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | markdown["Tasks"])'
+        )
+        observed: list[ConditionObservationRequest] = []
+        session = ReadOnlyObservationSession(
+            lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="## Summary\n\nhello", reference="gh.issue")
+        )
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow, observation_session=session), True)
+        self.assertEqual(observed[0].target, ("gh", "issue"))
+        self.assertEqual(observed[0].fields, ("body",))
 
     def test_evaluate_is_missing_accepts_text_adapter_invocation_when_match_absent(self) -> None:
         workflow = load_workflow_text(
@@ -961,6 +1013,37 @@ blocks:
         self.assertEqual(observed[0].target, ("gh", "issue"))
         self.assertEqual(observed[0].arguments, (("repository", "owner/repo"), ("issue_number", 7)))
         self.assertEqual(result.trace[-1].operator, "==")
+
+    def test_condition_evaluation_accepts_presence_builtin_with_probe_derived_pipe_style_adapter(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree(
+            'is_present(gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | markdown["Tasks"])',
+            allow_boolean_composition=True,
+        )
+        observed: list[ConditionObservationRequest] = []
+
+        result = evaluate_condition_expression(
+            parsed,
+            workflow,
+            observe=lambda request: observed.append(request)
+            or ConditionObservationResult(status="ok", value="## Tasks\n\n- repo/name#1", reference="gh.issue"),
+        )
+
+        self.assertEqual(result.status, "ok")
+        self.assertIs(result.value, True)
+        self.assertEqual(observed[0].target, ("gh", "issue"))
+        self.assertEqual(observed[0].fields, ("body",))
 
     def test_condition_evaluation_caches_repeated_probe_observation(self) -> None:
         workflow = load_workflow_text(

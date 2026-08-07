@@ -1450,6 +1450,7 @@ class _ConditionEvaluator:
                     workflow=self._workflow,
                     context=LocalExpressionContext.GUARD,
                     step_results={key: value for key, value in self._step_results.items() if isinstance(value, OperationResult)},
+                    observation_session=self._observation_session,
                 )
             except ValueExpressionEvaluationError as exc:
                 self._diagnostics.append(exc.to_diagnostic())
@@ -2196,6 +2197,7 @@ def _evaluate_builtin_call(
                 workflow=workflow,
                 context=context,
                 step_results=step_results,
+                observation_session=observation_session,
             )
         return spec.handler(
             node,
@@ -2269,6 +2271,7 @@ def _evaluate_presence_builtin(
     workflow: Workflow,
     context,
     step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
 ) -> JSONValue:
     if len(node.arguments) != 1:
         raise ValueExpressionEvaluationError(
@@ -2291,7 +2294,7 @@ def _evaluate_presence_builtin(
                 workflow=workflow,
                 context=context,
                 step_results=step_results,
-                observation_session=None,
+                observation_session=observation_session,
             )
         except ValueExpressionEvaluationError as exc:
             if exc.code == "runtime.value.adapter_not_found":
@@ -2306,7 +2309,7 @@ def _evaluate_presence_builtin(
                 workflow=workflow,
                 context=context,
                 step_results=step_results,
-                observation_session=None,
+                observation_session=observation_session,
             )
         except ValueExpressionEvaluationError as exc:
             if exc.code == "runtime.value.adapter_not_found":
