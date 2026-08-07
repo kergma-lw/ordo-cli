@@ -42,8 +42,8 @@ class ComposeModesTest(unittest.TestCase):
 
         self.assertEqual(checked.status, RuntimeStatus.OK)
         self.assertEqual(checked.outputs["preflight_step_items"][0]["preflight_support"]["strength"], "strong")
-        self.assertEqual(checked.outputs["preflight_step_items"][0]["preflight_support"]["missing_observations"], [])
-        self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_observations" for item in reviewed.outputs["findings"]))
+        self.assertEqual(checked.outputs["preflight_step_items"][0]["preflight_support"]["missing_probes"], [])
+        self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_probe_coverage" for item in reviewed.outputs["findings"]))
         self.assertEqual(explained.outputs["explanation"]["preflight_support_steps"][0]["name"], "start-project")
         self.assertEqual(explained.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["strength"], "strong")
 

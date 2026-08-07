@@ -270,12 +270,12 @@ class PlanModeTest(unittest.TestCase):
             result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
             self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], expected)
 
-    def test_plan_attaches_observation_scopes_to_read_only_steps(self) -> None:
+    def test_plan_attaches_probe_scopes_to_read_only_steps(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(Step(name="inspect", operation=OperationRef("gh.issue")),))
 
         result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-        self.assertEqual(result.outputs["step_items"][0]["observation_scopes"], ["gh.issue"])
+        self.assertEqual(result.outputs["step_items"][0]["probe_scopes"], ["gh.issue"])
         self.assertEqual(result.outputs["step_items"][0]["invalidates_scopes"], [])
 
     def test_plan_derives_reuse_policy_for_preflight_knowledge(self) -> None:
@@ -369,7 +369,7 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(tree["blocks"][0]["children"][0]["revalidated"], False)
         self.assertEqual(tree["blocks"][0]["children"][0]["preflight"]["register"], "issue")
         self.assertEqual(tree["blocks"][0]["children"][0]["divergence_status"], "not_checked")
-        self.assertEqual(tree["blocks"][0]["children"][0]["runtime_observation"], None)
+        self.assertEqual(tree["blocks"][0]["children"][0]["runtime_probe_result"], None)
         self.assertEqual(tree["blocks"][1]["children"][0]["id"], "block:1:guard:0")
         self.assertEqual(tree["blocks"][1]["children"][0]["runtime_status"], "not_started")
         self.assertEqual(tree["blocks"][1]["children"][0]["divergence_status"], "not_applicable")
@@ -537,7 +537,7 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["preflight_step_items"][0]["status"], "interpreted")
         self.assertEqual(result.outputs["preflight_step_items"][0]["outputs"], {"exists": True})
-        self.assertEqual(result.outputs["preflight_step_items"][0]["observation_scopes"], ["gh.issue"])
+        self.assertEqual(result.outputs["preflight_step_items"][0]["probe_scopes"], ["gh.issue"])
         self.assertIn("Loaded", result.outputs["preflight_step_items"][0]["summary"])
         self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "halted")
         self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
@@ -662,7 +662,7 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["allowed_state"], "unknown")
         self.assertEqual(result.outputs["step_items"][1]["preflight_support"]["strength"], "weak")
         self.assertEqual(
-            result.outputs["step_items"][1]["preflight_support"]["missing_observations"][2],
+            result.outputs["step_items"][1]["preflight_support"]["missing_probes"][2],
             {
                 "probe": "git.range",
                 "with": {"base": "@{upstream}", "head": {"expression": "step.branch_name.outputs.value"}},
@@ -700,7 +700,7 @@ class PlanModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["step_items"][0]["preflight_support"]["strength"], "weak")
         self.assertEqual(
-            result.outputs["step_items"][0]["preflight_support"]["missing_observations"][2],
+            result.outputs["step_items"][0]["preflight_support"]["missing_probes"][2],
             {
                 "probe": "gh.project.field.option",
                 "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status", "option": "In review"},
@@ -708,7 +708,7 @@ class PlanModeTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            result.outputs["step_items"][0]["preflight_support"]["missing_observations"][1],
+            result.outputs["step_items"][0]["preflight_support"]["missing_probes"][1],
             {
                 "probe": "gh.project.field",
                 "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status"},

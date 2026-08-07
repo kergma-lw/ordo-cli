@@ -568,7 +568,7 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
     if payload.get("failed_guard") is not None:
         summary["failed_guard"] = payload.get("failed_guard")
 
-    if outputs.get("verdict_basis_weakened"):
+    if outputs.get("verdict_basis_stale"):
         summary["message"] = "check incomplete; use --json check or explain for details"
 
     return summary
@@ -610,8 +610,8 @@ def _collect_missing_facts(outputs: dict[str, object]) -> list[str]:
     facts: list[str] = []
     seen: set[str] = set()
 
-    if outputs.get("verdict_basis_weakened"):
-        weakened_scopes = outputs.get("weakened_observation_scopes")
+    if outputs.get("verdict_basis_stale"):
+        weakened_scopes = outputs.get("stale_probe_scopes")
         if isinstance(weakened_scopes, list):
             for scope in weakened_scopes:
                 if isinstance(scope, str) and scope:

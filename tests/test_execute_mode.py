@@ -1189,7 +1189,7 @@ class ExecuteModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_status"], "diverged")
-        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_reason"], "runtime_observation_mismatch")
+        self.assertEqual(result.outputs["execution_tree"]["blocks"][0]["children"][0]["divergence_reason"], "runtime_probe_result_mismatch")
 
     def test_execute_records_divergence_for_runtime_value_outputs(self) -> None:
         workflow = Workflow(
@@ -1240,8 +1240,8 @@ class ExecuteModeTest(unittest.TestCase):
         node = result.outputs["execution_tree"]["blocks"][0]["children"][0]
         self.assertIn("runtime_status", node)
         self.assertIn("revalidated", node)
-        self.assertIn("planned_observation", node)
-        self.assertIn("runtime_observation", node)
+        self.assertIn("planned_probe_result", node)
+        self.assertIn("runtime_probe_result", node)
         self.assertIn("divergence_status", node)
         self.assertIn("divergence_reason", node)
 

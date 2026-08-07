@@ -77,7 +77,7 @@
           {
             "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
             "failure_kind": "guard_failed",
-            "observation_scopes": [
+            "probe_scopes": [
               "gh.issue"
             ],
             "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
@@ -165,7 +165,7 @@
       {
         "failed_subcondition": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
         "failure_kind": "guard_failed",
-        "observation_scopes": [
+        "probe_scopes": [
           "gh.issue"
         ],
         "reference": "gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state not in [\"DONE\", \"CLOSED\"]",
@@ -216,7 +216,7 @@
       }
     ],
     "incomplete_reasons": [],
-    "potential_invalidation_scopes": [
+    "potential_probe_invalidation_scopes": [
       "shell.*"
     ],
     "preflight_halts": [],
@@ -226,11 +226,11 @@
     "relevant_guard_count": 1,
     "unevaluated_relevant_guard_count": 0,
     "unevaluated_relevant_guards": [],
-    "used_observation_scopes": [
+    "used_probe_scopes": [
       "gh.issue"
     ],
-    "verdict_basis_weakened": false,
-    "weakened_observation_scopes": []
+    "verdict_basis_stale": false,
+    "stale_probe_scopes": []
   },
   "plan": {
     "blockers": [

@@ -125,7 +125,7 @@ def _build_review_findings(
     findings.extend(_find_profile_switch_literal_string_hints(workflow))
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
     findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
-    findings.extend(_find_missing_recommended_observations(check_result))
+    findings.extend(_find_missing_recommended_probe_coverage(check_result))
     findings.extend(_find_unnecessary_with_root_adapter_bindings(workflow))
     findings.extend(
         _find_bounded_fan_out_authoring_findings(
@@ -638,7 +638,7 @@ def _find_unused_declared_inputs(workflow: Workflow, check_result: RuntimeResult
     return findings
 
 
-def _find_missing_recommended_observations(check_result: RuntimeResult) -> list[dict[str, object]]:
+def _find_missing_recommended_probe_coverage(check_result: RuntimeResult) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     for item in check_result.outputs.get("preflight_step_items", []):
         if not isinstance(item, dict):
@@ -647,22 +647,26 @@ def _find_missing_recommended_observations(check_result: RuntimeResult) -> list[
         if not isinstance(support, dict):
             continue
         strength = support.get("strength")
-        missing = support.get("missing_observations")
+        missing = support.get("missing_probes")
         if strength not in {"weak", "partial"} or not isinstance(missing, list) or not missing:
             continue
         findings.append(
             {
-                "code": "review.workflow.missing_recommended_observations",
+                "code": "review.workflow.missing_recommended_probe_coverage",
                 "level": "warning",
                 "category": "preflight_support",
-                "message": f"Step '{item.get('name')}' is missing recommended preflight probe coverage",
+                "message": f"Step '{item.get('name')}' should prefer explicit guard probes for recommended preflight checks; use read-only probe steps only when guard probes are not a good fit",
                 "path": ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index"))],
                 "evidence": {
                     "step": item.get("name"),
                     "reference": item.get("reference"),
                     "strength": strength,
-                    "missing_observations": list(missing),
-                    "reason": "recommended preflight coverage is satisfied by explicit guard probes or read-only probe steps, not by a dedicated observes field",
+                    "missing_probes": list(missing),
+                    "authoring_term": "explicit_probe_coverage",
+                    "preferred_fix_kind": "guard_probe",
+                    "fallback_fix_kinds": ["read_only_probe_step"],
+                    "authoring_priority": ["guard_probe", "read_only_probe_step"],
+                    "reason": "recommended preflight coverage should usually be expressed as guard probes for applicability decisions; use read-only probe steps when the observed fact must be materialized for later reuse or when a guard probe is not a good fit",
                 },
             }
         )

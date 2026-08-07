@@ -1120,7 +1120,7 @@ def _mark_execution_tree_step_reused(execution_tree: dict[str, object] | None, s
                 continue
             child["runtime_status"] = "reused_preflight"
             child["revalidated"] = False
-            child["runtime_observation"] = child.get("planned_observation")
+            child["runtime_probe_result"] = child.get("planned_probe_result")
             child["divergence_status"] = "matched"
             child["divergence_reason"] = None
             _refresh_execution_tree_block_runtime(block)
@@ -1144,11 +1144,11 @@ def _mark_execution_tree_step_runtime(
                 continue
             if result is not None:
                 runtime = dict(result.outputs)
-                child["runtime_observation"] = runtime
-                planned = child.get("planned_observation")
+                child["runtime_probe_result"] = runtime
+                planned = child.get("planned_probe_result")
                 matches = planned in (None, {}, runtime)
                 child["divergence_status"] = "matched" if matches else "diverged"
-                child["divergence_reason"] = None if matches else "runtime_observation_mismatch"
+                child["divergence_reason"] = None if matches else "runtime_probe_result_mismatch"
             child["runtime_status"] = runtime_status
             _refresh_execution_tree_block_runtime(block)
             return
@@ -1164,7 +1164,7 @@ def _mark_execution_tree_guard_runtime(execution_tree: dict[str, object] | None,
             if not isinstance(child, dict) or child.get("reference") != guard_reference:
                 continue
             child["runtime_status"] = "done" if result.status == "ok" else "failed"
-            child["runtime_observation"] = dict(result.outputs)
+            child["runtime_probe_result"] = dict(result.outputs)
             child["divergence_status"] = "matched"
             child["divergence_reason"] = None
             _refresh_execution_tree_block_runtime(block)
@@ -1180,13 +1180,13 @@ def _mark_execution_tree_probe_revalidated(execution_tree: dict[str, object] | N
         for child in block.get("children", []):
             if not isinstance(child, dict) or child.get("name") != step_name:
                 continue
-            planned = child.get("planned_observation")
+            planned = child.get("planned_probe_result")
             runtime = dict(result.outputs)
             child["runtime_status"] = "revalidated"
             child["revalidated"] = True
-            child["runtime_observation"] = runtime
+            child["runtime_probe_result"] = runtime
             child["divergence_status"] = "matched" if planned == runtime else "diverged"
-            child["divergence_reason"] = None if planned == runtime else "runtime_observation_mismatch"
+            child["divergence_reason"] = None if planned == runtime else "runtime_probe_result_mismatch"
             _refresh_execution_tree_block_runtime(block)
             return
 

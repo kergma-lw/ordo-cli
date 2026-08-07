@@ -59,7 +59,7 @@
           {
             "failed_subcondition": "git.branch.value != \"main\"",
             "failure_kind": "guard_failed",
-            "observation_scopes": [
+            "probe_scopes": [
               "git.branch"
             ],
             "reference": "git.branch.value != \"main\"",
@@ -129,7 +129,7 @@
       {
         "failed_subcondition": "git.branch.value != \"main\"",
         "failure_kind": "guard_failed",
-        "observation_scopes": [
+        "probe_scopes": [
           "git.branch"
         ],
         "reference": "git.branch.value != \"main\"",
@@ -162,7 +162,7 @@
       }
     ],
     "incomplete_reasons": [],
-    "potential_invalidation_scopes": [
+    "potential_probe_invalidation_scopes": [
       "shell.*"
     ],
     "preflight_halts": [],
@@ -172,11 +172,11 @@
     "relevant_guard_count": 1,
     "unevaluated_relevant_guard_count": 0,
     "unevaluated_relevant_guards": [],
-    "used_observation_scopes": [
+    "used_probe_scopes": [
       "git.branch"
     ],
-    "verdict_basis_weakened": false,
-    "weakened_observation_scopes": []
+    "verdict_basis_stale": false,
+    "stale_probe_scopes": []
   },
   "plan": {
     "blockers": [

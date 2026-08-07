@@ -41,7 +41,7 @@ def _effective_preflight_classification(
 
 
 def _observation_scopes_for_step(step, resolved_step, preflight_item: dict[str, object]) -> list[str]:
-    scopes = preflight_item.get("observation_scopes")
+    scopes = preflight_item.get("probe_scopes")
     if isinstance(scopes, list):
         return [scope for scope in scopes if isinstance(scope, str)]
     if hasattr(resolved_step, "operation") and getattr(resolved_step.operation, "kind", None) == "probe":
@@ -119,7 +119,7 @@ def _fan_out_summary(fan_out: dict[str, object] | None) -> str | None:
 def _reuse_policy_for_step_item(item: dict[str, object], weakened_scopes: set[str]) -> str:
     classification = item.get("preflight_classification")
     if classification == "read_only_analyzable":
-        scopes = [scope for scope in item.get("observation_scopes", []) if isinstance(scope, str)]
+        scopes = [scope for scope in item.get("probe_scopes", []) if isinstance(scope, str)]
         if not scopes:
             return "reusable"
         if any(scope in weakened_scopes for scope in scopes):
@@ -142,9 +142,7 @@ def _build_preflight_step_items(check_result: RuntimeResult) -> list[dict[str, o
         raw_items = getattr(analysis_tree, "preflight_step_items")
     else:
         raw_items = check_result.outputs.get("preflight_step_items", [])
-    weakened_scopes = {
-        scope for scope in check_result.outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)
-    }
+    weakened_scopes = {scope for scope in check_result.outputs.get("stale_probe_scopes", []) if isinstance(scope, str)}
     items: list[dict[str, object]] = []
     for raw_item in raw_items:
         if not isinstance(raw_item, dict):
@@ -159,12 +157,12 @@ def _build_preflight_step_items(check_result: RuntimeResult) -> list[dict[str, o
         else:
             item["produced_value_paths"] = []
         item["freshness_state"] = _freshness_state_for_scopes(
-            [scope for scope in item.get("observation_scopes", []) if isinstance(scope, str)],
+            [scope for scope in item.get("probe_scopes", []) if isinstance(scope, str)],
             weakened_scopes,
         )
         item["invalidated_by_scopes"] = [
             scope
-            for scope in item.get("observation_scopes", [])
+            for scope in item.get("probe_scopes", [])
             if isinstance(scope, str) and scope in weakened_scopes
         ]
         items.append(item)
@@ -177,7 +175,7 @@ def _supporting_step_names_by_scope(preflight_step_items: list[dict[str, object]
         step_name = item.get("name")
         if not isinstance(step_name, str):
             continue
-        for scope in item.get("observation_scopes", []):
+        for scope in item.get("probe_scopes", []):
             if not isinstance(scope, str):
                 continue
             by_scope.setdefault(scope, []).append(step_name)
@@ -190,7 +188,7 @@ def _supporting_value_paths_by_scope(preflight_step_items: list[dict[str, object
         value_paths = [path for path in item.get("produced_value_paths", []) if isinstance(path, str)]
         if not value_paths:
             continue
-        for scope in item.get("observation_scopes", []):
+        for scope in item.get("probe_scopes", []):
             if not isinstance(scope, str):
                 continue
             by_scope.setdefault(scope, []).extend(value_paths)
@@ -264,7 +262,7 @@ def plan_workflow(
     preflight_step_items = _build_preflight_step_items(check_result)
     supporting_steps_by_scope = _supporting_step_names_by_scope(preflight_step_items)
     supporting_value_paths_by_scope = _supporting_value_paths_by_scope(preflight_step_items)
-    weakened_scopes = {scope for scope in base_outputs.get("weakened_observation_scopes", []) if isinstance(scope, str)}
+    weakened_scopes = {scope for scope in base_outputs.get("stale_probe_scopes", []) if isinstance(scope, str)}
     guard_items = _build_guard_items(check_result, resolution, supporting_steps_by_scope, supporting_value_paths_by_scope)
     step_items = _build_step_items(check_result, resolution, effective_workflow)
     run_items = _build_run_items(check_result, resolution, effective_workflow)
@@ -272,12 +270,12 @@ def plan_workflow(
     for item in step_items:
         item["reuse_policy"] = _reuse_policy_for_step_item(item, weakened_scopes)
         item["freshness_state"] = _freshness_state_for_scopes(
-            [scope for scope in item.get("observation_scopes", []) if isinstance(scope, str)],
+            [scope for scope in item.get("probe_scopes", []) if isinstance(scope, str)],
             weakened_scopes,
         )
         item["invalidated_by_scopes"] = [
             scope
-            for scope in item.get("observation_scopes", [])
+            for scope in item.get("probe_scopes", [])
             if isinstance(scope, str) and scope in weakened_scopes
         ]
     execution_tree = _build_execution_tree(
@@ -359,7 +357,7 @@ def _build_guard_items(
                         "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
                         "supporting_value_paths": _supporting_value_paths_for_guard(resolved_guard.reference, supporting_value_paths_by_scope),
                         "freshness_state": "fresh"
-                        if bool(coverage.get("evaluated", False)) and isinstance(detail, dict) and any(isinstance(scope, str) for scope in detail.get("observation_scopes", []))
+                        if bool(coverage.get("evaluated", False)) and isinstance(detail, dict) and any(isinstance(scope, str) for scope in detail.get("probe_scopes", []))
                         else "not_applicable",
                     }
                 )
@@ -435,7 +433,7 @@ def _build_step_items(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": _condition_status_for_step(step, preflight_item),
-                        "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
+                        "probe_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
                         "launcher": step.launcher,
@@ -456,7 +454,7 @@ def _build_step_items(
                         "conditional": step.if_ is not None,
                         "condition": step.if_,
                         "condition_status": condition_status,
-                        "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
+                        "probe_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                         "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                         "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
                         "launcher": None,
@@ -478,7 +476,7 @@ def _build_step_items(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": _condition_status_for_step(step, preflight_item),
-                    "observation_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
+                    "probe_scopes": _observation_scopes_for_step(step, resolved_step, preflight_item),
                     "invalidates_scopes": _invalidates_scopes_for_step(resolved_step),
                     "preflight_support": preflight_item.get("preflight_support") if isinstance(preflight_item.get("preflight_support"), dict) else None,
                     "launcher": step.launcher,
@@ -499,7 +497,7 @@ def _build_step_items(
                 "conditional": step.if_ is not None,
                 "condition": step.if_,
                 "condition_status": None if step.if_ is None else "unknown",
-                "observation_scopes": [],
+                "probe_scopes": [],
                 "invalidates_scopes": [],
                 "preflight_support": None,
                 "launcher": step.launcher if step.operation is not None else None,
@@ -638,8 +636,8 @@ def _build_execution_tree(
                     "id": f"block:{block_index}:guard:{guard_index}",
                     "runtime_status": "not_started",
                     "revalidated": False,
-                    "planned_observation": None,
-                    "runtime_observation": None,
+                    "planned_probe_result": None,
+                    "runtime_probe_result": None,
                     "divergence_status": "not_applicable",
                     "divergence_reason": None,
                     **dict(guard_by_reference.get(guard.reference, {"reference": guard.reference})),
@@ -652,10 +650,10 @@ def _build_execution_tree(
                     "id": f"block:{block_index}:step:{step_index}",
                     "runtime_status": "not_started",
                     "revalidated": False,
-                    "planned_observation": None
+                    "planned_probe_result": None
                     if step.name not in preflight_by_name
                     else dict(preflight_by_name[step.name].get("outputs", {})),
-                    "runtime_observation": None,
+                    "runtime_probe_result": None,
                     "divergence_status": "not_checked" if step.name in preflight_by_name else "not_applicable",
                     "divergence_reason": None,
                     **dict(step_by_name.get(step.name, {"name": step.name})),

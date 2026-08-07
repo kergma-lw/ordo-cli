@@ -51,7 +51,7 @@
           {
             "failed_subcondition": null,
             "failure_kind": null,
-            "observation_scopes": [
+            "probe_scopes": [
               "git.worktree"
             ],
             "reference": "git.worktree.clean",
@@ -111,7 +111,7 @@
       {
         "failed_subcondition": null,
         "failure_kind": null,
-        "observation_scopes": [
+        "probe_scopes": [
           "git.worktree"
         ],
         "reference": "git.worktree.clean",

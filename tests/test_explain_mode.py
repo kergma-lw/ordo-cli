@@ -201,7 +201,7 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(support_step["name"], "push")
         self.assertEqual(support_step["preflight_support"]["strength"], "partial")
         self.assertEqual(
-            support_step["preflight_support"]["missing_observations"],
+            support_step["preflight_support"]["missing_probes"],
             [
                 {
                     "probe": "git.range",
@@ -279,7 +279,7 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["name"], "push")
         self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["strength"], "weak")
         self.assertEqual(
-            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_observations"][2],
+            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_probes"][2],
             {
                 "probe": "git.range",
                 "with": {"base": "@{upstream}", "head": {"expression": "step.branch_name.outputs.value"}},
@@ -318,7 +318,7 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["category"], "ok")
         self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["name"], "set-status")
         self.assertEqual(
-            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_observations"][2],
+            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_probes"][2],
             {
                 "probe": "gh.project.field.option",
                 "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status", "option": "In review"},
@@ -326,7 +326,7 @@ class ExplainModeTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_observations"][1],
+            result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["missing_probes"][1],
             {
                 "probe": "gh.project.field",
                 "with": {"project_id": {"expression": "inputs.project_id"}, "field": "Status"},

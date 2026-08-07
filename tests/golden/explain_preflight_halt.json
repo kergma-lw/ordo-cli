@@ -78,10 +78,10 @@
               "kind": "probe",
               "launcher": null,
               "name": "load-issue",
-              "observation_scopes": [
+              "probe_scopes": [
                 "gh.issue"
               ],
-              "planned_observation": {
+              "planned_probe_result": {
                 "exists": true,
                 "number": 1,
                 "state": "OPEN"
@@ -94,7 +94,7 @@
                 "freshness_state": "fresh",
                 "invalidated_by_scopes": [],
                 "name": "load-issue",
-                "observation_scopes": [
+                "probe_scopes": [
                   "gh.issue"
                 ],
                 "operation_status": "ok",
@@ -123,7 +123,7 @@
               "reference": "gh.issue",
               "reuse_policy": "revalidate",
               "revalidated": false,
-              "runtime_observation": null,
+              "runtime_probe_result": null,
               "runtime_status": "not_started"
             },
             {
@@ -143,8 +143,8 @@
               "kind": "action",
               "launcher": null,
               "name": "close-issue",
-              "observation_scopes": [],
-              "planned_observation": {},
+              "probe_scopes": [],
+              "planned_probe_result": {},
               "preflight": {
                 "block_index": 0,
                 "condition": "${inputs.run_effectful}",
@@ -166,7 +166,7 @@
               "reference": "gh.issue.close",
               "reuse_policy": "not_reusable",
               "revalidated": false,
-              "runtime_observation": null,
+              "runtime_probe_result": null,
               "runtime_status": "not_started"
             }
           ],
@@ -191,11 +191,11 @@
               "id": "block:1:guard:0",
               "kind": "expression",
               "operation_status": null,
-              "planned_observation": null,
+              "planned_probe_result": null,
               "reference": "git.worktree.clean",
               "relevant": true,
               "revalidated": false,
-              "runtime_observation": null,
+              "runtime_probe_result": null,
               "runtime_status": "not_started",
               "status": "pending",
               "supporting_step_names": [],
@@ -283,7 +283,7 @@
       }
     ],
     "plan_ready": true,
-    "potential_invalidation_scopes": [
+    "potential_probe_invalidation_scopes": [
       "gh.*"
     ],
     "preflight_halts": [
@@ -319,7 +319,7 @@
         "freshness_state": "fresh",
         "invalidated_by_scopes": [],
         "name": "load-issue",
-        "observation_scopes": [
+        "probe_scopes": [
           "gh.issue"
         ],
         "operation_status": "ok",
@@ -399,7 +399,7 @@
         "kind": "probe",
         "launcher": null,
         "name": "load-issue",
-        "observation_scopes": [
+        "probe_scopes": [
           "gh.issue"
         ],
         "preflight_classification": "read_only_analyzable",
@@ -420,7 +420,7 @@
         "kind": "action",
         "launcher": null,
         "name": "close-issue",
-        "observation_scopes": [],
+        "probe_scopes": [],
         "preflight_classification": "effectful",
         "reference": "gh.issue.close",
         "reuse_policy": "not_reusable"
@@ -430,9 +430,9 @@
     "unevaluated_relevant_guards": [
       "git.worktree.clean"
     ],
-    "used_observation_scopes": [],
-    "verdict_basis_weakened": false,
-    "weakened_observation_scopes": []
+    "used_probe_scopes": [],
+    "verdict_basis_stale": false,
+    "stale_probe_scopes": []
   },
   "plan": {
     "blockers": [],

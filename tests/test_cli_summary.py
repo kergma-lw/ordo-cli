@@ -15,8 +15,8 @@ class CliSummaryTest(unittest.TestCase):
             "outputs": {
                 "can_execute": True,
                 "guard_details": [],
-                "weakened_observation_scopes": ["gh.issue", "gh.project.issue"],
-                "verdict_basis_weakened": False,
+                "stale_probe_scopes": ["gh.issue", "gh.project.issue"],
+                "verdict_basis_stale": False,
                 "unevaluated_relevant_guards": [],
             },
         }
@@ -36,8 +36,8 @@ class CliSummaryTest(unittest.TestCase):
             "outputs": {
                 "can_execute": True,
                 "guard_details": [],
-                "weakened_observation_scopes": ["gh.issue"],
-                "verdict_basis_weakened": True,
+                "stale_probe_scopes": ["gh.issue"],
+                "verdict_basis_stale": True,
                 "unevaluated_relevant_guards": [],
             },
         }
