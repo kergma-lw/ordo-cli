@@ -362,12 +362,17 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "prefer": [
             "use adapters when text or markdown projections make a downstream decision or published value clearer",
             "in guard context, prefer read-only adapter projections and keep adapter write paths such as ->... out of guard logic",
+            "express adapter root binding with pipe-style syntax when an equivalent pipe form exists",
             "keep transformations close to the structured adapter surface instead of re-encoding them manually",
         ],
         "avoid": [
             "hand-rolling repetitive transformations in raw inline expressions when an adapter surface already matches the need",
+            "using with{root: ...} when the same adapter binding can be expressed with pipe-style syntax",
             "using adapter write paths such as ->... inside guards",
             "ignoring published adapter families when they would make guard, condition, or publish logic easier to read",
+        ],
+        "stop_when": [
+            "a with{root: ...} form is being introduced before checking whether the same binding works as a pipe-style adapter expression",
         ],
     },
     {
@@ -729,6 +734,7 @@ def build_workflow_authoring_response() -> JSONObject:
             "validate both the request shape and the observed target context",
             "name important values early",
             "prefer bare expressions in let, if, with, value, publish, result, and for_each; quote literal strings explicitly",
+            "do not use with{root: ...} if the same adapter binding can be expressed with pipe-style syntax; use with{root: ...} only as a fallback when the pipe-style form is not valid in the current construct",
             "stage reusable payloads with value + register before emitting them through result or publish",
             "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
             "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",

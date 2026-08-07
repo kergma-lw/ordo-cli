@@ -612,6 +612,8 @@ def _split_adapter_body_and_bindings(
             quote = char
             position += 1
             continue
+        if stop_chars and depth_paren == 0 and depth_bracket == 0 and depth_brace == 0 and char in stop_chars:
+            return text[body_start:position].rstrip(), (), position
         if char == "(":
             depth_paren += 1
             position += 1
@@ -642,8 +644,6 @@ def _split_adapter_body_and_bindings(
                 raise ValueExpressionParseError("Unexpected '}' in adapter body", position, position + 1)
             position += 1
             continue
-        if stop_chars and depth_paren == 0 and depth_bracket == 0 and depth_brace == 0 and char in stop_chars:
-            return text[body_start:position].rstrip(), (), position
         if (
             char.isspace()
             and depth_paren == 0
@@ -2283,6 +2283,21 @@ def _evaluate_presence_builtin(
             message=f"Built-in value expression '{node.name}' requires a lookup-style reference or read-only adapter invocation argument",
             details={"expression": parsed.source, "builtin": node.name},
         )
+    if isinstance(argument, PipelineNode):
+        try:
+            _evaluate_node(
+                argument,
+                parsed=parsed,
+                workflow=workflow,
+                context=context,
+                step_results=step_results,
+                observation_session=None,
+            )
+        except ValueExpressionEvaluationError as exc:
+            if exc.code == "runtime.value.adapter_not_found":
+                return True if node.name == "is_missing" else False
+            raise
+        return False if node.name == "is_missing" else True
     if isinstance(argument, AdapterInvocationNode):
         try:
             result = _evaluate_adapter_invocation_result(
@@ -2933,6 +2948,8 @@ def _is_presence_check_argument(node: ValueExpressionNode) -> bool:
         return bool(node.parts) and node.parts[0] in {"inputs", "args"} and len(node.parts) >= 2
     if isinstance(node, AdapterInvocationNode):
         return True
+    if isinstance(node, PipelineNode):
+        return all(isinstance(stage, AdapterInvocationNode) for stage in node.filters)
     return isinstance(node, (StateReferenceNode, StepReferenceNode))
 
 

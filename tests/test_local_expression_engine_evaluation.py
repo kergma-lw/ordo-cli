@@ -694,6 +694,26 @@ blocks:
 
         self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
 
+    def test_evaluate_is_present_accepts_pipe_style_adapter_invocation_when_path_exists(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    ## Tasks
+
+    - repo/name#1
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_present(inputs.body | markdown["Tasks"])')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
     def test_evaluate_is_present_accepts_list_item_adapter_path(self) -> None:
         workflow = load_workflow_text(
             """
@@ -766,6 +786,26 @@ blocks:
         )
 
         parsed = parse_local_expression_tree('is_missing(markdown["Tasks"] with{root: inputs.body})')
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_is_missing_accepts_pipe_style_adapter_invocation_when_path_absent(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  body: |
+    ## Summary
+
+    hello
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree('is_missing(inputs.body | markdown["Tasks"])')
 
         self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
 
