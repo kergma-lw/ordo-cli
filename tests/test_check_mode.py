@@ -210,10 +210,10 @@ class CheckModeTest(unittest.TestCase):
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertFalse(result.outputs["verdict_basis_weakened"])
-        self.assertIn("git.branch", result.outputs["used_observation_scopes"])
-        self.assertIn("git.branch", result.outputs["weakened_observation_scopes"])
-        self.assertIn("git.branch", result.outputs["potential_invalidation_scopes"])
+        self.assertFalse(result.outputs["verdict_basis_stale"])
+        self.assertIn("git.branch", result.outputs["used_probe_scopes"])
+        self.assertIn("git.branch", result.outputs["stale_probe_scopes"])
+        self.assertIn("git.branch", result.outputs["potential_probe_invalidation_scopes"])
 
     def test_check_uses_family_wide_invalidation_fallback_when_action_has_no_narrow_metadata(self) -> None:
         workflow = Workflow(
@@ -229,9 +229,9 @@ class CheckModeTest(unittest.TestCase):
 
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-        self.assertFalse(result.outputs["verdict_basis_weakened"])
-        self.assertIn("gh.issue", result.outputs["used_observation_scopes"])
-        self.assertIn("gh.*", result.outputs["potential_invalidation_scopes"])
+        self.assertFalse(result.outputs["verdict_basis_stale"])
+        self.assertIn("gh.issue", result.outputs["used_probe_scopes"])
+        self.assertIn("gh.*", result.outputs["potential_probe_invalidation_scopes"])
 
     def test_check_evaluates_expr_guard_with_custom_probe(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(expr='git.branch.value != "main"'),), steps=())
@@ -262,7 +262,7 @@ class CheckModeTest(unittest.TestCase):
         result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(
-            result.outputs["guard_details"][0]["observations"],
+            result.outputs["guard_details"][0]["probes"],
             [
                 {
                     "probe": "gh.issue",
@@ -663,7 +663,7 @@ class CheckModeTest(unittest.TestCase):
             {"reference": "gh.issue.close", "with": {}},
         )
 
-    def test_check_reports_strong_preflight_support_when_recommended_observations_match_exactly(self) -> None:
+    def test_check_reports_strong_preflight_support_when_recommended_probes_match_exactly(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="open-task",
@@ -705,8 +705,8 @@ class CheckModeTest(unittest.TestCase):
 
         support = result.outputs["preflight_step_items"][4]["preflight_support"]
         self.assertEqual(support["strength"], "strong")
-        self.assertEqual(len(support["matched_observations"]), 3)
-        self.assertEqual(support["missing_observations"], [])
+        self.assertEqual(len(support["matched_probes"]), 3)
+        self.assertEqual(support["missing_probes"], [])
 
     def test_check_keeps_preflight_observation_matching_exact_without_expression_guessing(self) -> None:
         workflow = Workflow(
@@ -750,9 +750,9 @@ class CheckModeTest(unittest.TestCase):
 
         support = result.outputs["preflight_step_items"][4]["preflight_support"]
         self.assertEqual(support["strength"], "partial")
-        self.assertEqual(len(support["matched_observations"]), 2)
+        self.assertEqual(len(support["matched_probes"]), 2)
         self.assertEqual(
-            support["missing_observations"],
+            support["missing_probes"],
             [
                 {
                     "probe": "git.range",
@@ -761,6 +761,58 @@ class CheckModeTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_check_matches_guard_probe_references_with_action_probe_placeholders(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="task-to-ready",
+            inputs={"repository": "acme/repo", "project_id": "PVT_demo", "issue_number": 7},
+            let_bindings={
+                "project_issue": "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)",
+                "status_field": 'gh.project.field(project_id=inputs.project_id, field="Status")',
+                "ready_option": 'gh.project.field.option(project_id=inputs.project_id, field="Status", option="Ready")',
+            },
+            blocks=(
+                GuardBlock(
+                    guards=(
+                        Guard(expr="project_issue.exists"),
+                        Guard(expr="status_field.exists"),
+                        Guard(expr="ready_option.exists"),
+                    )
+                ),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "inputs.repository",
+                                    "issue_number": "inputs.issue_number",
+                                    "project_id": "inputs.project_id",
+                                    "field": "Status",
+                                    "option": "Ready",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            outputs = {
+                "gh.project.issue": {"exists": True},
+                "gh.project.field": {"exists": True},
+                "gh.project.field.option": {"exists": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support = result.outputs["preflight_step_items"][0]["preflight_support"]
+        self.assertEqual(support["strength"], "strong")
+        self.assertEqual(support["missing_probes"], [])
 
     def test_check_uses_shared_read_only_engine_for_preflight_values_and_conditions(self) -> None:
         workflow = Workflow(
@@ -835,7 +887,7 @@ class CheckModeTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            result.outputs["preflight_step_items"][0]["observations"],
+            result.outputs["preflight_step_items"][0]["probes"],
             [
                 {
                     "probe": "gh.issue",
@@ -939,9 +991,9 @@ blocks:
 
         support = result.outputs["preflight_step_items"][1]["preflight_support"]
         self.assertEqual(support["strength"], "weak")
-        self.assertEqual(support["matched_observations"], [])
+        self.assertEqual(support["matched_probes"], [])
         self.assertEqual(
-            support["missing_observations"],
+            support["missing_probes"],
             [
                 {"probe": "git.branch", "with": {}, "fields": []},
                 {"probe": "git.upstream", "with": {}, "fields": []},
@@ -985,7 +1037,7 @@ blocks:
 
         support = result.outputs["preflight_step_items"][1]["preflight_support"]
         self.assertEqual(
-            support["missing_observations"],
+            support["missing_probes"],
             [
                 {
                     "probe": "gh.project.issue",
@@ -1007,7 +1059,7 @@ blocks:
             ],
         )
 
-    def test_check_recommends_missing_observations_for_guardless_effectful_block(self) -> None:
+    def test_check_recommends_missing_probes_for_guardless_effectful_block(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="open-task",
@@ -1040,7 +1092,7 @@ blocks:
         support = result.outputs["preflight_step_items"][0]["preflight_support"]
         self.assertEqual(support["strength"], "weak")
         self.assertEqual(
-            support["missing_observations"],
+            support["missing_probes"],
             [
                 {
                     "probe": "gh.project.issue",
@@ -1106,7 +1158,7 @@ blocks:
         self.assertEqual(analysis.incomplete_reasons, ("read_only_step_failed", "relevant_guard_coverage_incomplete"))
         self.assertEqual(analysis.block_items[0]["status"], "preflight_halted")
         self.assertEqual(
-            analysis.preflight_step_items[1]["preflight_support"]["missing_observations"],
+            analysis.preflight_step_items[1]["preflight_support"]["missing_probes"],
             [
                 {
                     "probe": "gh.project.issue",

@@ -150,7 +150,7 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertFalse(any(item["code"] == "review.workflow.adapter_pipe_style_preferred" for item in result.outputs["findings"]))
 
-    def test_review_reports_missing_recommended_observations(self) -> None:
+    def test_review_reports_missing_recommended_probe_coverage(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="open-task",
@@ -180,9 +180,12 @@ blocks:
         result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertTrue(any(item["code"] == "review.workflow.missing_recommended_observations" for item in result.outputs["findings"]))
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.missing_recommended_probe_coverage")
+        self.assertIn("prefer explicit guard probes", finding["message"])
+        self.assertEqual(finding["evidence"]["preferred_fix_kind"], "guard_probe")
+        self.assertEqual(finding["evidence"]["fallback_fix_kinds"], ["read_only_probe_step"])
 
-    def test_review_recognizes_recommended_observations_from_let_bound_guard_probes(self) -> None:
+    def test_review_recognizes_recommended_probe_coverage_from_let_bound_guard_probes(self) -> None:
         workflow = Workflow(
             version=0,
             workflow="close-story",
@@ -222,7 +225,50 @@ blocks:
         result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_observations" for item in result.outputs["findings"]))
+        self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_probe_coverage" for item in result.outputs["findings"]))
+
+    def test_review_recognizes_recommended_probe_coverage_from_guard_probes_with_bare_input_references(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="task-to-ready",
+            let_bindings={
+                "project_issue": "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)",
+                "status_field": 'gh.project.field(project_id=inputs.project_id, field="Status")',
+                "ready_option": 'gh.project.field.option(project_id=inputs.project_id, field="Status", option="Ready")',
+            },
+            blocks=(
+                GuardBlock(
+                    guards=(
+                        Guard(expr="project_issue.exists"),
+                        Guard(expr="status_field.exists"),
+                        Guard(expr="ready_option.exists"),
+                    )
+                ),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "inputs.repository",
+                                    "issue_number": "inputs.issue_number",
+                                    "project_id": "inputs.project_id",
+                                    "field": "Status",
+                                    "option": "Ready",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            inputs={"repository": "acme/repo", "issue_number": 7, "project_id": "PVT_demo"},
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_probe_coverage" for item in result.outputs["findings"]))
 
     def test_review_reports_clean_when_no_findings_exist(self) -> None:
         workflow = Workflow(

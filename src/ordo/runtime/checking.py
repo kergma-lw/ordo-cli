@@ -464,7 +464,7 @@ def _build_check_analysis_tree(
                 guard_details.append(detail)
                 block_guard_details.append(detail)
                 checked_guards.append(resolved_guard.reference)
-                observed_probe_calls.extend(item for item in detail.get("observations", []) if isinstance(item, dict))
+                observed_probe_calls.extend(item for item in detail.get("probes", []) if isinstance(item, dict))
                 bootstrap_details = _collect_bootstrap_details(operation_results)
                 if result.status != "ok":
                     blockers.append(resolved_guard.reference)
@@ -1173,7 +1173,7 @@ def _interpret_step_block_for_check(
                     "conditional": step.if_ is not None,
                     "condition": step.if_,
                     "condition_status": "false",
-                    "observations": step_observations,
+                    "probes": step_observations,
                     "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
@@ -1293,8 +1293,8 @@ def _interpret_step_block_for_check(
                     "operation_status": result.status,
                     "summary": result.summary,
                     "outputs": dict(result.outputs),
-                    "observation_scopes": [resolved_step.reference] if isinstance(resolved_step, ResolvedOperation) else [],
-                    "observations": step_observations,
+                    "probe_scopes": [resolved_step.reference] if isinstance(resolved_step, ResolvedOperation) else [],
+                    "probes": step_observations,
                     "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                 }
             )
@@ -1327,7 +1327,7 @@ def _interpret_step_block_for_check(
                 "condition": step.if_,
                 "condition_status": "true" if step.if_ is not None else None,
                 "halt_reason": halt.reason,
-                "observations": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
+                "probes": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
                 "action_call": action_call,
                 "preflight_support": preflight_support,
             }
@@ -1627,7 +1627,7 @@ def _build_observation_basis_outputs(
             scope
             for detail in guard_details
             if isinstance(detail, dict)
-            for scope in detail.get("observation_scopes", [])
+            for scope in detail.get("probe_scopes", [])
             if isinstance(scope, str)
         }
     )
@@ -1640,10 +1640,10 @@ def _build_observation_basis_outputs(
         }
     )
     return {
-        "used_observation_scopes": used_scopes,
-        "potential_invalidation_scopes": invalidation_scopes,
-        "weakened_observation_scopes": weakened_scopes,
-        "verdict_basis_weakened": False,
+        "used_probe_scopes": used_scopes,
+        "potential_probe_invalidation_scopes": invalidation_scopes,
+        "stale_probe_scopes": weakened_scopes,
+        "verdict_basis_stale": False,
     }
 
 
@@ -1826,7 +1826,38 @@ def _render_preflight_observation(template, *, action_call: dict[str, object] | 
 def _canonical_observation_key(observation: dict[str, object]) -> str:
     import json
 
-    return json.dumps(observation, sort_keys=True, separators=(",", ":"))
+    return json.dumps(_canonicalize_probe_descriptor(observation), sort_keys=True, separators=(",", ":"))
+
+
+def _canonicalize_probe_descriptor(value: JSONValue | dict[str, object]) -> JSONValue:
+    if isinstance(value, str):
+        canonical_expression = _canonicalize_authored_reference_string(value)
+        if canonical_expression is not None:
+            return {"expression": canonical_expression}
+        return value
+    if isinstance(value, list):
+        return [_canonicalize_probe_descriptor(item) for item in value]
+    if isinstance(value, dict):
+        if set(value.keys()) == {"expression"} and isinstance(value.get("expression"), str):
+            canonical_expression = _canonicalize_authored_reference_string(value["expression"])
+            if canonical_expression is not None:
+                return {"expression": canonical_expression}
+        return {str(key): _canonicalize_probe_descriptor(item) for key, item in value.items()}
+    return value
+
+
+def _canonicalize_authored_reference_string(value: str) -> str | None:
+    expression = extract_embedded_local_expression(value)
+    if expression is None:
+        expression = value
+    try:
+        parsed = parse_local_expression_tree(expression)
+    except LocalExpressionParseError:
+        return None
+    root = parsed.root
+    if not isinstance(root, ReferenceNode) or not root.parts or root.parts[0] not in {"inputs", "step", "state", "let"}:
+        return None
+    return render_expression_text(root, source=expression)
 
 
 def _build_preflight_support(
@@ -1841,9 +1872,9 @@ def _build_preflight_support(
     if not templates:
         return {
             "strength": "not_applicable",
-            "recommended_observations": [],
-            "matched_observations": [],
-            "missing_observations": [],
+            "recommended_probes": [],
+            "matched_probes": [],
+            "missing_probes": [],
         }
     recommended = [_render_preflight_observation(template, action_call=action_call) for template in templates]
     known_keys = {_canonical_observation_key(item) for item in known_observations}
@@ -1852,9 +1883,9 @@ def _build_preflight_support(
     strength = "strong" if len(matched) == len(recommended) else "weak" if not matched else "partial"
     return {
         "strength": strength,
-        "recommended_observations": recommended,
-        "matched_observations": matched,
-        "missing_observations": missing,
+        "recommended_probes": recommended,
+        "matched_probes": matched,
+        "missing_probes": missing,
     }
 
 
@@ -2123,6 +2154,6 @@ def _build_guard_detail(
         "failed_subcondition": result.outputs.get("failed_subcondition"),
         "failure_kind": result.raw.get("failure_kind"),
         "trace": result.raw.get("trace", []),
-        "observation_scopes": [] if observation_scopes is None else list(observation_scopes),
-        "observations": [] if observations is None else [dict(item) for item in observations],
+        "probe_scopes": [] if observation_scopes is None else list(observation_scopes),
+        "probes": [] if observations is None else [dict(item) for item in observations],
     }
