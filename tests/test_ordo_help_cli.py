@@ -572,7 +572,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("when adding or changing inputs, validate them before continuing", payload["authoring_heuristic"])
         self.assertIn("validate both the request shape and the observed target context", payload["authoring_heuristic"])
         self.assertIn("keep bounded fan-out bodies short, structured, and explicit about scope boundaries", payload["authoring_heuristic"])
-        self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early", payload["authoring_heuristic"])
+        self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and probe-coverage gaps early", payload["authoring_heuristic"])
         self.assertIn("prefer bare expressions in let, if, with, value, publish, result, and for_each; quote literal strings explicitly", payload["authoring_heuristic"])
         self.assertEqual([item["name"] for item in payload["bounded_fan_out_examples"]], ["named_run_target_fan_out", "inline_fan_out_local_steps", "inline_fan_out_inner_if"])
         decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")

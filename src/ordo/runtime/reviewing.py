@@ -655,13 +655,14 @@ def _find_missing_recommended_observations(check_result: RuntimeResult) -> list[
                 "code": "review.workflow.missing_recommended_observations",
                 "level": "warning",
                 "category": "preflight_support",
-                "message": f"Step '{item.get('name')}' is missing recommended preflight observations",
+                "message": f"Step '{item.get('name')}' is missing recommended preflight probe coverage",
                 "path": ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index"))],
                 "evidence": {
                     "step": item.get("name"),
                     "reference": item.get("reference"),
                     "strength": strength,
                     "missing_observations": list(missing),
+                    "reason": "recommended preflight coverage is satisfied by explicit guard probes or read-only probe steps, not by a dedicated observes field",
                 },
             }
         )

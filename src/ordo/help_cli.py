@@ -64,7 +64,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "using both makes it harder to mistake execution readiness for authoring completeness",
         ],
         "prefer": [
-            "use check to surface guard, observation, and applicability gaps",
+            "use check to surface guard, probe-coverage, and applicability gaps",
             "use review to surface workflow authoring-quality findings",
             "report both results when presenting workflow changes as complete",
         ],
@@ -289,10 +289,10 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "put applicability checks near the top of the workflow",
             "for non-trivial workflows, phase guards in a stable order such as environment applicability, input validation, domain invariants, and structural preconditions",
             "when adding or changing workflow inputs, stop and validate each input at the guard boundary before moving on to downstream steps",
-            "when workflow success depends on an externally observable fact and the public surface can observe it, express that fact explicitly in guards or named observations",
+            "when workflow success depends on an externally observable fact and the public surface can observe it, express that fact explicitly with guard probes or read-only probe steps",
             "use input-validation filters such as value | is_string, value | is_number, value | is_integer, value | is_boolean, value | in(...), value | eq(...), and value | ne(...) when they make the input contract more explicit",
             "design guards so check and explain can name domain inapplicability before any mutating step runs",
-            "run ordo-playbook check <workflow> while authoring to surface missing structural observations or likely guard gaps whenever the current workflow shape makes those recommendations possible",
+            "run ordo-playbook check <workflow> while authoring to surface missing recommended probe coverage or likely guard gaps whenever the current workflow shape makes those recommendations possible",
             "reject inapplicable situations early instead of failing deep inside execution",
         ],
         "avoid": [
@@ -737,7 +737,7 @@ def build_workflow_authoring_response() -> JSONObject:
             "do not use with{root: ...} if the same adapter binding can be expressed with pipe-style syntax; use with{root: ...} only as a fallback when the pipe-style form is not valid in the current construct",
             "stage reusable payloads with value + register before emitting them through result or publish",
             "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
-            "use ordo-playbook check <workflow> during authoring to catch guard and observation gaps early",
+            "use ordo-playbook check <workflow> during authoring to catch guard and probe-coverage gaps early",
             "use ordo-playbook review <workflow> during authoring to catch workflow authoring-quality findings early",
             "after adding or changing a workflow, run both check and review before calling the work complete",
             "keep publish payloads minimal and follow stricter local agent or project output rules when they exist",
@@ -833,7 +833,7 @@ def build_command_line_response() -> JSONObject:
                         {
                             "mode": "check <workflow>",
                             "question": "Can this workflow run now?",
-                            "purpose": "Validate applicability, observations, and execution readiness",
+                            "purpose": "Validate applicability, probe coverage, and execution readiness",
                         },
                         {
                             "mode": "review <workflow>",

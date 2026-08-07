@@ -5,7 +5,7 @@
         "passes": [
           {
             "mode": "check <workflow>",
-            "purpose": "Validate applicability, observations, and execution readiness",
+            "purpose": "Validate applicability, probe coverage, and execution readiness",
             "question": "Can this workflow run now?"
           },
           {
