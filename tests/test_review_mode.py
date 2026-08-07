@@ -104,6 +104,52 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertFalse(any(item["code"] == "review.workflow.input_declared_but_unused" for item in result.outputs["findings"]))
 
+    def test_review_reports_unnecessary_with_root_when_pipe_equivalent_exists(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: markdown-adapter-demo
+inputs:
+  body:
+    type: string
+blocks:
+  - steps:
+      - name: extract-tasks
+        value: 'markdown["Tasks"] with{root: inputs.body}'
+        register: extracted
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.adapter_pipe_style_preferred")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "value"])
+        self.assertEqual(finding["evidence"]["suggested_expression"], 'inputs.body | markdown["Tasks"]')
+
+    def test_review_does_not_report_with_root_when_additional_bindings_exist(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: json-adapter-demo
+inputs:
+  body:
+    type: string
+  kind:
+    type: string
+blocks:
+  - steps:
+      - name: extract-name
+        value: 'json.items.one(kind=target_kind).name with{root: inputs.body, target_kind: inputs.kind}'
+        register: extracted
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(any(item["code"] == "review.workflow.adapter_pipe_style_preferred" for item in result.outputs["findings"]))
+
     def test_review_reports_missing_recommended_observations(self) -> None:
         workflow = Workflow(
             version=0,
@@ -244,6 +290,29 @@ blocks:
 
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.fan_out.runtime_only_cardinality")
         self.assertEqual(finding["path"][-1], "for_each")
+
+    def test_review_does_not_report_runtime_only_fan_out_when_source_is_review_derivable_collection(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="inspect-many",
+            steps=(
+                Step(
+                    name="load-items",
+                    operation=OperationRef("gh.project.items", with_={"project_id": "PVT_demo"}),
+                    register="items",
+                ),
+                Step(
+                    name="inspect",
+                    run="fragment.yml",
+                    for_each='step.items.outputs.items | field("id")',
+                    register="runs",
+                ),
+            ),
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertFalse(any(item["code"] == "review.workflow.fan_out.runtime_only_cardinality" for item in result.outputs["findings"]))
 
     def test_review_keeps_simple_inline_fan_out_clean(self) -> None:
         workflow = Workflow(
