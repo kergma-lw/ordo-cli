@@ -839,6 +839,7 @@ def _load_run_target_workflow_for_validation(
         run_path=run_path,
         launch_dir=launch_dir,
         node_path=node_path,
+        bindings=_sanitize_run_validation_bindings(step.run_with, include_iteration_item=step.for_each is not None),
     )
     if isinstance(built, Diagnostic) and built.code == "runtime.run.fragment_shape":
         return _diagnostic(
@@ -974,11 +975,23 @@ def _validate_step_list(
         has_publish = "publish" in item
         has_state_set = "state_set" in item
         has_state_delete = "state_delete" in item
+        has_gate = "gate" in item
         form_count = sum((has_uses, has_run, has_inline_steps, has_profile_switch, has_value, has_result, has_publish, has_state_set, has_state_delete))
 
         prior_registers = {name: register_path for name, register_path in seen_registers.items()}
 
-        if form_count != 1:
+        if has_gate and "register" in item:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.step.gate_register_conflict",
+                    "Step must not declare both 'gate' and 'register'",
+                    item_path + ("register",),
+                    source,
+                )
+            )
+        elif form_count == 0 and has_gate:
+            pass
+        elif form_count != 1:
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.form",

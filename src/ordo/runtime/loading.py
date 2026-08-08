@@ -1220,7 +1220,18 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
     has_publish = "publish" in data
     has_state_set = "state_set" in data
     has_state_delete = "state_delete" in data
-    if sum((has_uses, has_run, has_inline_steps, has_profile_switch, has_value, has_result, has_publish, has_state_set, has_state_delete)) != 1:
+    form_count = sum((has_uses, has_run, has_inline_steps, has_profile_switch, has_value, has_result, has_publish, has_state_set, has_state_delete))
+    has_gate = "gate" in data
+    if has_gate and "register" in data:
+        raise _load_error(
+            code="load.step.gate_register_conflict",
+            message="Step must not declare both 'gate' and 'register'",
+            path=path + ("register",),
+            details={"source": source},
+        )
+    if form_count == 0 and has_gate:
+        pass
+    elif form_count != 1:
         raise _load_error(
             code="load.step.form",
             message="Step must define exactly one of 'uses', 'run', 'steps', 'profile_switch', 'value', 'result', 'publish', 'state_set', or 'state_delete'",

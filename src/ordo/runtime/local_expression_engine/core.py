@@ -1419,6 +1419,15 @@ class _ConditionEvaluator:
                     return "probe_failed", None
                 self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="input", status="ok", value=value))
                 return "ok", value
+            if node.parts[0] == "args":
+                try:
+                    value = _resolve_args_reference(node.parts, workflow=self._workflow)
+                except ValueExpressionEvaluationError as exc:
+                    self._diagnostics.append(exc.to_diagnostic())
+                    self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="arg", status="probe_failed", value=None))
+                    return "probe_failed", None
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="arg", status="ok", value=value))
+                return "ok", value
             return self._observe_reference(node)
         if isinstance(node, StateReferenceNode):
             try:
@@ -1865,6 +1874,8 @@ def _evaluate_node(
             )
         if node.parts[0] == "item":
             return _resolve_iteration_item_reference(node.parts, workflow=workflow)
+        if node.parts[0] == "args":
+            return _resolve_args_reference(node.parts, workflow=workflow)
         return _resolve_input_reference(node.parts, workflow=workflow)
     if isinstance(node, StateReferenceNode):
         return _resolve_state_reference(node, parsed=parsed, workflow=workflow)
@@ -2089,6 +2100,31 @@ def _resolve_iteration_item_reference(parts: tuple[str, ...], *, workflow: Workf
             details={"reference": ".".join(parts)},
         )
     current: JSONValue = workflow.inputs["__iteration_item__"]
+    for part in parts[1:]:
+        if not isinstance(current, dict) or part not in current:
+            raise ValueExpressionEvaluationError(
+                code="runtime.value.input_missing",
+                message=f"Workflow input reference '{'.'.join(parts)}' is missing",
+                details={"reference": ".".join(parts)},
+            )
+        current = current[part]
+    return current
+
+
+def _resolve_args_reference(parts: tuple[str, ...], *, workflow: Workflow) -> JSONValue:
+    if "__fragment_args__" not in workflow.inputs:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.reference_unknown",
+            message="Unknown object 'args'",
+            details={"reference": ".".join(parts), "object": "args"},
+        )
+    current: JSONValue = workflow.inputs["__fragment_args__"]
+    if not isinstance(current, dict):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.reference_unknown",
+            message="Unknown object 'args'",
+            details={"reference": ".".join(parts), "object": "args"},
+        )
     for part in parts[1:]:
         if not isinstance(current, dict) or part not in current:
             raise ValueExpressionEvaluationError(

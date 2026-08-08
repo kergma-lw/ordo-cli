@@ -602,6 +602,27 @@ class ExecuteModeTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(list(result.results), [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]])
 
+    def test_execute_supports_standalone_gate_checkpoint_step(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="prepare", value=True, register="ready"),
+                        Step(name="checkpoint", gate="step.ready.outputs.value"),
+                        Step(name="done", result={"summary": "ok"}),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertIn("checkpoint", result.outputs["executed_steps"])
+        self.assertEqual(list(result.results), [{"summary": "ok"}])
+
     def test_execute_file_loaded_run_with_args_in_for_each_passes_current_item_to_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -189,6 +189,9 @@ def resolve_workflow_references(
             continue
         resolved_steps: list[ResolvedStep] = []
         for step_index, step in enumerate(block.steps):
+            if step.operation is None and step.run is None and step.steps is None and step.profile_switch is None and step.value is None and step.result is None and step.publish is None and step.state_set is None and step.state_delete is None:
+                resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="checkpoint"))
+                continue
             if step.value is not None:
                 resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="value"))
                 continue
@@ -259,6 +262,9 @@ def _resolve_inline_invocation_steps(
 ) -> tuple[ResolvedStep, ...]:
     resolved_steps: list[ResolvedStep] = []
     for step_index, step in enumerate(steps):
+        if step.operation is None and step.run is None and step.steps is None and step.profile_switch is None and step.value is None and step.result is None and step.publish is None and step.state_set is None and step.state_delete is None:
+            resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="checkpoint"))
+            continue
         if step.value is not None:
             resolved_steps.append(ResolvedBuiltinStep(name=step.name, builtin="value"))
             continue

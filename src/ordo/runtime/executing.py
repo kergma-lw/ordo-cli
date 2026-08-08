@@ -1096,6 +1096,8 @@ def _execute_builtin_step(step, workflow: Workflow, *, observation_session=None)
     try:
         if step.value is not None:
             return _execute_value_step(step.name, step.value, workflow, observation_session=observation_session)
+        if step.operation is None and step.run is None and step.steps is None and step.profile_switch is None and step.value is None and step.result is None and step.publish is None and step.state_set is None and step.state_delete is None:
+            return OperationResult(status="ok", summary=f"Gate checkpoint step '{step.name}' passed", outputs={})
         if step.result is not None:
             return _execute_result_step(step.name, step.result, workflow, observation_session=observation_session)
         if step.publish is not None:

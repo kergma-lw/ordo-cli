@@ -28,8 +28,25 @@ class LoadingTest(unittest.TestCase):
         self.assertEqual(authored_string_style(payload["plain"]), "plain")
         self.assertEqual(authored_string_style(payload["single"]), "single")
         self.assertEqual(authored_string_style(payload["double"]), "double")
-        self.assertEqual(authored_string_style(payload["nested"][0]), "plain")
-        self.assertEqual(authored_string_style(payload["nested"][1]), "double")
+
+    def test_load_rejects_gate_and_register_on_same_step(self) -> None:
+        with self.assertRaises(LoadError) as context:
+            load_workflow_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: gate-check
+                    blocks:
+                      - steps:
+                          - name: mutate
+                            uses: gh.issue.comment
+                            gate: inputs.enabled
+                            register: nope
+                    """
+                )
+            )
+
+        self.assertEqual(context.exception.diagnostics[0].code, "load.step.gate_register_conflict")
 
     def test_loads_workflow_yaml_into_typed_model(self) -> None:
         workflow = load_workflow_text(

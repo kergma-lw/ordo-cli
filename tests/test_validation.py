@@ -1653,14 +1653,74 @@ class ValidationTest(unittest.TestCase):
                   - steps:
                       - name: comment
                         uses: gh.issue.comment
-                        register: issue
                         gate: step.issue.outputs.open
+                      - name: inspect
+                        uses: gh.issue
+                        register: issue
                 """
             )
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.forward")
+
+    def test_standalone_gate_step_is_valid(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: gate-check
+                blocks:
+                  - steps:
+                      - name: prepare
+                        value: true
+                        register: ready
+                      - name: checkpoint
+                        gate:
+                          all:
+                            - step.ready.outputs.value
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_standalone_gate_step_must_not_register(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: gate-check
+                blocks:
+                  - steps:
+                      - name: checkpoint
+                        gate: inputs.enabled
+                        register: nope
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.gate_register_conflict")
+
+    def test_effectful_gate_step_must_not_register(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: gate-check
+                blocks:
+                  - steps:
+                      - name: mutate
+                        uses: gh.issue.comment
+                        gate: inputs.enabled
+                        register: nope
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.gate_register_conflict")
 
     def test_forward_step_register_reference_in_if_fails(self) -> None:
         report = validate_workflow_text(

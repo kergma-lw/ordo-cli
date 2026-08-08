@@ -1,6 +1,7 @@
 import os
-import unittest
 import tempfile
+import textwrap
+import unittest
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
@@ -768,6 +769,139 @@ class CheckModeTest(unittest.TestCase):
         self.assertTrue(result.outputs["can_execute"])
         self.assertEqual(result.outputs["frontier_ready_step"], "comment")
         self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
+
+    def test_check_surfaces_nested_gate_blockers_from_fan_out_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "validate.yml"
+            fragment.write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      item: string
+                    blocks:
+                      - steps:
+                          - name: load
+                            uses: gh.project.issue
+                            register: linked
+                            with:
+                              repository: "owner/repo"
+                              issue_number: 1
+                              project_id: "PVT_demo"
+                          - name: gate-task
+                            gate:
+                              all:
+                                - step.linked.outputs.exists
+                                - step.linked.outputs.status | eq("Ready")
+                            result:
+                              item: args.item
+                    """
+                ),
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="root",
+                inputs={"items": ["owner/repo#1", "owner/repo#2"]},
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="expand", run="validate.yml", resolved_run_path=str(fragment), for_each="${inputs.items}", run_with={"item": "${item}"}),
+                        )
+                    ),
+                ),
+            )
+
+            def probe(resolved_guard, _workflow):
+                self.assertEqual(resolved_guard.reference, "gh.project.issue")
+                return OperationResult(status="ok", outputs={"exists": True, "type": "Task", "status": "Backlog"})
+
+            result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "blocked")
+        self.assertEqual(result.outputs["gate_blockers"], ["expand"])
+        nested = result.outputs["nested_gate_blockers"]
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(nested[0]["expanded_item"], "owner/repo#1")
+        self.assertEqual(nested[0]["gate_reports"][0]["verdict"], "failed")
+
+    def test_check_surfaces_nested_gate_blockers_from_inline_fan_out(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="root",
+            inputs={"items": ["owner/repo#1", "owner/repo#2"], "project_id": "PVT_demo"},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(
+                                Step(
+                                    name="load",
+                                    operation=OperationRef(
+                                        "gh.project.issue",
+                                        with_={
+                                            "repository": 'item | text.before("#")',
+                                            "issue_number": 'item | text.after("#")',
+                                            "project_id": "inputs.project_id",
+                                        },
+                                    ),
+                                    register="linked",
+                            ),
+                                Step(
+                                    name="gate-task",
+                                    gate={
+                                        "all": [
+                                            "step.linked.outputs.exists",
+                                            'step.linked.outputs.status | eq("Ready")',
+                                        ]
+                                    },
+                                ),
+                            ),
+                            register="runs",
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            self.assertEqual(resolved_guard.reference, "gh.project.issue")
+            return OperationResult(status="ok", outputs={"exists": True, "type": "Task", "status": "Backlog"})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "blocked")
+        self.assertEqual(result.outputs["gate_blockers"], ["expand"])
+        nested = result.outputs["nested_gate_blockers"]
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(nested[0]["expanded_item"], "owner/repo#1")
+        self.assertEqual(nested[0]["gate_reports"][0]["failed"][0]["expression"], 'step.linked.outputs.status | eq("Ready")')
+
+    def test_check_supports_standalone_gate_checkpoint_step(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="prepare", value=True, register="ready"),
+                        Step(name="checkpoint", gate="step.ready.outputs.value"),
+                    )
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        checkpoint = next(item for item in result.outputs["preflight_step_items"] if item["name"] == "checkpoint")
+        self.assertEqual(checkpoint["status"], "interpreted")
+        self.assertEqual(checkpoint["gate_status"], "passed")
 
     def test_check_reports_strong_preflight_support_when_recommended_probes_match_exactly(self) -> None:
         workflow = Workflow(

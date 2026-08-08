@@ -84,7 +84,12 @@ class Step:
         )
         if self.run is not None and self.steps is not None:
             raise ValueError("Step must not define both run and steps invocation bodies")
-        if sum(forms) != 1:
+        if self.gate is not None and self.register is not None:
+            raise ValueError("Step must not declare both gate and register")
+        form_count = sum(forms)
+        if form_count == 0 and self.gate is not None:
+            return
+        if form_count != 1:
             raise ValueError("Step must define exactly one of operation, run, steps, profile_switch, value, result, publish, state_set, or state_delete")
 
     def to_contract(self) -> JSONObject:
@@ -133,7 +138,9 @@ class Step:
             return apply_controls({"name": self.name, "publish": self.publish})
         if self.state_set is not None:
             return apply_controls({"name": self.name, "state_set": dict(self.state_set)})
-        return apply_controls({"name": self.name, "state_delete": self.state_delete})
+        if self.state_delete is not None:
+            return apply_controls({"name": self.name, "state_delete": self.state_delete})
+        return apply_controls({"name": self.name})
 
 
 @dataclass(frozen=True, slots=True)

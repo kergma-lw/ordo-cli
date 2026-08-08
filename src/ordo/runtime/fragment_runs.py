@@ -20,6 +20,8 @@ class CheckRunExpansionDecision:
     admissible: bool
     reason: str
     workflow: Workflow | None = None
+    item_index: int | None = None
+    item_value: JSONValue | None = None
 
 
 def materialize_run_workflow(
@@ -92,6 +94,7 @@ def materialize_run_workflow(
         run_path=run_path,
         launch_dir=launch_dir,
         node_path=("blocks", str(block_index), "steps", str(step_index), "run"),
+        bindings=include_bindings,
     )
 
 
@@ -107,6 +110,8 @@ def _materialize_inline_run_workflow(
     materialized_inputs = dict(caller_workflow.inputs)
     if extra_bindings and "item" in extra_bindings:
         materialized_inputs["__iteration_item__"] = item_value
+    if step.run_with:
+        materialized_inputs["__fragment_args__"] = _evaluate_run_bindings(step.run_with, caller_workflow, block_index=block_index, step_index=step_index)
     return Workflow(
         version=caller_workflow.version,
         workflow=f"{caller_workflow.workflow}::{step.name}",
@@ -125,14 +130,43 @@ def _materialize_inline_run_workflow(
     )
 
 
-def classify_run_for_check(step: Step, caller_workflow: Workflow, *, block_index: int, step_index: int) -> CheckRunExpansionDecision:
-    if step.run is None or step.resolved_run_path is None:
+def classify_run_for_check(
+    step: Step,
+    caller_workflow: Workflow,
+    *,
+    block_index: int,
+    step_index: int,
+    extra_bindings: JSONObject | None = None,
+    item_index: int | None = None,
+    item_value: JSONValue | None = None,
+) -> CheckRunExpansionDecision:
+    if step.run is None and step.steps is None:
+        return CheckRunExpansionDecision(admissible=False, reason="run_target_unknown")
+    if step.run is not None and step.resolved_run_path is None and step.steps is None:
         return CheckRunExpansionDecision(admissible=False, reason="run_target_unknown")
     try:
-        _evaluate_run_bindings(step.run_with, caller_workflow, block_index=block_index, step_index=step_index)
+        binding_workflow = caller_workflow
+        if extra_bindings and "item" in extra_bindings:
+            binding_workflow = Workflow(
+                version=caller_workflow.version,
+                workflow=caller_workflow.workflow,
+                inputs={**caller_workflow.inputs, "__iteration_item__": extra_bindings["item"]},
+                declared_inputs=caller_workflow.declared_inputs,
+                explicit_input_keys=caller_workflow.explicit_input_keys,
+                let_bindings=caller_workflow.let_bindings,
+                state_needs=caller_workflow.state_needs,
+                state_bindings=caller_workflow.state_bindings,
+                states=caller_workflow.states,
+                step_results=caller_workflow.step_results,
+                connector_contexts=caller_workflow.connector_contexts,
+                blocks=caller_workflow.blocks,
+                source_path=caller_workflow.source_path,
+                launch_dir=caller_workflow.launch_dir,
+            )
+        _evaluate_run_bindings(step.run_with, binding_workflow, block_index=block_index, step_index=step_index)
     except ValueResolutionError:
         return CheckRunExpansionDecision(admissible=False, reason="run_args_not_known")
-    materialized = materialize_run_workflow(step, caller_workflow, block_index=block_index, step_index=step_index)
+    materialized = materialize_run_workflow(step, caller_workflow, block_index=block_index, step_index=step_index, extra_bindings=extra_bindings)
     if isinstance(materialized, Diagnostic):
         reason = "run_target_not_loadable"
         if materialized.code == "runtime.run.unresolved_path":
@@ -140,8 +174,8 @@ def classify_run_for_check(step: Step, caller_workflow: Workflow, *, block_index
         return CheckRunExpansionDecision(admissible=False, reason=reason)
     analyzable_reason = _check_analyzable_run_workflow(materialized)
     if analyzable_reason is not None:
-        return CheckRunExpansionDecision(admissible=False, reason=analyzable_reason, workflow=materialized)
-    return CheckRunExpansionDecision(admissible=True, reason="run_expandable", workflow=materialized)
+        return CheckRunExpansionDecision(admissible=False, reason=analyzable_reason, workflow=materialized, item_index=item_index, item_value=item_value)
+    return CheckRunExpansionDecision(admissible=True, reason="run_expandable", workflow=materialized, item_index=item_index, item_value=item_value)
 
 
 def evaluate_run_condition(step: Step, caller_workflow: Workflow, *, block_index: int, step_index: int) -> bool | Diagnostic:
@@ -168,14 +202,32 @@ def _check_analyzable_run_workflow(workflow: Workflow) -> str | None:
             continue
         assert isinstance(block, StepBlock)
         for step in block.steps:
-            if step.if_ is not None:
-                return "run_subtree_not_check_analyzable"
+            if (
+                step.operation is None
+                and step.run is None
+                and step.steps is None
+                and step.profile_switch is None
+                and step.value is None
+                and step.result is None
+                and step.publish is None
+                and step.state_set is None
+                and step.state_delete is None
+                and step.gate is not None
+            ):
+                continue
             if step.profile_switch is not None:
                 continue
-            if step.run is not None:
+            if step.run is not None or step.steps is not None:
                 continue
-            if step.operation is not None or step.value is not None or step.state_set is not None or step.state_delete is not None:
-                return "run_subtree_requires_effectful_execution"
+            if (
+                step.operation is not None
+                or step.value is not None
+                or step.state_set is not None
+                or step.state_delete is not None
+                or step.result is not None
+                or step.publish is not None
+            ):
+                continue
             return "run_subtree_not_check_analyzable"
     return None
 
@@ -227,7 +279,9 @@ def build_run_target_workflow(
     run_path: Path,
     launch_dir: Path,
     node_path: tuple[str, ...],
+    bindings: JSONObject | None = None,
 ) -> Workflow | Diagnostic:
+    effective_bindings = {} if bindings is None else dict(bindings)
     if isinstance(payload, dict) and "version" in payload and "workflow" in payload:
         try:
             nested_workflow = load_workflow_payload(payload, source=str(run_path), launch_dir=launch_dir)
@@ -236,7 +290,7 @@ def build_run_target_workflow(
         return Workflow(
             version=nested_workflow.version,
             workflow=f"{caller_workflow.workflow}::{nested_workflow.workflow}",
-            inputs={**nested_workflow.inputs, **caller_workflow.inputs},
+            inputs={**nested_workflow.inputs, **caller_workflow.inputs, "__fragment_args__": effective_bindings},
             declared_inputs={**caller_workflow.declared_inputs, **nested_workflow.declared_inputs},
             explicit_input_keys=_merge_explicit_input_keys(caller_workflow, nested_workflow),
             let_bindings=nested_workflow.let_bindings,
@@ -276,7 +330,7 @@ def build_run_target_workflow(
     return Workflow(
         version=caller_workflow.version,
         workflow=f"{caller_workflow.workflow}::{step.run}",
-        inputs=caller_workflow.inputs,
+        inputs={**caller_workflow.inputs, "__fragment_args__": effective_bindings},
         declared_inputs=caller_workflow.declared_inputs,
         explicit_input_keys=caller_workflow.explicit_input_keys,
         let_bindings={},

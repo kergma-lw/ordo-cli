@@ -150,14 +150,37 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         }
 
     gate_blockers = [name for name in result.outputs.get("gate_blockers", []) if isinstance(name, str)]
+    nested_gate_blockers = [item for item in result.outputs.get("nested_gate_blockers", []) if isinstance(item, dict)]
     if gate_blockers:
         step_items = [item for item in result.outputs.get("preflight_step_items", []) if isinstance(item, dict)]
+        why = "A reachable step is blocked by admission checks established from current read-only knowledge"
+        if nested_gate_blockers:
+            first = nested_gate_blockers[0]
+            item_value = first.get("expanded_item")
+            gate_reports = first.get("gate_reports") if isinstance(first.get("gate_reports"), list) else []
+            failed_expressions = []
+            if gate_reports and isinstance(gate_reports[0], dict):
+                failed = gate_reports[0].get("failed_causes")
+                if not isinstance(failed, list):
+                    failed = gate_reports[0].get("failed")
+                if isinstance(failed, list):
+                    failed_expressions = [
+                        item.get("rendered") or item.get("expression")
+                        for item in failed
+                        if isinstance(item, dict) and isinstance(item.get("rendered") or item.get("expression"), str)
+                    ]
+            why = "A nested gate inside fan-out preflight checks failed for at least one expanded item"
+            if isinstance(item_value, str):
+                why = f"Nested gate failed for fan-out item '{item_value}'"
+            if failed_expressions:
+                why = f"{why}: {failed_expressions[0]}"
         return {
             "category": "gate",
             "allowed": False,
-            "why": "A reachable step is blocked by admission checks established from current read-only knowledge",
+            "why": why,
             "blockers": gate_blockers,
             "step_gate_details": [item.get("gate_report") for item in step_items if item.get("name") in gate_blockers and isinstance(item.get("gate_report"), dict)],
+            "nested_gate_blockers": nested_gate_blockers,
         }
 
     preflight_halts = [item for item in result.outputs.get("preflight_halts", []) if isinstance(item, dict)]
@@ -173,6 +196,22 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
                 "blockers": [] if step_name is None else [step_name],
                 "preflight_halts": preflight_halts,
                 "preflight_support_steps": _preflight_support_steps(result),
+            }
+        if reason == "preflight_step_not_analyzable":
+            details = first.get("details") if isinstance(first.get("details"), dict) else {}
+            classification = details.get("classification") if isinstance(details.get("classification"), str) else None
+            reference = details.get("reference") if isinstance(details.get("reference"), str) else None
+            why = "A preflight step could not be fully analyzed from current read-only knowledge"
+            if classification == "read_only_unanalyzable":
+                why = "A read-only preflight step could not be fully analyzed from current knowledge, so nested gate results remain unavailable"
+            return {
+                "category": "preflight_step",
+                "allowed": False,
+                "why": why,
+                "blockers": [] if step_name is None else [step_name],
+                "preflight_halts": preflight_halts,
+                "preflight_support_steps": _preflight_support_steps(result),
+                "reference": reference,
             }
         if reason == "gate_unknown":
             step_items = [item for item in result.outputs.get("preflight_step_items", []) if isinstance(item, dict)]
@@ -282,6 +321,17 @@ def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:
         ]
 
     if any(isinstance(name, str) for name in result.outputs.get("gate_blockers", [])):
+        nested_gate_blockers = [item for item in result.outputs.get("nested_gate_blockers", []) if isinstance(item, dict)]
+        if nested_gate_blockers:
+            first = nested_gate_blockers[0]
+            item_value = first.get("expanded_item")
+            item_text = item_value if isinstance(item_value, str) else first.get("expanded_item_index")
+            return [
+                {
+                    "action": "satisfy_nested_step_gate",
+                    "reason": f"Resolve the failing nested gate for fan-out item '{item_text}' before retrying",
+                }
+            ]
         return [
             {
                 "action": "satisfy_step_gate",
@@ -299,6 +349,13 @@ def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:
                 {
                     "action": "repair_read_only_observation",
                     "reason": f"Fix the failing read-only step '{step_name}' before retrying preflight",
+                }
+            ]
+        if reason == "preflight_step_not_analyzable":
+            return [
+                {
+                    "action": "analyze_unanalyzable_preflight_step",
+                    "reason": f"Inspect the preflight step '{step_name}' because nested fan-out or fragment logic could not yet be explained from current read-only knowledge",
                 }
             ]
 

@@ -296,6 +296,146 @@ class ExplainModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["explanation"]["category"], "preflight_step")
         self.assertEqual(result.outputs["explanation"]["blockers"], ["Load story task item details in batch"])
 
+    def test_explain_reports_unanalyzable_preflight_step_clearly(self) -> None:
+        result = explain_runtime_result(
+            RuntimeResult(
+                mode=Mode.CHECK,
+                status=RuntimeStatus.OK,
+                diagnostics=(),
+                outputs={
+                    "allowed_state": "unknown",
+                    "analysis_complete": False,
+                    "incomplete_reasons": ["preflight_step_not_analyzable"],
+                    "preflight_halts": [
+                        {
+                            "reason": "preflight_step_not_analyzable",
+                            "step_name": "Validate linked task readiness",
+                            "details": {
+                                "classification": "read_only_unanalyzable",
+                                "reference": "fragments/validate-story-task-readiness.yml",
+                            },
+                        }
+                    ],
+                },
+            )
+        )
+
+        self.assertEqual(result.outputs["explanation"]["category"], "preflight_step")
+        self.assertEqual(result.outputs["explanation"]["blockers"], ["Validate linked task readiness"])
+        self.assertIn("nested gate results", result.outputs["explanation"]["why"])
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "analyze_unanalyzable_preflight_step")
+
+    def test_explain_reports_nested_gate_blockers_from_fan_out(self) -> None:
+        result = explain_runtime_result(
+            RuntimeResult(
+                mode=Mode.CHECK,
+                status=RuntimeStatus.OK,
+                diagnostics=(),
+                outputs={
+                    "allowed_state": "blocked",
+                    "analysis_complete": True,
+                    "gate_blockers": ["Validate linked task readiness"],
+                    "nested_gate_blockers": [
+                        {
+                            "expanded_from_step": "Validate linked task readiness",
+                            "expanded_item_index": 0,
+                            "expanded_item": "kergma-lw/checklist-mobile#1",
+                            "gate_blockers": ["Gate linked task readiness"],
+                            "gate_reports": [
+                                {
+                                    "field": "gate",
+                                    "verdict": "failed",
+                                    "failed": [
+                                        {"expression": 'step.linked_project_issue.outputs.status | eq("Ready")', "verdict": "failed"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+        )
+
+        self.assertEqual(result.outputs["explanation"]["category"], "gate")
+        self.assertIn("fan-out", result.outputs["explanation"]["why"])
+        nested = result.outputs["explanation"]["nested_gate_blockers"][0]
+        self.assertEqual(nested["expanded_item"], "kergma-lw/checklist-mobile#1")
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "satisfy_nested_step_gate")
+
+    def test_explain_summary_for_inline_fan_out_nested_gate(self) -> None:
+        result = explain_runtime_result(
+            RuntimeResult(
+                mode=Mode.CHECK,
+                status=RuntimeStatus.OK,
+                diagnostics=(),
+                outputs={
+                    "allowed_state": "blocked",
+                    "analysis_complete": True,
+                    "gate_blockers": ["Validate linked task readiness"],
+                    "nested_gate_blockers": [
+                        {
+                            "expanded_from_step": "Validate linked task readiness",
+                            "expanded_item_index": 0,
+                            "expanded_item": "kergma-lw/checklist-mobile#1",
+                            "gate_blockers": ["Gate linked task readiness"],
+                            "gate_reports": [
+                                {
+                                    "failed": [
+                                        {"expression": 'step.linked_project_issue.outputs.status | eq("Ready")'}
+                                    ]
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+        )
+
+        self.assertEqual(result.outputs["explanation"]["category"], "gate")
+        self.assertIn("kergma-lw/checklist-mobile#1", result.outputs["explanation"]["why"])
+        self.assertIn('step.linked_project_issue.outputs.status | eq("Ready")', result.outputs["explanation"]["why"])
+
+    def test_explain_uses_structural_failed_cause_for_any_group(self) -> None:
+        result = explain_runtime_result(
+            RuntimeResult(
+                mode=Mode.CHECK,
+                status=RuntimeStatus.OK,
+                diagnostics=(),
+                outputs={
+                    "allowed_state": "blocked",
+                    "analysis_complete": True,
+                    "gate_blockers": ["Validate linked task readiness"],
+                    "nested_gate_blockers": [
+                        {
+                            "expanded_from_step": "Validate linked task readiness",
+                            "expanded_item": "kergma-lw/checklist-mobile#1",
+                            "gate_reports": [
+                                {
+                                    "failed": [
+                                        {"expression": 'step.linked_project_issue.outputs.type | eq("Task")', "rendered": 'step.linked_project_issue.outputs.type | eq("Task")'},
+                                        {"expression": 'step.linked_project_issue.outputs.type | eq("Bug")', "rendered": 'step.linked_project_issue.outputs.type | eq("Bug")'},
+                                    ],
+                                    "failed_causes": [
+                                        {
+                                            "kind": "any",
+                                            "verdict": "failed",
+                                            "path": ["all", "1"],
+                                            "rendered": 'any(step.linked_project_issue.outputs.type | eq("Task"), step.linked_project_issue.outputs.type | eq("Bug"))',
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+        )
+
+        self.assertIn(
+            'any(step.linked_project_issue.outputs.type | eq("Task"), step.linked_project_issue.outputs.type | eq("Bug"))',
+            result.outputs["explanation"]["why"],
+        )
+
     def test_explain_reports_frontier_ready_step_when_preflight_reaches_effectful_step(self) -> None:
         result = explain_runtime_result(
             RuntimeResult(

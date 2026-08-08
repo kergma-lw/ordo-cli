@@ -62,6 +62,7 @@ class ConditionEvaluationNode:
             "kind": self.kind,
             "verdict": self.verdict,
             "path": list(self.path),
+            "rendered": render_condition_evaluation_node(self),
         }
         if self.expression is not None:
             contract["expression"] = self.expression
@@ -94,8 +95,58 @@ class ConditionEvaluationReport:
             "root": self.root.to_contract(),
             "passed": [node.to_contract() for node in self.passed],
             "failed": [node.to_contract() for node in self.failed],
+            "failed_causes": [node.to_contract() for node in summarize_failed_condition_causes(self.root)],
             "unknown": [node.to_contract() for node in self.unknown],
+            "unknown_causes": [node.to_contract() for node in summarize_unknown_condition_causes(self.root)],
         }
+
+
+def render_condition_evaluation_node(node: ConditionEvaluationNode) -> str:
+    if node.expression is not None:
+        return node.expression
+    if node.kind == "all":
+        return "all(" + ", ".join(render_condition_evaluation_node(child) for child in node.children) + ")"
+    if node.kind == "any":
+        return "any(" + ", ".join(render_condition_evaluation_node(child) for child in node.children) + ")"
+    if node.kind == "not":
+        if not node.children:
+            return "not(?)"
+        return "not(" + render_condition_evaluation_node(node.children[0]) + ")"
+    return node.kind
+
+
+def summarize_failed_condition_causes(node: ConditionEvaluationNode) -> tuple[ConditionEvaluationNode, ...]:
+    if node.verdict != "failed":
+        return ()
+    if not node.children:
+        return (node,)
+    if node.kind in {"any", "not"}:
+        return (node,)
+    if node.kind == "all":
+        causes: list[ConditionEvaluationNode] = []
+        for child in node.children:
+            if child.verdict == "failed":
+                child_causes = summarize_failed_condition_causes(child)
+                causes.extend(child_causes if child_causes else (child,))
+        return tuple(causes or (node,))
+    return (node,)
+
+
+def summarize_unknown_condition_causes(node: ConditionEvaluationNode) -> tuple[ConditionEvaluationNode, ...]:
+    if node.verdict != "unknown":
+        return ()
+    if not node.children:
+        return (node,)
+    if node.kind in {"any", "not"}:
+        return (node,)
+    if node.kind == "all":
+        causes: list[ConditionEvaluationNode] = []
+        for child in node.children:
+            if child.verdict == "unknown":
+                child_causes = summarize_unknown_condition_causes(child)
+                causes.extend(child_causes if child_causes else (child,))
+        return tuple(causes or (node,))
+    return (node,)
 
 _STRUCTURED_CONDITION_KEYS = frozenset({"all", "any", "not"})
 

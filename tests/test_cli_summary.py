@@ -1,6 +1,6 @@
 import unittest
 
-from ordo.cli import _summarize_check_payload, _summarize_review_payload
+from ordo.cli import _summarize_check_payload, _summarize_explain_payload, _summarize_review_payload
 
 
 class CliSummaryTest(unittest.TestCase):
@@ -112,6 +112,89 @@ class CliSummaryTest(unittest.TestCase):
         summary = _summarize_check_payload(payload)
 
         self.assertIn("workflow can run now", summary["message"])
+
+    def test_explain_summary_surfaces_nested_gate_item_and_failed_conditions(self) -> None:
+        payload = {
+            "mode": "explain",
+            "status": "ok",
+            "workflow": "story-to-ready",
+            "playbook": "/tmp/.ordo/ordo.yaml",
+            "profile": "meta",
+            "failed_guard": None,
+            "diagnostics": [],
+            "outputs": {
+                "explanation": {
+                    "allowed": False,
+                    "category": "gate",
+                    "why": "Nested gate failed for fan-out item 'kergma-lw/checklist-mobile#1': step.linked_project_issue.outputs.status | eq(\"Ready\")",
+                    "blockers": ["Validate linked task readiness"],
+                    "nested_gate_blockers": [
+                        {
+                            "expanded_item": "kergma-lw/checklist-mobile#1",
+                            "gate_reports": [
+                                {
+                                    "failed": [
+                                        {
+                                            "expression": 'step.linked_project_issue.outputs.status | eq("Ready")'
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    ],
+                }
+            },
+        }
+
+        summary = _summarize_explain_payload(payload)
+
+        self.assertEqual(summary["item"], "kergma-lw/checklist-mobile#1")
+        self.assertEqual(summary["failed_conditions"], ['step.linked_project_issue.outputs.status | eq("Ready")'])
+
+    def test_explain_summary_prefers_structural_failed_causes(self) -> None:
+        payload = {
+            "mode": "explain",
+            "status": "ok",
+            "workflow": "story-to-ready",
+            "playbook": "/tmp/.ordo/ordo.yaml",
+            "profile": "meta",
+            "failed_guard": None,
+            "diagnostics": [],
+            "outputs": {
+                "explanation": {
+                    "allowed": False,
+                    "category": "gate",
+                    "why": "Nested gate failed",
+                    "blockers": ["Validate linked task readiness"],
+                    "nested_gate_blockers": [
+                        {
+                            "expanded_item": "kergma-lw/checklist-mobile#1",
+                            "gate_reports": [
+                                {
+                                    "failed_causes": [
+                                        {
+                                            "rendered": 'any(step.linked_project_issue.outputs.type | eq("Task"), step.linked_project_issue.outputs.type | eq("Bug"))'
+                                        }
+                                    ],
+                                    "failed": [
+                                        {
+                                            "expression": 'step.linked_project_issue.outputs.type | eq("Bug")'
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            },
+        }
+
+        summary = _summarize_explain_payload(payload)
+
+        self.assertEqual(
+            summary["failed_conditions"],
+            ['any(step.linked_project_issue.outputs.type | eq("Task"), step.linked_project_issue.outputs.type | eq("Bug"))'],
+        )
 
     def test_review_summary_surfaces_structured_condition_rewrite_hints(self) -> None:
         payload = {

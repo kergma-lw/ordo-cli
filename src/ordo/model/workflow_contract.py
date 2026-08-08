@@ -166,6 +166,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "kind": "exclusive_choice",
             "fields": ["uses", "run", "steps", "profile_switch", "value", "result", "publish", "state_set", "state_delete"],
             "message": "A workflow step must define exactly one of uses, run, steps, profile_switch, value, result, publish, state_set, or state_delete",
+            "exception": "a standalone gate-only checkpoint step may omit a body form",
         },
         {
             "name": "with_requires_uses",
@@ -187,6 +188,12 @@ WORKFLOW_CONTRACT: JSONObject = {
             "field": "steps",
             "requires": ["for_each"],
             "message": "Inline repeated step bodies require for_each",
+        },
+        {
+            "name": "gate_forbids_register",
+            "kind": "conflict",
+            "fields": ["gate", "register"],
+            "message": "A workflow step must not define both gate and register",
         },
     ],
     "step_forms": [
@@ -267,6 +274,14 @@ WORKFLOW_CONTRACT: JSONObject = {
             "name": "state_delete",
             "required_fields": ["name", "state_delete"],
             "optional_fields": ["if", "gate"],
+            "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+            "if_structured_operators": ["all", "any", "not"],
+            "if_list_semantics": "implicit_all",
+        },
+        {
+            "name": "gate_checkpoint",
+            "required_fields": ["name", "gate"],
+            "optional_fields": ["if"],
             "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
             "if_structured_operators": ["all", "any", "not"],
             "if_list_semantics": "implicit_all",

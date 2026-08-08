@@ -43,7 +43,7 @@ class FragmentRunClassificationTest(unittest.TestCase):
             self.assertFalse(decision.admissible)
             self.assertEqual(decision.reason, "run_args_not_known")
 
-    def test_classifies_effectful_fragment_as_not_check_analyzable(self) -> None:
+    def test_classifies_effectful_fragment_as_check_expandable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             fragment = root / "effectful.yml"
@@ -55,8 +55,8 @@ class FragmentRunClassificationTest(unittest.TestCase):
 
             decision = classify_run_for_check(workflow.steps[0], workflow, block_index=0, step_index=0)
 
-            self.assertFalse(decision.admissible)
-            self.assertEqual(decision.reason, "run_subtree_requires_effectful_execution")
+            self.assertTrue(decision.admissible)
+            self.assertEqual(decision.reason, "run_expandable")
 
     def test_classifies_missing_fragment_as_not_loadable(self) -> None:
         workflow = Workflow(version=0, workflow="root", steps=(Step(name="expand", run="missing.yml", resolved_run_path="/tmp/does-not-exist.yml"),))

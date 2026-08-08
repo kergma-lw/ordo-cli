@@ -513,7 +513,7 @@ def _summarize_explain_payload(payload: dict[str, object]) -> dict[str, object]:
     if not isinstance(explanation, dict):
         explanation = {}
 
-    return {
+    summary = {
         "mode": payload.get("mode"),
         "status": payload.get("status"),
         "workflow": payload.get("workflow"),
@@ -526,6 +526,28 @@ def _summarize_explain_payload(payload: dict[str, object]) -> dict[str, object]:
         "blockers": explanation.get("blockers", outputs.get("blockers", [])),
         "diagnostics": payload.get("diagnostics", []),
     }
+
+    nested_gate_blockers = explanation.get("nested_gate_blockers")
+    if isinstance(nested_gate_blockers, list) and nested_gate_blockers:
+        first = nested_gate_blockers[0]
+        if isinstance(first, dict):
+            item_value = first.get("expanded_item")
+            if isinstance(item_value, str):
+                summary["item"] = item_value
+            gate_reports = first.get("gate_reports")
+            if isinstance(gate_reports, list) and gate_reports and isinstance(gate_reports[0], dict):
+                failed = gate_reports[0].get("failed_causes")
+                if not isinstance(failed, list):
+                    failed = gate_reports[0].get("failed")
+                if isinstance(failed, list):
+                    failed_conditions = [
+                        item.get("rendered") or item.get("expression")
+                        for item in failed
+                        if isinstance(item, dict) and isinstance(item.get("rendered") or item.get("expression"), str)
+                    ]
+                    if failed_conditions:
+                        summary["failed_conditions"] = failed_conditions
+    return summary
 
 
 def _summarize_plan_payload(payload: dict[str, object]) -> dict[str, object]:
