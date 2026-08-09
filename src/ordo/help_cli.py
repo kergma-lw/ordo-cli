@@ -655,7 +655,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     {
         "name": "profile",
         "summary": "Reusable runtime context for missing-input defaults, execution working directory, and profile-scoped launch metadata.",
-        "keywords": ["profile", "inputs", "working_directory", "checks", "overrides", "launchers"],
+        "keywords": ["profile", "inputs", "working_directory", "checks", "overrides", "launchers", "deprecated", "routines"],
         "appropriate_when": [
             "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
             "Selection among project modes belongs to launch context rather than to workflow-authored branching.",
@@ -664,7 +664,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
             "The value is only relevant to one workflow body and does not justify reusable launch context.",
         ],
-        "inspect_next": ["profile.inputs", "profile.working_directory", "profile.overrides.with", "playbook.defaults.profile", "command-line.ordo-playbook"],
+        "inspect_next": ["profile.inputs", "profile.working_directory", "profile.overrides.with", "profile.launchers", "playbook.defaults.profile", "command-line.ordo-playbook"],
         "related_rules": ["explicit_execution_context", "local_artifacts_are_context"],
         "related_examples": ["examples.playbook-pre-run", "examples.launcher-step"],
         "published_names_kind": "profile",
@@ -672,7 +672,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     {
         "name": "workflow",
         "summary": "One executable authoring unit with declared inputs, let bindings, state needs, blocks, and typed step forms.",
-        "keywords": ["workflow", "inputs", "let", "state_needs", "blocks", "step forms"],
+        "keywords": ["workflow", "inputs", "let", "state_needs", "blocks", "step forms", "profile_switch"],
         "appropriate_when": [
             "The task needs one explicit executable contract with declared activation inputs and reviewable runtime structure.",
             "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only.",
@@ -681,10 +681,27 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
             "You are trying to hide multiple unrelated concerns instead of exposing clear inputs, guards, and step forms.",
         ],
-        "inspect_next": ["workflow.inputs_contract", "workflow.step_forms.operation_call", "workflow.step.value", "workflow.step.publish", "workflow.run_contract"],
+        "inspect_next": ["workflow.inputs_contract", "workflow.step_forms.operation_call", "workflow.step.profile_switch", "workflow.step.value", "workflow.step.publish", "workflow.run_contract"],
         "related_rules": ["early_let", "value_register_before_result", "publish_outputs"],
         "related_examples": ["examples.minimal", "examples.inspect-issue"],
         "published_names_kind": "workflow",
+    },
+    {
+        "name": "state",
+        "summary": "Declared runtime state surface for bound locations, state-keyed storage, and explicit state mutation steps.",
+        "keywords": ["state", "state_needs", "state_bindings", "states", "state_set", "state_delete", "bound locations"],
+        "appropriate_when": [
+            "Workflow data must survive across step boundaries or across runs through declared state locations rather than through implicit files or ambient context.",
+            "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
+        ],
+        "inappropriate_when": [
+            "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
+            "State is being used as a vague catch-all context channel instead of a declared bound storage surface.",
+        ],
+        "inspect_next": ["state.workflow_surface.state_needs_field", "state.workflow_surface.state_binding_field", "state.workflow_surface.step_state_set_field", "state.workflow_surface.step_state_delete_field", "workflow.step.state_set", "workflow.step.state_delete"],
+        "related_rules": ["local_artifacts_are_context", "publish_outputs"],
+        "related_examples": [],
+        "published_names_kind": "state",
     },
     {
         "name": "include",
@@ -1004,6 +1021,7 @@ def _build_cluster_published_names(kind: str, *, model: JSONObject) -> JSONObjec
         return {
             "top_level_fields": _names_from_fields(profile["top_level_fields"]),
             "override_fields": _names_from_fields(profile["override_fields"]),
+            "deprecated_launcher_fields": _names_from_fields(profile.get("launcher_fields", [])),
         }
     if kind == "workflow":
         return {
@@ -1011,6 +1029,15 @@ def _build_cluster_published_names(kind: str, *, model: JSONObject) -> JSONObjec
             "block_forms": [str(item["name"]) for item in workflow["block_forms"] if isinstance(item, dict) and isinstance(item.get("name"), str)],
             "step_forms": [str(item["name"]) for item in step_forms if isinstance(item, dict) and isinstance(item.get("name"), str)],
             "step_fields": _workflow_step_field_names(step_forms),
+            "profile_switch_step_forms": _step_forms_with_field(step_forms, "profile_switch"),
+        }
+    if kind == "state":
+        state = model["state"]
+        return {
+            "workflow_surface": list(state["workflow_surface"].values()),
+            "path_root": [str(state["path_forms"]["root"])],
+            "path_shape": [str(state["path_forms"]["shape"])],
+            "runtime_rules": [str(item["name"]) for item in state["runtime_rules"] if isinstance(item, dict) and isinstance(item.get("name"), str)],
         }
     if kind == "include":
         return {

@@ -135,6 +135,13 @@
           "topic": "model"
         },
         {
+          "command": "ordo-help describe profile.launchers --json",
+          "handle": "profile.launchers",
+          "kind": "field",
+          "summary": "Published profile field metadata",
+          "topic": "model"
+        },
+        {
           "command": "ordo-help describe playbook.defaults.profile --json",
           "handle": "playbook.defaults.profile",
           "kind": "default_field",
@@ -155,10 +162,18 @@
         "working_directory",
         "checks",
         "overrides",
-        "launchers"
+        "launchers",
+        "deprecated",
+        "routines"
       ],
       "name": "profile",
       "published_names": {
+        "deprecated_launcher_fields": [
+          "file",
+          "connector",
+          "before",
+          "after"
+        ],
         "override_fields": [
           "target",
           "with",
@@ -229,6 +244,13 @@
           "topic": "model"
         },
         {
+          "command": "ordo-help describe workflow.step.profile_switch --json",
+          "handle": "workflow.step.profile_switch",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        },
+        {
           "command": "ordo-help describe workflow.step.value --json",
           "handle": "workflow.step.value",
           "kind": "step_field",
@@ -256,7 +278,8 @@
         "let",
         "state_needs",
         "blocks",
-        "step forms"
+        "step forms",
+        "profile_switch"
       ],
       "name": "workflow",
       "published_names": {
@@ -264,6 +287,9 @@
           "guard_block",
           "step_block",
           "include_block"
+        ],
+        "profile_switch_step_forms": [
+          "profile_switch"
         ],
         "step_fields": [
           "name",
@@ -339,6 +365,106 @@
         }
       ],
       "summary": "One executable authoring unit with declared inputs, let bindings, state needs, blocks, and typed step forms."
+    },
+    {
+      "appropriate_when": [
+        "Workflow data must survive across step boundaries or across runs through declared state locations rather than through implicit files or ambient context.",
+        "State reads, writes, and deletions should be explicit in the workflow contract and step surface."
+      ],
+      "inappropriate_when": [
+        "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
+        "State is being used as a vague catch-all context channel instead of a declared bound storage surface."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe state.workflow_surface.state_needs_field --json",
+          "handle": "state.workflow_surface.state_needs_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe state.workflow_surface.state_binding_field --json",
+          "handle": "state.workflow_surface.state_binding_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe state.workflow_surface.step_state_set_field --json",
+          "handle": "state.workflow_surface.step_state_set_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe state.workflow_surface.step_state_delete_field --json",
+          "handle": "state.workflow_surface.step_state_delete_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.state_set --json",
+          "handle": "workflow.step.state_set",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.state_delete --json",
+          "handle": "workflow.step.state_delete",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        }
+      ],
+      "keywords": [
+        "state",
+        "state_needs",
+        "state_bindings",
+        "states",
+        "state_set",
+        "state_delete",
+        "bound locations"
+      ],
+      "name": "state",
+      "published_names": {
+        "path_root": [
+          "state"
+        ],
+        "path_shape": [
+          "state.<role>[inputs.<key>][.<field>...]"
+        ],
+        "runtime_rules": [
+          "bound_role_required",
+          "scalar_key_required",
+          "declared_location_required"
+        ],
+        "workflow_surface": [
+          "state_needs",
+          "state_bindings",
+          "states",
+          "state_set",
+          "state_delete"
+        ]
+      },
+      "related_examples": [],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
+          "handle": "workflow-authoring.local_artifacts_are_context",
+          "name": "local_artifacts_are_context",
+          "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.publish_outputs --json",
+          "handle": "workflow-authoring.publish_outputs",
+          "name": "publish_outputs",
+          "summary": "Prefer publish: for intentional outward-facing workflow results."
+        }
+      ],
+      "summary": "Declared runtime state surface for bound locations, state-keyed storage, and explicit state mutation steps."
     },
     {
       "appropriate_when": [
