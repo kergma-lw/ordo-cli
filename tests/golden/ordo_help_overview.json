@@ -36,6 +36,7 @@
     ]
   },
   "published_topics": [
+    "features",
     "overview",
     "model",
     "workflow-authoring",
@@ -50,27 +51,31 @@
   "purpose": "World map for Ordo discovery and authoring bootstrap",
   "recommended_next_calls": [
     {
-      "command": "ordo-help model --json",
+      "command": "ordo-help features",
+      "purpose": "Scan workflow authoring features, named surfaces, and when to use them"
+    },
+    {
+      "command": "ordo-help model",
       "purpose": "Learn the main DSL surfaces"
     },
     {
-      "command": "ordo-help workflow-authoring --json",
+      "command": "ordo-help workflow-authoring",
       "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
     },
     {
-      "command": "ordo-help capabilities --json",
+      "command": "ordo-help capabilities",
       "purpose": "Learn capability boundaries"
     },
     {
-      "command": "ordo-help command-line --json",
+      "command": "ordo-help command-line",
       "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
     },
     {
-      "command": "ordo-help operations --json",
+      "command": "ordo-help operations",
       "purpose": "Inspect the public operation catalog"
     },
     {
-      "command": "ordo-help examples --json",
+      "command": "ordo-help examples",
       "purpose": "Inspect verified repository examples"
     }
   ],

@@ -54,7 +54,7 @@
           "name": "--input",
           "repeatable": true,
           "required": false,
-          "summary": "Add or override one top-level workflow input from an inline YAML value",
+          "summary": "Add or override one top-level workflow input from inline text, with simple number and true/false coercion",
           "value_shape": "KEY=VALUE"
         },
         {

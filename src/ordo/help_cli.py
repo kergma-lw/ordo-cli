@@ -26,6 +26,7 @@ from ordo.model.json import JSONObject
 
 
 PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
+    {"name": "features", "summary": "Inspect workflow authoring features, named surfaces, and when to use them"},
     {"name": "overview", "summary": "Start with the Ordo world map"},
     {"name": "model", "summary": "Inspect the main authoring contracts"},
     {"name": "workflow-authoring", "summary": "Inspect preferred workflow authoring patterns, paired check/review passes, routine cautions, early guards, and let usage"},
@@ -40,16 +41,17 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
 
 _SEARCH_TOKEN_RE = re.compile(r"[a-z0-9_.#:/-]+")
 
-DESCRIBABLE_TOPICS: tuple[str, ...] = ("overview", "model", "workflow-authoring", "capabilities", "command-line", "operations", "examples")
+DESCRIBABLE_TOPICS: tuple[str, ...] = ("features", "overview", "model", "workflow-authoring", "capabilities", "command-line", "operations", "examples")
 
 RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
-    {"command": "ordo-help overview --json", "purpose": "Get the Ordo world map"},
-    {"command": "ordo-help model --json", "purpose": "Learn the main DSL surfaces"},
-    {"command": "ordo-help workflow-authoring --json", "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"},
-    {"command": "ordo-help capabilities --json", "purpose": "Learn capability boundaries"},
-    {"command": "ordo-help command-line --json", "purpose": "Inspect public launch commands, flags, and distinct check/review roles"},
-    {"command": "ordo-help operations --json", "purpose": "Inspect the public operation catalog"},
-    {"command": "ordo-help examples --json", "purpose": "Inspect verified repository examples"},
+    {"command": "ordo-help features", "purpose": "Scan workflow authoring features, named surfaces, and when to use them"},
+    {"command": "ordo-help overview", "purpose": "Get the Ordo world map"},
+    {"command": "ordo-help model", "purpose": "Learn the main DSL surfaces"},
+    {"command": "ordo-help workflow-authoring", "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"},
+    {"command": "ordo-help capabilities", "purpose": "Learn capability boundaries"},
+    {"command": "ordo-help command-line", "purpose": "Inspect public launch commands, flags, and distinct check/review roles"},
+    {"command": "ordo-help operations", "purpose": "Inspect the public operation catalog"},
+    {"command": "ordo-help examples", "purpose": "Inspect verified repository examples"},
 )
 
 WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
@@ -632,6 +634,214 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
 )
 
 
+AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
+    {
+        "name": "playbook",
+        "summary": "Project-local launch catalog for named workflows, profile selection, pre_run orchestration, and static activation inputs.",
+        "keywords": ["workflows", "pre_run", "defaults", "profiles", "with", "working_directory", "state_bindings"],
+        "appropriate_when": [
+            "A project needs one stable launch surface that selects workflows by name instead of by raw file path.",
+            "Static entry-owned inputs, pre_run preparation, profile defaults, or launch-time working-directory policy belong to the wrapper rather than to one workflow body.",
+        ],
+        "inappropriate_when": [
+            "The logic is workflow-internal sequencing, validation, or branching that should live inside one workflow file.",
+            "The value belongs to workflow-declared inputs or step-local dataflow rather than to launch-time orchestration.",
+        ],
+        "inspect_next": ["command-line.ordo-playbook", "playbook.workflows.file", "playbook.workflows.with", "playbook.pre_run_contract", "playbook.defaults.profile"],
+        "related_rules": ["paired_authoring_passes"],
+        "related_examples": ["examples.playbook-pre-run"],
+        "published_names_kind": "playbook",
+    },
+    {
+        "name": "profile",
+        "summary": "Reusable runtime context for missing-input defaults, execution working directory, and profile-scoped launch metadata.",
+        "keywords": ["profile", "inputs", "working_directory", "checks", "overrides", "launchers"],
+        "appropriate_when": [
+            "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
+            "Selection among project modes belongs to launch context rather than to workflow-authored branching.",
+        ],
+        "inappropriate_when": [
+            "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
+            "The value is only relevant to one workflow body and does not justify reusable launch context.",
+        ],
+        "inspect_next": ["profile.inputs", "profile.working_directory", "profile.overrides.with", "playbook.defaults.profile", "command-line.ordo-playbook"],
+        "related_rules": ["explicit_execution_context", "local_artifacts_are_context"],
+        "related_examples": ["examples.playbook-pre-run", "examples.launcher-step"],
+        "published_names_kind": "profile",
+    },
+    {
+        "name": "workflow",
+        "summary": "One executable authoring unit with declared inputs, let bindings, state needs, blocks, and typed step forms.",
+        "keywords": ["workflow", "inputs", "let", "state_needs", "blocks", "step forms"],
+        "appropriate_when": [
+            "The task needs one explicit executable contract with declared activation inputs and reviewable runtime structure.",
+            "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only.",
+        ],
+        "inappropriate_when": [
+            "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
+            "You are trying to hide multiple unrelated concerns instead of exposing clear inputs, guards, and step forms.",
+        ],
+        "inspect_next": ["workflow.inputs_contract", "workflow.step_forms.operation_call", "workflow.step.value", "workflow.step.publish", "workflow.run_contract"],
+        "related_rules": ["early_let", "value_register_before_result", "publish_outputs"],
+        "related_examples": ["examples.minimal", "examples.inspect-issue"],
+        "published_names_kind": "workflow",
+    },
+    {
+        "name": "include",
+        "summary": "Source-time fragment reuse through include expansion with fragment-local args and assembled-workflow validation.",
+        "keywords": ["include", "with", "args", "fragment", "reuse", "expansion"],
+        "appropriate_when": [
+            "The same authored structure should be reused by expansion into the assembled workflow before validation and execution.",
+            "Fragment-local args improve reuse more honestly than cloning the same block into multiple workflows.",
+        ],
+        "inappropriate_when": [
+            "You need runtime invocation semantics, isolated callee scope, or per-item fan-out rather than source-time expansion.",
+            "The fragment is a one-off body that does not justify reusable include structure.",
+        ],
+        "inspect_next": ["workflow.include_contract", "workflow.include.include", "workflow.include.with", "workflow.fragment.args", "examples.include-plain", "examples.include-args"],
+        "related_rules": ["bounded_fan_out_is_structured_invocation"],
+        "related_examples": ["examples.include-plain", "examples.include-args"],
+        "published_names_kind": "include",
+    },
+    {
+        "name": "run",
+        "summary": "Runtime fragment invocation surface for named targets and bounded fan-out, including inline repeated step bodies.",
+        "keywords": ["run", "for_each", "steps", "with", "register", "named target", "fan-out"],
+        "appropriate_when": [
+            "A reusable fragment should be invoked at runtime, optionally once per item in a bounded collection.",
+            "A short repeated body fits inline fan-out better than a cloned step block.",
+        ],
+        "inappropriate_when": [
+            "The body is ordinary top-level workflow structure rather than runtime invocation or bounded repetition.",
+            "Inline repeated steps are growing long enough that a named run target would be clearer.",
+        ],
+        "inspect_next": ["workflow.run_contract", "workflow.run.run", "workflow.run.for_each", "workflow.step_forms.run_invocation", "workflow.step_forms.inline_fan_out_invocation", "workflow-authoring.run_target_vs_inline_fan_out"],
+        "related_rules": ["bounded_fan_out_is_structured_invocation", "run_target_vs_inline_fan_out", "fan_out_scope_and_conditions", "inline_fan_out_invalid_shapes"],
+        "related_examples": ["workflow-authoring.example.named_run_target_fan_out", "workflow-authoring.example.inline_fan_out_local_steps", "workflow-authoring.example.inline_fan_out_inner_if"],
+        "published_names_kind": "run",
+    },
+    {
+        "name": "guards",
+        "summary": "Workflow-level applicability surface that declares whether the workflow should run before effectful steps start.",
+        "keywords": ["guards", "applicability", "validation", "probe", "boolean result"],
+        "appropriate_when": [
+            "Applicability, input validation, or observable preconditions should be declared near the start of the workflow.",
+            "The workflow must reject inapplicable situations before mutating steps or fallback logic start.",
+        ],
+        "inappropriate_when": [
+            "The condition is step-local admission rather than whole-workflow applicability.",
+            "You are relying on downstream action failure instead of declaring a reviewable workflow-level precondition.",
+        ],
+        "inspect_next": ["workflow-authoring.early_guards", "workflow-authoring.input_validation_default", "workflow-authoring.delegated_applicability", "workflow.local_expression.filter_surface"],
+        "related_rules": ["early_guards", "input_validation_default", "delegated_applicability", "guard_result_contract"],
+        "related_examples": ["examples.inspect-issue"],
+        "published_names_kind": "guards",
+    },
+    {
+        "name": "gates",
+        "summary": "Step-admission surface that blocks one step body after earlier reads but before the protected effectful work executes.",
+        "keywords": ["gate", "on_fail", "admission", "step checkpoint", "blocked step"],
+        "appropriate_when": [
+            "A step should be admitted or blocked based on earlier observed or computed facts without redefining whole-workflow applicability.",
+            "Failure-focused gate context should be emitted through structured on_fail metadata instead of broad register dumps.",
+        ],
+        "inappropriate_when": [
+            "The decision really belongs in workflow guards near the start of the workflow.",
+            "You are trying to mix gate admission with register publication or current-step output reads.",
+        ],
+        "inspect_next": ["workflow.step.gate", "workflow.step_forms.gate_checkpoint", "workflow.run.gate", "workflow-authoring.separate_control_surfaces", "workflow-authoring.guard_result_contract"],
+        "related_rules": ["separate_control_surfaces", "guard_result_contract"],
+        "related_examples": ["workflow-authoring.example.inline_fan_out_inner_if"],
+        "published_names_kind": "gates",
+    },
+    {
+        "name": "conditions",
+        "summary": "Boolean condition-authoring surface shared by step if and gate, including expression and structured all/any/not forms.",
+        "keywords": ["if", "gate", "all", "any", "not", "structured condition", "implicit_all"],
+        "appropriate_when": [
+            "Branching or admission logic needs an explicit boolean condition surface with readable operator structure.",
+            "More than a few predicates benefit from structured all/any/not rather than one dense boolean string.",
+        ],
+        "inappropriate_when": [
+            "The authored value is data shaping or payload construction rather than a boolean decision.",
+            "You are using control-surface syntax where workflow-level guards or local-expression value fields would be clearer.",
+        ],
+        "inspect_next": ["workflow.step.if", "workflow.step.gate", "workflow-authoring.native_expression_contexts", "workflow-authoring.fan_out_scope_and_conditions"],
+        "related_rules": ["guard_result_contract", "fan_out_scope_and_conditions", "native_expression_contexts"],
+        "related_examples": ["workflow-authoring.example.inline_fan_out_inner_if"],
+        "published_names_kind": "conditions",
+    },
+    {
+        "name": "local-expressions",
+        "summary": "Built-in expression surface for reads, checks, comparisons, and short transformations inside workflow-owned fields.",
+        "keywords": ["roots", "filters", "builtins", "pipeline", "bare expression", "structured condition"],
+        "appropriate_when": [
+            "A workflow-owned field needs a short inline expression for guards, if, gate, let, with, value, publish, result, or for_each.",
+            "Type checks, membership checks, equality checks, or small value projections are enough without another surface.",
+        ],
+        "inappropriate_when": [
+            "The expression is becoming long, repetitive, or difficult to review as inline logic.",
+            "Representation shaping would be clearer through an adapter family or another more explicit surface.",
+        ],
+        "inspect_next": ["workflow.local_expression.filter_surface", "workflow.local_expression.filter.lookup", "workflow.local_expression.filter.only", "workflow-authoring.native_expression_contexts", "workflow.local_expression.adapter_seam"],
+        "related_rules": ["native_expression_contexts", "guard_result_contract", "representation_adapters"],
+        "related_examples": ["examples.local-expression-filters"],
+        "published_names_kind": "local-expressions",
+    },
+    {
+        "name": "connectors",
+        "summary": "Published operation catalog for external probes and actions, grouped by stable namespaces.",
+        "keywords": ["connectors", "operations", "namespace", "probe", "action", "public surface"],
+        "appropriate_when": [
+            "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
+            "Typed public operations express product intent better than broad execution surfaces.",
+        ],
+        "inappropriate_when": [
+            "You are treating a missing public capability as permission to improvise local semantics silently.",
+            "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation.",
+        ],
+        "inspect_next": ["operations", "connector.gh", "connector.fs", "workflow-authoring.decision_order", "workflow-authoring.structured_surface_bias"],
+        "related_rules": ["decision_order", "structured_surface_bias", "routine.*", "local_artifacts_are_context"],
+        "related_examples": ["examples.minimal", "examples.inspect-pr"],
+        "published_names_kind": "connectors",
+    },
+    {
+        "name": "routines",
+        "summary": "Bounded opaque local-automation fallback surface. This is an exception path, not a normal extension mechanism, and repeated routine use is a design smell.",
+        "keywords": ["routine.*", "fallback", "bounded automation", "local automation", "with.env", "opaque exception path"],
+        "appropriate_when": [
+            "Published connector operations and clean composition have already been exhausted, and the remaining gap is mechanical or intentionally project-local rather than semantic.",
+            "A narrowly bounded local automation step must run through one published routine entry with explicit scalar caller context instead of a broader ad hoc shell surface.",
+        ],
+        "inappropriate_when": [
+            "The remaining gap is semantic, unclear, or being preserved silently through a nearby local helper.",
+            "Routine use is becoming the default implementation path, a convenience shortcut, or a way to avoid publishing better connector surface.",
+        ],
+        "inspect_next": ["routine_contract", "routine_contract.workflow_call_surface", "routine_contract.workflow_call.env", "workflow-authoring.routine.*", "workflow-authoring.explicit_execution_context", "workflow-authoring.decision_order"],
+        "related_rules": ["routine.*", "decision_order", "explicit_execution_context", "local_artifacts_are_context", "semantic_ambiguity"],
+        "related_examples": [],
+        "published_names_kind": "routines",
+    },
+    {
+        "name": "adapters",
+        "summary": "Family-based representation transforms over workflow values, including projection-oriented selectors and family-specific actions.",
+        "keywords": ["json", "key_value", "markdown", "text", "yaml", "selectors", "actions", "shortcuts", "with{...}"],
+        "appropriate_when": [
+            "A guard, condition, or published value would be clearer after family-owned representation shaping than after ad hoc inline rewrites.",
+            "The published adapter family already matches the projection or mutation style you need.",
+        ],
+        "inappropriate_when": [
+            "A plain local expression is already clearer than an adapter invocation.",
+            "Guard logic would need adapter write-path behavior rather than read-only projection.",
+        ],
+        "inspect_next": ["workflow.local_expression.adapter_seam", "workflow.local_expression.adapter_binding", "workflow.local_expression.adapter.json", "workflow.local_expression.adapter.text", "workflow.local_expression.adapter.yaml", "workflow-authoring.representation_adapters"],
+        "related_rules": ["representation_adapters", "native_expression_contexts"],
+        "related_examples": ["examples.text-adapter"],
+        "published_names_kind": "adapters",
+    },
+)
+
+
 def build_root_response() -> JSONObject:
     """Return the machine-readable root discovery response."""
 
@@ -644,13 +854,14 @@ def build_root_response() -> JSONObject:
         "topics": [dict(topic) for topic in PUBLIC_TOPICS],
         "recommended_first_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS],
         "examples": [
-            "ordo-help overview --json",
-            "ordo-help model --json",
-            "ordo-help workflow-authoring --json",
-            "ordo-help capabilities --json",
-            "ordo-help command-line --json",
-            "ordo-help operations --json",
-            "ordo-help examples --json",
+            "ordo-help features",
+            "ordo-help overview",
+            "ordo-help model",
+            "ordo-help workflow-authoring",
+            "ordo-help capabilities",
+            "ordo-help command-line",
+            "ordo-help operations",
+            "ordo-help examples",
         ],
         "introspection": {
             "version": system["introspection_version"],
@@ -695,7 +906,7 @@ def build_overview_response() -> JSONObject:
         },
         "connector_namespaces": [connector["namespace"] for connector in operations["connectors"]],
         "published_topics": [topic["name"] for topic in PUBLIC_TOPICS],
-        "recommended_next_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS[1:]],
+        "recommended_next_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS if item["command"] != "ordo-help overview"],
     }
 
 
@@ -713,6 +924,172 @@ def build_model_response() -> JSONObject:
         "local_expressions": describe_local_expression_surface(),
         "representation_adapters": describe_representation_adapter_surface(),
     }
+
+
+def build_features_response() -> JSONObject:
+    """Return the compact feature map for workflow authoring discovery."""
+
+    model = build_model_response()
+    workflow_authoring = build_workflow_authoring_response()
+    examples = describe_examples_catalog()
+    rule_lookup = {str(rule["name"]): rule for rule in workflow_authoring["rules"] if isinstance(rule, dict)}
+
+    clusters = []
+    for spec in AUTHORING_CLUSTER_SPECS:
+        clusters.append(
+            {
+                "name": spec["name"],
+                "summary": spec["summary"],
+                "published_names": _build_cluster_published_names(str(spec["published_names_kind"]), model=model),
+                "keywords": list(spec["keywords"]),
+                "appropriate_when": list(spec["appropriate_when"]),
+                "inappropriate_when": list(spec["inappropriate_when"]),
+                "inspect_next": [_build_public_handle_reference(str(handle)) for handle in spec["inspect_next"]],
+                "related_rules": [_build_workflow_authoring_rule_reference(str(name), rule_lookup=rule_lookup) for name in spec["related_rules"]],
+                "related_examples": [_build_example_reference(str(name), examples=examples) for name in spec["related_examples"]],
+            }
+        )
+
+    return {
+        "document_kind": "features",
+        "purpose": "Compact workflow authoring feature map for authors and agents, with named handles for deeper discovery.",
+        "clusters": clusters,
+    }
+
+
+def _names_from_fields(entries: list[JSONObject]) -> list[str]:
+    return [str(item["name"]) for item in entries if isinstance(item, dict) and isinstance(item.get("name"), str)]
+
+
+def _workflow_step_field_names(step_forms: list[JSONObject]) -> list[str]:
+    names: list[str] = []
+    for form in step_forms:
+        if not isinstance(form, dict):
+            continue
+        for field_name in [*form.get("required_fields", []), *form.get("optional_fields", [])]:
+            if isinstance(field_name, str) and field_name not in names:
+                names.append(field_name)
+    return names
+
+
+def _step_forms_with_field(step_forms: list[JSONObject], field_name: str) -> list[str]:
+    matches: list[str] = []
+    for form in step_forms:
+        if not isinstance(form, dict) or not isinstance(form.get("name"), str):
+            continue
+        if field_name in form.get("required_fields", []) or field_name in form.get("optional_fields", []):
+            current_name = str(form["name"])
+            if current_name not in matches:
+                matches.append(current_name)
+    return matches
+
+
+def _build_cluster_published_names(kind: str, *, model: JSONObject) -> JSONObject:
+    workflow = model["workflow"]
+    playbook = model["playbook"]
+    profile = model["profile"]
+    local_expressions = model["local_expressions"]
+    adapters = model["representation_adapters"]
+    step_forms = workflow["step_forms"]
+    authored_surfaces = workflow["surface_constraints"]["authored_surfaces"]
+
+    if kind == "playbook":
+        return {
+            "top_level_fields": _names_from_fields(playbook["top_level_fields"]),
+            "workflow_entry_fields": _names_from_fields(playbook["workflow_entry_fields"]),
+            "pre_run_entry_fields": _names_from_fields(playbook["pre_run_entry_fields"]),
+            "defaults_fields": _names_from_fields(playbook["defaults_fields"]),
+        }
+    if kind == "profile":
+        return {
+            "top_level_fields": _names_from_fields(profile["top_level_fields"]),
+            "override_fields": _names_from_fields(profile["override_fields"]),
+        }
+    if kind == "workflow":
+        return {
+            "top_level_fields": _names_from_fields(workflow["top_level_fields"]),
+            "block_forms": [str(item["name"]) for item in workflow["block_forms"] if isinstance(item, dict) and isinstance(item.get("name"), str)],
+            "step_forms": [str(item["name"]) for item in step_forms if isinstance(item, dict) and isinstance(item.get("name"), str)],
+            "step_fields": _workflow_step_field_names(step_forms),
+        }
+    if kind == "include":
+        return {
+            "call_fields": _names_from_fields(workflow["include_contract"]["call_fields"]),
+            "fragment_metadata_fields": _names_from_fields(workflow["include_contract"]["fragment_metadata_fields"]),
+            "fragment_argument_forms": [str(item["name"]) for item in workflow["include_contract"]["fragment_argument_declaration_forms"] if isinstance(item, dict) and isinstance(item.get("name"), str)],
+        }
+    if kind == "run":
+        run_step_forms: list[str] = []
+        for current_name in [*_step_forms_with_field(step_forms, "run"), *_step_forms_with_field(step_forms, "for_each")]:
+            if current_name not in run_step_forms:
+                run_step_forms.append(current_name)
+        return {
+            "call_fields": _names_from_fields(workflow["run_contract"]["call_fields"]),
+            "body_forms": list(workflow["run_contract"]["body_forms"]),
+            "step_forms": run_step_forms,
+            "fan_out_fields": ["item_binding", "outer_if_scope", "inner_if_scope", "outer_register_scope"],
+        }
+    if kind == "guards":
+        return {
+            "workflow_fields": ["guards"],
+            "guard_forms": [str(item["name"]) for item in workflow["guard_forms"] if isinstance(item, dict) and isinstance(item.get("name"), str)],
+            "allowed_roots": list(workflow["surface_constraints"]["guard_expression"]["allowed_roots"]),
+            "allowed_filters": list(workflow["surface_constraints"]["guard_expression"]["allowed_filters"]),
+            "allowed_builtins": list(workflow["surface_constraints"]["guard_expression"]["allowed_builtins"]),
+        }
+    if kind == "gates":
+        gate_fields = [item for item in workflow["run_contract"]["call_fields"] if isinstance(item, dict) and item.get("name") == "gate"]
+        structured_optional_fields = []
+        if gate_fields:
+            structured_optional_fields = [str(item["name"]) for item in gate_fields[0].get("structured_optional_fields", []) if isinstance(item, dict) and isinstance(item.get("name"), str)]
+        return {
+            "step_field": ["gate"],
+            "step_forms": _step_forms_with_field(step_forms, "gate"),
+            "structured_operators": list(authored_surfaces["condition_field_forms"]["structured_object_operators"]),
+            "structured_optional_fields": structured_optional_fields,
+        }
+    if kind == "conditions":
+        return {
+            "condition_fields": list(authored_surfaces["native_condition_fields"]),
+            "structured_operators": list(local_expressions["condition_structures"]["structured_operators"]),
+            "list_semantics": [str(local_expressions["condition_structures"]["list_semantics"])],
+            "boolean_operators": list(workflow["surface_constraints"]["runtime_value_surface"]["boolean_operators"]),
+        }
+    if kind == "local-expressions":
+        return {
+            "roots": sorted(
+                {
+                    *workflow["surface_constraints"]["guard_expression"]["allowed_roots"],
+                    *workflow["surface_constraints"]["runtime_value_surface"]["allowed_roots"],
+                    "probe",
+                }
+            ),
+            "filters": [str(item["name"]) for item in local_expressions["pipeline_filters"] if isinstance(item, dict) and isinstance(item.get("name"), str)],
+            "builtins": list(workflow["surface_constraints"]["runtime_value_surface"]["allowed_builtins"]),
+            "structured_condition_operators": list(local_expressions["condition_structures"]["structured_operators"]),
+            "comparison_operators": ["==", "!=", "in", "not in"],
+        }
+    if kind == "connectors":
+        return {
+            "namespaces": [str(item["namespace"]) for item in model["connectors"] if isinstance(item, dict) and isinstance(item.get("namespace"), str)],
+        }
+    if kind == "routines":
+        routine_contract = model["routine_contract"]
+        return {
+            "top_level_fields": _names_from_fields(routine_contract["top_level_fields"]),
+            "routine_entry_fields": _names_from_fields(routine_contract["routine_entry_fields"]),
+            "workflow_call_fields": _names_from_fields(routine_contract.get("workflow_call_surface", {}).get("fields", [])),
+            "implementation_fields": _names_from_fields(routine_contract.get("implementation_fields", [])),
+            "generated_env_name_examples": list(routine_contract.get("workflow_call_surface", {}).get("generated_env_name_examples", {}).keys()),
+        }
+    if kind == "adapters":
+        return {
+            "families": [str(item["name"]) for item in adapters["families"] if isinstance(item, dict) and isinstance(item.get("name"), str)],
+            "selectors": {str(item["name"]): list(item["selectors"]) for item in adapters["families"] if isinstance(item, dict) and isinstance(item.get("name"), str)},
+            "actions": {str(item["name"]): list(item["actions"]) for item in adapters["families"] if isinstance(item, dict) and isinstance(item.get("name"), str)},
+            "shortcuts": {str(item["name"]): list(item["shortcuts"]) for item in adapters["families"] if isinstance(item, dict) and isinstance(item.get("name"), str)},
+        }
+    return {}
 
 
 def describe_local_expression_surface() -> JSONObject:
@@ -1068,6 +1445,13 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)
     for field in model["profile"]["override_fields"]:
         add_node(f"profile.overrides.{field['name']}", contract="profile", node_category="override_field", summary="Published profile override field metadata", metadata=field)
+    add_node(
+        "routine_contract",
+        contract="routine_contract",
+        node_category="contract",
+        summary="Published routine-registry contract metadata",
+        metadata=model["routine_contract"],
+    )
     for field in model["routine_contract"]["top_level_fields"]:
         add_node(
             f"routine_contract.{field['name']}",
@@ -1162,6 +1546,55 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     return lookup
 
 
+def _build_workflow_authoring_node_lookup() -> dict[str, JSONObject]:
+    payload = build_workflow_authoring_response()
+    lookup: dict[str, JSONObject] = {}
+
+    for rule in payload["rules"]:
+        if not isinstance(rule, dict) or not isinstance(rule.get("name"), str):
+            continue
+        handle = f"workflow-authoring.{rule['name']}"
+        lookup[handle] = {
+            "document_kind": "workflow_authoring_node",
+            "node_kind": "rule",
+            "name": handle,
+            "summary": rule["rule"],
+            "metadata": rule,
+        }
+
+    for example_group in ("bounded_fan_out_examples", "routine_env_examples"):
+        for example in payload.get(example_group, []):
+            if not isinstance(example, dict) or not isinstance(example.get("name"), str):
+                continue
+            handle = f"workflow-authoring.example.{example['name']}"
+            lookup[handle] = {
+                "document_kind": "workflow_authoring_node",
+                "node_kind": "example",
+                "name": handle,
+                "summary": str(example.get("summary") or "Published workflow-authoring example"),
+                "metadata": {"group": example_group, **example},
+            }
+
+    return lookup
+
+
+def _build_examples_node_lookup() -> dict[str, JSONObject]:
+    payload = describe_examples_catalog()
+    lookup: dict[str, JSONObject] = {}
+    for example in payload["examples"]:
+        if not isinstance(example, dict) or not isinstance(example.get("name"), str):
+            continue
+        handle = f"examples.{example['name']}"
+        lookup[handle] = {
+            "document_kind": "example_node",
+            "node_kind": "example",
+            "name": handle,
+            "summary": f"Verified example at {example['path']}",
+            "metadata": example,
+        }
+    return lookup
+
+
 def _build_command_line_node_lookup() -> dict[str, JSONObject]:
     payload = build_command_line_response()
     lookup: dict[str, JSONObject] = {}
@@ -1185,6 +1618,83 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
                 "metadata": flag,
             }
     return lookup
+
+
+def _build_public_handle_reference(handle: str) -> JSONObject:
+    topic = next((item for item in PUBLIC_TOPICS if item["name"] == handle), None)
+    if topic is not None:
+        return {
+            "handle": handle,
+            "kind": "topic",
+            "summary": topic["summary"],
+            "command": f"ordo-help {handle} --json",
+        }
+
+    for lookup, topic_name in (
+        (_build_workflow_authoring_node_lookup(), "workflow-authoring"),
+        (_build_examples_node_lookup(), "examples"),
+        (_build_model_node_lookup(), "model"),
+        (_build_command_line_node_lookup(), "command-line"),
+        (_build_capability_lookup(), "capabilities"),
+    ):
+        node = lookup.get(handle)
+        if node is None:
+            continue
+        return {
+            "handle": handle,
+            "kind": str(node["node_kind"]),
+            "summary": str(node["summary"]),
+            "command": f"ordo-help describe {handle} --json",
+            "topic": topic_name,
+        }
+
+    return {"handle": handle, "kind": "unknown", "summary": "Unresolved public handle", "command": f"ordo-help describe {handle} --json"}
+
+
+def _build_workflow_authoring_rule_reference(rule_name: str, *, rule_lookup: dict[str, JSONObject]) -> JSONObject:
+    handle = f"workflow-authoring.{rule_name}"
+    node = _build_workflow_authoring_node_lookup().get(handle)
+    rule = rule_lookup.get(rule_name)
+    summary = str(rule["rule"]) if isinstance(rule, dict) and isinstance(rule.get("rule"), str) else str(node["summary"]) if node is not None else rule_name
+    return {
+        "name": rule_name,
+        "handle": handle,
+        "summary": summary,
+        "command": f"ordo-help describe {handle} --json",
+    }
+
+
+def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject:
+    if handle.startswith("workflow-authoring.example."):
+        node = _build_workflow_authoring_node_lookup().get(handle)
+        if node is not None:
+            return {
+                "name": str(node["metadata"]["name"]),
+                "handle": handle,
+                "summary": str(node["summary"]),
+                "command": f"ordo-help describe {handle} --json",
+            }
+
+    node = _build_examples_node_lookup().get(handle)
+    if node is not None:
+        return {
+            "name": str(node["metadata"]["name"]),
+            "handle": handle,
+            "summary": str(node["summary"]),
+            "command": f"ordo-help describe {handle} --json",
+        }
+
+    if isinstance(examples, dict):
+        for example in examples.get("examples", []):
+            if isinstance(example, dict) and f"examples.{example.get('name')}" == handle:
+                return {
+                    "name": str(example["name"]),
+                    "handle": handle,
+                    "summary": f"Verified example at {example['path']}",
+                    "command": f"ordo-help describe {handle} --json",
+                }
+
+    return {"name": handle, "handle": handle, "summary": "Unresolved related example", "command": f"ordo-help describe {handle} --json"}
 
 
 def build_search_response(query: str) -> JSONObject:
@@ -1291,7 +1801,7 @@ def build_search_response(query: str) -> JSONObject:
                     "name": example["name"],
                     "summary": f"Verified example at {example['path']}",
                     "topic": "examples",
-                    "command": "ordo-help examples --json",
+                    "command": f"ordo-help describe examples.{example['name']} --json",
                 }
             )
 
@@ -1315,7 +1825,7 @@ def build_search_response(query: str) -> JSONObject:
                     "name": f"workflow-authoring.{rule['name']}",
                     "summary": rule["rule"],
                     "topic": "workflow-authoring",
-                    "command": "ordo-help workflow-authoring --json",
+                    "command": f"ordo-help describe workflow-authoring.{rule['name']} --json",
                 }
             )
 
@@ -1423,22 +1933,16 @@ def render_root_text() -> str:
         [
             "",
             "Recommended first calls:",
-            "1. ordo-help overview --json",
-            "2. ordo-help model --json",
-            "3. ordo-help workflow-authoring --json",
-            "4. ordo-help capabilities --json",
-            "5. ordo-help command-line --json",
-            "6. ordo-help operations --json",
-            "7. ordo-help examples --json",
+            "1. ordo-help features",
+            "2. ordo-help overview",
+            "3. ordo-help model",
+            "4. ordo-help workflow-authoring",
+            "5. ordo-help capabilities",
+            "6. ordo-help command-line",
+            "7. ordo-help operations",
+            "8. ordo-help examples",
             "",
-            "Next command examples:",
-            "- ordo-help overview --json",
-            "- ordo-help model --json",
-            "- ordo-help workflow-authoring --json",
-            "- ordo-help capabilities --json",
-            "- ordo-help command-line --json",
-            "- ordo-help operations --json",
-            "- ordo-help examples --json",
+            "Add --json for machine-readable output.",
         ]
     )
     return "\n".join(lines)
@@ -1513,6 +2017,33 @@ def render_model_text(payload: JSONObject) -> str:
     ]
     for family in payload["representation_adapters"]["families"]:
         lines.append(f"- {family['name']}: selectors={', '.join(family['selectors'])}; actions={', '.join(family['actions'])}")
+    return "\n".join(lines)
+
+
+def render_features_text(payload: JSONObject) -> str:
+    """Return the text features surface."""
+
+    lines = ["features", payload["purpose"]]
+    for cluster in payload["clusters"]:
+        lines.extend(["", cluster["name"], f"what: {cluster['summary']}"])
+        published_names = cluster.get("published_names", {})
+        if isinstance(published_names, dict):
+            lines.append("published names:")
+            for group_name, values in published_names.items():
+                if isinstance(values, dict):
+                    rendered = "; ".join(f"{key}={', '.join(map(str, item_values))}" for key, item_values in values.items())
+                    lines.append(f"- {group_name}: {rendered}")
+                    continue
+                if isinstance(values, list):
+                    lines.append(f"- {group_name}: {', '.join(map(str, values))}")
+        lines.append(f"keywords: {', '.join(cluster['keywords'])}")
+        lines.append("when appropriate:")
+        lines.extend(f"- {item}" for item in cluster["appropriate_when"])
+        lines.append("when inappropriate:")
+        lines.extend(f"- {item}" for item in cluster["inappropriate_when"])
+        lines.append("inspect next:")
+        for item in cluster["inspect_next"]:
+            lines.append(f"- {item['handle']}: {item['summary']}")
     return "\n".join(lines)
 
 
@@ -1653,6 +2184,18 @@ def render_command_line_node_text(payload: JSONObject) -> str:
     return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
 
 
+def render_workflow_authoring_node_text(payload: JSONObject) -> str:
+    """Return the text workflow-authoring-node surface."""
+
+    return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
+
+
+def render_example_node_text(payload: JSONObject) -> str:
+    """Return the text example-node surface."""
+
+    return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
+
+
 def render_search_text(payload: JSONObject) -> str:
     """Return the text search surface."""
 
@@ -1714,7 +2257,7 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
         "status": "unknown_topic",
         "message": f"Unsupported public topic or node '{topic}'",
         "supported_topics": list(DESCRIBABLE_TOPICS),
-        "supported_node_kinds": ["capability", "negative_rule", "model_node"],
+        "supported_node_kinds": ["capability", "negative_rule", "model_node", "workflow_authoring_node", "example_node", "command_line_node"],
     }
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -1732,6 +2275,8 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
         return build_overview_response(), render_overview_text
     if topic == "model":
         return build_model_response(), render_model_text
+    if topic == "features":
+        return build_features_response(), render_features_text
     if topic == "workflow-authoring":
         return build_workflow_authoring_response(), render_workflow_authoring_text
     if topic == "capabilities":
@@ -1751,6 +2296,12 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
     command_line_node = _build_command_line_node_lookup().get(topic)
     if command_line_node is not None:
         return command_line_node, render_command_line_node_text
+    workflow_authoring_node = _build_workflow_authoring_node_lookup().get(topic)
+    if workflow_authoring_node is not None:
+        return workflow_authoring_node, render_workflow_authoring_node_text
+    example_node = _build_examples_node_lookup().get(topic)
+    if example_node is not None:
+        return example_node, render_example_node_text
     return None
 
 
@@ -1770,6 +2321,9 @@ def main(argv: list[str] | None = None) -> int:
 
     model_parser = subparsers.add_parser("model", add_help=False)
     model_parser.add_argument("--json", action="store_true", dest="as_json")
+
+    features_parser = subparsers.add_parser("features", add_help=False)
+    features_parser.add_argument("--json", action="store_true", dest="as_json")
 
     workflow_authoring_parser = subparsers.add_parser("workflow-authoring", add_help=False)
     workflow_authoring_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -1814,6 +2368,8 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_payload(describe_capabilities(), as_json=as_json, renderer=render_capabilities_text)
     if parsed.command == "model":
         return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text)
+    if parsed.command == "features":
+        return _emit_payload(build_features_response(), as_json=as_json, renderer=render_features_text)
     if parsed.command == "workflow-authoring":
         return _emit_payload(build_workflow_authoring_response(), as_json=as_json, renderer=render_workflow_authoring_text)
     if parsed.command == "command-line":

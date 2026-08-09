@@ -52,6 +52,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         expected = json.loads((GOLDEN_DIR / "ordo_help_overview.json").read_text(encoding="utf-8"))
         self.assertEqual(actual, expected)
 
+    def test_features_json_matches_golden(self) -> None:
+        result = self.run_help("features", "--json")
+
+        self.assertEqual(result.returncode, 0)
+        actual = json.loads(result.stdout)
+        expected = json.loads((GOLDEN_DIR / "ordo_help_features.json").read_text(encoding="utf-8"))
+        self.assertEqual(actual, expected)
+
     def test_workflow_authoring_json_matches_golden(self) -> None:
         result = self.run_help("workflow-authoring", "--json")
 
@@ -80,6 +88,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         root = json.loads(self.run_help("--json").stdout)
         overview = json.loads(self.run_help("overview", "--json").stdout)
         model = json.loads(self.run_help("model", "--json").stdout)
+        features = json.loads(self.run_help("features", "--json").stdout)
         workflow_authoring = json.loads(self.run_help("workflow-authoring", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         command_line = json.loads(self.run_help("command-line", "--json").stdout)
@@ -89,6 +98,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(root["tool_name"], "ordo-help")
         self.assertEqual(overview["document_kind"], "overview")
         self.assertEqual(model["document_kind"], "model")
+        self.assertEqual(features["document_kind"], "features")
         self.assertEqual(workflow_authoring["document_kind"], "workflow_authoring")
         self.assertIn("capabilities", capabilities)
         self.assertEqual(command_line["document_kind"], "command_line")
@@ -429,6 +439,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
 
+    def test_describe_resolves_workflow_authoring_rule_and_example_nodes(self) -> None:
+        rule_node = json.loads(self.run_help("describe", "workflow-authoring.early_guards", "--json").stdout)
+        example_node = json.loads(self.run_help("describe", "workflow-authoring.example.inline_fan_out_local_steps", "--json").stdout)
+        catalog_example_node = json.loads(self.run_help("describe", "examples.text-adapter", "--json").stdout)
+
+        self.assertEqual(rule_node["document_kind"], "workflow_authoring_node")
+        self.assertEqual(rule_node["node_kind"], "rule")
+        self.assertEqual(rule_node["metadata"]["name"], "early_guards")
+        self.assertEqual(example_node["document_kind"], "workflow_authoring_node")
+        self.assertEqual(example_node["node_kind"], "example")
+        self.assertEqual(example_node["metadata"]["name"], "inline_fan_out_local_steps")
+        self.assertEqual(catalog_example_node["document_kind"], "example_node")
+        self.assertEqual(catalog_example_node["metadata"]["name"], "text-adapter")
+
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:
         include_contract_node = json.loads(self.run_help("describe", "workflow.include_contract", "--json").stdout)
 
@@ -571,6 +595,30 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.delegated_applicability" for item in delegated_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_let" for item in let_result["facts"]))
         self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.native_expression_contexts" for item in bare_result["facts"]))
+
+    def test_features_publish_local_expression_and_adapter_handles(self) -> None:
+        payload = json.loads(self.run_help("features", "--json").stdout)
+
+        clusters = {item["name"]: item for item in payload["clusters"]}
+        local_expressions = clusters["local-expressions"]
+        adapters = clusters["adapters"]
+
+        self.assertIn("lookup", local_expressions["published_names"]["filters"])
+        self.assertIn("is_present", local_expressions["published_names"]["builtins"])
+        self.assertTrue(any(item["handle"] == "workflow.local_expression.filter.lookup" for item in local_expressions["inspect_next"]))
+        self.assertIn("yaml", adapters["published_names"]["families"])
+        self.assertTrue(any(item["handle"] == "workflow.local_expression.adapter.yaml" for item in adapters["inspect_next"]))
+
+    def test_features_publish_routine_fallback_cluster(self) -> None:
+        payload = json.loads(self.run_help("features", "--json").stdout)
+
+        clusters = {item["name"]: item for item in payload["clusters"]}
+        routines = clusters["routines"]
+
+        self.assertIn("env", routines["published_names"]["workflow_call_fields"])
+        self.assertIn("inputs.profile", routines["published_names"]["generated_env_name_examples"])
+        self.assertTrue(any(item["handle"] == "routine_contract" for item in routines["inspect_next"]))
+        self.assertTrue(any(item["handle"] == "workflow-authoring.routine.*" for item in routines["inspect_next"]))
 
     def test_workflow_authoring_topic_prioritizes_routine_caution_and_early_guards(self) -> None:
         payload = json.loads(self.run_help("workflow-authoring", "--json").stdout)
