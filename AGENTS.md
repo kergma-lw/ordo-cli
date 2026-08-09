@@ -101,6 +101,7 @@
 ### Completion rule
 
 - An engine change is not complete until all affected runtime modes and all affected discovery/help surfaces have been reviewed and updated together, or their non-impact has been explicitly established.
+- After a work item is otherwise complete, run `ordo-playbook run verify-all-tests` before final closure.
 
 ## GitHub and project operations
 

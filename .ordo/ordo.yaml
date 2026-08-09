@@ -50,6 +50,11 @@ workflows:
     description: Regenerate derived meta packs from source docs
     category: meta
     when: Use after changing meta source docs so meta/packs stays in sync.
+  verify-all-tests:
+    file: workflows/verify-all-tests.yml
+    description: Run the full repository pytest suite from a clean worktree
+    category: verify
+    when: Use when you need one canonical clean-worktree entrypoint for the full local test suite.
   stories-backlog:
     file: workflows/stories-backlog.yml
     description: Show Story issues that are in Backlog in the project

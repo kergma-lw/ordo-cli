@@ -9,6 +9,15 @@ routines:
     failure_modes:
     - runtime_unavailable
     - packs_build_failed
+  verify.run-all-tests:
+    kind: action
+    summary: Run the full repository pytest suite through the project-local virtual environment.
+    implementation:
+      argv:
+      - ".ordo/scripts/run-all-tests.sh"
+    failure_modes:
+    - tests_failed
+    - runtime_unavailable
   review.render-open-diff:
     kind: probe
     summary: Render the current branch diff versus main into a temporary HTML file
