@@ -34,6 +34,7 @@
 ## Operational workflows (Ordo-first)
 
 - `ordo-playbook` is the canonical operational entrypoint.
+- If a suitable workflow exists, do not use a direct command instead of it.
 - `ordo-playbook` command modes from `--help`:
   - Discovery: `workflows`
   - Execution: `review`, `check`, `plan`, `explain`, `run`, `next`

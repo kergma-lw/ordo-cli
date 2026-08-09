@@ -64,7 +64,7 @@ class ProfileCompositionTest(unittest.TestCase):
         self.assertEqual(result.active_profile, "repo-defaults")
 
     def test_profile_application_rejects_silent_workflow_override(self) -> None:
-        workflow = Workflow(version=0, workflow="open-task", inputs={"branch": "feature"})
+        workflow = Workflow(version=0, workflow="open-task", inputs={"branch": "feature"}, explicit_input_keys=("branch",))
         profile = Profile(name="repo-defaults", inputs={"branch": "keep"})
 
         result = apply_profile_to_workflow(workflow, profile)

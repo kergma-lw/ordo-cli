@@ -219,7 +219,7 @@ class PreflightInterpreterTest(unittest.TestCase):
             self.assertIsNone(expanded.halt)
             self.assertEqual(expanded.workflow.workflow, "demo::fragment.yml")
 
-    def test_records_halt_for_unanalyzable_nested_run_fragment(self) -> None:
+    def test_expands_effectful_nested_run_fragment_for_check_analysis(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fragment = Path(temp_dir) / "fragment.yml"
             fragment.write_text("steps:\n  - name: comment\n    uses: gh.issue.comment\n", encoding="utf-8")
@@ -228,8 +228,9 @@ class PreflightInterpreterTest(unittest.TestCase):
 
             expanded = expand_preflight_run_step(step, workflow, block_index=0, step_index=0)
 
-            self.assertIsNone(expanded.workflow)
-            self.assertEqual(expanded.halt.reason, "run_subtree_requires_effectful_execution")
+            self.assertIsNotNone(expanded.workflow)
+            self.assertIsNone(expanded.halt)
+            self.assertEqual(expanded.workflow.workflow, "demo::fragment.yml")
 
 
 if __name__ == "__main__":

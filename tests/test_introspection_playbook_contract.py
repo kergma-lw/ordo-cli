@@ -11,8 +11,8 @@ class IntrospectionPlaybookContractTest(unittest.TestCase):
         self.assertEqual(payload["discovery"]["path"], ".ordo/ordo.yaml")
         workflow_entry_fields = {field["name"] for field in payload["workflow_entry_fields"]}
         pre_run_entry_fields = {field["name"] for field in payload["pre_run_entry_fields"]}
-        self.assertEqual(workflow_entry_fields, {"file", "description", "category", "when", "working_directory", "state_bindings"})
-        self.assertEqual(pre_run_entry_fields, {"file", "state_bindings"})
+        self.assertEqual(workflow_entry_fields, {"file", "with", "description", "category", "when", "working_directory", "state_bindings"})
+        self.assertEqual(pre_run_entry_fields, {"file", "with", "state_bindings"})
         category = next(field for field in payload["workflow_entry_fields"] if field["name"] == "category")
         when = next(field for field in payload["workflow_entry_fields"] if field["name"] == "when")
         self.assertEqual(category["runtime_effect"], "published_metadata_only")
