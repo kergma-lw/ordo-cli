@@ -32,15 +32,19 @@
 - An `if` expression may read `inputs...` values.
 - An `if` expression may read `state...` values.
 - An `if` expression may read prior registered `step...` results.
+- An `if` expression may depend on approved read-only probe observation when the surrounding step-condition context allows non-effectful external observation.
 - An `if` expression must never read future step results.
-- An `if` expression must never call connector operations or probes.
+- Structural nesting alone must not change the approved step-condition dependency classes for one otherwise equivalent `if` surface.
+- An `if` expression must never trigger effectful connector execution.
 - An `if` expression must never perform conditional value selection through ternary syntax, `if(...)`, `select(...)`, `case(...)`, or equivalent forms.
 - A `gate` expression may read `inputs...` values.
 - A `gate` expression may read `state...` values.
 - A `gate` expression may read prior registered `step...` results.
+- A `gate` expression may depend on approved read-only probe observation when the surrounding step-condition context allows non-effectful external observation.
 - A `gate` expression must never read future step results.
 - A `gate` expression must never read outputs of the current step it protects.
-- A `gate` expression must never call connector operations or probes.
+- Structural nesting alone must not change the approved step-condition dependency classes for one otherwise equivalent `gate` surface.
+- A `gate` expression must never trigger effectful connector execution.
 - A `gate` expression must never perform conditional value selection through ternary syntax, `if(...)`, `select(...)`, `case(...)`, or equivalent forms.
 
 ## Boolean discipline
@@ -69,8 +73,8 @@
 
 - A workflow step must not declare both `if` and `register` in the MVP.
 - The MVP should avoid publishing registered results for skipped steps.
-- A workflow step may declare both `gate` and `register`.
-- If a gated step is blocked before execution, the runtime must not publish a registered result for that step.
+- A workflow step must not declare both `gate` and `register`.
+- A standalone step-local `gate` checkpoint step may omit a step body form and should act only as one admission boundary.
 
 ## Runtime behavior
 

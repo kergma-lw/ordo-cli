@@ -452,6 +452,7 @@ class ExplainModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["explanation"]["category"], "ok")
         self.assertIn("Set story status to Ready", result.outputs["explanation"]["why"])
+        self.assertIn("current observed inputs and state", result.outputs["explanation"]["why"])
 
     def test_explain_keeps_preflight_support_consistent_with_plan(self) -> None:
         workflow = Workflow(

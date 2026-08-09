@@ -44,6 +44,15 @@ Step-condition context models conditional execution of one workflow step.
 
 Unlike guard context, it may legitimately depend on prior execution-local registered results because it is evaluated after earlier steps may already have run.
 
+When a step-condition surface allows non-effectful external observation, structural nesting alone does not change which approved observation-capable dependencies the context may use.
+
+That means one semantically equivalent step-condition surface should keep the same approved dependency classes:
+
+- at top level;
+- inside nested inline `steps`;
+- inside one inline `for_each` body; and
+- inside one reusable fragment body.
+
 It also belongs to the condition-oriented context family.
 
 Its native authored surface may be either a bare boolean expression or a structured condition tree under `if`.
@@ -79,3 +88,7 @@ This distinction is about authored surface, not about separate semantic language
 Context policy governs the whole parsed expression tree.
 
 A context therefore validates dependency classes structurally rather than only checking the root node.
+
+The same tree-scoped rule also means that structural nesting is not itself a dependency-class change.
+
+If one read-only step-local surface is observation-capable in one structural position, equivalent nested positions should not silently become local-only just because the step body was repeated or inlined.

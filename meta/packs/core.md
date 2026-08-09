@@ -444,6 +444,7 @@
   - `is_boolean`;
   - `in(container)`;
   - `field(path)`;
+  - `lookup(key)`;
   - `only(field=value)` / `only(field!=value)`;
   - `flatten`;
   - `first`;
@@ -452,7 +453,7 @@
   - `unique`.
 - `lower`, `trim`, and `slug` are string-to-string transforming filters.
 - `eq(...)`, `ne(...)`, `not`, `is_string`, `is_number`, `is_integer`, `is_boolean`, and `in(container)` are boolean-producing filters.
-- `field(path)`, `only(field=value)` / `only(field!=value)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
+- `field(path)`, `lookup(key)`, `only(field=value)` / `only(field!=value)`, `flatten`, `first`, `last`, `length`, and `unique` are pure value-shaping filters over already evaluated JSON-shaped values.
 - Predicate-style filters such as `is_string`, `is_number`, `is_integer`, and `is_boolean` must accept any already evaluated local-expression value and return `true` or `false` without implicit coercion.
 - `eq(...)` and `ne(...)` compare without implicit coercion.
 - `in(container)` must evaluate its argument as a container expression and must require that container to produce a list value.
@@ -464,6 +465,11 @@
 - `field(path)` on an array must yield `null` for an item whose addressed path is missing rather than failing the whole filter.
 - `field(path)` must fail on scalar or `null` input rather than silently coercing it into an object or singleton list.
 - `field(path)` path syntax must support at least dotted field access and zero-based list indexing, for example `results` and `results[0]`.
+- `lookup(key)` must support object input only.
+- `lookup(key)` must require its argument to evaluate to a string key.
+- `lookup(key)` on an object must return the exact value stored under that key.
+- `lookup(key)` on an object must fail when the addressed key is missing.
+- `lookup(key)` must fail on array, scalar, or `null` input rather than reinterpreting those shapes as object-like containers.
 - `only(field=value)` and `only(field!=value)` must require array input.
 - `only(...)` must keep only array elements whose addressed field path exists and satisfies the authored comparison.
 - `only(...)` must treat a missing addressed field path on one item as a non-match rather than as a whole-filter failure.
@@ -706,6 +712,8 @@
 - Step-condition context expresses step-local conditional execution.
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
 - Step-condition context may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
+- Step-condition context should expose the same approved read-only observation-capable local-expression dependency classes regardless of whether the surrounding step appears at top level, inside nested inline `steps`, inside one inline `for_each` body, or inside one reusable fragment body.
+- Structural nesting by itself must not narrow otherwise valid step-condition roots or read-only observation dependencies.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native `if` conditions are the preferred step-condition surface.
 - Native step conditions may be authored either as a bare boolean expression or as a structured condition tree.
@@ -714,6 +722,12 @@
 - Structured step conditions may use `all`, `any`, and `not` nodes and may nest them.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
 - Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
+
+## Nesting invariant for read-only step-local surfaces
+
+- Structural nesting must not by itself change the approved local-expression dependency classes for equivalent read-only step-local authored surfaces.
+- If two authored step-local surfaces share the same semantic class and both allow non-effectful external observation, they should admit the same approved roots and read-only probe dependencies at top level, in nested inline `steps`, in one inline `for_each` body, and in reusable fragment bodies.
+- Different runtime timing or result interpretation may distinguish surfaces such as `if`, `gate`, and `value`, but those differences should not create ad hoc root restrictions purely because one surface appears inside a repeated or nested body.
 
 ## Presence-check argument boundary
 
@@ -1121,6 +1135,9 @@
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
+- A workflow entry may declare playbook-owned invocation inputs through a `with` field.
+- A `pre_run` entry may declare playbook-owned invocation inputs for that launch-phase workflow through a `with` field.
+- Playbook-owned invocation inputs should be static YAML values rather than a second expression language.
 - A playbook launch surface may declare an explicit execution working directory for a run through playbook defaults, the active profile, or the active workflow entry.
 - Working-directory precedence must be deterministic and follow increasing specificity from playbook defaults to profile context to workflow-entry context.
 - Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` embedded-value local-expression surface when the expression stays within an activation-time-safe subset.
@@ -1134,6 +1151,7 @@
 - `pre_run` must have an explicit playbook-owned dependency model rather than borrowing hidden state requirements from the requested workflow contract.
 - Main workflows must not be required to declare logical state needs only because playbook `pre_run` consumes that state during launch.
 - When `pre_run` needs runtime state, the playbook surface must declare the necessary binding explicitly on the `pre_run` entry itself.
+- Playbook-owned invocation inputs for `pre_run` must apply only to that `pre_run` workflow rather than leaking automatically into the requested workflow entry.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -1147,6 +1165,8 @@
 - Relative workflow and profile references must resolve deterministically from playbook-owned context.
 - An execution working directory must not change playbook discovery or reference resolution rules.
 - A working-directory expression must be fully resolvable before the first guard or step executes.
+- Playbook-owned workflow-entry invocation inputs must apply after profile-provided missing-input defaults and before CLI launch-time input overrides.
+- CLI launch-time input overrides must remain the highest-precedence activation input surface.
 - Named references must either resolve to one declared target or fail clearly.
 - Missing catalog targets must fail validation before effectful execution starts.
 - Unknown stable fields in the playbook contract should fail validation.
@@ -1319,6 +1339,8 @@ The runtime must be able to answer, in machine-readable form:
 - `gate` must be able to depend on runtime-derived read-only knowledge that was established by earlier steps.
 - `gate` must not depend on outputs of the current step it protects.
 - A blocked `gate` must not be rewritten into a silent skip.
+- A `gate` that is semantically observation-capable at top level should preserve the same approved read-only dependency classes inside nested inline `steps`, inline `for_each` bodies, and reusable fragment bodies.
+- Structural nesting alone must not turn an observation-capable `gate` surface into a local-only one.
 
 ## Outcome model
 
@@ -2630,6 +2652,10 @@ A context determines:
 
 It should not imply a separate read-only execution engine for otherwise equivalent probe-capable expression nodes.
 
+Equivalent contexts should therefore remain stable across structural nesting.
+
+If one read-only step-local authored surface is observation-capable at top level, the same semantic context should remain observation-capable inside nested inline `steps`, inside one inline `for_each` body, and inside reusable fragment bodies unless a distinct higher-level rule explicitly changes the semantic class of the surface.
+
 ### Root
 
 A root is one documented local reference family.
@@ -2776,7 +2802,7 @@ The modeled filter families include:
 - boolean membership filters such as `in(container)`;
 - bounded collection-selection filters such as `only(field=value)` and `only(field!=value)`;
 - boolean negation filters such as `not`;
-- collection-shaping filters such as `field(path)`, `flatten`, `first`, `last`, `length`, and `unique`.
+- collection-shaping filters such as `field(path)`, `lookup(key)`, `flatten`, `first`, `last`, `length`, and `unique`.
 
 The modeled predicate-filter semantics are:
 
@@ -2814,6 +2840,15 @@ The modeled `field(path)` semantics are:
 - a missing addressed path within one array element yields `null` for that element rather than failing the whole projection;
 - scalar or `null` input fails;
 - the initial path model supports dotted field navigation and zero-based list indexing such as `results` and `results[0]`.
+
+The modeled `lookup(key)` semantics are:
+
+- input must be an object;
+- the authored argument must evaluate to a string key;
+- lookup is exact-key retrieval rather than path traversal;
+- object input returns the value stored under that exact key;
+- object input with a missing key fails;
+- array, scalar, or `null` input fails.
 
 The modeled `flatten` semantics are:
 
@@ -3478,6 +3513,15 @@ Step-condition context models conditional execution of one workflow step.
 
 Unlike guard context, it may legitimately depend on prior execution-local registered results because it is evaluated after earlier steps may already have run.
 
+When a step-condition surface allows non-effectful external observation, structural nesting alone does not change which approved observation-capable dependencies the context may use.
+
+That means one semantically equivalent step-condition surface should keep the same approved dependency classes:
+
+- at top level;
+- inside nested inline `steps`;
+- inside one inline `for_each` body; and
+- inside one reusable fragment body.
+
 It also belongs to the condition-oriented context family.
 
 Its native authored surface may be either a bare boolean expression or a structured condition tree under `if`.
@@ -3513,6 +3557,10 @@ This distinction is about authored surface, not about separate semantic language
 Context policy governs the whole parsed expression tree.
 
 A context therefore validates dependency classes structurally rather than only checking the root node.
+
+The same tree-scoped rule also means that structural nesting is not itself a dependency-class change.
+
+If one read-only step-local surface is observation-capable in one structural position, equivalent nested positions should not silently become local-only just because the step body was repeated or inlined.
 
 <!-- source: model/workflow/entities.md -->
 
@@ -3602,6 +3650,8 @@ version: 1
 
 pre_run:
   - file: workflows/resolve-context.yml
+    with:
+      active_profile_key: active_profile
     state_bindings:
       shared_context: repo_task_state
 
@@ -3623,6 +3673,8 @@ connectors:
 workflows:
   inspect-issue:
     file: inspect-issue.yml
+    with:
+      repository: acme/repo
     category: inspect
     when: Use when you need issue details without changing project state.
 
@@ -3657,6 +3709,8 @@ Each entry declares the workflow `file` to execute in the same runtime session b
 
 Each entry may also declare launch-phase-only bindings such as `state_bindings` that belong to the playbook wrapper rather than to the requested workflow contract.
 
+Each entry may also declare one static `with` object whose keys become playbook-owned invocation inputs for that `pre_run` workflow only.
+
 The initial model treats `pre_run` as playbook-owned orchestration for shared preparation such as context resolution, environment checks, or runtime-profile switching.
 
 That means the requested workflow does not need to declare logical state needs that are consumed only by `pre_run`.
@@ -3667,6 +3721,7 @@ A workflow entry gives a stable project-local name to a workflow file.
 
 It may additionally declare:
 
+- a static `with` object whose keys become playbook-owned invocation inputs for that workflow entry;
 - a short project-local `category` string for top-level workflow catalog grouping;
 - a short project-local `when` string that explains when an operator should choose that workflow from the launch surface;
 - state bindings from workflow logical roles to concrete playbook state entries;
@@ -3675,6 +3730,9 @@ It may additionally declare:
 
 `category` and `when` are launch-surface metadata.
 They help humans and agents choose among named workflows, but they must not change workflow execution semantics, workflow resolution, or guard truth.
+
+Workflow-entry `with` is not catalog-only metadata.
+It is a playbook-owned invocation surface that supplies static activation inputs for that workflow entry before one run begins.
 
 ## Defaults role
 
@@ -3809,6 +3867,7 @@ The entry must resolve to exactly one workflow file.
 - `pre_run` is an optional ordered list of playbook-owned launch-phase entries declared directly on the playbook.
 - Each `pre_run` item must declare its workflow `file` explicitly.
 - Each `pre_run` item resolves its `file` with the same workflow-path rules as a named workflow file reference.
+- Each `pre_run` item may declare a static `with` object whose values become invocation inputs for that `pre_run` workflow only.
 - Each `pre_run` item may declare launch-phase `state_bindings` that apply only while that `pre_run` workflow is being evaluated.
 - `pre_run` workflows execute in declaration order before the requested workflow performs its own effectful execution.
 - `pre_run` workflows run in the same runtime session as the requested workflow.
@@ -3871,8 +3930,13 @@ The entry must resolve to exactly one workflow file.
 
 - A playbook run may accept explicit launch-time input overrides from the caller.
 - Launch-time input overrides apply to the selected workflow run only.
+- A workflow entry may declare a static `with` object whose keys become playbook-owned invocation inputs for that workflow entry.
+- Workflow-entry `with` applies to the selected workflow run only.
+- Workflow-entry `with` takes precedence over workflow-declared input defaults.
+- Workflow-entry `with` also takes precedence over profile-provided missing-input defaults.
 - Launch-time input overrides take precedence over workflow-declared input defaults.
 - Launch-time input overrides also take precedence over profile-provided missing-input defaults.
+- Launch-time input overrides take precedence over workflow-entry `with`.
 - A launch-time input override may be provided either inline or from a file-backed raw string value.
 - Launch-time input overrides do not mutate the playbook, workflow source file, or profile source file.
 
@@ -4947,6 +5011,10 @@ That means `check` may:
 
 That does not allow `check` to execute the gated effectful step itself.
 
+The same admission semantics should survive structural nesting.
+
+If one `gate` surface is observation-capable at top level, the runtime model should preserve that same approved dependency class inside nested inline `steps`, inline `for_each` bodies, and reusable fragment bodies rather than introducing narrower ad hoc local-only variants.
+
 ## Projection expectations
 
 ### `run`
@@ -4995,6 +5063,33 @@ gate: step.a.outputs.value and step.b.outputs.value and step.c.outputs.value
 ```
 
 Structured form keeps admission analysis easier to review, explain, and project across runtime modes.
+
+## Failure-focused diagnostic context
+
+Structured `gate` objects may also include an optional `on_fail` mapping.
+
+Illustrative shape:
+
+```yaml
+gate:
+  all:
+    - step.project_issue.outputs.exists
+    - step.project_issue.outputs.status | eq("Ready")
+  on_fail:
+    repository: step.repository.outputs.value
+    issue_number: step.issue_number.outputs.value
+    status: step.project_issue.outputs.status
+```
+
+Semantics:
+
+- `gate` still owns the admission verdict;
+- `on_fail` does not participate in pass/fail logic;
+- runtime evaluates `on_fail` only when the gate verdict is `failed`;
+- evaluated entries become compact machine-readable failure context for `run`, `check --json`, and `explain`;
+- gate-failure diagnostics should prefer this compact context and should not emit broad visible-register dumps.
+
+`on_fail` entries use the same step-local read-only authoring context as the gate itself.
 
 <!-- source: model/runtime/state.md -->
 
@@ -6764,6 +6859,8 @@ Unknown top-level and nested stable fields fail validation.
 workflows:
   close-task:
     file: close-task.yml
+    with:
+      repository: acme/repo
     working_directory: ${inputs.repo_root}
     state_bindings:
       task_memory: repo_task_state
@@ -6775,6 +6872,7 @@ Required field:
 
 Optional stable field:
 
+- `with`
 - `working_directory`
 - `state_bindings`
 
@@ -6782,13 +6880,23 @@ Optional stable field:
 
 ```yaml
 pre_run:
-  - workflows/resolve-context.yml
-  - workflows/ensure-environment.yml
+  - file: workflows/resolve-context.yml
+    with:
+      active_profile_key: active_profile
+  - file: workflows/ensure-environment.yml
 ```
 
 Optional stable top-level field:
 
 - `pre_run`
+
+Stable `with` shape:
+
+```yaml
+with:
+  repository: acme/repo
+  issue_number: 42
+```
 
 ## Stable connector context shape
 
@@ -7335,6 +7443,7 @@ If a change breaks any invariant, `meta/` must be updated explicitly in the same
 - Collection-shaping filters must remain bounded data-shaping helpers over already available JSON-shaped values rather than drifting into a nested collection-programming sublanguage.
 - Collection-shaping filters must fail on unsupported input shapes unless the documented contract explicitly defines a different outcome for that filter and shape.
 - `field(path)` must preserve the hybrid missing-path rule: object input with a missing path fails, while array input yields `null` for an item with a missing path.
+- `lookup(key)` must remain exact object-key retrieval rather than drifting into path parsing, collection projection, or fallback coercion.
 - `flatten` must remain single-level rather than silently becoming recursive.
 - `first` and `last` must keep the documented empty-array outcome of `null`.
 - `unique` must remain stable, must keep first occurrence, and must preserve strict normalized JSON equality including the distinction between `1` and `1.0`.

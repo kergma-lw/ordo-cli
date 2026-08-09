@@ -814,7 +814,7 @@ def build_command_line_response() -> JSONObject:
     playbook_flags = [
         {"name": "--file", "value_shape": "PATH", "required": False, "effect": "override_playbook_discovery", "summary": "Use one explicit playbook file path"},
         {"name": "--profile", "value_shape": "NAME", "required": False, "effect": "select_active_profile", "summary": "Select one named profile for this run"},
-        {"name": "--input", "value_shape": "KEY=VALUE", "required": False, "repeatable": True, "effect": "override_input_inline", "summary": "Add or override one top-level workflow input from an inline YAML value"},
+        {"name": "--input", "value_shape": "KEY=VALUE", "required": False, "repeatable": True, "effect": "override_input_inline", "summary": "Add or override one top-level workflow input from inline text, with simple number and true/false coercion"},
         {"name": "--input-file", "value_shape": "KEY=PATH", "required": False, "repeatable": True, "effect": "override_input_from_file", "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"},
         {"name": "--json", "required": False, "effect": "emit_json", "summary": "Emit JSON without extra decoration"},
     ]
@@ -827,7 +827,7 @@ def build_command_line_response() -> JSONObject:
                 "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>",
                 "discovery_commands": [
                     {"name": "workflows list", "summary": "list declared playbook workflows with project-local descriptions"},
-                    {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata and root-declared inputs"},
+                    {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata, playbook-owned invocation inputs, and root-declared inputs"},
                 ],
                 "modes": [
                     {"name": "review <workflow>", "summary": "review authoring-quality findings without making changes"},
@@ -857,6 +857,8 @@ def build_command_line_response() -> JSONObject:
                 "input_override_precedence": [
                     f"workflow.inputs declares the allowed activation keys; declared keys are required at activation={str(input_contract['declared_keys_required_at_activation']).lower()}",
                     "profile.inputs may supply values for declared workflow inputs",
+                    "playbook workflow-entry with supplies static invocation inputs before one run",
+                    "playbook pre_run with supplies static invocation inputs to that pre_run workflow only",
                     "--input overrides workflow and profile-provided values for one run",
                     "--input-file overrides workflow and profile-provided values for one run",
                     f"unknown activation inputs are rejected={str(input_contract['rejects_unknown_activation_inputs']).lower()}",

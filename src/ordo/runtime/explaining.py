@@ -241,9 +241,9 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
         "category": "ok",
         "allowed": allowed_state == "allowed" if isinstance(allowed_state, str) else bool(result.outputs.get("can_execute", True)),
         "why": (
-            f"All read-only observations completed and the next runnable step is '{result.outputs.get('frontier_ready_step')}'"
+            f"Based on current observed inputs and state, all read-only observations completed and the next runnable step is '{result.outputs.get('frontier_ready_step')}'"
             if isinstance(result.outputs.get("frontier_ready_step"), str)
-            else "No known blocker prevents execution now"
+            else "Based on current observed inputs and state, no known blocker prevents execution now"
         ),
         "blockers": [],
         "preflight_support_steps": _preflight_support_steps(result),

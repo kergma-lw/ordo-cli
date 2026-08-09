@@ -15,6 +15,8 @@
 workflows:
   close-task:
     file: close-task.yml
+    with:
+      repository: acme/repo
     working_directory: ${inputs.repo_root}
     state_bindings:
       task_memory: repo_task_state
@@ -26,6 +28,7 @@ Required field:
 
 Optional stable field:
 
+- `with`
 - `working_directory`
 - `state_bindings`
 
@@ -33,13 +36,23 @@ Optional stable field:
 
 ```yaml
 pre_run:
-  - workflows/resolve-context.yml
-  - workflows/ensure-environment.yml
+  - file: workflows/resolve-context.yml
+    with:
+      active_profile_key: active_profile
+  - file: workflows/ensure-environment.yml
 ```
 
 Optional stable top-level field:
 
 - `pre_run`
+
+Stable `with` shape:
+
+```yaml
+with:
+  repository: acme/repo
+  issue_number: 42
+```
 
 ## Stable connector context shape
 

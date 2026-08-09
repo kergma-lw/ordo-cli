@@ -190,9 +190,10 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
 
     diagnostics: list[Diagnostic] = []
     merged_inputs = dict(workflow.inputs)
+    protected_keys = set(workflow.protected_input_keys) | set(workflow.explicit_input_keys)
 
     for key, value in profile.inputs.items():
-        if key in merged_inputs and merged_inputs[key] != value:
+        if key in merged_inputs and merged_inputs[key] != value and key in protected_keys:
             diagnostics.append(
                 _diagnostic(
                     code="composition.workflow.input_conflict",
@@ -223,6 +224,7 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
             inputs=merged_inputs,
             declared_inputs=workflow.declared_inputs,
             explicit_input_keys=workflow.explicit_input_keys,
+            protected_input_keys=workflow.protected_input_keys,
             let_bindings=workflow.let_bindings,
             state_needs=workflow.state_needs,
             state_bindings=workflow.state_bindings,
@@ -242,9 +244,9 @@ def apply_profile_defaults_to_subsequent_steps(workflow: Workflow, profile: Prof
     """Apply profile missing-input defaults forward-only for subsequent execution."""
 
     merged_inputs = dict(workflow.inputs)
-    explicit_keys = set(workflow.explicit_input_keys)
+    protected_keys = set(workflow.protected_input_keys) | set(workflow.explicit_input_keys)
     for key, value in profile.inputs.items():
-        if key in explicit_keys:
+        if key in protected_keys:
             continue
         merged_inputs[key] = value
 
@@ -256,6 +258,7 @@ def apply_profile_defaults_to_subsequent_steps(workflow: Workflow, profile: Prof
             inputs=merged_inputs,
             declared_inputs=workflow.declared_inputs,
             explicit_input_keys=workflow.explicit_input_keys,
+            protected_input_keys=workflow.protected_input_keys,
             let_bindings=workflow.let_bindings,
             state_needs=workflow.state_needs,
             state_bindings=workflow.state_bindings,

@@ -657,8 +657,45 @@ class ExecuteModeTest(unittest.TestCase):
 
             result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-            self.assertEqual(result.status, RuntimeStatus.OK)
-            self.assertEqual(list(result.results), [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]])
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.results), [[{"results": [{"summary": "one"}]}, {"results": [{"summary": "two"}]}]])
+
+    def test_execute_include_fragment_with_plain_args_references(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragments = root / "fragments"
+            fragments.mkdir()
+            fragment = fragments / "emit.yml"
+            fragment.write_text(
+                "args:\n  item: string\nblocks:\n  - steps:\n      - name: emit\n        result:\n          summary: args.item\n",
+                encoding="utf-8",
+            )
+            caller = root / "caller.yml"
+            caller.write_text(
+                "version: 0\nworkflow: caller\ninputs:\n  item: {}\nblocks:\n  - include: fragments/emit.yml\n    with:\n      item: ${inputs.item}\n",
+                encoding="utf-8",
+            )
+
+            loaded = load_workflow_file(caller, launch_dir=root)
+            workflow = Workflow(
+                version=loaded.version,
+                workflow=loaded.workflow,
+                inputs={**loaded.inputs, "item": "demo-ref"},
+                declared_inputs=loaded.declared_inputs,
+                let_bindings=loaded.let_bindings,
+                state_needs=loaded.state_needs,
+                state_bindings=loaded.state_bindings,
+                states=loaded.states,
+                step_results=loaded.step_results,
+                blocks=loaded.blocks,
+                source_path=loaded.source_path,
+                launch_dir=loaded.launch_dir,
+            )
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.results), [{"summary": "demo-ref"}])
 
     def test_execute_real_parse_issue_ref_fragment_with_story_tasks_show_step_shape(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -777,6 +814,137 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         self.assertEqual(result.failed_step, "nested-command")
         self.assertEqual(result.outputs["fan_out_failure"]["item_index"], 1)
+        self.assertEqual(result.outputs["fan_out_failure"]["item"], "boom")
+
+    def test_execute_inline_fan_out_gate_failure_diagnostic_includes_item_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={"items": ["ok", "boom"]},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(Step(name="gate-item", gate='item == "ok"'),),
+                            register="runs",
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
+        self.assertEqual(diagnostic.details["fan_out_step"], "expand")
+        self.assertEqual(diagnostic.details["fan_out_item_index"], 1)
+        self.assertEqual(diagnostic.details["fan_out_item"], "boom")
+        self.assertEqual(diagnostic.details["human_summary"], 'Item \'boom\' failed gate \'gate-item\': item == "ok"')
+        self.assertEqual(diagnostic.message, 'Item \'boom\' failed gate \'gate-item\': item == "ok"')
+
+    def test_execute_gate_failure_diagnostic_omits_visible_registers(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="linked", value={"exists": True, "status": "Backlog"}, register="linked_project_issue"),
+                        Step(
+                            name="gate-linked-task",
+                            gate={
+                                "all": [
+                                    "step.linked_project_issue.outputs.value.exists",
+                                    'step.linked_project_issue.outputs.value.status | eq("Ready")',
+                                ]
+                            },
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
+        self.assertNotIn("visible_registers", diagnostic.details)
+
+    def test_execute_gate_failure_diagnostic_includes_on_fail_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            inputs={"repository": "kergma-lw/checklist-mobile", "issue_number": 1},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="profile", value="mobile", register="profile"),
+                        Step(name="linked", value={"exists": True, "status": "Backlog"}, register="linked_project_issue"),
+                        Step(
+                            name="gate-linked-task",
+                            gate={
+                                "all": [
+                                    "step.linked_project_issue.outputs.value.exists",
+                                    'step.linked_project_issue.outputs.value.status | eq("Ready")',
+                                ]
+                            },
+                            gate_on_fail={
+                                "profile": "${step.profile.outputs.value}",
+                                "issue_number": "${inputs.issue_number}",
+                                "repository": "${inputs.repository}",
+                                "status": "${step.linked_project_issue.outputs.value.status}",
+                            },
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
+        self.assertEqual(
+            diagnostic.details["on_fail_context"],
+            {
+                "profile": "mobile",
+                "issue_number": 1,
+                "repository": "kergma-lw/checklist-mobile",
+                "status": "Backlog",
+            },
+        )
+
+    def test_execute_inline_fan_out_gate_failure_human_summary_supports_multiple_conditions(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="publish",
+            inputs={"items": ["boom"]},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(
+                                Step(
+                                    name="gate-item",
+                                    gate={"all": ['item == "ok"', 'item == "good"']},
+                                ),
+                            ),
+                            register="runs",
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
+        self.assertIn("Failed conditions:", diagnostic.message)
+        self.assertIn('item == "ok"', diagnostic.message)
+        self.assertIn('item == "good"', diagnostic.message)
 
     def test_execute_branch_classifiers_isolate_legacy_shaped_paths(self) -> None:
         probe = ResolvedOperation(reference="gh.issue", connector_namespace="gh", operation=OperationContract(name="issue", kind="probe"), source="public")

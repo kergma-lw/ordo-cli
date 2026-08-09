@@ -25,7 +25,7 @@ from ordo.routines import (
 from ordo.model.workflow_contract import WORKFLOW_CONTRACT
 
 from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
-from .local_expression_contexts import LocalExpressionContext
+from .local_expression_contexts import LocalExpressionContext, LocalExpressionRoot, get_local_expression_context_policy
 from .local_expressions import (
     LOCAL_EXPRESSION_PARSE_ERRORS,
     build_local_expression_parse_diagnostic,
@@ -61,6 +61,7 @@ from .local_expression_engine.core import (
     UnaryNode,
     VALUE_EXPRESSION_FILTERS,
     ValueExpressionNode,
+    collect_local_expression_dependencies,
     collect_step_references,
 )
 from .static_expression_diagnostics import collect_static_expression_diagnostics
@@ -699,6 +700,20 @@ def _validate_include_binding_values(value: JSONValue, *, source: str, path: tup
             )
         )
     diagnostics.extend(
+        _validate_expression_scope_dependencies(
+            parsed.root,
+            context=LocalExpressionContext.INCLUDE_BINDING,
+            available_roots=frozenset({"inputs", "item", "state", "step"}),
+            path=path,
+            source=source,
+            let_bindings=let_bindings,
+            root_error_code="validation.workflow.include.with.root",
+            root_error_message="Include bindings may reference only roots available in the current caller-side context",
+            observation_error_code="validation.workflow.include.with.observation",
+            observation_error_message="Include bindings may use only approved read-only observations in the current context",
+        )
+    )
+    diagnostics.extend(
         _validate_workflow_let_binding_uses(
             parsed.root,
             source=source,
@@ -907,6 +922,20 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
                     )
                 )
             diagnostics.extend(
+                _validate_expression_scope_dependencies(
+                    parsed.root,
+                    context=LocalExpressionContext.GUARD,
+                    available_roots=frozenset({"inputs", "state"}),
+                    path=item_path,
+                    source=source,
+                    let_bindings=let_bindings,
+                    root_error_code="validation.workflow.guard_expr.root",
+                    root_error_message="Guard expressions may reference only roots available in the current guard context",
+                    observation_error_code="validation.workflow.guard_expr.observation",
+                    observation_error_message="Guard expressions may use only approved read-only observations in the current context",
+                )
+            )
+            diagnostics.extend(
                 _validate_workflow_let_binding_uses(
                     parsed.root,
                     source=source,
@@ -949,6 +978,7 @@ def _validate_step_list(
     declared_registers: dict[str, tuple[str, ...]] | None = None,
     inherit_prior_register_names: bool = True,
     extra_condition_roots: frozenset[str] = frozenset(),
+    extra_value_roots: frozenset[str] = frozenset(),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, list):
@@ -1010,6 +1040,7 @@ def _validate_step_list(
                     let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
+                    available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_value_roots)}),
                 )
             )
         elif has_run:
@@ -1021,6 +1052,7 @@ def _validate_step_list(
                     let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
+                    available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_value_roots)}),
                 )
             )
         elif has_inline_steps:
@@ -1043,6 +1075,7 @@ def _validate_step_list(
                     let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
+                    available_roots=frozenset({"inputs", "args", "item", "state", *tuple(extra_value_roots)}),
                 )
             )
         elif has_value:
@@ -1054,6 +1087,7 @@ def _validate_step_list(
                     let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
+                    available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_value_roots)}),
                 )
             )
         elif has_result:
@@ -1065,6 +1099,7 @@ def _validate_step_list(
                     let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
+                    available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_value_roots)}),
                 )
             )
         elif has_publish:
@@ -1076,6 +1111,7 @@ def _validate_step_list(
                     let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
+                    available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_value_roots)}),
                 )
             )
         if "for_each" in item and not (has_run or has_inline_steps):
@@ -1116,6 +1152,7 @@ def _validate_step_list(
                 let_bindings=let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=effective_declared_registers,
+                extra_allowed_reference_roots=extra_condition_roots,
             )
         )
         diagnostics.extend(_validate_step_launcher(item, path=item_path, source=source, can_use_launcher=has_uses))
@@ -1196,20 +1233,211 @@ def _validate_step_gate(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
+    extra_allowed_reference_roots: frozenset[str] = frozenset(),
 ) -> list[Diagnostic]:
-    return _validate_invocation_condition(
+    diagnostics = _validate_gate_on_fail(
         value,
+        path=path,
+        source=source,
+        let_bindings=let_bindings,
+        prior_registers=prior_registers,
+        declared_registers=declared_registers,
+        extra_allowed_reference_roots=extra_allowed_reference_roots,
+    )
+    diagnostics.extend(
+        _validate_invocation_condition(
+            _strip_gate_on_fail(value),
         path=path,
         source=source,
         let_bindings=let_bindings,
         prior_registers={} if prior_registers is None else prior_registers,
         declared_registers={} if declared_registers is None else declared_registers,
+        extra_allowed_reference_roots=extra_allowed_reference_roots,
         field_name="gate",
         type_code="validation.workflow.step.gate.type",
         expression_code="validation.workflow.local_expression.step_condition.syntax",
         type_message="Step field 'gate' must be a string-form or structured local expression",
         expression_message="Step field 'gate' must be a valid step-condition expression",
+        )
     )
+    return diagnostics
+
+
+def _strip_gate_on_fail(value: JSONObject) -> JSONObject:
+    gate = value.get("gate")
+    if not isinstance(gate, dict) or "on_fail" not in gate:
+        return value
+    normalized = dict(value)
+    normalized["gate"] = {key: item for key, item in gate.items() if key != "on_fail"}
+    return normalized
+
+
+def _validate_gate_on_fail(
+    value: JSONObject,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+    extra_allowed_reference_roots: frozenset[str] = frozenset(),
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    gate = value.get("gate")
+    if not isinstance(gate, dict) or "on_fail" not in gate:
+        return diagnostics
+    on_fail = gate.get("on_fail")
+    on_fail_path = path + ("gate", "on_fail")
+    if not isinstance(on_fail, dict):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.gate.on_fail.type",
+                "Step field 'gate.on_fail' must be an object mapping names to read-only expressions or literals",
+                on_fail_path,
+                source,
+                actual_type=type(on_fail).__name__,
+            )
+        )
+        return diagnostics
+    for key, item in on_fail.items():
+        diagnostics.extend(
+            _validate_gate_on_fail_value_surface(
+                item,
+                path=on_fail_path + (str(key),),
+                source=source,
+                let_bindings=let_bindings,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
+                available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_allowed_reference_roots)}),
+            )
+        )
+    return diagnostics
+
+
+def _validate_gate_on_fail_value_surface(
+    value: JSONValue | None,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state", "step"}),
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = collect_static_expression_diagnostics(value, path=path, source=source)
+    if _is_format_value_object(value):
+        diagnostics.extend(
+            _validate_format_value_object(
+                value,
+                path=path,
+                source=source,
+                let_bindings=let_bindings,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
+            )
+        )
+        return diagnostics
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            diagnostics.extend(
+                _validate_gate_on_fail_value_surface(
+                    item,
+                    path=path + (str(index),),
+                    source=source,
+                    let_bindings=let_bindings,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                    available_roots=available_roots,
+                )
+            )
+        return diagnostics
+    if isinstance(value, dict):
+        for key, item in value.items():
+            diagnostics.extend(
+                _validate_gate_on_fail_value_surface(
+                    item,
+                    path=path + (str(key),),
+                    source=source,
+                    let_bindings=let_bindings,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                    available_roots=available_roots,
+                )
+            )
+        return diagnostics
+    if not isinstance(value, str):
+        return diagnostics
+    authored_style = authored_string_style(value)
+    mode = _runtime_value_expression_mode(value, allow_bare_strings=True)
+    if mode is None:
+        if authored_style in {"single", "double", "other"}:
+            diagnostics.extend(_validate_quoted_literal_expression_hint(value, path=path, source=source))
+        return diagnostics
+    try:
+        parsed = parse_value_local_expression(
+            value,
+            context=LocalExpressionContext.STEP_CONDITION,
+            allow_boolean_composition=True,
+        )
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        diagnostics.extend(_build_runtime_value_surface_parse_diagnostics(value, path=path, source=source, exc=exc, mode=mode))
+        return diagnostics
+    if parsed is None or parsed.value is None:
+        return diagnostics
+    expression = _runtime_value_expression_text(value, mode=mode)
+    surface_diagnostics = _validate_step_references(
+        collect_step_references(parsed.value.root),
+        path=path,
+        source=source,
+        prior_registers={} if prior_registers is None else prior_registers,
+        declared_registers={} if declared_registers is None else declared_registers,
+    )
+    surface_diagnostics.extend(
+        _validate_expression_scope_dependencies(
+            parsed.value.root,
+            context=LocalExpressionContext.STEP_CONDITION,
+            available_roots=available_roots,
+            path=path,
+            source=source,
+            let_bindings=let_bindings,
+            root_error_code="validation.workflow.step.gate.on_fail.root",
+            root_error_message="Step field 'gate.on_fail' may reference only roots available in the current step-local context",
+            observation_error_code="validation.workflow.step.gate.on_fail.observation",
+            observation_error_message="Step field 'gate.on_fail' may use only approved read-only observations in the current context",
+        )
+    )
+    diagnostics.extend(surface_diagnostics)
+    for validation_error in validate_parsed_local_expression(parsed):
+        diagnostic = build_local_expression_validation_diagnostic(
+            validation_error,
+            context=LocalExpressionContext.STEP_CONDITION,
+            path=path,
+            source=source,
+            expression=expression,
+        )
+        diagnostics.append(diagnostic)
+        surface_diagnostics.append(diagnostic)
+    diagnostics.extend(
+        _validate_workflow_let_binding_uses(
+            parsed.value.root,
+            source=source,
+            path=path,
+            context=LocalExpressionContext.STEP_CONDITION,
+            expression=expression,
+            let_bindings=let_bindings,
+        )
+    )
+    if mode == "embedded" and authored_style in {"single", "double", "other"} and not _value_expression_requires_escape(expression):
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.step.gate.on_fail.embedded_escape_unnecessary",
+                "Quoted ${...} in 'gate.on_fail' is unnecessary here; prefer a bare read-only expression",
+                path,
+                source,
+                expression=expression,
+            )
+        )
+    return diagnostics
 
 
 def _validate_invocation_condition(
@@ -1270,12 +1498,25 @@ def _validate_invocation_condition(
             )
         )
         diagnostics.extend(
+            _validate_expression_scope_dependencies(
+                parsed.root,
+                context=LocalExpressionContext.STEP_CONDITION,
+                available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_allowed_reference_roots)}),
+                path=leaf_path,
+                source=source,
+                let_bindings=let_bindings,
+                root_error_code=f"validation.workflow.step.{field_name}_expr.root",
+                root_error_message=f"Step field '{field_name}' may reference only roots available in the current step-local context",
+                observation_error_code=f"validation.workflow.step.{field_name}_expr.observation",
+                observation_error_message=f"Step field '{field_name}' may use only approved read-only observations in the current context",
+            )
+        )
+        diagnostics.extend(
             _validate_step_condition_type(
                 parsed.root,
                 path=leaf_path,
                 source=source,
                 let_bindings=let_bindings,
-                extra_allowed_reference_roots=extra_allowed_reference_roots,
             )
         )
         diagnostics.extend(
@@ -1357,6 +1598,7 @@ def _validate_run_step(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state", "step"}),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(_require_non_empty_string(value, "run", path=path + ("run",), source=source))
@@ -1395,6 +1637,7 @@ def _validate_run_step(
                 let_bindings=let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=declared_registers,
+                available_roots=available_roots,
             )
         )
     if value.get("register") is not None:
@@ -1460,6 +1703,7 @@ def _validate_inline_invocation_step(
                 let_bindings=let_bindings,
                 prior_registers={} if prior_registers is None else prior_registers,
                 declared_registers=declared_registers,
+                available_roots=frozenset({"inputs", "args", "item", "state", "step"}),
             )
         )
     if "with" in value:
@@ -1503,6 +1747,7 @@ def _validate_inline_invocation_step(
             declared_registers=combined_declared_registers,
             inherit_prior_register_names=False,
             extra_condition_roots=frozenset({"item"}),
+            extra_value_roots=frozenset({"item"}),
         )
     )
     return diagnostics
@@ -1516,6 +1761,7 @@ def _validate_profile_switch_step(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state"}),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(
@@ -1526,6 +1772,7 @@ def _validate_profile_switch_step(
             let_bindings=let_bindings,
             prior_registers=prior_registers,
             declared_registers=declared_registers,
+            available_roots=available_roots,
         )
     )
     if value.get("register") is not None:
@@ -1567,6 +1814,7 @@ def _validate_call(
     let_bindings: JSONObject | None = None,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "state", "step"}),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, dict):
@@ -1602,6 +1850,7 @@ def _validate_call(
                 let_bindings={} if let_bindings is None else let_bindings,
                 prior_registers=prior_registers,
                 declared_registers=declared_registers,
+                available_roots=available_roots,
             )
         )
     return diagnostics
@@ -1763,6 +2012,7 @@ def _validate_runtime_value_surface(
     allow_bare_strings: bool = True,
     prior_registers: dict[str, tuple[str, ...]] | None = None,
     declared_registers: dict[str, tuple[str, ...]] | None = None,
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "state", "step"}),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = collect_static_expression_diagnostics(value, path=path, source=source)
     if _is_format_value_object(value):
@@ -1788,6 +2038,7 @@ def _validate_runtime_value_surface(
                     allow_bare_strings=allow_bare_strings,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
+                    available_roots=available_roots,
                 )
             )
         return diagnostics
@@ -1802,6 +2053,7 @@ def _validate_runtime_value_surface(
                     allow_bare_strings=allow_bare_strings,
                     prior_registers=prior_registers,
                     declared_registers=declared_registers,
+                    available_roots=available_roots,
                 )
             )
         return diagnostics
@@ -1839,7 +2091,18 @@ def _validate_runtime_value_surface(
         prior_registers={} if prior_registers is None else prior_registers,
         declared_registers={} if declared_registers is None else declared_registers,
     )
-    root_diagnostics = _validate_runtime_value_reference_roots(parsed.value.root, path=path, source=source, let_bindings=let_bindings)
+    root_diagnostics = _validate_expression_scope_dependencies(
+        parsed.value.root,
+        context=LocalExpressionContext.EMBEDDED_VALUE,
+        available_roots=available_roots,
+        path=path,
+        source=source,
+        let_bindings=let_bindings,
+        root_error_code="validation.workflow.value_expr.root",
+        root_error_message="Value-bearing workflow surfaces may reference only roots available in the current local-expression context",
+        observation_error_code="validation.workflow.value_expr.observation",
+        observation_error_message="Value-bearing workflow surfaces may use only approved read-only observations in the current context",
+    )
     surface_diagnostics.extend(root_diagnostics)
     diagnostics.extend(surface_diagnostics)
     for validation_error in validate_parsed_local_expression(parsed):
@@ -1898,7 +2161,7 @@ def _node_looks_like_runtime_expression(node: ValueExpressionNode) -> bool:
     if isinstance(node, (PipelineNode, AdapterInvocationNode, BuiltinCallNode, CallNode, StepReferenceNode, ValueStateReferenceNode)):
         return True
     if isinstance(node, ReferenceNode):
-        return bool(node.parts) and node.parts[0] in {"inputs", "args", "item"}
+        return bool(node.parts) and (node.parts[0] in {"inputs", "args", "item"} or len(node.parts) > 1)
     return False
 
 
@@ -2032,6 +2295,7 @@ def _validate_profile_switch_value(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state"}),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, str):
@@ -2103,6 +2367,7 @@ def _validate_profile_switch_value(
             let_bindings=let_bindings,
             prior_registers=prior_registers,
             declared_registers=declared_registers,
+            available_roots=available_roots,
         )
     )
     return diagnostics
@@ -2192,13 +2457,62 @@ def _iter_condition_leaf_expressions(value: JSONValue) -> list[tuple[tuple[str, 
         return []
 
 
+def _validate_expression_scope_dependencies(
+    node: ValueExpressionNode,
+    *,
+    context: LocalExpressionContext,
+    available_roots: frozenset[str],
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject,
+    root_error_code: str,
+    root_error_message: str,
+    observation_error_code: str,
+    observation_error_message: str,
+) -> list[Diagnostic]:
+    diagnostics: list[Diagnostic] = []
+    policy = get_local_expression_context_policy(context)
+    local_root_names = {root.value for root in LocalExpressionRoot}
+    seen: set[tuple[str, int, int]] = set()
+    for dependency in collect_local_expression_dependencies(node):
+        if dependency.kind == "root":
+            root_name = dependency.name
+            if root_name in let_bindings:
+                continue
+            try:
+                root = LocalExpressionRoot(root_name)
+            except ValueError:
+                root = None
+            if root is not None and policy.allows_root(root) and root_name in available_roots:
+                continue
+            if root is None:
+                key = (root_name, dependency.start, dependency.end)
+                if key in seen:
+                    continue
+                seen.add(key)
+                diagnostics.append(_diagnostic(root_error_code, root_error_message, path, source, root=root_name))
+                continue
+            key = (root_name, dependency.start, dependency.end)
+            if key in seen:
+                continue
+            seen.add(key)
+            diagnostics.append(_diagnostic(root_error_code, root_error_message, path, source, root=root_name))
+            continue
+        if dependency.kind == "observation" and not policy.allows_observation:
+            key = ("probe", dependency.start, dependency.end)
+            if key in seen:
+                continue
+            seen.add(key)
+            diagnostics.append(_diagnostic(observation_error_code, observation_error_message, path, source))
+    return diagnostics
+
+
 def _validate_step_condition_type(
     node: ValueExpressionNode,
     *,
     path: tuple[str, ...],
     source: str,
     let_bindings: JSONObject,
-    extra_allowed_reference_roots: frozenset[str] = frozenset(),
 ) -> list[Diagnostic]:
     inferred, diagnostics = _infer_value_expression_type(
         node,
@@ -2206,7 +2520,6 @@ def _validate_step_condition_type(
         source=source,
         step_condition_mode=True,
         let_bindings=let_bindings,
-        extra_allowed_reference_roots=extra_allowed_reference_roots,
     )
     if inferred not in {"boolean", "unknown"}:
         diagnostics.append(
@@ -2242,22 +2555,6 @@ def _infer_value_expression_type(
             return "null", diagnostics
         return "unknown", diagnostics
     if isinstance(node, ReferenceNode):
-        if (
-            step_condition_mode
-            and node.parts[0] != "inputs"
-            and node.parts[0] != "item"
-            and node.parts[0] not in extra_allowed_reference_roots
-            and not (isinstance(let_bindings, dict) and node.parts[0] in let_bindings)
-        ):
-            diagnostics.append(
-                _diagnostic(
-                    "validation.workflow.step.if_expr.root",
-                    "Step conditions may reference only workflow-local roots",
-                    path,
-                    source,
-                    root=node.parts[0],
-                )
-            )
         return "unknown", diagnostics
     if isinstance(node, (ValueStateReferenceNode, StepReferenceNode)):
         return "unknown", diagnostics
@@ -2352,18 +2649,19 @@ def _infer_value_expression_type(
         )
         diagnostics.extend(left_diagnostics)
         diagnostics.extend(right_diagnostics)
-        for operand_type in (left_type, right_type):
-            if operand_type not in {"boolean", "unknown"}:
-                diagnostics.append(
-                    _diagnostic(
-                        "validation.workflow.step.if_expr.boolean_operand_type",
-                        f"Operator '{node.operator}' requires boolean operands",
-                        path,
-                        source,
-                        operator=node.operator,
-                        actual_type=operand_type,
+        if node.operator in {"and", "or"}:
+            for operand_type in (left_type, right_type):
+                if operand_type not in {"boolean", "unknown"}:
+                    diagnostics.append(
+                        _diagnostic(
+                            "validation.workflow.step.if_expr.boolean_operand_type",
+                            f"Operator '{node.operator}' requires boolean operands",
+                            path,
+                            source,
+                            operator=node.operator,
+                            actual_type=operand_type,
+                        )
                     )
-                )
         return "boolean", diagnostics
     return "unknown", diagnostics
 

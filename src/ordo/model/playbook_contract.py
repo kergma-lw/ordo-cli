@@ -22,6 +22,14 @@ PLAYBOOK_CONTRACT: JSONObject = {
     "workflow_entry_fields": [
         {"name": "file", "required": True, "type": "string"},
         {
+            "name": "with",
+            "required": False,
+            "type": "object",
+            "runtime_effect": "supplies_playbook_owned_workflow_entry_inputs_or_declares_caller_required_inputs",
+            "value_surface": "static_yaml_values_or_null_caller_placeholders",
+            "null_value_semantics": "caller_must_supply_input_via_cli_or_activation_override",
+        },
+        {
             "name": "description",
             "required": False,
             "type": "string",
@@ -60,6 +68,14 @@ PLAYBOOK_CONTRACT: JSONObject = {
     "pre_run_entry_fields": [
         {"name": "file", "required": True, "type": "string"},
         {
+            "name": "with",
+            "required": False,
+            "type": "object",
+            "documentation_role": "playbook_owned_pre_run_invocation_inputs",
+            "runtime_effect": "supplies_playbook_owned_pre_run_inputs",
+            "value_surface": "static_yaml_values_only",
+        },
+        {
             "name": "state_bindings",
             "required": False,
             "type": "object",
@@ -91,12 +107,12 @@ PLAYBOOK_CONTRACT: JSONObject = {
         },
         "workflow_entries": {
             "requires": ["file"],
-            "optional": ["description", "category", "when", "working_directory", "state_bindings"],
+            "optional": ["with", "description", "category", "when", "working_directory", "state_bindings"],
         },
         "pre_run": {
             "item_type": "pre_run_entry",
             "requires": ["file"],
-            "optional": ["state_bindings"],
+            "optional": ["with", "state_bindings"],
             "effect": "executes_before_requested_workflow_in_same_runtime_session",
             "launch_context_boundary": "playbook_owned",
             "state_dependency_boundary": "must_not_widen_main_workflow_state_contract",

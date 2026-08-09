@@ -109,6 +109,22 @@ class ContractShapeTest(unittest.TestCase):
 
         self.assertEqual(operation_step.to_contract()["if"], {"all": ["inputs.enabled", {"not": "inputs.blocked"}]})
 
+    def test_step_contract_preserves_gate_on_fail_field(self) -> None:
+        operation_step = Step(
+            name="inspect",
+            operation=OperationRef("gh.issue"),
+            gate={"all": ["step.issue.outputs.exists"]},
+            gate_on_fail={"issue_number": "inputs.issue_number", "exists": "step.issue.outputs.exists"},
+        )
+
+        self.assertEqual(
+            operation_step.to_contract()["gate"],
+            {
+                "all": ["step.issue.outputs.exists"],
+                "on_fail": {"issue_number": "inputs.issue_number", "exists": "step.issue.outputs.exists"},
+            },
+        )
+
     def test_run_step_contract_preserves_if_and_with(self) -> None:
         run_step = Step(name="comment-and-status", run="github/comment-and-set-status", if_="${step.issue.outputs.open}", run_with={"comment": "hello"})
 

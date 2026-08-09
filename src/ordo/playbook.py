@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
 import re
@@ -82,6 +82,7 @@ class ActivationInputAnalysis:
     supplied_profile_inputs: tuple[str, ...]
     consumed_profile_inputs: tuple[str, ...]
     surplus_profile_inputs: tuple[str, ...]
+    caller_required_inputs: tuple[str, ...]
     explicit_user_inputs: tuple[str, ...]
     explicit_user_unknown_inputs: tuple[str, ...]
 
@@ -106,6 +107,8 @@ class PlaybookWorkflowCatalogEntry:
     workflow_category: str | None = None
     workflow_when: str | None = None
     working_directory: str | None = None
+    with_: dict[str, object] = field(default_factory=dict)
+    caller_inputs: tuple[str, ...] = ()
     inputs: tuple[WorkflowCatalogInput, ...] = ()
 
 
@@ -114,6 +117,7 @@ class PlaybookPreRunEntry:
     """Explicit playbook-owned launch-phase workflow entry."""
 
     file: str
+    with_: dict[str, object]
     state_bindings: dict[str, str]
     states: dict[str, str]
 
@@ -163,6 +167,8 @@ def list_playbook_workflows(*, playbook_path: str | Path | None = None, cwd: str
         _validate_workflow_entry_fields(workflow_entry, workflow_name=workflow_name, playbook_path=path)
         workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
         workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
+        workflow_with = _optional_mapping(workflow_entry, "with", playbook_path=path, path=("workflows", workflow_name, "with"))
+        bound_inputs, caller_inputs = _split_workflow_entry_inputs(workflow_with)
         entries.append(
             PlaybookWorkflowCatalogEntry(
                 playbook_path=path,
@@ -172,6 +178,8 @@ def list_playbook_workflows(*, playbook_path: str | Path | None = None, cwd: str
                 workflow_category=_optional_non_empty_string(workflow_entry, "category"),
                 workflow_when=_optional_non_empty_string(workflow_entry, "when"),
                 working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
+                with_=bound_inputs,
+                caller_inputs=caller_inputs,
             )
         )
     return tuple(entries)
@@ -219,6 +227,8 @@ def inspect_playbook_workflow(
     semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
     if not semantic_report.ok:
         raise PlaybookError(semantic_report.diagnostics)
+    workflow_with = _optional_mapping(workflow_entry, "with", playbook_path=path, path=("workflows", workflow_name, "with"))
+    bound_inputs, caller_inputs = _split_workflow_entry_inputs(workflow_with)
     return PlaybookWorkflowCatalogEntry(
         playbook_path=path,
         workflow_name=workflow_name,
@@ -227,6 +237,8 @@ def inspect_playbook_workflow(
         workflow_category=_optional_non_empty_string(workflow_entry, "category"),
         workflow_when=_optional_non_empty_string(workflow_entry, "when"),
         working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
+        with_=bound_inputs,
+        caller_inputs=caller_inputs,
         inputs=tuple(_catalog_input_from_declared_input(name, schema) for name, schema in workflow.declared_inputs.items() if isinstance(name, str)),
     )
 
@@ -316,7 +328,15 @@ def activate_playbook(
         raise PlaybookError(exc.diagnostics) from exc
     workflow = _with_workflow_connector_contexts(workflow, profile.connectors if profile is not None else playbook_connector_contexts)
 
-    workflow, profile = _apply_input_overrides(workflow, profile, input_overrides=input_overrides)
+    workflow_entry_with = _optional_mapping(workflow_entry, "with", playbook_path=path, path=("workflows", workflow_name, "with"))
+    bound_workflow_inputs, caller_workflow_inputs = _split_workflow_entry_inputs(workflow_entry_with)
+    workflow, profile = _apply_input_overrides(
+        workflow,
+        profile,
+        playbook_owned_inputs=bound_workflow_inputs,
+        caller_required_inputs=caller_workflow_inputs,
+        input_overrides=input_overrides,
+    )
     workflow = _prepend_pre_run_workflows(
         workflow,
         playbook_payload=payload,
@@ -360,6 +380,7 @@ def activate_playbook(
         playbook_path=path,
         workflow=workflow,
         profile=profile,
+        playbook_owned_inputs=bound_workflow_inputs,
         input_overrides=None,
     )
     workflow = _resolve_workflow_state_paths(workflow, base_dir=working_directory or playbook_dir)
@@ -369,6 +390,8 @@ def activate_playbook(
     input_analysis = _analyze_activation_inputs(
         workflow,
         profile=profile,
+        playbook_owned_inputs=bound_workflow_inputs,
+        caller_required_inputs=caller_workflow_inputs,
         input_overrides=None,
     )
     activation_diagnostics = _activation_diagnostics(
@@ -402,20 +425,30 @@ def _apply_input_overrides(
     workflow: Workflow,
     profile: Profile | None,
     *,
+    playbook_owned_inputs: dict[str, object] | None = None,
+    caller_required_inputs: tuple[str, ...] = (),
     input_overrides: dict[str, object] | None,
 ) -> tuple[Workflow, Profile | None]:
     input_analysis = _analyze_activation_inputs(
         workflow,
         profile=profile,
+        playbook_owned_inputs=playbook_owned_inputs,
+        caller_required_inputs=caller_required_inputs,
         input_overrides=input_overrides,
     )
 
     merged_workflow_inputs = dict(workflow.inputs)
+    protected_input_keys = set(workflow.protected_input_keys)
+    protected_input_keys.update(workflow.inputs.keys())
     if profile is not None:
         for key, value in profile.inputs.items():
             merged_workflow_inputs.setdefault(key, value)
+    if playbook_owned_inputs:
+        merged_workflow_inputs.update(playbook_owned_inputs)
+        protected_input_keys.update(playbook_owned_inputs.keys())
     if input_overrides:
         merged_workflow_inputs.update(input_overrides)
+        protected_input_keys.update(input_overrides.keys())
 
     _validate_activation_inputs(workflow, merged_workflow_inputs, input_analysis=input_analysis)
 
@@ -425,6 +458,7 @@ def _apply_input_overrides(
         inputs=merged_workflow_inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=tuple(sorted((input_overrides or {}).keys())),
+        protected_input_keys=tuple(sorted(protected_input_keys)),
         let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
@@ -439,7 +473,7 @@ def _apply_input_overrides(
     if profile is None:
         return overridden_workflow, None
 
-    override_keys = set(input_overrides or {})
+    override_keys = set(playbook_owned_inputs or {}) | set(input_overrides or {})
     remaining_profile_inputs = {key: value for key, value in profile.inputs.items() if key not in override_keys}
     if remaining_profile_inputs == profile.inputs:
         return overridden_workflow, profile
@@ -463,7 +497,12 @@ def _validate_activation_inputs(
     input_analysis: ActivationInputAnalysis | None = None,
 ) -> None:
     declared_keys = set(workflow.declared_inputs)
-    missing = sorted(key for key in declared_keys if key not in inputs)
+    caller_required_inputs = set() if input_analysis is None else set(input_analysis.caller_required_inputs)
+    missing = sorted(
+        key
+        for key in declared_keys
+        if key not in inputs or (key in caller_required_inputs and key not in set(input_analysis.explicit_user_inputs if input_analysis is not None else ()))
+    )
     surplus_profile_inputs = set() if input_analysis is None else set(input_analysis.surplus_profile_inputs)
     unknown = sorted(key for key in inputs if key not in declared_keys and key not in surplus_profile_inputs)
     diagnostics: list[Diagnostic] = []
@@ -645,6 +684,7 @@ def _prepend_pre_run_workflows(
                         name=f"pre_run[{index}]",
                         run=entry.file,
                         resolved_run_path=str(resolved.resolve()),
+                        run_inputs=entry.with_,
                         run_state_bindings=entry.state_bindings,
                         run_states=entry.states,
                     ),
@@ -658,6 +698,7 @@ def _prepend_pre_run_workflows(
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=workflow.explicit_input_keys,
+        protected_input_keys=workflow.protected_input_keys,
         let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
@@ -693,9 +734,10 @@ def _parse_pre_run_entry(
                 details={"playbook": str(playbook_path), "allowed_fields": sorted(PRE_RUN_ENTRY_ALLOWED_FIELDS)},
             )
     file = _require_string(item, "file", playbook_path=playbook_path, path=("pre_run", str(index), "file"))
+    invocation_inputs = _optional_mapping(item, "with", playbook_path=playbook_path, path=("pre_run", str(index), "with"))
     raw_bindings = item.get("state_bindings")
     if raw_bindings is None:
-        return PlaybookPreRunEntry(file=file, state_bindings={}, states={})
+        return PlaybookPreRunEntry(file=file, with_=invocation_inputs, state_bindings={}, states={})
     if not isinstance(raw_bindings, dict):
         raise _playbook_error(
             "playbook.pre_run.state_bindings_invalid",
@@ -741,7 +783,7 @@ def _parse_pre_run_entry(
             resolved_path = playbook_path.parent / resolved_path
         state_bindings[role_name] = state_name
         injected_states[state_name] = str(resolved_path)
-    return PlaybookPreRunEntry(file=file, state_bindings=state_bindings, states=injected_states)
+    return PlaybookPreRunEntry(file=file, with_=invocation_inputs, state_bindings=state_bindings, states=injected_states)
 
 
 def _require_mapping(
@@ -772,6 +814,20 @@ def _require_string(payload: dict[str, object], key: str, *, playbook_path: Path
     raise _playbook_error(
         "playbook.shape.string_required",
         f"Playbook field '{key}' must be a non-empty string",
+        path=path,
+        details={"playbook": str(playbook_path), "field": key, "actual_type": type(value).__name__},
+    )
+
+
+def _optional_mapping(payload: dict[str, object], key: str, *, playbook_path: Path, path: tuple[str, ...]) -> dict[str, object]:
+    value = payload.get(key)
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return dict(value)
+    raise _playbook_error(
+        "playbook.shape.mapping_required",
+        f"Playbook field '{key}' must be an object",
         path=path,
         details={"playbook": str(playbook_path), "field": key, "actual_type": type(value).__name__},
     )
@@ -822,6 +878,14 @@ def _validate_workflow_entry_fields(workflow_entry: dict[str, object], *, workfl
             path=("workflows", workflow_name, "when"),
             details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(when).__name__},
         )
+    invocation_inputs = workflow_entry.get("with")
+    if invocation_inputs is not None and not isinstance(invocation_inputs, dict):
+        raise _playbook_error(
+            "playbook.workflow.with_invalid",
+            "Workflow entry field 'with' must be an object when present",
+            path=("workflows", workflow_name, "with"),
+            details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(invocation_inputs).__name__},
+        )
 
 
 def _optional_non_empty_string(payload: dict[str, object], key: str) -> str | None:
@@ -853,6 +917,7 @@ def _resolve_working_directory(
     playbook_path: Path,
     workflow: Workflow | None = None,
     profile: Profile | None = None,
+    playbook_owned_inputs: dict[str, object] | None = None,
     input_overrides: dict[str, object] | None = None,
 ) -> Path | None:
     defaults = playbook_payload.get("defaults")
@@ -894,6 +959,7 @@ def _resolve_working_directory(
             playbook_path=playbook_path,
             workflow=workflow,
             profile=profile,
+            playbook_owned_inputs=playbook_owned_inputs,
             input_overrides=input_overrides,
         )
 
@@ -936,6 +1002,7 @@ def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Work
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=workflow.explicit_input_keys,
+        protected_input_keys=workflow.protected_input_keys,
         let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
@@ -982,6 +1049,8 @@ def _analyze_activation_inputs(
     workflow: Workflow,
     *,
     profile: Profile | None,
+    playbook_owned_inputs: dict[str, object] | None = None,
+    caller_required_inputs: tuple[str, ...] = (),
     input_overrides: dict[str, object] | None,
 ) -> ActivationInputAnalysis:
     declared_inputs = tuple(key for key in workflow.declared_inputs if isinstance(key, str))
@@ -999,9 +1068,25 @@ def _analyze_activation_inputs(
         supplied_profile_inputs=supplied_profile_inputs,
         consumed_profile_inputs=consumed_profile_inputs,
         surplus_profile_inputs=surplus_profile_inputs,
+        caller_required_inputs=tuple(sorted(caller_required_inputs)),
         explicit_user_inputs=explicit_user_inputs,
         explicit_user_unknown_inputs=explicit_user_unknown_inputs,
     )
+
+
+def _split_workflow_entry_inputs(values: dict[str, object] | None) -> tuple[dict[str, object], tuple[str, ...]]:
+    if not values:
+        return {}, ()
+    bound_inputs: dict[str, object] = {}
+    caller_inputs: list[str] = []
+    for key, value in values.items():
+        if not isinstance(key, str):
+            continue
+        if value is None:
+            caller_inputs.append(key)
+            continue
+        bound_inputs[key] = value
+    return bound_inputs, tuple(sorted(caller_inputs))
 
 
 def _workflow_consumed_inputs(workflow: Workflow) -> set[str]:
@@ -1065,6 +1150,7 @@ def _evaluate_working_directory_expression(
     playbook_path: Path,
     workflow: Workflow | None,
     profile: Profile | None,
+    playbook_owned_inputs: dict[str, object] | None,
     input_overrides: dict[str, object] | None,
 ) -> str:
     try:
@@ -1123,6 +1209,7 @@ def _working_directory_activation_workflow(
     *,
     workflow: Workflow | None,
     profile: Profile | None,
+    playbook_owned_inputs: dict[str, object] | None = None,
     input_overrides: dict[str, object] | None,
 ) -> Workflow:
     merged_inputs: dict[str, object] = {}
@@ -1131,12 +1218,15 @@ def _working_directory_activation_workflow(
     if profile is not None:
         for key, value in profile.inputs.items():
             merged_inputs.setdefault(key, value)
+    if playbook_owned_inputs:
+        merged_inputs.update(playbook_owned_inputs)
     if input_overrides:
         merged_inputs.update(input_overrides)
 
     template = workflow
     if template is None:
-        return Workflow(version=0, workflow="activation", inputs=merged_inputs, explicit_input_keys=tuple(sorted((input_overrides or {}).keys())), let_bindings={}, state_needs={}, state_bindings={}, states={}, step_results={}, connector_contexts=profile.connectors if profile is not None else {}, blocks=())
+        protected = set(playbook_owned_inputs or {}) | set(input_overrides or {})
+        return Workflow(version=0, workflow="activation", inputs=merged_inputs, explicit_input_keys=tuple(sorted((input_overrides or {}).keys())), protected_input_keys=tuple(sorted(protected)), let_bindings={}, state_needs={}, state_bindings={}, states={}, step_results={}, connector_contexts=profile.connectors if profile is not None else {}, blocks=())
 
     return Workflow(
         version=template.version,
@@ -1144,6 +1234,7 @@ def _working_directory_activation_workflow(
         inputs=merged_inputs,
         declared_inputs=template.declared_inputs,
         explicit_input_keys=template.explicit_input_keys,
+        protected_input_keys=template.protected_input_keys,
         let_bindings=template.let_bindings,
         state_needs=template.state_needs,
         state_bindings=template.state_bindings,
@@ -1311,6 +1402,7 @@ def _with_workflow_connector_contexts(workflow: Workflow, connector_contexts: di
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=workflow.explicit_input_keys,
+        protected_input_keys=workflow.protected_input_keys,
         let_bindings=workflow.let_bindings,
         state_needs=workflow.state_needs,
         state_bindings=workflow.state_bindings,
@@ -1362,6 +1454,7 @@ def _resolve_profile_working_directory(
             playbook_path=playbook_path,
             workflow=activation_workflow,
             profile=profile,
+            playbook_owned_inputs=None,
             input_overrides=None,
         )
     resolved = Path(resolved_value)

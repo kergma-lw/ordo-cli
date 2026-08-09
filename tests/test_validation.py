@@ -249,6 +249,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  issue_number: integer
                 blocks:
                   - guards:
                       - ""
@@ -266,6 +268,9 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: boolean
+                  issue_number: integer
                 blocks:
                   - guards:
                       - gh.issue(inputs.issue).status not in ["Done"]
@@ -353,6 +358,27 @@ class ValidationTest(unittest.TestCase):
                   - steps:
                       - name: switch-profile
                         profile_switch: ${inputs.profile}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_inline_profile_switch_allows_item_root(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: switch-many
+                inputs:
+                  profiles: []
+                blocks:
+                  - steps:
+                      - name: switch-many
+                        for_each: ${inputs.profiles}
+                        steps:
+                          - name: switch
+                            profile_switch: ${item}
                 """
             )
         )
@@ -499,7 +525,6 @@ class ValidationTest(unittest.TestCase):
                           - name: maybe-publish
                             value: ${step.issue.outputs.title}
                             if: item
-                            register: title
                         register: runs
                 """
             )
@@ -1182,6 +1207,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: {}
                 blocks:
                   - guards: []
                   - steps:
@@ -1205,6 +1232,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: {}
                 blocks:
                   - guards: []
                   - steps:
@@ -1229,6 +1258,8 @@ class ValidationTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: {}
                 blocks:
                   - guards: []
                   - steps:
@@ -1642,6 +1673,56 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_step_gate_on_fail_accepts_read_only_value_expressions(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: inspect
+                        value:
+                          exists: true
+                          status: "Backlog"
+                        register: issue
+                      - name: comment
+                        gate:
+                          all:
+                            - step.issue.outputs.value.exists
+                          on_fail:
+                            issue_number: inputs.issue_number
+                            status: step.issue.outputs.value.status
+                        uses: gh.issue.comment
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_step_gate_on_fail_requires_object(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: comment
+                        gate:
+                          all:
+                            - inputs.enabled
+                          on_fail: inputs.issue_number
+                        uses: gh.issue.comment
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.gate.on_fail.type")
+
     def test_self_step_register_reference_in_gate_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
@@ -1951,12 +2032,14 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.boolean_operand_type")
 
-    def test_step_if_rejects_non_input_reference_root(self) -> None:
+    def test_step_if_allows_read_only_probe_observation(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
                 version: 0
                 workflow: open-task
+                inputs:
+                  enabled: {}
                 blocks:
                   - guards: []
                   - steps:
@@ -1967,8 +2050,46 @@ class ValidationTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.if_expr.root")
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_value_surface_allows_read_only_probe_observation(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: branch
+                        value: git.branch.value
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_inline_gate_allows_item_root(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  items: []
+                blocks:
+                  - guards: []
+                  - steps:
+                      - name: expand
+                        for_each: ${inputs.items}
+                        steps:
+                          - name: gate-item
+                            gate: item.ready
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
 
     def test_publish_accepts_bare_expressions_and_quoted_literals(self) -> None:
         report = validate_workflow_text(

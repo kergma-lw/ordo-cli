@@ -342,6 +342,31 @@ blocks:
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_condition.structured_form_preferred")
         self.assertEqual(finding["path"], ["blocks", "0", "steps", "4", "gate"])
 
+    def test_review_counts_for_each_input_usage_inside_inline_profile_switch(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: profile-switch-inline-probe
+inputs:
+  profiles: []
+blocks:
+  - guards:
+      - git.repo.exists
+  - steps:
+      - name: Validate profiles inline
+        for_each: inputs.profiles
+        steps:
+          - name: Switch runtime profile inline
+            profile_switch: ${item}
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        codes = [item["code"] for item in result.outputs["findings"]]
+        self.assertNotIn("review.workflow.input_declared_but_unused", codes)
+        self.assertIn("review.workflow.input_validation_missing", codes)
+
     def test_review_reports_missing_recommended_probe_coverage(self) -> None:
         workflow = Workflow(
             version=0,

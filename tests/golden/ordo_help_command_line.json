@@ -23,7 +23,7 @@
         },
         {
           "name": "workflows show <workflow>",
-          "summary": "show one workflow entry with file metadata and root-declared inputs"
+          "summary": "show one workflow entry with file metadata, playbook-owned invocation inputs, and root-declared inputs"
         }
       ],
       "examples": [
@@ -75,6 +75,8 @@
       "input_override_precedence": [
         "workflow.inputs declares the allowed activation keys; declared keys are required at activation=true",
         "profile.inputs may supply values for declared workflow inputs",
+        "playbook workflow-entry with supplies static invocation inputs before one run",
+        "playbook pre_run with supplies static invocation inputs to that pre_run workflow only",
         "--input overrides workflow and profile-provided values for one run",
         "--input-file overrides workflow and profile-provided values for one run",
         "unknown activation inputs are rejected=true",

@@ -150,7 +150,8 @@ def build_local_expression_validation_diagnostic(
 
 @dataclass(frozen=True, slots=True)
 class _LocalExpressionDependency:
-    root: LocalExpressionRoot
+    root: LocalExpressionRoot | None
+    kind: str
     start: int
     end: int
 
@@ -160,10 +161,29 @@ def _validate_context_policy(parsed: ParsedLocalExpression) -> tuple[LocalExpres
     if not policy.whole_tree_restrictions:
         return ()
     errors: list[LocalExpressionContextPolicyError] = []
-    seen: set[tuple[LocalExpressionRoot, int, int]] = set()
+    seen: set[tuple[object, int, int]] = set()
     for dependency in _collect_local_expression_dependencies(parsed):
-        if policy.allows_root(dependency.root):
+        if dependency.kind == "root" and dependency.root is not None and policy.allows_root(dependency.root):
             continue
+        if dependency.kind == "observation":
+            if policy.allows_observation:
+                continue
+            key = (dependency.kind, dependency.start, dependency.end)
+            if key in seen:
+                continue
+            seen.add(key)
+            errors.append(
+                LocalExpressionContextPolicyError(
+                    code=f"validation.workflow.local_expression.{parsed.context.value}.probe_ref",
+                    message=f"read-only probe observations are not allowed in the {parsed.context.value} local-expression context",
+                    start=dependency.start,
+                    end=dependency.end,
+                )
+            )
+            continue
+        if dependency.root is None:
+            continue
+        assert dependency.root is not None
         key = (dependency.root, dependency.start, dependency.end)
         if key in seen:
             continue
@@ -181,7 +201,12 @@ def _validate_context_policy(parsed: ParsedLocalExpression) -> tuple[LocalExpres
 
 def _collect_local_expression_dependencies(parsed: ParsedLocalExpression) -> tuple[_LocalExpressionDependency, ...]:
     return tuple(
-        _LocalExpressionDependency(root=LocalExpressionRoot(dependency.name), start=dependency.start, end=dependency.end)
+        _LocalExpressionDependency(
+            root=(None if dependency.kind == "observation" else (LocalExpressionRoot(dependency.name) if dependency.name in {root.value for root in LocalExpressionRoot} else None)),
+            kind=dependency.kind,
+            start=dependency.start,
+            end=dependency.end,
+        )
         for dependency in collect_local_expression_dependencies(parsed.value.root)
     )
 
@@ -476,6 +501,7 @@ def resolve_condition_local_expression(
         evaluation = evaluate_condition_expression(
             condition_tree,
             workflow,
+            context=context,
             observe=observe,
             session=observation_session,
             step_results=step_results,

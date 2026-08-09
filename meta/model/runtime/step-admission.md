@@ -95,6 +95,10 @@ That means `check` may:
 
 That does not allow `check` to execute the gated effectful step itself.
 
+The same admission semantics should survive structural nesting.
+
+If one `gate` surface is observation-capable at top level, the runtime model should preserve that same approved dependency class inside nested inline `steps`, inline `for_each` bodies, and reusable fragment bodies rather than introducing narrower ad hoc local-only variants.
+
 ## Projection expectations
 
 ### `run`
@@ -143,3 +147,30 @@ gate: step.a.outputs.value and step.b.outputs.value and step.c.outputs.value
 ```
 
 Structured form keeps admission analysis easier to review, explain, and project across runtime modes.
+
+## Failure-focused diagnostic context
+
+Structured `gate` objects may also include an optional `on_fail` mapping.
+
+Illustrative shape:
+
+```yaml
+gate:
+  all:
+    - step.project_issue.outputs.exists
+    - step.project_issue.outputs.status | eq("Ready")
+  on_fail:
+    repository: step.repository.outputs.value
+    issue_number: step.issue_number.outputs.value
+    status: step.project_issue.outputs.status
+```
+
+Semantics:
+
+- `gate` still owns the admission verdict;
+- `on_fail` does not participate in pass/fail logic;
+- runtime evaluates `on_fail` only when the gate verdict is `failed`;
+- evaluated entries become compact machine-readable failure context for `run`, `check --json`, and `explain`;
+- gate-failure diagnostics should prefer this compact context and should not emit broad visible-register dumps.
+
+`on_fail` entries use the same step-local read-only authoring context as the gate itself.

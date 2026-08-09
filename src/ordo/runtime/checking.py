@@ -17,6 +17,8 @@ from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
+from .gate_failure_context import evaluate_gate_failure_context
+from .local_expression_contexts import LocalExpressionContext
 from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, ConditionObservationRequest, ConditionObservationResult, FilterApplicationNode, ListNode, LiteralNode, LocalExpressionParseError, ObjectEntryNode, ObjectNode, OnlyPredicateNode, PipelineNode, ReadOnlyObservationSession, ReferenceNode, UnaryNode, ValueExpressionNode, evaluate_condition_expression, parse_local_expression_tree, render_expression_text
 from .local_expressions import extract_embedded_local_expression
 from .launchers import validate_step_launchers
@@ -79,6 +81,23 @@ def _base_verdict_outputs(
         "preflight_registers": {},
         "preflight_step_results": {},
     }
+
+
+def _gate_report_with_failure_context(
+    gate_report: dict[str, object],
+    *,
+    step: Step,
+    workflow: Workflow,
+    step_results: dict[str, object],
+) -> dict[str, object]:
+    detailed = dict(gate_report)
+    if gate_report.get("verdict") == "failed":
+        on_fail_context, on_fail_errors = evaluate_gate_failure_context(step, workflow, step_results=step_results)
+        if on_fail_context:
+            detailed["on_fail_context"] = on_fail_context
+        if on_fail_errors:
+            detailed["on_fail_context_errors"] = on_fail_errors
+    return detailed
 
 
 def _guard_coverage_outputs(
@@ -307,7 +326,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
         if isinstance(item, dict) and item.get("status") == "gate_blocked" and isinstance(item.get("name"), str)
     ]
     nested_gate_blockers = [dict(item) for item in analysis.nested_gate_blockers if isinstance(item, dict)]
-    if nested_gate_blockers and not gate_blockers:
+    if nested_gate_blockers:
         gate_blockers = [
             blocker.get("expanded_from_step")
             for blocker in nested_gate_blockers
@@ -426,6 +445,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
     }
     if frontier_ready_step is not None:
         outputs["frontier_ready_step"] = frontier_ready_step
+        outputs["allowed_basis"] = "current_observed_state"
     if analysis.bootstrap_details:
         outputs["bootstrap_details"] = list(analysis.bootstrap_details)
 
@@ -618,6 +638,7 @@ def _build_check_analysis_tree(
             )
             expansion_outcome = _expand_run_step_block_for_check(
                 run_expansions,
+                outer_block_index=block_index,
                 current_workflow=effective_workflow,
                 current_profile_name=current_profile_name,
                 current_profile=current_profile,
@@ -632,6 +653,8 @@ def _build_check_analysis_tree(
             checked_guards.extend(expansion_outcome["checked_guards"])
             guard_details.extend(expansion_outcome["guard_details"])
             block_items.extend(expansion_outcome["block_items"])
+            preflight_step_items.extend(cast(list[dict[str, object]], expansion_outcome.get("preflight_step_items", [])))
+            preflight_halts.extend(cast(list[dict[str, object]], expansion_outcome.get("preflight_halts", [])))
             blockers.extend(expansion_outcome["blockers"])
             nested_gate_blockers.extend(expansion_outcome["nested_gate_blockers"])
             incomplete_reasons.extend(expansion_outcome["incomplete_reasons"])
@@ -792,80 +815,40 @@ def _classify_declared_input_usage(
             continue
         if isinstance(block, StepBlock):
             resolved_steps = resolved_block.steps if isinstance(resolved_block, ResolvedStepBlock) else ()
-            for step_index, step in enumerate(block.steps):
-                resolved_step = resolved_steps[step_index] if step_index < len(resolved_steps) else None
-                for input_name in _extract_input_names(step.if_):
-                    record(
-                        input_name,
-                        "control_input",
-                        site_kind="step_condition",
-                        path=("blocks", block_index, "steps", step_index, "if"),
-                        detail=step.name,
-                    )
-                if step.profile_switch is not None:
-                    for input_name in _extract_input_names(step.profile_switch):
-                        record(
-                            input_name,
-                            "control_input",
-                            site_kind="profile_switch",
-                            path=("blocks", block_index, "steps", step_index, "profile_switch"),
-                            detail=step.name,
-                        )
-                if step.state_set is not None:
-                    for input_name in _extract_input_names(step.state_set):
-                        record(
-                            input_name,
-                            "control_input",
-                            site_kind="state_set",
-                            path=("blocks", block_index, "steps", step_index, "state_set"),
-                            detail=step.name,
-                        )
-                if step.value is not None:
-                    for input_name in _extract_input_names(step.value):
-                        record(
-                            input_name,
-                            "contract_input",
-                            site_kind="value",
-                            path=("blocks", block_index, "steps", step_index, "value"),
-                            detail=step.name,
-                        )
-                if step.publish is not None:
-                    for input_name in _extract_input_names(step.publish):
-                        record(
-                            input_name,
-                            "contract_input",
-                            site_kind="publish",
-                            path=("blocks", block_index, "steps", step_index, "publish"),
-                            detail=step.name,
-                        )
-                if step.result is not None:
-                    for input_name in _extract_input_names(step.result):
-                        record(
-                            input_name,
-                            "contract_input",
-                            site_kind="result",
-                            path=("blocks", block_index, "steps", step_index, "result"),
-                            detail=step.name,
-                        )
-                if step.run is not None:
-                    for input_name in _extract_input_names(step.run_with):
-                        record(
-                            input_name,
-                            "effect_target_input",
-                            site_kind="run_with",
-                            path=("blocks", block_index, "steps", step_index, "with"),
-                            detail=step.name,
-                        )
-                if step.operation is not None:
-                    step_kind = resolved_step.operation.kind if isinstance(resolved_step, ResolvedOperation) else "unknown"
-                    for input_name in _extract_input_names(step.operation.with_):
-                        record(
-                            input_name,
-                            "effect_target_input",
-                            site_kind="operation_target",
-                            path=("blocks", block_index, "steps", step_index, "with"),
-                            detail=f"{step.operation.uses}:{step_kind}",
-                        )
+            def visit_steps(steps: tuple[Step, ...], *, path_prefix: tuple[object, ...], resolved_candidates=()) -> None:
+                for step_index, step in enumerate(steps):
+                    resolved_step = resolved_candidates[step_index] if step_index < len(resolved_candidates) else None
+                    step_path = path_prefix + (step_index,)
+                    for input_name in _extract_input_names(step.for_each):
+                        record(input_name, "control_input", site_kind="for_each", path=step_path + ("for_each",), detail=step.name)
+                    for input_name in _extract_input_names(step.if_):
+                        record(input_name, "control_input", site_kind="step_condition", path=step_path + ("if",), detail=step.name)
+                    if step.profile_switch is not None:
+                        for input_name in _extract_input_names(step.profile_switch):
+                            record(input_name, "control_input", site_kind="profile_switch", path=step_path + ("profile_switch",), detail=step.name)
+                    if step.state_set is not None:
+                        for input_name in _extract_input_names(step.state_set):
+                            record(input_name, "control_input", site_kind="state_set", path=step_path + ("state_set",), detail=step.name)
+                    if step.value is not None:
+                        for input_name in _extract_input_names(step.value):
+                            record(input_name, "contract_input", site_kind="value", path=step_path + ("value",), detail=step.name)
+                    if step.publish is not None:
+                        for input_name in _extract_input_names(step.publish):
+                            record(input_name, "contract_input", site_kind="publish", path=step_path + ("publish",), detail=step.name)
+                    if step.result is not None:
+                        for input_name in _extract_input_names(step.result):
+                            record(input_name, "contract_input", site_kind="result", path=step_path + ("result",), detail=step.name)
+                    if step.run is not None:
+                        for input_name in _extract_input_names(step.run_with):
+                            record(input_name, "effect_target_input", site_kind="run_with", path=step_path + ("with",), detail=step.name)
+                    if step.operation is not None:
+                        step_kind = resolved_step.operation.kind if isinstance(resolved_step, ResolvedOperation) else "unknown"
+                        for input_name in _extract_input_names(step.operation.with_):
+                            record(input_name, "effect_target_input", site_kind="operation_target", path=step_path + ("with",), detail=f"{step.operation.uses}:{step_kind}")
+                    if step.steps is not None:
+                        visit_steps(step.steps, path_prefix=step_path + ("steps",), resolved_candidates=())
+
+            visit_steps(block.steps, path_prefix=("blocks", block_index, "steps"), resolved_candidates=resolved_steps)
 
     return tuple(
         {
@@ -1035,6 +1018,7 @@ def _resolve_guard_block(
             inputs=workflow.inputs,
             declared_inputs=workflow.declared_inputs,
             explicit_input_keys=workflow.explicit_input_keys,
+            protected_input_keys=workflow.protected_input_keys,
             let_bindings=workflow.let_bindings,
             state_needs=workflow.state_needs,
             state_bindings=workflow.state_bindings,
@@ -1120,6 +1104,7 @@ def _resolve_step_block(
             inputs=workflow.inputs,
             declared_inputs=workflow.declared_inputs,
             explicit_input_keys=workflow.explicit_input_keys,
+            protected_input_keys=workflow.protected_input_keys,
             let_bindings=workflow.let_bindings,
             state_needs=workflow.state_needs,
             state_bindings=workflow.state_bindings,
@@ -1313,6 +1298,17 @@ def _interpret_step_block_for_check(
         )
         if gate_report is not None and gate_report.verdict != "passed":
             halt_reason = "gate_failed" if gate_report.verdict == "failed" else "gate_unknown"
+            gate_report_detail = _gate_report_with_failure_context(
+                gate_report.to_contract(),
+                step=step,
+                workflow=effective_workflow,
+                step_results=effective_workflow.step_results,
+            )
+            halt_item = build_preflight_halt(
+                halt_reason,
+                step=step,
+                details={"block_index": block_index, "step_index": step_index, "reference": resolved_step.reference},
+            ).to_contract()
             if gate_report.verdict == "unknown":
                 incomplete_reasons.append(halt_reason)
             step_items.append(
@@ -1329,7 +1325,7 @@ def _interpret_step_block_for_check(
                     "gate_conditional": True,
                     "gate": step.gate,
                     "gate_status": gate_report.verdict,
-                    "gate_report": gate_report.to_contract(),
+                    "gate_report": gate_report_detail,
                     "halt_reason": halt_reason,
                     "probes": [_observed_probe_call_from_resolved_operation(resolved_step)] if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "probe" else [],
                     "action_call": _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
@@ -1351,6 +1347,7 @@ def _interpret_step_block_for_check(
             if run_expansions is not None:
                 expansion_outcome = _expand_run_step_block_for_check(
                     run_expansions,
+                    outer_block_index=block_index,
                     current_workflow=effective_workflow,
                     current_profile_name=effective_profile_name,
                     current_profile=effective_profile,
@@ -1362,6 +1359,11 @@ def _interpret_step_block_for_check(
                 )
                 diagnostics.extend(expansion_outcome["diagnostics"])
                 operation_results.extend(expansion_outcome["operation_results"])
+                step_items.extend(cast(list[dict[str, object]], expansion_outcome.get("preflight_step_items", [])))
+                if not halt_item:
+                    halts = cast(list[dict[str, object]], expansion_outcome.get("preflight_halts", []))
+                    if halts:
+                        halt_item = halts[0]
                 nested = cast(list[dict[str, object]], expansion_outcome.get("nested_gate_blockers", []))
                 if nested:
                     nested_gate_blockers.extend(nested)
@@ -1723,6 +1725,7 @@ def _evaluate_analyzable_preflight_step(
 def _expand_run_step_block_for_check(
     expansions: list[tuple[Step, CheckRunExpansionDecision]],
     *,
+    outer_block_index: int,
     current_workflow: Workflow,
     current_profile_name: str | None,
     current_profile: Profile | None,
@@ -1737,6 +1740,8 @@ def _expand_run_step_block_for_check(
     checked_guards: list[str] = []
     guard_details: list[dict[str, object]] = []
     block_items: list[dict[str, object]] = []
+    preflight_step_items: list[dict[str, object]] = []
+    preflight_halts: list[dict[str, object]] = []
     blockers: list[str] = []
     nested_gate_blockers: list[dict[str, object]] = []
     incomplete_reasons: list[str] = []
@@ -1768,6 +1773,35 @@ def _expand_run_step_block_for_check(
         operation_results.extend(result.operation_results)
         checked_guards.extend(cast(list[str], result.outputs.get("checked_guards", [])))
         guard_details.extend(cast(list[dict[str, object]], result.outputs.get("guard_details", [])))
+        child_preflight_items = [item for item in result.outputs.get("preflight_step_items", []) if isinstance(item, dict)]
+        child_preflight_halts = [item for item in result.outputs.get("preflight_halts", []) if isinstance(item, dict)]
+        synthesized_step_item = {
+            "block_index": outer_block_index,
+            "step_index": 0,
+            "name": step.name,
+            "reference": step.run if step.run is not None else "inline_steps",
+            "body_kind": "named_run_target" if step.run is not None else "inline_repeated_steps",
+            "preflight_classification": "context_only" if step.steps is not None and all(inner.profile_switch is not None for inner in step.steps) else "read_only_unanalyzable",
+            "status": "interpreted",
+            "conditional": step.if_ is not None,
+            "condition": step.if_,
+            "condition_status": "true" if step.if_ is not None else None,
+            "gate_conditional": step.gate is not None,
+            "gate": step.gate,
+            "gate_status": "passed" if step.gate is not None else None,
+            "fan_out": {"enabled": step.for_each is not None},
+            "active_profile": result.outputs.get("active_profile"),
+        }
+        if decision.item_index is not None:
+            synthesized_step_item["expanded_item_index"] = decision.item_index
+            synthesized_step_item["expanded_item"] = decision.item_value
+        preflight_step_items.append(dict(synthesized_step_item))
+        if not child_preflight_halts and child_preflight_items and all(item.get("preflight_classification") == "context_only" and item.get("status") == "pending" for item in child_preflight_items):
+            child_preflight_items = [synthesized_step_item]
+        elif not child_preflight_items:
+            child_preflight_items = []
+        if child_preflight_items and all(item.get("name") == step.name for item in child_preflight_items):
+            child_preflight_items = []
         gate_names = [name for name in result.outputs.get("gate_blockers", []) if isinstance(name, str)]
         if not gate_names:
             blockers.extend(cast(list[str], result.outputs.get("blockers", [])))
@@ -1781,6 +1815,26 @@ def _expand_run_step_block_for_check(
                 nested["expanded_item_index"] = decision.item_index
                 nested["expanded_item"] = decision.item_value
             block_items.append(nested)
+        for item in child_preflight_items:
+            nested_item = dict(item)
+            nested_item["block_index"] = outer_block_index
+            nested_item["expanded_from_step"] = step.name
+            nested_item["expanded_from_run"] = step.run
+            if decision.item_index is not None:
+                nested_item["expanded_item_index"] = decision.item_index
+                nested_item["expanded_item"] = decision.item_value
+            preflight_step_items.append(nested_item)
+        for halt in child_preflight_halts:
+            nested_halt = dict(halt)
+            details = dict(nested_halt.get("details", {})) if isinstance(nested_halt.get("details"), dict) else {}
+            details["block_index"] = outer_block_index
+            details["expanded_from_step"] = step.name
+            details["expanded_from_run"] = step.run
+            if decision.item_index is not None:
+                details["expanded_item_index"] = decision.item_index
+                details["expanded_item"] = decision.item_value
+            nested_halt["details"] = details
+            preflight_halts.append(nested_halt)
         if gate_names:
             step_items = [item for item in result.outputs.get("preflight_step_items", []) if isinstance(item, dict)]
             nested_gate_blockers.append(
@@ -1804,6 +1858,12 @@ def _expand_run_step_block_for_check(
         if result.status is RuntimeStatus.GUARD_FAILED:
             halted = True
             break
+        if any(isinstance(item, dict) and item.get("status") == "pending" for item in result.outputs.get("block_items", [])):
+            halted = True
+            incomplete_reasons.extend(reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str))
+            if not incomplete_reasons:
+                incomplete_reasons.append("effectful_step_encountered")
+            break
         if result.outputs.get("allowed_state") != "allowed":
             halted = True
             incomplete_reasons.extend(reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str))
@@ -1826,6 +1886,8 @@ def _expand_run_step_block_for_check(
         "checked_guards": checked_guards,
         "guard_details": guard_details,
         "block_items": block_items,
+        "preflight_step_items": preflight_step_items,
+        "preflight_halts": preflight_halts,
         "blockers": blockers,
         "nested_gate_blockers": nested_gate_blockers,
         "incomplete_reasons": incomplete_reasons,
@@ -2273,9 +2335,22 @@ def _build_preflight_observation_session(
 ) -> ReadOnlyObservationSession:
     resolved_provider = connector_provider or get_default_connector_provider()
 
+    def resolve_observation_target(parts: tuple[str, ...]) -> tuple[str, tuple[str, ...]] | None:
+        for index in range(len(parts), 0, -1):
+            candidate = ".".join(parts[:index])
+            if resolved_provider.registry.get_operation(candidate) is not None:
+                return candidate, parts[index:]
+        return None
+
     def observe(request: ConditionObservationRequest) -> ConditionObservationResult:
         reference = ".".join(request.target)
+        fields = request.fields
         operation = resolved_provider.registry.get_operation(reference)
+        if operation is None and not request.arguments and not request.fields:
+            resolved_target = resolve_observation_target(request.target)
+            if resolved_target is not None:
+                reference, fields = resolved_target
+                operation = resolved_provider.registry.get_operation(reference)
         if operation is None:
             return ConditionObservationResult(
                 status="probe_failed",
@@ -2309,7 +2384,7 @@ def _build_preflight_observation_session(
         result = probe(
             ResolvedOperation(
                 reference=reference,
-                connector_namespace=request.target[0],
+                connector_namespace=reference.partition(".")[0],
                 operation=operation,
                 source="public",
                 declared_with={name: value for name, value in request.arguments},
@@ -2318,7 +2393,7 @@ def _build_preflight_observation_session(
         )
         if result.status != "ok":
             return ConditionObservationResult(status="probe_failed", value=None, diagnostics=result.diagnostics, reference=reference)
-        value = _extract_probe_value(result.outputs, request.fields)
+        value = _extract_probe_value(result.outputs, fields)
         if value is _MISSING:
             return ConditionObservationResult(
                 status="probe_failed",
@@ -2327,9 +2402,9 @@ def _build_preflight_observation_session(
                     Diagnostic(
                         code="runtime.local_expression.probe_field_missing",
                         level="error",
-                        message=f"Probe field path '{'.'.join(request.fields)}' was not present at runtime",
+                        message=f"Probe field path '{'.'.join(fields)}' was not present at runtime",
                         path=(),
-                        details={"reference": reference, "field_path": ".".join(request.fields)},
+                        details={"reference": reference, "field_path": ".".join(fields)},
                     ),
                 ),
                 reference=reference,
@@ -2348,6 +2423,7 @@ def _evaluate_guard_expression(
     evaluation = evaluate_condition_expression(
         resolved_guard.parsed,
         workflow,
+        context=LocalExpressionContext.GUARD,
         observe=observer.observe,
     )
     return _build_guard_expression_result(resolved_guard.expr, evaluation)

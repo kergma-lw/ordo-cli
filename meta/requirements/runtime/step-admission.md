@@ -20,6 +20,8 @@
 - `gate` must be able to depend on runtime-derived read-only knowledge that was established by earlier steps.
 - `gate` must not depend on outputs of the current step it protects.
 - A blocked `gate` must not be rewritten into a silent skip.
+- A `gate` that is semantically observation-capable at top level should preserve the same approved read-only dependency classes inside nested inline `steps`, inline `for_each` bodies, and reusable fragment bodies.
+- Structural nesting alone must not turn an observation-capable `gate` surface into a local-only one.
 
 ## Outcome model
 

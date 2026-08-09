@@ -24,6 +24,10 @@ A context determines:
 
 It should not imply a separate read-only execution engine for otherwise equivalent probe-capable expression nodes.
 
+Equivalent contexts should therefore remain stable across structural nesting.
+
+If one read-only step-local authored surface is observation-capable at top level, the same semantic context should remain observation-capable inside nested inline `steps`, inside one inline `for_each` body, and inside reusable fragment bodies unless a distinct higher-level rule explicitly changes the semantic class of the surface.
+
 ### Root
 
 A root is one documented local reference family.
@@ -170,7 +174,7 @@ The modeled filter families include:
 - boolean membership filters such as `in(container)`;
 - bounded collection-selection filters such as `only(field=value)` and `only(field!=value)`;
 - boolean negation filters such as `not`;
-- collection-shaping filters such as `field(path)`, `flatten`, `first`, `last`, `length`, and `unique`.
+- collection-shaping filters such as `field(path)`, `lookup(key)`, `flatten`, `first`, `last`, `length`, and `unique`.
 
 The modeled predicate-filter semantics are:
 
@@ -208,6 +212,15 @@ The modeled `field(path)` semantics are:
 - a missing addressed path within one array element yields `null` for that element rather than failing the whole projection;
 - scalar or `null` input fails;
 - the initial path model supports dotted field navigation and zero-based list indexing such as `results` and `results[0]`.
+
+The modeled `lookup(key)` semantics are:
+
+- input must be an object;
+- the authored argument must evaluate to a string key;
+- lookup is exact-key retrieval rather than path traversal;
+- object input returns the value stored under that exact key;
+- object input with a missing key fails;
+- array, scalar, or `null` input fails.
 
 The modeled `flatten` semantics are:
 

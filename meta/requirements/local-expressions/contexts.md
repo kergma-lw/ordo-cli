@@ -44,6 +44,8 @@
 - Step-condition context expresses step-local conditional execution.
 - Step-condition context may depend on prior execution-local registered step results when those results already exist before the conditional step is considered.
 - Step-condition context may depend on read-only probe observation when the surrounding contract allows non-effectful external observation.
+- Step-condition context should expose the same approved read-only observation-capable local-expression dependency classes regardless of whether the surrounding step appears at top level, inside nested inline `steps`, inside one inline `for_each` body, or inside one reusable fragment body.
+- Structural nesting by itself must not narrow otherwise valid step-condition roots or read-only observation dependencies.
 - Step-condition context must remain workflow-owned condition evaluation rather than a hidden branching language.
 - Native `if` conditions are the preferred step-condition surface.
 - Native step conditions may be authored either as a bare boolean expression or as a structured condition tree.
@@ -52,6 +54,12 @@
 - Structured step conditions may use `all`, `any`, and `not` nodes and may nest them.
 - Embedded `if: ${...}` remains supported only as a deprecated compatibility form.
 - Presence-check helpers such as `is_missing(...)` or `is_present(...)`, if introduced later, must apply only to approved lookup-style references and approved read-only representation-adapter invocations rather than to arbitrary computed expressions.
+
+## Nesting invariant for read-only step-local surfaces
+
+- Structural nesting must not by itself change the approved local-expression dependency classes for equivalent read-only step-local authored surfaces.
+- If two authored step-local surfaces share the same semantic class and both allow non-effectful external observation, they should admit the same approved roots and read-only probe dependencies at top level, in nested inline `steps`, in one inline `for_each` body, and in reusable fragment bodies.
+- Different runtime timing or result interpretation may distinguish surfaces such as `if`, `gate`, and `value`, but those differences should not create ad hoc root restrictions purely because one surface appears inside a repeated or nested body.
 
 ## Presence-check argument boundary
 

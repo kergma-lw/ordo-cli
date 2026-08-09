@@ -45,7 +45,17 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertIn("step", payload["run_contract"]["caller_scoped_condition_surface"])
         self.assertEqual(payload["run_contract"]["body_forms"], ["named_run_target", "inline_repeated_steps"])
         self.assertEqual(payload["run_contract"]["call_fields"][2]["surface"], "expression_or_structured_condition")
+        self.assertEqual(payload["run_contract"]["call_fields"][3]["structured_optional_fields"][0]["name"], "on_fail")
         self.assertEqual(payload["surface_constraints"]["authored_surfaces"]["condition_field_forms"]["structured_object_operators"], ["all", "any", "not"])
+        self.assertEqual(payload["surface_constraints"]["authored_surfaces"]["condition_field_forms"]["gate_structured_optional_fields"], ["on_fail"])
+
+        from ordo.introspection import describe_playbook_contract
+
+        playbook = describe_playbook_contract()
+        workflow_entry_fields = {item["name"]: item for item in playbook["workflow_entry_fields"]}
+        pre_run_fields = {item["name"]: item for item in playbook["pre_run_entry_fields"]}
+        self.assertIn("with", workflow_entry_fields)
+        self.assertIn("with", pre_run_fields)
 
     def test_workflow_contract_stays_aligned_with_validator_field_sets(self) -> None:
         payload = describe_workflow_contract()

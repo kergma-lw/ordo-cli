@@ -460,6 +460,65 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.field_path_invalid")
 
+    def test_evaluate_lookup_filter_projects_object_value_by_dynamic_key(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={
+                "repository_profile_map": {
+                    "kergma-lw/checklist-mobile": "mobile",
+                    "kergma-lw/checklist-backend": "backend",
+                },
+                "repository": "kergma-lw/checklist-mobile",
+            },
+        )
+
+        parsed = parse_local_expression_tree("inputs.repository_profile_map | lookup(inputs.repository)")
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), "mobile")
+
+    def test_evaluate_lookup_filter_rejects_missing_object_key(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"mapping": {"known": 7}, "key": "missing"},
+        )
+
+        parsed = parse_local_expression_tree("inputs.mapping | lookup(inputs.key)")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.lookup_key_missing")
+
+    def test_evaluate_lookup_filter_rejects_non_object_input(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"mapping": [1, 2], "key": "0"},
+        )
+
+        parsed = parse_local_expression_tree("inputs.mapping | lookup(inputs.key)")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+
+    def test_evaluate_lookup_filter_rejects_non_string_key_argument(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"mapping": {"1": "one"}, "key": 1},
+        )
+
+        parsed = parse_local_expression_tree("inputs.mapping | lookup(inputs.key)")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.filter_arg_type_invalid")
+
     def test_evaluate_flatten_filter_flattens_one_level(self) -> None:
         workflow = Workflow(
             version=0,

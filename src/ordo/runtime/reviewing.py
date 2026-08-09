@@ -417,6 +417,8 @@ def _step_expression_surfaces(step: Step, *, path: tuple[str, ...]) -> list[tupl
         surfaces.extend(_collect_condition_surface_expressions(step.if_, path=path + ("if",)))
     if step.gate is not None:
         surfaces.extend(_collect_condition_surface_expressions(step.gate, path=path + ("gate",)))
+    if step.gate_on_fail is not None:
+        surfaces.extend(_collect_value_surface_expressions(step.gate_on_fail, path=path + ("gate", "on_fail")))
     surfaces.extend(_collect_native_value_surface_expressions(step.for_each, path=path + ("for_each",)))
     if step.operation is not None:
         surfaces.extend(_collect_value_surface_expressions(step.operation.with_, path=path + ("with",)))

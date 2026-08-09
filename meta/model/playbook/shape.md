@@ -17,6 +17,8 @@ version: 1
 
 pre_run:
   - file: workflows/resolve-context.yml
+    with:
+      active_profile_key: active_profile
     state_bindings:
       shared_context: repo_task_state
 
@@ -38,6 +40,8 @@ connectors:
 workflows:
   inspect-issue:
     file: inspect-issue.yml
+    with:
+      repository: acme/repo
     category: inspect
     when: Use when you need issue details without changing project state.
 
@@ -72,6 +76,8 @@ Each entry declares the workflow `file` to execute in the same runtime session b
 
 Each entry may also declare launch-phase-only bindings such as `state_bindings` that belong to the playbook wrapper rather than to the requested workflow contract.
 
+Each entry may also declare one static `with` object whose keys become playbook-owned invocation inputs for that `pre_run` workflow only.
+
 The initial model treats `pre_run` as playbook-owned orchestration for shared preparation such as context resolution, environment checks, or runtime-profile switching.
 
 That means the requested workflow does not need to declare logical state needs that are consumed only by `pre_run`.
@@ -82,6 +88,7 @@ A workflow entry gives a stable project-local name to a workflow file.
 
 It may additionally declare:
 
+- a static `with` object whose keys become playbook-owned invocation inputs for that workflow entry;
 - a short project-local `category` string for top-level workflow catalog grouping;
 - a short project-local `when` string that explains when an operator should choose that workflow from the launch surface;
 - state bindings from workflow logical roles to concrete playbook state entries;
@@ -90,6 +97,9 @@ It may additionally declare:
 
 `category` and `when` are launch-surface metadata.
 They help humans and agents choose among named workflows, but they must not change workflow execution semantics, workflow resolution, or guard truth.
+
+Workflow-entry `with` is not catalog-only metadata.
+It is a playbook-owned invocation surface that supplies static activation inputs for that workflow entry before one run begins.
 
 ## Defaults role
 

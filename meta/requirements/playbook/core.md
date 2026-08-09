@@ -12,6 +12,9 @@
 - A playbook must support named workflow entries as the primary launch surface.
 - A playbook may support named profile entries for launch-time selection and defaults.
 - A playbook launch surface may support explicit launch-time input overrides for one run.
+- A workflow entry may declare playbook-owned invocation inputs through a `with` field.
+- A `pre_run` entry may declare playbook-owned invocation inputs for that launch-phase workflow through a `with` field.
+- Playbook-owned invocation inputs should be static YAML values rather than a second expression language.
 - A playbook launch surface may declare an explicit execution working directory for a run through playbook defaults, the active profile, or the active workflow entry.
 - Working-directory precedence must be deterministic and follow increasing specificity from playbook defaults to profile context to workflow-entry context.
 - Any declared playbook-, profile-, or workflow-level working directory may use the existing `${...}` embedded-value local-expression surface when the expression stays within an activation-time-safe subset.
@@ -25,6 +28,7 @@
 - `pre_run` must have an explicit playbook-owned dependency model rather than borrowing hidden state requirements from the requested workflow contract.
 - Main workflows must not be required to declare logical state needs only because playbook `pre_run` consumes that state during launch.
 - When `pre_run` needs runtime state, the playbook surface must declare the necessary binding explicitly on the `pre_run` entry itself.
+- Playbook-owned invocation inputs for `pre_run` must apply only to that `pre_run` workflow rather than leaking automatically into the requested workflow entry.
 - A playbook must support named runtime state declarations for project-local reuse.
 - A playbook must support binding workflow logical state roles to named project state declarations.
 - Every workflow logical state need must have an explicit playbook binding for the active workflow entry.
@@ -38,6 +42,8 @@
 - Relative workflow and profile references must resolve deterministically from playbook-owned context.
 - An execution working directory must not change playbook discovery or reference resolution rules.
 - A working-directory expression must be fully resolvable before the first guard or step executes.
+- Playbook-owned workflow-entry invocation inputs must apply after profile-provided missing-input defaults and before CLI launch-time input overrides.
+- CLI launch-time input overrides must remain the highest-precedence activation input surface.
 - Named references must either resolve to one declared target or fail clearly.
 - Missing catalog targets must fail validation before effectful execution starts.
 - Unknown stable fields in the playbook contract should fail validation.

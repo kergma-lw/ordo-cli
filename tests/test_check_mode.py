@@ -2,6 +2,7 @@ import os
 import tempfile
 import textwrap
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
@@ -769,6 +770,68 @@ class CheckModeTest(unittest.TestCase):
         self.assertTrue(result.outputs["can_execute"])
         self.assertEqual(result.outputs["frontier_ready_step"], "comment")
         self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
+        self.assertEqual(result.outputs["allowed_basis"], "current_observed_state")
+
+    def test_check_marks_frontier_allowed_after_expanded_preflight_when_final_gate_is_satisfied(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "inspect.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - 1 == 1\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="open-task",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand", run="inspect.yml", resolved_run_path=str(fragment)),)),
+                    StepBlock(
+                        steps=(
+                            Step(name="load", operation=OperationRef("gh.issue"), register="issue"),
+                            Step(name="ready", value=True, register="ready"),
+                            Step(name="comment", operation=OperationRef("gh.issue.close"), gate="step.ready.outputs.value"),
+                        )
+                    ),
+                ),
+            )
+
+            def probe(resolved_guard, _workflow):
+                if resolved_guard.reference == "gh.issue":
+                    return OperationResult(status="ok", outputs={"exists": True})
+                return OperationResult(status="ok")
+
+            result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["allowed_state"], "allowed")
+            self.assertTrue(result.outputs["can_execute"])
+            self.assertTrue(result.outputs["analysis_complete"])
+            self.assertEqual(result.outputs["frontier_ready_step"], "comment")
+            self.assertEqual(result.outputs["allowed_basis"], "current_observed_state")
+
+    def test_check_marks_frontier_allowed_after_context_application_when_final_gate_is_satisfied(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(steps=(Step(name="switch", profile_switch="frontend"),)),
+                StepBlock(
+                    steps=(
+                        Step(name="ready", value=True, register="ready"),
+                        Step(name="comment", operation=OperationRef("gh.issue.close"), gate="step.ready.outputs.value"),
+                    )
+                ),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend")}
+
+        result = check_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["can_execute"])
+        self.assertEqual(result.outputs["frontier_ready_step"], "comment")
+        self.assertEqual(result.outputs["allowed_basis"], "current_observed_state")
 
     def test_check_surfaces_nested_gate_blockers_from_fan_out_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -787,7 +850,7 @@ class CheckModeTest(unittest.TestCase):
                             with:
                               repository: "owner/repo"
                               issue_number: 1
-                              project_id: "PVT_demo"
+                              project_id: ${inputs.project_id}
                           - name: gate-task
                             gate:
                               all:
@@ -802,7 +865,7 @@ class CheckModeTest(unittest.TestCase):
             workflow = Workflow(
                 version=0,
                 workflow="root",
-                inputs={"items": ["owner/repo#1", "owner/repo#2"]},
+                inputs={"items": ["owner/repo#1", "owner/repo#2"], "project_id": "PVT_demo"},
                 blocks=(
                     StepBlock(
                         steps=(
@@ -880,6 +943,7 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(len(nested), 1)
         self.assertEqual(nested[0]["expanded_item"], "owner/repo#1")
         self.assertEqual(nested[0]["gate_reports"][0]["failed"][0]["expression"], 'step.linked.outputs.status | eq("Ready")')
+        self.assertNotIn("visible_registers", nested[0]["gate_reports"][0])
 
     def test_check_supports_standalone_gate_checkpoint_step(self) -> None:
         workflow = Workflow(
@@ -899,9 +963,155 @@ class CheckModeTest(unittest.TestCase):
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["allowed_state"], "allowed")
+
+    def test_check_gate_report_includes_on_fail_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            inputs={"repository": "owner/repo", "issue_number": 1},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="profile", value="mobile", register="profile"),
+                        Step(name="linked", value={"exists": True, "status": "Backlog"}, register="linked_project_issue"),
+                        Step(
+                            name="checkpoint",
+                            gate={
+                                "all": [
+                                    "step.linked_project_issue.outputs.value.exists",
+                                    'step.linked_project_issue.outputs.value.status | eq("Ready")',
+                                ]
+                            },
+                            gate_on_fail={
+                                "profile": "${step.profile.outputs.value}",
+                                "issue_number": "${inputs.issue_number}",
+                                "repository": "${inputs.repository}",
+                                "status": "${step.linked_project_issue.outputs.value.status}",
+                            },
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["allowed_state"], "blocked")
+        self.assertEqual(
+            result.outputs["preflight_step_items"][2]["gate_report"]["on_fail_context"],
+            {
+                "profile": "mobile",
+                "issue_number": 1,
+                "repository": "owner/repo",
+                "status": "Backlog",
+            },
+        )
         checkpoint = next(item for item in result.outputs["preflight_step_items"] if item["name"] == "checkpoint")
-        self.assertEqual(checkpoint["status"], "interpreted")
-        self.assertEqual(checkpoint["gate_status"], "passed")
+        self.assertEqual(checkpoint["status"], "gate_blocked")
+        self.assertEqual(checkpoint["gate_status"], "failed")
+
+    def test_check_evaluates_item_root_inside_inline_gate(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="fan-out-check",
+            inputs={"items": ["ok", "bad"]},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="expand",
+                            for_each="${inputs.items}",
+                            steps=(
+                                Step(name="gate-item", gate='item == "ok"'),
+                            ),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "blocked")
+        self.assertEqual(result.outputs["gate_blockers"], ["expand"])
+        nested = result.outputs["nested_gate_blockers"][0]
+        self.assertEqual(nested["expanded_item"], "bad")
+        self.assertEqual(nested["gate_reports"][0]["failed_causes"][0]["rendered"], 'item == "ok"')
+
+    def test_check_marks_inline_profile_switch_fan_out_as_interpreted_context_logic(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: profile-switch-inline-probe
+inputs:
+  profiles: []
+blocks:
+  - guards:
+      - git.repo.exists
+  - steps:
+      - name: Validate profiles inline
+        for_each: inputs.profiles
+        steps:
+          - name: Switch runtime profile inline
+            profile_switch: ${item}
+'''
+        )
+        workflow = replace(workflow, inputs={"profiles": ["mobile"]})
+        profiles = {"mobile": Profile(name="mobile")}
+
+        result = check_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        item = next(item for item in result.outputs["preflight_step_items"] if item["name"] == "Validate profiles inline")
+        self.assertEqual(item["status"], "interpreted")
+        self.assertEqual(item["preflight_classification"], "context_only")
+        self.assertEqual(item["expanded_item"], "mobile")
+
+    def test_check_evaluates_git_probe_references_inside_nested_inline_gate(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: workspace-hygiene-inline
+inputs:
+  profiles: []
+blocks:
+  - guards:
+      - git.repo.exists
+  - steps:
+      - name: Validate workspace profile hygiene
+        for_each: inputs.profiles
+        steps:
+          - name: Switch runtime profile inline
+            profile_switch: ${item}
+          - name: Gate workspace profile hygiene
+            gate:
+              all:
+                - git.branch.value == "main"
+                - git.worktree.clean
+'''
+        )
+        workflow = replace(workflow, inputs={"profiles": ["mobile"]})
+        profiles = {"mobile": Profile(name="mobile")}
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "git.repo":
+                return OperationResult(status="ok", outputs={"exists": True})
+            if resolved_guard.reference == "git.branch":
+                return OperationResult(status="ok", outputs={"value": "main"})
+            if resolved_guard.reference == "git.worktree":
+                return OperationResult(status="ok", outputs={"clean": True})
+            return OperationResult(status="state_error", summary="unexpected probe")
+
+        result = check_workflow(workflow, available_profiles=profiles, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertEqual(result.outputs["incomplete_reasons"], [])
+        nested = next(item for item in result.outputs["preflight_step_items"] if item["name"] == "Validate workspace profile hygiene")
+        self.assertEqual(nested["status"], "interpreted")
+        self.assertEqual(nested["expanded_item"], "mobile")
 
     def test_check_reports_strong_preflight_support_when_recommended_probes_match_exactly(self) -> None:
         workflow = Workflow(

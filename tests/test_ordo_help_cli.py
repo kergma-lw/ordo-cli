@@ -202,6 +202,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
         self.assertEqual(defaults_fields["working_directory"]["runtime_effect"], "sets_default_execution_working_directory")
         self.assertEqual(workflow_inputs["authoring_role"], "declares_global_activation_inputs")
+        self.assertEqual(workflow_entry_fields["with"]["runtime_effect"], "supplies_playbook_owned_workflow_entry_inputs_or_declares_caller_required_inputs")
+        self.assertEqual(workflow_entry_fields["with"]["value_surface"], "static_yaml_values_or_null_caller_placeholders")
+        self.assertEqual(workflow_entry_fields["with"]["null_value_semantics"], "caller_must_supply_input_via_cli_or_activation_override")
         self.assertEqual(workflow_entry_fields["category"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(workflow_entry_fields["when"]["runtime_effect"], "published_metadata_only")
         self.assertEqual(workflow_entry_fields["working_directory"]["runtime_effect"], "sets_execution_working_directory")
@@ -210,6 +213,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(workflow_entry_fields["working_directory"]["expression_surface"], "activation_input_value_expression")
         self.assertEqual(workflow_entry_fields["working_directory"]["expression_allowed_roots"], ["inputs"])
         self.assertEqual(workflow_entry_fields["working_directory"]["expression_forbidden_roots"], ["state", "step"])
+        pre_run_fields = {item["name"]: item for item in model["playbook"]["pre_run_entry_fields"]}
+        self.assertEqual(pre_run_fields["with"]["runtime_effect"], "supplies_playbook_owned_pre_run_inputs")
 
     def test_model_publishes_value_step_form(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -320,6 +325,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertIn("lower", filters)
         self.assertIn("field", filters)
+        self.assertIn("lookup", filters)
         self.assertIn("flatten", filters)
         self.assertIn("only", filters)
         self.assertIn("first", filters)
@@ -330,6 +336,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("in", filters)
         self.assertEqual(filters["lower"]["argument_count"], 0)
         self.assertEqual(filters["field"]["argument_count"], 1)
+        self.assertEqual(filters["lookup"]["argument_count"], 1)
         self.assertEqual(filters["only"]["argument_count"], 1)
         self.assertEqual(filters["only"]["authored_form"], "only(field=value) / only(field!=value)")
         self.assertEqual(filters["flatten"]["argument_count"], 0)

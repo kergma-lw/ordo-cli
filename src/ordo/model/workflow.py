@@ -57,6 +57,7 @@ class Step:
     steps: tuple[Step, ...] | None = None
     for_each: JSONValue | None = None
     run_with: JSONObject = field(default_factory=dict, kw_only=True)
+    run_inputs: JSONObject = field(default_factory=dict, kw_only=True)
     run_state_bindings: JSONObject = field(default_factory=dict, kw_only=True)
     run_states: JSONObject = field(default_factory=dict, kw_only=True)
     profile_switch: JSONValue | None = None
@@ -67,6 +68,7 @@ class Step:
     state_delete: str | None = None
     if_: JSONValue | None = field(default=None, metadata={"contract_name": "if"})
     gate: JSONValue | None = None
+    gate_on_fail: JSONValue | None = None
     register: str | None = None
     launcher: str | None = None
     resolved_run_path: str | None = field(default=None, kw_only=True)
@@ -99,7 +101,10 @@ class Step:
             if self.if_ is not None:
                 contract["if"] = self.if_
             if self.gate is not None:
-                contract["gate"] = self.gate
+                gate_value = self.gate
+                if self.gate_on_fail is not None and isinstance(gate_value, dict):
+                    gate_value = {**gate_value, "on_fail": self.gate_on_fail}
+                contract["gate"] = gate_value
             return contract
 
         if self.operation is not None:
@@ -193,6 +198,7 @@ class Workflow:
     inputs: JSONObject = field(default_factory=dict)
     declared_inputs: JSONObject = field(default_factory=dict)
     explicit_input_keys: tuple[str, ...] = ()
+    protected_input_keys: tuple[str, ...] = ()
     let_bindings: dict[str, str] = field(default_factory=dict)
     state_needs: JSONObject = field(default_factory=dict)
     state_bindings: JSONObject = field(default_factory=dict)
@@ -211,6 +217,7 @@ class Workflow:
         inputs: JSONObject | None = None,
         declared_inputs: JSONObject | None = None,
         explicit_input_keys: tuple[str, ...] = (),
+        protected_input_keys: tuple[str, ...] = (),
         let_bindings: dict[str, str] | None = None,
         state_needs: JSONObject | None = None,
         state_bindings: JSONObject | None = None,
@@ -242,6 +249,7 @@ class Workflow:
         object.__setattr__(self, "inputs", runtime_inputs)
         object.__setattr__(self, "declared_inputs", declared)
         object.__setattr__(self, "explicit_input_keys", tuple(explicit_input_keys))
+        object.__setattr__(self, "protected_input_keys", tuple(protected_input_keys))
         object.__setattr__(self, "let_bindings", {} if let_bindings is None else dict(let_bindings))
         object.__setattr__(self, "state_needs", {} if state_needs is None else dict(state_needs))
         object.__setattr__(self, "state_bindings", {} if state_bindings is None else dict(state_bindings))

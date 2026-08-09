@@ -60,6 +60,7 @@ def materialize_run_workflow(
             inputs={**caller_workflow.inputs, "__iteration_item__": extra_bindings["item"]},
             declared_inputs=caller_workflow.declared_inputs,
             explicit_input_keys=caller_workflow.explicit_input_keys,
+            protected_input_keys=caller_workflow.protected_input_keys,
             let_bindings=caller_workflow.let_bindings,
             state_needs=caller_workflow.state_needs,
             state_bindings=caller_workflow.state_bindings,
@@ -112,12 +113,15 @@ def _materialize_inline_run_workflow(
         materialized_inputs["__iteration_item__"] = item_value
     if step.run_with:
         materialized_inputs["__fragment_args__"] = _evaluate_run_bindings(step.run_with, caller_workflow, block_index=block_index, step_index=step_index)
+    if step.run_inputs:
+        materialized_inputs.update(step.run_inputs)
     return Workflow(
         version=caller_workflow.version,
         workflow=f"{caller_workflow.workflow}::{step.name}",
         inputs=materialized_inputs,
         declared_inputs=caller_workflow.declared_inputs,
         explicit_input_keys=caller_workflow.explicit_input_keys,
+        protected_input_keys=caller_workflow.protected_input_keys,
         let_bindings={},
         state_needs=caller_workflow.state_needs,
         state_bindings=caller_workflow.state_bindings,
@@ -153,6 +157,7 @@ def classify_run_for_check(
                 inputs={**caller_workflow.inputs, "__iteration_item__": extra_bindings["item"]},
                 declared_inputs=caller_workflow.declared_inputs,
                 explicit_input_keys=caller_workflow.explicit_input_keys,
+                protected_input_keys=caller_workflow.protected_input_keys,
                 let_bindings=caller_workflow.let_bindings,
                 state_needs=caller_workflow.state_needs,
                 state_bindings=caller_workflow.state_bindings,
@@ -290,9 +295,10 @@ def build_run_target_workflow(
         return Workflow(
             version=nested_workflow.version,
             workflow=f"{caller_workflow.workflow}::{nested_workflow.workflow}",
-            inputs={**nested_workflow.inputs, **caller_workflow.inputs, "__fragment_args__": effective_bindings},
+            inputs={**nested_workflow.inputs, **caller_workflow.inputs, **step.run_inputs, **effective_bindings, "__fragment_args__": effective_bindings},
             declared_inputs={**caller_workflow.declared_inputs, **nested_workflow.declared_inputs},
             explicit_input_keys=_merge_explicit_input_keys(caller_workflow, nested_workflow),
+            protected_input_keys=caller_workflow.protected_input_keys,
             let_bindings=nested_workflow.let_bindings,
             state_needs={**caller_workflow.state_needs, **nested_workflow.state_needs},
             state_bindings={**caller_workflow.state_bindings, **nested_workflow.state_bindings, **dict(step.run_state_bindings)},
@@ -330,9 +336,10 @@ def build_run_target_workflow(
     return Workflow(
         version=caller_workflow.version,
         workflow=f"{caller_workflow.workflow}::{step.run}",
-        inputs={**caller_workflow.inputs, "__fragment_args__": effective_bindings},
+        inputs={**caller_workflow.inputs, **step.run_inputs, **effective_bindings, "__fragment_args__": effective_bindings},
         declared_inputs=caller_workflow.declared_inputs,
         explicit_input_keys=caller_workflow.explicit_input_keys,
+        protected_input_keys=caller_workflow.protected_input_keys,
         let_bindings={},
         state_needs=caller_workflow.state_needs,
         state_bindings=step.run_state_bindings or caller_workflow.state_bindings,

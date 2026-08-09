@@ -37,6 +37,7 @@
 - Collection-shaping filters must remain bounded data-shaping helpers over already available JSON-shaped values rather than drifting into a nested collection-programming sublanguage.
 - Collection-shaping filters must fail on unsupported input shapes unless the documented contract explicitly defines a different outcome for that filter and shape.
 - `field(path)` must preserve the hybrid missing-path rule: object input with a missing path fails, while array input yields `null` for an item with a missing path.
+- `lookup(key)` must remain exact object-key retrieval rather than drifting into path parsing, collection projection, or fallback coercion.
 - `flatten` must remain single-level rather than silently becoming recursive.
 - `first` and `last` must keep the documented empty-array outcome of `null`.
 - `unique` must remain stable, must keep first occurrence, and must preserve strict normalized JSON equality including the distinction between `1` and `1.0`.

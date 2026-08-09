@@ -13,9 +13,10 @@ from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStat
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
 from .checking import GuardProbe, _build_guard_detail, _build_preflight_observation_session, _default_guard_probe, _evaluate_guard_expression, check_workflow
-from .conditions import ConditionEvaluationReport
+from .conditions import ConditionEvaluationReport, summarize_failed_condition_causes, summarize_unknown_condition_causes
 from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
+from .gate_failure_context import evaluate_gate_failure_context
 from .launchers import apply_launcher_to_step
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import evaluate_condition_report
@@ -280,10 +281,25 @@ def execute_workflow(
                 step_condition_details.append({"name": step.name, "condition": step.if_, "outcome": "executed", "result": True, "source": condition_source})
             gate_report = _evaluate_step_gate(step, effective_workflow, observation_session=observation_session)
             if gate_report is not None:
-                step_gate_details.append(_gate_detail(step, gate_report, source=condition_source))
+                step_gate_details.append(
+                    _gate_detail(
+                        step,
+                        gate_report,
+                        source=condition_source,
+                        workflow=effective_workflow,
+                        step_results=effective_workflow.step_results,
+                    )
+                )
                 if gate_report.verdict != "passed":
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
-                    diagnostics.append(_gate_failure_diagnostic(step, gate_report))
+                    diagnostics.append(
+                        _gate_failure_diagnostic(
+                            step,
+                            gate_report,
+                            workflow=effective_workflow,
+                            step_results=effective_workflow.step_results,
+                        )
+                    )
                     _append_execution_error_block_item(
                         block_items,
                         block_index=block_index,
@@ -494,6 +510,32 @@ def execute_workflow(
                             invoked_by_run=True,
                             invoked_run_reference=step.run,
                         )
+                    contextualized_run_diagnostics = (
+                        _contextualize_fan_out_diagnostics(
+                            run_result.diagnostics,
+                            step=step,
+                            item_index=item_index,
+                            item=item,
+                            item_count=len(fan_out_items),
+                        )
+                        if step.for_each is not None and run_result.diagnostics
+                        else run_result.diagnostics
+                    )
+                    if contextualized_run_diagnostics is not run_result.diagnostics:
+                        run_result = RuntimeResult(
+                            mode=run_result.mode,
+                            status=run_result.status,
+                            diagnostics=contextualized_run_diagnostics,
+                            plan=run_result.plan,
+                            outputs=run_result.outputs,
+                            results=run_result.results,
+                            published=run_result.published,
+                            operation_results=run_result.operation_results,
+                            failed_guard=run_result.failed_guard,
+                            failed_step=run_result.failed_step,
+                            preflight_decision=run_result.preflight_decision,
+                            analysis_tree=run_result.analysis_tree,
+                        )
                     run_results.append(run_result)
                     diagnostics.extend(run_result.diagnostics)
                     operation_results.extend(run_result.operation_results)
@@ -564,6 +606,7 @@ def execute_workflow(
                                 "fan_out_failure": {
                                     "step": step.name,
                                     "item_index": failed_item_index,
+                                    "item": fan_out_items[failed_item_index] if failed_item_index is not None and failed_item_index < len(fan_out_items) else None,
                                     "item_count": len(fan_out_items),
                                 }
                                 if step.for_each is not None
@@ -835,8 +878,8 @@ def _evaluate_step_gate(step: Step, workflow: Workflow, *, observation_session=N
     )
 
 
-def _gate_detail(step: Step, report: ConditionEvaluationReport, *, source: str) -> dict[str, object]:
-    return {
+def _gate_detail(step: Step, report: ConditionEvaluationReport, *, source: str, workflow: Workflow, step_results: dict[str, object]) -> dict[str, object]:
+    detail = {
         "name": step.name,
         "gate": step.gate,
         "outcome": "passed" if report.verdict == "passed" else "blocked",
@@ -844,29 +887,99 @@ def _gate_detail(step: Step, report: ConditionEvaluationReport, *, source: str) 
         "source": source,
         "report": report.to_contract(),
         "failed": [node.to_contract() for node in report.failed],
+        "failed_causes": [node.to_contract() for node in summarize_failed_condition_causes(report.root)],
         "unknown": [node.to_contract() for node in report.unknown],
+        "unknown_causes": [node.to_contract() for node in summarize_unknown_condition_causes(report.root)],
         "passed": [node.to_contract() for node in report.passed],
     }
+    if report.verdict == "failed":
+        on_fail_context, on_fail_errors = evaluate_gate_failure_context(step, workflow, step_results=step_results)
+        if on_fail_context:
+            detail["on_fail_context"] = on_fail_context
+        if on_fail_errors:
+            detail["on_fail_context_errors"] = on_fail_errors
+    return detail
 
 
-def _gate_failure_diagnostic(step: Step, report: ConditionEvaluationReport) -> Diagnostic:
-    failed = [node.expression for node in report.failed if node.expression is not None]
-    unknown = [node.expression for node in report.unknown if node.expression is not None]
+def _gate_failure_diagnostic(step: Step, report: ConditionEvaluationReport, *, workflow: Workflow, step_results: dict[str, object]) -> Diagnostic:
+    failed = [node.expression or node.to_contract().get("rendered") for node in summarize_failed_condition_causes(report.root) if isinstance(node.expression or node.to_contract().get("rendered"), str)]
+    unknown = [node.expression or node.to_contract().get("rendered") for node in summarize_unknown_condition_causes(report.root) if isinstance(node.expression or node.to_contract().get("rendered"), str)]
     message = f"Step gate blocked execution for '{step.name}'"
     if report.verdict == "unknown":
         message = f"Step gate could not be fully established for '{step.name}'"
+    details: dict[str, object] = {
+        "step": step.name,
+        "verdict": report.verdict,
+        "failed_conditions": failed,
+        "unknown_conditions": unknown,
+    }
+    if report.verdict == "failed":
+        on_fail_context, on_fail_errors = evaluate_gate_failure_context(step, workflow, step_results=step_results)
+        if on_fail_context:
+            details["on_fail_context"] = on_fail_context
+        if on_fail_errors:
+            details["on_fail_context_errors"] = on_fail_errors
     return Diagnostic(
         code="runtime.step.gate.failed" if report.verdict == "failed" else "runtime.step.gate.unknown",
         level="error",
         message=message,
         path=("steps", step.name, "gate"),
-        details={
-            "step": step.name,
-            "verdict": report.verdict,
-            "failed_conditions": failed,
-            "unknown_conditions": unknown,
-        },
+        details=details,
     )
+
+
+def _fan_out_gate_failure_human_summary(*, step_name: str, item: JSONValue, failed_conditions: list[str], unknown_conditions: list[str]) -> str:
+    item_label = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, sort_keys=True)
+    if failed_conditions:
+        if len(failed_conditions) == 1:
+            return f"Item '{item_label}' failed gate '{step_name}': {failed_conditions[0]}"
+        rendered = "; ".join(failed_conditions)
+        return f"Item '{item_label}' failed gate '{step_name}'. Failed conditions: {rendered}"
+    if unknown_conditions:
+        if len(unknown_conditions) == 1:
+            return f"Item '{item_label}' could not establish gate '{step_name}': {unknown_conditions[0]}"
+        rendered = "; ".join(unknown_conditions)
+        return f"Item '{item_label}' could not establish gate '{step_name}'. Unknown conditions: {rendered}"
+    return f"Item '{item_label}' failed gate '{step_name}'"
+
+
+def _contextualize_fan_out_diagnostics(
+    diagnostics: tuple[Diagnostic, ...],
+    *,
+    step: Step,
+    item_index: int,
+    item: JSONValue,
+    item_count: int,
+) -> tuple[Diagnostic, ...]:
+    contextualized: list[Diagnostic] = []
+    for diagnostic in diagnostics:
+        details = dict(diagnostic.details)
+        details.setdefault("fan_out_step", step.name)
+        details.setdefault("fan_out_item_index", item_index)
+        details.setdefault("fan_out_item", item)
+        details.setdefault("fan_out_item_count", item_count)
+        message = diagnostic.message
+        if diagnostic.code in {"runtime.step.gate.failed", "runtime.step.gate.unknown"}:
+            failed_conditions = [value for value in details.get("failed_conditions", []) if isinstance(value, str)]
+            unknown_conditions = [value for value in details.get("unknown_conditions", []) if isinstance(value, str)]
+            human_summary = _fan_out_gate_failure_human_summary(
+                step_name=str(details.get("step", step.name)),
+                item=item,
+                failed_conditions=failed_conditions,
+                unknown_conditions=unknown_conditions,
+            )
+            details.setdefault("human_summary", human_summary)
+            message = human_summary
+        contextualized.append(
+            Diagnostic(
+                code=diagnostic.code,
+                level=diagnostic.level,
+                message=message,
+                path=diagnostic.path,
+                details=details,
+            )
+        )
+    return tuple(contextualized)
 
 
 def _evaluate_run_for_each_items(

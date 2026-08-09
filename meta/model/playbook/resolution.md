@@ -27,6 +27,7 @@ The entry must resolve to exactly one workflow file.
 - `pre_run` is an optional ordered list of playbook-owned launch-phase entries declared directly on the playbook.
 - Each `pre_run` item must declare its workflow `file` explicitly.
 - Each `pre_run` item resolves its `file` with the same workflow-path rules as a named workflow file reference.
+- Each `pre_run` item may declare a static `with` object whose values become invocation inputs for that `pre_run` workflow only.
 - Each `pre_run` item may declare launch-phase `state_bindings` that apply only while that `pre_run` workflow is being evaluated.
 - `pre_run` workflows execute in declaration order before the requested workflow performs its own effectful execution.
 - `pre_run` workflows run in the same runtime session as the requested workflow.
@@ -89,8 +90,13 @@ The entry must resolve to exactly one workflow file.
 
 - A playbook run may accept explicit launch-time input overrides from the caller.
 - Launch-time input overrides apply to the selected workflow run only.
+- A workflow entry may declare a static `with` object whose keys become playbook-owned invocation inputs for that workflow entry.
+- Workflow-entry `with` applies to the selected workflow run only.
+- Workflow-entry `with` takes precedence over workflow-declared input defaults.
+- Workflow-entry `with` also takes precedence over profile-provided missing-input defaults.
 - Launch-time input overrides take precedence over workflow-declared input defaults.
 - Launch-time input overrides also take precedence over profile-provided missing-input defaults.
+- Launch-time input overrides take precedence over workflow-entry `with`.
 - A launch-time input override may be provided either inline or from a file-backed raw string value.
 - Launch-time input overrides do not mutate the playbook, workflow source file, or profile source file.
 

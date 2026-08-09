@@ -7,8 +7,6 @@ import json
 import re
 import sys
 
-import yaml
-
 from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
@@ -123,6 +121,8 @@ def main() -> int:
         epilog=(
             "command help:\n"
             "  run `ordo-playbook <command> --help` to see command-specific guidance\n\n"
+            "deeper reference:\n"
+            "  run `ordo-help` for the detailed Ordo reference model, capabilities, and examples\n\n"
             "discovery:\n"
             "  workflows  list workflow entries or show one workflow contract summary\n\n"
             "execution:\n"
@@ -142,7 +142,7 @@ def main() -> int:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="override one workflow input for this run; repeatable; VALUE is parsed as YAML",
+        help="override one workflow input for this run; repeatable; VALUE stays text except simple numbers and true/false",
     )
     parser.add_argument(
         "--input-file",
@@ -231,6 +231,8 @@ def main() -> int:
             payload = _summarize_check_payload(payload)
         if args.mode == "review" and not args.json:
             payload = _summarize_review_payload(payload)
+        if args.mode == "run" and not args.json:
+            payload = _summarize_run_payload(payload)
 
         if args.json:
             json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -313,6 +315,40 @@ def _summarize_review_finding(item: dict[str, object]) -> dict[str, object]:
         summary["suggested_expression"] = evidence.get("suggested_expression")
     if evidence.get("suggested_rewrite") is not None:
         summary["suggested_rewrite"] = evidence.get("suggested_rewrite")
+    return summary
+
+
+def _summarize_run_payload(payload: dict[str, object]) -> dict[str, object]:
+    summary = {
+        "status": payload.get("status"),
+    }
+    if payload.get("mode") is not None:
+        summary["mode"] = payload.get("mode")
+    if payload.get("workflow") is not None:
+        summary["workflow"] = payload.get("workflow")
+    if payload.get("profile") is not None:
+        summary["profile"] = payload.get("profile")
+    if payload.get("status") == "ok":
+        if payload.get("results") is not None:
+            summary["results"] = payload.get("results")
+        if payload.get("published") is not None:
+            summary["published"] = payload.get("published")
+        return summary
+    if payload.get("failed_guard") is not None:
+        summary["failed_guard"] = payload.get("failed_guard")
+    if payload.get("failed_step") is not None:
+        summary["failed_step"] = payload.get("failed_step")
+    diagnostics = [item for item in payload.get("diagnostics", []) if isinstance(item, dict)]
+    if diagnostics:
+        summary["message"] = diagnostics[0].get("message")
+        details = diagnostics[0].get("details")
+        if isinstance(details, dict):
+            if isinstance(details.get("fan_out_item"), (str, int, float, bool)):
+                summary["item"] = details.get("fan_out_item")
+            if isinstance(details.get("on_fail_context"), dict):
+                summary["on_fail_context"] = details.get("on_fail_context")
+    if isinstance(payload.get("failure"), dict):
+        summary["failure"] = payload.get("failure")
     return summary
 
 
@@ -435,6 +471,8 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                 when=entry.workflow_when,
                 file=str(entry.workflow_path),
                 working_directory=entry.working_directory,
+                with_inputs=entry.with_,
+                caller_inputs=list(entry.caller_inputs),
                 inputs=[
                     _compact_mapping(
                         name=item.name,
@@ -464,11 +502,21 @@ def _parse_input_overrides(raw_items: list[str], *, parser: argparse.ArgumentPar
         key = key.strip()
         if not key:
             parser.error("--input key must not be empty")
-        try:
-            overrides[key] = "" if raw_value == "" else yaml.safe_load(raw_value)
-        except yaml.YAMLError as exc:
-            parser.error(f"invalid YAML value for --input {key}: {exc}")
+        overrides[key] = _coerce_inline_input_value(raw_value)
     return overrides
+
+
+def _coerce_inline_input_value(raw_value: str) -> object:
+    lowered = raw_value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if re.fullmatch(r"-?(0|[1-9]\d*)", raw_value):
+        return int(raw_value)
+    if re.fullmatch(r"-?(?:0|[1-9]\d*)\.\d+", raw_value):
+        return float(raw_value)
+    return raw_value
 
 
 def _parse_input_file_overrides(raw_items: list[str], *, parser: argparse.ArgumentParser) -> dict[str, object]:
@@ -601,7 +649,11 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
     gate_blockers = [name for name in outputs.get("gate_blockers", []) if isinstance(name, str)]
     if gate_blockers:
         summary["blockers"] = gate_blockers
-        summary["message"] = "check blocked by step gate; use explain or --json check for full gate details"
+        gate_summary = _extract_check_gate_failure_summary(outputs)
+        if gate_summary:
+            summary.update(gate_summary)
+        else:
+            summary["message"] = "check blocked by step gate; use explain or --json check for full gate details"
 
     if payload.get("failed_guard") is not None:
         summary["failed_guard"] = payload.get("failed_guard")
@@ -620,12 +672,112 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
 
     frontier_ready_step = outputs.get("frontier_ready_step")
     if isinstance(frontier_ready_step, str):
-        summary["message"] = f"workflow can run now; read-only preflight reached '{frontier_ready_step}'"
+        summary["message"] = f"workflow can run now for the current observed inputs and state; read-only preflight reached '{frontier_ready_step}'"
 
     if outputs.get("verdict_basis_stale"):
         summary["message"] = "check incomplete; use --json check or explain for details"
 
     return summary
+
+
+def _extract_check_gate_failure_summary(outputs: dict[str, object]) -> dict[str, object]:
+    nested_gate_blockers = outputs.get("nested_gate_blockers")
+    if isinstance(nested_gate_blockers, list):
+        for item in nested_gate_blockers:
+            if not isinstance(item, dict):
+                continue
+            gate_names = [name for name in item.get("gate_blockers", []) if isinstance(name, str)]
+            gate_reports = item.get("gate_reports")
+            if not gate_names or not isinstance(gate_reports, list) or not gate_reports or not isinstance(gate_reports[0], dict):
+                continue
+            return _build_gate_failure_summary(
+                step_name=gate_names[0],
+                gate_report=gate_reports[0],
+                item=item.get("expanded_item"),
+            )
+
+    preflight_step_items = outputs.get("preflight_step_items")
+    if isinstance(preflight_step_items, list):
+        for item in preflight_step_items:
+            if not isinstance(item, dict) or item.get("status") != "gate_blocked":
+                continue
+            step_name = item.get("name")
+            gate_report = item.get("gate_report")
+            if not isinstance(step_name, str) or not isinstance(gate_report, dict):
+                continue
+            return _build_gate_failure_summary(step_name=step_name, gate_report=gate_report, item=None)
+
+    return {}
+
+
+def _build_gate_failure_summary(*, step_name: str, gate_report: dict[str, object], item: object) -> dict[str, object]:
+    summary: dict[str, object] = {"failed_step": step_name}
+    if isinstance(item, (str, int, float, bool)):
+        summary["item"] = item
+    message = _render_gate_failure_message(step_name=step_name, gate_report=gate_report, item=item)
+    if message is not None:
+        summary["message"] = message
+    if isinstance(gate_report.get("on_fail_context"), dict):
+        summary["on_fail_context"] = gate_report.get("on_fail_context")
+    if isinstance(gate_report.get("on_fail_context_errors"), dict):
+        summary["on_fail_context_errors"] = gate_report.get("on_fail_context_errors")
+    return summary
+
+
+def _render_gate_failure_message(*, step_name: str, gate_report: dict[str, object], item: object) -> str | None:
+    verdict = gate_report.get("verdict")
+    failed = gate_report.get("failed_causes")
+    if not isinstance(failed, list):
+        failed = gate_report.get("failed")
+    unknown = gate_report.get("unknown_causes")
+    if not isinstance(unknown, list):
+        unknown = gate_report.get("unknown")
+    failed_conditions = _gate_rendered_conditions(failed)
+    unknown_conditions = _gate_rendered_conditions(unknown)
+    if item is not None:
+        return _render_fan_out_gate_failure_message(
+            step_name=step_name,
+            item=item,
+            failed_conditions=failed_conditions,
+            unknown_conditions=unknown_conditions,
+        )
+    if verdict == "unknown":
+        if len(unknown_conditions) == 1:
+            return f"Step gate could not be fully established for '{step_name}': {unknown_conditions[0]}"
+        if unknown_conditions:
+            return f"Step gate could not be fully established for '{step_name}'. Unknown conditions: {'; '.join(unknown_conditions)}"
+        return f"Step gate could not be fully established for '{step_name}'"
+    if len(failed_conditions) == 1:
+        return f"Step gate blocked execution for '{step_name}': {failed_conditions[0]}"
+    if failed_conditions:
+        return f"Step gate blocked execution for '{step_name}'. Failed conditions: {'; '.join(failed_conditions)}"
+    return f"Step gate blocked execution for '{step_name}'"
+
+
+def _gate_rendered_conditions(nodes: object) -> list[str]:
+    if not isinstance(nodes, list):
+        return []
+    rendered: list[str] = []
+    for item in nodes:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("rendered") or item.get("expression")
+        if isinstance(text, str):
+            rendered.append(text)
+    return rendered
+
+
+def _render_fan_out_gate_failure_message(*, step_name: str, item: object, failed_conditions: list[str], unknown_conditions: list[str]) -> str:
+    item_label = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, sort_keys=True)
+    if failed_conditions:
+        if len(failed_conditions) == 1:
+            return f"Item '{item_label}' failed gate '{step_name}': {failed_conditions[0]}"
+        return f"Item '{item_label}' failed gate '{step_name}'. Failed conditions: {'; '.join(failed_conditions)}"
+    if unknown_conditions:
+        if len(unknown_conditions) == 1:
+            return f"Item '{item_label}' could not establish gate '{step_name}': {unknown_conditions[0]}"
+        return f"Item '{item_label}' could not establish gate '{step_name}'. Unknown conditions: {'; '.join(unknown_conditions)}"
+    return f"Item '{item_label}' failed gate '{step_name}'"
 
 
 def _collect_observed_facts(outputs: dict[str, object]) -> list[str]:
@@ -656,6 +808,20 @@ def _collect_observed_facts(outputs: dict[str, object]) -> list[str]:
                 continue
             rendered = f"{expr} = {_compact_value(item.get('value'))}"
             _append_unique(facts, seen, rendered)
+
+    preflight_step_items = outputs.get("preflight_step_items")
+    if isinstance(preflight_step_items, list):
+        for item in preflight_step_items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("status") != "interpreted" or item.get("preflight_classification") != "context_only":
+                continue
+            expanded_item = item.get("expanded_item")
+            if expanded_item is not None:
+                _append_unique(facts, seen, f"fan_out item = {_compact_value(expanded_item)}")
+            active_profile = item.get("active_profile")
+            if isinstance(active_profile, str) and active_profile:
+                _append_unique(facts, seen, f"active_profile = {active_profile}")
 
     return _limit_items(facts)
 
@@ -697,7 +863,7 @@ def _limit_items(items: list[str], *, limit: int = 8) -> list[str]:
     if len(items) <= limit:
         return items
     hidden_count = len(items) - limit
-    return [*items[:limit], f"… and {hidden_count} more"]
+    return [*items[:limit], f"... and {hidden_count} more"]
 
 
 def _compact_value(value: object, *, limit: int = 80) -> str:
@@ -709,7 +875,7 @@ def _compact_value(value: object, *, limit: int = 80) -> str:
         rendered = json.dumps(value, ensure_ascii=False, sort_keys=True)
     if len(rendered) <= limit:
         return rendered
-    return f"{rendered[: limit - 1]}…"
+    return f"{rendered[: limit - 3]}..."
 
 
 def _extract_fact_references(expression: str) -> list[str]:

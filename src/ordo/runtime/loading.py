@@ -15,7 +15,7 @@ from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
-from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression
+from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression, parse_value_local_expression
 from ordo.runtime.local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, FilterApplicationNode, ListNode, LocalExpressionNode, ParsedLocalExpressionTree, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, parse_local_expression_tree
 
 
@@ -625,10 +625,22 @@ def _bind_fragment_arg_string(
     include_chain: tuple[Path, ...],
     include_node_path: tuple[str, ...],
 ) -> JSONValue | _BoundFragmentExpression:
-    expression = _extract_runtime_expression(value)
-    if expression is None:
+    expression: str | None = _extract_runtime_expression(value)
+    parsed: ParsedLocalExpressionTree | None = None
+    if expression is not None:
+        parsed = parse_local_expression_tree(expression, allow_boolean_composition=True)
+    elif authored_string_style(value) == "plain":
+        try:
+            parsed_value = parse_value_local_expression(
+                value,
+                context=LocalExpressionContext.EMBEDDED_VALUE,
+                allow_boolean_composition=True,
+            )
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            return value
+        parsed = parsed_value.value
+    if parsed is None:
         return value
-    parsed = parse_local_expression_tree(expression, allow_boolean_composition=True)
     direct_arg_name = _direct_fragment_arg_name(parsed)
     if direct_arg_name is not None:
         if direct_arg_name not in include_bindings:
@@ -649,7 +661,8 @@ def _bind_fragment_arg_string(
     )
     if not replacements:
         return value
-    rebound_expression = _apply_expression_replacements(expression, replacements)
+    rebound_source = expression if expression is not None else value
+    rebound_expression = _apply_expression_replacements(rebound_source, replacements)
     rebound_value = "${" + rebound_expression + "}"
     if allowed_caller_step_refs:
         return _BoundFragmentExpression(text=rebound_value, allowed_caller_step_refs=allowed_caller_step_refs)
@@ -1271,6 +1284,13 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
             for item_index, item in enumerate(inline_steps_payload)
         )
 
+    gate_payload = data.get("gate")
+    gate_condition_payload = gate_payload
+    gate_on_fail_payload: JSONValue | None = None
+    if isinstance(gate_payload, dict) and "on_fail" in gate_payload:
+        gate_on_fail_payload = _normalize_json_value(gate_payload.get("on_fail"), source=source, path=path + ("gate", "on_fail"))
+        gate_condition_payload = {key: value for key, value in gate_payload.items() if key != "on_fail"}
+
     return Step(
         name=_require_string(data, "name", path=path + ("name",), source=source),
         operation=_load_operation_ref(data, path=path, source=source) if has_uses else None,
@@ -1285,7 +1305,8 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
         state_set=state_set,
         state_delete=state_delete,
         if_=_optional_condition(data, "if", path=path + ("if",), source=source),
-        gate=_optional_condition(data, "gate", path=path + ("gate",), source=source),
+        gate=_optional_condition({"gate": gate_condition_payload}, "gate", path=path + ("gate",), source=source) if "gate" in data else None,
+        gate_on_fail=gate_on_fail_payload,
         register=_optional_string(data, "register", path=path + ("register",), source=source),
         launcher=_optional_string(data, "launcher", path=path + ("launcher",), source=source),
         resolved_run_path=_optional_string(data, "__run_path__", path=path + ("__run_path__",), source=source),

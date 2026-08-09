@@ -1,5 +1,6 @@
 import unittest
 
+from ordo.model.workflow import OperationRef, Step, StepBlock, Workflow
 from ordo.model.runtime import RuntimeStatus
 from ordo.runtime import execute_workflow, explain_execution_result, load_workflow_text, validate_workflow_text
 
@@ -125,6 +126,61 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         self.assertEqual(result.outputs["step_condition_details"][0]["reason"], "condition_evaluation_failed")
         self.assertEqual(result.outputs["step_condition_details"][0]["error_code"], "runtime.value.filter_type_invalid")
+
+    def test_execute_workflow_with_lookup_filter_projects_mapping_value(self) -> None:
+        workflow_text = """
+version: 0
+workflow: local-expression-lookup
+inputs:
+  repository_profile_map: {}
+  repository: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: resolve-profile
+        value: ${inputs.repository_profile_map | lookup(inputs.repository)}
+        register: resolved_profile
+      - name: announce
+        if: step.resolved_profile.outputs.value | eq("mobile")
+        uses: shell.command
+        with:
+          command: "printf ready"
+"""
+
+        validation = validate_workflow_text(workflow_text)
+        workflow = Workflow(
+            version=0,
+            workflow="local-expression-lookup",
+            inputs={
+                "repository_profile_map": {
+                    "kergma-lw/checklist-mobile": "mobile",
+                    "kergma-lw/checklist-backend": "backend",
+                },
+                "repository": "kergma-lw/checklist-mobile",
+            },
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="resolve-profile",
+                            value="${inputs.repository_profile_map | lookup(inputs.repository)}",
+                            register="resolved_profile",
+                        ),
+                        Step(
+                            name="announce",
+                            if_='step.resolved_profile.outputs.value | eq("mobile")',
+                            operation=OperationRef("shell.command", with_={"command": "printf ready"}),
+                        ),
+                    )
+                ),
+            ),
+        )
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(validation.status, RuntimeStatus.OK)
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.operation_results[0].outputs.get("value"), "mobile")
+        self.assertEqual(result.operation_results[1].outputs.get("stdout"), "ready")
 
     def test_execute_workflow_with_only_filter_selects_non_success_checks(self) -> None:
         workflow_text = """

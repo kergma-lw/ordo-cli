@@ -357,6 +357,40 @@ blocks:
         self.assertEqual(result.outputs["skipped_steps"], ["mutate"])
         self.assertEqual(result.outputs["step_gate_details"], [])
 
+    def test_run_gate_failure_diagnostic_uses_structural_any_semantics(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: gate-check
+blocks:
+  - guards: []
+  - steps:
+      - name: linked
+        value:
+          exists: true
+          type: "Task"
+          status: "Backlog"
+        register: linked_project_issue
+      - name: gate-linked-task
+        gate:
+          all:
+            - step.linked_project_issue.outputs.value.exists
+            - any:
+                - step.linked_project_issue.outputs.value.type | eq("Task")
+                - step.linked_project_issue.outputs.value.type | eq("Bug")
+            - step.linked_project_issue.outputs.value.status | eq("Ready")
+      - name: mutate
+        result:
+          summary: "done"
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
+        self.assertEqual(diagnostic.details["failed_conditions"], ['step.linked_project_issue.outputs.value.status | eq("Ready")'])
+
     def test_explain_structured_condition_failure_preserves_error(self) -> None:
         loaded = load_workflow_text(
             """

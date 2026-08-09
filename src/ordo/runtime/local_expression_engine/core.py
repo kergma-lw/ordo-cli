@@ -258,7 +258,7 @@ class LocalExpressionValidationIssue:
 class LocalExpressionDependency:
     """One dependency reference collected from the canonical expression tree."""
 
-    kind: Literal["root"]
+    kind: Literal["root", "observation"]
     name: str
     start: int
     end: int
@@ -432,6 +432,7 @@ def evaluate_condition_expression(
     parsed: ParsedLocalExpressionTree,
     workflow: Workflow,
     *,
+    context=None,
     observe: Callable[[ConditionObservationRequest], ConditionObservationResult] | None = None,
     session: ReadOnlyObservationSession | None = None,
     step_results: dict[str, OperationResult | JSONObject] | None = None,
@@ -442,9 +443,14 @@ def evaluate_condition_expression(
         if observe is None:
             raise ValueError("Condition evaluation requires either an observation session or an observe callback")
         session = ReadOnlyObservationSession(observe)
+    if context is None:
+        from ordo.runtime.local_expression_contexts import LocalExpressionContext
+
+        context = LocalExpressionContext.STEP_CONDITION
     evaluator = _ConditionEvaluator(
         parsed,
         workflow,
+        context=context,
         observation_session=session,
         step_results={} if step_results is None else step_results,
     )
@@ -465,7 +471,11 @@ def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[Lo
 
     def visit(current: ValueExpressionNode) -> None:
         if isinstance(current, ReferenceNode):
-            if current.parts and current.parts[0] in {"inputs", "args", "state", "step"}:
+            if current.parts and current.parts[0] in {"inputs", "args", "item", "state", "step"}:
+                found.append(LocalExpressionDependency(kind="root", name=current.parts[0], start=current.start, end=current.end))
+            elif current.parts and len(current.parts) > 1:
+                found.append(LocalExpressionDependency(kind="observation", name="probe", start=current.start, end=current.end))
+            elif current.parts:
                 found.append(LocalExpressionDependency(kind="root", name=current.parts[0], start=current.start, end=current.end))
             return
         if isinstance(current, StateReferenceNode):
@@ -489,6 +499,7 @@ def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[Lo
             visit(current.value)
             return
         if isinstance(current, CallNode):
+            found.append(LocalExpressionDependency(kind="observation", name="probe", start=current.start, end=current.end))
             for argument in current.arguments:
                 visit(argument)
             return
@@ -1338,11 +1349,13 @@ class _ConditionEvaluator:
         parsed: ParsedValueExpression,
         workflow: Workflow,
         *,
+        context,
         observation_session: ReadOnlyObservationSession,
         step_results: dict[str, OperationResult | JSONObject],
     ) -> None:
         self._parsed = parsed
         self._workflow = workflow
+        self._context = context
         self._observation_session = observation_session
         self._step_results = step_results
         self._diagnostics: list[Diagnostic] = []
@@ -1428,6 +1441,15 @@ class _ConditionEvaluator:
                     return "probe_failed", None
                 self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="arg", status="ok", value=value))
                 return "ok", value
+            if node.parts[0] == "item":
+                try:
+                    value = _resolve_iteration_item_reference(node.parts, workflow=self._workflow)
+                except ValueExpressionEvaluationError as exc:
+                    self._diagnostics.append(exc.to_diagnostic())
+                    self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="item", status="probe_failed", value=None))
+                    return "probe_failed", None
+                self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="item", status="ok", value=value))
+                return "ok", value
             return self._observe_reference(node)
         if isinstance(node, StateReferenceNode):
             try:
@@ -1457,7 +1479,7 @@ class _ConditionEvaluator:
                     node,
                     parsed=self._parsed,
                     workflow=self._workflow,
-                    context=LocalExpressionContext.GUARD,
+                    context=self._context,
                     step_results=self._step_results,
                     observation_session=self._observation_session,
                 )
@@ -1475,7 +1497,7 @@ class _ConditionEvaluator:
                     node,
                     parsed=self._parsed,
                     workflow=self._workflow,
-                    context=LocalExpressionContext.GUARD,
+                    context=self._context,
                     step_results=self._step_results,
                     observation_session=self._observation_session,
                 )
@@ -2844,6 +2866,44 @@ def _apply_field_filter(
     )
 
 
+def _apply_lookup_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=1)
+    raw_key = _evaluate_filter_argument(
+        filter_node,
+        0,
+        parsed=parsed,
+        workflow=workflow,
+        context=_context_local_expression_context(evaluation_context),
+        step_results=_context_step_results(evaluation_context),
+        observation_session=_context_observation_session(evaluation_context),
+    )
+    if not isinstance(raw_key, str):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.filter_arg_type_invalid",
+            message="Filter 'lookup' requires a string key argument",
+            details={"expression": parsed.source, "filter": "lookup", "actual_type": type(raw_key).__name__},
+        )
+    if not isinstance(value, dict):
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.filter_type_invalid",
+            message="Filter 'lookup' requires an object input",
+            details={"expression": parsed.source, "filter": "lookup", "actual_type": type(value).__name__},
+        )
+    if raw_key not in value:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.lookup_key_missing",
+            message="Filter 'lookup' could not resolve the addressed key on object input",
+            details={"expression": parsed.source, "filter": "lookup", "key": raw_key},
+        )
+    return value[raw_key]
+
+
 def _apply_flatten_filter(
     value: JSONValue,
     filter_node: FilterApplicationNode,
@@ -3107,6 +3167,7 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
     ValueExpressionFilterSpec(name="is_boolean", input_type="json", output_type="boolean", argument_count=0, handler=_apply_is_boolean_filter),
     ValueExpressionFilterSpec(name="in", input_type="json", output_type="boolean", argument_count=1, handler=_apply_in_filter),
     ValueExpressionFilterSpec(name="field", input_type="json", output_type="json", argument_count=1, handler=_apply_field_filter),
+    ValueExpressionFilterSpec(name="lookup", input_type="json", output_type="json", argument_count=1, handler=_apply_lookup_filter),
     ValueExpressionFilterSpec(name="only", input_type="json", output_type="json", argument_count=1, handler=_apply_only_filter, authored_form="only(field=value) / only(field!=value)"),
     ValueExpressionFilterSpec(name="flatten", input_type="json", output_type="json", argument_count=0, handler=_apply_flatten_filter),
     ValueExpressionFilterSpec(name="first", input_type="json", output_type="json", argument_count=0, handler=_apply_first_filter),

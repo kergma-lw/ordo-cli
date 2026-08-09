@@ -908,6 +908,65 @@ class LoadingTest(unittest.TestCase):
         self.assertTrue(report.ok)
         self.assertEqual(payload["blocks"][1]["steps"][0]["with"]["issue_id"], "${step.outer_issue.outputs.id}")
 
+    def test_load_workflow_file_binds_plain_fragment_arg_references_in_value_surfaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workflow_path = root / "workflow.yaml"
+            fragments_dir = root / "fragments"
+            fragments_dir.mkdir()
+            workflow_path.write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: demo
+                    inputs:
+                      repository: {}
+                      issue_number: {}
+                    blocks:
+                      - include: fragments/check-issue
+                        with:
+                          repository: ${inputs.repository}
+                          issue_number: ${inputs.issue_number}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (fragments_dir / "check-issue.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    args:
+                      repository: string
+                      issue_number: integer
+
+                    blocks:
+                      - steps:
+                          - name: inspect
+                            uses: gh.issue
+                            with:
+                              repository: args.repository
+                              issue_number: args.issue_number
+                            register: issue
+                      - steps:
+                          - name: publish
+                            result:
+                              issue_ref:
+                                format: "{}#{}"
+                                args:
+                                  - args.repository
+                                  - args.issue_number
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            workflow = load_workflow_file(workflow_path, launch_dir=root)
+
+        self.assertEqual(workflow.steps[0].operation.with_["repository"], "${inputs.repository}")
+        self.assertEqual(workflow.steps[0].operation.with_["issue_number"], "${inputs.issue_number}")
+        self.assertEqual(workflow.steps[1].result["issue_ref"]["args"], ["${inputs.repository}", "${inputs.issue_number}"])
+
     def test_load_workflow_file_rejects_missing_fragment_args(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)

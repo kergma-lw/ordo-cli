@@ -13,6 +13,7 @@ class LocalExpressionRoot(StrEnum):
     ARGS = "args"
     STATE = "state"
     STEP = "step"
+    ITEM = "item"
 
 
 class LocalExpressionContext(StrEnum):
@@ -46,6 +47,8 @@ class LocalExpressionContextPolicy:
     allows_args: bool
     allows_state: bool
     allows_step: bool
+    allows_item: bool
+    allows_observation: bool
 
     def allows_root(self, root: LocalExpressionRoot) -> bool:
         return {
@@ -53,6 +56,7 @@ class LocalExpressionContextPolicy:
             LocalExpressionRoot.ARGS: self.allows_args,
             LocalExpressionRoot.STATE: self.allows_state,
             LocalExpressionRoot.STEP: self.allows_step,
+            LocalExpressionRoot.ITEM: self.allows_item,
         }[root]
 
 
@@ -69,6 +73,8 @@ LOCAL_EXPRESSION_CONTEXT_POLICIES: dict[LocalExpressionContext, LocalExpressionC
         allows_args=False,
         allows_state=True,
         allows_step=False,
+        allows_item=False,
+        allows_observation=True,
     ),
     LocalExpressionContext.STEP_CONDITION: LocalExpressionContextPolicy(
         context=LocalExpressionContext.STEP_CONDITION,
@@ -82,6 +88,8 @@ LOCAL_EXPRESSION_CONTEXT_POLICIES: dict[LocalExpressionContext, LocalExpressionC
         allows_args=True,
         allows_state=True,
         allows_step=True,
+        allows_item=True,
+        allows_observation=True,
     ),
     LocalExpressionContext.EMBEDDED_VALUE: LocalExpressionContextPolicy(
         context=LocalExpressionContext.EMBEDDED_VALUE,
@@ -95,6 +103,8 @@ LOCAL_EXPRESSION_CONTEXT_POLICIES: dict[LocalExpressionContext, LocalExpressionC
         allows_args=True,
         allows_state=True,
         allows_step=True,
+        allows_item=True,
+        allows_observation=True,
     ),
     LocalExpressionContext.INCLUDE_BINDING: LocalExpressionContextPolicy(
         context=LocalExpressionContext.INCLUDE_BINDING,
@@ -108,6 +118,8 @@ LOCAL_EXPRESSION_CONTEXT_POLICIES: dict[LocalExpressionContext, LocalExpressionC
         allows_args=False,
         allows_state=True,
         allows_step=True,
+        allows_item=True,
+        allows_observation=True,
     ),
 }
 
