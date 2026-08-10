@@ -36,6 +36,7 @@ from .local_expressions import (
     parse_local_expression,
     parse_value_local_expression,
     validate_parsed_local_expression,
+    validate_parsed_local_expression_for_workflow,
 )
 from .fragment_runs import build_run_target_workflow, load_run_target_payload
 from .loading import LoadError, load_yaml_document
@@ -689,7 +690,7 @@ def _validate_include_binding_values(value: JSONValue, *, source: str, path: tup
         return diagnostics
     if parsed is None:
         return diagnostics
-    for validation_error in validate_parsed_local_expression(parsed):
+    for validation_error in _validate_workflow_aware_local_expression(parsed, let_bindings=let_bindings):
         diagnostics.append(
             build_local_expression_validation_diagnostic(
                 validation_error,
@@ -911,7 +912,7 @@ def _validate_guard_list(value: JSONValue | None, *, source: str, path: tuple[st
                     )
                 )
                 continue
-            for validation_error in validate_parsed_local_expression(parsed):
+            for validation_error in _validate_workflow_aware_local_expression(parsed, let_bindings=let_bindings):
                 diagnostics.append(
                     build_local_expression_validation_diagnostic(
                         validation_error,
@@ -1407,7 +1408,7 @@ def _validate_gate_on_fail_value_surface(
         )
     )
     diagnostics.extend(surface_diagnostics)
-    for validation_error in validate_parsed_local_expression(parsed):
+    for validation_error in _validate_workflow_aware_local_expression(parsed, let_bindings=let_bindings):
         diagnostic = build_local_expression_validation_diagnostic(
             validation_error,
             context=LocalExpressionContext.STEP_CONDITION,
@@ -2105,7 +2106,7 @@ def _validate_runtime_value_surface(
     )
     surface_diagnostics.extend(root_diagnostics)
     diagnostics.extend(surface_diagnostics)
-    for validation_error in validate_parsed_local_expression(parsed):
+    for validation_error in _validate_workflow_aware_local_expression(parsed, let_bindings=let_bindings):
         diagnostic = build_local_expression_validation_diagnostic(
             validation_error,
             context=LocalExpressionContext.EMBEDDED_VALUE,
@@ -2415,7 +2416,7 @@ def _validate_workflow_let_binding_uses(
                 )
             )
             continue
-        for validation_error in validate_parsed_local_expression(parsed_binding):
+        for validation_error in _validate_workflow_aware_local_expression(parsed_binding, let_bindings=let_bindings):
             diagnostic = build_local_expression_validation_diagnostic(
                 validation_error,
                 context=context,
@@ -2442,6 +2443,13 @@ def _validate_workflow_let_binding_uses(
                 )
             )
     return diagnostics
+
+
+def _validate_workflow_aware_local_expression(parsed, *, let_bindings: JSONObject):
+    if not let_bindings:
+        return validate_parsed_local_expression(parsed)
+    workflow = Workflow(version=0, workflow="validation", let_bindings=dict(let_bindings), guards=(), steps=())
+    return validate_parsed_local_expression_for_workflow(parsed, workflow)
 
 
 def _extract_runtime_value_expression(value: str) -> str | None:

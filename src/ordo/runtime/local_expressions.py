@@ -98,6 +98,18 @@ def validate_parsed_local_expression(parsed: ParsedLocalExpression) -> tuple[Loc
     return tuple(errors)
 
 
+def validate_parsed_local_expression_for_workflow(
+    parsed: ParsedLocalExpression,
+    workflow: Workflow,
+) -> tuple[LocalExpressionValidationError, ...]:
+    """Validate one parsed local expression with workflow-aware let expansion."""
+
+    errors: list[LocalExpressionValidationError | LocalExpressionContextPolicyError] = []
+    errors.extend(_validate_context_policy(parsed))
+    errors.extend(validate_local_expression_tree(parsed.value, workflow=workflow, context=parsed.context))
+    return tuple(errors)
+
+
 def build_local_expression_parse_diagnostic(
     exc: LocalExpressionParseError,
     *,

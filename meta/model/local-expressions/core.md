@@ -103,6 +103,8 @@ The narrow modeled argument classes are:
 - lookup-style references whose missingness semantics are defined by the surrounding root contract;
 - read-only representation-adapter invocations whose absence semantics are defined by adapter `not_found`.
 
+Workflow-level `let` aliases are transparent for this rule: the admitted argument class is determined from the aliased expression after expansion, not from the alias name itself.
+
 For read-only adapter invocation arguments, the modeled interpretation is:
 
 - successful invocation means present;

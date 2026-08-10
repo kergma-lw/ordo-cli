@@ -222,6 +222,46 @@ class ValidationTest(unittest.TestCase):
         self.assertEqual(report.diagnostics[0].path, ("blocks", "0", "guards", "0"))
         self.assertEqual(report.diagnostics[0].details["binding_path"], ["let", "current_issue"])
 
+    def test_presence_check_accepts_lookup_style_workflow_let_alias(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs: {}
+                let:
+                  priority: inputs.priority
+                blocks:
+                  - guards:
+                      - is_missing(priority)
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_presence_check_rejects_computed_workflow_let_alias(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  title: hello
+                let:
+                  title_value: format("{}", inputs.title)
+                blocks:
+                  - guards:
+                      - is_missing(title_value)
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.local_expression.guard.presence_check_argument")
+
     def test_object_guard_with_unknown_expr_field_fails(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(

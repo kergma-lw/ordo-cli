@@ -733,6 +733,46 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.presence_check_argument")
 
+    def test_evaluate_is_missing_accepts_workflow_let_lookup_alias(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs: {}
+let:
+  priority: inputs.priority
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("is_missing(priority)")
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_presence_check_rejects_workflow_let_computed_alias(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  title: hello
+let:
+  title_value: format("{}", inputs.title)
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("is_missing(title_value)")
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.presence_check_argument")
+
     def test_evaluate_is_present_accepts_adapter_invocation_when_path_exists(self) -> None:
         workflow = load_workflow_text(
             """

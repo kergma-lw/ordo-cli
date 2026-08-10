@@ -457,10 +457,15 @@ def evaluate_condition_expression(
     return evaluator.evaluate()
 
 
-def validate_local_expression_tree(parsed: ParsedLocalExpressionTree) -> tuple[LocalExpressionValidationIssue, ...]:
+def validate_local_expression_tree(
+    parsed: ParsedLocalExpressionTree,
+    *,
+    workflow: Workflow | None = None,
+    context: LocalExpressionContext | None = None,
+) -> tuple[LocalExpressionValidationIssue, ...]:
     """Validate semantic rules over the canonical local-expression tree."""
 
-    validator = _SemanticValidator(parsed)
+    validator = _SemanticValidator(parsed, workflow=workflow, context=context)
     return tuple(validator.validate())
 
 
@@ -1178,8 +1183,10 @@ class _Parser:
 
 
 class _SemanticValidator:
-    def __init__(self, parsed: ParsedValueExpression) -> None:
+    def __init__(self, parsed: ParsedValueExpression, *, workflow: Workflow | None = None, context: LocalExpressionContext | None = None) -> None:
         self._parsed = parsed
+        self._workflow = workflow
+        self._context = context
         self._errors: list[ValueExpressionValidationError] = []
 
     def validate(self) -> list[ValueExpressionValidationError]:
@@ -1296,12 +1303,23 @@ class _SemanticValidator:
             )
             return
         argument = node.arguments[0]
-        if not _is_presence_check_argument(argument):
+        if not _is_presence_check_argument(self._expand_presence_check_argument(argument)):
             self._error(
                 "validation.workflow.value_expr.presence_check_argument",
                 f"Built-in value expression '{node.name}' requires a lookup-style reference or read-only adapter invocation argument",
                 argument,
             )
+
+    def _expand_presence_check_argument(self, node: ValueExpressionNode) -> ValueExpressionNode:
+        if self._workflow is None or self._context is None or not isinstance(node, ReferenceNode):
+            return node
+        from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, resolve_workflow_let_reference_node
+
+        try:
+            expanded = resolve_workflow_let_reference_node(node, self._workflow, context=self._context)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            return node
+        return node if expanded is None else expanded
 
     def _validate_filter(self, node: FilterApplicationNode) -> None:
         spec = VALUE_EXPRESSION_FILTERS.get(node.name)
@@ -2338,16 +2356,26 @@ def _evaluate_presence_builtin(
             details={"expression": parsed.source, "builtin": node.name},
         )
     argument = node.arguments[0]
-    if not _is_presence_check_argument(argument):
+    normalized_argument = argument
+    if isinstance(argument, ReferenceNode):
+        from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, resolve_workflow_let_reference_node
+
+        try:
+            expanded = resolve_workflow_let_reference_node(argument, workflow, context=context)
+        except LOCAL_EXPRESSION_PARSE_ERRORS:
+            expanded = None
+        if expanded is not None:
+            normalized_argument = expanded
+    if not _is_presence_check_argument(normalized_argument):
         raise ValueExpressionEvaluationError(
             code="runtime.value.presence_check_argument",
             message=f"Built-in value expression '{node.name}' requires a lookup-style reference or read-only adapter invocation argument",
             details={"expression": parsed.source, "builtin": node.name},
         )
-    if isinstance(argument, PipelineNode):
+    if isinstance(normalized_argument, PipelineNode):
         try:
             _evaluate_node(
-                argument,
+                normalized_argument,
                 parsed=parsed,
                 workflow=workflow,
                 context=context,
@@ -2359,10 +2387,10 @@ def _evaluate_presence_builtin(
                 return True if node.name == "is_missing" else False
             raise
         return False if node.name == "is_missing" else True
-    if isinstance(argument, AdapterInvocationNode):
+    if isinstance(normalized_argument, AdapterInvocationNode):
         try:
             result = _evaluate_adapter_invocation_result(
-                argument,
+                normalized_argument,
                 parsed=parsed,
                 workflow=workflow,
                 context=context,
@@ -2380,7 +2408,7 @@ def _evaluate_presence_builtin(
                 details={"expression": parsed.source, "builtin": node.name},
             )
         return False if node.name == "is_missing" else True
-    missing = _is_reference_missing(argument, parsed=parsed, workflow=workflow, context=context, step_results=step_results)
+    missing = _is_reference_missing(normalized_argument, parsed=parsed, workflow=workflow, context=context, step_results=step_results)
     return missing if node.name == "is_missing" else not missing
 
 

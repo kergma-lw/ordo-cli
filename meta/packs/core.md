@@ -732,6 +732,7 @@
 ## Presence-check argument boundary
 
 - A presence-check helper, if introduced, must accept only lookup-style references whose missingness semantics are well-defined and read-only representation-adapter invocations whose absence semantics are contractually tied to adapter `not_found`.
+- A workflow `let` alias used as a presence-check argument must be validated by the same rule after expanding the alias to its bound expression; a `let` alias must not be treated as a distinct argument class.
 - Allowed argument forms should be listed explicitly rather than inferred from broad expression permissiveness.
 - Arbitrary computed expressions, built-in calls, pipelines, boolean compositions, probe calls, and literals must not be treated as valid presence-check arguments.
 - A read-only representation-adapter invocation used as a presence-check argument should evaluate to presence success when the invocation succeeds and to absence when it fails specifically with adapter `not_found`.
@@ -2730,6 +2731,8 @@ The narrow modeled argument classes are:
 
 - lookup-style references whose missingness semantics are defined by the surrounding root contract;
 - read-only representation-adapter invocations whose absence semantics are defined by adapter `not_found`.
+
+Workflow-level `let` aliases are transparent for this rule: the admitted argument class is determined from the aliased expression after expansion, not from the alias name itself.
 
 For read-only adapter invocation arguments, the modeled interpretation is:
 

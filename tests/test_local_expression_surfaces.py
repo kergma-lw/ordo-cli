@@ -9,6 +9,7 @@ from ordo.runtime.local_expressions import (
     parse_local_expression,
     resolve_workflow_let_reference_node,
     validate_parsed_local_expression,
+    validate_parsed_local_expression_for_workflow,
 )
 
 
@@ -146,6 +147,33 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
 
         self.assertEqual(
             {issue.code for issue in validate_parsed_local_expression(parsed)},
+            {"validation.workflow.value_expr.presence_check_argument"},
+        )
+
+    def test_embedded_value_surface_accepts_presence_check_on_workflow_let_lookup_alias(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            let_bindings={"priority": "inputs.priority"},
+            guards=(),
+            steps=(),
+        )
+        parsed = parse_local_expression("is_missing(priority)", context=LocalExpressionContext.EMBEDDED_VALUE)
+
+        self.assertEqual(validate_parsed_local_expression_for_workflow(parsed, workflow), ())
+
+    def test_embedded_value_surface_rejects_presence_check_on_workflow_let_computed_alias(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            let_bindings={"priority": 'format("{}", inputs.priority)'},
+            guards=(),
+            steps=(),
+        )
+        parsed = parse_local_expression("is_missing(priority)", context=LocalExpressionContext.EMBEDDED_VALUE)
+
+        self.assertEqual(
+            {issue.code for issue in validate_parsed_local_expression_for_workflow(parsed, workflow)},
             {"validation.workflow.value_expr.presence_check_argument"},
         )
 
