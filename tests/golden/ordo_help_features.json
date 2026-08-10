@@ -739,6 +739,13 @@
           "kind": "filter_surface",
           "summary": "Published local-expression pipeline filter metadata",
           "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.builtin.is_missing --json",
+          "handle": "workflow.local_expression.builtin.is_missing",
+          "kind": "builtin",
+          "summary": "Published local-expression builtin metadata",
+          "topic": "model"
         }
       ],
       "keywords": [
@@ -1044,6 +1051,20 @@
           "handle": "workflow.local_expression.filter_surface",
           "kind": "filter_surface",
           "summary": "Published local-expression pipeline filter metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.builtin_surface --json",
+          "handle": "workflow.local_expression.builtin_surface",
+          "kind": "builtin_surface",
+          "summary": "Published local-expression builtin metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.builtin.is_missing --json",
+          "handle": "workflow.local_expression.builtin.is_missing",
+          "kind": "builtin",
+          "summary": "Published local-expression builtin metadata",
           "topic": "model"
         },
         {

@@ -20,7 +20,7 @@ from ordo.introspection import (
     describe_workflow_contract,
 )
 from ordo.runtime.representation_adapters import describe_representation_adapter_surface
-from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_FILTERS
+from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
 from ordo.model.runtime import Mode, RuntimeStatus
 from ordo.model.json import JSONObject
 
@@ -749,7 +749,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The condition is step-local admission rather than whole-workflow applicability.",
             "You are relying on downstream action failure instead of declaring a reviewable workflow-level precondition.",
         ],
-        "inspect_next": ["workflow-authoring.early_guards", "workflow-authoring.input_validation_default", "workflow-authoring.delegated_applicability", "workflow.local_expression.filter_surface"],
+        "inspect_next": ["workflow-authoring.early_guards", "workflow-authoring.input_validation_default", "workflow-authoring.delegated_applicability", "workflow.local_expression.filter_surface", "workflow.local_expression.builtin.is_missing"],
         "related_rules": ["early_guards", "input_validation_default", "delegated_applicability", "guard_result_contract"],
         "related_examples": ["examples.inspect-issue"],
         "published_names_kind": "guards",
@@ -800,7 +800,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The expression is becoming long, repetitive, or difficult to review as inline logic.",
             "Representation shaping would be clearer through an adapter family or another more explicit surface.",
         ],
-        "inspect_next": ["workflow.local_expression.filter_surface", "workflow.local_expression.filter.lookup", "workflow.local_expression.filter.only", "workflow-authoring.native_expression_contexts", "workflow.local_expression.adapter_seam"],
+        "inspect_next": ["workflow.local_expression.filter_surface", "workflow.local_expression.builtin_surface", "workflow.local_expression.builtin.is_missing", "workflow.local_expression.filter.lookup", "workflow.local_expression.filter.only", "workflow-authoring.native_expression_contexts", "workflow.local_expression.adapter_seam"],
         "related_rules": ["native_expression_contexts", "guard_result_contract", "representation_adapters"],
         "related_examples": ["examples.local-expression-filters"],
         "published_names_kind": "local-expressions",
@@ -1120,10 +1120,25 @@ def _build_cluster_published_names(kind: str, *, model: JSONObject) -> JSONObjec
 
 
 def describe_local_expression_surface() -> JSONObject:
-    """Return the published local-expression filter discovery surface."""
+    """Return the published local-expression discovery surface."""
 
+    allowed_roots = sorted(
+        {
+            *describe_workflow_contract()["surface_constraints"]["guard_expression"]["allowed_roots"],
+            *describe_workflow_contract()["surface_constraints"]["runtime_value_surface"]["allowed_roots"],
+            "probe",
+        }
+    )
     return {
         "pipeline_filters": [spec.to_contract() for spec in VALUE_EXPRESSION_FILTERS.values()],
+        "builtins": [
+            {
+                **spec.to_contract(),
+                "summary": "Published local-expression builtin for inline workflow expressions.",
+                "allowed_roots": allowed_roots,
+            }
+            for spec in VALUE_EXPRESSION_BUILTINS.values()
+        ],
         "condition_structures": {
             "equal_authority_if_forms": ["expression_string", "structured_condition"],
             "structured_operators": ["all", "any", "not"],
@@ -1424,6 +1439,13 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         summary="Published local-expression pipeline filter metadata",
         metadata=model["local_expressions"],
     )
+    add_node(
+        "workflow.local_expression.builtin_surface",
+        contract="workflow",
+        node_category="builtin_surface",
+        summary="Published local-expression builtin metadata",
+        metadata={"builtins": model["local_expressions"]["builtins"]},
+    )
     for filter_spec in model["local_expressions"]["pipeline_filters"]:
         add_node(
             f"workflow.local_expression.filter.{filter_spec['name']}",
@@ -1431,6 +1453,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             node_category="filter",
             summary="Published local-expression pipeline filter metadata",
             metadata=filter_spec,
+        )
+    for builtin_spec in model["local_expressions"]["builtins"]:
+        add_node(
+            f"workflow.local_expression.builtin.{builtin_spec['name']}",
+            contract="workflow",
+            node_category="builtin",
+            summary="Published local-expression builtin metadata",
+            metadata=builtin_spec,
         )
     for adapter in model["representation_adapters"]["families"]:
         add_node(
@@ -1570,6 +1600,21 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             summary="Published state workflow-surface metadata",
             metadata={"name": field_name, "value": value},
         )
+    add_node(
+        "state",
+        contract="state",
+        node_category="state_contract",
+        summary="Published state contract metadata",
+        metadata={
+            **model["state"],
+            "search_aliases": [
+                "shared_state",
+                "state.shared_state",
+                "bound state role",
+                "declared state location",
+            ],
+        },
+    )
     return lookup
 
 
@@ -1926,19 +1971,115 @@ def _operation_search_score(query: str, record: dict[str, str]) -> int:
     return score
 
 
+def _expand_search_tokens(text: str) -> list[str]:
+    expanded: list[str] = []
+    for token in _search_tokens(text):
+        if token not in expanded:
+            expanded.append(token)
+        for segment in re.split(r"[._:/#-]+", token):
+            if len(segment) < 2:
+                continue
+            if segment not in expanded:
+                expanded.append(segment)
+    return expanded
+
+
 def _query_matches(query: str, searchable: str) -> bool:
     if not query:
         return False
     if query in searchable:
         return True
-    tokens = _search_tokens(query)
+    tokens = _expand_search_tokens(query)
     if not tokens:
         return False
-    return all(token in searchable for token in tokens)
+    return all(token in searchable for token in tokens if token not in {query})
 
 
 def _search_tokens(text: str) -> list[str]:
     return _SEARCH_TOKEN_RE.findall(text.lower())
+
+
+def _resolve_example_topic_alias(topic: str) -> str | None:
+    lowered = topic.strip().lower()
+    if not lowered.startswith("examples/"):
+        return None
+    for example in describe_examples_catalog()["examples"]:
+        path = str(example.get("path") or "")
+        if lowered == path.lower():
+            return f"examples.{example['name']}"
+    return None
+
+
+def _resolve_describe_topic_alias(topic: str) -> str:
+    example_alias = _resolve_example_topic_alias(topic)
+    if example_alias is not None:
+        return example_alias
+    if topic.startswith("operation."):
+        candidate = f"connector.{topic.removeprefix('operation.')}"
+        if candidate in _build_model_node_lookup():
+            return candidate
+    return topic
+
+
+def _build_unknown_topic_suggestions(topic: str) -> list[JSONObject]:
+    suggestions: list[JSONObject] = []
+    example_alias = _resolve_example_topic_alias(topic)
+    if example_alias is not None:
+        suggestions.append(
+            {
+                "kind": "canonical_topic",
+                "topic": example_alias,
+                "command": f"ordo-help describe {example_alias} --json",
+                "reason": "Example paths resolve to canonical examples.<name> handles.",
+            }
+        )
+    if topic.startswith("operation."):
+        operation_reference = topic.removeprefix("operation.")
+        connector_topic = f"connector.{operation_reference}"
+        suggestions.append(
+            {
+                "kind": "operation_command",
+                "topic": operation_reference,
+                "command": f"ordo-help operation {operation_reference} --json",
+                "reason": "Operation references are described with the dedicated operation command.",
+            }
+        )
+        if connector_topic in _build_model_node_lookup():
+            suggestions.append(
+                {
+                    "kind": "connector_topic",
+                    "topic": connector_topic,
+                    "command": f"ordo-help describe {connector_topic} --json",
+                    "reason": "Connector operation metadata is also available as a model node.",
+                }
+            )
+    if topic.startswith("examples/") and example_alias is None:
+        suggestions.append(
+            {
+                "kind": "examples_catalog",
+                "topic": "examples",
+                "command": "ordo-help examples --json",
+                "reason": "List published examples to find the canonical examples.<name> handle.",
+            }
+        )
+    if topic == "state":
+        suggestions.append(
+            {
+                "kind": "canonical_topic",
+                "topic": "state",
+                "command": "ordo-help describe state --json",
+                "reason": "State discovery is published as a describable state model node.",
+            }
+        )
+    suggestions.append(
+        {
+            "kind": "search",
+            "topic": topic,
+            "command": f"ordo-help search {json.dumps(topic)} --json",
+            "reason": "Search can reveal nearby public topics, facts, or operations.",
+        }
+    )
+    return suggestions
 
 
 def render_root_text() -> str:
@@ -2285,6 +2426,7 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
         "message": f"Unsupported public topic or node '{topic}'",
         "supported_topics": list(DESCRIBABLE_TOPICS),
         "supported_node_kinds": ["capability", "negative_rule", "model_node", "workflow_authoring_node", "example_node", "command_line_node"],
+        "suggestions": _build_unknown_topic_suggestions(topic),
     }
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -2292,6 +2434,8 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
     else:
         sys.stderr.write(payload["message"])
         sys.stderr.write("\n")
+        for suggestion in payload["suggestions"]:
+            sys.stderr.write(f"- {suggestion['command']}\n")
     return 1
 
 
@@ -2411,7 +2555,8 @@ def main(argv: list[str] | None = None) -> int:
             return _emit_unknown_operation(parsed.reference, as_json=as_json)
         return _emit_payload(payload, as_json=as_json, renderer=render_operation_text)
     if parsed.command == "describe":
-        resolved = _resolve_public_topic(parsed.topic)
+        resolved_topic = _resolve_describe_topic_alias(parsed.topic)
+        resolved = _resolve_public_topic(resolved_topic)
         if resolved is None:
             return _emit_unknown_topic(parsed.topic, as_json=as_json)
         payload, renderer = resolved

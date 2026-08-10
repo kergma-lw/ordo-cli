@@ -453,6 +453,27 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(catalog_example_node["document_kind"], "example_node")
         self.assertEqual(catalog_example_node["metadata"]["name"], "text-adapter")
 
+    def test_describe_accepts_example_path_aliases(self) -> None:
+        payload = json.loads(self.run_help("describe", "examples/set-active-task-from-gitx.yaml", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "example_node")
+        self.assertEqual(payload["name"], "examples.set-active-task-from-gitx")
+        self.assertEqual(payload["metadata"]["path"], "examples/set-active-task-from-gitx.yaml")
+
+    def test_describe_accepts_operation_topic_alias_for_connector_metadata(self) -> None:
+        payload = json.loads(self.run_help("describe", "operation.gh.issue", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "model_node")
+        self.assertEqual(payload["name"], "connector.gh.issue")
+        self.assertEqual(payload["metadata"]["name"], "issue")
+
+    def test_describe_accepts_state_model_node(self) -> None:
+        payload = json.loads(self.run_help("describe", "state", "--json").stdout)
+
+        self.assertEqual(payload["document_kind"], "model_node")
+        self.assertEqual(payload["name"], "state")
+        self.assertIn("workflow_surface", payload["metadata"])
+
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:
         include_contract_node = json.loads(self.run_help("describe", "workflow.include_contract", "--json").stdout)
 
@@ -540,6 +561,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(filter_node["metadata"]["argument_count"], 0)
         self.assertEqual(filter_node["metadata"]["output_type"], "boolean")
 
+    def test_describe_resolves_local_expression_builtin_model_nodes(self) -> None:
+        surface_node = json.loads(self.run_help("describe", "workflow.local_expression.builtin_surface", "--json").stdout)
+        builtin_node = json.loads(self.run_help("describe", "workflow.local_expression.builtin.is_missing", "--json").stdout)
+
+        self.assertEqual(surface_node["document_kind"], "model_node")
+        self.assertTrue(any(item["name"] == "is_missing" for item in surface_node["metadata"]["builtins"]))
+        self.assertEqual(builtin_node["metadata"]["name"], "is_missing")
+        self.assertIn("state", builtin_node["metadata"]["allowed_roots"])
+
     def test_search_indexes_representation_adapter_topics(self) -> None:
         result = json.loads(self.run_help("search", "markdown", "--json").stdout)
         key_value_result = json.loads(self.run_help("search", "separator", "--json").stdout)
@@ -561,6 +591,15 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter.is_integer" for item in result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter_surface" for item in surface_result["facts"]))
+
+    def test_search_indexes_local_expression_builtins_and_state_aliases(self) -> None:
+        builtin_result = json.loads(self.run_help("search", "is_missing", "--json").stdout)
+        combined_result = json.loads(self.run_help("search", "is_missing state", "--json").stdout)
+        state_alias_result = json.loads(self.run_help("search", "state.shared_state", "--json").stdout)
+
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.builtin.is_missing" for item in builtin_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.builtin.is_missing" for item in combined_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "state" for item in state_alias_result["facts"]))
 
     def test_search_indexes_workflow_authoring_rules(self) -> None:
         shell_result = json.loads(self.run_help("search", "shell.command", "--json").stdout)
@@ -858,6 +897,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(launcher_example["status"], "legacy_compatibility_example")
         self.assertTrue(any(item["name"] == "text-adapter" for item in payload["examples"]))
         self.assertTrue(any(item["name"] == "project-items-let" for item in payload["examples"]))
+
+    def test_unknown_describe_topic_reports_actionable_suggestions(self) -> None:
+        result = self.run_help("describe", "operation.gh.missing", "--json")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "unknown_topic")
+        self.assertTrue(any(item["command"] == "ordo-help operation gh.missing --json" for item in payload["suggestions"]))
 
     def test_launcher_reports_missing_virtualenv(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
