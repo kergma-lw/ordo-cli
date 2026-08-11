@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -75,7 +75,15 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 },
                 raw=raw,
             )
-        return exc.outcome
+        return fail_external_command(
+            code="probe_failed",
+            summary="Git tag inspection failed",
+            diagnostic_code="probe.git_tag.command_failed",
+            reference=ctx.reference,
+            details={"name": tag_name},
+            raw=exc.outcome.raw,
+            tool="git",
+        )
 
     raw["oid"] = dict(oid_command.raw)
     oid = oid_command.stdout.strip()
@@ -88,10 +96,21 @@ def run(ctx: OperationContext) -> OperationOutcome:
             raw=raw,
         )
 
-    type_command = ctx.command(
-        ["git", "cat-file", "-t", ref],
-        failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
-    )
+    try:
+        type_command = ctx.command(
+            ["git", "cat-file", "-t", ref],
+            failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
+        )
+    except MappedOutcomeError as exc:
+        return fail_external_command(
+            code="probe_failed",
+            summary="Git tag type inspection failed",
+            diagnostic_code="probe.git_tag.command_failed",
+            reference=ctx.reference,
+            details={"name": tag_name},
+            raw=exc.outcome.raw,
+            tool="git",
+        )
     raw["type"] = dict(type_command.raw)
     object_type = type_command.stdout.strip()
     if object_type not in {"tag", "commit"}:

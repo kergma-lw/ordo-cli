@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic
 
 
 BRANCH_INVENTORY_INVALIDATION: tuple[str, ...] = ("git.branches", "git.ref.*")
@@ -133,12 +133,13 @@ def map_nonzero(
                 reference=ctx.reference,
                 raw=exc.outcome.raw,
             )
-    return fail_with_diagnostic(
+    return fail_external_command(
         code="action_failed",
         summary=fallback_summary,
         diagnostic_code="action.git.command_failed",
         reference=ctx.reference,
         raw=exc.outcome.raw,
+        tool="git",
     )
 
 

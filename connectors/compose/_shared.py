@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,13 +137,15 @@ def map_start_failure(ctx: OperationContext, exc: MappedOutcomeError, *, service
         code = "start_failed"
         diagnostic_code = "action.compose_start.start_failed"
         summary = _start_failure_summary(service, "the target could not be started")
-    return fail_with_diagnostic(
+    return fail_external_command(
         code=code,
         summary=summary,
         diagnostic_code=diagnostic_code,
         reference=ctx.reference,
         details={"service": service} if service is not None else {},
         raw=exc.outcome.raw,
+        tool="docker",
+        system="compose",
     )
 
 
@@ -161,13 +163,15 @@ def map_stop_failure(ctx: OperationContext, exc: MappedOutcomeError, *, service:
         code = "stop_failed"
         diagnostic_code = "action.compose_stop.stop_failed"
         summary = _stop_failure_summary(service, "the target could not be stopped")
-    return fail_with_diagnostic(
+    return fail_external_command(
         code=code,
         summary=summary,
         diagnostic_code=diagnostic_code,
         reference=ctx.reference,
         details={"service": service} if service is not None else {},
         raw=exc.outcome.raw,
+        tool="docker",
+        system="compose",
     )
 
 
@@ -185,13 +189,15 @@ def map_remove_failure(ctx: OperationContext, exc: MappedOutcomeError, *, servic
         code = "remove_failed"
         diagnostic_code = "action.compose_remove.remove_failed"
         summary = f"Compose service '{service}' could not be removed"
-    return fail_with_diagnostic(
+    return fail_external_command(
         code=code,
         summary=summary,
         diagnostic_code=diagnostic_code,
         reference=ctx.reference,
         details={"service": service},
         raw=exc.outcome.raw,
+        tool="docker",
+        system="compose",
     )
 
 

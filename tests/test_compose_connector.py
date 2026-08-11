@@ -163,6 +163,8 @@ class ComposeConnectorTest(unittest.TestCase):
 
         self.assertEqual(result.status, "image_unavailable")
         self.assertEqual(result.diagnostics[0].code, "action.compose_start.image_unavailable")
+        self.assertEqual(result.diagnostics[0].details["external_tool"], "docker")
+        self.assertEqual(result.diagnostics[0].details["external_system"], "compose")
 
     def test_compose_stop_reports_stopped_after_shutdown(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

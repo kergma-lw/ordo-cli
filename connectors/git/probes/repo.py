@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
 
 
 def info():
@@ -125,7 +125,15 @@ def _required_text(
     try:
         command = ctx.command(argv, failures={"os_error": "probe_failed", "nonzero": "probe_failed"})
     except MappedOutcomeError as exc:
-        return exc.outcome
+        return fail_external_command(
+            code="probe_failed",
+            summary=f"Git command for '{label}' failed",
+            diagnostic_code="probe.git_repo.command_failed",
+            reference=ctx.reference,
+            details={"label": label},
+            raw=exc.outcome.raw,
+            tool="git",
+        )
     raw_commands[label] = command.raw
     value = command.stdout.strip()
     if not value:
@@ -190,7 +198,15 @@ def _optional_text(
         if isinstance(returncode, int) and returncode in allowed_returncodes:
             raw_commands[label] = exc.outcome.raw
             return None
-        return exc.outcome
+        return fail_external_command(
+            code="probe_failed",
+            summary=f"Git command for '{label}' failed",
+            diagnostic_code="probe.git_repo.command_failed",
+            reference=ctx.reference,
+            details={"label": label},
+            raw=exc.outcome.raw,
+            tool="git",
+        )
 
     raw_commands[label] = command.raw
     value = command.stdout.strip()

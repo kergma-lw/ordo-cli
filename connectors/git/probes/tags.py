@@ -6,7 +6,7 @@ import fnmatch
 import re
 
 from ordo.model.json import JSONValue
-from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
 
 
@@ -95,16 +95,26 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 raw={"match": match_value, "match_kind": match_kind},
             )
 
-    command = ctx.command(
-        [
-            "git",
-            "for-each-ref",
-            "--sort=-version:refname",
-            "--format=%(refname)\t%(refname:short)\t%(objecttype)\t%(objectname)\t%(*objectname)",
-            "refs/tags",
-        ],
-        failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
-    )
+    try:
+        command = ctx.command(
+            [
+                "git",
+                "for-each-ref",
+                "--sort=-version:refname",
+                "--format=%(refname)\t%(refname:short)\t%(objecttype)\t%(objectname)\t%(*objectname)",
+                "refs/tags",
+            ],
+            failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
+        )
+    except MappedOutcomeError as exc:
+        return fail_external_command(
+            code="probe_failed",
+            summary="Git tag inventory inspection failed",
+            diagnostic_code="probe.git_tags.command_failed",
+            reference=ctx.reference,
+            raw=exc.outcome.raw,
+            tool="git",
+        )
 
     items: list[dict[str, object]] = []
     for line in command.stdout.splitlines():

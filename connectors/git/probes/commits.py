@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_with_diagnostic, ok, probe
+from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, fail_external_command, fail_with_diagnostic, ok, probe
 
 _FIELD_SEPARATOR = "\x1f"
 _RECORD_SEPARATOR = "\x1e"
@@ -94,7 +94,15 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 reference=ctx.reference,
                 raw={"rev": rev, "log": dict(exc.outcome.raw)},
             )
-        return exc.outcome
+        return fail_external_command(
+            code="probe_failed",
+            summary="Git commit log inspection failed",
+            diagnostic_code="probe.git_commits.command_failed",
+            reference=ctx.reference,
+            details={"rev": rev},
+            raw=exc.outcome.raw,
+            tool="git",
+        )
 
     items: list[dict[str, object]] = []
     for raw_record in command.stdout.split(_RECORD_SEPARATOR):

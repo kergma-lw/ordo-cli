@@ -2082,6 +2082,28 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.raw["stdout"], "hi\n")
         self.assertEqual(result.outputs["exit_code"], 0)
 
+    def test_shell_command_surfaces_external_failure_details(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="run", operation=OperationRef("shell.command", with_={"command": "./script.sh"})),),
+        )
+        operation = get_public_connector_registry().get_operation("shell.command")
+        resolved = ResolvedOperation("shell.command", "shell", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-shell\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "command_failed")
+        self.assertEqual(result.diagnostics[0].details["classification"], "permission_denied")
+        self.assertEqual(result.diagnostics[0].details["external_tool"], "bash")
+
     def test_git_branch_switch_returns_structured_action_result(self) -> None:
         workflow = Workflow(
             version=0,
@@ -4918,6 +4940,24 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "probe_failed")
         self.assertEqual(result.diagnostics[0].code, "probe.git_repo.invalid_remote_head")
+
+    def test_git_repo_probe_surfaces_external_failure_details(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.repo")),), steps=())
+        operation = get_public_connector_registry().get_operation("git.repo")
+        resolved = ResolvedOperation("git.repo", "git", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "probe_failed")
+        self.assertEqual(result.diagnostics[0].code, "probe.git_repo.command_failed")
+        self.assertEqual(result.diagnostics[0].details["classification"], "permission_denied")
+        self.assertEqual(result.diagnostics[0].details["external_tool"], "git")
 
     def test_git_probe_surfaces_bootstrap_failure_before_operation_logic(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.branch")),), steps=())
