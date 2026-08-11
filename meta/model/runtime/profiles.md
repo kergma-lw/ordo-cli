@@ -58,10 +58,10 @@ The public construct for this should be `profile_switch`.
 - apply the target profile's missing-input defaults to subsequent steps without overriding explicit activation inputs already in force;
 - avoid silently re-activating already-executed workflow material under a different profile;
 - remain explainable in structured runtime outputs;
-- depend only on pre-execution knowledge such as `inputs.*`, `state.*`, literals, or equivalent runtime-static context;
-- reject `step.*` dependencies.
+- resolve against current runtime knowledge such as literals, `inputs.*`, `state.*`, or prior established `step.*` outputs;
+- reject only references that point forward to not-yet-established step outputs.
 
-Because `profile_switch` is runtime-owned context shaping rather than an ordinary business-world action, `check` may treat deterministic profile switches as static context annotations inside its decision tree rather than as opaque effect barriers.
+Because `profile_switch` is runtime-owned context shaping rather than an ordinary business-world action, `check` may treat deterministic profile switches as static context annotations inside its decision tree rather than as opaque effect barriers, including when the target profile is derived from prior interpreted step outputs.
 
 ## Reviewability expectation
 

@@ -211,7 +211,7 @@
           "name": "inputs",
           "surfaces": [
             "guard_expression",
-            "state_key_reference",
+            "state_key_expression",
             "step_condition",
             "embedded_value_expression"
           ]
@@ -229,6 +229,14 @@
           "surfaces": [
             "step_condition",
             "embedded_value_expression"
+          ]
+        },
+        {
+          "name": "item",
+          "surfaces": [
+            "step_condition",
+            "embedded_value_expression",
+            "include_binding_expression"
           ]
         },
         {
@@ -323,6 +331,7 @@
           "roots": [
             "inputs",
             "args",
+            "item",
             "state",
             "step",
             "probe"
@@ -364,18 +373,94 @@
           "roots": [
             "inputs",
             "args",
+            "item",
             "state",
             "step",
             "probe"
           ]
         },
         {
-          "boolean_operators": [],
-          "builtins": [],
-          "filters": [],
-          "name": "state_key_reference",
+          "boolean_operators": [
+            "and",
+            "or",
+            "not",
+            "parentheses"
+          ],
+          "builtins": [
+            "format",
+            "is_missing",
+            "is_present"
+          ],
+          "filters": [
+            "lower",
+            "trim",
+            "slug",
+            "eq",
+            "ne",
+            "not",
+            "is_string",
+            "is_number",
+            "is_integer",
+            "is_boolean",
+            "in",
+            "field",
+            "lookup",
+            "only",
+            "flatten",
+            "first",
+            "last",
+            "length",
+            "unique"
+          ],
+          "name": "include_binding_expression",
           "roots": [
-            "inputs"
+            "inputs",
+            "item",
+            "state",
+            "step",
+            "probe"
+          ]
+        },
+        {
+          "boolean_operators": [
+            "and",
+            "or",
+            "not",
+            "parentheses"
+          ],
+          "builtins": [
+            "format",
+            "is_missing",
+            "is_present"
+          ],
+          "filters": [
+            "lower",
+            "trim",
+            "slug",
+            "eq",
+            "ne",
+            "not",
+            "is_string",
+            "is_number",
+            "is_integer",
+            "is_boolean",
+            "in",
+            "field",
+            "lookup",
+            "only",
+            "flatten",
+            "first",
+            "last",
+            "length",
+            "unique"
+          ],
+          "name": "state_key_expression",
+          "roots": [
+            "inputs",
+            "args",
+            "item",
+            "state",
+            "step"
           ]
         }
       ],
@@ -4333,8 +4418,8 @@
           "name": "root_must_be_state"
         },
         {
-          "message": "state path key reference must use dotted inputs form such as 'inputs.task_key'",
-          "name": "key_reference_must_use_dotted_inputs"
+          "message": "state path key expression must be a valid local expression",
+          "name": "key_expression_must_be_valid_local_expression"
         },
         {
           "message": "state path must not contain trailing content",
@@ -4342,9 +4427,9 @@
         }
       ],
       "path_forms": {
+        "key_expression_surface": "embedded_value_expression",
         "root": "state",
-        "root_reference": "inputs",
-        "shape": "state.<role>[inputs.<key>][.<field>...]",
+        "shape": "state.<role>[<expression>][.<field>...]",
         "supports_hyphenated_roles": true,
         "supports_nested_fields": true
       },
@@ -4356,8 +4441,8 @@
         },
         {
           "error_code": "runtime.state.key_invalid",
-          "message": "state key reference must resolve to a scalar value",
-          "name": "scalar_key_required"
+          "message": "state key expression must resolve to a non-null scalar value",
+          "name": "non_null_scalar_key_required"
         },
         {
           "error_code": "runtime.state.declaration_missing",

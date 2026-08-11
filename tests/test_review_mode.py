@@ -134,6 +134,30 @@ blocks:
         self.assertEqual(finding["evidence"]["suggested_expression"], 'inputs.body | markdown["Tasks"]')
         self.assertEqual(finding["evidence"]["suggested_rewrite"], 'inputs.body | markdown["Tasks"]')
 
+    def test_review_reports_unnecessary_with_root_for_adapter_path_suffix(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: markdown-adapter-demo
+inputs:
+  body:
+    type: string
+blocks:
+  - steps:
+      - name: extract-task-refs
+        value: '${markdown["Tasks"].list_items with{root: inputs.body}}'
+        register: extracted
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.adapter_pipe_style_preferred")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "value"])
+        self.assertEqual(finding["evidence"]["suggested_expression"], 'inputs.body | markdown["Tasks"].list_items')
+        self.assertEqual(finding["evidence"]["suggested_rewrite"], 'inputs.body | markdown["Tasks"].list_items')
+
     def test_review_does_not_report_with_root_when_additional_bindings_exist(self) -> None:
         workflow = load_workflow_text(
             '''

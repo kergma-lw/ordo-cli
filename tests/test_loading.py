@@ -47,6 +47,11 @@ class LoadingTest(unittest.TestCase):
             )
 
         self.assertEqual(context.exception.diagnostics[0].code, "load.step.gate_register_conflict")
+        self.assertIn("standalone gate checkpoint step", context.exception.diagnostics[0].message)
+        self.assertEqual(
+            context.exception.diagnostics[0].details["suggested_fix"],
+            "split_gate_checkpoint_from_register_step",
+        )
 
     def test_loads_workflow_yaml_into_typed_model(self) -> None:
         workflow = load_workflow_text(

@@ -757,6 +757,7 @@
 
 - A native condition context may expose expressions without an interpolation envelope.
 - An expression-first value context may expose plain scalar expressions while still preserving explicit quoted string literals.
+- Once a plain scalar in an expression-first value context is being evaluated as an expression, runtime failure must not silently reinterpret it as a literal string.
 - An embedded value context may use a distinct authored embedding form for local expressions as an explicit escape surface when the expression is not viable as a YAML plain scalar.
 - Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.
 
@@ -1397,7 +1398,8 @@ The runtime must be able to answer, in machine-readable form:
 - `state_delete` should remove the addressed value deterministically.
 - State reads should resolve to stored values through the same stable state path surface used by authoring.
 - Missing state reads should remain structured and predictable rather than falling back to hidden defaults.
-- The initial stable state path should require a logical role, one `inputs...` key reference, and optional dotted field traversal.
+- The stable state path should require a logical role, one bracketed runtime local-expression key, and optional dotted field traversal.
+- The bracketed state key expression should resolve to a non-null scalar value.
 
 ## Boundary discipline
 
@@ -1457,7 +1459,8 @@ An author should be able to discover:
 - which operations exist;
 - what each operation means;
 - what inputs and result shapes are expected;
-- which examples and patterns are considered idiomatic.
+- which examples and patterns are considered idiomatic;
+- which disputed minimal forms are backed by canonical verified snippets rather than only by prose description.
 
 ## Checkability
 
@@ -2892,6 +2895,7 @@ The intended execution contract is:
 - canonical evaluation remains the owner of node semantics, context gating, caching expectations, trace shape, and diagnostics emitted for probe-call execution.
 
 The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
+When that happens, the surfaced runtime diagnostic should preserve the underlying probe-failure diagnostics rather than exposing only one wrapper error at the outer expression site.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 
@@ -4145,6 +4149,7 @@ Such interpretation must remain non-effectful, ordered, conservative, and explic
 Why this matters:
 - relevant read-only observations may live behind step flow rather than direct guard probes;
 - runtime should be able to strengthen guard coverage without turning `check` into hidden execution;
+- when a nested read-only observation fails, `check` should preserve the underlying probe diagnostics so authors can see the root cause without extra reconstruction work;
 - a dedicated contract keeps richer preflight behavior reviewable.
 
 ## CHECK-MODE-013 — Advisory preflight-observation metadata may strengthen explainability without becoming a prerequisite
@@ -4822,6 +4827,8 @@ The runtime must classify steps into at least these categories:
 
 This classification must be runtime-visible and contract-backed rather than heuristic-only.
 
+Builtin payload-shaping steps such as `value`, `result`, and `publish` should classify as `read_only_analyzable` when their payloads are evaluated through the shared runtime value-resolution surface rather than through effectful connector execution.
+
 ## Evaluation model
 
 - Interpret step blocks in declared order.
@@ -5185,7 +5192,7 @@ The read surface should stay aligned with the mutation target surface so that au
 The initial stable state path grammar is:
 
 ```text
-state.<role>[inputs.<key-reference>][.<field>...]
+state.<role>[<expression>][.<field>...]
 ```
 
 Examples:
@@ -5213,10 +5220,10 @@ state_delete: state.task_memory[inputs.task_key].branch
 
 - the path must start with `state.`;
 - `<role>` is an identifier-like logical state role name;
-- the bracketed key reference must use dotted `inputs...` form;
-- at least one segment must follow `inputs` inside the key reference;
+- the bracketed key must be a valid runtime local expression;
+- the bracketed key expression must resolve to a non-null scalar value;
 - field traversal after the key is optional and uses dotted identifiers only;
-- the initial grammar does not support literal keys, quoted keys, multiple bracket segments, arbitrary nested expressions, or mixed index syntaxes.
+- the initial grammar does not support multiple bracket segments or mixed index syntaxes after the key expression.
 
 ## MVP constraints
 
@@ -6493,6 +6500,7 @@ Expression-first value rules:
 - the surrounding field remains a value-bearing field rather than a dedicated condition list;
 - plain authored scalar strings are local expressions by default;
 - quoted authored strings are explicit string literals;
+- if a plain authored scalar string is accepted as an expression, runtime evaluation failure must remain an expression error rather than silently degrading back into a literal string;
 - YAML numeric, boolean, and null scalars retain their ordinary scalar meaning;
 - nested object and list leaves follow the same rule recursively.
 
@@ -6800,7 +6808,7 @@ Built-in runtime state mutation forms may also appear in `steps`.
 Stable state target/read path grammar:
 
 ```text
-state.<role>[inputs.<key-reference>][.<field>...]
+state.<role>[<expression>][.<field>...]
 ```
 
 Rules:
@@ -6808,7 +6816,7 @@ Rules:
 - reads use this path only inside step-local expression-bearing surfaces rather than as raw YAML path text;
 - `state_set` keys use this path text directly;
 - `state_delete` uses this path text directly;
-- the key reference inside `[...]` must use dotted `inputs...` form;
+- the key expression inside `[...]` must be a valid runtime local expression that resolves to a non-null scalar value;
 - post-key field traversal uses dotted identifiers only.
 
 Set example:

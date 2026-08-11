@@ -63,6 +63,10 @@
     {
       "command": "ordo-help examples",
       "purpose": "Inspect verified repository examples"
+    },
+    {
+      "command": "ordo-help snippet-coverage",
+      "purpose": "Inspect which public handles do and do not publish canonical verified snippets"
     }
   ],
   "tool_name": "ordo-help",
@@ -98,6 +102,10 @@
     {
       "name": "examples",
       "summary": "Inspect verified repository examples"
+    },
+    {
+      "name": "snippet-coverage",
+      "summary": "Inspect which public handles do and do not publish canonical verified snippets"
     },
     {
       "name": "operation",

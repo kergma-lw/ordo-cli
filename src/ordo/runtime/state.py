@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue
+from ordo.model.runtime import OperationResult
 from ordo.model.workflow import Workflow
 from .state_paths import StatePathParseError, parse_state_path
 
@@ -103,7 +104,14 @@ def read_state_document(location: StateLocation) -> JSONObject:
     return _validate_state_document(payload, location=location)
 
 
-def resolve_state_target(expression: str, workflow: Workflow, *, base_dir: str | Path | None = None) -> ResolvedStateTarget:
+def resolve_state_target(
+    expression: str,
+    workflow: Workflow,
+    *,
+    base_dir: str | Path | None = None,
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+    observation_session=None,
+) -> ResolvedStateTarget:
     """Resolve a state path expression into a concrete storage target."""
 
     try:
@@ -115,12 +123,21 @@ def resolve_state_target(expression: str, workflow: Workflow, *, base_dir: str |
             details={"expression": expression, "position": exc.position, "end": exc.end if exc.end is not None else exc.position},
         ) from exc
 
-    key_value = resolve_workflow_input_reference(parsed.key_reference, workflow)
-    if isinstance(key_value, dict) or isinstance(key_value, list):
+    key_value = _resolve_state_key_expression(
+        parsed.key_expression,
+        workflow,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
+    if key_value is None or isinstance(key_value, dict) or isinstance(key_value, list):
         raise RuntimeStateError(
             code="runtime.state.key_invalid",
-            message="Runtime state key reference must resolve to a scalar value",
-            details={"expression": expression, "reference": ".".join(parsed.key_reference)},
+            message="Runtime state key expression must resolve to a non-null scalar value",
+            details={
+                "expression": expression,
+                "key_expression": parsed.key_expression,
+                "actual_type": "null" if key_value is None else type(key_value).__name__,
+            },
         )
 
     state_name = workflow.state_bindings.get(parsed.state_role)
@@ -137,6 +154,33 @@ def resolve_state_target(expression: str, workflow: Workflow, *, base_dir: str |
         key=str(key_value),
         fields=parsed.fields,
     )
+
+
+def _resolve_state_key_expression(
+    expression: str,
+    workflow: Workflow,
+    *,
+    step_results: dict[str, OperationResult | JSONObject] | None,
+    observation_session,
+) -> JSONValue:
+    from .local_expressions import resolve_value_local_expression
+    from .value_resolution import ValueResolutionError
+
+    try:
+        return resolve_value_local_expression(
+            expression,
+            workflow,
+            step_results=step_results,
+            allow_boolean_composition=True,
+            observation_session=observation_session,
+        )
+    except ValueResolutionError as exc:
+        mapped_code = "runtime.state.input_missing" if exc.code == "runtime.value.input_missing" else exc.code
+        raise RuntimeStateError(
+            code=mapped_code,
+            message=exc.message,
+            details={**exc.details, "key_expression": expression},
+        ) from exc
 
 
 def write_state_document(location: StateLocation, document: JSONObject) -> None:

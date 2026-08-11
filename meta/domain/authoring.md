@@ -27,7 +27,8 @@ An author should be able to discover:
 - which operations exist;
 - what each operation means;
 - what inputs and result shapes are expected;
-- which examples and patterns are considered idiomatic.
+- which examples and patterns are considered idiomatic;
+- which disputed minimal forms are backed by canonical verified snippets rather than only by prose description.
 
 ## Checkability
 

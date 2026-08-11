@@ -168,6 +168,81 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(list(result.results), [])
         self.assertEqual(list(result.published), [{"summary": "first"}, {"summary": "second"}])
 
+    def test_execute_publish_allows_probe_reference_in_value_surface(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: publish
+blocks:
+  - steps:
+      - name: publish-branch
+        publish:
+          branch: git.branch.value
+          detached: git.branch.detached
+"""
+        )
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+            ]
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.published), [{"branch": "feature/demo", "detached": False}])
+
+    def test_execute_value_step_allows_probe_reference_in_value_surface(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: publish
+blocks:
+  - steps:
+      - name: branch
+        value: git.branch.value
+        register: current_branch
+"""
+        )
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+            ]
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(workflow.step_results["current_branch"]["outputs"]["value"], "feature/demo")
+
+    def test_execute_result_allows_probe_reference_in_value_surface(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: publish
+blocks:
+  - steps:
+      - name: branch-result
+        result:
+          branch: git.branch.value
+"""
+        )
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
+            ]
+
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(list(result.results), [{"branch": "feature/demo"}])
+
     def test_execute_returns_empty_results_when_no_result_step_runs(self) -> None:
         workflow = Workflow(version=0, workflow="publish", steps=(Step(name="remember", value="ok"),))
 
@@ -2031,6 +2106,38 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["active_profile"], "backend")
         self.assertEqual(seen_inputs[0]["repo_kind"], "backend")
+
+    def test_execute_profile_switch_uses_prior_step_output(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(
+                Step(name="select-profile", value="frontend", register="selected"),
+                Step(name="switch", profile_switch="${step.selected.outputs.value}"),
+                Step(name="main", operation=OperationRef("shell.command", with_={"command": "echo hi"})),
+            ),
+        )
+        backend = Profile(name="backend")
+        frontend = Profile(name="frontend", inputs={"repo_kind": "frontend"})
+        seen_inputs = []
+
+        def executor(_resolved_step, runtime_workflow):
+            seen_inputs.append(dict(runtime_workflow.inputs))
+            return OperationResult(status="ok", summary="Executed")
+
+        result = execute_workflow(
+            workflow,
+            profile=backend,
+            available_profiles={"backend": backend, "frontend": frontend},
+            profile_working_directories={"backend": None, "frontend": None},
+            step_executor=executor,
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+        self.assertEqual(seen_inputs[0]["repo_kind"], "frontend")
 
 
 if __name__ == "__main__":

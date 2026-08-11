@@ -23,6 +23,7 @@ Expression-first value rules:
 - the surrounding field remains a value-bearing field rather than a dedicated condition list;
 - plain authored scalar strings are local expressions by default;
 - quoted authored strings are explicit string literals;
+- if a plain authored scalar string is accepted as an expression, runtime evaluation failure must remain an expression error rather than silently degrading back into a literal string;
 - YAML numeric, boolean, and null scalars retain their ordinary scalar meaning;
 - nested object and list leaves follow the same rule recursively.
 

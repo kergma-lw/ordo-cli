@@ -25,7 +25,8 @@
 - `state_delete` should remove the addressed value deterministically.
 - State reads should resolve to stored values through the same stable state path surface used by authoring.
 - Missing state reads should remain structured and predictable rather than falling back to hidden defaults.
-- The initial stable state path should require a logical role, one `inputs...` key reference, and optional dotted field traversal.
+- The stable state path should require a logical role, one bracketed runtime local-expression key, and optional dotted field traversal.
+- The bracketed state key expression should resolve to a non-null scalar value.
 
 ## Boundary discipline
 

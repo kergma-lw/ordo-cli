@@ -156,7 +156,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         status="supported",
         scope="workflow.step",
         related_capabilities=("workflow.step.register", "workflow.step.value"),
-        related_negative_rules=("workflow_step.if_conflicts_with_register",),
+        related_negative_rules=("workflow_step.if_conflicts_with_register", "workflow_step.gate_conflicts_with_register"),
         related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
     ),
     CapabilitySpec(
@@ -164,7 +164,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         status="supported",
         scope="workflow.step",
         related_capabilities=("workflow.step.condition", "workflow.step.outputs", "workflow.step.value"),
-        related_negative_rules=("workflow_step.register_requires_uses", "workflow_step.if_conflicts_with_register"),
+        related_negative_rules=("workflow_step.register_requires_uses", "workflow_step.if_conflicts_with_register", "workflow_step.gate_conflicts_with_register"),
         related_model_nodes=("workflow.step.register", "workflow.step.uses", "workflow.step.value", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
     ),
     CapabilitySpec(name="workflow.step.outputs", status="supported", scope="workflow.step"),
@@ -179,7 +179,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
 )
 
 EXPRESSION_ROOTS: tuple[ExpressionRootSpec, ...] = (
-    ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_reference", "step_condition", "embedded_value_expression")),
+    ExpressionRootSpec(name="inputs", surfaces=("guard_expression", "state_key_expression", "step_condition", "embedded_value_expression")),
     ExpressionRootSpec(name="probe", surfaces=("guard_expression", "step_condition", "embedded_value_expression")),
     ExpressionRootSpec(name="args", surfaces=("step_condition", "embedded_value_expression")),
     ExpressionRootSpec(name="item", surfaces=("step_condition", "embedded_value_expression", "include_binding_expression")),
@@ -216,7 +216,13 @@ EXPRESSION_SURFACES: tuple[ExpressionSurfaceSpec, ...] = (
         builtins=tuple(VALUE_EXPRESSION_BUILTINS),
         boolean_operators=("and", "or", "not", "parentheses"),
     ),
-    ExpressionSurfaceSpec(name="state_key_reference", roots=("inputs",)),
+    ExpressionSurfaceSpec(
+        name="state_key_expression",
+        roots=("inputs", "args", "item", "state", "step"),
+        filters=tuple(VALUE_EXPRESSION_FILTERS),
+        builtins=tuple(VALUE_EXPRESSION_BUILTINS),
+        boolean_operators=("and", "or", "not", "parentheses"),
+    ),
 )
 
 NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
@@ -280,6 +286,15 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
         related_codes=("validation.workflow.step.if_with_register",),
         related_capabilities=("workflow.step.condition", "workflow.step.register", "workflow.step.value", "workflow.branching"),
         related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
+    ),
+    NegativeRuleSpec(
+        name="workflow_step.gate_conflicts_with_register",
+        surface="workflow_step",
+        rule="The gate and register fields cannot be used together; split the gate into a standalone checkpoint step before the registered step",
+        reason="gate admission should stay separate from step-result publication so blocked steps never need to imply a registered output surface",
+        related_codes=("validation.workflow.step.gate_register_conflict", "load.step.gate_register_conflict"),
+        related_capabilities=("workflow.step.condition", "workflow.step.register", "workflow.step.value"),
+        related_model_nodes=("workflow.step.gate", "workflow.step.register", "workflow.step_forms.gate_checkpoint", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
     ),
     NegativeRuleSpec(
         name="embedded_value_expression.step_refs_must_be_backward",

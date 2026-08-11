@@ -9,13 +9,13 @@ class RuntimeStatePathTest(unittest.TestCase):
         parsed = parse_state_path("state.task_memory[inputs.issue_ref].branch")
 
         self.assertEqual(parsed.state_role, "task_memory")
-        self.assertEqual(parsed.key_reference, ("inputs", "issue_ref"))
+        self.assertEqual(parsed.key_expression, "inputs.issue_ref")
         self.assertEqual(parsed.fields, ("branch",))
 
-    def test_parse_state_path_allows_nested_input_reference_and_field_chain(self) -> None:
-        parsed = parse_state_path("state.task_memory[inputs.issue.ref].branch.name")
+    def test_parse_state_path_allows_dynamic_key_expression_and_field_chain(self) -> None:
+        parsed = parse_state_path('state.task_memory[format("{}:{}", inputs.issue, step.branch.outputs.value)].branch.name')
 
-        self.assertEqual(parsed.key_reference, ("inputs", "issue", "ref"))
+        self.assertEqual(parsed.key_expression, 'format("{}:{}", inputs.issue, step.branch.outputs.value)')
         self.assertEqual(parsed.fields, ("branch", "name"))
 
     def test_validation_rejects_invalid_state_delete_path(self) -> None:
@@ -33,8 +33,42 @@ blocks:
 """
         )
 
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.state_path.syntax")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.state_path.key_expr.root")
         self.assertEqual(report.diagnostics[0].path, ("blocks", "1", "steps", "0", "state_delete"))
+
+    def test_validation_rejects_null_state_key_expression(self) -> None:
+        report = validate_workflow_text(
+            """
+version: 0
+workflow: open-task
+state_needs:
+  task_memory: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: forget-branch
+        state_delete: state.task_memory[null].branch
+"""
+        )
+
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.state_path.key_expr.result_type")
+
+    def test_validation_rejects_object_state_key_expression(self) -> None:
+        report = validate_workflow_text(
+            """
+version: 0
+workflow: open-task
+state_needs:
+  task_memory: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: forget-branch
+        state_delete: "state.task_memory[{name: inputs.issue_ref}].branch"
+"""
+        )
+
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.state_path.key_expr.result_type")
 
     def test_validation_rejects_multiple_state_set_targets(self) -> None:
         report = validate_workflow_text(

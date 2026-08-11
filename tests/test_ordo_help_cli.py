@@ -94,6 +94,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         command_line = json.loads(self.run_help("command-line", "--json").stdout)
         operations = json.loads(self.run_help("operations", "--json").stdout)
         examples = json.loads(self.run_help("examples", "--json").stdout)
+        snippet_coverage = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         self.assertEqual(root["tool_name"], "ordo-help")
         self.assertEqual(overview["document_kind"], "overview")
@@ -104,6 +105,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(command_line["document_kind"], "command_line")
         self.assertIn("connectors", operations)
         self.assertEqual(examples["document_kind"], "examples_catalog")
+        self.assertEqual(snippet_coverage["document_kind"], "snippet_coverage")
 
     def test_operation_topic_discovers_compose_start_automatically(self) -> None:
         result = self.run_help("operation", "compose.start", "--json")
@@ -181,6 +183,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.step.if", branching["related_model_nodes"])
         self.assertIn("workflow.branching", if_conflict["related_capabilities"])
         self.assertIn("workflow.step.register", if_conflict["related_capabilities"])
+
+    def test_capabilities_publish_gate_register_conflict_rule(self) -> None:
+        capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
+
+        gate_conflict = next(item for item in capabilities["negative_rules"] if item["name"] == "workflow_step.gate_conflicts_with_register")
+        register = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.step.register")
+
+        self.assertIn("split the gate into a standalone checkpoint step", gate_conflict["rule"])
+        self.assertIn("validation.workflow.step.gate_register_conflict", gate_conflict["related_codes"])
+        self.assertIn("workflow_step.gate_conflicts_with_register", register["related_negative_rules"])
 
     def test_capabilities_publish_representation_adapter_capability(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -473,6 +485,48 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["document_kind"], "model_node")
         self.assertEqual(payload["name"], "state")
         self.assertIn("workflow_surface", payload["metadata"])
+        self.assertEqual(payload["snippet_coverage"], "harness_verified")
+        self.assertEqual(payload["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"]')
+
+    def test_describe_state_step_and_filter_nodes_publish_canonical_snippets(self) -> None:
+        state_set = json.loads(self.run_help("describe", "workflow.step.state_set", "--json").stdout)
+        step_if = json.loads(self.run_help("describe", "workflow.step.if", "--json").stdout)
+        lookup = json.loads(self.run_help("describe", "workflow.local_expression.filter.lookup", "--json").stdout)
+
+        self.assertEqual(state_set["snippet_coverage"], "harness_verified")
+        self.assertEqual(state_set["canonical_examples"][0]["yaml"], 'state_set:\n  state.shared_state["active_profile"]: review')
+        self.assertEqual(state_set["canonical_examples"][1]["yaml"], 'state_set:\n  state.shared_state["active_profile"].enabled: true')
+        self.assertIn("state.task_memory[inputs.task_key].issue_number", state_set["canonical_examples"][2]["yaml"])
+        self.assertEqual(step_if["snippet_coverage"], "harness_verified")
+        self.assertEqual(step_if["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"] == "review"')
+        self.assertEqual(lookup["snippet_coverage"], "harness_verified")
+        self.assertEqual(lookup["canonical_examples"][0]["yaml"], 'inputs.status_labels | lookup("ready")')
+
+    def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
+        payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
+
+        handles = {item["handle"]: item for item in payload["handles"]}
+        self.assertEqual(payload["summary"]["coverage_counts"]["harness_verified"], 4)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
+        self.assertEqual(handles["state"]["snippet_coverage"], "harness_verified")
+        self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "harness_verified")
+        self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "none")
+
+    def test_text_describe_state_set_shows_snippet_coverage_and_yaml(self) -> None:
+        result = self.run_help("describe", "workflow.step.state_set")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("snippet coverage: harness_verified", result.stdout)
+        self.assertIn("canonical examples:", result.stdout)
+        self.assertIn('state.shared_state["active_profile"]: review', result.stdout)
+        self.assertIn("verification: excerpt_verified from examples.set-active-task-from-gitx", result.stdout)
+
+    def test_text_describe_state_shows_snippet_yaml(self) -> None:
+        result = self.run_help("describe", "state")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("snippet coverage: harness_verified", result.stdout)
+        self.assertIn('state.shared_state["active_profile"]', result.stdout)
 
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:
         include_contract_node = json.loads(self.run_help("describe", "workflow.include_contract", "--json").stdout)
@@ -595,7 +649,7 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_search_indexes_local_expression_builtins_and_state_aliases(self) -> None:
         builtin_result = json.loads(self.run_help("search", "is_missing", "--json").stdout)
         combined_result = json.loads(self.run_help("search", "is_missing state", "--json").stdout)
-        state_alias_result = json.loads(self.run_help("search", "state.shared_state", "--json").stdout)
+        state_alias_result = json.loads(self.run_help("search", "state key expression", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.builtin.is_missing" for item in builtin_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.builtin.is_missing" for item in combined_result["facts"]))
@@ -671,7 +725,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and explicit probe-coverage gaps early", payload["authoring_heuristic"])
         self.assertIn("for applicability decisions, prefer guard probes first; use read-only probe steps mainly when the observed fact must be reused later", payload["authoring_heuristic"])
         self.assertIn("treat 'observation' in runtime metadata as the internal term for the result of an explicit probe", payload["authoring_heuristic"])
-        self.assertIn("prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly", payload["authoring_heuristic"])
+        self.assertIn("prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text", payload["authoring_heuristic"])
         self.assertEqual([item["name"] for item in payload["bounded_fan_out_examples"]], ["named_run_target_fan_out", "inline_fan_out_local_steps", "inline_fan_out_inner_if"])
         decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")
         structured_rule = next(item for item in payload["rules"] if item["name"] == "structured_surface_bias")
@@ -797,7 +851,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any("let bindings" in item for item in native_expression_rule["prefer"]))
         self.assertTrue(any("step if conditions" in item for item in native_expression_rule["prefer"]))
         self.assertTrue(any("quote literal strings explicitly" in item for item in native_expression_rule["prefer"]))
-        self.assertTrue(any("expression-driven" in item or "quoted literals" in item for item in native_expression_rule["why"]))
+        self.assertTrue(any("expression-driven" in item or "quoted literals" in item or "silently reinterpreting" in item for item in native_expression_rule["why"]))
+        self.assertTrue(any("broken bare expression" in item for item in native_expression_rule["avoid"]))
         self.assertEqual(guard_result_rule["priority"], "critical_guard_contract")
         self.assertEqual(guard_result_rule["guidance_level"], "required")
         self.assertTrue(any("non-boolean" in item for item in guard_result_rule["prefer"] + guard_result_rule["avoid"]))

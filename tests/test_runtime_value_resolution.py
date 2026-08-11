@@ -6,7 +6,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import AuthoredString
 from ordo.model.runtime import OperationResult
 from ordo.model.runtime import RuntimeStatus
-from ordo.model.workflow import Workflow
+from ordo.model.workflow import Step, Workflow
 from ordo.runtime import json_adapter as runtime_json_adapter
 from ordo.runtime import execute_workflow, load_workflow_text
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
@@ -437,6 +437,34 @@ blocks:
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_root_missing")
 
+    def test_resolve_runtime_value_does_not_fallback_plain_expression_failure_to_literal(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", inputs={"issue_ref": "owner/repo"})
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value(AuthoredString('inputs.issue_ref | text.before("#")', style="plain"), workflow)
+
+        self.assertEqual(context.exception.code, "runtime.value.adapter_not_found")
+
+    def test_execute_surfaces_plain_expression_failure_in_value_step_without_literal_fallback(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"issue_ref": "owner/repo"},
+            steps=(
+                Step(
+                    name="select",
+                    value=AuthoredString('inputs.issue_ref | text.before("#")', style="plain"),
+                    register="picked",
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.failed_step, "select")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.adapter_not_found")
+
     def test_resolve_runtime_value_supports_cross_adapter_value_flow(self) -> None:
         register_representation_adapter("fixture", lambda invocation: adapter_read_result({"wrapped": invocation.root_value}))
         register_representation_adapter("json", lambda invocation: adapter_read_result(invocation.root_value[invocation.parameters["field"]]))
@@ -674,6 +702,10 @@ blocks:
             )
 
         self.assertEqual(context.exception.code, "runtime.value.call_probe_failed")
+        self.assertEqual(context.exception.details["cause_code"], "probe.failed")
+        self.assertEqual(context.exception.details["cause_message"], "boom")
+        self.assertEqual(context.exception.details["probe_status"], "probe_failed")
+        self.assertEqual(context.exception.details["probe_diagnostics"][0]["code"], "probe.failed")
 
     def test_resolve_runtime_value_can_feed_fs_file_content_into_key_value_adapter(self) -> None:
         workflow = load_workflow_text(

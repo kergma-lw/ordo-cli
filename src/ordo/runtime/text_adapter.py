@@ -7,6 +7,7 @@ import json
 import re
 
 from ordo.model.json import JSONObject, JSONValue
+from .value_preview import summarize_json_value
 
 from .representation_adapters import (
     RepresentationAdapterError,
@@ -303,7 +304,7 @@ def _apply_selector(current: _TextScope | _TextCollection, step: _SelectorStep) 
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_path",
             message=f"Text selector '.{step.name}' is not available after a collection focus",
-            details={"selector": step.name, "collection_kind": current.kind},
+            details={"selector": step.name, "collection_kind": current.kind, "observed": _summarize_text_focus(current)},
         )
     if step.name == "lines":
         return _project_lines(current)
@@ -314,13 +315,13 @@ def _apply_selector(current: _TextScope | _TextCollection, step: _SelectorStep) 
             raise RepresentationAdapterError(
                 code="runtime.value.adapter_not_found",
                 message=f"Text find selector found no matches for '{step.argument}'",
-                details={"literal": step.argument},
+                details={"literal": step.argument, "observed": _summarize_text_focus(current)},
             )
         if len(matches) > 1:
             raise RepresentationAdapterError(
                 code="runtime.value.adapter_ambiguous",
                 message=f"Text find selector is ambiguous for '{step.argument}'",
-                details={"literal": step.argument, "matches": len(matches)},
+                details={"literal": step.argument, "matches": len(matches), "observed": _summarize_text_focus(current)},
             )
         return matches[0]
     if step.name == "finds":
@@ -341,13 +342,18 @@ def _apply_index(current: _TextScope | _TextCollection, step: _IndexStep) -> _Te
         raise RepresentationAdapterError(
             code="runtime.value.adapter_invalid_path",
             message="Text index selectors require a collection focus",
-            details={"index": step.index},
+            details={"index": step.index, "observed": _summarize_text_focus(current)},
         )
     if step.index >= len(current.items):
         raise RepresentationAdapterError(
             code="runtime.value.adapter_not_found",
             message=f"Text selection index {step.index} is not available",
-            details={"index": step.index, "matches": len(current.items), "collection_kind": current.kind},
+            details={
+                "index": step.index,
+                "matches": len(current.items),
+                "collection_kind": current.kind,
+                "observed": _summarize_text_focus(current),
+            },
         )
     return current.items[step.index]
 
@@ -387,13 +393,13 @@ def _narrow_around_anchor(scope: _TextScope, literal: str, *, mode: str) -> _Tex
         raise RepresentationAdapterError(
             code="runtime.value.adapter_not_found",
             message=f"Text {mode} selector found no matches for '{literal}'",
-            details={"literal": literal},
+            details={"literal": literal, "observed": _summarize_text_focus(scope)},
         )
     if len(matches) > 1:
         raise RepresentationAdapterError(
             code="runtime.value.adapter_ambiguous",
             message=f"Text {mode} selector is ambiguous for '{literal}'",
-            details={"literal": literal, "matches": len(matches)},
+            details={"literal": literal, "matches": len(matches), "observed": _summarize_text_focus(scope)},
         )
     match = matches[0]
     if mode == "before":
@@ -405,6 +411,24 @@ def _selection_to_json(selection: _TextScope | _TextCollection) -> JSONValue:
     if isinstance(selection, _TextCollection):
         return [item.text for item in selection.items]
     return selection.text
+
+
+def _summarize_text_focus(value: _TextScope | _TextCollection | JSONValue) -> JSONObject:
+    if isinstance(value, _TextCollection):
+        preview_items = [item.text for item in value.items[:2]]
+        return {
+            "type": "text_collection",
+            "collection_kind": value.kind,
+            "length": len(value.items),
+            "items_preview": preview_items,
+        }
+    if isinstance(value, _TextScope):
+        return {
+            "type": "text_scope",
+            "length": len(value.text),
+            "preview": value.text[:80] + ("…" if len(value.text) > 80 else ""),
+        }
+    return summarize_json_value(value)
 
 
 def _apply_text_action(selection: _TextScope | _TextCollection, action: _TextAction, parameters: JSONObject) -> str:

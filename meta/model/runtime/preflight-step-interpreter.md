@@ -157,6 +157,8 @@ The runtime must classify steps into at least these categories:
 
 This classification must be runtime-visible and contract-backed rather than heuristic-only.
 
+Builtin payload-shaping steps such as `value`, `result`, and `publish` should classify as `read_only_analyzable` when their payloads are evaluated through the shared runtime value-resolution surface rather than through effectful connector execution.
+
 ## Evaluation model
 
 - Interpret step blocks in declared order.

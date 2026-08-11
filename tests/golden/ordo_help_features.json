@@ -434,11 +434,11 @@
           "state"
         ],
         "path_shape": [
-          "state.<role>[inputs.<key>][.<field>...]"
+          "state.<role>[<expression>][.<field>...]"
         ],
         "runtime_rules": [
           "bound_role_required",
-          "scalar_key_required",
+          "non_null_scalar_key_required",
           "declared_location_required"
         ],
         "workflow_surface": [
@@ -839,7 +839,7 @@
       ],
       "inappropriate_when": [
         "The decision really belongs in workflow guards near the start of the workflow.",
-        "You are trying to mix gate admission with register publication or current-step output reads."
+        "You are trying to mix gate admission with register publication or current-step output reads; split the gate into a standalone checkpoint step before the registered step."
       ],
       "inspect_next": [
         {
@@ -963,7 +963,7 @@
           "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
           "handle": "workflow-authoring.native_expression_contexts",
           "kind": "rule",
-          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly.",
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
           "topic": "workflow-authoring"
         },
         {
@@ -1031,7 +1031,7 @@
           "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
           "handle": "workflow-authoring.native_expression_contexts",
           "name": "native_expression_contexts",
-          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly."
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
         }
       ],
       "summary": "Boolean condition-authoring surface shared by step if and gate, including expression and structured all/any/not forms."
@@ -1085,7 +1085,7 @@
           "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
           "handle": "workflow-authoring.native_expression_contexts",
           "kind": "rule",
-          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly.",
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
           "topic": "workflow-authoring"
         },
         {
@@ -1164,7 +1164,7 @@
           "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
           "handle": "workflow-authoring.native_expression_contexts",
           "name": "native_expression_contexts",
-          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly."
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
         },
         {
           "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
@@ -1575,7 +1575,7 @@
           "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
           "handle": "workflow-authoring.native_expression_contexts",
           "name": "native_expression_contexts",
-          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly."
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
         }
       ],
       "summary": "Family-based representation transforms over workflow values, including projection-oriented selectors and family-specific actions."

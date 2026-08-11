@@ -6,6 +6,15 @@ from dataclasses import dataclass, field
 
 from .json import JSONObject, JSONValue
 
+GATE_REGISTER_SPLIT_RECOMMENDATION = (
+    "Split this into a standalone gate checkpoint step followed by a separate step that declares 'register'."
+)
+
+GATE_REGISTER_CONFLICT_MESSAGE = (
+    "Step must not declare both 'gate' and 'register'. "
+    + GATE_REGISTER_SPLIT_RECOMMENDATION
+)
+
 
 @dataclass(frozen=True, slots=True)
 class OperationRef:
@@ -87,7 +96,7 @@ class Step:
         if self.run is not None and self.steps is not None:
             raise ValueError("Step must not define both run and steps invocation bodies")
         if self.gate is not None and self.register is not None:
-            raise ValueError("Step must not declare both gate and register")
+            raise ValueError(GATE_REGISTER_CONFLICT_MESSAGE)
         form_count = sum(forms)
         if form_count == 0 and self.gate is not None:
             return

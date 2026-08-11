@@ -180,6 +180,10 @@ def _optional_input(ctx: OperationContext, key: str) -> JSONValue | None | Opera
     resolved = getattr(ctx, "_resolved")
     workflow = getattr(ctx, "_workflow")
 
+    resolved_inputs = getattr(resolved, "resolved_inputs", None)
+    if isinstance(resolved_inputs, dict) and key in resolved_inputs:
+        return resolved_inputs[key]
+
     candidate_inputs = getattr(resolved, "declared_with", None)
     if isinstance(candidate_inputs, dict) and key in candidate_inputs:
         candidate = candidate_inputs[key]

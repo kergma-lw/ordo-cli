@@ -17,8 +17,8 @@ STATE_CONTRACT: JSONObject = {
     },
     "path_forms": {
         "root": "state",
-        "shape": "state.<role>[inputs.<key>][.<field>...]",
-        "root_reference": "inputs",
+        "shape": "state.<role>[<expression>][.<field>...]",
+        "key_expression_surface": "embedded_value_expression",
         "supports_nested_fields": True,
         "supports_hyphenated_roles": True,
     },
@@ -28,8 +28,8 @@ STATE_CONTRACT: JSONObject = {
             "message": "state path must start with 'state'",
         },
         {
-            "name": "key_reference_must_use_dotted_inputs",
-            "message": "state path key reference must use dotted inputs form such as 'inputs.task_key'",
+            "name": "key_expression_must_be_valid_local_expression",
+            "message": "state path key expression must be a valid local expression",
         },
         {
             "name": "no_trailing_content",
@@ -47,8 +47,8 @@ STATE_CONTRACT: JSONObject = {
             "error_code": "runtime.state.binding_missing",
         },
         {
-            "name": "scalar_key_required",
-            "message": "state key reference must resolve to a scalar value",
+            "name": "non_null_scalar_key_required",
+            "message": "state key expression must resolve to a non-null scalar value",
             "error_code": "runtime.state.key_invalid",
         },
         {

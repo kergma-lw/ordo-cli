@@ -114,6 +114,7 @@ Such interpretation must remain non-effectful, ordered, conservative, and explic
 Why this matters:
 - relevant read-only observations may live behind step flow rather than direct guard probes;
 - runtime should be able to strengthen guard coverage without turning `check` into hidden execution;
+- when a nested read-only observation fails, `check` should preserve the underlying probe diagnostics so authors can see the root cause without extra reconstruction work;
 - a dedicated contract keeps richer preflight behavior reviewable.
 
 ## CHECK-MODE-013 — Advisory preflight-observation metadata may strengthen explainability without becoming a prerequisite

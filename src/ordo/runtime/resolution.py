@@ -27,6 +27,7 @@ class ResolvedOperation:
     operation: OperationContract
     source: str
     declared_with: JSONObject | None = None
+    resolved_inputs: JSONObject | None = None
 
 
 @dataclass(frozen=True, slots=True)

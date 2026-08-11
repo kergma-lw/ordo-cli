@@ -89,5 +89,6 @@
 
 - A native condition context may expose expressions without an interpolation envelope.
 - An expression-first value context may expose plain scalar expressions while still preserving explicit quoted string literals.
+- Once a plain scalar in an expression-first value context is being evaluated as an expression, runtime failure must not silently reinterpret it as a literal string.
 - An embedded value context may use a distinct authored embedding form for local expressions as an explicit escape surface when the expression is not viable as a YAML plain scalar.
 - Surface differences must not erase the underlying context restrictions that determine which roots and dependencies are allowed.

@@ -10,7 +10,8 @@ class IntrospectionStateContractTest(unittest.TestCase):
     def test_state_contract_publishes_path_and_storage_rules(self) -> None:
         payload = describe_state_contract()
 
-        self.assertEqual(payload["path_forms"]["shape"], "state.<role>[inputs.<key>][.<field>...]")
+        self.assertEqual(payload["path_forms"]["shape"], "state.<role>[<expression>][.<field>...]")
+        self.assertEqual(payload["path_forms"]["key_expression_surface"], "embedded_value_expression")
         self.assertEqual(payload["storage_document"]["root_type"], "object")
         runtime_rules = {rule["name"]: rule for rule in payload["runtime_rules"]}
         self.assertEqual(runtime_rules["bound_role_required"]["error_code"], "runtime.state.binding_missing")
@@ -23,6 +24,7 @@ class IntrospectionStateContractTest(unittest.TestCase):
         self.assertEqual(payload["path_forms"]["root"], "state")
         self.assertEqual(payload["storage_document"]["top_level_keys"], "user-defined")
         self.assertEqual(parsed.state_role, "task_memory")
+        self.assertEqual(parsed.key_expression, "inputs.issue_ref")
         self.assertIn("states", PLAYBOOK_ALLOWED_FIELDS)
         self.assertEqual(payload, STATE_CONTRACT)
 

@@ -425,7 +425,7 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
-    def test_profile_switch_rejects_step_references(self) -> None:
+    def test_profile_switch_allows_prior_step_references(self) -> None:
         report = validate_workflow_text(
             textwrap.dedent(
                 """
@@ -439,13 +439,34 @@ class ValidationTest(unittest.TestCase):
                         value: "backend"
                         register: selected
                       - name: switch-profile
-                        profile_switch: ${step.selected.value}
+                        profile_switch: ${step.selected.outputs.value}
+                """
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_profile_switch_rejects_forward_step_references(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  enabled: true
+                blocks:
+                  - steps:
+                      - name: switch-profile
+                        profile_switch: ${step.selected.outputs.value}
+                      - name: prepare
+                        value: "backend"
+                        register: selected
                 """
             )
         )
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
-        self.assertEqual(report.diagnostics[0].code, "validation.workflow.profile_switch.step_ref_forbidden")
+        self.assertEqual(report.diagnostics[0].code, "validation.workflow.step_ref.forward")
 
     def test_run_step_rejects_non_object_with(self) -> None:
         report = validate_workflow_text(
@@ -1823,6 +1844,11 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.gate_register_conflict")
+        self.assertIn("standalone gate checkpoint step", report.diagnostics[0].message)
+        self.assertEqual(
+            report.diagnostics[0].details["suggested_fix"],
+            "split_gate_checkpoint_from_register_step",
+        )
 
     def test_effectful_gate_step_must_not_register(self) -> None:
         report = validate_workflow_text(
@@ -1842,6 +1868,7 @@ class ValidationTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(report.diagnostics[0].code, "validation.workflow.step.gate_register_conflict")
+        self.assertIn("standalone gate checkpoint step", report.diagnostics[0].message)
 
     def test_forward_step_register_reference_in_if_fails(self) -> None:
         report = validate_workflow_text(
@@ -2268,6 +2295,25 @@ class ValidationTest(unittest.TestCase):
                       - name: publish
                         publish:
                           digest: ${step.digest_json.outputs.value | json..["head_sha"]->remove() | json}
+                '''
+            )
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_publish_accepts_field_filter_path_starting_from_root_array_index(self) -> None:
+        report = validate_workflow_text(
+            textwrap.dedent(
+                '''
+                version: 0
+                workflow: publish-demo
+                inputs:
+                  payload: []
+                blocks:
+                  - steps:
+                      - name: publish
+                        publish:
+                          task_item: ${inputs.payload | field("[0].content_ref")}
                 '''
             )
         )

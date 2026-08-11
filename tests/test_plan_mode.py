@@ -281,15 +281,41 @@ class PlanModeTest(unittest.TestCase):
         cases = [
             (Step(name="probe", operation=OperationRef("gh.issue")), "read_only_analyzable"),
             (Step(name="value", value=True, register="enabled"), "read_only_analyzable"),
+            (Step(name="result", result={"summary": "ok"}), "read_only_analyzable"),
+            (Step(name="publish", publish={"summary": "ok"}), "read_only_analyzable"),
             (Step(name="switch", profile_switch="frontend"), "context_only"),
             (Step(name="run-fragment", run="fragment.yml"), "read_only_unanalyzable"),
-            (Step(name="write-state", state_set={"state.shared_state.flag": True}), "effectful"),
+            (Step(name="write-state", state_set={"state.shared_state[inputs.flag_key].flag": True}), "effectful"),
         ]
 
         for step, expected in cases:
             workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(step,))
             result = plan_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
             self.assertEqual(result.outputs["step_items"][0]["preflight_classification"], expected)
+
+    def test_plan_applies_profile_switch_from_prior_step_output(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repo_kind": {}},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="select-profile", value="frontend", register="selected"),
+                        Step(name="switch", profile_switch="${step.selected.outputs.value}"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+        result = plan_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["execution_allowed"], True)
+        self.assertEqual(result.outputs["step_items"][1]["preflight_classification"], "context_only")
+        self.assertEqual(result.outputs["step_items"][1]["eligibility"], "eligible")
 
     def test_plan_attaches_probe_scopes_to_read_only_steps(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(), steps=(Step(name="inspect", operation=OperationRef("gh.issue")),))

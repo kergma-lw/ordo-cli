@@ -562,6 +562,100 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["allowed_state"], "unknown")
         self.assertIn("profile_switch_not_resolvable_from_current_knowledge", result.outputs["incomplete_reasons"])
 
+    def test_check_applies_profile_switch_from_prior_step_output(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            declared_inputs={"repo_kind": {}},
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="select-profile", value="frontend", register="selected"),
+                        Step(name="switch-profile", profile_switch="${step.selected.outputs.value}"),
+                    )
+                ),
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+        result = check_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+        self.assertEqual(result.outputs["preflight_registers"]["selected"]["outputs"]["value"], "frontend")
+        self.assertEqual(result.outputs["preflight_step_items"][0]["status"], "interpreted")
+        self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "interpreted")
+
+    def test_check_treats_publish_step_as_read_only_analyzable(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(name="select-profile", value="frontend", register="selected"),
+                        Step(
+                            name="publish-selected",
+                            gate={"all": ["step.selected.outputs.value | is_string"]},
+                            publish={"profile": "${step.selected.outputs.value}", "summary": "ready"},
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertEqual(result.outputs["preflight_step_items"][1]["preflight_classification"], "read_only_analyzable")
+        self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "interpreted")
+
+    def test_check_surfaces_nested_probe_failure_root_cause_for_value_step(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  repository: owner/repo
+  issue_number: 7
+let:
+  story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
+blocks:
+  - steps:
+      - name: Extract story task refs
+        value: '${markdown["Tasks"].list_items with{root: story_body}}'
+        register: task_refs
+      - name: Publish selected story task
+        uses: shell.command
+        gate: is_present(step.task_refs.outputs.value)
+        with:
+          command: "echo hi"
+"""
+        )
+
+        def probe(resolved_probe, _workflow):
+            if resolved_probe.reference == "gh.issue":
+                return OperationResult(
+                    status="state_error",
+                    summary="missing auth",
+                    diagnostics=(Diagnostic(code="gh.auth_missing", level="error", message="GitHub auth missing", path=()),),
+                )
+            return OperationResult(status="ok")
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["preflight_halts"][0]["step_name"], "Extract story task refs")
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.call_probe_failed")
+        self.assertIn("GitHub auth missing", result.diagnostics[0].message)
+        self.assertEqual(result.diagnostics[0].details["cause_code"], "gh.auth_missing")
+        self.assertEqual(result.diagnostics[1].code, "gh.auth_missing")
+
     def test_check_evaluates_guard_pipeline_filters(self) -> None:
         workflow = Workflow(
             version=0,

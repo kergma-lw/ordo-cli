@@ -22,6 +22,7 @@ from ..representation_adapters import (
     has_representation_adapter,
 )
 from ..boolean_composition import parse_boolean_and, parse_boolean_not, parse_boolean_or
+from ..value_preview import summarize_json_value
 from .registry import (
     ValueExpressionBuiltinSpec,
     ValueExpressionFilterSpec,
@@ -60,7 +61,7 @@ class StateReferenceNode(ValueExpressionNode):
     """Runtime-state read such as ``state.task_memory[inputs.task_key].branch``."""
 
     state_role: str
-    key_reference: tuple[str, ...]
+    key_expression: ValueExpressionNode
     fields: tuple[str, ...] = ()
 
 
@@ -485,6 +486,7 @@ def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[Lo
             return
         if isinstance(current, StateReferenceNode):
             found.append(LocalExpressionDependency(kind="root", name="state", start=current.start, end=current.end))
+            visit(current.key_expression)
             return
         if isinstance(current, StepReferenceNode):
             found.append(LocalExpressionDependency(kind="root", name="step", start=current.start, end=current.end))
@@ -1095,14 +1097,8 @@ class _Parser:
         self._consume("DOT", "Expected '.' after 'state'")
         state_role = self._consume("IDENT", "Expected state role")
         self._consume("LBRACKET", "Expected '[' after state role")
-        key_reference = self._parse_dotted_reference()
-        if key_reference.parts[0] != "inputs" or len(key_reference.parts) < 2:
-            raise ValueExpressionParseError(
-                "State path key reference must use dotted form such as 'inputs.task_key'",
-                key_reference.start,
-                key_reference.end,
-            )
-        self._consume("RBRACKET", "Expected ']' after state key reference")
+        key_expression = self._parse_or() if self._allow_boolean_composition else self._parse_pipeline()
+        self._consume("RBRACKET", "Expected ']' after state key expression")
         fields: list[str] = []
         end = state_role.end
         while self._match("DOT") is not None:
@@ -1117,7 +1113,7 @@ class _Parser:
             start=start.start,
             end=end,
             state_role=state_role.text,
-            key_reference=key_reference.parts,
+            key_expression=key_expression,
             fields=tuple(fields),
         )
 
@@ -1199,7 +1195,10 @@ class _SemanticValidator:
         if isinstance(node, ReferenceNode):
             self._validate_reference(node)
             return
-        if isinstance(node, (StateReferenceNode, StepReferenceNode)):
+        if isinstance(node, StateReferenceNode):
+            self._visit(node.key_expression)
+            return
+        if isinstance(node, StepReferenceNode):
             return
         if isinstance(node, ListNode):
             for item in node.items:
@@ -1471,7 +1470,13 @@ class _ConditionEvaluator:
             return self._observe_reference(node)
         if isinstance(node, StateReferenceNode):
             try:
-                value = _resolve_state_reference(node, parsed=self._parsed, workflow=self._workflow)
+                value = _resolve_state_reference(
+                    node,
+                    parsed=self._parsed,
+                    workflow=self._workflow,
+                    step_results=self._step_results,
+                    observation_session=self._observation_session,
+                )
             except ValueExpressionEvaluationError as exc:
                 self._diagnostics.append(exc.to_diagnostic())
                 self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="state", status="probe_failed", value=None))
@@ -1759,7 +1764,7 @@ def _with_grouped_end(node: ValueExpressionNode, end: int) -> ValueExpressionNod
     if isinstance(node, ReferenceNode):
         return ReferenceNode(start=node.start, end=end, parts=node.parts)
     if isinstance(node, StateReferenceNode):
-        return StateReferenceNode(start=node.start, end=end, state_role=node.state_role, key_reference=node.key_reference, fields=node.fields)
+        return StateReferenceNode(start=node.start, end=end, state_role=node.state_role, key_expression=node.key_expression, fields=node.fields)
     if isinstance(node, StepReferenceNode):
         return StepReferenceNode(start=node.start, end=end, register=node.register, fields=node.fields)
     if isinstance(node, ListNode):
@@ -1799,7 +1804,7 @@ def _shift_node_offsets(node: ValueExpressionNode, *, delta: int) -> ValueExpres
             start=node.start + delta,
             end=node.end + delta,
             state_role=node.state_role,
-            key_reference=node.key_reference,
+            key_expression=_shift_node_offsets(node.key_expression, delta=delta),
             fields=node.fields,
         )
     if isinstance(node, StepReferenceNode):
@@ -1916,9 +1921,26 @@ def _evaluate_node(
             return _resolve_iteration_item_reference(node.parts, workflow=workflow)
         if node.parts[0] == "args":
             return _resolve_args_reference(node.parts, workflow=workflow)
+        if node.parts[0] == "inputs":
+            return _resolve_input_reference(node.parts, workflow=workflow)
+        if _is_read_only_probe_reference_candidate(node):
+            return _evaluate_read_only_reference(
+                node,
+                parsed=parsed,
+                workflow=workflow,
+                context=context,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
         return _resolve_input_reference(node.parts, workflow=workflow)
     if isinstance(node, StateReferenceNode):
-        return _resolve_state_reference(node, parsed=parsed, workflow=workflow)
+        return _resolve_state_reference(
+            node,
+            parsed=parsed,
+            workflow=workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
     if isinstance(node, StepReferenceNode):
         return _resolve_step_reference(node, parsed=parsed, step_results=step_results)
     if isinstance(node, ListNode):
@@ -2176,10 +2198,22 @@ def _resolve_args_reference(parts: tuple[str, ...], *, workflow: Workflow) -> JS
     return current
 
 
-def _resolve_state_reference(node: StateReferenceNode, *, parsed: ParsedValueExpression, workflow: Workflow) -> JSONValue:
+def _resolve_state_reference(
+    node: StateReferenceNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    step_results: dict[str, OperationResult | JSONObject],
+    observation_session: ReadOnlyObservationSession | None = None,
+) -> JSONValue:
     expression = render_expression_text(node, source=parsed.source)
     try:
-        target = resolve_state_target(expression, workflow)
+        target = resolve_state_target(
+            expression,
+            workflow,
+            step_results=step_results,
+            observation_session=observation_session,
+        )
     except RuntimeStateError as exc:
         raise ValueExpressionEvaluationError(
             code=(
@@ -2408,7 +2442,14 @@ def _evaluate_presence_builtin(
                 details={"expression": parsed.source, "builtin": node.name},
             )
         return False if node.name == "is_missing" else True
-    missing = _is_reference_missing(normalized_argument, parsed=parsed, workflow=workflow, context=context, step_results=step_results)
+    missing = _is_reference_missing(
+        normalized_argument,
+        parsed=parsed,
+        workflow=workflow,
+        context=context,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
     return missing if node.name == "is_missing" else not missing
 
 
@@ -2450,12 +2491,25 @@ def _evaluate_read_only_call(
         )
     ).result
     if observation.status != "ok":
-        details: JSONObject = {"expression": parsed.source, "target": ".".join(node.target.parts)}
+        details: JSONObject = {
+            "expression": parsed.source,
+            "target": ".".join(node.target.parts),
+            "probe_status": observation.status,
+        }
         if observation.reference is not None:
             details["reference"] = observation.reference
+        message = f"Read-only probe call '{'.'.join(node.target.parts)}' failed during value evaluation"
+        if observation.diagnostics:
+            details["probe_diagnostics"] = [diagnostic.to_contract() for diagnostic in observation.diagnostics]
+            first = observation.diagnostics[0]
+            details["cause_code"] = first.code
+            details["cause_message"] = first.message
+            if first.path:
+                details["cause_path"] = list(first.path)
+            message = f"{message}: {first.message}"
         raise ValueExpressionEvaluationError(
             code="runtime.value.call_probe_failed",
-            message=f"Read-only probe call '{'.'.join(node.target.parts)}' failed during value evaluation",
+            message=message,
             details=details,
         )
     return observation.value
@@ -2489,7 +2543,7 @@ def _evaluate_adapter_invocation_result(
         raise ValueExpressionEvaluationError(
             code="runtime.value.adapter_root_missing",
             message=f"Representation-adapter family '{node.family}' requires outer binding 'root'",
-            details={"expression": parsed.source, "family": node.family},
+            details={"expression": parsed.source, "family": node.family, "parameters_preview": summarize_json_value(parameters)},
         )
     try:
         return evaluate_representation_adapter_invocation(
@@ -2530,7 +2584,12 @@ def _require_string(value: JSONValue, *, filter_name: str, parsed: ParsedValueEx
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_type_invalid",
         message=f"Filter '{filter_name}' requires a string input",
-        details={"expression": parsed.source, "filter": filter_name, "actual_type": type(value).__name__},
+        details={
+            "expression": parsed.source,
+            "filter": filter_name,
+            "actual_type": type(value).__name__,
+            "observed": summarize_json_value(value),
+        },
     )
 
 
@@ -2577,8 +2636,26 @@ def _parse_field_path(path: str) -> tuple[FieldPathSegment, ...]:
             end += 1
         return path[start:end], end
 
-    identifier, position = consume_identifier(position)
-    segments.append(identifier)
+    def consume_index(start: int) -> tuple[int, int]:
+        if start >= length or path[start] != "[":
+            raise _FieldPathSyntaxError("Filter 'field' path contains unsupported syntax", start)
+        closing = path.find("]", start + 1)
+        if closing == -1:
+            raise _FieldPathSyntaxError("Filter 'field' path index is missing a closing bracket", start)
+        raw_index = path[start + 1 : closing]
+        if not raw_index or any(not item.isdigit() for item in raw_index):
+            raise _FieldPathSyntaxError("Filter 'field' path indexes must be zero-based integers", start + 1)
+        return int(raw_index), closing + 1
+
+    if path[position].isalpha() or path[position] == "_":
+        identifier, position = consume_identifier(position)
+        segments.append(identifier)
+    elif path[position] == "[":
+        index, position = consume_index(position)
+        segments.append(index)
+    else:
+        raise _FieldPathSyntaxError("Filter 'field' path must start with an identifier or index", position)
+
     while position < length:
         char = path[position]
         if char == ".":
@@ -2586,14 +2663,8 @@ def _parse_field_path(path: str) -> tuple[FieldPathSegment, ...]:
             segments.append(identifier)
             continue
         if char == "[":
-            closing = path.find("]", position + 1)
-            if closing == -1:
-                raise _FieldPathSyntaxError("Filter 'field' path index is missing a closing bracket", position)
-            raw_index = path[position + 1 : closing]
-            if not raw_index or any(not item.isdigit() for item in raw_index):
-                raise _FieldPathSyntaxError("Filter 'field' path indexes must be zero-based integers", position + 1)
-            segments.append(int(raw_index))
-            position = closing + 1
+            index, position = consume_index(position)
+            segments.append(index)
             continue
         raise _FieldPathSyntaxError("Filter 'field' path contains unsupported syntax", position)
     return tuple(segments)
@@ -2613,13 +2684,95 @@ def _resolve_field_path(value: JSONValue, path: tuple[FieldPathSegment, ...]) ->
     return current
 
 
+def _resolve_field_path_diagnostic_details(
+    value: JSONValue,
+    path: tuple[FieldPathSegment, ...],
+    *,
+    expression: str,
+    raw_path: str,
+) -> JSONObject:
+    current: JSONValue | object = value
+    resolved_segments: list[str] = []
+    for segment in path:
+        segment_text = segment if isinstance(segment, str) else f"[{segment}]"
+        if isinstance(segment, str):
+            if not isinstance(current, dict):
+                return {
+                    "expression": expression,
+                    "filter": "field",
+                    "path": raw_path,
+                    "resolved_prefix": _join_field_prefix(resolved_segments),
+                    "failed_segment": segment_text,
+                    "expected_container": "object",
+                    "observed": summarize_json_value(current),
+                }
+            if segment not in current:
+                details: JSONObject = {
+                    "expression": expression,
+                    "filter": "field",
+                    "path": raw_path,
+                    "resolved_prefix": _join_field_prefix(resolved_segments),
+                    "failed_segment": segment_text,
+                    "expected_container": "object",
+                    "observed": summarize_json_value(current),
+                    "available_keys": list(current.keys())[:10],
+                }
+                return details
+            current = current[segment]
+            resolved_segments.append(segment_text)
+            continue
+        if not isinstance(current, list):
+            return {
+                "expression": expression,
+                "filter": "field",
+                "path": raw_path,
+                "resolved_prefix": _join_field_prefix(resolved_segments),
+                "failed_segment": segment_text,
+                "expected_container": "array",
+                "observed": summarize_json_value(current),
+            }
+        if segment < 0 or segment >= len(current):
+            details = {
+                "expression": expression,
+                "filter": "field",
+                "path": raw_path,
+                "resolved_prefix": _join_field_prefix(resolved_segments),
+                "failed_segment": segment_text,
+                "expected_container": "array",
+                "observed": summarize_json_value(current),
+            }
+            return details
+        current = current[segment]
+        resolved_segments.append(segment_text)
+    return {"expression": expression, "filter": "field", "path": raw_path, "observed": summarize_json_value(value)}
+
+
+def _join_field_prefix(segments: list[str]) -> str:
+    if not segments:
+        return ""
+    text = ""
+    for segment in segments:
+        if segment.startswith("["):
+            text += segment
+        elif not text:
+            text = segment
+        else:
+            text += f".{segment}"
+    return text
+
+
 def _require_list(value: JSONValue, *, filter_name: str, parsed: ParsedValueExpression) -> list[JSONValue]:
     if isinstance(value, list):
         return value
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_type_invalid",
         message=f"Filter '{filter_name}' requires an array input",
-        details={"expression": parsed.source, "filter": filter_name, "actual_type": type(value).__name__},
+        details={
+            "expression": parsed.source,
+            "filter": filter_name,
+            "actual_type": type(value).__name__,
+            "observed": summarize_json_value(value),
+        },
     )
 
 
@@ -2878,10 +3031,19 @@ def _apply_field_filter(
             raise ValueExpressionEvaluationError(
                 code="runtime.value.field_path_missing",
                 message="Filter 'field' could not resolve the addressed path on object input",
-                details={"expression": parsed.source, "filter": "field", "path": raw_path},
+                details=_resolve_field_path_diagnostic_details(value, path, expression=parsed.source, raw_path=raw_path),
             )
         return resolved
     if isinstance(value, list):
+        if path and isinstance(path[0], int):
+            resolved = _resolve_field_path(value, path)
+            if resolved is _FIELD_PATH_MISSING:
+                raise ValueExpressionEvaluationError(
+                    code="runtime.value.field_path_missing",
+                    message="Filter 'field' could not resolve the addressed path on array input",
+                    details=_resolve_field_path_diagnostic_details(value, path, expression=parsed.source, raw_path=raw_path),
+                )
+            return resolved
         projected: list[JSONValue] = []
         for item in value:
             resolved = _resolve_field_path(item, path)
@@ -2890,7 +3052,12 @@ def _apply_field_filter(
     raise ValueExpressionEvaluationError(
         code="runtime.value.filter_type_invalid",
         message="Filter 'field' requires an object or array input",
-        details={"expression": parsed.source, "filter": "field", "actual_type": type(value).__name__},
+        details={
+            "expression": parsed.source,
+            "filter": "field",
+            "actual_type": type(value).__name__,
+            "observed": summarize_json_value(value),
+        },
     )
 
 
@@ -3072,7 +3239,10 @@ def _apply_not_filter(
 
 def _is_presence_check_argument(node: ValueExpressionNode) -> bool:
     if isinstance(node, ReferenceNode):
-        return bool(node.parts) and node.parts[0] in {"inputs", "args"} and len(node.parts) >= 2
+        return bool(node.parts) and (
+            (node.parts[0] in {"inputs", "args"} and len(node.parts) >= 2)
+            or _is_read_only_probe_reference_candidate(node)
+        )
     if isinstance(node, AdapterInvocationNode):
         return True
     if isinstance(node, PipelineNode):
@@ -3087,6 +3257,7 @@ def _is_reference_missing(
     workflow: Workflow,
     context,
     step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
 ) -> bool:
     if isinstance(node, ReferenceNode):
         from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, resolve_workflow_let_reference_node
@@ -3096,7 +3267,32 @@ def _is_reference_missing(
         except LOCAL_EXPRESSION_PARSE_ERRORS:
             return True
         if expanded is not None:
-            return _is_reference_missing(expanded, parsed=parsed, workflow=workflow, context=context, step_results=step_results)
+            return _is_reference_missing(
+                expanded,
+                parsed=parsed,
+                workflow=workflow,
+                context=context,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
+        if _is_read_only_probe_reference_candidate(node):
+            try:
+                _evaluate_read_only_reference(
+                    node,
+                    parsed=parsed,
+                    workflow=workflow,
+                    context=context,
+                    step_results=step_results,
+                    observation_session=observation_session,
+                )
+            except ValueExpressionEvaluationError as exc:
+                if exc.code in {
+                    "runtime.value.reference_unsupported",
+                    "runtime.value.reference_probe_failed",
+                }:
+                    return True
+                raise
+            return False
         if not node.parts or node.parts[0] != "inputs":
             return True
         current: JSONValue = workflow.inputs
@@ -3118,7 +3314,7 @@ def _is_reference_missing(
         return False
     if isinstance(node, StateReferenceNode):
         try:
-            target = resolve_state_target(render_expression_text(node, source=parsed.source), workflow)
+            target = resolve_state_target(render_expression_text(node, source=parsed.source), workflow, step_results=step_results)
             document = read_state_document(target.location)
             value = read_state_value(document, key=target.key, fields=target.fields)
             return value is None
@@ -3127,13 +3323,64 @@ def _is_reference_missing(
     return True
 
 
+def _is_read_only_probe_reference_candidate(node: ReferenceNode) -> bool:
+    return len(node.parts) >= 2 and node.parts[0] not in {"inputs", "args", "item"}
+
+
+def _evaluate_read_only_reference(
+    node: ReferenceNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    context,
+    step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
+) -> JSONValue:
+    del workflow, context, step_results
+    if observation_session is None:
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.reference_unsupported",
+            message="Read-only probe references require a shared observation session in canonical value evaluation",
+            details={"expression": parsed.source, "target": ".".join(node.parts)},
+        )
+    observation = observation_session.observe(
+        ConditionObservationRequest(
+            expression_text=render_expression_text(node, source=parsed.source),
+            target=node.parts,
+        )
+    ).result
+    if observation.status != "ok":
+        details: JSONObject = {
+            "expression": parsed.source,
+            "target": ".".join(node.parts),
+            "probe_status": observation.status,
+        }
+        if observation.reference is not None:
+            details["reference"] = observation.reference
+        message = f"Read-only probe reference '{'.'.join(node.parts)}' failed during value evaluation"
+        if observation.diagnostics:
+            details["probe_diagnostics"] = [diagnostic.to_contract() for diagnostic in observation.diagnostics]
+            first = observation.diagnostics[0]
+            details["cause_code"] = first.code
+            details["cause_message"] = first.message
+            if first.path:
+                details["cause_path"] = list(first.path)
+            message = f"{message}: {first.message}"
+        raise ValueExpressionEvaluationError(
+            code="runtime.value.reference_probe_failed",
+            message=message,
+            details=details,
+        )
+    return observation.value
+
+
 def render_expression_text(node: ValueExpressionNode, *, source: str) -> str:
     if isinstance(node, LiteralNode):
         return json.dumps(node.value)
     if isinstance(node, ReferenceNode):
         return ".".join(node.parts)
     if isinstance(node, StateReferenceNode):
-        key_reference = ".".join(node.key_reference)
+        key_reference = render_expression_text(node.key_expression, source=source)
         suffix = "" if not node.fields else "." + ".".join(node.fields)
         return f"state.{node.state_role}[{key_reference}]{suffix}"
     if isinstance(node, StepReferenceNode):

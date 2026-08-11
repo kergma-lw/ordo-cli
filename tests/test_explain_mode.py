@@ -5,7 +5,7 @@ from pathlib import Path
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow
+from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow, load_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -160,6 +160,47 @@ class ExplainModeTest(unittest.TestCase):
 
         self.assertEqual(result.outputs["explanation"]["preflight_halts"][0]["reason"], "effectful_step_encountered")
         self.assertEqual(result.outputs["preflight_step_items"][1]["condition_status"], "true")
+
+    def test_explain_surfaces_nested_probe_failure_root_cause_for_value_step(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: open-task
+inputs:
+  repository: owner/repo
+  issue_number: 7
+let:
+  story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
+blocks:
+  - steps:
+      - name: Extract story task refs
+        value: '${markdown["Tasks"].list_items with{root: story_body}}'
+        register: task_refs
+      - name: Publish selected story task
+        uses: shell.command
+        gate: is_present(step.task_refs.outputs.value)
+        with:
+          command: "echo hi"
+"""
+        )
+
+        def probe(resolved_probe, _workflow):
+            if resolved_probe.reference == "gh.issue":
+                return OperationResult(
+                    status="state_error",
+                    summary="missing auth",
+                    diagnostics=(Diagnostic(code="gh.auth_missing", level="error", message="GitHub auth missing", path=()),),
+                )
+            return OperationResult(status="ok")
+
+        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["reason_category"], "preflight_step")
+        self.assertEqual(result.outputs["explanation"]["blockers"], ["Extract story task refs"])
+        self.assertEqual(result.diagnostics[0].code, "runtime.value.call_probe_failed")
+        self.assertIn("GitHub auth missing", result.diagnostics[0].message)
+        self.assertEqual(result.diagnostics[1].code, "gh.auth_missing")
 
     def test_explain_reports_partial_preflight_support_with_rendered_recommendations(self) -> None:
         workflow = Workflow(

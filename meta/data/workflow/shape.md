@@ -231,7 +231,7 @@ Built-in runtime state mutation forms may also appear in `steps`.
 Stable state target/read path grammar:
 
 ```text
-state.<role>[inputs.<key-reference>][.<field>...]
+state.<role>[<expression>][.<field>...]
 ```
 
 Rules:
@@ -239,7 +239,7 @@ Rules:
 - reads use this path only inside step-local expression-bearing surfaces rather than as raw YAML path text;
 - `state_set` keys use this path text directly;
 - `state_delete` uses this path text directly;
-- the key reference inside `[...]` must use dotted `inputs...` form;
+- the key expression inside `[...]` must be a valid runtime local expression that resolves to a non-null scalar value;
 - post-key field traversal uses dotted identifiers only.
 
 Set example:

@@ -35,7 +35,7 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
 
         self.assertIsInstance(parsed.root, StateReferenceNode)
         self.assertEqual(parsed.root.state_role, "task_memory")
-        self.assertEqual(parsed.root.key_reference, ("inputs", "issue_ref"))
+        self.assertEqual(parsed.root.key_expression.parts, ("inputs", "issue_ref"))
         self.assertEqual(parsed.root.fields, ("branch",))
 
     def test_parse_pipe_chain(self) -> None:
@@ -96,11 +96,11 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
 
         self.assertEqual(ctx.exception.message, "Expected filter name after '|'")
 
-    def test_parse_rejects_non_input_state_key_reference(self) -> None:
-        with self.assertRaises(LocalExpressionParseError) as ctx:
-            parse_local_expression_tree("state.task_memory[foo.bar]")
+    def test_parse_accepts_dynamic_state_key_expression(self) -> None:
+        parsed = parse_local_expression_tree('state.task_memory[format("{}", step.pick.outputs.issue_ref)].branch')
 
-        self.assertIn("State path key reference", ctx.exception.message)
+        self.assertEqual(parsed.root.state_role, "task_memory")
+        self.assertEqual(parsed.root.fields, ("branch",))
 
     def test_parse_inline_format_call(self) -> None:
         parsed = parse_local_expression_tree('format("{}/{}", inputs.owner, inputs.repo | lower)')

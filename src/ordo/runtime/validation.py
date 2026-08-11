@@ -11,7 +11,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue, authored_string_style
 from ordo.model.profile_contract import PROFILE_CONTRACT
 from ordo.model.runtime import RuntimeStatus
-from ordo.model.workflow import StepBlock, Workflow
+from ordo.model.workflow import GATE_REGISTER_SPLIT_RECOMMENDATION, StepBlock, Workflow
 from ordo.routines import (
     ROUTINE_ENV_REFERENCE_PATTERN,
     ROUTINE_REFERENCE_PREFIX,
@@ -536,7 +536,11 @@ def _collect_input_references_from_state_path_text(value: str) -> set[tuple[str,
         parsed = parse_state_path(value)
     except StatePathParseError:
         return set()
-    return {parsed.key_reference}
+    try:
+        key_expression = parse_value_local_expression(parsed.key_expression, allow_boolean_composition=True)
+    except LOCAL_EXPRESSION_PARSE_ERRORS:
+        return set()
+    return _collect_value_input_references(key_expression.value.root)
 
 
 def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> list[Diagnostic]:
@@ -1015,9 +1019,11 @@ def _validate_step_list(
             diagnostics.append(
                 _diagnostic(
                     "validation.workflow.step.gate_register_conflict",
-                    "Step must not declare both 'gate' and 'register'",
+                    f"Step must not declare both 'gate' and 'register'. {GATE_REGISTER_SPLIT_RECOMMENDATION}",
                     item_path + ("register",),
                     source,
+                    suggested_fix="split_gate_checkpoint_from_register_step",
+                    recommendation=GATE_REGISTER_SPLIT_RECOMMENDATION,
                 )
             )
         elif form_count == 0 and has_gate:
@@ -1076,7 +1082,7 @@ def _validate_step_list(
                     let_bindings=let_bindings,
                     prior_registers=prior_registers,
                     declared_registers=effective_declared_registers,
-                    available_roots=frozenset({"inputs", "args", "item", "state", *tuple(extra_value_roots)}),
+                    available_roots=frozenset({"inputs", "args", "item", "state", "step", *tuple(extra_value_roots)}),
                 )
             )
         elif has_value:
@@ -1173,7 +1179,16 @@ def _validate_step_list(
             )
         if has_state_delete:
             diagnostics.extend(_require_non_empty_string(item, "state_delete", path=item_path + ("state_delete",), source=source))
-            diagnostics.extend(_validate_state_path_text(item.get("state_delete"), path=item_path + ("state_delete",), source=source))
+            diagnostics.extend(
+                _validate_state_path_text(
+                    item.get("state_delete"),
+                    path=item_path + ("state_delete",),
+                    source=source,
+                    let_bindings=let_bindings,
+                    prior_registers=prior_registers,
+                    declared_registers=declared_registers,
+                )
+            )
 
         name = item.get("name")
         if isinstance(name, str) and name:
@@ -1762,7 +1777,7 @@ def _validate_profile_switch_step(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
-    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state"}),
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state", "step"}),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     diagnostics.extend(
@@ -1987,7 +2002,16 @@ def _validate_state_set_shape(
                 )
             )
             continue
-        diagnostics.extend(_validate_state_path_text(key, path=path + (key,), source=source))
+        diagnostics.extend(
+            _validate_state_path_text(
+                key,
+                path=path + (key,),
+                source=source,
+                let_bindings=let_bindings,
+                prior_registers=prior_registers,
+                declared_registers=declared_registers,
+            )
+        )
     for key, item in value.items():
         if isinstance(key, str):
             diagnostics.extend(
@@ -2187,7 +2211,11 @@ def _validate_runtime_value_reference_roots(
                 )
             )
         return diagnostics
-    if isinstance(node, (LiteralNode, ValueStateReferenceNode, StepReferenceNode)):
+    if isinstance(node, LiteralNode):
+        return diagnostics
+    if isinstance(node, ValueStateReferenceNode):
+        return _validate_runtime_value_reference_roots(node.key_expression, path=path, source=source, let_bindings=let_bindings)
+    if isinstance(node, StepReferenceNode):
         return diagnostics
     if isinstance(node, AdapterBindingNode):
         return _validate_runtime_value_reference_roots(node.value, path=path, source=source, let_bindings=let_bindings)
@@ -2296,7 +2324,7 @@ def _validate_profile_switch_value(
     let_bindings: JSONObject,
     prior_registers: dict[str, tuple[str, ...]],
     declared_registers: dict[str, tuple[str, ...]],
-    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state"}),
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state", "step"}),
 ) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     if not isinstance(value, str):
@@ -2347,18 +2375,6 @@ def _validate_profile_switch_value(
         )
         return diagnostics
     if parsed is None or parsed.value is None:
-        return diagnostics
-    references = collect_step_references(parsed.value.root)
-    if references:
-        diagnostics.append(
-            _diagnostic(
-                "validation.workflow.profile_switch.step_ref_forbidden",
-                "profile_switch must not depend on step.* references",
-                path,
-                source,
-                references=[f"step.{reference.register}" + ("." + ".".join(reference.fields) if reference.fields else "") for reference in references],
-            )
-        )
         return diagnostics
     diagnostics.extend(
         _validate_runtime_value_surface(
@@ -2566,6 +2582,30 @@ def _infer_value_expression_type(
         return "unknown", diagnostics
     if isinstance(node, (ValueStateReferenceNode, StepReferenceNode)):
         return "unknown", diagnostics
+    if isinstance(node, ListNode):
+        for item in node.items:
+            _, item_diagnostics = _infer_value_expression_type(
+                item,
+                path=path,
+                source=source,
+                step_condition_mode=step_condition_mode,
+                let_bindings=let_bindings,
+                extra_allowed_reference_roots=extra_allowed_reference_roots,
+            )
+            diagnostics.extend(item_diagnostics)
+        return "array", diagnostics
+    if isinstance(node, ObjectNode):
+        for entry in node.entries:
+            _, entry_diagnostics = _infer_value_expression_type(
+                entry.value,
+                path=path,
+                source=source,
+                step_condition_mode=step_condition_mode,
+                let_bindings=let_bindings,
+                extra_allowed_reference_roots=extra_allowed_reference_roots,
+            )
+            diagnostics.extend(entry_diagnostics)
+        return "object", diagnostics
     if isinstance(node, BuiltinCallNode):
         if node.name == "format":
             for argument in node.arguments:
@@ -2926,6 +2966,7 @@ def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
     def visit(current: ValueExpressionNode) -> None:
         if isinstance(current, ValueStateReferenceNode):
             roles.add(current.state_role)
+            visit(current.key_expression)
             return
         if isinstance(current, AdapterBindingNode):
             visit(current.value)
@@ -2981,8 +3022,7 @@ def _collect_value_input_references(node: ValueExpressionNode) -> set[tuple[str,
                 references.add(current.parts)
             return
         if isinstance(current, ValueStateReferenceNode):
-            if current.key_reference and current.key_reference[0] == "inputs" and len(current.key_reference) >= 2:
-                references.add(current.key_reference)
+            visit(current.key_expression)
             return
         if isinstance(current, StepReferenceNode):
             return
@@ -3086,14 +3126,100 @@ def _validate_step_references(
     return diagnostics
 
 
-def _validate_state_path_text(value: JSONValue | None, *, path: tuple[str, ...], source: str) -> list[Diagnostic]:
+def _validate_state_path_text(
+    value: JSONValue | None,
+    *,
+    path: tuple[str, ...],
+    source: str,
+    let_bindings: JSONObject | None = None,
+    prior_registers: dict[str, tuple[str, ...]] | None = None,
+    declared_registers: dict[str, tuple[str, ...]] | None = None,
+    available_roots: frozenset[str] = frozenset({"inputs", "args", "item", "state", "step"}),
+) -> list[Diagnostic]:
     if not isinstance(value, str) or not value:
         return []
     try:
-        parse_state_path(value)
+        parsed_path = parse_state_path(value)
     except StatePathParseError as exc:
         return [exc.to_diagnostic(path=path, source=source, expression=value)]
-    return []
+    diagnostics: list[Diagnostic] = []
+    let_bindings = {} if let_bindings is None else let_bindings
+    try:
+        parsed_key_expression = parse_value_local_expression(parsed_path.key_expression, allow_boolean_composition=True)
+    except LOCAL_EXPRESSION_PARSE_ERRORS as exc:
+        diagnostics.append(
+            build_local_expression_parse_diagnostic(
+                exc,
+                context=LocalExpressionContext.EMBEDDED_VALUE,
+                path=path,
+                source=source,
+                expression=parsed_path.key_expression,
+            )
+        )
+        return diagnostics
+    for validation_error in _validate_workflow_aware_local_expression(parsed_key_expression, let_bindings=let_bindings):
+        diagnostics.append(
+            build_local_expression_validation_diagnostic(
+                validation_error,
+                context=LocalExpressionContext.EMBEDDED_VALUE,
+                path=path,
+                source=source,
+                expression=parsed_path.key_expression,
+            )
+        )
+    references = collect_step_references(parsed_key_expression.value.root)
+    if references:
+        diagnostics.extend(
+            _validate_step_references(
+                references,
+                path=path,
+                source=source,
+                prior_registers={} if prior_registers is None else prior_registers,
+                declared_registers={} if declared_registers is None else declared_registers,
+            )
+        )
+    diagnostics.extend(
+        _validate_expression_scope_dependencies(
+            parsed_key_expression.value.root,
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+            available_roots=available_roots,
+            path=path,
+            source=source,
+            let_bindings=let_bindings,
+            root_error_code="validation.workflow.state_path.key_expr.root",
+            root_error_message="State path key expression may reference only roots available in the current runtime value context",
+            observation_error_code="validation.workflow.state_path.key_expr.observation",
+            observation_error_message="State path key expression may use only approved read-only observations in the current context",
+        )
+    )
+    diagnostics.extend(
+        _validate_workflow_let_binding_uses(
+            parsed_key_expression.value.root,
+            source=source,
+            path=path,
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+            expression=parsed_path.key_expression,
+            let_bindings=let_bindings,
+        )
+    )
+    inferred_type, inferred_diagnostics = _infer_value_expression_type(
+        parsed_key_expression.value.root,
+        path=path,
+        source=source,
+        let_bindings=let_bindings,
+    )
+    diagnostics.extend(inferred_diagnostics)
+    if inferred_type in {"null", "array", "object"}:
+        diagnostics.append(
+            _diagnostic(
+                "validation.workflow.state_path.key_expr.result_type",
+                "State path key expression must evaluate to a non-null scalar value",
+                path,
+                source,
+                inferred_type=inferred_type,
+            )
+        )
+    return diagnostics
 
 
 def _validate_checks(value: JSONValue | None, *, source: str) -> list[Diagnostic]:

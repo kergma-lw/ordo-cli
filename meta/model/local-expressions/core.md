@@ -263,6 +263,7 @@ The intended execution contract is:
 - canonical evaluation remains the owner of node semantics, context gating, caching expectations, trace shape, and diagnostics emitted for probe-call execution.
 
 The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
+When that happens, the surfaced runtime diagnostic should preserve the underlying probe-failure diagnostics rather than exposing only one wrapper error at the outer expression site.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 

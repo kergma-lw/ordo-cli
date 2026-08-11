@@ -13,7 +13,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import AuthoredString, JSONArray, JSONObject, JSONScalar, JSONValue, authored_string_style
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
-from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
+from ordo.model.workflow import GATE_REGISTER_CONFLICT_MESSAGE, GATE_REGISTER_SPLIT_RECOMMENDATION, Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression, parse_value_local_expression
 from ordo.runtime.local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, FilterApplicationNode, ListNode, LocalExpressionNode, ParsedLocalExpressionTree, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, parse_local_expression_tree
@@ -1238,9 +1238,13 @@ def _load_step_at_path(payload: JSONValue, *, path: tuple[str, ...], source: str
     if has_gate and "register" in data:
         raise _load_error(
             code="load.step.gate_register_conflict",
-            message="Step must not declare both 'gate' and 'register'",
+            message=GATE_REGISTER_CONFLICT_MESSAGE,
             path=path + ("register",),
-            details={"source": source},
+            details={
+                "source": source,
+                "suggested_fix": "split_gate_checkpoint_from_register_step",
+                "recommendation": GATE_REGISTER_SPLIT_RECOMMENDATION,
+            },
         )
     if form_count == 0 and has_gate:
         pass

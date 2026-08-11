@@ -30,6 +30,16 @@ class ValueResolutionError(Exception):
             details=dict(self.details),
         )
 
+    def to_diagnostics(self, *, path: tuple[str, ...] = ()) -> tuple[Diagnostic, ...]:
+        diagnostics = [self.to_diagnostic(path=path)]
+        nested = self.details.get("probe_diagnostics")
+        if isinstance(nested, list):
+            for item in nested:
+                diagnostic = _diagnostic_from_contract(item)
+                if diagnostic is not None:
+                    diagnostics.append(diagnostic)
+        return tuple(diagnostics)
+
 
 def resolve_runtime_value(
     value: JSONValue,
@@ -74,25 +84,37 @@ def resolve_runtime_value(
     if authored_style is None and _extract_expression(value) is None:
         return value
 
-    try:
-        resolver = resolve_value_local_expression if authored_style == "plain" else resolve_embedded_value_local_expression
-        return resolver(
-            value,
-            workflow,
-            step_results=resolved_step_results,
-            allow_boolean_composition=allow_boolean_composition,
-            observation_session=observation_session,
-        )
-    except ValueResolutionError as exc:
-        if authored_style == "plain" and _extract_expression(value) is None and exc.code != "runtime.value.reference_unknown":
-            return str(value)
-        raise
+    resolver = resolve_value_local_expression if authored_style == "plain" else resolve_embedded_value_local_expression
+    return resolver(
+        value,
+        workflow,
+        step_results=resolved_step_results,
+        allow_boolean_composition=allow_boolean_composition,
+        observation_session=observation_session,
+    )
 
 
 def _extract_expression(value: str) -> str | None:
     if value.startswith("${") and value.endswith("}") and len(value) >= 4:
         return value[2:-1]
     return None
+
+
+def _diagnostic_from_contract(value: JSONValue) -> Diagnostic | None:
+    if not isinstance(value, dict):
+        return None
+    code = value.get("code")
+    level = value.get("level")
+    message = value.get("message")
+    raw_path = value.get("path", [])
+    details = value.get("details", {})
+    if not isinstance(code, str) or not isinstance(level, str) or not isinstance(message, str):
+        return None
+    if not isinstance(raw_path, list) or not all(isinstance(item, str) for item in raw_path):
+        return None
+    if not isinstance(details, dict):
+        return None
+    return Diagnostic(code=code, level=level, message=message, path=tuple(raw_path), details=details)
 
 
 def _is_format_object(value: JSONValue) -> bool:

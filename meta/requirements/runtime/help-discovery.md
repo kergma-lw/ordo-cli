@@ -13,8 +13,14 @@
 
 ## Public topics
 
-- The initial public top-level topics must include `overview`, `capabilities`, `model`, `command-line`, `operations`, and `examples`.
+- The initial public top-level topics must include `overview`, `capabilities`, `model`, `command-line`, `operations`, `examples`, and `snippet-coverage`.
 - Internal implementation names such as `workflow_contract` or `pattern_hints` must not be the primary public topic surface for bootstrap.
+
+## Canonical example visibility
+
+- `ordo-help describe <topic>` must publish explicit canonical-snippet coverage state for describable handles, including the explicit absence state `none`.
+- Where canonical short examples are published, they must be backed either by verified excerpts from repository examples or by declared harness-based validation of the minimal form.
+- The public help surface must provide one machine-readable way to inspect which describable handles are covered and which are still uncovered.
 
 ## Discovery actions
 

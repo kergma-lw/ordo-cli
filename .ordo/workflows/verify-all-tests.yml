@@ -3,10 +3,10 @@ workflow: verify-all-tests
 blocks:
 - guards:
   - git.repo.exists
-  - git.worktree.clean
 - steps:
   - name: Run full pytest suite
     uses: routine.verify.run-all-tests
   - name: Publish test result
     publish:
       summary: "Full repository pytest suite passed"
+      recommendation: "Tests passed; ready to commit."

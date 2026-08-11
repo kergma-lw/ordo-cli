@@ -40,6 +40,7 @@ class TextAdapterTest(unittest.TestCase):
             resolve_runtime_value('${text.find("world") with{root: inputs.body}}', workflow)
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_not_found")
+        self.assertEqual(context.exception.details["observed"]["type"], "text_scope")
 
     def test_find_reports_ambiguity_for_multiple_matches(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello hello"})
@@ -93,6 +94,7 @@ class TextAdapterTest(unittest.TestCase):
             resolve_runtime_value('${text.lines.after("h") with{root: inputs.body}}', workflow)
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_invalid_path")
+        self.assertEqual(context.exception.details["observed"]["type"], "text_collection")
 
     def test_index_reports_not_found_when_out_of_range(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": "hello"})
@@ -101,6 +103,8 @@ class TextAdapterTest(unittest.TestCase):
             resolve_runtime_value('${text.lines[1] with{root: inputs.body}}', workflow)
 
         self.assertEqual(context.exception.code, "runtime.value.adapter_not_found")
+        self.assertEqual(context.exception.details["observed"]["type"], "text_collection")
+        self.assertEqual(context.exception.details["observed"]["collection_kind"], "lines")
 
     def test_requires_string_root_value(self) -> None:
         workflow = Workflow(version=0, workflow="demo", inputs={"body": ["hello"]})

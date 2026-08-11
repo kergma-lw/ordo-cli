@@ -202,7 +202,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "name": "gate_forbids_register",
             "kind": "conflict",
             "fields": ["gate", "register"],
-            "message": "A workflow step must not define both gate and register",
+            "message": "A workflow step must not define both gate and register. Split this into a standalone gate checkpoint step followed by a separate step that declares register.",
         },
     ],
     "step_forms": [

@@ -1139,7 +1139,7 @@ def _execute_profile_switch_step(
         profile_name = resolve_runtime_value(raw_profile, workflow)
     except ValueResolutionError as exc:
         return (
-            OperationResult(status="input_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),)),
+            OperationResult(status="input_error", summary=exc.message, diagnostics=exc.to_diagnostics()),
             current_profile,
             None if current_profile is None else current_profile.name,
             None if current_profile is None else current_profile.name,
@@ -1222,7 +1222,7 @@ def _execute_builtin_step(step, workflow: Workflow, *, observation_session=None)
     except RuntimeStateError as exc:
         return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
     except ValueResolutionError as exc:
-        return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
+        return OperationResult(status="state_error", summary=exc.message, diagnostics=exc.to_diagnostics())
     return OperationResult(status="state_error", summary="Unknown builtin step form")
 
 
@@ -1254,7 +1254,7 @@ def _execute_result_step(step_name: str, raw_value: JSONValue, workflow: Workflo
 
 def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow: Workflow, *, observation_session=None) -> OperationResult:
     target_expr, raw_value = next(iter(state_set.items()))
-    target = resolve_state_target(target_expr, workflow)
+    target = resolve_state_target(target_expr, workflow, step_results=workflow.step_results, observation_session=observation_session)
     value = resolve_runtime_value(raw_value, workflow, observation_session=observation_session)
     document = read_state_document(target.location)
     write_state_value(document, key=target.key, fields=target.fields, value=value)
@@ -1272,7 +1272,7 @@ def _execute_state_set(step_name: str, state_set: dict[str, JSONValue], workflow
 
 
 def _execute_state_delete(step_name: str, target_expr: str, workflow: Workflow) -> OperationResult:
-    target = resolve_state_target(target_expr, workflow)
+    target = resolve_state_target(target_expr, workflow, step_results=workflow.step_results)
     document = read_state_document(target.location)
     deleted = delete_state_value(document, key=target.key, fields=target.fields)
     write_state_document(target.location, document)

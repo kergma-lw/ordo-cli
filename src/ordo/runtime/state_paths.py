@@ -13,7 +13,7 @@ class ParsedStatePath:
 
     source: str
     state_role: str
-    key_reference: tuple[str, ...]
+    key_expression: str
     fields: tuple[str, ...] = ()
 
 
@@ -60,8 +60,7 @@ class _Parser:
         self._expect_char(".")
         state_role = self._parse_identifier(allow_hyphen=True, label="state role")
         self._expect_char("[")
-        key_reference = self._parse_input_reference()
-        self._expect_char("]")
+        key_expression = self._parse_key_expression()
         fields: list[str] = []
         while self._peek() == ".":
             self.position += 1
@@ -71,20 +70,68 @@ class _Parser:
         return ParsedStatePath(
             source=self.expression,
             state_role=state_role,
-            key_reference=key_reference,
+            key_expression=key_expression,
             fields=tuple(fields),
         )
 
-    def _parse_input_reference(self) -> tuple[str, ...]:
+    def _parse_key_expression(self) -> str:
         start = self.position
-        self._expect_literal("inputs")
-        parts = ["inputs"]
-        while self._peek() == ".":
+        depth_paren = 0
+        depth_brace = 0
+        depth_bracket = 1
+        quote: str | None = None
+        escaped = False
+        while self.position < self.length:
+            current = self.expression[self.position]
+            if quote is not None:
+                self.position += 1
+                if escaped:
+                    escaped = False
+                    continue
+                if current == "\\":
+                    escaped = True
+                    continue
+                if current == quote:
+                    quote = None
+                continue
+            if current in {'"', "'"}:
+                quote = current
+                self.position += 1
+                continue
+            if current == "(":
+                depth_paren += 1
+                self.position += 1
+                continue
+            if current == ")":
+                if depth_paren > 0:
+                    depth_paren -= 1
+                self.position += 1
+                continue
+            if current == "{":
+                depth_brace += 1
+                self.position += 1
+                continue
+            if current == "}":
+                if depth_brace > 0:
+                    depth_brace -= 1
+                self.position += 1
+                continue
+            if current == "[":
+                depth_bracket += 1
+                self.position += 1
+                continue
+            if current == "]":
+                depth_bracket -= 1
+                if depth_bracket == 0:
+                    expression = self.expression[start : self.position].strip()
+                    self.position += 1
+                    if not expression:
+                        raise StatePathParseError("State path key expression must not be empty", start, self.position)
+                    return expression
+                self.position += 1
+                continue
             self.position += 1
-            parts.append(self._parse_identifier(label="input reference segment"))
-        if len(parts) == 1:
-            raise StatePathParseError("State path input reference must use dotted form such as 'inputs.task_key'", start, self.position)
-        return tuple(parts)
+        raise StatePathParseError("Expected ']' after state key expression", start, self.length)
 
     def _parse_identifier(self, *, allow_hyphen: bool = False, label: str) -> str:
         start = self.position

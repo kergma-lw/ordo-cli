@@ -24,6 +24,7 @@ from .local_expressions import extract_embedded_local_expression
 from .launchers import validate_step_launchers
 from .preflight_interpreter import (
     build_preflight_halt,
+    evaluate_preflight_payload_step,
     evaluate_preflight_probe_step,
     evaluate_preflight_step_condition,
     evaluate_preflight_step_gate,
@@ -1717,6 +1718,24 @@ def _evaluate_analyzable_preflight_step(
         return evaluate_preflight_probe_step(step, resolved_step, workflow, guard_probe=probe)
     if isinstance(resolved_step, ResolvedBuiltinStep) and resolved_step.builtin == "value":
         return evaluate_preflight_value_step(step, workflow, step_results=workflow.step_results, observation_session=observation_session)
+    if isinstance(resolved_step, ResolvedBuiltinStep) and resolved_step.builtin == "result" and step.result is not None:
+        return evaluate_preflight_payload_step(
+            step.name,
+            step.result,
+            workflow,
+            summary="Recorded workflow result for step '{step_name}'",
+            step_results=workflow.step_results,
+            observation_session=observation_session,
+        )
+    if isinstance(resolved_step, ResolvedBuiltinStep) and resolved_step.builtin == "publish" and step.publish is not None:
+        return evaluate_preflight_payload_step(
+            step.name,
+            step.publish,
+            workflow,
+            summary="Published workflow output for step '{step_name}'",
+            step_results=workflow.step_results,
+            observation_session=observation_session,
+        )
     if isinstance(resolved_step, ResolvedBuiltinStep) and resolved_step.builtin == "checkpoint":
         return OperationResult(status="ok", summary=f"Gate checkpoint step '{step.name}' passed", outputs={})
     return OperationResult(status="state_error", summary=f"Step '{step.name}' is not a supported preflight step")
@@ -2387,7 +2406,8 @@ def _build_preflight_observation_session(
                 connector_namespace=reference.partition(".")[0],
                 operation=operation,
                 source="public",
-                declared_with={name: value for name, value in request.arguments},
+                declared_with={},
+                resolved_inputs={name: value for name, value in request.arguments},
             ),
             workflow,
         )

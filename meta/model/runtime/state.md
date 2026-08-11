@@ -87,7 +87,7 @@ The read surface should stay aligned with the mutation target surface so that au
 The initial stable state path grammar is:
 
 ```text
-state.<role>[inputs.<key-reference>][.<field>...]
+state.<role>[<expression>][.<field>...]
 ```
 
 Examples:
@@ -115,10 +115,10 @@ state_delete: state.task_memory[inputs.task_key].branch
 
 - the path must start with `state.`;
 - `<role>` is an identifier-like logical state role name;
-- the bracketed key reference must use dotted `inputs...` form;
-- at least one segment must follow `inputs` inside the key reference;
+- the bracketed key must be a valid runtime local expression;
+- the bracketed key expression must resolve to a non-null scalar value;
 - field traversal after the key is optional and uses dotted identifiers only;
-- the initial grammar does not support literal keys, quoted keys, multiple bracket segments, arbitrary nested expressions, or mixed index syntaxes.
+- the initial grammar does not support multiple bracket segments or mixed index syntaxes after the key expression.
 
 ## MVP constraints
 

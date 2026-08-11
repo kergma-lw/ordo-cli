@@ -98,12 +98,30 @@ def evaluate_preflight_value_step(
     try:
         value = resolve_preflight_value(step.value, workflow, step_results=step_results, observation_session=observation_session)
     except ValueResolutionError as exc:
-        return OperationResult(status="state_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
+        return OperationResult(status="state_error", summary=exc.message, diagnostics=exc.to_diagnostics())
     return OperationResult(
         status="ok",
         summary=f"Materialized derived value for step '{step.name}'",
         outputs={"value": value},
     )
+
+
+def evaluate_preflight_payload_step(
+    step_name: str,
+    raw_value: JSONValue,
+    workflow: Workflow,
+    *,
+    summary: str,
+    step_results: dict[str, OperationResult | JSONObject] | None = None,
+    observation_session: ReadOnlyObservationSession | None = None,
+) -> OperationResult:
+    """Evaluate one read-only payload-shaping builtin step without effectful execution."""
+
+    try:
+        value = resolve_preflight_value(raw_value, workflow, step_results=step_results, observation_session=observation_session)
+    except ValueResolutionError as exc:
+        return OperationResult(status="state_error", summary=exc.message, diagnostics=exc.to_diagnostics())
+    return OperationResult(status="ok", summary=summary.format(step_name=step_name), outputs={"value": value})
 
 
 def evaluate_preflight_step_gate(

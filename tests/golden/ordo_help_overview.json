@@ -44,6 +44,7 @@
     "command-line",
     "operations",
     "examples",
+    "snippet-coverage",
     "operation",
     "describe",
     "search"
@@ -77,8 +78,19 @@
     {
       "command": "ordo-help examples",
       "purpose": "Inspect verified repository examples"
+    },
+    {
+      "command": "ordo-help snippet-coverage",
+      "purpose": "Inspect which public handles do and do not publish canonical verified snippets"
     }
   ],
+  "snippet_coverage_summary": {
+    "coverage_counts": {
+      "harness_verified": 4,
+      "none": 259
+    },
+    "total_handles": 263
+  },
   "workflow_authoring_passes": {
     "passes": [
       {

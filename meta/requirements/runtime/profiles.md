@@ -28,7 +28,7 @@
 - Runtime profile switching should be represented by an engine-level construct such as `profile_switch`, not by an ordinary connector action.
 - `profile_switch` must change only subsequent execution context within the current run unless the public model later standardizes stronger semantics.
 - `profile_switch` should apply the newly active profile's input defaults to subsequent steps using the same missing-input discipline as activation-time profile application.
-- `profile_switch` must not depend on `step.*` outputs or other post-step execution knowledge.
+- `profile_switch` may depend on prior `step.*` outputs when those outputs are already established earlier in the current workflow run.
 
 ## Constraints
 
@@ -41,4 +41,4 @@
 - Profile switching must not silently reinterpret an already-activated workflow run under a different profile.
 - Profile switching must not override explicit activation inputs that were already provided for the current run.
 - Same-name shadowing of base connector operations must not be default behavior for profile-owned adaptation.
-- `check` may apply deterministic `profile_switch` transitions statically when their target profile is resolvable from pre-execution knowledge.
+- `check` may apply deterministic `profile_switch` transitions statically when their target profile is resolvable from current preflight knowledge, including prior interpreted step outputs.

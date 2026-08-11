@@ -31,6 +31,7 @@ The initial public command model is:
 ./ordo-help command-line [--json]
 ./ordo-help operations [--json]
 ./ordo-help examples [--json]
+./ordo-help snippet-coverage [--json]
 ./ordo-help operation <reference> [--json]
 ./ordo-help describe <topic> [--json]
 ./ordo-help search <query> [--json]
@@ -54,9 +55,26 @@ These actions are navigation surfaces over the public topic model rather than ad
 - `command-line` exposes the public launch-command surface, stable flag semantics, and the distinct roles of `ordo-playbook check` and `ordo-playbook review`.
 - `operations` exposes the public connector operation catalog.
 - `examples` exposes verified repository examples intended as public authoring references.
+- `snippet-coverage` exposes which describable handles do and do not publish canonical verified snippets.
 - `operation <reference>` exposes one focused operation contract.
 - `describe <topic>` resolves a supported public topic, capability node, or model node to the same canonical discovery surface.
 - `search <query>` helps a caller bridge from vague terms to public topics, published contract facts, or operation references.
+
+## Canonical snippet coverage
+
+`ordo-help describe` should publish explicit canonical-snippet coverage state for describable handles rather than forcing a caller to infer support from silence.
+
+- Every describable handle should publish `snippet_coverage`, even when the value is `none`.
+- Initial coverage states are:
+  - `none`
+  - `excerpt_verified`
+  - `harness_verified`
+- `canonical_examples` should list the short positive snippets published for that handle.
+- Excerpt-backed snippets should identify their source example and excerpt location.
+- Harness-backed snippets should identify the verification harness used to validate the minimal form.
+- `snippet-coverage` should aggregate the current coverage map so a caller can tell where snippet support is still missing.
+
+The goal is for `describe` to act as a short syntax confirmer for disputed authoring forms without turning prose examples into an unverified second source of truth.
 
 ## Workflow authoring pass pair
 
@@ -110,6 +128,7 @@ The initial recommended bootstrap sequence is:
 ./ordo-help command-line --json
 ./ordo-help operations --json
 ./ordo-help examples --json
+./ordo-help snippet-coverage --json
 ```
 
 This sequence should let a zero-knowledge caller discover:

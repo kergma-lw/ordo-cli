@@ -253,7 +253,7 @@ def _apply_workflow_let_suffix(node: ValueExpressionNode, suffix: tuple[str, ...
             start=node.start,
             end=node.end,
             state_role=node.state_role,
-            key_reference=node.key_reference,
+            key_expression=node.key_expression,
             fields=node.fields + suffix,
         )
     if isinstance(node, StepReferenceNode):

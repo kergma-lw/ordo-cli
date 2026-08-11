@@ -21,6 +21,7 @@ from ordo.introspection import (
 )
 from ordo.runtime.representation_adapters import describe_representation_adapter_surface
 from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_BUILTINS, VALUE_EXPRESSION_FILTERS
+from ordo.model.help_snippets import describe_help_snippets
 from ordo.model.runtime import Mode, RuntimeStatus
 from ordo.model.json import JSONObject
 
@@ -34,6 +35,7 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
     {"name": "command-line", "summary": "Inspect the public command-line launch surface, including distinct check and review roles"},
     {"name": "operations", "summary": "Inspect the public connector catalog"},
     {"name": "examples", "summary": "Inspect verified repository examples"},
+    {"name": "snippet-coverage", "summary": "Inspect which public handles do and do not publish canonical verified snippets"},
     {"name": "operation", "summary": "Inspect one public operation by reference"},
     {"name": "describe", "summary": "Resolve a supported public topic"},
     {"name": "search", "summary": "Search topics, contract facts, and operation references"},
@@ -41,7 +43,7 @@ PUBLIC_TOPICS: tuple[dict[str, str], ...] = (
 
 _SEARCH_TOKEN_RE = re.compile(r"[a-z0-9_.#:/-]+")
 
-DESCRIBABLE_TOPICS: tuple[str, ...] = ("features", "overview", "model", "workflow-authoring", "capabilities", "command-line", "operations", "examples")
+DESCRIBABLE_TOPICS: tuple[str, ...] = ("features", "overview", "model", "workflow-authoring", "capabilities", "command-line", "operations", "examples", "snippet-coverage")
 
 RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
     {"command": "ordo-help features", "purpose": "Scan workflow authoring features, named surfaces, and when to use them"},
@@ -52,6 +54,7 @@ RECOMMENDED_FIRST_CALLS: tuple[dict[str, str], ...] = (
     {"command": "ordo-help command-line", "purpose": "Inspect public launch commands, flags, and distinct check/review roles"},
     {"command": "ordo-help operations", "purpose": "Inspect the public operation catalog"},
     {"command": "ordo-help examples", "purpose": "Inspect verified repository examples"},
+    {"command": "ordo-help snippet-coverage", "purpose": "Inspect which public handles do and do not publish canonical verified snippets"},
 )
 
 WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
@@ -609,11 +612,12 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "name": "native_expression_contexts",
         "priority": "recommended_readability_pattern",
         "guidance_level": "recommended",
-        "rule": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly.",
+        "rule": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
         "why": [
             "bare expressions reduce visual noise across the workflow surfaces that are usually expression-driven",
             "quoted literals make string intent explicit without forcing the common expression case through an extra envelope",
             "using one bare-first value model across with, value, publish, result, and for_each keeps authored workflow dataflow easier to scan",
+            "fail-closed expression evaluation keeps author intent visible instead of silently reinterpreting a broken expression as plain text",
             "structured step conditions stay reviewable once predicate count grows beyond a small compact expression",
         ],
         "prefer": [
@@ -622,6 +626,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "rewrite step if conditions into structured all/any/not form when more than three predicates are being compared",
             "write with, value, publish, result, and for_each entries as bare expressions when they are meant to evaluate",
             "quote literal strings explicitly when a value-bearing field should preserve raw text",
+            "treat runtime evaluation failure in a bare expression as a real error to fix rather than a cue to keep the bare form as text",
             "keep ${...} only for YAML-hostile expressions that are not viable as bare plain scalars",
         ],
         "avoid": [
@@ -629,6 +634,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "using ${...} in value-bearing fields that now prefer bare expressions",
             "packing more than three step-condition predicates into one boolean string",
             "leaving intended string literals unquoted in expression-first value-bearing fields",
+            "depending on a broken bare expression to degrade into a literal string at runtime",
         ],
     },
 )
@@ -764,7 +770,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         ],
         "inappropriate_when": [
             "The decision really belongs in workflow guards near the start of the workflow.",
-            "You are trying to mix gate admission with register publication or current-step output reads.",
+            "You are trying to mix gate admission with register publication or current-step output reads; split the gate into a standalone checkpoint step before the registered step.",
         ],
         "inspect_next": ["workflow.step.gate", "workflow.step_forms.gate_checkpoint", "workflow.run.gate", "workflow-authoring.separate_control_surfaces", "workflow-authoring.guard_result_contract"],
         "related_rules": ["separate_control_surfaces", "guard_result_contract"],
@@ -893,6 +899,7 @@ def build_overview_response() -> JSONObject:
 
     system = describe_system()
     operations = describe_operations()
+    snippet_coverage = build_snippet_coverage_response()
     document_kinds = []
     for name, payload in system["sections"].items():
         if name == "discovery":
@@ -923,6 +930,7 @@ def build_overview_response() -> JSONObject:
         },
         "connector_namespaces": [connector["namespace"] for connector in operations["connectors"]],
         "published_topics": [topic["name"] for topic in PUBLIC_TOPICS],
+        "snippet_coverage_summary": snippet_coverage["summary"],
         "recommended_next_calls": [dict(item) for item in RECOMMENDED_FIRST_CALLS if item["command"] != "ordo-help overview"],
     }
 
@@ -940,6 +948,16 @@ def build_model_response() -> JSONObject:
         "connectors": describe_operations()["connectors"],
         "local_expressions": describe_local_expression_surface(),
         "representation_adapters": describe_representation_adapter_surface(),
+    }
+
+
+def _snippet_surface_for_handle(handle: str) -> JSONObject:
+    snippets = describe_help_snippets().get(handle)
+    if not isinstance(snippets, dict):
+        return {"snippet_coverage": "none", "canonical_examples": []}
+    return {
+        "snippet_coverage": str(snippets.get("snippet_coverage", "none")),
+        "canonical_examples": list(snippets.get("canonical_examples", [])),
     }
 
 
@@ -1160,7 +1178,7 @@ def build_workflow_authoring_response() -> JSONObject:
             "when adding or changing inputs, validate them before continuing",
             "validate both the request shape and the observed target context",
             "name important values early",
-            "prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly",
+            "prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text",
             "do not use with{root: ...} if the same adapter binding can be expressed with pipe-style syntax; use with{root: ...} only as a fallback when the pipe-style form is not valid in the current construct",
             "stage reusable payloads with value + register before emitting them through result or publish",
             "keep bounded fan-out bodies short, structured, and explicit about scope boundaries",
@@ -1327,16 +1345,22 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
     payload = describe_capabilities()
     lookup: dict[str, JSONObject] = {}
     for capability in payload["capabilities"]:
+        snippet_surface = _snippet_surface_for_handle(str(capability["name"]))
         lookup[capability["name"]] = {
             "document_kind": "capability_node",
             "node_kind": "capability",
             **capability,
+            "snippet_coverage": snippet_surface["snippet_coverage"],
+            "canonical_examples": snippet_surface["canonical_examples"],
         }
     for rule in payload["negative_rules"]:
+        snippet_surface = _snippet_surface_for_handle(str(rule["name"]))
         lookup[rule["name"]] = {
             "document_kind": "capability_node",
             "node_kind": "negative_rule",
             **rule,
+            "snippet_coverage": snippet_surface["snippet_coverage"],
+            "canonical_examples": snippet_surface["canonical_examples"],
         }
     return lookup
 
@@ -1346,6 +1370,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     lookup: dict[str, JSONObject] = {}
 
     def add_node(name: str, *, contract: str, node_category: str, summary: str, metadata: JSONObject) -> None:
+        snippet_surface = _snippet_surface_for_handle(name)
         lookup[name] = {
             "document_kind": "model_node",
             "node_kind": node_category,
@@ -1353,6 +1378,8 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "contract": contract,
             "summary": summary,
             "metadata": metadata,
+            "snippet_coverage": snippet_surface["snippet_coverage"],
+            "canonical_examples": snippet_surface["canonical_examples"],
         }
 
     for field in model["workflow"]["top_level_fields"]:
@@ -1608,8 +1635,8 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         metadata={
             **model["state"],
             "search_aliases": [
-                "shared_state",
-                "state.shared_state",
+                "state key expression",
+                "state key path",
                 "bound state role",
                 "declared state location",
             ],
@@ -1632,6 +1659,8 @@ def _build_workflow_authoring_node_lookup() -> dict[str, JSONObject]:
             "name": handle,
             "summary": rule["rule"],
             "metadata": rule,
+            "snippet_coverage": "none",
+            "canonical_examples": [],
         }
 
     for example_group in ("bounded_fan_out_examples", "routine_env_examples"):
@@ -1645,6 +1674,8 @@ def _build_workflow_authoring_node_lookup() -> dict[str, JSONObject]:
                 "name": handle,
                 "summary": str(example.get("summary") or "Published workflow-authoring example"),
                 "metadata": {"group": example_group, **example},
+                "snippet_coverage": "none",
+                "canonical_examples": [],
             }
 
     return lookup
@@ -1663,6 +1694,8 @@ def _build_examples_node_lookup() -> dict[str, JSONObject]:
             "name": handle,
             "summary": f"Verified example at {example['path']}",
             "metadata": example,
+            "snippet_coverage": "none",
+            "canonical_examples": [],
         }
     return lookup
 
@@ -1679,6 +1712,8 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
             "name": f"command-line.{command_name}",
             "summary": "Published command-line command metadata",
             "metadata": command,
+            "snippet_coverage": "none",
+            "canonical_examples": [],
         }
         for flag in command.get("flags", []):
             normalized = flag["name"].lstrip("-").replace("-", "_")
@@ -1688,6 +1723,8 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
                 "name": f"command-line.{command_name}.flag.{normalized}",
                 "summary": "Published command-line flag metadata",
                 "metadata": flag,
+                "snippet_coverage": "none",
+                "canonical_examples": [],
             }
     return lookup
 
@@ -1767,6 +1804,50 @@ def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject
                 }
 
     return {"name": handle, "handle": handle, "summary": "Unresolved related example", "command": f"ordo-help describe {handle} --json"}
+
+
+def build_snippet_coverage_response() -> JSONObject:
+    """Return snippet-coverage metadata for public describable handles."""
+
+    handles: list[JSONObject] = []
+    lookup_groups = (
+        ("capabilities", _build_capability_lookup()),
+        ("model", _build_model_node_lookup()),
+        ("command-line", _build_command_line_node_lookup()),
+        ("workflow-authoring", _build_workflow_authoring_node_lookup()),
+        ("examples", _build_examples_node_lookup()),
+    )
+    seen_handles: set[str] = set()
+    for topic_name, lookup in lookup_groups:
+        for handle, payload in lookup.items():
+            if handle in seen_handles:
+                continue
+            seen_handles.add(handle)
+            handles.append(
+                {
+                    "handle": handle,
+                    "topic": topic_name,
+                    "document_kind": payload["document_kind"],
+                    "node_kind": payload["node_kind"],
+                    "snippet_coverage": payload.get("snippet_coverage", "none"),
+                    "canonical_example_count": len(payload.get("canonical_examples", [])),
+                }
+            )
+    handles.sort(key=lambda item: str(item["handle"]))
+    coverage_counts: dict[str, int] = {}
+    for item in handles:
+        coverage = str(item["snippet_coverage"])
+        coverage_counts[coverage] = coverage_counts.get(coverage, 0) + 1
+    return {
+        "document_kind": "snippet_coverage",
+        "purpose": "Coverage map for canonical verified snippets published through ordo-help describe.",
+        "coverage_levels": ["none", "excerpt_verified", "harness_verified"],
+        "summary": {
+            "total_handles": len(handles),
+            "coverage_counts": coverage_counts,
+        },
+        "handles": handles,
+    }
 
 
 def build_search_response(query: str) -> JSONObject:
@@ -2141,6 +2222,19 @@ def render_overview_text(payload: JSONObject) -> str:
         ]
     )
     lines.extend(f"- {namespace}" for namespace in payload["connector_namespaces"])
+    summary = payload.get("snippet_coverage_summary")
+    if isinstance(summary, dict):
+        coverage_counts = summary.get("coverage_counts", {})
+        lines.extend(
+            [
+                "",
+                "Snippet coverage:",
+                f"- total handles: {summary.get('total_handles', 0)}",
+                f"- none: {coverage_counts.get('none', 0)}",
+                f"- excerpt_verified: {coverage_counts.get('excerpt_verified', 0)}",
+                f"- harness_verified: {coverage_counts.get('harness_verified', 0)}",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -2328,21 +2422,51 @@ def render_operation_text(payload: JSONObject) -> str:
     return "\n".join(lines)
 
 
+def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]) -> None:
+    if not examples:
+        return
+    lines.extend(["", "canonical examples:"])
+    for example in examples:
+        lines.append(f"- {example['name']}: {example['summary']}")
+        verification = example.get("verification")
+        if isinstance(verification, dict):
+            verification_kind = verification.get("kind")
+            if verification_kind == "harness_verified":
+                lines.append(f"  verification: harness_verified via {verification['harness']}")
+            elif verification_kind == "excerpt_verified":
+                source = verification.get("example") or example.get("source_example") or "unknown"
+                lines.append(f"  verification: excerpt_verified from {source}")
+        yaml_text = example.get("yaml")
+        if isinstance(yaml_text, str) and yaml_text:
+            lines.append("  yaml:")
+            for snippet_line in yaml_text.splitlines():
+                lines.append(f"    {snippet_line}")
+
+
 def render_capability_node_text(payload: JSONObject) -> str:
     """Return the text capability-node surface."""
 
-    lines = [payload["name"], payload["node_kind"]]
+    lines = [payload["name"], payload["node_kind"], f"snippet coverage: {payload.get('snippet_coverage', 'none')}"]
     if payload["node_kind"] == "capability":
         lines.extend([f"status: {payload['status']}", f"scope: {payload['scope']}"])
     else:
         lines.extend([f"surface: {payload['surface']}", payload["rule"]])
+    _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
     return "\n".join(lines)
 
 
 def render_model_node_text(payload: JSONObject) -> str:
     """Return the text model-node surface."""
 
-    lines = [payload["name"], payload["summary"], "", f"contract: {payload['contract']}", f"node kind: {payload['node_kind']}"]
+    lines = [
+        payload["name"],
+        payload["summary"],
+        "",
+        f"contract: {payload['contract']}",
+        f"node kind: {payload['node_kind']}",
+        f"snippet coverage: {payload.get('snippet_coverage', 'none')}",
+    ]
+    _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
     return "\n".join(lines)
 
 
@@ -2362,6 +2486,20 @@ def render_example_node_text(payload: JSONObject) -> str:
     """Return the text example-node surface."""
 
     return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
+
+
+def render_snippet_coverage_text(payload: JSONObject) -> str:
+    """Return the text snippet-coverage surface."""
+
+    lines = ["snippet-coverage", payload["purpose"], "", "Coverage summary:"]
+    coverage_counts = payload["summary"]["coverage_counts"]
+    lines.append(f"- total handles: {payload['summary']['total_handles']}")
+    for coverage in payload["coverage_levels"]:
+        lines.append(f"- {coverage}: {coverage_counts.get(coverage, 0)}")
+    lines.extend(["", "Handles:"])
+    for item in payload["handles"]:
+        lines.append(f"- {item['handle']}: {item['snippet_coverage']}")
+    return "\n".join(lines)
 
 
 def render_search_text(payload: JSONObject) -> str:
@@ -2458,6 +2596,8 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
         return describe_operations(), render_operations_text
     if topic == "examples":
         return describe_examples_catalog(), render_examples_text
+    if topic == "snippet-coverage":
+        return build_snippet_coverage_response(), render_snippet_coverage_text
     capability_node = _build_capability_lookup().get(topic)
     if capability_node is not None:
         return capability_node, render_capability_node_text
@@ -2508,6 +2648,9 @@ def main(argv: list[str] | None = None) -> int:
     examples_parser = subparsers.add_parser("examples", add_help=False)
     examples_parser.add_argument("--json", action="store_true", dest="as_json")
 
+    snippet_coverage_parser = subparsers.add_parser("snippet-coverage", add_help=False)
+    snippet_coverage_parser.add_argument("--json", action="store_true", dest="as_json")
+
     operation_parser = subparsers.add_parser("operation", add_help=False)
     operation_parser.add_argument("reference")
     operation_parser.add_argument("--json", action="store_true", dest="as_json")
@@ -2549,6 +2692,8 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_payload(describe_operations(), as_json=as_json, renderer=render_operations_text)
     if parsed.command == "examples":
         return _emit_payload(describe_examples_catalog(), as_json=as_json, renderer=render_examples_text)
+    if parsed.command == "snippet-coverage":
+        return _emit_payload(build_snippet_coverage_response(), as_json=as_json, renderer=render_snippet_coverage_text)
     if parsed.command == "operation":
         payload = build_operation_response(parsed.reference)
         if payload is None:

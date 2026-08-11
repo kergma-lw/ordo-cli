@@ -44,7 +44,7 @@ def classify_preflight_step(step: Step, resolved_step: ResolvedStep | None = Non
 
 
 def _classify_builtin_name(builtin: str) -> PreflightStepClassification:
-    if builtin == "value":
+    if builtin in {"value", "result", "publish"}:
         return "read_only_analyzable"
     if builtin == "checkpoint":
         return "read_only_analyzable"

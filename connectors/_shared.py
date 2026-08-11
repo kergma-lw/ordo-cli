@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 def require_input(workflow: Workflow, resolved: "ResolvedOperation | ResolvedExpressionProbe", key: str) -> JSONValue | OperationResult:
     value = resolved.operation.inputs.get(key)
     _ = value
+    resolved_inputs = getattr(resolved, "resolved_inputs", None)
+    if isinstance(resolved_inputs, dict) and key in resolved_inputs:
+        return resolved_inputs[key]
     candidate_inputs = getattr(resolved, "declared_with", None)
     if isinstance(candidate_inputs, dict) and key in candidate_inputs:
         candidate = candidate_inputs[key]

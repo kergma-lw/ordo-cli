@@ -27,19 +27,20 @@ class LocalExpressionEngineModelTest(unittest.TestCase):
         self.assertEqual(parsed.root.filters[0].name, "slug")
 
     def test_model_can_represent_state_read(self) -> None:
+        key_expression = ReferenceNode(start=18, end=34, parts=("inputs", "issue_ref"))
         parsed = ParsedLocalExpressionTree(
             source="state.task_memory[inputs.issue_ref].branch",
             root=StateReferenceNode(
                 start=0,
                 end=40,
                 state_role="task_memory",
-                key_reference=("inputs", "issue_ref"),
+                key_expression=key_expression,
                 fields=("branch",),
             ),
         )
 
         self.assertEqual(parsed.root.state_role, "task_memory")
-        self.assertEqual(parsed.root.key_reference, ("inputs", "issue_ref"))
+        self.assertEqual(parsed.root.key_expression.parts, ("inputs", "issue_ref"))
         self.assertEqual(parsed.root.fields, ("branch",))
 
     def test_model_can_represent_root_builtin_call(self) -> None:

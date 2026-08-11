@@ -418,6 +418,17 @@ blocks:
 
         self.assertEqual(evaluate_local_expression_tree(parsed, workflow), [7, None, 9])
 
+    def test_evaluate_field_filter_projects_root_array_path_from_object_value(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            inputs={"payload": [{"content_ref": "owner/repo#1"}, {"content_ref": "owner/repo#2"}]},
+        )
+
+        parsed = parse_local_expression_tree('inputs.payload | field("[0].content_ref")')
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow), "owner/repo#1")
+
     def test_evaluate_field_filter_rejects_missing_object_path(self) -> None:
         workflow = Workflow(
             version=0,
@@ -431,6 +442,9 @@ blocks:
             evaluate_local_expression_tree(parsed, workflow)
 
         self.assertEqual(ctx.exception.code, "runtime.value.field_path_missing")
+        self.assertEqual(ctx.exception.details["failed_segment"], "results")
+        self.assertEqual(ctx.exception.details["observed"]["type"], "object")
+        self.assertEqual(ctx.exception.details["available_keys"], ["other"])
 
     def test_evaluate_field_filter_rejects_non_collection_input(self) -> None:
         workflow = Workflow(
@@ -445,6 +459,7 @@ blocks:
             evaluate_local_expression_tree(parsed, workflow)
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
+        self.assertEqual(ctx.exception.details["observed"]["type"], "string")
 
     def test_evaluate_field_filter_rejects_invalid_path_syntax(self) -> None:
         workflow = Workflow(
