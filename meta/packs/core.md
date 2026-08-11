@@ -2896,6 +2896,7 @@ The intended execution contract is:
 
 The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
 When that happens, the surfaced runtime diagnostic should preserve the underlying probe-failure diagnostics rather than exposing only one wrapper error at the outer expression site.
+If the underlying probe failure already knows that the cause is external, the surfaced runtime diagnostic should preserve that distinction so the caller does not mistake an external command or remote-system failure for local workflow logic failure.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 
@@ -4150,6 +4151,7 @@ Why this matters:
 - relevant read-only observations may live behind step flow rather than direct guard probes;
 - runtime should be able to strengthen guard coverage without turning `check` into hidden execution;
 - when a nested read-only observation fails, `check` should preserve the underlying probe diagnostics so authors can see the root cause without extra reconstruction work;
+- when the nested failure already identifies an external tool or remote-system cause, `check` should preserve that distinction rather than collapsing the problem into an apparently local workflow failure;
 - a dedicated contract keeps richer preflight behavior reviewable.
 
 ## CHECK-MODE-013 — Advisory preflight-observation metadata may strengthen explainability without becoming a prerequisite

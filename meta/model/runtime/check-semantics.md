@@ -115,6 +115,7 @@ Why this matters:
 - relevant read-only observations may live behind step flow rather than direct guard probes;
 - runtime should be able to strengthen guard coverage without turning `check` into hidden execution;
 - when a nested read-only observation fails, `check` should preserve the underlying probe diagnostics so authors can see the root cause without extra reconstruction work;
+- when the nested failure already identifies an external tool or remote-system cause, `check` should preserve that distinction rather than collapsing the problem into an apparently local workflow failure;
 - a dedicated contract keeps richer preflight behavior reviewable.
 
 ## CHECK-MODE-013 — Advisory preflight-observation metadata may strengthen explainability without becoming a prerequisite

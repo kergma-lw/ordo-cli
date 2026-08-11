@@ -1,6 +1,6 @@
 import unittest
 
-from ordo.help_cli import build_search_response
+from ordo.help_cli import build_command_line_response, build_features_response, build_overview_response, build_search_response
 
 
 class HelpCliSearchTest(unittest.TestCase):
@@ -41,6 +41,27 @@ class HelpCliSearchTest(unittest.TestCase):
 
         references = [entry["reference"] for entry in payload["operations"]]
         self.assertIn("compose.remove", references)
+
+    def test_overview_surfaces_external_failure_diagnostic_rule(self) -> None:
+        payload = build_overview_response()
+
+        self.assertIn("external cause", payload["failure_diagnostics"]["rule"])
+        self.assertIn("stderr_excerpt", payload["failure_diagnostics"]["external_payload_fields"])
+
+    def test_command_line_surfaces_external_run_failure_payload_fields(self) -> None:
+        payload = build_command_line_response()
+
+        command = payload["commands"][0]
+        self.assertIn("external context", command["run_failure_surface"]["rule"])
+        self.assertIn("suggested_checks", command["run_failure_surface"]["external_payload_fields"])
+
+    def test_features_connectors_cluster_mentions_external_runtime_failures(self) -> None:
+        payload = build_features_response()
+
+        cluster = next(item for item in payload["clusters"] if item["name"] == "connectors")
+        self.assertTrue(any("external tool" in text for text in cluster["appropriate_when"]))
+        inspect_handles = [item["handle"] for item in cluster["inspect_next"]]
+        self.assertIn("command-line.ordo-playbook", inspect_handles)
 
 
 if __name__ == "__main__":

@@ -1,118 +1,130 @@
 {
-  "commands": [
-    {
-      "authoring_passes": {
-        "passes": [
-          {
-            "mode": "check <workflow>",
-            "purpose": "Validate applicability, explicit probe coverage, and execution readiness",
-            "question": "Can this workflow run now?"
-          },
-          {
-            "mode": "review <workflow>",
-            "purpose": "Surface workflow authoring-quality findings",
-            "question": "Is this workflow well-authored?"
-          }
-        ],
-        "rule": "When authoring or modifying workflows, run both check and review. Neither replaces the other."
-      },
-      "discovery_commands": [
+    "commands": [
         {
-          "name": "workflows list",
-          "summary": "list declared playbook workflows with project-local descriptions"
-        },
-        {
-          "name": "workflows show <workflow>",
-          "summary": "show one workflow entry with file metadata, playbook-owned invocation inputs, and root-declared inputs"
+            "authoring_passes": {
+                "passes": [
+                    {
+                        "mode": "check <workflow>",
+                        "purpose": "Validate applicability, explicit probe coverage, and execution readiness",
+                        "question": "Can this workflow run now?"
+                    },
+                    {
+                        "mode": "review <workflow>",
+                        "purpose": "Surface workflow authoring-quality findings",
+                        "question": "Is this workflow well-authored?"
+                    }
+                ],
+                "rule": "When authoring or modifying workflows, run both check and review. Neither replaces the other."
+            },
+            "discovery_commands": [
+                {
+                    "name": "workflows list",
+                    "summary": "list declared playbook workflows with project-local descriptions"
+                },
+                {
+                    "name": "workflows show <workflow>",
+                    "summary": "show one workflow entry with file metadata, playbook-owned invocation inputs, and root-declared inputs"
+                }
+            ],
+            "examples": [
+                "ordo-playbook workflows list",
+                "ordo-playbook workflows show inspect-issue",
+                "ordo-playbook plan inspect-issue",
+                "ordo-playbook --profile review plan inspect-issue",
+                "ordo-playbook --input enabled=true plan inspect-issue",
+                "ordo-playbook --input-file body=./prompt.md plan inspect-issue"
+            ],
+            "flags": [
+                {
+                    "effect": "override_playbook_discovery",
+                    "name": "--file",
+                    "required": false,
+                    "summary": "Use one explicit playbook file path",
+                    "value_shape": "PATH"
+                },
+                {
+                    "effect": "select_active_profile",
+                    "name": "--profile",
+                    "required": false,
+                    "summary": "Select one named profile for this run",
+                    "value_shape": "NAME"
+                },
+                {
+                    "effect": "override_input_inline",
+                    "name": "--input",
+                    "repeatable": true,
+                    "required": false,
+                    "summary": "Add or override one top-level workflow input from inline text, with simple number and true/false coercion",
+                    "value_shape": "KEY=VALUE"
+                },
+                {
+                    "effect": "override_input_from_file",
+                    "name": "--input-file",
+                    "repeatable": true,
+                    "required": false,
+                    "summary": "Add or override one top-level workflow input from a raw UTF-8 file string",
+                    "value_shape": "KEY=PATH"
+                },
+                {
+                    "effect": "emit_json",
+                    "name": "--json",
+                    "required": false,
+                    "summary": "Emit JSON without extra decoration"
+                }
+            ],
+            "input_override_precedence": [
+                "workflow.inputs declares the allowed activation keys; declared keys are required at activation=true",
+                "profile.inputs may supply values for declared workflow inputs",
+                "playbook workflow-entry with supplies static invocation inputs before one run",
+                "playbook pre_run with supplies static invocation inputs to that pre_run workflow only",
+                "--input overrides workflow and profile-provided values for one run",
+                "--input-file overrides workflow and profile-provided values for one run",
+                "unknown activation inputs are rejected=true",
+                "when both --input and --input-file set the same key, --input-file wins"
+            ],
+            "modes": [
+                {
+                    "name": "review <workflow>",
+                    "summary": "review authoring-quality findings without making changes"
+                },
+                {
+                    "name": "check <workflow>",
+                    "summary": "check whether the workflow can be run now, without making changes"
+                },
+                {
+                    "name": "plan <workflow>",
+                    "summary": "show what the workflow would do, without making changes"
+                },
+                {
+                    "name": "explain <workflow>",
+                    "summary": "explain why the workflow can or cannot be run right now"
+                },
+                {
+                    "name": "run <workflow>",
+                    "summary": "run the workflow and do the real work"
+                },
+                {
+                    "name": "next <workflow>",
+                    "summary": "suggest the next workflow step to run now"
+                }
+            ],
+            "name": "ordo-playbook",
+            "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
+            "run_failure_surface": {
+                "external_payload_fields": [
+                    "kind",
+                    "classification",
+                    "tool",
+                    "system",
+                    "argv_summary",
+                    "stderr_excerpt",
+                    "suggested_checks"
+                ],
+                "rule": "When a run failure has normalized external context, the public failure payload should identify that external cause instead of surfacing only a generic wrapper message."
+            },
+            "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
+            "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
         }
-      ],
-      "examples": [
-        "ordo-playbook workflows list",
-        "ordo-playbook workflows show inspect-issue",
-        "ordo-playbook plan inspect-issue",
-        "ordo-playbook --profile review plan inspect-issue",
-        "ordo-playbook --input enabled=true plan inspect-issue",
-        "ordo-playbook --input-file body=./prompt.md plan inspect-issue"
-      ],
-      "flags": [
-        {
-          "effect": "override_playbook_discovery",
-          "name": "--file",
-          "required": false,
-          "summary": "Use one explicit playbook file path",
-          "value_shape": "PATH"
-        },
-        {
-          "effect": "select_active_profile",
-          "name": "--profile",
-          "required": false,
-          "summary": "Select one named profile for this run",
-          "value_shape": "NAME"
-        },
-        {
-          "effect": "override_input_inline",
-          "name": "--input",
-          "repeatable": true,
-          "required": false,
-          "summary": "Add or override one top-level workflow input from inline text, with simple number and true/false coercion",
-          "value_shape": "KEY=VALUE"
-        },
-        {
-          "effect": "override_input_from_file",
-          "name": "--input-file",
-          "repeatable": true,
-          "required": false,
-          "summary": "Add or override one top-level workflow input from a raw UTF-8 file string",
-          "value_shape": "KEY=PATH"
-        },
-        {
-          "effect": "emit_json",
-          "name": "--json",
-          "required": false,
-          "summary": "Emit JSON without extra decoration"
-        }
-      ],
-      "input_override_precedence": [
-        "workflow.inputs declares the allowed activation keys; declared keys are required at activation=true",
-        "profile.inputs may supply values for declared workflow inputs",
-        "playbook workflow-entry with supplies static invocation inputs before one run",
-        "playbook pre_run with supplies static invocation inputs to that pre_run workflow only",
-        "--input overrides workflow and profile-provided values for one run",
-        "--input-file overrides workflow and profile-provided values for one run",
-        "unknown activation inputs are rejected=true",
-        "when both --input and --input-file set the same key, --input-file wins"
-      ],
-      "modes": [
-        {
-          "name": "review <workflow>",
-          "summary": "review authoring-quality findings without making changes"
-        },
-        {
-          "name": "check <workflow>",
-          "summary": "check whether the workflow can be run now, without making changes"
-        },
-        {
-          "name": "plan <workflow>",
-          "summary": "show what the workflow would do, without making changes"
-        },
-        {
-          "name": "explain <workflow>",
-          "summary": "explain why the workflow can or cannot be run right now"
-        },
-        {
-          "name": "run <workflow>",
-          "summary": "run the workflow and do the real work"
-        },
-        {
-          "name": "next <workflow>",
-          "summary": "suggest the next workflow step to run now"
-        }
-      ],
-      "name": "ordo-playbook",
-      "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
-      "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
-      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
-    }
-  ],
-  "document_kind": "command_line"
+    ],
+    "document_kind": "command_line"
 }

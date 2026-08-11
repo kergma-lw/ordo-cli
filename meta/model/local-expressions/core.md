@@ -264,6 +264,7 @@ The intended execution contract is:
 
 The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
 When that happens, the surfaced runtime diagnostic should preserve the underlying probe-failure diagnostics rather than exposing only one wrapper error at the outer expression site.
+If the underlying probe failure already knows that the cause is external, the surfaced runtime diagnostic should preserve that distinction so the caller does not mistake an external command or remote-system failure for local workflow logic failure.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 

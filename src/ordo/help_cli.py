@@ -818,12 +818,13 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "appropriate_when": [
             "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
             "Typed public operations express product intent better than broad execution surfaces.",
+            "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
         ],
         "inappropriate_when": [
             "You are treating a missing public capability as permission to improvise local semantics silently.",
             "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation.",
         ],
-        "inspect_next": ["operations", "connector.gh", "connector.fs", "workflow-authoring.decision_order", "workflow-authoring.structured_surface_bias"],
+        "inspect_next": ["operations", "connector.gh", "connector.fs", "command-line.ordo-playbook", "workflow-authoring.decision_order", "workflow-authoring.structured_surface_bias"],
         "related_rules": ["decision_order", "structured_surface_bias", "routine.*", "local_artifacts_are_context"],
         "related_examples": ["examples.minimal", "examples.inspect-pr"],
         "published_names_kind": "connectors",
@@ -926,6 +927,18 @@ def build_overview_response() -> JSONObject:
                     "command": "ordo-playbook review <workflow>",
                     "purpose": "Review workflow authoring-quality findings",
                 },
+            ],
+        },
+        "failure_diagnostics": {
+            "rule": "When runtime has external command or remote-system context, user-facing diagnostics should distinguish that external cause from workflow or engine logic failures.",
+            "external_payload_fields": [
+                "kind",
+                "classification",
+                "tool",
+                "system",
+                "argv_summary",
+                "stderr_excerpt",
+                "suggested_checks",
             ],
         },
         "connector_namespaces": [connector["namespace"] for connector in operations["connectors"]],
@@ -1290,6 +1303,18 @@ def build_command_line_response() -> JSONObject:
                     ],
                 },
                 "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
+                "run_failure_surface": {
+                    "rule": "When a run failure has normalized external context, the public failure payload should identify that external cause instead of surfacing only a generic wrapper message.",
+                    "external_payload_fields": [
+                        "kind",
+                        "classification",
+                        "tool",
+                        "system",
+                        "argv_summary",
+                        "stderr_excerpt",
+                        "suggested_checks",
+                    ],
+                },
                 "flags": playbook_flags,
                 "input_override_precedence": [
                     f"workflow.inputs declares the allowed activation keys; declared keys are required at activation={str(input_contract['declared_keys_required_at_activation']).lower()}",
@@ -2218,6 +2243,10 @@ def render_overview_text(payload: JSONObject) -> str:
             f"- rule: {payload['workflow_authoring_passes']['rule']}",
             *[f"- {item['command']}: {item['purpose']}" for item in payload['workflow_authoring_passes']['passes']],
             "",
+            "Failure diagnostics:",
+            f"- rule: {payload['failure_diagnostics']['rule']}",
+            f"- external payload fields: {', '.join(payload['failure_diagnostics']['external_payload_fields'])}",
+            "",
             "Connector namespaces:",
         ]
     )
@@ -2366,6 +2395,16 @@ def render_command_line_text(payload: JSONObject) -> str:
             lines.extend(["", "workflow authoring passes:", f"- rule: {authoring_passes['rule']}"])
             for item in authoring_passes.get("passes", []):
                 lines.append(f"- {item['mode']}: {item['purpose']} ({item['question']})")
+        run_failure_surface = command.get("run_failure_surface")
+        if isinstance(run_failure_surface, dict):
+            lines.extend(
+                [
+                    "",
+                    "run failure surface:",
+                    f"- rule: {run_failure_surface['rule']}",
+                    f"- external payload fields: {', '.join(run_failure_surface['external_payload_fields'])}",
+                ]
+            )
         lines.extend(["", "flags:"])
         for flag in command["flags"]:
             suffix = f" {flag.get('value_shape', '')}".rstrip()

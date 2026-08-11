@@ -1,107 +1,119 @@
 {
-  "connector_namespaces": [
-    "runtime",
-    "git",
-    "compose",
-    "gh",
-    "shell",
-    "fs"
-  ],
-  "document_kind": "overview",
-  "document_kinds": [
-    "error_taxonomy",
-    "examples_catalog",
-    "pattern_hints",
-    "playbook",
-    "plugin_surface_contract",
-    "profile",
-    "routine_registry",
-    "state_contract",
-    "workflow"
-  ],
-  "execution_concepts": {
-    "modes": [
-      "review",
-      "check",
-      "plan",
-      "execute",
-      "explain"
+    "connector_namespaces": [
+        "runtime",
+        "git",
+        "compose",
+        "gh",
+        "shell",
+        "fs"
     ],
-    "statuses": [
-      "ok",
-      "guard_failed",
-      "validation_error",
-      "resolution_error",
-      "execution_error"
-    ]
-  },
-  "published_topics": [
-    "features",
-    "overview",
-    "model",
-    "workflow-authoring",
-    "capabilities",
-    "command-line",
-    "operations",
-    "examples",
-    "snippet-coverage",
-    "operation",
-    "describe",
-    "search"
-  ],
-  "purpose": "World map for Ordo discovery and authoring bootstrap",
-  "recommended_next_calls": [
-    {
-      "command": "ordo-help features",
-      "purpose": "Scan workflow authoring features, named surfaces, and when to use them"
+    "document_kind": "overview",
+    "document_kinds": [
+        "error_taxonomy",
+        "examples_catalog",
+        "pattern_hints",
+        "playbook",
+        "plugin_surface_contract",
+        "profile",
+        "routine_registry",
+        "state_contract",
+        "workflow"
+    ],
+    "execution_concepts": {
+        "modes": [
+            "review",
+            "check",
+            "plan",
+            "execute",
+            "explain"
+        ],
+        "statuses": [
+            "ok",
+            "guard_failed",
+            "validation_error",
+            "resolution_error",
+            "execution_error"
+        ]
     },
-    {
-      "command": "ordo-help model",
-      "purpose": "Learn the main DSL surfaces"
+    "failure_diagnostics": {
+        "external_payload_fields": [
+            "kind",
+            "classification",
+            "tool",
+            "system",
+            "argv_summary",
+            "stderr_excerpt",
+            "suggested_checks"
+        ],
+        "rule": "When runtime has external command or remote-system context, user-facing diagnostics should distinguish that external cause from workflow or engine logic failures."
     },
-    {
-      "command": "ordo-help workflow-authoring",
-      "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
+    "published_topics": [
+        "features",
+        "overview",
+        "model",
+        "workflow-authoring",
+        "capabilities",
+        "command-line",
+        "operations",
+        "examples",
+        "snippet-coverage",
+        "operation",
+        "describe",
+        "search"
+    ],
+    "purpose": "World map for Ordo discovery and authoring bootstrap",
+    "recommended_next_calls": [
+        {
+            "command": "ordo-help features",
+            "purpose": "Scan workflow authoring features, named surfaces, and when to use them"
+        },
+        {
+            "command": "ordo-help model",
+            "purpose": "Learn the main DSL surfaces"
+        },
+        {
+            "command": "ordo-help workflow-authoring",
+            "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
+        },
+        {
+            "command": "ordo-help capabilities",
+            "purpose": "Learn capability boundaries"
+        },
+        {
+            "command": "ordo-help command-line",
+            "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
+        },
+        {
+            "command": "ordo-help operations",
+            "purpose": "Inspect the public operation catalog"
+        },
+        {
+            "command": "ordo-help examples",
+            "purpose": "Inspect verified repository examples"
+        },
+        {
+            "command": "ordo-help snippet-coverage",
+            "purpose": "Inspect which public handles do and do not publish canonical verified snippets"
+        }
+    ],
+    "snippet_coverage_summary": {
+        "coverage_counts": {
+            "harness_verified": 4,
+            "none": 259
+        },
+        "total_handles": 263
     },
-    {
-      "command": "ordo-help capabilities",
-      "purpose": "Learn capability boundaries"
-    },
-    {
-      "command": "ordo-help command-line",
-      "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
-    },
-    {
-      "command": "ordo-help operations",
-      "purpose": "Inspect the public operation catalog"
-    },
-    {
-      "command": "ordo-help examples",
-      "purpose": "Inspect verified repository examples"
-    },
-    {
-      "command": "ordo-help snippet-coverage",
-      "purpose": "Inspect which public handles do and do not publish canonical verified snippets"
+    "workflow_authoring_passes": {
+        "passes": [
+            {
+                "command": "ordo-playbook check <workflow>",
+                "purpose": "Validate workflow applicability and execution readiness"
+            },
+            {
+                "command": "ordo-playbook review <workflow>",
+                "purpose": "Review workflow authoring-quality findings"
+            }
+        ],
+        "rule": "Use both check and review after adding or changing a workflow; neither replaces the other."
     }
-  ],
-  "snippet_coverage_summary": {
-    "coverage_counts": {
-      "harness_verified": 4,
-      "none": 259
-    },
-    "total_handles": 263
-  },
-  "workflow_authoring_passes": {
-    "passes": [
-      {
-        "command": "ordo-playbook check <workflow>",
-        "purpose": "Validate workflow applicability and execution readiness"
-      },
-      {
-        "command": "ordo-playbook review <workflow>",
-        "purpose": "Review workflow authoring-quality findings"
-      }
-    ],
-    "rule": "Use both check and review after adding or changing a workflow; neither replaces the other."
-  }
 }

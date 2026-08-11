@@ -50,9 +50,10 @@ These actions are navigation surfaces over the public topic model rather than ad
 ## Topic mapping
 
 - `overview` aggregates the world map needed before authoring or execution planning.
+- `overview` should also explain that runtime diagnostics distinguish internal workflow/engine failures from external command or remote-system failures when that context is available.
 - `capabilities` exposes supported, unsupported, and planned surface states.
 - `model` aggregates the main authoring contracts over workflows, profiles, playbooks, and runtime state.
-- `command-line` exposes the public launch-command surface, stable flag semantics, and the distinct roles of `ordo-playbook check` and `ordo-playbook review`.
+- `command-line` exposes the public launch-command surface, stable flag semantics, the distinct roles of `ordo-playbook check` and `ordo-playbook review`, and the normalized external-failure payload fields surfaced by `run --json` when runtime has that context.
 - `operations` exposes the public connector operation catalog.
 - `examples` exposes verified repository examples intended as public authoring references.
 - `snippet-coverage` exposes which describable handles do and do not publish canonical verified snippets.
@@ -85,6 +86,14 @@ When a caller is adding or changing a workflow, `ordo-help` should make the auth
 - `check` and `review` are complementary authoring passes; neither replaces the other.
 
 The public help surface should present this pairing in at least the `overview`, `workflow-authoring`, and `command-line` topics so a zero-knowledge caller does not infer that `check` alone is sufficient workflow sign-off.
+
+## External failure diagnostics
+
+When runtime has normalized external command or remote-system context, public help should make that behavior discoverable instead of leaving it implicit.
+
+- `overview` should state that user-facing diagnostics may distinguish internal workflow or engine failures from external causes.
+- `command-line` should name the normalized external failure payload fields published through `run --json`.
+- At minimum, the published external failure payload contract should mention: `kind`, `classification`, `tool`, `system`, `argv_summary`, `stderr_excerpt`, and `suggested_checks`.
 
 ## Publish payload discipline
 
