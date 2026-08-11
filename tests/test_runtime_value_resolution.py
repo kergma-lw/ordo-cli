@@ -725,6 +725,8 @@ blocks:
         self.assertTrue(context.exception.details["is_external"])
         self.assertEqual(context.exception.details["classification"], "auth_failed")
         self.assertEqual(context.exception.details["external_tool"], "gh")
+        self.assertEqual(context.exception.details["argv_summary"], "gh api repos/owner/repo/issues/7")
+        self.assertIn("gh auth status", context.exception.details["suggested_checks"][0])
         self.assertIn("external github failure reported by gh", context.exception.message)
 
     def test_resolve_runtime_value_can_feed_fs_file_content_into_key_value_adapter(self) -> None:

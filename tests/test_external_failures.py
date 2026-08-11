@@ -63,6 +63,51 @@ class ExternalFailuresTest(unittest.TestCase):
         self.assertEqual(details["returncode"], 1)
         self.assertIn("network", details["suggested_checks"][0].lower())
 
+    def test_classify_tls_failure(self) -> None:
+        info = classify_external_command_failure(
+            raw={
+                "argv": ["gh", "api", "graphql"],
+                "stderr": "x509: certificate signed by unknown authority",
+                "stdout": "",
+                "returncode": 1,
+            },
+            tool="gh",
+            system="github",
+        )
+
+        self.assertEqual(info.classification, "tls_failed")
+        self.assertIn("certificate", info.suggested_checks[0].lower())
+
+    def test_classify_timeout_failure(self) -> None:
+        info = classify_external_command_failure(
+            raw={
+                "argv": ["docker", "compose", "up"],
+                "stderr": "request timed out while waiting for response",
+                "stdout": "",
+                "returncode": 1,
+            },
+            tool="docker",
+            system="compose",
+        )
+
+        self.assertEqual(info.classification, "timeout")
+        self.assertIn("retry", info.suggested_checks[0].lower())
+
+    def test_classify_resource_not_found_failure(self) -> None:
+        info = classify_external_command_failure(
+            raw={
+                "argv": ["gh", "api", "repos/owner/repo/pulls/999"],
+                "stderr": "gh: Not Found (HTTP 404)",
+                "stdout": "",
+                "returncode": 1,
+            },
+            tool="gh",
+            system="github",
+        )
+
+        self.assertEqual(info.classification, "resource_not_found")
+        self.assertIn("resource", info.suggested_checks[0].lower())
+
     def test_fail_external_command_uses_shared_details_payload(self) -> None:
         outcome = fail_external_command(
             code="probe_failed",

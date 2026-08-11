@@ -3327,8 +3327,11 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(payload["failure"]["tool"], "gh")
         self.assertEqual(payload["failure"]["system"], "github")
         self.assertEqual(payload["failure"]["classification"], "auth_failed")
+        self.assertEqual(payload["failure"]["argv_summary"], "gh api repos/owner/repo/pulls/7")
+        self.assertEqual(payload["failure"]["stderr_excerpt"], "authentication required")
         self.assertEqual(payload["failure"]["target"], "gh.pr")
         self.assertEqual(payload["failure"]["reference"], "gh.pr")
+        self.assertIn("external github failure reported by gh", payload["failure"]["summary"])
         self.assertIn("gh auth status", payload["failure"]["suggested_checks"][0])
 
     def test_cli_run_hides_raw_diagnostic_details_without_json(self) -> None:
