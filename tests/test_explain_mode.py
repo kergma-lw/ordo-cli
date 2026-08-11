@@ -189,7 +189,20 @@ blocks:
                 return OperationResult(
                     status="state_error",
                     summary="missing auth",
-                    diagnostics=(Diagnostic(code="gh.auth_missing", level="error", message="GitHub auth missing", path=()),),
+                    diagnostics=(
+                        Diagnostic(
+                            code="gh.auth_missing",
+                            level="error",
+                            message="GitHub auth missing",
+                            path=(),
+                            details={
+                                "is_external": True,
+                                "classification": "auth_failed",
+                                "external_tool": "gh",
+                                "external_system": "github",
+                            },
+                        ),
+                    ),
                 )
             return OperationResult(status="ok")
 
@@ -200,6 +213,7 @@ blocks:
         self.assertEqual(result.outputs["explanation"]["blockers"], ["Extract story task refs"])
         self.assertEqual(result.diagnostics[0].code, "runtime.value.call_probe_failed")
         self.assertIn("GitHub auth missing", result.diagnostics[0].message)
+        self.assertIn("external github failure reported by gh", result.diagnostics[0].message)
         self.assertEqual(result.diagnostics[1].code, "gh.auth_missing")
 
     def test_explain_reports_partial_preflight_support_with_rendered_recommendations(self) -> None:

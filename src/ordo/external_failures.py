@@ -75,6 +75,24 @@ def build_external_failure_details(
     return details
 
 
+def describe_external_failure_context(details: Mapping[str, object] | None) -> str | None:
+    if details is None or not details.get("is_external"):
+        return None
+    classification = details.get("classification")
+    if not isinstance(classification, str):
+        return None
+    label = _classification_label(classification)
+    tool = details.get("external_tool")
+    system = details.get("external_system")
+    if isinstance(system, str) and isinstance(tool, str):
+        return f"external {system} failure reported by {tool} ({label})"
+    if isinstance(system, str):
+        return f"external {system} failure ({label})"
+    if isinstance(tool, str):
+        return f"external {tool} command failure ({label})"
+    return f"external failure ({label})"
+
+
 def classify_external_command_failure(
     *,
     raw: Mapping[str, object] | None,
@@ -193,6 +211,21 @@ def _suggested_checks(
     if classification == "remote_api_failed":
         return ("Retry later or inspect the remote service status.",)
     return ("Inspect stderr output from the external command for the concrete cause.",)
+
+
+def _classification_label(classification: str) -> str:
+    return {
+        "binary_missing": "missing command",
+        "auth_failed": "authentication failure",
+        "permission_denied": "permission failure",
+        "network_failed": "network failure",
+        "tls_failed": "TLS failure",
+        "timeout": "timeout",
+        "rate_limited": "rate limit",
+        "resource_not_found": "missing remote resource",
+        "remote_api_failed": "remote API failure",
+        "unknown_external": "unknown external cause",
+    }.get(classification, "unknown external cause")
 
 
 def _first_argv_token(value: object) -> str | None:

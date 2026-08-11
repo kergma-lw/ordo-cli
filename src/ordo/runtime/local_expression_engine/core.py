@@ -8,6 +8,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Literal
 
+from ordo.external_failures import describe_external_failure_context
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONScalar, JSONValue
 from ordo.model.runtime import OperationResult
@@ -2506,7 +2507,26 @@ def _evaluate_read_only_call(
             details["cause_message"] = first.message
             if first.path:
                 details["cause_path"] = list(first.path)
-            message = f"{message}: {first.message}"
+            if first.details:
+                for key in (
+                    "is_external",
+                    "classification",
+                    "external_tool",
+                    "external_system",
+                    "argv_summary",
+                    "returncode",
+                    "stderr_excerpt",
+                    "stdout_excerpt",
+                    "os_error",
+                    "suggested_checks",
+                ):
+                    if key in first.details:
+                        details[key] = first.details[key]
+            external_context = describe_external_failure_context(first.details)
+            if external_context is not None:
+                message = f"Read-only probe call '{'.'.join(node.target.parts)}' failed due to {external_context}: {first.message}"
+            else:
+                message = f"{message}: {first.message}"
         raise ValueExpressionEvaluationError(
             code="runtime.value.call_probe_failed",
             message=message,

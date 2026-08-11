@@ -689,7 +689,23 @@ blocks:
             lambda _: ConditionObservationResult(
                 status="probe_failed",
                 value=None,
-                diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),),
+                diagnostics=(
+                    Diagnostic(
+                        code="probe.failed",
+                        level="error",
+                        message="boom",
+                        path=(),
+                        details={
+                            "is_external": True,
+                            "classification": "auth_failed",
+                            "external_tool": "gh",
+                            "external_system": "github",
+                            "argv_summary": "gh api repos/owner/repo/issues/7",
+                            "stderr_excerpt": "authentication required",
+                            "suggested_checks": ["Run 'gh auth status' to verify GitHub CLI authentication."],
+                        },
+                    ),
+                ),
                 reference="gh.issue",
             )
         )
@@ -706,6 +722,10 @@ blocks:
         self.assertEqual(context.exception.details["cause_message"], "boom")
         self.assertEqual(context.exception.details["probe_status"], "probe_failed")
         self.assertEqual(context.exception.details["probe_diagnostics"][0]["code"], "probe.failed")
+        self.assertTrue(context.exception.details["is_external"])
+        self.assertEqual(context.exception.details["classification"], "auth_failed")
+        self.assertEqual(context.exception.details["external_tool"], "gh")
+        self.assertIn("external github failure reported by gh", context.exception.message)
 
     def test_resolve_runtime_value_can_feed_fs_file_content_into_key_value_adapter(self) -> None:
         workflow = load_workflow_text(

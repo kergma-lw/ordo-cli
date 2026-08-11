@@ -3278,6 +3278,59 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(payload["failure"]["stdout_tail"], "before fail")
         self.assertEqual(payload["failure"]["stderr_tail"], "boom")
 
+    def test_cli_run_includes_external_failure_payload_without_operation_results(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            diagnostics=(),
+            available_profiles={},
+            profile_working_directories={},
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXECUTE,
+            status=RuntimeStatus.EXECUTION_ERROR,
+            diagnostics=(
+                Diagnostic(
+                    code="runtime.value.call_probe_failed",
+                    level="error",
+                    message="Read-only probe call 'gh.pr' failed due to external github failure reported by gh (authentication failure): GitHub pull request probe failed",
+                    details={
+                        "is_external": True,
+                        "classification": "auth_failed",
+                        "external_tool": "gh",
+                        "external_system": "github",
+                        "argv_summary": "gh api repos/owner/repo/pulls/7",
+                        "stderr_excerpt": "authentication required",
+                        "suggested_checks": ["Run 'gh auth status' to verify GitHub CLI authentication."],
+                        "target": "gh.pr",
+                        "reference": "gh.pr",
+                    },
+                ),
+            ),
+            failed_step="Build digest payload",
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "run", "inspect-issue", "--json"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated):
+                with patch("ordo.cli._run_mode", return_value=runtime_result):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["failure"]["kind"], "external_failure")
+        self.assertEqual(payload["failure"]["tool"], "gh")
+        self.assertEqual(payload["failure"]["system"], "github")
+        self.assertEqual(payload["failure"]["classification"], "auth_failed")
+        self.assertEqual(payload["failure"]["target"], "gh.pr")
+        self.assertEqual(payload["failure"]["reference"], "gh.pr")
+        self.assertIn("gh auth status", payload["failure"]["suggested_checks"][0])
+
     def test_cli_run_hides_raw_diagnostic_details_without_json(self) -> None:
         activated = SimpleNamespace(
             playbook_path=Path("/tmp/.ordo/ordo.yaml"),

@@ -8,6 +8,7 @@ import re
 import sys
 
 from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
+from ordo.external_failures import describe_external_failure_context
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
 
@@ -379,7 +380,7 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
 
 def _build_run_failure_payload(result: RuntimeResult) -> dict[str, object] | None:
     if not result.operation_results:
-        return None
+        return _build_external_run_failure_payload_from_diagnostics(result)
     failed_result = result.operation_results[-1]
     outputs = failed_result.outputs
     raw = failed_result.raw
@@ -403,6 +404,38 @@ def _build_run_failure_payload(result: RuntimeResult) -> dict[str, object] | Non
     if failed_result.status == "execution_error" and failed_result.summary:
         payload["message"] = failed_result.summary
     return payload
+
+
+def _build_external_run_failure_payload_from_diagnostics(result: RuntimeResult) -> dict[str, object] | None:
+    for diagnostic in result.diagnostics:
+        details = diagnostic.details
+        if not isinstance(details, dict) or not details.get("is_external"):
+            continue
+        payload: dict[str, object] = {
+            "kind": "external_failure",
+            "message": diagnostic.message,
+            "diagnostic_code": diagnostic.code,
+        }
+        for source_key, target_key in (
+            ("classification", "classification"),
+            ("external_tool", "tool"),
+            ("external_system", "system"),
+            ("argv_summary", "argv_summary"),
+            ("stderr_excerpt", "stderr_excerpt"),
+            ("stdout_excerpt", "stdout_excerpt"),
+            ("returncode", "returncode"),
+            ("suggested_checks", "suggested_checks"),
+            ("reference", "reference"),
+            ("target", "target"),
+        ):
+            value = details.get(source_key)
+            if value is not None:
+                payload[target_key] = value
+        context = describe_external_failure_context(details)
+        if context is not None:
+            payload["summary"] = context
+        return payload
+    return None
 
 
 def _top_level_missing_output_result() -> dict[str, object]:
