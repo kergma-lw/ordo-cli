@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from ordo.external_failures import build_external_failure_details, classify_external_command_failure
 from ordo.model.connector import PreflightObservation
 from ordo.model.diagnostic import Diagnostic as RuntimeDiagnostic
 from ordo.model.json import JSONObject, JSONValue
@@ -342,6 +343,32 @@ def fail_with_diagnostic(
             ),
         ),
         raw=raw,
+    )
+
+
+def fail_external_command(
+    *,
+    code: str,
+    summary: str,
+    diagnostic_code: str,
+    raw: Mapping[str, object] | None,
+    reference: str | None = None,
+    details: JSONObject | None = None,
+    outputs: JSONObject | None = None,
+    tool: str | None = None,
+    system: str | None = None,
+    message: str | None = None,
+) -> OperationOutcome:
+    external_details = build_external_failure_details(raw=raw, tool=tool, system=system, extra_details=details)
+    return fail_with_diagnostic(
+        code=code,
+        summary=summary,
+        diagnostic_code=diagnostic_code,
+        message=summary if message is None else message,
+        reference=reference,
+        details=external_details,
+        outputs=outputs,
+        raw={} if raw is None else dict(raw),
     )
 
 
