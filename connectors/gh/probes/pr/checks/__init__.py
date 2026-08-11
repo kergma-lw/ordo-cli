@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import fail_github_command
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh.probes.pr._shared import fetch_pull_request
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
@@ -170,18 +171,14 @@ def _parse_object_payload(
 
 
 def _checks_command_failure(ctx: OperationContext, outcome: OperationOutcome, *, pull_ref: str, diagnostic_code: str) -> OperationOutcome:
-    return fail(
+    return fail_github_command(
+        ctx,
         code="checks_unavailable",
         summary="GitHub pull request checks were unavailable",
-        diagnostics=(
-            Diagnostic(
-                code=diagnostic_code,
-                level="error",
-                message="GitHub pull request checks were unavailable",
-                details={"reference": ctx.reference, "pull_ref": pull_ref},
-            ),
-        ),
         raw=outcome.raw,
+        diagnostic_code=diagnostic_code,
+        details={"pull_ref": pull_ref},
+        message="GitHub pull request checks were unavailable",
     )
 
 

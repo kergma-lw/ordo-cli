@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import fail_github_command
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail
 
 
@@ -178,18 +179,14 @@ def _load_project_items_page(
     try:
         return ctx.command(argv, failures={"os_error": "probe_failed", "nonzero": "probe_failed"})
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code="probe_failed",
             summary="GitHub project items probe failed",
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.command_failed",
-                    level="error",
-                    message="GitHub project items probe failed",
-                    details={"reference": ctx.reference, "project_id": project_id},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code=f"{diagnostic_prefix}.command_failed",
+            details={"project_id": project_id},
+            message="GitHub project items probe failed",
         )
 
 
@@ -259,18 +256,14 @@ def fetch_project_items_by_content_refs(
             failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
         )
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code="probe_failed",
             summary="GitHub project items probe failed",
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.command_failed",
-                    level="error",
-                    message="GitHub project items probe failed",
-                    details={"reference": ctx.reference, "project_id": project_id},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code=f"{diagnostic_prefix}.command_failed",
+            details={"project_id": project_id},
+            message="GitHub project items probe failed",
         )
 
     try:

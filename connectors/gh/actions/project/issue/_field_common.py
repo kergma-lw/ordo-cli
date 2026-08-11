@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok
 
@@ -48,21 +49,17 @@ def load_issue_membership(
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
-        if "could not resolve to an issue" in text or "issue not found" in text or "not found" in text:
+        text = command_text(outcome.raw)
+        if text_mentions_not_found(text, "could not resolve to an issue", "issue not found"):
             return issue_not_found(ctx, issue_ref=issue_ref, raw=outcome.raw, diagnostic_prefix=diagnostic_prefix)
-        return fail(
+        return fail_github_command(
+            ctx,
             code=failure_code,
             summary="Inspecting GitHub project issue membership failed",
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.inspect_failed",
-                    level="error",
-                    message="Inspecting GitHub project issue membership failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code=f"{diagnostic_prefix}.inspect_failed",
+            details={"issue_ref": issue_ref},
+            message="Inspecting GitHub project issue membership failed",
         )
 
     try:
@@ -132,18 +129,14 @@ def lookup_project_field(
             failures={"os_error": failure_code, "nonzero": failure_code},
         )
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code=failure_code,
             summary="Inspecting GitHub project field definition failed",
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.project_lookup_failed",
-                    level="error",
-                    message="Inspecting GitHub project field definition failed",
-                    details={"reference": ctx.reference, "project_id": project_id, "field": field_name},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code=f"{diagnostic_prefix}.project_lookup_failed",
+            details={"project_id": project_id, "field": field_name},
+            message="Inspecting GitHub project field definition failed",
         )
 
     try:
@@ -479,18 +472,14 @@ def run_field_update(
     try:
         command = ctx.command(mutation_argv, failures={"os_error": failure_code, "nonzero": failure_code})
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code=failure_code,
             summary="Updating GitHub project field failed",
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.command_failed",
-                    level="error",
-                    message="Updating GitHub project field failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref, "project_id": project_id, "field": field_name},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code=f"{diagnostic_prefix}.command_failed",
+            details={"issue_ref": issue_ref, "project_id": project_id, "field": field_name},
+            message="Updating GitHub project field failed",
         )
     updated_item_id = extract_updated_item_id(
         ctx,

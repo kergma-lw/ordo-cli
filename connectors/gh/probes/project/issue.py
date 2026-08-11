@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
 
@@ -69,12 +70,8 @@ def run(ctx: OperationContext) -> OperationOutcome:
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        stderr = str(outcome.raw.get("stderr", "")).lower()
-        stdout = str(outcome.raw.get("stdout", "")).lower()
-        text = f"{stderr}\n{stdout}"
-        if outcome.status == "execution_error" and (
-            "could not resolve to an issue" in text or "issue not found" in text or "not found" in text
-        ):
+        text = command_text(outcome.raw)
+        if outcome.status == "execution_error" and text_mentions_not_found(text, "could not resolve to an issue", "issue not found"):
             return fail(
                 code="issue_not_found",
                 summary="GitHub issue was not found",
@@ -88,18 +85,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="probe_failed",
             summary="GitHub project issue probe failed",
-            diagnostics=(
-                Diagnostic(
-                    code="probe.gh_project_issue.command_failed",
-                    level="error",
-                    message="GitHub project issue probe failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref, "project_id": project_id},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="probe.gh_project_issue.command_failed",
+            details={"issue_ref": issue_ref, "project_id": project_id},
+            message="GitHub project issue probe failed",
         )
 
     try:

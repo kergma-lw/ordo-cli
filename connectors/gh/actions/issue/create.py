@@ -6,6 +6,7 @@ import json
 import re
 
 from connectors.gh.actions._shared import ISSUE_INVENTORY_INVALIDATION
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
 _REPOSITORY_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)$")
@@ -73,7 +74,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
         create_command = ctx.command(command, failures={"os_error": "create_blocked", "nonzero": "create_blocked"})
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
+        text = command_text(outcome.raw)
         if outcome.status == "create_blocked" and ("title can't be blank" in text or "title is required" in text):
             return fail(
                 code="title_invalid",
@@ -88,18 +89,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="create_blocked",
             summary="Creating GitHub issue failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.command_failed",
-                    level="error",
-                    message="Creating GitHub issue failed",
-                    details={"reference": ctx.reference, "repository": repository, "title": title},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_create.command_failed",
+            details={"repository": repository, "title": title},
+            message="Creating GitHub issue failed",
         )
 
     issue_data = _parse_issue_output(ctx, repository=repository, title=title, stdout=create_command.stdout, raw=create_command.raw)
@@ -156,10 +153,8 @@ def _lookup_repository(ctx: OperationContext, *, repository: str, owner: str, re
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
-        if outcome.status == "create_blocked" and (
-            "could not resolve to a repository" in text or "repository not found" in text or "not found" in text
-        ):
+        text = command_text(outcome.raw)
+        if outcome.status == "create_blocked" and text_mentions_not_found(text, "could not resolve to a repository", "repository not found"):
             return fail(
                 code="repository_not_found",
                 summary="GitHub repository was not found",
@@ -173,18 +168,14 @@ def _lookup_repository(ctx: OperationContext, *, repository: str, owner: str, re
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="create_blocked",
             summary="Inspecting GitHub repository failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.repository_lookup_failed",
-                    level="error",
-                    message="Inspecting GitHub repository failed",
-                    details={"reference": ctx.reference, "repository": repository},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_create.repository_lookup_failed",
+            details={"repository": repository},
+            message="Inspecting GitHub repository failed",
         )
 
     try:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
@@ -55,7 +56,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
+        text = command_text(outcome.raw)
         if outcome.status == "comment_blocked" and ("body cannot be blank" in text or "body is required" in text):
             return fail(
                 code="body_invalid",
@@ -70,18 +71,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="comment_blocked",
             summary="Adding GitHub issue comment failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_comment_add.command_failed",
-                    level="error",
-                    message="Adding GitHub issue comment failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_comment_add.command_failed",
+            details={"issue_ref": issue_ref},
+            message="Adding GitHub issue comment failed",
         )
 
     comment_data = _lookup_latest_comment(ctx, issue_ref=issue_ref, owner=owner, repo=repo, number=number)
@@ -108,10 +105,8 @@ def _lookup_issue(
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
-        if outcome.status == "comment_blocked" and (
-            "could not resolve to an issue" in text or "issue not found" in text or "not found" in text
-        ):
+        text = command_text(outcome.raw)
+        if outcome.status == "comment_blocked" and text_mentions_not_found(text, "could not resolve to an issue", "issue not found"):
             return fail(
                 code="issue_not_found",
                 summary="GitHub issue was not found",
@@ -125,18 +120,14 @@ def _lookup_issue(
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="comment_blocked",
             summary="Inspecting GitHub issue failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_comment_add.issue_lookup_failed",
-                    level="error",
-                    message="Inspecting GitHub issue failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_comment_add.issue_lookup_failed",
+            details={"issue_ref": issue_ref},
+            message="Inspecting GitHub issue failed",
         )
 
     try:
@@ -198,18 +189,14 @@ def _lookup_latest_comment(
             failures={"os_error": "comment_blocked", "nonzero": "comment_blocked"},
         )
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code="comment_blocked",
             summary="Inspecting latest GitHub issue comment failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_comment_add.comment_lookup_failed",
-                    level="error",
-                    message="Inspecting latest GitHub issue comment failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code="action.gh_issue_comment_add.comment_lookup_failed",
+            details={"issue_ref": issue_ref},
+            message="Inspecting latest GitHub issue comment failed",
         )
 
     try:

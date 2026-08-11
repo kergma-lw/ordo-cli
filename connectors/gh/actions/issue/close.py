@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
@@ -48,10 +49,8 @@ def run(ctx: OperationContext) -> OperationOutcome:
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
-        if outcome.status == "close_blocked" and (
-            "could not resolve to an issue" in text or "issue not found" in text or "not found" in text
-        ):
+        text = command_text(outcome.raw)
+        if outcome.status == "close_blocked" and text_mentions_not_found(text, "could not resolve to an issue", "issue not found"):
             return fail(
                 code="issue_not_found",
                 summary="GitHub issue was not found",
@@ -65,18 +64,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="close_blocked",
             summary="Closing GitHub issue failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_close.command_failed",
-                    level="error",
-                    message="Closing GitHub issue failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_close.command_failed",
+            details={"issue_ref": issue_ref},
+            message="Closing GitHub issue failed",
         )
 
     return ok(
@@ -94,10 +89,8 @@ def _view_issue(
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
-        if outcome.status == "close_blocked" and (
-            "could not resolve to an issue" in text or "issue not found" in text or "not found" in text
-        ):
+        text = command_text(outcome.raw)
+        if outcome.status == "close_blocked" and text_mentions_not_found(text, "could not resolve to an issue", "issue not found"):
             return fail(
                 code="issue_not_found",
                 summary="GitHub issue was not found",
@@ -111,18 +104,14 @@ def _view_issue(
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="close_blocked",
             summary="Inspecting GitHub issue state failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_close.inspect_failed",
-                    level="error",
-                    message="Inspecting GitHub issue state failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_close.inspect_failed",
+            details={"issue_ref": issue_ref},
+            message="Inspecting GitHub issue state failed",
         )
 
     try:

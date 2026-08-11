@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from connectors.gh.actions._shared import PROJECT_ISSUE_INVALIDATION
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
@@ -79,18 +80,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
             failures={"os_error": "add_blocked", "nonzero": "add_blocked"},
         )
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code="add_blocked",
             summary="Adding GitHub issue to project failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_project_issue_add.command_failed",
-                    level="error",
-                    message="Adding GitHub issue to project failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref, "project_id": project_id},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code="action.gh_project_issue_add.command_failed",
+            details={"issue_ref": issue_ref, "project_id": project_id},
+            message="Adding GitHub issue to project failed",
         )
 
     item_id = _extract_item_id(ctx, issue_ref=issue_ref, project_id=project_id, command_stdout=command.stdout, command_raw=command.raw)
@@ -131,10 +128,8 @@ def _load_issue_facts(
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
-        if outcome.status == "add_blocked" and (
-            "could not resolve to an issue" in text or "issue not found" in text or "not found" in text
-        ):
+        text = command_text(outcome.raw)
+        if outcome.status == "add_blocked" and text_mentions_not_found(text, "could not resolve to an issue", "issue not found"):
             return fail(
                 code="issue_not_found",
                 summary="GitHub issue was not found",
@@ -148,18 +143,14 @@ def _load_issue_facts(
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="add_blocked",
             summary="Inspecting GitHub project issue membership failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_project_issue_add.inspect_failed",
-                    level="error",
-                    message="Inspecting GitHub project issue membership failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_project_issue_add.inspect_failed",
+            details={"issue_ref": issue_ref},
+            message="Inspecting GitHub project issue membership failed",
         )
 
     try:
@@ -248,18 +239,14 @@ def _lookup_project(ctx: OperationContext, *, project_id: str) -> dict[str, obje
             failures={"os_error": "add_blocked", "nonzero": "add_blocked"},
         )
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code="add_blocked",
             summary="Inspecting GitHub project failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_project_issue_add.project_lookup_failed",
-                    level="error",
-                    message="Inspecting GitHub project failed",
-                    details={"reference": ctx.reference, "project_id": project_id},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code="action.gh_project_issue_add.project_lookup_failed",
+            details={"project_id": project_id},
+            message="Inspecting GitHub project failed",
         )
 
     try:

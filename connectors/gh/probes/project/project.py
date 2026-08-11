@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import fail_github_command
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
 
 
@@ -38,18 +39,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
             failures={"os_error": "probe_failed"},
         )
     except MappedOutcomeError as exc:
-        return fail(
+        return fail_github_command(
+            ctx,
             code="probe_failed",
             summary="GitHub project probe failed",
-            diagnostics=(
-                Diagnostic(
-                    code="probe.gh_project.command_failed",
-                    level="error",
-                    message="GitHub project probe failed",
-                    details={"reference": ctx.reference, "project_id": project_id},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code="probe.gh_project.command_failed",
+            details={"project_id": project_id},
+            message="GitHub project probe failed",
         )
 
     try:

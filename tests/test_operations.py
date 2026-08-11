@@ -3313,6 +3313,8 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "close_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_close.command_failed")
+        self.assertEqual(result.diagnostics[0].details["classification"], "permission_denied")
+        self.assertEqual(result.diagnostics[0].details["external_tool"], "gh")
 
     def test_gh_issue_create_creates_issue(self) -> None:
         workflow = Workflow(
@@ -3399,6 +3401,29 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "create_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.command_failed")
+
+    def test_gh_issue_create_reports_rate_limit_details(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="create", operation=OperationRef("gh.issue.create", with_={"repository": "owner/repo", "title": "Add checklist"})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.create")
+        resolved = ResolvedOperation("gh.issue.create", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo"}}}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="api rate limit exceeded"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "create_blocked")
+        self.assertEqual(result.diagnostics[0].details["classification"], "rate_limited")
+        self.assertEqual(result.diagnostics[0].details["external_system"], "github")
 
     def test_gh_issue_create_reports_missing_issue_url(self) -> None:
         workflow = Workflow(
@@ -3507,6 +3532,28 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "comment_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_comment_add.command_failed")
+
+    def test_gh_issue_comment_add_reports_unknown_external_failure_details(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(),
+            steps=(Step(name="comment", operation=OperationRef("gh.issue.comment.add", with_={"repository": "owner/repo", "issue_number": 17, "body": "Looks good."})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.comment.add")
+        resolved = ResolvedOperation("gh.issue.comment.add", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"id":"I_17","url":"https://github.com/owner/repo/issues/17"}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="boom"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "comment_blocked")
+        self.assertEqual(result.diagnostics[0].details["classification"], "unknown_external")
 
     def test_gh_issue_body_replace_updates_body(self) -> None:
         workflow = Workflow(
@@ -3817,6 +3864,28 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "add_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_project_issue_add.command_failed")
+
+    def test_gh_project_items_probe_reports_network_failure_details(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            guards=(Guard(OperationRef("gh.project.items", with_={"project_id": "PVT_demo", "content_kind": "Issue"})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.project.items")
+        resolved = ResolvedOperation("gh.project.items", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="could not resolve host: api.github.com"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "probe_failed")
+        self.assertEqual(result.diagnostics[0].details["classification"], "network_failed")
+        self.assertEqual(result.diagnostics[0].details["external_tool"], "gh")
 
     def test_gh_project_issue_status_set_updates_project_status(self) -> None:
         workflow = Workflow(

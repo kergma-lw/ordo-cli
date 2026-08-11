@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh.probes.pr._shared import fetch_json_list, resolve_limit
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
@@ -118,10 +119,8 @@ def _fetch_diff_text(
             failures={"os_error": "probe_failed"},
         )
     except MappedOutcomeError as exc:
-        stderr = str(exc.outcome.raw.get("stderr", "")).lower()
-        stdout = str(exc.outcome.raw.get("stdout", "")).lower()
-        text = f"{stderr}\n{stdout}"
-        if exc.outcome.status == "execution_error" and ("not found" in text or "could not resolve to a pull request" in text):
+        text = command_text(exc.outcome.raw)
+        if exc.outcome.status == "execution_error" and text_mentions_not_found(text, "could not resolve to a pull request"):
             return fail(
                 code="pull_not_found",
                 summary="GitHub pull request was not found",
@@ -135,18 +134,14 @@ def _fetch_diff_text(
                 ),
                 raw=exc.outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="probe_failed",
             summary="GitHub pull request diff probe failed",
-            diagnostics=(
-                Diagnostic(
-                    code="probe.gh_pr_diff.command_failed",
-                    level="error",
-                    message="GitHub pull request diff probe failed",
-                    details={"reference": ctx.reference, "pull_ref": pull_ref},
-                ),
-            ),
             raw=exc.outcome.raw,
+            diagnostic_code="probe.gh_pr_diff.command_failed",
+            details={"pull_ref": pull_ref},
+            message="GitHub pull request diff probe failed",
         )
     return command.stdout or "", command.raw
 

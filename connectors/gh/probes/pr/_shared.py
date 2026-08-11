@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._pull_identity import PullIdentity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail
 
@@ -242,10 +243,8 @@ def _map_command_error(
     failed_summary: str,
     pull_ref: str,
 ) -> OperationOutcome:
-    stderr = str(outcome.raw.get("stderr", "")).lower()
-    stdout = str(outcome.raw.get("stdout", "")).lower()
-    text = f"{stderr}\n{stdout}"
-    if outcome.status == "execution_error" and ("not found" in text or "could not resolve to a pull request" in text):
+    text = command_text(outcome.raw)
+    if outcome.status == "execution_error" and text_mentions_not_found(text, "could not resolve to a pull request"):
         return fail(
             code="pull_not_found",
             summary=not_found_summary,
@@ -260,18 +259,14 @@ def _map_command_error(
             raw=outcome.raw,
         )
     if outcome.status == "execution_error":
-        return fail(
+        return fail_github_command(
+            ctx,
             code="probe_failed",
             summary=failed_summary,
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.command_failed",
-                    level="error",
-                    message=failed_summary,
-                    details={"reference": ctx.reference, "pull_ref": pull_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code=f"{diagnostic_prefix}.command_failed",
+            details={"pull_ref": pull_ref},
+            message=failed_summary,
         )
     return outcome
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
 from connectors.gh._issue_identity import ISSUE_IDENTITY_INPUTS, resolve_issue_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 _DEFAULT_SEPARATOR = "\n\n"
@@ -67,7 +68,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text_blob = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
+        text_blob = command_text(outcome.raw)
         if outcome.status == "append_blocked" and ("body is too long" in text_blob or "invalid body" in text_blob):
             return fail(
                 code="text_invalid",
@@ -82,18 +83,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="append_blocked",
             summary="Appending to GitHub issue body failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_body_append.command_failed",
-                    level="error",
-                    message="Appending to GitHub issue body failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_body_append.command_failed",
+            details={"issue_ref": issue_ref},
+            message="Appending to GitHub issue body failed",
         )
 
     return ok(
@@ -123,10 +120,8 @@ def _load_issue(
         )
     except MappedOutcomeError as exc:
         outcome = exc.outcome
-        text = f"{outcome.raw.get('stderr', '')}\n{outcome.raw.get('stdout', '')}".lower()
-        if outcome.status == "append_blocked" and (
-            "could not resolve to an issue" in text or "issue not found" in text or "not found" in text
-        ):
+        text = command_text(outcome.raw)
+        if outcome.status == "append_blocked" and text_mentions_not_found(text, "could not resolve to an issue", "issue not found"):
             return fail(
                 code="issue_not_found",
                 summary="GitHub issue was not found",
@@ -140,18 +135,14 @@ def _load_issue(
                 ),
                 raw=outcome.raw,
             )
-        return fail(
+        return fail_github_command(
+            ctx,
             code="append_blocked",
             summary="Inspecting GitHub issue failed",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_body_append.issue_lookup_failed",
-                    level="error",
-                    message="Inspecting GitHub issue failed",
-                    details={"reference": ctx.reference, "issue_ref": issue_ref},
-                ),
-            ),
             raw=outcome.raw,
+            diagnostic_code="action.gh_issue_body_append.issue_lookup_failed",
+            details={"issue_ref": issue_ref},
+            message="Inspecting GitHub issue failed",
         )
 
     try:
