@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 from ordo.model.help_snippet_worlds import describe_help_snippet_worlds
-from ordo.model.help_snippets import describe_help_snippets
+from ordo.model.help_snippets import describe_help_snippets, validate_help_snippet_registry
 from ordo.model.runtime import RuntimeStatus
 from ordo.runtime import validate_workflow_text
 
@@ -47,6 +47,36 @@ class HelpSnippetRegistryTest(unittest.TestCase):
                 lines = (ROOT / excerpt["path"]).read_text(encoding="utf-8").splitlines()
                 expected = "\n".join(lines[excerpt["start_line"] - 1 : excerpt["end_line"]])
                 self.assertEqual(example["yaml"], expected, handle)
+
+    def test_registry_examples_publish_declared_forms(self) -> None:
+        registry = describe_help_snippets()
+
+        self.assertEqual(registry["state"]["canonical_examples"][0]["form"], "value")
+        self.assertEqual(registry["workflow.step.if"]["canonical_examples"][0]["form"], "value")
+        self.assertEqual(registry["workflow.step.state_set"]["canonical_examples"][0]["form"], "field_fragment")
+
+    def test_registry_validator_accepts_runner_verified_metadata_shape(self) -> None:
+        registry = describe_help_snippets()
+        registry["demo.runner"] = {
+            "snippet_coverage": "runner_verified",
+            "canonical_examples": [
+                {
+                    "name": "runner",
+                    "kind": "positive",
+                    "form": "value",
+                    "summary": "Runner-backed example.",
+                    "yaml": "inputs.repository",
+                    "verification": {
+                        "kind": "runner_verified",
+                        "world": "default",
+                        "insertion_mode": "expression_value",
+                        "expected_status": "ok",
+                    },
+                }
+            ],
+        }
+
+        validate_help_snippet_registry(registry)
 
 
 def _workflow_text_for_harness(harness: str, snippet: str) -> str:

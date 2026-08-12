@@ -8,6 +8,27 @@ from pathlib import Path
 from .json import JSONObject
 
 
+SUPPORTED_SNIPPET_FORMS = {
+    "value",
+    "field_fragment",
+    "step_fragment",
+    "workflow_fragment",
+}
+
+SUPPORTED_SNIPPET_VERIFICATION_KINDS = {
+    "harness_verified",
+    "excerpt_verified",
+    "runner_verified",
+}
+
+SUPPORTED_SNIPPET_INSERTION_MODES = {
+    "expression_value",
+    "step_field",
+    "step_fragment",
+    "workflow_fragment",
+}
+
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -18,6 +39,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             {
                 "name": "fixed_shared_state_key",
                 "kind": "positive",
+                "form": "value",
                 "summary": "Read one fixed shared-state key directly with a literal key selector.",
                 "yaml": 'state.shared_state["active_profile"]',
                 "verification": {
@@ -29,6 +51,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             {
                 "name": "dynamic_shared_state_key",
                 "kind": "positive",
+                "form": "value",
                 "summary": "Read one shared-state value through a dynamic key from inputs.",
                 "yaml": "state.shared_state[inputs.active_profile_key]",
                 "verification": {
@@ -45,6 +68,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             {
                 "name": "step_if_reads_state_directly",
                 "kind": "positive",
+                "form": "value",
                 "summary": "Gate one step with a direct fixed-key state read.",
                 "yaml": 'state.shared_state["active_profile"] == "review"',
                 "verification": {
@@ -61,6 +85,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             {
                 "name": "state_set_fixed_shared_state_key",
                 "kind": "positive",
+                "form": "field_fragment",
                 "summary": "Write one value to a fixed shared-state key directly with a literal key selector.",
                 "yaml": 'state_set:\n  state.shared_state["active_profile"]: review',
                 "verification": {
@@ -72,6 +97,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             {
                 "name": "state_set_fixed_shared_state_nested_field",
                 "kind": "positive",
+                "form": "field_fragment",
                 "summary": "Write one nested field under a fixed shared-state key.",
                 "yaml": 'state_set:\n  state.shared_state["active_profile"].enabled: true',
                 "verification": {
@@ -83,6 +109,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             {
                 "name": "state_set_dynamic_task_memory_key",
                 "kind": "positive",
+                "form": "field_fragment",
                 "summary": "Persist one value under a state path whose key comes from inputs.",
                 "source_example": "examples.set-active-task-from-gitx",
                 "source_excerpt": {
@@ -103,6 +130,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             {
                 "name": "lookup_fixed_mapping_key",
                 "kind": "positive",
+                "form": "value",
                 "summary": "Select one mapping value with the lookup pipeline filter.",
                 "yaml": 'inputs.status_labels | lookup("ready")',
                 "verification": {
@@ -137,4 +165,36 @@ def describe_help_snippets() -> dict[str, JSONObject]:
                     start_line=int(excerpt["start_line"]),
                     end_line=int(excerpt["end_line"]),
                 )
+    validate_help_snippet_registry(payload)
     return payload
+
+
+def validate_help_snippet_registry(registry: dict[str, JSONObject]) -> None:
+    """Validate published help-snippet metadata."""
+
+    for handle, entry in registry.items():
+        coverage = entry.get("snippet_coverage")
+        if coverage not in {"none", "excerpt_verified", "harness_verified", "runner_verified"}:
+            raise ValueError(f"Unsupported snippet coverage for {handle}: {coverage!r}")
+        for example in entry.get("canonical_examples", []):
+            if not isinstance(example, dict):
+                raise ValueError(f"Canonical example for {handle} must be a mapping")
+            form = example.get("form")
+            if form not in SUPPORTED_SNIPPET_FORMS:
+                raise ValueError(f"Unsupported snippet form for {handle}:{example.get('name')}: {form!r}")
+            verification = example.get("verification")
+            if not isinstance(verification, dict):
+                raise ValueError(f"Missing verification metadata for {handle}:{example.get('name')}")
+            kind = verification.get("kind")
+            if kind not in SUPPORTED_SNIPPET_VERIFICATION_KINDS:
+                raise ValueError(f"Unsupported verification kind for {handle}:{example.get('name')}: {kind!r}")
+            if kind == "runner_verified":
+                if not isinstance(verification.get("world"), str):
+                    raise ValueError(f"runner_verified snippet must declare world for {handle}:{example.get('name')}")
+                insertion_mode = verification.get("insertion_mode")
+                if insertion_mode not in SUPPORTED_SNIPPET_INSERTION_MODES:
+                    raise ValueError(
+                        f"Unsupported runner insertion mode for {handle}:{example.get('name')}: {insertion_mode!r}"
+                    )
+                if "expected_status" not in verification:
+                    raise ValueError(f"runner_verified snippet must declare expected_status for {handle}:{example.get('name')}")
