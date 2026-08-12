@@ -20,6 +20,10 @@
 
 - `ordo-help describe <topic>` must publish explicit canonical-snippet coverage state for describable handles, including the explicit absence state `none`.
 - Where canonical short examples are published, they must be backed either by verified excerpts from repository examples or by declared harness-based validation of the minimal form.
+- Canonical examples may also be backed by named snippet worlds when the example needs stable shared context rather than a standalone excerpt or one-off harness.
+- If a published example uses a snippet world, the public help contract must still preserve honesty about the example form rather than silently presenting one verified shape as if it were another.
+- Example verification for snippet-world-backed examples must remain a repository test concern rather than a normal `ordo-help` runtime action.
+- If the supported snippet-world path cannot yet express a required example shape honestly, that limitation must be treated as missing snippet support rather than hidden by rendering tricks or unverifiable prose.
 - The public help surface must provide one machine-readable way to inspect which describable handles are covered and which are still uncovered.
 
 ## Discovery actions

@@ -73,9 +73,16 @@ These actions are navigation surfaces over the public topic model rather than ad
 - `canonical_examples` should list the short positive snippets published for that handle.
 - Excerpt-backed snippets should identify their source example and excerpt location.
 - Harness-backed snippets should identify the verification harness used to validate the minimal form.
+- Snippet-world-backed examples should identify the teaching context and verification path used to keep the example strict.
+- The help model may support more than one example form, such as value examples, step-field examples, step fragments, and workflow fragments.
+- `describe` should surface enough metadata for a caller to distinguish those forms honestly rather than inferring them from the raw snippet text alone.
+- The renderer must not silently disguise one verified example kind as a different authored shape just to make the output look friendlier.
 - `snippet-coverage` should aggregate the current coverage map so a caller can tell where snippet support is still missing.
 
 The goal is for `describe` to act as a short syntax confirmer for disputed authoring forms without turning prose examples into an unverified second source of truth.
+
+Snippet worlds are publication and verification context for help examples, not runtime workflow semantics.
+They provide stable shared teaching context for snippets that are too small to stand alone while preserving the invariant that the published example remains the example that was actually verified.
 
 ## Workflow authoring pass pair
 
