@@ -491,6 +491,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow_surface", payload["metadata"])
         self.assertEqual(payload["snippet_coverage"], "runner_verified")
         self.assertEqual(payload["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"]')
+        self.assertEqual(payload["canonical_examples"][0]["form"], "value")
 
     def test_describe_state_step_and_filter_nodes_publish_canonical_snippets(self) -> None:
         state_set = json.loads(self.run_help("describe", "workflow.step.state_set", "--json").stdout)
@@ -504,8 +505,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_if["snippet_coverage"], "runner_verified")
         self.assertEqual(step_if["metadata"]["role"], "local_behavioral_variation")
         self.assertIn("workflow applicability or early rejection", step_if["metadata"]["do_not_use_for"])
+        self.assertEqual(step_if["canonical_examples"][0]["form"], "value")
         self.assertEqual(step_if["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"] == "review"')
         self.assertEqual(lookup["snippet_coverage"], "runner_verified")
+        self.assertEqual(lookup["canonical_examples"][0]["form"], "value")
         self.assertEqual(lookup["canonical_examples"][0]["yaml"], 'inputs.status_labels | lookup("ready")')
 
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
@@ -525,6 +528,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("snippet coverage: harness_verified", result.stdout)
         self.assertIn("canonical examples:", result.stdout)
+        self.assertIn("form: field_fragment", result.stdout)
         self.assertIn('state.shared_state["active_profile"]: review', result.stdout)
         self.assertIn("verification: excerpt_verified from examples.set-active-task-from-gitx", result.stdout)
 
@@ -533,6 +537,8 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("snippet coverage: runner_verified", result.stdout)
+        self.assertIn("form: value", result.stdout)
+        self.assertIn("verification: runner_verified in world default via expression_value", result.stdout)
         self.assertIn('state.shared_state["active_profile"]', result.stdout)
 
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:

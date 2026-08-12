@@ -2516,6 +2516,8 @@ def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]
     lines.extend(["", "canonical examples:"])
     for example in examples:
         lines.append(f"- {example['name']}: {example['summary']}")
+        if isinstance(example.get("form"), str):
+            lines.append(f"  form: {example['form']}")
         verification = example.get("verification")
         if isinstance(verification, dict):
             verification_kind = verification.get("kind")
@@ -2524,6 +2526,10 @@ def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]
             elif verification_kind == "excerpt_verified":
                 source = verification.get("example") or example.get("source_example") or "unknown"
                 lines.append(f"  verification: excerpt_verified from {source}")
+            elif verification_kind == "runner_verified":
+                world_name = verification.get("world") or "unknown"
+                insertion_mode = verification.get("insertion_mode") or "unknown"
+                lines.append(f"  verification: runner_verified in world {world_name} via {insertion_mode}")
         yaml_text = example.get("yaml")
         if isinstance(yaml_text, str) and yaml_text:
             lines.append("  yaml:")
