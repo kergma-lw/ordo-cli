@@ -870,7 +870,7 @@
           "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
           "handle": "workflow-authoring.separate_control_surfaces",
           "kind": "rule",
-          "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: for local step branching inside an already-valid path.",
+          "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: when one local step or local branch is optional inside an already-valid path.",
           "topic": "workflow-authoring"
         },
         {
@@ -927,7 +927,7 @@
           "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
           "handle": "workflow-authoring.separate_control_surfaces",
           "name": "separate_control_surfaces",
-          "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: for local step branching inside an already-valid path."
+          "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: when one local step or local branch is optional inside an already-valid path."
         },
         {
           "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
@@ -953,7 +953,7 @@
           "command": "ordo-help describe workflow.step.if --json",
           "handle": "workflow.step.if",
           "kind": "step_field",
-          "summary": "Local step-branching field for behavioral variation inside an already-valid path",
+          "summary": "Local step-branching field for an optional step or local branch inside an already-valid path",
           "topic": "model"
         },
         {
@@ -1038,7 +1038,7 @@
           "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
         }
       ],
-      "summary": "Boolean condition-authoring surface shared by step if and gate, with if for local branching and gate for admission decisions."
+      "summary": "Boolean condition-authoring surface shared by step if and gate, with if for optional local branching and gate for admission decisions."
     },
     {
       "appropriate_when": [

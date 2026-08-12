@@ -15,6 +15,7 @@ class HelpSnippetScaffoldTest(unittest.TestCase):
         self.assertEqual(set(INSERTION_CONTRACTS.keys()), {"expression_value", "step_field", "step_fragment"})
         self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_field"].supported_targets)
         self.assertIn("state", INSERTION_CONTRACTS["expression_value"].supported_targets)
+        self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_fragment"].supported_targets)
         self.assertIn("workflow.step.state_set", INSERTION_CONTRACTS["step_fragment"].supported_targets)
 
     def test_expression_value_scaffold_validates_for_state_target(self) -> None:
@@ -52,6 +53,16 @@ class HelpSnippetScaffoldTest(unittest.TestCase):
         )
 
         report = validate_workflow_text(workflow_text, source="snippet-scaffold:state-set-step-fragment")
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_step_fragment_scaffold_validates_for_step_if_target(self) -> None:
+        workflow_text = build_step_fragment_scaffold(
+            target="workflow.step.if",
+            snippet='- name: Add close comment\n  if: is_present(inputs.close_comment)\n  uses: gh.issue.comment.add\n  with:\n    repository: inputs.repository\n    issue_number: inputs.issue_number\n    body: inputs.close_comment',
+        )
+
+        report = validate_workflow_text(workflow_text, source="snippet-scaffold:step-if-fragment")
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 

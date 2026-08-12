@@ -33,7 +33,7 @@ STEP_FIELD_CONTRACT = SnippetInsertionContract(
 
 STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="step_fragment",
-    supported_targets=("workflow.step.state_set",),
+    supported_targets=("workflow.step.if", "workflow.step.state_set"),
     workflow_surface="steps list inside a standard workflow scaffold",
     summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
 )
@@ -104,6 +104,19 @@ blocks:
 def build_step_fragment_scaffold(*, target: str, snippet: str) -> str:
     """Return a standard workflow scaffold for one authored step fragment."""
 
+    if target == "workflow.step.if":
+        indented = snippet.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-step-fragment-if
+inputs:
+  repository: {{}}
+  issue_number: {{}}
+  close_comment: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
     if target == "workflow.step.state_set":
         indented = snippet.replace(chr(10), chr(10) + "  ")
         return f"""version: 0

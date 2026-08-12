@@ -60,6 +60,17 @@ class HelpSnippetRunnerTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertIn('- name: remember-profile', result.workflow_text)
 
+    def test_runner_verifies_step_if_fragment_snippet_in_named_world(self) -> None:
+        result = verify_help_snippet(
+            snippet='- name: Add close comment\n  if: is_present(inputs.close_comment)\n  uses: gh.issue.comment.add\n  with:\n    repository: inputs.repository\n    issue_number: inputs.issue_number\n    body: inputs.close_comment',
+            world="default",
+            insertion_mode="step_fragment",
+            target="workflow.step.if",
+        )
+
+        self.assertEqual(result.status, "ok")
+        self.assertIn("uses: gh.issue.comment.add", result.workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()

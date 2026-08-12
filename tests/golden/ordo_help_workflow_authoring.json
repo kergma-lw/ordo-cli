@@ -8,7 +8,7 @@
     "when adding or changing inputs, validate them before continuing",
     "validate both the request shape and the observed target context",
     "name important values early",
-    "use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only for local branching inside an already-valid path",
+    "use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only when one local step or local branch is optional inside an already-valid path",
     "when the first effectful action is skipped by an if that depends only on pre-step facts, treat that as a strong signal to consider guards instead",
     "distinguish authored probe intent from successful probe materialization: a guard may already express the right probe shape even when the observation could not be completed from the currently available pre-step facts",
     "prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text",
@@ -487,10 +487,10 @@
         "use guards for conditions that determine whether the workflow should run at all or should narrow applicability early",
         "use gates when the real question is whether a path or step may execute at all",
         "use inputs, profiles, and reusable fragments for stable context-specific variation",
-        "use if: only for step-local behavioral variation inside an already applicable workflow"
+        "use if: only when one local step or local branch is optional inside an already applicable workflow"
       ],
       "priority": "strong_recommendation",
-      "rule": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: for local step branching inside an already-valid path.",
+      "rule": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: when one local step or local branch is optional inside an already-valid path.",
       "why": [
         "mixing these roles makes workflows harder to read and harder to explain",
         "hidden applicability inside step conditions weakens workflow selection and safety",

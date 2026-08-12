@@ -460,7 +460,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "name": "separate_control_surfaces",
         "priority": "strong_recommendation",
         "guidance_level": "recommended",
-        "rule": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: for local step branching inside an already-valid path.",
+        "rule": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: when one local step or local branch is optional inside an already-valid path.",
         "why": [
             "mixing these roles makes workflows harder to read and harder to explain",
             "hidden applicability inside step conditions weakens workflow selection and safety",
@@ -470,7 +470,7 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
             "use guards for conditions that determine whether the workflow should run at all or should narrow applicability early",
             "use gates when the real question is whether a path or step may execute at all",
             "use inputs, profiles, and reusable fragments for stable context-specific variation",
-            "use if: only for step-local behavioral variation inside an already applicable workflow",
+            "use if: only when one local step or local branch is optional inside an already applicable workflow",
         ],
         "avoid": [
             "hiding workflow inapplicability inside late step-level if: conditions",
@@ -784,7 +784,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     },
     {
         "name": "conditions",
-        "summary": "Boolean condition-authoring surface shared by step if and gate, with if for local branching and gate for admission decisions.",
+        "summary": "Boolean condition-authoring surface shared by step if and gate, with if for optional local branching and gate for admission decisions.",
         "keywords": ["if", "gate", "all", "any", "not", "structured condition", "implicit_all"],
         "appropriate_when": [
             "Branching or admission logic needs an explicit boolean condition surface with readable operator structure.",
@@ -1204,7 +1204,7 @@ def build_workflow_authoring_response() -> JSONObject:
             "when adding or changing inputs, validate them before continuing",
             "validate both the request shape and the observed target context",
             "name important values early",
-            "use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only for local branching inside an already-valid path",
+            "use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only when one local step or local branch is optional inside an already-valid path",
             "when the first effectful action is skipped by an if that depends only on pre-step facts, treat that as a strong signal to consider guards instead",
             "distinguish authored probe intent from successful probe materialization: a guard may already express the right probe shape even when the observation could not be completed from the currently available pre-step facts",
             "prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text",
@@ -1567,10 +1567,11 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 metadata={"name": field_name, "optional_in_forms": [form["name"]]},
             )
     if "workflow.step.if" in lookup:
-        lookup["workflow.step.if"]["summary"] = "Local step-branching field for behavioral variation inside an already-valid path"
+        lookup["workflow.step.if"]["summary"] = "Local step-branching field for an optional step or local branch inside an already-valid path"
         lookup["workflow.step.if"]["metadata"]["role"] = "local_behavioral_variation"
         lookup["workflow.step.if"]["metadata"]["use_when"] = [
-            "a valid path needs local branching",
+            "one local step is optional inside a path that is already valid",
+            "a valid path needs one small local branch rather than a new applicability or admission decision",
             "the condition changes one step's behavior without deciding workflow applicability or step admission",
         ]
         lookup["workflow.step.if"]["metadata"]["do_not_use_for"] = [
@@ -2517,19 +2518,7 @@ def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]
     for example in examples:
         lines.append(f"- {example['name']}: {example['summary']}")
         if isinstance(example.get("form"), str):
-            lines.append(f"  form: {example['form']}")
-        verification = example.get("verification")
-        if isinstance(verification, dict):
-            verification_kind = verification.get("kind")
-            if verification_kind == "harness_verified":
-                lines.append(f"  verification: harness_verified via {verification['harness']}")
-            elif verification_kind == "excerpt_verified":
-                source = verification.get("example") or example.get("source_example") or "unknown"
-                lines.append(f"  verification: excerpt_verified from {source}")
-            elif verification_kind == "runner_verified":
-                world_name = verification.get("world") or "unknown"
-                insertion_mode = verification.get("insertion_mode") or "unknown"
-                lines.append(f"  verification: runner_verified in world {world_name} via {insertion_mode}")
+            lines.append(f"  example_for: {example['form']}")
         yaml_text = example.get("yaml")
         if isinstance(yaml_text, str) and yaml_text:
             lines.append("  yaml:")
@@ -2557,16 +2546,10 @@ def render_model_node_text(payload: JSONObject) -> str:
     lines = [
         payload["name"],
         payload["summary"],
-        "",
-        f"contract: {payload['contract']}",
-        f"node kind: {payload['node_kind']}",
-        f"snippet coverage: {payload.get('snippet_coverage', 'none')}",
     ]
     metadata = payload.get("metadata")
     if isinstance(metadata, dict):
-        role = metadata.get("role")
-        if isinstance(role, str):
-            lines.append(f"role: {role}")
+        lines.append("")
         for item in metadata.get("use_when", []):
             lines.append(f"use when: {item}")
         for item in metadata.get("do_not_use_for", []):

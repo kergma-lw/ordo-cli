@@ -70,15 +70,29 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
             {
-                "name": "step_if_checks_optional_close_comment",
+                "name": "step_if_value_optional_close_comment",
                 "kind": "positive",
                 "form": "value",
-                "summary": "Run one optional step when a close comment is present.",
+                "summary": "Show a valid `workflow.step.if` value for the case when a close comment is present.",
                 "yaml": "is_present(inputs.close_comment)",
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
                     "insertion_mode": "step_field",
+                    "target": "workflow.step.if",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "step_if_optional_close_comment_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete optional step guarded by `workflow.step.if`.",
+                "yaml": '- name: Add close comment\n  if: is_present(inputs.close_comment)\n  uses: gh.issue.comment.add\n  with:\n    repository: inputs.repository\n    issue_number: inputs.issue_number\n    body: inputs.close_comment',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
                     "target": "workflow.step.if",
                     "expected_status": "ok",
                 },
