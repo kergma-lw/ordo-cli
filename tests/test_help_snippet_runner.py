@@ -18,14 +18,14 @@ class HelpSnippetRunnerTest(unittest.TestCase):
 
     def test_runner_verifies_step_field_snippet_in_named_world(self) -> None:
         result = verify_help_snippet(
-            snippet='state.shared_state["active_profile"] == "review"',
+            snippet="is_present(inputs.close_comment)",
             world="default",
             insertion_mode="step_field",
             target="workflow.step.if",
         )
 
         self.assertEqual(result.status, "ok")
-        self.assertIn('if: state.shared_state["active_profile"] == "review"', result.workflow_text)
+        self.assertIn("if: is_present(inputs.close_comment)", result.workflow_text)
 
     def test_runner_applies_world_overrides_deterministically(self) -> None:
         result = verify_help_snippet(

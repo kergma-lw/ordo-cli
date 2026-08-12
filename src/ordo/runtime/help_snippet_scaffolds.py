@@ -69,8 +69,8 @@ def build_step_field_scaffold(*, target: str, snippet: str) -> str:
     if target == "workflow.step.if":
         return f"""version: 0
 workflow: snippet-step-if
-state_needs:
-  shared_state: {{}}
+inputs:
+  close_comment: {{}}
 blocks:
 - guards: []
 - steps:

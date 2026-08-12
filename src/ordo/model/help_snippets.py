@@ -70,11 +70,11 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
             {
-                "name": "step_if_reads_state_directly",
+                "name": "step_if_checks_optional_close_comment",
                 "kind": "positive",
                 "form": "value",
-                "summary": "Gate one step with a direct fixed-key state read.",
-                "yaml": 'state.shared_state["active_profile"] == "review"',
+                "summary": "Run one optional step when a close comment is present.",
+                "yaml": "is_present(inputs.close_comment)",
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",

@@ -30,7 +30,7 @@ class HelpSnippetScaffoldTest(unittest.TestCase):
         self.assertEqual(report.status, RuntimeStatus.OK)
 
     def test_step_field_scaffold_validates_for_step_if_target(self) -> None:
-        workflow_text = build_step_field_scaffold(target="workflow.step.if", snippet='state.shared_state["active_profile"] == "review"')
+        workflow_text = build_step_field_scaffold(target="workflow.step.if", snippet="is_present(inputs.close_comment)")
 
         report = validate_workflow_text(workflow_text, source="snippet-scaffold:step-if")
 

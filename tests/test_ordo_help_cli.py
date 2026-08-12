@@ -506,7 +506,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_if["metadata"]["role"], "local_behavioral_variation")
         self.assertIn("workflow applicability or early rejection", step_if["metadata"]["do_not_use_for"])
         self.assertEqual(step_if["canonical_examples"][0]["form"], "value")
-        self.assertEqual(step_if["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"] == "review"')
+        self.assertEqual(step_if["canonical_examples"][0]["yaml"], "is_present(inputs.close_comment)")
         self.assertEqual(lookup["snippet_coverage"], "runner_verified")
         self.assertEqual(lookup["canonical_examples"][0]["form"], "value")
         self.assertEqual(lookup["canonical_examples"][0]["yaml"], 'inputs.status_labels | lookup("ready")')
@@ -540,6 +540,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("form: value", result.stdout)
         self.assertIn("verification: runner_verified in world default via expression_value", result.stdout)
         self.assertIn('state.shared_state["active_profile"]', result.stdout)
+
+    def test_text_describe_workflow_step_if_shows_optional_step_example(self) -> None:
+        result = self.run_help("describe", "workflow.step.if")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Local step-branching field for behavioral variation inside an already-valid path", result.stdout)
+        self.assertIn("form: value", result.stdout)
+        self.assertIn("verification: runner_verified in world default via step_field", result.stdout)
+        self.assertIn("Run one optional step when a close comment is present.", result.stdout)
+        self.assertIn("is_present(inputs.close_comment)", result.stdout)
 
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:
         include_contract_node = json.loads(self.run_help("describe", "workflow.include_contract", "--json").stdout)
