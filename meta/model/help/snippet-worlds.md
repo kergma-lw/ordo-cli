@@ -113,3 +113,31 @@ This should make examples:
 - The help model may define more than one snippet world.
 - Different worlds may exist for different teaching needs, connector families, or example shapes.
 - No single snippet world should be assumed to be the only valid future teaching context.
+
+## Adding a new world-backed snippet
+
+When adding a new world-backed snippet, the author should make four decisions explicitly:
+
+1. which snippet world supplies the teaching context;
+2. which snippet form is being published;
+3. which insertion mode or scaffold places the snippet into a verifiable host;
+4. which verification mode proves the snippet stays valid.
+
+The snippet world should answer only the first question.
+It must not answer placement or rendering questions by itself.
+
+### Contribution contract
+
+- Choose an existing snippet world when it already supplies the needed teaching context.
+- Add a new snippet world only when the example honestly needs a different stable teaching context rather than a local override.
+- Declare the snippet form explicitly so readers can tell whether they are looking at a value example, a step-field example, a step fragment, or a workflow fragment.
+- Declare the insertion mode explicitly so placement remains reviewable as a scaffold concern rather than leaking into world data.
+- Keep the published snippet body aligned with the snippet that the verifier actually runs.
+- Do not rely on decorative rendering tricks to make one snippet form look like another.
+- Keep verification in repository tests rather than in normal `ordo-help` runtime calls.
+
+### Verification expectations for contributors
+
+- A new world-backed snippet should fail visibly when its verified shape drifts.
+- A new world-backed snippet should participate in ordinary repository verification.
+- If the supported snippet-world path cannot yet express the required example shape honestly, treat that as a support gap and call it out explicitly instead of inventing an unverifiable workaround.
