@@ -19,8 +19,8 @@ from .conditions import ConditionShapeError, iter_condition_expression_leaves, n
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
 from .gate_failure_context import evaluate_gate_failure_context
 from .local_expression_contexts import LocalExpressionContext
-from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, ConditionObservationRequest, ConditionObservationResult, FilterApplicationNode, ListNode, LiteralNode, LocalExpressionParseError, ObjectEntryNode, ObjectNode, OnlyPredicateNode, PipelineNode, ReadOnlyObservationSession, ReferenceNode, UnaryNode, ValueExpressionNode, evaluate_condition_expression, parse_local_expression_tree, render_expression_text
-from .local_expressions import extract_embedded_local_expression
+from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, ConditionObservationRequest, ConditionObservationResult, FilterApplicationNode, ListNode, LiteralNode, LocalExpressionParseError, ObjectEntryNode, ObjectNode, OnlyPredicateNode, PipelineNode, ReadOnlyObservationSession, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, evaluate_condition_expression, parse_local_expression_tree, render_expression_text
+from .local_expressions import extract_embedded_local_expression, resolve_workflow_let_reference_node
 from .launchers import validate_step_launchers
 from .preflight_interpreter import (
     build_preflight_halt,
@@ -1212,6 +1212,7 @@ def _interpret_step_block_for_check(
                     condition_status="unknown",
                     halt_reason=halt.reason,
                     preflight_support=_build_preflight_support(
+                        effective_workflow,
                         resolved_step,
                         action_call=_action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                         known_observations=known_observations,
@@ -1220,6 +1221,7 @@ def _interpret_step_block_for_check(
                 )
             )
             _append_structural_tail_items(
+                workflow=effective_workflow,
                 block_index=block_index,
                 start_step_index=step_index + 1,
                 block=block,
@@ -1257,6 +1259,7 @@ def _interpret_step_block_for_check(
                     condition_status="unknown",
                     halt_reason=halt.reason,
                     preflight_support=_build_preflight_support(
+                        effective_workflow,
                         resolved_step,
                         action_call=_action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                         known_observations=known_observations,
@@ -1265,6 +1268,7 @@ def _interpret_step_block_for_check(
                 )
             )
             _append_structural_tail_items(
+                workflow=effective_workflow,
                 block_index=block_index,
                 start_step_index=step_index + 1,
                 block=block,
@@ -1340,6 +1344,7 @@ def _interpret_step_block_for_check(
                 }
             )
             _append_structural_tail_items(
+                workflow=effective_workflow,
                 block_index=block_index,
                 start_step_index=step_index + 1,
                 block=block,
@@ -1410,6 +1415,7 @@ def _interpret_step_block_for_check(
                         }
                     )
                     _append_structural_tail_items(
+                        workflow=effective_workflow,
                         block_index=block_index,
                         start_step_index=step_index + 1,
                         block=block,
@@ -1450,6 +1456,7 @@ def _interpret_step_block_for_check(
                         }
                     )
                     _append_structural_tail_items(
+                        workflow=effective_workflow,
                         block_index=block_index,
                         start_step_index=step_index + 1,
                         block=block,
@@ -1577,6 +1584,7 @@ def _interpret_step_block_for_check(
                     }
                 )
                 _append_structural_tail_items(
+                    workflow=effective_workflow,
                     block_index=block_index,
                     start_step_index=step_index + 1,
                     block=block,
@@ -1618,6 +1626,7 @@ def _interpret_step_block_for_check(
 
         action_call = _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None
         preflight_support = _build_preflight_support(
+            effective_workflow,
             resolved_step,
             action_call=action_call,
             known_observations=known_observations,
@@ -2172,6 +2181,7 @@ def _structural_step_item(
 
 def _append_structural_tail_items(
     *,
+    workflow: Workflow,
     block_index: int,
     start_step_index: int,
     block: StepBlock,
@@ -2185,6 +2195,7 @@ def _append_structural_tail_items(
         tail_resolved = resolved_block.steps[tail_step_index]
         action_call = _action_call_from_resolved_operation(tail_resolved) if isinstance(tail_resolved, ResolvedOperation) and tail_resolved.operation.kind == "action" else None
         preflight_support = _build_preflight_support(
+            workflow,
             tail_resolved,
             action_call=action_call,
             known_observations=known_observations,
@@ -2241,6 +2252,7 @@ def _append_structural_items_for_uninterpreted_step_blocks(
             return resolved_block
         known_observations = [dict(item) for item in observed_probe_calls if isinstance(item, dict)]
         _append_structural_tail_items(
+            workflow=workflow,
             block_index=block_index,
             start_step_index=0,
             block=declared_block,
@@ -2272,30 +2284,30 @@ def _render_preflight_observation(template, *, action_call: dict[str, object] | 
     }
 
 
-def _canonical_observation_key(observation: dict[str, object]) -> str:
+def _canonical_observation_key(observation: dict[str, object], *, workflow: Workflow | None = None) -> str:
     import json
 
-    return json.dumps(_canonicalize_probe_descriptor(observation), sort_keys=True, separators=(",", ":"))
+    return json.dumps(_canonicalize_probe_descriptor(observation, workflow=workflow), sort_keys=True, separators=(",", ":"))
 
 
-def _canonicalize_probe_descriptor(value: JSONValue | dict[str, object]) -> JSONValue:
+def _canonicalize_probe_descriptor(value: JSONValue | dict[str, object], *, workflow: Workflow | None = None) -> JSONValue:
     if isinstance(value, str):
-        canonical_expression = _canonicalize_authored_reference_string(value)
+        canonical_expression = _canonicalize_authored_reference_string(value, workflow=workflow)
         if canonical_expression is not None:
             return {"expression": canonical_expression}
         return value
     if isinstance(value, list):
-        return [_canonicalize_probe_descriptor(item) for item in value]
+        return [_canonicalize_probe_descriptor(item, workflow=workflow) for item in value]
     if isinstance(value, dict):
         if set(value.keys()) == {"expression"} and isinstance(value.get("expression"), str):
-            canonical_expression = _canonicalize_authored_reference_string(value["expression"])
+            canonical_expression = _canonicalize_authored_reference_string(value["expression"], workflow=workflow)
             if canonical_expression is not None:
                 return {"expression": canonical_expression}
-        return {str(key): _canonicalize_probe_descriptor(item) for key, item in value.items()}
+        return {str(key): _canonicalize_probe_descriptor(item, workflow=workflow) for key, item in value.items()}
     return value
 
 
-def _canonicalize_authored_reference_string(value: str) -> str | None:
+def _canonicalize_authored_reference_string(value: str, *, workflow: Workflow | None = None) -> str | None:
     expression = extract_embedded_local_expression(value)
     if expression is None:
         expression = value
@@ -2303,13 +2315,48 @@ def _canonicalize_authored_reference_string(value: str) -> str | None:
         parsed = parse_local_expression_tree(expression)
     except LocalExpressionParseError:
         return None
-    root = parsed.root
-    if not isinstance(root, ReferenceNode) or not root.parts or root.parts[0] not in {"inputs", "step", "state", "let"}:
+    root = _normalize_safe_probe_equivalence_node(parsed.root, workflow=workflow, seen_let_bindings=set())
+    if root is None:
         return None
     return render_expression_text(root, source=expression)
 
 
+def _normalize_safe_probe_equivalence_node(
+    node: ValueExpressionNode,
+    *,
+    workflow: Workflow | None,
+    seen_let_bindings: set[str],
+) -> ValueExpressionNode | None:
+    if isinstance(node, ReferenceNode):
+        if not node.parts:
+            return None
+        root = node.parts[0]
+        if workflow is not None and root in workflow.let_bindings:
+            if root in seen_let_bindings:
+                return None
+            expanded = resolve_workflow_let_reference_node(node, workflow, context=LocalExpressionContext.EMBEDDED_VALUE)
+            if expanded is None:
+                return None
+            return _normalize_safe_probe_equivalence_node(expanded, workflow=workflow, seen_let_bindings=seen_let_bindings | {root})
+        if root in {"inputs", "args"}:
+            return node
+        return None
+    if isinstance(node, StateReferenceNode):
+        normalized_key = _normalize_safe_probe_equivalence_node(node.key_expression, workflow=workflow, seen_let_bindings=seen_let_bindings)
+        if normalized_key is None:
+            return None
+        return StateReferenceNode(
+            start=node.start,
+            end=node.end,
+            state_role=node.state_role,
+            key_expression=normalized_key,
+            fields=node.fields,
+        )
+    return None
+
+
 def _build_preflight_support(
+    workflow: Workflow,
     resolved_step: ResolvedStep,
     *,
     action_call: dict[str, object] | None,
@@ -2328,22 +2375,22 @@ def _build_preflight_support(
             "missing_probes": [],
         }
     recommended = [_render_preflight_observation(template, action_call=action_call) for template in templates]
-    known_keys = {_canonical_observation_key(item) for item in known_observations}
+    known_keys = {_canonical_observation_key(item, workflow=None) for item in known_observations}
     intent_keys = {
-        _canonical_observation_key(item)
+        _canonical_observation_key(item, workflow=workflow)
         for item in ([] if authored_probe_intents is None else authored_probe_intents)
         if isinstance(item, dict)
     }
-    matched = [item for item in recommended if _canonical_observation_key(item) in known_keys]
+    matched = [item for item in recommended if _canonical_observation_key(item, workflow=workflow) in known_keys]
     unmaterialized = [
         item
         for item in recommended
-        if _canonical_observation_key(item) not in known_keys and _canonical_observation_key(item) in intent_keys
+        if _canonical_observation_key(item, workflow=workflow) not in known_keys and _canonical_observation_key(item, workflow=workflow) in intent_keys
     ]
     missing = [
         item
         for item in recommended
-        if _canonical_observation_key(item) not in known_keys and _canonical_observation_key(item) not in intent_keys
+        if _canonical_observation_key(item, workflow=workflow) not in known_keys and _canonical_observation_key(item, workflow=workflow) not in intent_keys
     ]
     if len(matched) == len(recommended):
         strength = "strong"

@@ -9,7 +9,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, RunBlock, Step, StepBlock, Workflow
 
-from .checking import check_workflow
+from .checking import _canonical_observation_key, check_workflow
 from .conditions import iter_condition_expression_leaves, normalize_condition_authoring
 from .local_expression_contexts import LocalExpressionContext
 from .local_expression_engine.core import (
@@ -129,7 +129,7 @@ def _build_review_findings(
     findings.extend(_find_profile_switch_literal_string_hints(workflow))
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
     findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
-    findings.extend(_find_missing_recommended_probe_coverage(check_result))
+    findings.extend(_find_missing_recommended_probe_coverage(workflow, check_result))
     findings.extend(_find_string_condition_structured_form_hints(workflow))
     findings.extend(_find_gate_recommendation_hints(workflow))
     findings.extend(_find_first_step_applicability_guard_hints(workflow))
@@ -912,8 +912,9 @@ def _find_unused_declared_inputs(workflow: Workflow, check_result: RuntimeResult
     return findings
 
 
-def _find_missing_recommended_probe_coverage(check_result: RuntimeResult) -> list[dict[str, object]]:
+def _find_missing_recommended_probe_coverage(workflow: Workflow, check_result: RuntimeResult) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
+    guard_details = [detail for detail in check_result.outputs.get("guard_details", []) if isinstance(detail, dict)]
     for item in check_result.outputs.get("preflight_step_items", []):
         if not isinstance(item, dict):
             continue
@@ -951,12 +952,13 @@ def _find_missing_recommended_probe_coverage(check_result: RuntimeResult) -> lis
                 }
             )
         elif strength == "partial" and isinstance(unmaterialized, list) and unmaterialized:
+            blockers = _explain_unavailable_probe_results(workflow, unmaterialized, guard_details)
             findings.append(
                 {
-                    "code": "review.workflow.recommended_probe_coverage_not_materialized",
+                    "code": "review.workflow.recommended_probe_result_not_available",
                     "level": "warning",
                     "category": "preflight_support",
-                    "message": f"Step '{item.get('name')}' relies on recommended preflight probes that are already authored but were not successfully materialized before the action",
+                    "message": f"Step '{item.get('name')}' already has authored probe intent for a recommended preflight check, but the required probe result was not available before the action because the check could not be completed from the current pre-step facts.",
                     "path": path,
                     "evidence": {
                         "step": item.get("name"),
@@ -965,13 +967,46 @@ def _find_missing_recommended_probe_coverage(check_result: RuntimeResult) -> lis
                         "unmaterialized_probes": list(unmaterialized),
                         "missing_probes": [],
                         "authoring_term": "explicit_probe_coverage",
-                        "preferred_fix_kind": "materialize_existing_probe_intent",
+                        "preferred_fix_kind": "make_probe_result_available",
                         "fallback_fix_kinds": ["read_only_probe_step"],
-                        "authoring_priority": ["make_prerequisites_available_earlier", "read_only_probe_step"],
-                        "suggested_fix": "materialize_authored_probe_coverage",
+                        "authoring_priority": ["make_probe_result_available", "read_only_probe_step"],
+                        "suggested_fix": "make_probe_result_available",
                         "suggested_rewrite": {},
-                        "reason": "recommended probe intent already exists, but the probe was not successfully materialized before this action from the currently available pre-step facts",
+                        "reason": "The workflow already expresses the right probe shape, but the check could not be completed from the current pre-step facts before the action.",
+                        **blockers,
                     },
                 }
             )
     return findings
+
+
+def _explain_unavailable_probe_results(
+    workflow: Workflow,
+    probes: list[object],
+    guard_details: list[dict[str, object]],
+) -> dict[str, object]:
+    for probe in probes:
+        if not isinstance(probe, dict):
+            continue
+        authored_key = _probe_descriptor_key(probe, workflow=workflow)
+        if authored_key is None:
+            continue
+        for detail in guard_details:
+            authored = detail.get("authored_probes", [])
+            if not isinstance(authored, list):
+                continue
+            if any(_probe_descriptor_key(item, workflow=workflow) == authored_key for item in authored if isinstance(item, dict)):
+                evidence: dict[str, object] = {"unavailability_kind": "current_pre_step_facts_incomplete"}
+                if isinstance(detail.get("reference"), str):
+                    evidence["blocking_guard"] = detail["reference"]
+                if isinstance(detail.get("failed_subcondition"), str):
+                    evidence["blocking_expression"] = detail["failed_subcondition"]
+                return evidence
+    return {"unavailability_kind": "current_pre_step_facts_incomplete"}
+
+
+def _probe_descriptor_key(value: dict[str, object], *, workflow: Workflow) -> str | None:
+    try:
+        return _canonical_observation_key(value, workflow=workflow)
+    except TypeError:
+        return None

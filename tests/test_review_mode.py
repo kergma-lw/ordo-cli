@@ -611,9 +611,12 @@ blocks:
 
         codes = [item["code"] for item in result.outputs["findings"]]
         self.assertNotIn("review.workflow.missing_recommended_probe_coverage", codes)
-        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.recommended_probe_coverage_not_materialized")
-        self.assertEqual(finding["evidence"]["suggested_fix"], "materialize_authored_probe_coverage")
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.recommended_probe_result_not_available")
+        self.assertEqual(finding["evidence"]["suggested_fix"], "make_probe_result_available")
         self.assertEqual(finding["evidence"]["unmaterialized_probes"][0]["probe"], "gh.project.issue")
+        self.assertEqual(finding["evidence"]["unavailability_kind"], "current_pre_step_facts_incomplete")
+        self.assertEqual(finding["evidence"]["blocking_guard"], "story_project_issue.exists")
+        self.assertIn("gh.project.issue(", finding["evidence"]["blocking_expression"])
 
     def test_check_publishes_successful_guard_probe_observations_from_let_expansion(self) -> None:
         workflow = Workflow(
