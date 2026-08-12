@@ -1,9 +1,9 @@
 import unittest
 
 from ordo.model.profile import Profile
-from ordo.model.runtime import RuntimeStatus
+from ordo.model.runtime import Diagnostic, OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import load_workflow_text, review_workflow
+from ordo.runtime import check_workflow, load_workflow_text, review_workflow
 from ordo.runtime.reviewing import _review_input_classification
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -366,6 +366,95 @@ blocks:
         finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.step_condition.structured_form_preferred")
         self.assertEqual(finding["path"], ["blocks", "0", "steps", "4", "gate"])
 
+    def test_review_recommends_guard_for_first_step_if_using_pre_step_facts(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: maybe-run
+blocks:
+  - steps:
+      - name: mutate
+        if: inputs.enabled and state.shared_state[inputs.mode_key] == "ready"
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.guard.preferred_for_first_step_applicability")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "if"])
+        self.assertEqual(finding["evidence"]["condition_roots"], ["inputs", "state"])
+        self.assertFalse(finding["evidence"]["contains_step_root"])
+        self.assertTrue(finding["evidence"]["first_effectful_action"])
+
+    def test_review_does_not_recommend_guard_for_first_step_if_using_step_root(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: maybe-run
+blocks:
+  - steps:
+      - name: observe
+        value: true
+        register: observed
+      - name: mutate
+        if: step.observed.outputs.value
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertFalse(any(item["code"] == "review.workflow.guard.preferred_for_first_step_applicability" for item in result.outputs["findings"]))
+
+    def test_review_still_recommends_guard_even_when_other_guards_exist(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: maybe-run
+guards:
+  - inputs.ticket
+blocks:
+  - steps:
+      - name: mutate
+        if: inputs.enabled
+        uses: shell.command
+        with:
+          command: "printf ok"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertTrue(any(item["code"] == "review.workflow.guard.preferred_for_first_step_applicability" for item in result.outputs["findings"]))
+
+    def test_review_does_not_recommend_guard_after_earlier_effectful_action(self) -> None:
+        workflow = load_workflow_text(
+            '''
+version: 0
+workflow: maybe-run
+blocks:
+  - steps:
+      - name: comment-first
+        uses: shell.command
+        with:
+          command: "printf first"
+      - name: mutate-later
+        if: inputs.enabled
+        uses: shell.command
+        with:
+          command: "printf second"
+'''
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertFalse(any(item["code"] == "review.workflow.guard.preferred_for_first_step_applicability" for item in result.outputs["findings"]))
+
     def test_review_counts_for_each_input_usage_inside_inline_profile_switch(self) -> None:
         workflow = load_workflow_text(
             '''
@@ -469,6 +558,106 @@ blocks:
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_probe_coverage" for item in result.outputs["findings"]))
+
+    def test_review_reports_unmaterialized_probe_coverage_separately_from_missing_coverage(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="close-story",
+            declared_inputs={"repository": {}, "issue_number": {}, "project_id": {}},
+            let_bindings={
+                "story_project_issue": "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)",
+                "status_field": 'gh.project.field(project_id=inputs.project_id, field="Status")',
+                "done_option": 'gh.project.field.option(project_id=inputs.project_id, field="Status", option="Done")',
+            },
+            blocks=(
+                GuardBlock(
+                    guards=(
+                        Guard(expr="story_project_issue.exists"),
+                        Guard(expr="status_field.exists"),
+                        Guard(expr="done_option.exists"),
+                    )
+                ),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "${inputs.repository}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "Status",
+                                    "option": "Done",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            inputs={"repository": "acme/repo", "issue_number": 7, "project_id": "PVT_demo"},
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.project.issue":
+                return OperationResult(status="probe_failed", diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),))
+            outputs = {
+                "gh.project.field": {"exists": True},
+                "gh.project.field.option": {"exists": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        result = review_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        codes = [item["code"] for item in result.outputs["findings"]]
+        self.assertNotIn("review.workflow.missing_recommended_probe_coverage", codes)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.recommended_probe_coverage_not_materialized")
+        self.assertEqual(finding["evidence"]["suggested_fix"], "materialize_authored_probe_coverage")
+        self.assertEqual(finding["evidence"]["unmaterialized_probes"][0]["probe"], "gh.project.issue")
+
+    def test_check_publishes_successful_guard_probe_observations_from_let_expansion(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="close-story",
+            declared_inputs={"repository": {}, "issue_number": {}, "project_id": {}},
+            let_bindings={
+                "story_project_issue": "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)"
+            },
+            blocks=(
+                GuardBlock(
+                    guards=(
+                        Guard(expr="story_project_issue.exists"),
+                    )
+                ),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "${inputs.repository}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "Status",
+                                    "option": "Done",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            inputs={"repository": "acme/repo", "issue_number": 7, "project_id": "PVT_demo"},
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        guard_detail = result.outputs["guard_details"][0]
+        self.assertTrue(guard_detail["authored_probes"])
+        self.assertEqual(guard_detail["authored_probes"][0]["probe"], "gh.project.issue")
+        self.assertEqual(guard_detail["authored_probes"][0]["fields"], ["exists"])
+        self.assertEqual(guard_detail["probes"], [])
 
     def test_review_recognizes_recommended_probe_coverage_from_guard_probes_with_bare_input_references(self) -> None:
         workflow = Workflow(

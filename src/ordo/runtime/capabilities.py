@@ -158,6 +158,10 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         related_capabilities=("workflow.step.register", "workflow.step.value"),
         related_negative_rules=("workflow_step.if_conflicts_with_register", "workflow_step.gate_conflicts_with_register"),
         related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
+        must_not_infer=(
+            "one shared boolean condition surface means if and gate do the same semantic job",
+            "if is the catch-all control mechanism for applicability, admission, and local branching",
+        ),
     ),
     CapabilitySpec(
         name="workflow.step.register",
@@ -175,6 +179,10 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         related_capabilities=("workflow.step.condition", "workflow.step.register", "workflow.step.value"),
         related_negative_rules=("workflow_step.if_conflicts_with_register",),
         related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
+        must_not_infer=(
+            "branching support means if should carry workflow applicability or admission decisions",
+            "workflow branching is best modeled by stretching if across every conditional concern",
+        ),
     ),
 )
 

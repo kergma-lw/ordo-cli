@@ -29,10 +29,12 @@ from .local_expression_engine.core import (
     StepReferenceNode,
     UnaryNode,
     ValueExpressionNode,
+    collect_local_expression_dependencies,
     render_expression_text,
 )
 from .local_expressions import LocalExpressionParseError, extract_embedded_local_expression, parse_condition_local_expression, parse_value_local_expression
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
+from .preflight_steps import classify_preflight_step
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
@@ -57,6 +59,7 @@ def review_workflow(
     )
     if check_result.status in {RuntimeStatus.VALIDATION_ERROR, RuntimeStatus.RESOLUTION_ERROR}:
         validation_findings = _find_diagnostic_review_hints(check_result)
+        validation_findings.extend(_find_first_step_applicability_guard_hints(workflow))
         return RuntimeResult(
             mode=Mode.REVIEW,
             status=check_result.status,
@@ -129,6 +132,7 @@ def _build_review_findings(
     findings.extend(_find_missing_recommended_probe_coverage(check_result))
     findings.extend(_find_string_condition_structured_form_hints(workflow))
     findings.extend(_find_gate_recommendation_hints(workflow))
+    findings.extend(_find_first_step_applicability_guard_hints(workflow))
     findings.extend(_find_unnecessary_with_root_adapter_bindings(workflow))
     findings.extend(
         _find_bounded_fan_out_authoring_findings(
@@ -201,6 +205,35 @@ def _find_gate_recommendation_hints(workflow: Workflow) -> list[dict[str, object
                 }
             )
     return findings
+
+
+def _find_first_step_applicability_guard_hints(workflow: Workflow) -> list[dict[str, object]]:
+    candidate = _first_effectful_action_step(workflow)
+    if candidate is None:
+        return []
+    path, step = candidate
+    if step.if_ is None:
+        return []
+    condition_roots = _condition_roots_for_guard_like_review(step.if_)
+    if condition_roots is None:
+        return []
+    return [
+        {
+            "code": "review.workflow.guard.preferred_for_first_step_applicability",
+            "level": "warning",
+            "category": "control_surface_authoring",
+            "message": "This if guards the first effectful action using only pre-step facts; consider guards if the workflow should be treated as not applicable when this condition is false.",
+            "path": [*path, "if"],
+            "evidence": {
+                "step": step.name,
+                "first_effectful_action": True,
+                "condition_roots": sorted(condition_roots),
+                "contains_step_root": False,
+                "suggested_surface": "guards",
+                "reason": "the first effectful action is being skipped based on facts that are already available before step execution",
+            },
+        }
+    ]
 
 
 def _find_unnecessary_with_root_adapter_bindings(workflow: Workflow) -> list[dict[str, object]]:
@@ -446,6 +479,53 @@ def _collect_condition_surface_expressions(value: object, *, path: tuple[str, ..
     except Exception:
         return []
     return [(path + relative_path, expression, LocalExpressionContext.STEP_CONDITION) for relative_path, expression in iter_condition_expression_leaves(normalized)]
+
+
+def _first_effectful_action_step(workflow: Workflow) -> tuple[tuple[str, ...], Step] | None:
+    for block_index, block in enumerate(workflow.blocks):
+        if not isinstance(block, StepBlock):
+            continue
+        candidate = _first_effectful_action_step_in_steps(block.steps, path=("blocks", str(block_index), "steps"))
+        if candidate is not None:
+            return candidate
+    return None
+
+
+def _first_effectful_action_step_in_steps(steps: list[Step], *, path: tuple[str, ...]) -> tuple[tuple[str, ...], Step] | None:
+    for step_index, step in enumerate(steps):
+        step_path = path + (str(step_index),)
+        if _is_effectful_action_boundary(step):
+            return step_path, step
+        if step.steps is not None:
+            candidate = _first_effectful_action_step_in_steps(step.steps, path=step_path + ("steps",))
+            if candidate is not None:
+                return candidate
+    return None
+
+
+def _is_effectful_action_boundary(step: Step) -> bool:
+    return classify_preflight_step(step) in {"effectful", "unknown"}
+
+
+def _condition_roots_for_guard_like_review(value: object) -> set[str] | None:
+    allowed_roots = {"inputs", "args", "state", "probe"}
+    roots: set[str] = set()
+    expressions = _collect_condition_surface_expressions(value, path=())
+    if not expressions:
+        return None
+    for _, expression, _ in expressions:
+        try:
+            parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+        except LocalExpressionParseError:
+            return None
+        dependencies = collect_local_expression_dependencies(parsed.value.root)
+        current_roots = {dependency.name for dependency in dependencies if dependency.kind in {"root", "observation"}}
+        if "step" in current_roots:
+            return None
+        if any(root not in allowed_roots for root in current_roots):
+            return None
+        roots.update(current_roots)
+    return roots
 
 
 def _iter_string_condition_surfaces(workflow: Workflow) -> list[tuple[tuple[str, ...], str]]:
@@ -842,30 +922,56 @@ def _find_missing_recommended_probe_coverage(check_result: RuntimeResult) -> lis
             continue
         strength = support.get("strength")
         missing = support.get("missing_probes")
-        if strength not in {"weak", "partial"} or not isinstance(missing, list) or not missing:
-            continue
-        findings.append(
-            {
-                "code": "review.workflow.missing_recommended_probe_coverage",
-                "level": "warning",
-                "category": "preflight_support",
-                "message": f"Step '{item.get('name')}' should prefer explicit guard probes for recommended preflight checks; use read-only probe steps only when guard probes are not a good fit",
-                "path": ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index"))],
-                "evidence": {
-                    "step": item.get("name"),
-                    "reference": item.get("reference"),
-                    "strength": strength,
-                    "missing_probes": list(missing),
-                    "authoring_term": "explicit_probe_coverage",
-                    "preferred_fix_kind": "guard_probe",
-                    "fallback_fix_kinds": ["read_only_probe_step"],
-                    "authoring_priority": ["guard_probe", "read_only_probe_step"],
-                    "suggested_fix": "add_guard_probes",
-                    "suggested_rewrite": {
-                        "guards": _suggested_guard_probe_entries(missing),
+        unmaterialized = support.get("unmaterialized_probes")
+        path = ["blocks", str(item.get("block_index")), "steps", str(item.get("step_index"))]
+        if isinstance(missing, list) and missing:
+            findings.append(
+                {
+                    "code": "review.workflow.missing_recommended_probe_coverage",
+                    "level": "warning",
+                    "category": "preflight_support",
+                    "message": f"Step '{item.get('name')}' should prefer explicit guard probes for recommended preflight checks; use read-only probe steps only when guard probes are not a good fit",
+                    "path": path,
+                    "evidence": {
+                        "step": item.get("name"),
+                        "reference": item.get("reference"),
+                        "strength": strength,
+                        "missing_probes": list(missing),
+                        "unmaterialized_probes": [] if not isinstance(unmaterialized, list) else list(unmaterialized),
+                        "authoring_term": "explicit_probe_coverage",
+                        "preferred_fix_kind": "guard_probe",
+                        "fallback_fix_kinds": ["read_only_probe_step"],
+                        "authoring_priority": ["guard_probe", "read_only_probe_step"],
+                        "suggested_fix": "add_guard_probes",
+                        "suggested_rewrite": {
+                            "guards": _suggested_guard_probe_entries(missing),
+                        },
+                        "reason": "recommended preflight coverage should usually be expressed as guard probes for applicability decisions; use read-only probe steps when the observed fact must be materialized for later reuse or when a guard probe is not a good fit",
                     },
-                    "reason": "recommended preflight coverage should usually be expressed as guard probes for applicability decisions; use read-only probe steps when the observed fact must be materialized for later reuse or when a guard probe is not a good fit",
-                },
-            }
-        )
+                }
+            )
+        elif strength == "partial" and isinstance(unmaterialized, list) and unmaterialized:
+            findings.append(
+                {
+                    "code": "review.workflow.recommended_probe_coverage_not_materialized",
+                    "level": "warning",
+                    "category": "preflight_support",
+                    "message": f"Step '{item.get('name')}' relies on recommended preflight probes that are already authored but were not successfully materialized before the action",
+                    "path": path,
+                    "evidence": {
+                        "step": item.get("name"),
+                        "reference": item.get("reference"),
+                        "strength": strength,
+                        "unmaterialized_probes": list(unmaterialized),
+                        "missing_probes": [],
+                        "authoring_term": "explicit_probe_coverage",
+                        "preferred_fix_kind": "materialize_existing_probe_intent",
+                        "fallback_fix_kinds": ["read_only_probe_step"],
+                        "authoring_priority": ["make_prerequisites_available_earlier", "read_only_probe_step"],
+                        "suggested_fix": "materialize_authored_probe_coverage",
+                        "suggested_rewrite": {},
+                        "reason": "recommended probe intent already exists, but the probe was not successfully materialized before this action from the currently available pre-step facts",
+                    },
+                }
+            )
     return findings

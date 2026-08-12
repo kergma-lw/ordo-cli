@@ -1264,6 +1264,7 @@ blocks:
         support = result.outputs["preflight_step_items"][4]["preflight_support"]
         self.assertEqual(support["strength"], "strong")
         self.assertEqual(len(support["matched_probes"]), 3)
+        self.assertEqual(support["unmaterialized_probes"], [])
         self.assertEqual(support["missing_probes"], [])
 
     def test_check_keeps_preflight_observation_matching_exact_without_expression_guessing(self) -> None:
@@ -1309,6 +1310,7 @@ blocks:
         support = result.outputs["preflight_step_items"][4]["preflight_support"]
         self.assertEqual(support["strength"], "partial")
         self.assertEqual(len(support["matched_probes"]), 2)
+        self.assertEqual(support["unmaterialized_probes"], [])
         self.assertEqual(
             support["missing_probes"],
             [
@@ -1370,7 +1372,64 @@ blocks:
 
         support = result.outputs["preflight_step_items"][0]["preflight_support"]
         self.assertEqual(support["strength"], "strong")
+        self.assertEqual(support["unmaterialized_probes"], [])
         self.assertEqual(support["missing_probes"], [])
+
+    def test_check_marks_authored_probe_intent_as_unmaterialized_when_not_successfully_observed(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="close-story",
+            declared_inputs={"repository": {}, "issue_number": {}, "project_id": {}},
+            let_bindings={
+                "story_project_issue": "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)",
+                "status_field": 'gh.project.field(project_id=inputs.project_id, field="Status")',
+                "done_option": 'gh.project.field.option(project_id=inputs.project_id, field="Status", option="Done")',
+            },
+            blocks=(
+                GuardBlock(
+                    guards=(
+                        Guard(expr="story_project_issue.exists"),
+                        Guard(expr="status_field.exists"),
+                        Guard(expr="done_option.exists"),
+                    )
+                ),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="set-status",
+                            operation=OperationRef(
+                                "gh.project.issue.field_single_select.set",
+                                with_={
+                                    "repository": "${inputs.repository}",
+                                    "issue_number": "${inputs.issue_number}",
+                                    "project_id": "${inputs.project_id}",
+                                    "field": "Status",
+                                    "option": "Done",
+                                },
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            inputs={"repository": "acme/repo", "issue_number": 7, "project_id": "PVT_demo"},
+        )
+
+        def probe(resolved_guard, _workflow):
+            if resolved_guard.reference == "gh.project.issue":
+                return OperationResult(status="probe_failed", diagnostics=(Diagnostic(code="probe.failed", level="error", message="boom", path=()),))
+            outputs = {
+                "gh.project.field": {"exists": True},
+                "gh.project.field.option": {"exists": True},
+            }
+            return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support = result.outputs["preflight_step_items"][0]["preflight_support"]
+        self.assertEqual(support["strength"], "partial")
+        self.assertEqual(len(support["matched_probes"]), 2)
+        self.assertEqual(support["missing_probes"], [])
+        self.assertEqual(support["unmaterialized_probes"][0]["probe"], "gh.project.issue")
 
     def test_check_uses_shared_read_only_engine_for_preflight_values_and_conditions(self) -> None:
         workflow = Workflow(

@@ -1,1594 +1,1598 @@
 {
-    "clusters": [
+  "clusters": [
+    {
+      "appropriate_when": [
+        "A project needs one stable launch surface that selects workflows by name instead of by raw file path.",
+        "Static entry-owned inputs, pre_run preparation, profile defaults, or launch-time working-directory policy belong to the wrapper rather than to one workflow body."
+      ],
+      "inappropriate_when": [
+        "The logic is workflow-internal sequencing, validation, or branching that should live inside one workflow file.",
+        "The value belongs to workflow-declared inputs or step-local dataflow rather than to launch-time orchestration."
+      ],
+      "inspect_next": [
         {
-            "appropriate_when": [
-                "A project needs one stable launch surface that selects workflows by name instead of by raw file path.",
-                "Static entry-owned inputs, pre_run preparation, profile defaults, or launch-time working-directory policy belong to the wrapper rather than to one workflow body."
-            ],
-            "inappropriate_when": [
-                "The logic is workflow-internal sequencing, validation, or branching that should live inside one workflow file.",
-                "The value belongs to workflow-declared inputs or step-local dataflow rather than to launch-time orchestration."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe command-line.ordo-playbook --json",
-                    "handle": "command-line.ordo-playbook",
-                    "kind": "command",
-                    "summary": "Published command-line command metadata",
-                    "topic": "command-line"
-                },
-                {
-                    "command": "ordo-help describe playbook.workflows.file --json",
-                    "handle": "playbook.workflows.file",
-                    "kind": "workflow_entry_field",
-                    "summary": "Published playbook workflow-entry field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe playbook.workflows.with --json",
-                    "handle": "playbook.workflows.with",
-                    "kind": "workflow_entry_field",
-                    "summary": "Published playbook workflow-entry field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe playbook.pre_run_contract --json",
-                    "handle": "playbook.pre_run_contract",
-                    "kind": "pre_run_contract",
-                    "summary": "Published playbook pre-run contract metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe playbook.defaults.profile --json",
-                    "handle": "playbook.defaults.profile",
-                    "kind": "default_field",
-                    "summary": "Published playbook default field metadata",
-                    "topic": "model"
-                }
-            ],
-            "keywords": [
-                "workflows",
-                "pre_run",
-                "defaults",
-                "profiles",
-                "with",
-                "working_directory",
-                "state_bindings"
-            ],
-            "name": "playbook",
-            "published_names": {
-                "defaults_fields": [
-                    "profile",
-                    "working_directory"
-                ],
-                "pre_run_entry_fields": [
-                    "file",
-                    "with",
-                    "state_bindings"
-                ],
-                "top_level_fields": [
-                    "version",
-                    "pre_run",
-                    "states",
-                    "defaults",
-                    "connectors",
-                    "workflows",
-                    "profiles"
-                ],
-                "workflow_entry_fields": [
-                    "file",
-                    "with",
-                    "description",
-                    "category",
-                    "when",
-                    "working_directory",
-                    "state_bindings"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.playbook-pre-run --json",
-                    "handle": "examples.playbook-pre-run",
-                    "name": "playbook-pre-run",
-                    "summary": "Verified example at examples/playbook-pre-run.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.paired_authoring_passes --json",
-                    "handle": "workflow-authoring.paired_authoring_passes",
-                    "name": "paired_authoring_passes",
-                    "summary": "After adding or changing a workflow, run both ordo-playbook check <workflow> and ordo-playbook review <workflow>. Treat them as complementary authoring passes, not substitutes."
-                }
-            ],
-            "summary": "Project-local launch catalog for named workflows, profile selection, pre_run orchestration, and static activation inputs."
+          "command": "ordo-help describe command-line.ordo-playbook --json",
+          "handle": "command-line.ordo-playbook",
+          "kind": "command",
+          "summary": "Published command-line command metadata",
+          "topic": "command-line"
         },
         {
-            "appropriate_when": [
-                "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
-                "Selection among project modes belongs to launch context rather than to workflow-authored branching."
-            ],
-            "inappropriate_when": [
-                "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
-                "The value is only relevant to one workflow body and does not justify reusable launch context."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe profile.inputs --json",
-                    "handle": "profile.inputs",
-                    "kind": "field",
-                    "summary": "Published profile field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe profile.working_directory --json",
-                    "handle": "profile.working_directory",
-                    "kind": "field",
-                    "summary": "Published profile field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe profile.overrides.with --json",
-                    "handle": "profile.overrides.with",
-                    "kind": "override_field",
-                    "summary": "Published profile override field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe profile.launchers --json",
-                    "handle": "profile.launchers",
-                    "kind": "field",
-                    "summary": "Published profile field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe playbook.defaults.profile --json",
-                    "handle": "playbook.defaults.profile",
-                    "kind": "default_field",
-                    "summary": "Published playbook default field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe command-line.ordo-playbook --json",
-                    "handle": "command-line.ordo-playbook",
-                    "kind": "command",
-                    "summary": "Published command-line command metadata",
-                    "topic": "command-line"
-                }
-            ],
-            "keywords": [
-                "profile",
-                "inputs",
-                "working_directory",
-                "checks",
-                "overrides",
-                "launchers",
-                "deprecated",
-                "routines"
-            ],
-            "name": "profile",
-            "published_names": {
-                "deprecated_launcher_fields": [
-                    "file",
-                    "connector",
-                    "before",
-                    "after"
-                ],
-                "override_fields": [
-                    "target",
-                    "with",
-                    "reason"
-                ],
-                "top_level_fields": [
-                    "name",
-                    "inputs",
-                    "working_directory",
-                    "connectors",
-                    "checks",
-                    "overrides",
-                    "launchers"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.playbook-pre-run --json",
-                    "handle": "examples.playbook-pre-run",
-                    "name": "playbook-pre-run",
-                    "summary": "Verified example at examples/playbook-pre-run.yaml"
-                },
-                {
-                    "command": "ordo-help describe examples.launcher-step --json",
-                    "handle": "examples.launcher-step",
-                    "name": "launcher-step",
-                    "summary": "Verified example at examples/launcher-step.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
-                    "handle": "workflow-authoring.explicit_execution_context",
-                    "name": "explicit_execution_context",
-                    "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-                    "handle": "workflow-authoring.local_artifacts_are_context",
-                    "name": "local_artifacts_are_context",
-                    "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
-                }
-            ],
-            "summary": "Reusable runtime context for missing-input defaults, execution working directory, and profile-scoped launch metadata."
+          "command": "ordo-help describe playbook.workflows.file --json",
+          "handle": "playbook.workflows.file",
+          "kind": "workflow_entry_field",
+          "summary": "Published playbook workflow-entry field metadata",
+          "topic": "model"
         },
         {
-            "appropriate_when": [
-                "The task needs one explicit executable contract with declared activation inputs and reviewable runtime structure.",
-                "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only."
-            ],
-            "inappropriate_when": [
-                "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
-                "You are trying to hide multiple unrelated concerns instead of exposing clear inputs, guards, and step forms."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow.inputs_contract --json",
-                    "handle": "workflow.inputs_contract",
-                    "kind": "input_contract",
-                    "summary": "Published workflow activation-input contract metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step_forms.operation_call --json",
-                    "handle": "workflow.step_forms.operation_call",
-                    "kind": "step_form",
-                    "summary": "Published workflow step-form metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step.profile_switch --json",
-                    "handle": "workflow.step.profile_switch",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step.value --json",
-                    "handle": "workflow.step.value",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step.publish --json",
-                    "handle": "workflow.step.publish",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.run_contract --json",
-                    "handle": "workflow.run_contract",
-                    "kind": "run_contract",
-                    "summary": "Published workflow fragment-run contract metadata",
-                    "topic": "model"
-                }
-            ],
-            "keywords": [
-                "workflow",
-                "inputs",
-                "let",
-                "state_needs",
-                "blocks",
-                "step forms",
-                "profile_switch"
-            ],
-            "name": "workflow",
-            "published_names": {
-                "block_forms": [
-                    "guard_block",
-                    "step_block",
-                    "include_block"
-                ],
-                "profile_switch_step_forms": [
-                    "profile_switch"
-                ],
-                "step_fields": [
-                    "name",
-                    "uses",
-                    "if",
-                    "gate",
-                    "with",
-                    "register",
-                    "launcher",
-                    "run",
-                    "for_each",
-                    "steps",
-                    "profile_switch",
-                    "value",
-                    "result",
-                    "publish",
-                    "state_set",
-                    "state_delete"
-                ],
-                "step_forms": [
-                    "operation_call",
-                    "run_invocation",
-                    "inline_fan_out_invocation",
-                    "profile_switch",
-                    "value",
-                    "result",
-                    "publish",
-                    "state_set",
-                    "state_delete",
-                    "gate_checkpoint"
-                ],
-                "top_level_fields": [
-                    "version",
-                    "workflow",
-                    "inputs",
-                    "let",
-                    "state_needs",
-                    "blocks"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.minimal --json",
-                    "handle": "examples.minimal",
-                    "name": "minimal",
-                    "summary": "Verified example at examples/minimal.yaml"
-                },
-                {
-                    "command": "ordo-help describe examples.inspect-issue --json",
-                    "handle": "examples.inspect-issue",
-                    "name": "inspect-issue",
-                    "summary": "Verified example at examples/inspect-issue.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.early_let --json",
-                    "handle": "workflow-authoring.early_let",
-                    "name": "early_let",
-                    "summary": "Prefer an early let block when the workflow uses long, repeated, or semantically important expressions."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.value_register_before_result --json",
-                    "handle": "workflow-authoring.value_register_before_result",
-                    "name": "value_register_before_result",
-                    "summary": "Use value + register when a built payload must be reused by later steps. Use result only to append one workflow-local result value, not to create a reusable named binding."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.publish_outputs --json",
-                    "handle": "workflow-authoring.publish_outputs",
-                    "name": "publish_outputs",
-                    "summary": "Prefer publish: for intentional outward-facing workflow results."
-                }
-            ],
-            "summary": "One executable authoring unit with declared inputs, let bindings, state needs, blocks, and typed step forms."
+          "command": "ordo-help describe playbook.workflows.with --json",
+          "handle": "playbook.workflows.with",
+          "kind": "workflow_entry_field",
+          "summary": "Published playbook workflow-entry field metadata",
+          "topic": "model"
         },
         {
-            "appropriate_when": [
-                "Workflow data must survive across step boundaries or across runs through declared state locations rather than through implicit files or ambient context.",
-                "State reads, writes, and deletions should be explicit in the workflow contract and step surface."
-            ],
-            "inappropriate_when": [
-                "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
-                "State is being used as a vague catch-all context channel instead of a declared bound storage surface."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe state.workflow_surface.state_needs_field --json",
-                    "handle": "state.workflow_surface.state_needs_field",
-                    "kind": "workflow_surface_field",
-                    "summary": "Published state workflow-surface metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe state.workflow_surface.state_binding_field --json",
-                    "handle": "state.workflow_surface.state_binding_field",
-                    "kind": "workflow_surface_field",
-                    "summary": "Published state workflow-surface metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe state.workflow_surface.step_state_set_field --json",
-                    "handle": "state.workflow_surface.step_state_set_field",
-                    "kind": "workflow_surface_field",
-                    "summary": "Published state workflow-surface metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe state.workflow_surface.step_state_delete_field --json",
-                    "handle": "state.workflow_surface.step_state_delete_field",
-                    "kind": "workflow_surface_field",
-                    "summary": "Published state workflow-surface metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step.state_set --json",
-                    "handle": "workflow.step.state_set",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step.state_delete --json",
-                    "handle": "workflow.step.state_delete",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                }
-            ],
-            "keywords": [
-                "state",
-                "state_needs",
-                "state_bindings",
-                "states",
-                "state_set",
-                "state_delete",
-                "bound locations"
-            ],
-            "name": "state",
-            "published_names": {
-                "path_root": [
-                    "state"
-                ],
-                "path_shape": [
-                    "state.<role>[<expression>][.<field>...]"
-                ],
-                "runtime_rules": [
-                    "bound_role_required",
-                    "non_null_scalar_key_required",
-                    "declared_location_required"
-                ],
-                "workflow_surface": [
-                    "state_needs",
-                    "state_bindings",
-                    "states",
-                    "state_set",
-                    "state_delete"
-                ]
-            },
-            "related_examples": [],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-                    "handle": "workflow-authoring.local_artifacts_are_context",
-                    "name": "local_artifacts_are_context",
-                    "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.publish_outputs --json",
-                    "handle": "workflow-authoring.publish_outputs",
-                    "name": "publish_outputs",
-                    "summary": "Prefer publish: for intentional outward-facing workflow results."
-                }
-            ],
-            "summary": "Declared runtime state surface for bound locations, state-keyed storage, and explicit state mutation steps."
+          "command": "ordo-help describe playbook.pre_run_contract --json",
+          "handle": "playbook.pre_run_contract",
+          "kind": "pre_run_contract",
+          "summary": "Published playbook pre-run contract metadata",
+          "topic": "model"
         },
         {
-            "appropriate_when": [
-                "The same authored structure should be reused by expansion into the assembled workflow before validation and execution.",
-                "Fragment-local args improve reuse more honestly than cloning the same block into multiple workflows."
-            ],
-            "inappropriate_when": [
-                "You need runtime invocation semantics, isolated callee scope, or per-item fan-out rather than source-time expansion.",
-                "The fragment is a one-off body that does not justify reusable include structure."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow.include_contract --json",
-                    "handle": "workflow.include_contract",
-                    "kind": "include_contract",
-                    "summary": "Published workflow include-resolution contract metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.include.include --json",
-                    "handle": "workflow.include.include",
-                    "kind": "include_field",
-                    "summary": "Published included-fragment call field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.include.with --json",
-                    "handle": "workflow.include.with",
-                    "kind": "include_field",
-                    "summary": "Published included-fragment call field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.fragment.args --json",
-                    "handle": "workflow.fragment.args",
-                    "kind": "fragment_metadata_field",
-                    "summary": "Published included-fragment metadata field",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe examples.include-plain --json",
-                    "handle": "examples.include-plain",
-                    "kind": "example",
-                    "summary": "Verified example at examples/include-plain.yaml",
-                    "topic": "examples"
-                },
-                {
-                    "command": "ordo-help describe examples.include-args --json",
-                    "handle": "examples.include-args",
-                    "kind": "example",
-                    "summary": "Verified example at examples/include-args.yaml",
-                    "topic": "examples"
-                }
-            ],
-            "keywords": [
-                "include",
-                "with",
-                "args",
-                "fragment",
-                "reuse",
-                "expansion"
-            ],
-            "name": "include",
-            "published_names": {
-                "call_fields": [
-                    "include",
-                    "with"
-                ],
-                "fragment_argument_forms": [
-                    "required_short_form",
-                    "object_form"
-                ],
-                "fragment_metadata_fields": [
-                    "description",
-                    "args"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.include-plain --json",
-                    "handle": "examples.include-plain",
-                    "name": "include-plain",
-                    "summary": "Verified example at examples/include-plain.yaml"
-                },
-                {
-                    "command": "ordo-help describe examples.include-args --json",
-                    "handle": "examples.include-args",
-                    "name": "include-args",
-                    "summary": "Verified example at examples/include-args.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.bounded_fan_out_is_structured_invocation --json",
-                    "handle": "workflow-authoring.bounded_fan_out_is_structured_invocation",
-                    "name": "bounded_fan_out_is_structured_invocation",
-                    "summary": "Treat bounded fan-out as a structured invocation surface, not as a general control-flow language."
-                }
-            ],
-            "summary": "Source-time fragment reuse through include expansion with fragment-local args and assembled-workflow validation."
-        },
-        {
-            "appropriate_when": [
-                "A reusable fragment should be invoked at runtime, optionally once per item in a bounded collection.",
-                "A short repeated body fits inline fan-out better than a cloned step block."
-            ],
-            "inappropriate_when": [
-                "The body is ordinary top-level workflow structure rather than runtime invocation or bounded repetition.",
-                "Inline repeated steps are growing long enough that a named run target would be clearer."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow.run_contract --json",
-                    "handle": "workflow.run_contract",
-                    "kind": "run_contract",
-                    "summary": "Published workflow fragment-run contract metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.run.run --json",
-                    "handle": "workflow.run.run",
-                    "kind": "run_field",
-                    "summary": "Published workflow fragment-run call field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.run.for_each --json",
-                    "handle": "workflow.run.for_each",
-                    "kind": "run_field",
-                    "summary": "Published workflow fragment-run call field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step_forms.run_invocation --json",
-                    "handle": "workflow.step_forms.run_invocation",
-                    "kind": "step_form",
-                    "summary": "Published workflow step-form metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step_forms.inline_fan_out_invocation --json",
-                    "handle": "workflow.step_forms.inline_fan_out_invocation",
-                    "kind": "step_form",
-                    "summary": "Published workflow step-form metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.run_target_vs_inline_fan_out --json",
-                    "handle": "workflow-authoring.run_target_vs_inline_fan_out",
-                    "kind": "rule",
-                    "summary": "Use a named run target for reusable, guard-bearing, or non-trivially sized repeated bodies. Use inline repeated steps only for short local repeated bodies.",
-                    "topic": "workflow-authoring"
-                }
-            ],
-            "keywords": [
-                "run",
-                "for_each",
-                "steps",
-                "with",
-                "register",
-                "named target",
-                "fan-out"
-            ],
-            "name": "run",
-            "published_names": {
-                "body_forms": [
-                    "named_run_target",
-                    "inline_repeated_steps"
-                ],
-                "call_fields": [
-                    "run",
-                    "steps",
-                    "if",
-                    "gate",
-                    "with",
-                    "for_each",
-                    "register"
-                ],
-                "fan_out_fields": [
-                    "item_binding",
-                    "outer_if_scope",
-                    "inner_if_scope",
-                    "outer_register_scope"
-                ],
-                "step_forms": [
-                    "run_invocation",
-                    "inline_fan_out_invocation"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe workflow-authoring.example.named_run_target_fan_out --json",
-                    "handle": "workflow-authoring.example.named_run_target_fan_out",
-                    "name": "named_run_target_fan_out",
-                    "summary": "Use run + for_each when one reusable fragment should be invoked for each item."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.example.inline_fan_out_local_steps --json",
-                    "handle": "workflow-authoring.example.inline_fan_out_local_steps",
-                    "name": "inline_fan_out_local_steps",
-                    "summary": "Use inline steps + for_each only for short local repeated bodies."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
-                    "handle": "workflow-authoring.example.inline_fan_out_inner_if",
-                    "name": "inline_fan_out_inner_if",
-                    "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.bounded_fan_out_is_structured_invocation --json",
-                    "handle": "workflow-authoring.bounded_fan_out_is_structured_invocation",
-                    "name": "bounded_fan_out_is_structured_invocation",
-                    "summary": "Treat bounded fan-out as a structured invocation surface, not as a general control-flow language."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.run_target_vs_inline_fan_out --json",
-                    "handle": "workflow-authoring.run_target_vs_inline_fan_out",
-                    "name": "run_target_vs_inline_fan_out",
-                    "summary": "Use a named run target for reusable, guard-bearing, or non-trivially sized repeated bodies. Use inline repeated steps only for short local repeated bodies."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
-                    "handle": "workflow-authoring.fan_out_scope_and_conditions",
-                    "name": "fan_out_scope_and_conditions",
-                    "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.inline_fan_out_invalid_shapes --json",
-                    "handle": "workflow-authoring.inline_fan_out_invalid_shapes",
-                    "name": "inline_fan_out_invalid_shapes",
-                    "summary": "Keep inline bounded fan-out inside the published shape: for_each must be array-valued, nested for_each is invalid, nested guards are invalid, and outer with belongs only to named run targets."
-                }
-            ],
-            "summary": "Runtime fragment invocation surface for named targets and bounded fan-out, including inline repeated step bodies."
-        },
-        {
-            "appropriate_when": [
-                "Applicability, input validation, or observable preconditions should be declared near the start of the workflow.",
-                "The workflow must reject inapplicable situations before mutating steps or fallback logic start."
-            ],
-            "inappropriate_when": [
-                "The condition is step-local admission rather than whole-workflow applicability.",
-                "You are relying on downstream action failure instead of declaring a reviewable workflow-level precondition."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow-authoring.early_guards --json",
-                    "handle": "workflow-authoring.early_guards",
-                    "kind": "rule",
-                    "summary": "Express workflow applicability near the start of the workflow, not as a late discovery during action execution.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.input_validation_default --json",
-                    "handle": "workflow-authoring.input_validation_default",
-                    "kind": "rule",
-                    "summary": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.delegated_applicability --json",
-                    "handle": "workflow-authoring.delegated_applicability",
-                    "kind": "rule",
-                    "summary": "Do not delegate workflow applicability to downstream action validation when the public surface can express the relevant precondition earlier.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.filter_surface --json",
-                    "handle": "workflow.local_expression.filter_surface",
-                    "kind": "filter_surface",
-                    "summary": "Published local-expression pipeline filter metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.builtin.is_missing --json",
-                    "handle": "workflow.local_expression.builtin.is_missing",
-                    "kind": "builtin",
-                    "summary": "Published local-expression builtin metadata",
-                    "topic": "model"
-                }
-            ],
-            "keywords": [
-                "guards",
-                "applicability",
-                "validation",
-                "probe",
-                "boolean result"
-            ],
-            "name": "guards",
-            "published_names": {
-                "allowed_builtins": [
-                    "format",
-                    "is_missing",
-                    "is_present"
-                ],
-                "allowed_filters": [
-                    "lower",
-                    "trim",
-                    "slug",
-                    "eq",
-                    "ne",
-                    "not",
-                    "is_string",
-                    "is_number",
-                    "is_integer",
-                    "is_boolean",
-                    "in",
-                    "field",
-                    "lookup",
-                    "only",
-                    "flatten",
-                    "first",
-                    "last",
-                    "length",
-                    "unique"
-                ],
-                "allowed_roots": [
-                    "inputs",
-                    "probe",
-                    "state"
-                ],
-                "guard_forms": [
-                    "operation_call",
-                    "expression"
-                ],
-                "workflow_fields": [
-                    "guards"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.inspect-issue --json",
-                    "handle": "examples.inspect-issue",
-                    "name": "inspect-issue",
-                    "summary": "Verified example at examples/inspect-issue.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.early_guards --json",
-                    "handle": "workflow-authoring.early_guards",
-                    "name": "early_guards",
-                    "summary": "Express workflow applicability near the start of the workflow, not as a late discovery during action execution."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.input_validation_default --json",
-                    "handle": "workflow-authoring.input_validation_default",
-                    "name": "input_validation_default",
-                    "summary": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.delegated_applicability --json",
-                    "handle": "workflow-authoring.delegated_applicability",
-                    "name": "delegated_applicability",
-                    "summary": "Do not delegate workflow applicability to downstream action validation when the public surface can express the relevant precondition earlier."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-                    "handle": "workflow-authoring.guard_result_contract",
-                    "name": "guard_result_contract",
-                    "summary": "A guard expression must evaluate to a boolean result."
-                }
-            ],
-            "summary": "Workflow-level applicability surface that declares whether the workflow should run before effectful steps start."
-        },
-        {
-            "appropriate_when": [
-                "A step should be admitted or blocked based on earlier observed or computed facts without redefining whole-workflow applicability.",
-                "Failure-focused gate context should be emitted through structured on_fail metadata instead of broad register dumps."
-            ],
-            "inappropriate_when": [
-                "The decision really belongs in workflow guards near the start of the workflow.",
-                "You are trying to mix gate admission with register publication or current-step output reads; split the gate into a standalone checkpoint step before the registered step."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow.step.gate --json",
-                    "handle": "workflow.step.gate",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step_forms.gate_checkpoint --json",
-                    "handle": "workflow.step_forms.gate_checkpoint",
-                    "kind": "step_form",
-                    "summary": "Published workflow step-form metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.run.gate --json",
-                    "handle": "workflow.run.gate",
-                    "kind": "run_field",
-                    "summary": "Published workflow fragment-run call field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
-                    "handle": "workflow-authoring.separate_control_surfaces",
-                    "kind": "rule",
-                    "summary": "Use the right control surface for the right kind of decision: guards for workflow applicability, configuration for context variation, and if: for local step branching.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-                    "handle": "workflow-authoring.guard_result_contract",
-                    "kind": "rule",
-                    "summary": "A guard expression must evaluate to a boolean result.",
-                    "topic": "workflow-authoring"
-                }
-            ],
-            "keywords": [
-                "gate",
-                "on_fail",
-                "admission",
-                "step checkpoint",
-                "blocked step"
-            ],
-            "name": "gates",
-            "published_names": {
-                "step_field": [
-                    "gate"
-                ],
-                "step_forms": [
-                    "operation_call",
-                    "run_invocation",
-                    "inline_fan_out_invocation",
-                    "profile_switch",
-                    "value",
-                    "result",
-                    "publish",
-                    "state_set",
-                    "state_delete",
-                    "gate_checkpoint"
-                ],
-                "structured_operators": [
-                    "all",
-                    "any",
-                    "not"
-                ],
-                "structured_optional_fields": [
-                    "on_fail"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
-                    "handle": "workflow-authoring.example.inline_fan_out_inner_if",
-                    "name": "inline_fan_out_inner_if",
-                    "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
-                    "handle": "workflow-authoring.separate_control_surfaces",
-                    "name": "separate_control_surfaces",
-                    "summary": "Use the right control surface for the right kind of decision: guards for workflow applicability, configuration for context variation, and if: for local step branching."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-                    "handle": "workflow-authoring.guard_result_contract",
-                    "name": "guard_result_contract",
-                    "summary": "A guard expression must evaluate to a boolean result."
-                }
-            ],
-            "summary": "Step-admission surface that blocks one step body after earlier reads but before the protected effectful work executes."
-        },
-        {
-            "appropriate_when": [
-                "Branching or admission logic needs an explicit boolean condition surface with readable operator structure.",
-                "More than a few predicates benefit from structured all/any/not rather than one dense boolean string."
-            ],
-            "inappropriate_when": [
-                "The authored value is data shaping or payload construction rather than a boolean decision.",
-                "You are using control-surface syntax where workflow-level guards or local-expression value fields would be clearer."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow.step.if --json",
-                    "handle": "workflow.step.if",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.step.gate --json",
-                    "handle": "workflow.step.gate",
-                    "kind": "step_field",
-                    "summary": "Published workflow step field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-                    "handle": "workflow-authoring.native_expression_contexts",
-                    "kind": "rule",
-                    "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
-                    "handle": "workflow-authoring.fan_out_scope_and_conditions",
-                    "kind": "rule",
-                    "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only.",
-                    "topic": "workflow-authoring"
-                }
-            ],
-            "keywords": [
-                "if",
-                "gate",
-                "all",
-                "any",
-                "not",
-                "structured condition",
-                "implicit_all"
-            ],
-            "name": "conditions",
-            "published_names": {
-                "boolean_operators": [
-                    "and",
-                    "or",
-                    "not",
-                    "parentheses"
-                ],
-                "condition_fields": [
-                    "let",
-                    "guards",
-                    "if",
-                    "gate"
-                ],
-                "list_semantics": [
-                    "implicit_all"
-                ],
-                "structured_operators": [
-                    "all",
-                    "any",
-                    "not"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
-                    "handle": "workflow-authoring.example.inline_fan_out_inner_if",
-                    "name": "inline_fan_out_inner_if",
-                    "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-                    "handle": "workflow-authoring.guard_result_contract",
-                    "name": "guard_result_contract",
-                    "summary": "A guard expression must evaluate to a boolean result."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
-                    "handle": "workflow-authoring.fan_out_scope_and_conditions",
-                    "name": "fan_out_scope_and_conditions",
-                    "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-                    "handle": "workflow-authoring.native_expression_contexts",
-                    "name": "native_expression_contexts",
-                    "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
-                }
-            ],
-            "summary": "Boolean condition-authoring surface shared by step if and gate, including expression and structured all/any/not forms."
-        },
-        {
-            "appropriate_when": [
-                "A workflow-owned field needs a short inline expression for guards, if, gate, let, with, value, publish, result, or for_each.",
-                "Type checks, membership checks, equality checks, or small value projections are enough without another surface."
-            ],
-            "inappropriate_when": [
-                "The expression is becoming long, repetitive, or difficult to review as inline logic.",
-                "Representation shaping would be clearer through an adapter family or another more explicit surface."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow.local_expression.filter_surface --json",
-                    "handle": "workflow.local_expression.filter_surface",
-                    "kind": "filter_surface",
-                    "summary": "Published local-expression pipeline filter metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.builtin_surface --json",
-                    "handle": "workflow.local_expression.builtin_surface",
-                    "kind": "builtin_surface",
-                    "summary": "Published local-expression builtin metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.builtin.is_missing --json",
-                    "handle": "workflow.local_expression.builtin.is_missing",
-                    "kind": "builtin",
-                    "summary": "Published local-expression builtin metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.filter.lookup --json",
-                    "handle": "workflow.local_expression.filter.lookup",
-                    "kind": "filter",
-                    "summary": "Published local-expression pipeline filter metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.filter.only --json",
-                    "handle": "workflow.local_expression.filter.only",
-                    "kind": "filter",
-                    "summary": "Published local-expression pipeline filter metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-                    "handle": "workflow-authoring.native_expression_contexts",
-                    "kind": "rule",
-                    "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.adapter_seam --json",
-                    "handle": "workflow.local_expression.adapter_seam",
-                    "kind": "adapter_seam",
-                    "summary": "Published shared representation-adapter seam metadata",
-                    "topic": "model"
-                }
-            ],
-            "keywords": [
-                "roots",
-                "filters",
-                "builtins",
-                "pipeline",
-                "bare expression",
-                "structured condition"
-            ],
-            "name": "local-expressions",
-            "published_names": {
-                "builtins": [
-                    "format",
-                    "is_missing",
-                    "is_present"
-                ],
-                "comparison_operators": [
-                    "==",
-                    "!=",
-                    "in",
-                    "not in"
-                ],
-                "filters": [
-                    "lower",
-                    "trim",
-                    "slug",
-                    "eq",
-                    "ne",
-                    "not",
-                    "is_string",
-                    "is_number",
-                    "is_integer",
-                    "is_boolean",
-                    "in",
-                    "field",
-                    "lookup",
-                    "only",
-                    "flatten",
-                    "first",
-                    "last",
-                    "length",
-                    "unique"
-                ],
-                "roots": [
-                    "args",
-                    "inputs",
-                    "probe",
-                    "state",
-                    "step"
-                ],
-                "structured_condition_operators": [
-                    "all",
-                    "any",
-                    "not"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.local-expression-filters --json",
-                    "handle": "examples.local-expression-filters",
-                    "name": "local-expression-filters",
-                    "summary": "Verified example at examples/local-expression-filters.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-                    "handle": "workflow-authoring.native_expression_contexts",
-                    "name": "native_expression_contexts",
-                    "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-                    "handle": "workflow-authoring.guard_result_contract",
-                    "name": "guard_result_contract",
-                    "summary": "A guard expression must evaluate to a boolean result."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.representation_adapters --json",
-                    "handle": "workflow-authoring.representation_adapters",
-                    "name": "representation_adapters",
-                    "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results."
-                }
-            ],
-            "summary": "Built-in expression surface for reads, checks, comparisons, and short transformations inside workflow-owned fields."
-        },
-        {
-            "appropriate_when": [
-                "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
-                "Typed public operations express product intent better than broad execution surfaces.",
-                "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes."
-            ],
-            "inappropriate_when": [
-                "You are treating a missing public capability as permission to improvise local semantics silently.",
-                "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help operations --json",
-                    "handle": "operations",
-                    "kind": "topic",
-                    "summary": "Inspect the public connector catalog"
-                },
-                {
-                    "command": "ordo-help describe connector.gh --json",
-                    "handle": "connector.gh",
-                    "kind": "connector_family",
-                    "summary": "Published connector family metadata for the gh namespace",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe connector.fs --json",
-                    "handle": "connector.fs",
-                    "kind": "connector_family",
-                    "summary": "Published connector family metadata for the fs namespace",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe command-line.ordo-playbook --json",
-                    "handle": "command-line.ordo-playbook",
-                    "kind": "command",
-                    "summary": "Published command-line command metadata",
-                    "topic": "command-line"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.decision_order --json",
-                    "handle": "workflow-authoring.decision_order",
-                    "kind": "rule",
-                    "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.structured_surface_bias --json",
-                    "handle": "workflow-authoring.structured_surface_bias",
-                    "kind": "rule",
-                    "summary": "Prefer implementations that express product intent through typed public workflow surfaces.",
-                    "topic": "workflow-authoring"
-                }
-            ],
-            "keywords": [
-                "connectors",
-                "operations",
-                "namespace",
-                "probe",
-                "action",
-                "public surface"
-            ],
-            "name": "connectors",
-            "published_names": {
-                "namespaces": [
-                    "runtime",
-                    "git",
-                    "compose",
-                    "gh",
-                    "shell",
-                    "fs"
-                ]
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.minimal --json",
-                    "handle": "examples.minimal",
-                    "name": "minimal",
-                    "summary": "Verified example at examples/minimal.yaml"
-                },
-                {
-                    "command": "ordo-help describe examples.inspect-pr --json",
-                    "handle": "examples.inspect-pr",
-                    "name": "inspect-pr",
-                    "summary": "Verified example at examples/inspect-pr.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.decision_order --json",
-                    "handle": "workflow-authoring.decision_order",
-                    "name": "decision_order",
-                    "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.structured_surface_bias --json",
-                    "handle": "workflow-authoring.structured_surface_bias",
-                    "name": "structured_surface_bias",
-                    "summary": "Prefer implementations that express product intent through typed public workflow surfaces."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.routine.* --json",
-                    "handle": "workflow-authoring.routine.*",
-                    "name": "routine.*",
-                    "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-                    "handle": "workflow-authoring.local_artifacts_are_context",
-                    "name": "local_artifacts_are_context",
-                    "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
-                }
-            ],
-            "summary": "Published operation catalog for external probes and actions, grouped by stable namespaces."
-        },
-        {
-            "appropriate_when": [
-                "Published connector operations and clean composition have already been exhausted, and the remaining gap is mechanical or intentionally project-local rather than semantic.",
-                "A narrowly bounded local automation step must run through one published routine entry with explicit scalar caller context instead of a broader ad hoc shell surface."
-            ],
-            "inappropriate_when": [
-                "The remaining gap is semantic, unclear, or being preserved silently through a nearby local helper.",
-                "Routine use is becoming the default implementation path, a convenience shortcut, or a way to avoid publishing better connector surface."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe routine_contract --json",
-                    "handle": "routine_contract",
-                    "kind": "contract",
-                    "summary": "Published routine-registry contract metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe routine_contract.workflow_call_surface --json",
-                    "handle": "routine_contract.workflow_call_surface",
-                    "kind": "routine_call_surface",
-                    "summary": "Published routine workflow-call surface metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe routine_contract.workflow_call.env --json",
-                    "handle": "routine_contract.workflow_call.env",
-                    "kind": "routine_call_field",
-                    "summary": "Published routine workflow-call field metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.routine.* --json",
-                    "handle": "workflow-authoring.routine.*",
-                    "kind": "rule",
-                    "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
-                    "handle": "workflow-authoring.explicit_execution_context",
-                    "kind": "rule",
-                    "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic.",
-                    "topic": "workflow-authoring"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.decision_order --json",
-                    "handle": "workflow-authoring.decision_order",
-                    "kind": "rule",
-                    "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations.",
-                    "topic": "workflow-authoring"
-                }
-            ],
-            "keywords": [
-                "routine.*",
-                "fallback",
-                "bounded automation",
-                "local automation",
-                "with.env",
-                "opaque exception path"
-            ],
-            "name": "routines",
-            "published_names": {
-                "generated_env_name_examples": [
-                    "inputs.profile",
-                    "step.collect.outputs.value.path"
-                ],
-                "implementation_fields": [
-                    "argv"
-                ],
-                "routine_entry_fields": [
-                    "kind",
-                    "summary",
-                    "args",
-                    "implementation",
-                    "failure_modes",
-                    "outputs",
-                    "log_hints"
-                ],
-                "top_level_fields": [
-                    "version",
-                    "routines"
-                ],
-                "workflow_call_fields": [
-                    "args",
-                    "env"
-                ]
-            },
-            "related_examples": [],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.routine.* --json",
-                    "handle": "workflow-authoring.routine.*",
-                    "name": "routine.*",
-                    "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.decision_order --json",
-                    "handle": "workflow-authoring.decision_order",
-                    "name": "decision_order",
-                    "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
-                    "handle": "workflow-authoring.explicit_execution_context",
-                    "name": "explicit_execution_context",
-                    "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-                    "handle": "workflow-authoring.local_artifacts_are_context",
-                    "name": "local_artifacts_are_context",
-                    "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.semantic_ambiguity --json",
-                    "handle": "workflow-authoring.semantic_ambiguity",
-                    "name": "semantic_ambiguity",
-                    "summary": "Treat semantic ambiguity as a stop signal for clarification, not as permission to invent or preserve semantics silently."
-                }
-            ],
-            "summary": "Bounded opaque local-automation fallback surface. This is an exception path, not a normal extension mechanism, and repeated routine use is a design smell."
-        },
-        {
-            "appropriate_when": [
-                "A guard, condition, or published value would be clearer after family-owned representation shaping than after ad hoc inline rewrites.",
-                "The published adapter family already matches the projection or mutation style you need."
-            ],
-            "inappropriate_when": [
-                "A plain local expression is already clearer than an adapter invocation.",
-                "Guard logic would need adapter write-path behavior rather than read-only projection."
-            ],
-            "inspect_next": [
-                {
-                    "command": "ordo-help describe workflow.local_expression.adapter_seam --json",
-                    "handle": "workflow.local_expression.adapter_seam",
-                    "kind": "adapter_seam",
-                    "summary": "Published shared representation-adapter seam metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.adapter_binding --json",
-                    "handle": "workflow.local_expression.adapter_binding",
-                    "kind": "adapter_binding",
-                    "summary": "Published outer representation-adapter binding metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.adapter.json --json",
-                    "handle": "workflow.local_expression.adapter.json",
-                    "kind": "adapter_family",
-                    "summary": "Published representation-adapter family metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.adapter.text --json",
-                    "handle": "workflow.local_expression.adapter.text",
-                    "kind": "adapter_family",
-                    "summary": "Published representation-adapter family metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow.local_expression.adapter.yaml --json",
-                    "handle": "workflow.local_expression.adapter.yaml",
-                    "kind": "adapter_family",
-                    "summary": "Published representation-adapter family metadata",
-                    "topic": "model"
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.representation_adapters --json",
-                    "handle": "workflow-authoring.representation_adapters",
-                    "kind": "rule",
-                    "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results.",
-                    "topic": "workflow-authoring"
-                }
-            ],
-            "keywords": [
-                "json",
-                "key_value",
-                "markdown",
-                "text",
-                "yaml",
-                "selectors",
-                "actions",
-                "shortcuts",
-                "with{...}"
-            ],
-            "name": "adapters",
-            "published_names": {
-                "actions": {
-                    "json": [
-                        "set",
-                        "remove"
-                    ],
-                    "key_value": [],
-                    "markdown": [
-                        "add",
-                        "append",
-                        "replace",
-                        "remove"
-                    ],
-                    "text": [
-                        "append",
-                        "replace",
-                        "remove"
-                    ],
-                    "yaml": []
-                },
-                "families": [
-                    "json",
-                    "key_value",
-                    "markdown",
-                    "text",
-                    "yaml"
-                ],
-                "selectors": {
-                    "json": [
-                        ".field",
-                        "[\"literal-key\"]",
-                        "[n]",
-                        "..field",
-                        ".one(field=value)",
-                        ".many(field=value)",
-                        ".one(field!=value)",
-                        ".many(field!=value)"
-                    ],
-                    "key_value": [],
-                    "markdown": [
-                        "prelude",
-                        "[\"title\"]",
-                        "[n]",
-                        ".blocks(\"kind\")"
-                    ],
-                    "text": [
-                        "lines",
-                        "find(\"literal\")",
-                        "finds(\"literal\")",
-                        "before(\"literal\")",
-                        "after(\"literal\")",
-                        "[n]"
-                    ],
-                    "yaml": [
-                        ".field",
-                        "[\"literal-key\"]",
-                        "[n]",
-                        ".one(field=value)",
-                        ".one(field!=value)",
-                        ".many(field=value)",
-                        ".many(field!=value)"
-                    ]
-                },
-                "shortcuts": {
-                    "json": [],
-                    "key_value": [],
-                    "markdown": [
-                        "list",
-                        "lists",
-                        "list_items",
-                        "task_list",
-                        "task_lists",
-                        "task_list_items",
-                        "paragraph",
-                        "paragraphs",
-                        "prelude"
-                    ],
-                    "text": [],
-                    "yaml": []
-                }
-            },
-            "related_examples": [
-                {
-                    "command": "ordo-help describe examples.text-adapter --json",
-                    "handle": "examples.text-adapter",
-                    "name": "text-adapter",
-                    "summary": "Verified example at examples/text-adapter.yaml"
-                }
-            ],
-            "related_rules": [
-                {
-                    "command": "ordo-help describe workflow-authoring.representation_adapters --json",
-                    "handle": "workflow-authoring.representation_adapters",
-                    "name": "representation_adapters",
-                    "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results."
-                },
-                {
-                    "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-                    "handle": "workflow-authoring.native_expression_contexts",
-                    "name": "native_expression_contexts",
-                    "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
-                }
-            ],
-            "summary": "Family-based representation transforms over workflow values, including projection-oriented selectors and family-specific actions."
+          "command": "ordo-help describe playbook.defaults.profile --json",
+          "handle": "playbook.defaults.profile",
+          "kind": "default_field",
+          "summary": "Published playbook default field metadata",
+          "topic": "model"
         }
-    ],
-    "document_kind": "features",
-    "purpose": "Compact workflow authoring feature map for authors and agents, with named handles for deeper discovery."
+      ],
+      "keywords": [
+        "workflows",
+        "pre_run",
+        "defaults",
+        "profiles",
+        "with",
+        "working_directory",
+        "state_bindings"
+      ],
+      "name": "playbook",
+      "published_names": {
+        "defaults_fields": [
+          "profile",
+          "working_directory"
+        ],
+        "pre_run_entry_fields": [
+          "file",
+          "with",
+          "state_bindings"
+        ],
+        "top_level_fields": [
+          "version",
+          "pre_run",
+          "states",
+          "defaults",
+          "connectors",
+          "workflows",
+          "profiles"
+        ],
+        "workflow_entry_fields": [
+          "file",
+          "with",
+          "description",
+          "category",
+          "when",
+          "working_directory",
+          "state_bindings"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.playbook-pre-run --json",
+          "handle": "examples.playbook-pre-run",
+          "name": "playbook-pre-run",
+          "summary": "Verified example at examples/playbook-pre-run.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.paired_authoring_passes --json",
+          "handle": "workflow-authoring.paired_authoring_passes",
+          "name": "paired_authoring_passes",
+          "summary": "After adding or changing a workflow, run both ordo-playbook check <workflow> and ordo-playbook review <workflow>. Treat them as complementary authoring passes, not substitutes."
+        }
+      ],
+      "summary": "Project-local launch catalog for named workflows, profile selection, pre_run orchestration, and static activation inputs."
+    },
+    {
+      "appropriate_when": [
+        "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
+        "Selection among project modes belongs to launch context rather than to workflow-authored branching."
+      ],
+      "inappropriate_when": [
+        "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
+        "The value is only relevant to one workflow body and does not justify reusable launch context."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe profile.inputs --json",
+          "handle": "profile.inputs",
+          "kind": "field",
+          "summary": "Published profile field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe profile.working_directory --json",
+          "handle": "profile.working_directory",
+          "kind": "field",
+          "summary": "Published profile field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe profile.overrides.with --json",
+          "handle": "profile.overrides.with",
+          "kind": "override_field",
+          "summary": "Published profile override field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe profile.launchers --json",
+          "handle": "profile.launchers",
+          "kind": "field",
+          "summary": "Published profile field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe playbook.defaults.profile --json",
+          "handle": "playbook.defaults.profile",
+          "kind": "default_field",
+          "summary": "Published playbook default field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe command-line.ordo-playbook --json",
+          "handle": "command-line.ordo-playbook",
+          "kind": "command",
+          "summary": "Published command-line command metadata",
+          "topic": "command-line"
+        }
+      ],
+      "keywords": [
+        "profile",
+        "inputs",
+        "working_directory",
+        "checks",
+        "overrides",
+        "launchers",
+        "deprecated",
+        "routines"
+      ],
+      "name": "profile",
+      "published_names": {
+        "deprecated_launcher_fields": [
+          "file",
+          "connector",
+          "before",
+          "after"
+        ],
+        "override_fields": [
+          "target",
+          "with",
+          "reason"
+        ],
+        "top_level_fields": [
+          "name",
+          "inputs",
+          "working_directory",
+          "connectors",
+          "checks",
+          "overrides",
+          "launchers"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.playbook-pre-run --json",
+          "handle": "examples.playbook-pre-run",
+          "name": "playbook-pre-run",
+          "summary": "Verified example at examples/playbook-pre-run.yaml"
+        },
+        {
+          "command": "ordo-help describe examples.launcher-step --json",
+          "handle": "examples.launcher-step",
+          "name": "launcher-step",
+          "summary": "Verified example at examples/launcher-step.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
+          "handle": "workflow-authoring.explicit_execution_context",
+          "name": "explicit_execution_context",
+          "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
+          "handle": "workflow-authoring.local_artifacts_are_context",
+          "name": "local_artifacts_are_context",
+          "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
+        }
+      ],
+      "summary": "Reusable runtime context for missing-input defaults, execution working directory, and profile-scoped launch metadata."
+    },
+    {
+      "appropriate_when": [
+        "The task needs one explicit executable contract with declared activation inputs and reviewable runtime structure.",
+        "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only."
+      ],
+      "inappropriate_when": [
+        "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
+        "You are trying to hide multiple unrelated concerns instead of exposing clear inputs, guards, and step forms."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow.inputs_contract --json",
+          "handle": "workflow.inputs_contract",
+          "kind": "input_contract",
+          "summary": "Published workflow activation-input contract metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step_forms.operation_call --json",
+          "handle": "workflow.step_forms.operation_call",
+          "kind": "step_form",
+          "summary": "Published workflow step-form metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.profile_switch --json",
+          "handle": "workflow.step.profile_switch",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.value --json",
+          "handle": "workflow.step.value",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.publish --json",
+          "handle": "workflow.step.publish",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.run_contract --json",
+          "handle": "workflow.run_contract",
+          "kind": "run_contract",
+          "summary": "Published workflow fragment-run contract metadata",
+          "topic": "model"
+        }
+      ],
+      "keywords": [
+        "workflow",
+        "inputs",
+        "let",
+        "state_needs",
+        "blocks",
+        "step forms",
+        "profile_switch"
+      ],
+      "name": "workflow",
+      "published_names": {
+        "block_forms": [
+          "guard_block",
+          "step_block",
+          "include_block"
+        ],
+        "profile_switch_step_forms": [
+          "profile_switch"
+        ],
+        "step_fields": [
+          "name",
+          "uses",
+          "if",
+          "gate",
+          "with",
+          "register",
+          "launcher",
+          "run",
+          "for_each",
+          "steps",
+          "profile_switch",
+          "value",
+          "result",
+          "publish",
+          "state_set",
+          "state_delete"
+        ],
+        "step_forms": [
+          "operation_call",
+          "run_invocation",
+          "inline_fan_out_invocation",
+          "profile_switch",
+          "value",
+          "result",
+          "publish",
+          "state_set",
+          "state_delete",
+          "gate_checkpoint"
+        ],
+        "top_level_fields": [
+          "version",
+          "workflow",
+          "inputs",
+          "let",
+          "state_needs",
+          "blocks"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.minimal --json",
+          "handle": "examples.minimal",
+          "name": "minimal",
+          "summary": "Verified example at examples/minimal.yaml"
+        },
+        {
+          "command": "ordo-help describe examples.inspect-issue --json",
+          "handle": "examples.inspect-issue",
+          "name": "inspect-issue",
+          "summary": "Verified example at examples/inspect-issue.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.early_let --json",
+          "handle": "workflow-authoring.early_let",
+          "name": "early_let",
+          "summary": "Prefer an early let block when the workflow uses long, repeated, or semantically important expressions."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.value_register_before_result --json",
+          "handle": "workflow-authoring.value_register_before_result",
+          "name": "value_register_before_result",
+          "summary": "Use value + register when a built payload must be reused by later steps. Use result only to append one workflow-local result value, not to create a reusable named binding."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.publish_outputs --json",
+          "handle": "workflow-authoring.publish_outputs",
+          "name": "publish_outputs",
+          "summary": "Prefer publish: for intentional outward-facing workflow results."
+        }
+      ],
+      "summary": "One executable authoring unit with declared inputs, let bindings, state needs, blocks, and typed step forms."
+    },
+    {
+      "appropriate_when": [
+        "Workflow data must survive across step boundaries or across runs through declared state locations rather than through implicit files or ambient context.",
+        "State reads, writes, and deletions should be explicit in the workflow contract and step surface."
+      ],
+      "inappropriate_when": [
+        "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
+        "State is being used as a vague catch-all context channel instead of a declared bound storage surface."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe state.workflow_surface.state_needs_field --json",
+          "handle": "state.workflow_surface.state_needs_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe state.workflow_surface.state_binding_field --json",
+          "handle": "state.workflow_surface.state_binding_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe state.workflow_surface.step_state_set_field --json",
+          "handle": "state.workflow_surface.step_state_set_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe state.workflow_surface.step_state_delete_field --json",
+          "handle": "state.workflow_surface.step_state_delete_field",
+          "kind": "workflow_surface_field",
+          "summary": "Published state workflow-surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.state_set --json",
+          "handle": "workflow.step.state_set",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.state_delete --json",
+          "handle": "workflow.step.state_delete",
+          "kind": "step_field",
+          "summary": "Published workflow step field metadata",
+          "topic": "model"
+        }
+      ],
+      "keywords": [
+        "state",
+        "state_needs",
+        "state_bindings",
+        "states",
+        "state_set",
+        "state_delete",
+        "bound locations"
+      ],
+      "name": "state",
+      "published_names": {
+        "path_root": [
+          "state"
+        ],
+        "path_shape": [
+          "state.<role>[<expression>][.<field>...]"
+        ],
+        "runtime_rules": [
+          "bound_role_required",
+          "non_null_scalar_key_required",
+          "declared_location_required"
+        ],
+        "workflow_surface": [
+          "state_needs",
+          "state_bindings",
+          "states",
+          "state_set",
+          "state_delete"
+        ]
+      },
+      "related_examples": [],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
+          "handle": "workflow-authoring.local_artifacts_are_context",
+          "name": "local_artifacts_are_context",
+          "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.publish_outputs --json",
+          "handle": "workflow-authoring.publish_outputs",
+          "name": "publish_outputs",
+          "summary": "Prefer publish: for intentional outward-facing workflow results."
+        }
+      ],
+      "summary": "Declared runtime state surface for bound locations, state-keyed storage, and explicit state mutation steps."
+    },
+    {
+      "appropriate_when": [
+        "The same authored structure should be reused by expansion into the assembled workflow before validation and execution.",
+        "Fragment-local args improve reuse more honestly than cloning the same block into multiple workflows."
+      ],
+      "inappropriate_when": [
+        "You need runtime invocation semantics, isolated callee scope, or per-item fan-out rather than source-time expansion.",
+        "The fragment is a one-off body that does not justify reusable include structure."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow.include_contract --json",
+          "handle": "workflow.include_contract",
+          "kind": "include_contract",
+          "summary": "Published workflow include-resolution contract metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.include.include --json",
+          "handle": "workflow.include.include",
+          "kind": "include_field",
+          "summary": "Published included-fragment call field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.include.with --json",
+          "handle": "workflow.include.with",
+          "kind": "include_field",
+          "summary": "Published included-fragment call field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.fragment.args --json",
+          "handle": "workflow.fragment.args",
+          "kind": "fragment_metadata_field",
+          "summary": "Published included-fragment metadata field",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe examples.include-plain --json",
+          "handle": "examples.include-plain",
+          "kind": "example",
+          "summary": "Verified example at examples/include-plain.yaml",
+          "topic": "examples"
+        },
+        {
+          "command": "ordo-help describe examples.include-args --json",
+          "handle": "examples.include-args",
+          "kind": "example",
+          "summary": "Verified example at examples/include-args.yaml",
+          "topic": "examples"
+        }
+      ],
+      "keywords": [
+        "include",
+        "with",
+        "args",
+        "fragment",
+        "reuse",
+        "expansion"
+      ],
+      "name": "include",
+      "published_names": {
+        "call_fields": [
+          "include",
+          "with"
+        ],
+        "fragment_argument_forms": [
+          "required_short_form",
+          "object_form"
+        ],
+        "fragment_metadata_fields": [
+          "description",
+          "args"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.include-plain --json",
+          "handle": "examples.include-plain",
+          "name": "include-plain",
+          "summary": "Verified example at examples/include-plain.yaml"
+        },
+        {
+          "command": "ordo-help describe examples.include-args --json",
+          "handle": "examples.include-args",
+          "name": "include-args",
+          "summary": "Verified example at examples/include-args.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.bounded_fan_out_is_structured_invocation --json",
+          "handle": "workflow-authoring.bounded_fan_out_is_structured_invocation",
+          "name": "bounded_fan_out_is_structured_invocation",
+          "summary": "Treat bounded fan-out as a structured invocation surface, not as a general control-flow language."
+        }
+      ],
+      "summary": "Source-time fragment reuse through include expansion with fragment-local args and assembled-workflow validation."
+    },
+    {
+      "appropriate_when": [
+        "A reusable fragment should be invoked at runtime, optionally once per item in a bounded collection.",
+        "A short repeated body fits inline fan-out better than a cloned step block."
+      ],
+      "inappropriate_when": [
+        "The body is ordinary top-level workflow structure rather than runtime invocation or bounded repetition.",
+        "Inline repeated steps are growing long enough that a named run target would be clearer."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow.run_contract --json",
+          "handle": "workflow.run_contract",
+          "kind": "run_contract",
+          "summary": "Published workflow fragment-run contract metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.run.run --json",
+          "handle": "workflow.run.run",
+          "kind": "run_field",
+          "summary": "Published workflow fragment-run call field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.run.for_each --json",
+          "handle": "workflow.run.for_each",
+          "kind": "run_field",
+          "summary": "Published workflow fragment-run call field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step_forms.run_invocation --json",
+          "handle": "workflow.step_forms.run_invocation",
+          "kind": "step_form",
+          "summary": "Published workflow step-form metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step_forms.inline_fan_out_invocation --json",
+          "handle": "workflow.step_forms.inline_fan_out_invocation",
+          "kind": "step_form",
+          "summary": "Published workflow step-form metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.run_target_vs_inline_fan_out --json",
+          "handle": "workflow-authoring.run_target_vs_inline_fan_out",
+          "kind": "rule",
+          "summary": "Use a named run target for reusable, guard-bearing, or non-trivially sized repeated bodies. Use inline repeated steps only for short local repeated bodies.",
+          "topic": "workflow-authoring"
+        }
+      ],
+      "keywords": [
+        "run",
+        "for_each",
+        "steps",
+        "with",
+        "register",
+        "named target",
+        "fan-out"
+      ],
+      "name": "run",
+      "published_names": {
+        "body_forms": [
+          "named_run_target",
+          "inline_repeated_steps"
+        ],
+        "call_fields": [
+          "run",
+          "steps",
+          "if",
+          "gate",
+          "with",
+          "for_each",
+          "register"
+        ],
+        "fan_out_fields": [
+          "item_binding",
+          "outer_if_scope",
+          "inner_if_scope",
+          "outer_register_scope"
+        ],
+        "step_forms": [
+          "run_invocation",
+          "inline_fan_out_invocation"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe workflow-authoring.example.named_run_target_fan_out --json",
+          "handle": "workflow-authoring.example.named_run_target_fan_out",
+          "name": "named_run_target_fan_out",
+          "summary": "Use run + for_each when one reusable fragment should be invoked for each item."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_local_steps --json",
+          "handle": "workflow-authoring.example.inline_fan_out_local_steps",
+          "name": "inline_fan_out_local_steps",
+          "summary": "Use inline steps + for_each only for short local repeated bodies."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
+          "handle": "workflow-authoring.example.inline_fan_out_inner_if",
+          "name": "inline_fan_out_inner_if",
+          "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.bounded_fan_out_is_structured_invocation --json",
+          "handle": "workflow-authoring.bounded_fan_out_is_structured_invocation",
+          "name": "bounded_fan_out_is_structured_invocation",
+          "summary": "Treat bounded fan-out as a structured invocation surface, not as a general control-flow language."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.run_target_vs_inline_fan_out --json",
+          "handle": "workflow-authoring.run_target_vs_inline_fan_out",
+          "name": "run_target_vs_inline_fan_out",
+          "summary": "Use a named run target for reusable, guard-bearing, or non-trivially sized repeated bodies. Use inline repeated steps only for short local repeated bodies."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
+          "handle": "workflow-authoring.fan_out_scope_and_conditions",
+          "name": "fan_out_scope_and_conditions",
+          "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.inline_fan_out_invalid_shapes --json",
+          "handle": "workflow-authoring.inline_fan_out_invalid_shapes",
+          "name": "inline_fan_out_invalid_shapes",
+          "summary": "Keep inline bounded fan-out inside the published shape: for_each must be array-valued, nested for_each is invalid, nested guards are invalid, and outer with belongs only to named run targets."
+        }
+      ],
+      "summary": "Runtime fragment invocation surface for named targets and bounded fan-out, including inline repeated step bodies."
+    },
+    {
+      "appropriate_when": [
+        "Applicability, input validation, or observable preconditions should be declared near the start of the workflow.",
+        "The workflow must reject inapplicable situations before mutating steps or fallback logic start."
+      ],
+      "inappropriate_when": [
+        "The condition is step-local admission rather than whole-workflow applicability.",
+        "The condition is only changing local behavior inside a path that is already valid.",
+        "You are relying on downstream action failure instead of declaring a reviewable workflow-level precondition."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow-authoring.early_guards --json",
+          "handle": "workflow-authoring.early_guards",
+          "kind": "rule",
+          "summary": "Express workflow applicability near the start of the workflow, not as a late discovery during action execution.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.input_validation_default --json",
+          "handle": "workflow-authoring.input_validation_default",
+          "kind": "rule",
+          "summary": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.delegated_applicability --json",
+          "handle": "workflow-authoring.delegated_applicability",
+          "kind": "rule",
+          "summary": "Do not delegate workflow applicability to downstream action validation when the public surface can express the relevant precondition earlier.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.filter_surface --json",
+          "handle": "workflow.local_expression.filter_surface",
+          "kind": "filter_surface",
+          "summary": "Published local-expression pipeline filter metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.builtin.is_missing --json",
+          "handle": "workflow.local_expression.builtin.is_missing",
+          "kind": "builtin",
+          "summary": "Published local-expression builtin metadata",
+          "topic": "model"
+        }
+      ],
+      "keywords": [
+        "guards",
+        "applicability",
+        "validation",
+        "probe",
+        "boolean result"
+      ],
+      "name": "guards",
+      "published_names": {
+        "allowed_builtins": [
+          "format",
+          "is_missing",
+          "is_present"
+        ],
+        "allowed_filters": [
+          "lower",
+          "trim",
+          "slug",
+          "eq",
+          "ne",
+          "not",
+          "is_string",
+          "is_number",
+          "is_integer",
+          "is_boolean",
+          "in",
+          "field",
+          "lookup",
+          "only",
+          "flatten",
+          "first",
+          "last",
+          "length",
+          "unique"
+        ],
+        "allowed_roots": [
+          "inputs",
+          "probe",
+          "state"
+        ],
+        "guard_forms": [
+          "operation_call",
+          "expression"
+        ],
+        "workflow_fields": [
+          "guards"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.inspect-issue --json",
+          "handle": "examples.inspect-issue",
+          "name": "inspect-issue",
+          "summary": "Verified example at examples/inspect-issue.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.early_guards --json",
+          "handle": "workflow-authoring.early_guards",
+          "name": "early_guards",
+          "summary": "Express workflow applicability near the start of the workflow, not as a late discovery during action execution."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.input_validation_default --json",
+          "handle": "workflow-authoring.input_validation_default",
+          "name": "input_validation_default",
+          "summary": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.delegated_applicability --json",
+          "handle": "workflow-authoring.delegated_applicability",
+          "name": "delegated_applicability",
+          "summary": "Do not delegate workflow applicability to downstream action validation when the public surface can express the relevant precondition earlier."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
+          "handle": "workflow-authoring.guard_result_contract",
+          "name": "guard_result_contract",
+          "summary": "A guard expression must evaluate to a boolean result."
+        }
+      ],
+      "summary": "Workflow-level applicability surface for early rejection, narrowing, and deciding whether the workflow should run before effectful steps start."
+    },
+    {
+      "appropriate_when": [
+        "A step should be admitted or blocked based on earlier observed or computed facts without redefining whole-workflow applicability.",
+        "The real question is whether the protected path may execute at all, not how one valid path should branch locally.",
+        "Failure-focused gate context should be emitted through structured on_fail metadata instead of broad register dumps."
+      ],
+      "inappropriate_when": [
+        "The decision really belongs in workflow guards near the start of the workflow.",
+        "The condition is only local behavioral variation inside an already-valid path; use if instead.",
+        "You are trying to mix gate admission with register publication or current-step output reads; split the gate into a standalone checkpoint step before the registered step."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow.step.gate --json",
+          "handle": "workflow.step.gate",
+          "kind": "step_field",
+          "summary": "Step-admission field for deciding whether a path or step may run at all",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step_forms.gate_checkpoint --json",
+          "handle": "workflow.step_forms.gate_checkpoint",
+          "kind": "step_form",
+          "summary": "Published workflow step-form metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.run.gate --json",
+          "handle": "workflow.run.gate",
+          "kind": "run_field",
+          "summary": "Published workflow fragment-run call field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
+          "handle": "workflow-authoring.separate_control_surfaces",
+          "kind": "rule",
+          "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: for local step branching inside an already-valid path.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
+          "handle": "workflow-authoring.guard_result_contract",
+          "kind": "rule",
+          "summary": "A guard expression must evaluate to a boolean result.",
+          "topic": "workflow-authoring"
+        }
+      ],
+      "keywords": [
+        "gate",
+        "on_fail",
+        "admission",
+        "step checkpoint",
+        "blocked step"
+      ],
+      "name": "gates",
+      "published_names": {
+        "step_field": [
+          "gate"
+        ],
+        "step_forms": [
+          "operation_call",
+          "run_invocation",
+          "inline_fan_out_invocation",
+          "profile_switch",
+          "value",
+          "result",
+          "publish",
+          "state_set",
+          "state_delete",
+          "gate_checkpoint"
+        ],
+        "structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
+        "structured_optional_fields": [
+          "on_fail"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
+          "handle": "workflow-authoring.example.inline_fan_out_inner_if",
+          "name": "inline_fan_out_inner_if",
+          "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
+          "handle": "workflow-authoring.separate_control_surfaces",
+          "name": "separate_control_surfaces",
+          "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: for local step branching inside an already-valid path."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
+          "handle": "workflow-authoring.guard_result_contract",
+          "name": "guard_result_contract",
+          "summary": "A guard expression must evaluate to a boolean result."
+        }
+      ],
+      "summary": "Step-admission surface that decides whether a path or step may run at all after earlier reads but before the protected work executes."
+    },
+    {
+      "appropriate_when": [
+        "Branching or admission logic needs an explicit boolean condition surface with readable operator structure.",
+        "More than a few predicates benefit from structured all/any/not rather than one dense boolean string."
+      ],
+      "inappropriate_when": [
+        "The authored value is data shaping or payload construction rather than a boolean decision.",
+        "You are using if as a catch-all control mechanism instead of separating workflow applicability, admission, and local branching.",
+        "You are using control-surface syntax where workflow-level guards or local-expression value fields would be clearer."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow.step.if --json",
+          "handle": "workflow.step.if",
+          "kind": "step_field",
+          "summary": "Local step-branching field for behavioral variation inside an already-valid path",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step.gate --json",
+          "handle": "workflow.step.gate",
+          "kind": "step_field",
+          "summary": "Step-admission field for deciding whether a path or step may run at all",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
+          "handle": "workflow-authoring.native_expression_contexts",
+          "kind": "rule",
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
+          "handle": "workflow-authoring.fan_out_scope_and_conditions",
+          "kind": "rule",
+          "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only.",
+          "topic": "workflow-authoring"
+        }
+      ],
+      "keywords": [
+        "if",
+        "gate",
+        "all",
+        "any",
+        "not",
+        "structured condition",
+        "implicit_all"
+      ],
+      "name": "conditions",
+      "published_names": {
+        "boolean_operators": [
+          "and",
+          "or",
+          "not",
+          "parentheses"
+        ],
+        "condition_fields": [
+          "let",
+          "guards",
+          "if",
+          "gate"
+        ],
+        "list_semantics": [
+          "implicit_all"
+        ],
+        "structured_operators": [
+          "all",
+          "any",
+          "not"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
+          "handle": "workflow-authoring.example.inline_fan_out_inner_if",
+          "name": "inline_fan_out_inner_if",
+          "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
+          "handle": "workflow-authoring.guard_result_contract",
+          "name": "guard_result_contract",
+          "summary": "A guard expression must evaluate to a boolean result."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
+          "handle": "workflow-authoring.fan_out_scope_and_conditions",
+          "name": "fan_out_scope_and_conditions",
+          "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
+          "handle": "workflow-authoring.native_expression_contexts",
+          "name": "native_expression_contexts",
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
+        }
+      ],
+      "summary": "Boolean condition-authoring surface shared by step if and gate, with if for local branching and gate for admission decisions."
+    },
+    {
+      "appropriate_when": [
+        "A workflow-owned field needs a short inline expression for guards, if, gate, let, with, value, publish, result, or for_each.",
+        "Type checks, membership checks, equality checks, or small value projections are enough without another surface."
+      ],
+      "inappropriate_when": [
+        "The expression is becoming long, repetitive, or difficult to review as inline logic.",
+        "Representation shaping would be clearer through an adapter family or another more explicit surface."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow.local_expression.filter_surface --json",
+          "handle": "workflow.local_expression.filter_surface",
+          "kind": "filter_surface",
+          "summary": "Published local-expression pipeline filter metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.builtin_surface --json",
+          "handle": "workflow.local_expression.builtin_surface",
+          "kind": "builtin_surface",
+          "summary": "Published local-expression builtin metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.builtin.is_missing --json",
+          "handle": "workflow.local_expression.builtin.is_missing",
+          "kind": "builtin",
+          "summary": "Published local-expression builtin metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.filter.lookup --json",
+          "handle": "workflow.local_expression.filter.lookup",
+          "kind": "filter",
+          "summary": "Published local-expression pipeline filter metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.filter.only --json",
+          "handle": "workflow.local_expression.filter.only",
+          "kind": "filter",
+          "summary": "Published local-expression pipeline filter metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
+          "handle": "workflow-authoring.native_expression_contexts",
+          "kind": "rule",
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.adapter_seam --json",
+          "handle": "workflow.local_expression.adapter_seam",
+          "kind": "adapter_seam",
+          "summary": "Published shared representation-adapter seam metadata",
+          "topic": "model"
+        }
+      ],
+      "keywords": [
+        "roots",
+        "filters",
+        "builtins",
+        "pipeline",
+        "bare expression",
+        "structured condition"
+      ],
+      "name": "local-expressions",
+      "published_names": {
+        "builtins": [
+          "format",
+          "is_missing",
+          "is_present"
+        ],
+        "comparison_operators": [
+          "==",
+          "!=",
+          "in",
+          "not in"
+        ],
+        "filters": [
+          "lower",
+          "trim",
+          "slug",
+          "eq",
+          "ne",
+          "not",
+          "is_string",
+          "is_number",
+          "is_integer",
+          "is_boolean",
+          "in",
+          "field",
+          "lookup",
+          "only",
+          "flatten",
+          "first",
+          "last",
+          "length",
+          "unique"
+        ],
+        "roots": [
+          "args",
+          "inputs",
+          "probe",
+          "state",
+          "step"
+        ],
+        "structured_condition_operators": [
+          "all",
+          "any",
+          "not"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.local-expression-filters --json",
+          "handle": "examples.local-expression-filters",
+          "name": "local-expression-filters",
+          "summary": "Verified example at examples/local-expression-filters.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
+          "handle": "workflow-authoring.native_expression_contexts",
+          "name": "native_expression_contexts",
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
+          "handle": "workflow-authoring.guard_result_contract",
+          "name": "guard_result_contract",
+          "summary": "A guard expression must evaluate to a boolean result."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.representation_adapters --json",
+          "handle": "workflow-authoring.representation_adapters",
+          "name": "representation_adapters",
+          "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results."
+        }
+      ],
+      "summary": "Built-in expression surface for reads, checks, comparisons, and short transformations inside workflow-owned fields."
+    },
+    {
+      "appropriate_when": [
+        "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
+        "Typed public operations express product intent better than broad execution surfaces.",
+        "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes."
+      ],
+      "inappropriate_when": [
+        "You are treating a missing public capability as permission to improvise local semantics silently.",
+        "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help operations --json",
+          "handle": "operations",
+          "kind": "topic",
+          "summary": "Inspect the public connector catalog"
+        },
+        {
+          "command": "ordo-help describe connector.gh --json",
+          "handle": "connector.gh",
+          "kind": "connector_family",
+          "summary": "Published connector family metadata for the gh namespace",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.fs --json",
+          "handle": "connector.fs",
+          "kind": "connector_family",
+          "summary": "Published connector family metadata for the fs namespace",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe command-line.ordo-playbook --json",
+          "handle": "command-line.ordo-playbook",
+          "kind": "command",
+          "summary": "Published command-line command metadata",
+          "topic": "command-line"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.decision_order --json",
+          "handle": "workflow-authoring.decision_order",
+          "kind": "rule",
+          "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.structured_surface_bias --json",
+          "handle": "workflow-authoring.structured_surface_bias",
+          "kind": "rule",
+          "summary": "Prefer implementations that express product intent through typed public workflow surfaces.",
+          "topic": "workflow-authoring"
+        }
+      ],
+      "keywords": [
+        "connectors",
+        "operations",
+        "namespace",
+        "probe",
+        "action",
+        "public surface"
+      ],
+      "name": "connectors",
+      "published_names": {
+        "namespaces": [
+          "runtime",
+          "git",
+          "compose",
+          "gh",
+          "shell",
+          "fs"
+        ]
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.minimal --json",
+          "handle": "examples.minimal",
+          "name": "minimal",
+          "summary": "Verified example at examples/minimal.yaml"
+        },
+        {
+          "command": "ordo-help describe examples.inspect-pr --json",
+          "handle": "examples.inspect-pr",
+          "name": "inspect-pr",
+          "summary": "Verified example at examples/inspect-pr.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.decision_order --json",
+          "handle": "workflow-authoring.decision_order",
+          "name": "decision_order",
+          "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.structured_surface_bias --json",
+          "handle": "workflow-authoring.structured_surface_bias",
+          "name": "structured_surface_bias",
+          "summary": "Prefer implementations that express product intent through typed public workflow surfaces."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.routine.* --json",
+          "handle": "workflow-authoring.routine.*",
+          "name": "routine.*",
+          "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
+          "handle": "workflow-authoring.local_artifacts_are_context",
+          "name": "local_artifacts_are_context",
+          "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
+        }
+      ],
+      "summary": "Published operation catalog for external probes and actions, grouped by stable namespaces."
+    },
+    {
+      "appropriate_when": [
+        "Published connector operations and clean composition have already been exhausted, and the remaining gap is mechanical or intentionally project-local rather than semantic.",
+        "A narrowly bounded local automation step must run through one published routine entry with explicit scalar caller context instead of a broader ad hoc shell surface."
+      ],
+      "inappropriate_when": [
+        "The remaining gap is semantic, unclear, or being preserved silently through a nearby local helper.",
+        "Routine use is becoming the default implementation path, a convenience shortcut, or a way to avoid publishing better connector surface."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe routine_contract --json",
+          "handle": "routine_contract",
+          "kind": "contract",
+          "summary": "Published routine-registry contract metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe routine_contract.workflow_call_surface --json",
+          "handle": "routine_contract.workflow_call_surface",
+          "kind": "routine_call_surface",
+          "summary": "Published routine workflow-call surface metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe routine_contract.workflow_call.env --json",
+          "handle": "routine_contract.workflow_call.env",
+          "kind": "routine_call_field",
+          "summary": "Published routine workflow-call field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.routine.* --json",
+          "handle": "workflow-authoring.routine.*",
+          "kind": "rule",
+          "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
+          "handle": "workflow-authoring.explicit_execution_context",
+          "kind": "rule",
+          "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic.",
+          "topic": "workflow-authoring"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.decision_order --json",
+          "handle": "workflow-authoring.decision_order",
+          "kind": "rule",
+          "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations.",
+          "topic": "workflow-authoring"
+        }
+      ],
+      "keywords": [
+        "routine.*",
+        "fallback",
+        "bounded automation",
+        "local automation",
+        "with.env",
+        "opaque exception path"
+      ],
+      "name": "routines",
+      "published_names": {
+        "generated_env_name_examples": [
+          "inputs.profile",
+          "step.collect.outputs.value.path"
+        ],
+        "implementation_fields": [
+          "argv"
+        ],
+        "routine_entry_fields": [
+          "kind",
+          "summary",
+          "args",
+          "implementation",
+          "failure_modes",
+          "outputs",
+          "log_hints"
+        ],
+        "top_level_fields": [
+          "version",
+          "routines"
+        ],
+        "workflow_call_fields": [
+          "args",
+          "env"
+        ]
+      },
+      "related_examples": [],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.routine.* --json",
+          "handle": "workflow-authoring.routine.*",
+          "name": "routine.*",
+          "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.decision_order --json",
+          "handle": "workflow-authoring.decision_order",
+          "name": "decision_order",
+          "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
+          "handle": "workflow-authoring.explicit_execution_context",
+          "name": "explicit_execution_context",
+          "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
+          "handle": "workflow-authoring.local_artifacts_are_context",
+          "name": "local_artifacts_are_context",
+          "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.semantic_ambiguity --json",
+          "handle": "workflow-authoring.semantic_ambiguity",
+          "name": "semantic_ambiguity",
+          "summary": "Treat semantic ambiguity as a stop signal for clarification, not as permission to invent or preserve semantics silently."
+        }
+      ],
+      "summary": "Bounded opaque local-automation fallback surface. This is an exception path, not a normal extension mechanism, and repeated routine use is a design smell."
+    },
+    {
+      "appropriate_when": [
+        "A guard, condition, or published value would be clearer after family-owned representation shaping than after ad hoc inline rewrites.",
+        "The published adapter family already matches the projection or mutation style you need."
+      ],
+      "inappropriate_when": [
+        "A plain local expression is already clearer than an adapter invocation.",
+        "Guard logic would need adapter write-path behavior rather than read-only projection."
+      ],
+      "inspect_next": [
+        {
+          "command": "ordo-help describe workflow.local_expression.adapter_seam --json",
+          "handle": "workflow.local_expression.adapter_seam",
+          "kind": "adapter_seam",
+          "summary": "Published shared representation-adapter seam metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.adapter_binding --json",
+          "handle": "workflow.local_expression.adapter_binding",
+          "kind": "adapter_binding",
+          "summary": "Published outer representation-adapter binding metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.adapter.json --json",
+          "handle": "workflow.local_expression.adapter.json",
+          "kind": "adapter_family",
+          "summary": "Published representation-adapter family metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.adapter.text --json",
+          "handle": "workflow.local_expression.adapter.text",
+          "kind": "adapter_family",
+          "summary": "Published representation-adapter family metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.local_expression.adapter.yaml --json",
+          "handle": "workflow.local_expression.adapter.yaml",
+          "kind": "adapter_family",
+          "summary": "Published representation-adapter family metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.representation_adapters --json",
+          "handle": "workflow-authoring.representation_adapters",
+          "kind": "rule",
+          "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results.",
+          "topic": "workflow-authoring"
+        }
+      ],
+      "keywords": [
+        "json",
+        "key_value",
+        "markdown",
+        "text",
+        "yaml",
+        "selectors",
+        "actions",
+        "shortcuts",
+        "with{...}"
+      ],
+      "name": "adapters",
+      "published_names": {
+        "actions": {
+          "json": [
+            "set",
+            "remove"
+          ],
+          "key_value": [],
+          "markdown": [
+            "add",
+            "append",
+            "replace",
+            "remove"
+          ],
+          "text": [
+            "append",
+            "replace",
+            "remove"
+          ],
+          "yaml": []
+        },
+        "families": [
+          "json",
+          "key_value",
+          "markdown",
+          "text",
+          "yaml"
+        ],
+        "selectors": {
+          "json": [
+            ".field",
+            "[\"literal-key\"]",
+            "[n]",
+            "..field",
+            ".one(field=value)",
+            ".many(field=value)",
+            ".one(field!=value)",
+            ".many(field!=value)"
+          ],
+          "key_value": [],
+          "markdown": [
+            "prelude",
+            "[\"title\"]",
+            "[n]",
+            ".blocks(\"kind\")"
+          ],
+          "text": [
+            "lines",
+            "find(\"literal\")",
+            "finds(\"literal\")",
+            "before(\"literal\")",
+            "after(\"literal\")",
+            "[n]"
+          ],
+          "yaml": [
+            ".field",
+            "[\"literal-key\"]",
+            "[n]",
+            ".one(field=value)",
+            ".one(field!=value)",
+            ".many(field=value)",
+            ".many(field!=value)"
+          ]
+        },
+        "shortcuts": {
+          "json": [],
+          "key_value": [],
+          "markdown": [
+            "list",
+            "lists",
+            "list_items",
+            "task_list",
+            "task_lists",
+            "task_list_items",
+            "paragraph",
+            "paragraphs",
+            "prelude"
+          ],
+          "text": [],
+          "yaml": []
+        }
+      },
+      "related_examples": [
+        {
+          "command": "ordo-help describe examples.text-adapter --json",
+          "handle": "examples.text-adapter",
+          "name": "text-adapter",
+          "summary": "Verified example at examples/text-adapter.yaml"
+        }
+      ],
+      "related_rules": [
+        {
+          "command": "ordo-help describe workflow-authoring.representation_adapters --json",
+          "handle": "workflow-authoring.representation_adapters",
+          "name": "representation_adapters",
+          "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
+          "handle": "workflow-authoring.native_expression_contexts",
+          "name": "native_expression_contexts",
+          "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
+        }
+      ],
+      "summary": "Family-based representation transforms over workflow values, including projection-oriented selectors and family-specific actions."
+    }
+  ],
+  "document_kind": "features",
+  "purpose": "Compact workflow authoring feature map for authors and agents, with named handles for deeper discovery."
 }

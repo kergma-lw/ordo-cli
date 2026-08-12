@@ -686,6 +686,7 @@ def _build_check_analysis_tree(
                 profile_working_directories=profile_working_directories,
                 current_working_directory=current_working_directory,
                 observed_probe_calls=observed_probe_calls,
+                authored_probe_intents=_collect_authored_probe_intents(guard_details),
             )
             if interpreted_step_block is not None:
                 if interpreted_step_block.get("resolution_error") is not None:
@@ -728,6 +729,7 @@ def _build_check_analysis_tree(
         connector_provider=connector_provider,
         active_overrides=resolved_overrides,
         observed_probe_calls=observed_probe_calls,
+        authored_probe_intents=_collect_authored_probe_intents(guard_details),
     )
     if structural_fill_result is not None:
         return structural_fill_result
@@ -1154,6 +1156,7 @@ def _interpret_step_block_for_check(
     profile_working_directories: dict[str, Path | None] | None,
     current_working_directory: Path | None,
     observed_probe_calls: list[dict[str, object]],
+    authored_probe_intents: list[dict[str, object]],
 ) -> dict[str, object] | None:
     resolved_block = _resolve_step_block(
         workflow,
@@ -1212,6 +1215,7 @@ def _interpret_step_block_for_check(
                         resolved_step,
                         action_call=_action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                         known_observations=known_observations,
+                        authored_probe_intents=authored_probe_intents,
                     ),
                 )
             )
@@ -1222,6 +1226,7 @@ def _interpret_step_block_for_check(
                 resolved_block=resolved_block,
                 step_items=step_items,
                 known_observations=known_observations,
+                authored_probe_intents=authored_probe_intents,
             )
             break
         if condition is None:
@@ -1255,6 +1260,7 @@ def _interpret_step_block_for_check(
                         resolved_step,
                         action_call=_action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None,
                         known_observations=known_observations,
+                        authored_probe_intents=authored_probe_intents,
                     ),
                 )
             )
@@ -1265,6 +1271,7 @@ def _interpret_step_block_for_check(
                 resolved_block=resolved_block,
                 step_items=step_items,
                 known_observations=known_observations,
+                authored_probe_intents=authored_probe_intents,
             )
             break
         if condition is False:
@@ -1339,6 +1346,7 @@ def _interpret_step_block_for_check(
                 resolved_block=resolved_block,
                 step_items=step_items,
                 known_observations=known_observations,
+                authored_probe_intents=authored_probe_intents,
             )
             break
 
@@ -1407,7 +1415,8 @@ def _interpret_step_block_for_check(
                         block=block,
                         resolved_block=resolved_block,
                         step_items=step_items,
-                        known_observations=known_observations,
+                            known_observations=known_observations,
+                            authored_probe_intents=authored_probe_intents,
                     )
                     break
                 if expansion_outcome["halted"]:
@@ -1446,7 +1455,8 @@ def _interpret_step_block_for_check(
                         block=block,
                         resolved_block=resolved_block,
                         step_items=step_items,
-                        known_observations=known_observations,
+                            known_observations=known_observations,
+                            authored_probe_intents=authored_probe_intents,
                     )
                     break
                 interpreted_steps.append(step.name)
@@ -1572,7 +1582,8 @@ def _interpret_step_block_for_check(
                     block=block,
                     resolved_block=resolved_block,
                     step_items=step_items,
-                    known_observations=known_observations,
+                        known_observations=known_observations,
+                        authored_probe_intents=authored_probe_intents,
                 )
                 break
             if step.register is not None:
@@ -1606,7 +1617,12 @@ def _interpret_step_block_for_check(
             continue
 
         action_call = _action_call_from_resolved_operation(resolved_step) if isinstance(resolved_step, ResolvedOperation) and resolved_step.operation.kind == "action" else None
-        preflight_support = _build_preflight_support(resolved_step, action_call=action_call, known_observations=known_observations)
+        preflight_support = _build_preflight_support(
+            resolved_step,
+            action_call=action_call,
+            known_observations=known_observations,
+            authored_probe_intents=authored_probe_intents,
+        )
         halt = build_preflight_halt(
             "effectful_step_encountered" if classification == "effectful" else "preflight_step_not_analyzable",
             step=step,
@@ -2162,12 +2178,18 @@ def _append_structural_tail_items(
     resolved_block: ResolvedStepBlock,
     step_items: list[dict[str, object]],
     known_observations: list[dict[str, object]],
+    authored_probe_intents: list[dict[str, object]] | None = None,
 ) -> None:
     for tail_step_index in range(start_step_index, min(len(block.steps), len(resolved_block.steps))):
         tail_step = block.steps[tail_step_index]
         tail_resolved = resolved_block.steps[tail_step_index]
         action_call = _action_call_from_resolved_operation(tail_resolved) if isinstance(tail_resolved, ResolvedOperation) and tail_resolved.operation.kind == "action" else None
-        preflight_support = _build_preflight_support(tail_resolved, action_call=action_call, known_observations=known_observations)
+        preflight_support = _build_preflight_support(
+            tail_resolved,
+            action_call=action_call,
+            known_observations=known_observations,
+            authored_probe_intents=authored_probe_intents,
+        )
         step_items.append(
             _structural_step_item(
                 block_index=block_index,
@@ -2189,6 +2211,7 @@ def _append_structural_items_for_uninterpreted_step_blocks(
     connector_provider: ConnectorProvider | None,
     active_overrides,
     observed_probe_calls: list[dict[str, object]],
+    authored_probe_intents: list[dict[str, object]],
 ) -> RuntimeResult | None:
     existing_block_indexes = {
         item.get("block_index")
@@ -2224,6 +2247,7 @@ def _append_structural_items_for_uninterpreted_step_blocks(
             resolved_block=resolved_block,
             step_items=preflight_step_items,
             known_observations=known_observations,
+            authored_probe_intents=authored_probe_intents,
         )
     return None
 
@@ -2290,6 +2314,7 @@ def _build_preflight_support(
     *,
     action_call: dict[str, object] | None,
     known_observations: list[dict[str, object]],
+    authored_probe_intents: list[dict[str, object]] | None = None,
 ) -> dict[str, object] | None:
     if not isinstance(resolved_step, ResolvedOperation) or resolved_step.operation.kind != "action":
         return None
@@ -2299,17 +2324,38 @@ def _build_preflight_support(
             "strength": "not_applicable",
             "recommended_probes": [],
             "matched_probes": [],
+            "unmaterialized_probes": [],
             "missing_probes": [],
         }
     recommended = [_render_preflight_observation(template, action_call=action_call) for template in templates]
     known_keys = {_canonical_observation_key(item) for item in known_observations}
+    intent_keys = {
+        _canonical_observation_key(item)
+        for item in ([] if authored_probe_intents is None else authored_probe_intents)
+        if isinstance(item, dict)
+    }
     matched = [item for item in recommended if _canonical_observation_key(item) in known_keys]
-    missing = [item for item in recommended if _canonical_observation_key(item) not in known_keys]
-    strength = "strong" if len(matched) == len(recommended) else "weak" if not matched else "partial"
+    unmaterialized = [
+        item
+        for item in recommended
+        if _canonical_observation_key(item) not in known_keys and _canonical_observation_key(item) in intent_keys
+    ]
+    missing = [
+        item
+        for item in recommended
+        if _canonical_observation_key(item) not in known_keys and _canonical_observation_key(item) not in intent_keys
+    ]
+    if len(matched) == len(recommended):
+        strength = "strong"
+    elif matched or unmaterialized:
+        strength = "partial"
+    else:
+        strength = "weak"
     return {
         "strength": strength,
         "recommended_probes": recommended,
         "matched_probes": matched,
+        "unmaterialized_probes": unmaterialized,
         "missing_probes": missing,
     }
 
@@ -2446,7 +2492,7 @@ def _evaluate_guard_expression(
         context=LocalExpressionContext.GUARD,
         observe=observer.observe,
     )
-    return _build_guard_expression_result(resolved_guard.expr, evaluation)
+    return _build_guard_expression_result(resolved_guard.expr, evaluation, observations=observer.observed_probes)
 
 
 @dataclass(slots=True)
@@ -2455,9 +2501,11 @@ class _ResolvedGuardObserver:
     workflow: Workflow
     probe: GuardProbe
     _probes_by_expression: dict[str, ResolvedExpressionProbe] = field(init=False, repr=False)
+    observed_probes: list[dict[str, object]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._probes_by_expression = {probe.expression_text: probe for probe in self.resolved_guard.probes}
+        self.observed_probes = []
 
     def observe(self, request: ConditionObservationRequest) -> ConditionObservationResult:
         probe_spec = self._probes_by_expression.get(request.expression_text)
@@ -2494,6 +2542,7 @@ class _ResolvedGuardObserver:
                 reference=probe_spec.reference,
             )
 
+        self.observed_probes.append(_observed_probe_call_from_expression_probe(probe_spec, source=self.resolved_guard.expr))
         return ConditionObservationResult(status="ok", value=value, diagnostics=result.diagnostics, reference=probe_spec.reference)
 
 
@@ -2512,7 +2561,12 @@ def _json_value_to_expression_node(value: JSONValue) -> ValueExpressionNode:
     return LiteralNode(start=0, end=0, value=value)
 
 
-def _build_guard_expression_result(expr: str, evaluation: ConditionEvaluationResult) -> OperationResult:
+def _build_guard_expression_result(
+    expr: str,
+    evaluation: ConditionEvaluationResult,
+    *,
+    observations: list[dict[str, object]],
+) -> OperationResult:
     failed_trace = next(
         (entry for entry in reversed(evaluation.trace) if entry.status == "probe_failed" or entry.value is False),
         None,
@@ -2523,7 +2577,12 @@ def _build_guard_expression_result(expr: str, evaluation: ConditionEvaluationRes
             summary="Guard expression could not be evaluated safely",
             diagnostics=evaluation.diagnostics,
             outputs={"guard": expr, "result": None, "failed_subcondition": None if failed_trace is None else failed_trace.expr},
-            raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "probe_failed"},
+            raw={
+                "cache_entries": evaluation.cache_entries,
+                "trace": [item.to_contract() for item in evaluation.trace],
+                "failure_kind": "probe_failed",
+                "observations": [dict(item) for item in observations],
+            },
         )
     if not isinstance(evaluation.value, bool):
         diagnostic = Diagnostic(
@@ -2538,7 +2597,12 @@ def _build_guard_expression_result(expr: str, evaluation: ConditionEvaluationRes
             summary="Guard expression produced a non-boolean result",
             diagnostics=evaluation.diagnostics + (diagnostic,),
             outputs={"guard": expr, "result": None, "failed_subcondition": expr},
-            raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "result_type"},
+            raw={
+                "cache_entries": evaluation.cache_entries,
+                "trace": [item.to_contract() for item in evaluation.trace],
+                "failure_kind": "result_type",
+                "observations": [dict(item) for item in observations],
+            },
         )
     passed = evaluation.value
     return OperationResult(
@@ -2546,7 +2610,12 @@ def _build_guard_expression_result(expr: str, evaluation: ConditionEvaluationRes
         summary="Guard expression evaluated successfully" if passed else "Guard expression evaluated false",
         diagnostics=evaluation.diagnostics,
         outputs={"guard": expr, "result": passed, "failed_subcondition": None if passed or failed_trace is None else failed_trace.expr},
-        raw={"cache_entries": evaluation.cache_entries, "trace": [item.to_contract() for item in evaluation.trace], "failure_kind": "guard_failed" if not passed else None},
+        raw={
+            "cache_entries": evaluation.cache_entries,
+            "trace": [item.to_contract() for item in evaluation.trace],
+            "failure_kind": "guard_failed" if not passed else None,
+            "observations": [dict(item) for item in observations],
+        },
     )
 
 
@@ -2580,6 +2649,18 @@ def _guard_observations(resolved_guard: ResolvedOperation | ResolvedConditionExp
     return []
 
 
+def _collect_authored_probe_intents(guard_details: list[dict[str, object]]) -> list[dict[str, object]]:
+    intents: list[dict[str, object]] = []
+    for detail in guard_details:
+        if not isinstance(detail, dict):
+            continue
+        authored = detail.get("authored_probes", detail.get("probes", []))
+        for item in authored:
+            if isinstance(item, dict):
+                intents.append(dict(item))
+    return intents
+
+
 def _build_guard_detail(
     reference: str,
     result: OperationResult,
@@ -2587,6 +2668,11 @@ def _build_guard_detail(
     observation_scopes: list[str] | None = None,
     observations: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
+    actual_observations = result.raw.get("observations")
+    authored_probes = [] if observations is None else [dict(item) for item in observations]
+    successful_probes = [dict(item) for item in actual_observations if isinstance(item, dict)] if isinstance(actual_observations, list) else []
+    if not successful_probes and result.status == "ok":
+        successful_probes = [dict(item) for item in authored_probes]
     return {
         "reference": reference,
         "status": result.status,
@@ -2595,5 +2681,6 @@ def _build_guard_detail(
         "failure_kind": result.raw.get("failure_kind"),
         "trace": result.raw.get("trace", []),
         "probe_scopes": [] if observation_scopes is None else list(observation_scopes),
-        "probes": [] if observations is None else [dict(item) for item in observations],
+        "authored_probes": authored_probes,
+        "probes": successful_probes,
     }

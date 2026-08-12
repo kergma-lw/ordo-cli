@@ -460,19 +460,21 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         "name": "separate_control_surfaces",
         "priority": "strong_recommendation",
         "guidance_level": "recommended",
-        "rule": "Use the right control surface for the right kind of decision: guards for workflow applicability, configuration for context variation, and if: for local step branching.",
+        "rule": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: for local step branching inside an already-valid path.",
         "why": [
             "mixing these roles makes workflows harder to read and harder to explain",
             "hidden applicability inside step conditions weakens workflow selection and safety",
-            "using if: as a substitute for configuration or workflow structure leads to brittle branching logic",
+            "using if: as a substitute for guards, gates, configuration, or workflow structure leads to brittle branching logic",
         ],
         "prefer": [
-            "use guards for conditions that determine whether the workflow should run at all",
+            "use guards for conditions that determine whether the workflow should run at all or should narrow applicability early",
+            "use gates when the real question is whether a path or step may execute at all",
             "use inputs, profiles, and reusable fragments for stable context-specific variation",
-            "use if: only for step-local optional behavior inside an already applicable workflow",
+            "use if: only for step-local behavioral variation inside an already applicable workflow",
         ],
         "avoid": [
             "hiding workflow inapplicability inside late step-level if: conditions",
+            "using if: for admission, readiness, or coarse path routing when guards or gates carry that meaning more honestly",
             "expressing broad context variation through many ad hoc if: branches",
             "cloning or rewriting workflows when explicit configuration would preserve one stable behavior shape",
         ],
@@ -745,7 +747,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     },
     {
         "name": "guards",
-        "summary": "Workflow-level applicability surface that declares whether the workflow should run before effectful steps start.",
+        "summary": "Workflow-level applicability surface for early rejection, narrowing, and deciding whether the workflow should run before effectful steps start.",
         "keywords": ["guards", "applicability", "validation", "probe", "boolean result"],
         "appropriate_when": [
             "Applicability, input validation, or observable preconditions should be declared near the start of the workflow.",
@@ -753,6 +755,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         ],
         "inappropriate_when": [
             "The condition is step-local admission rather than whole-workflow applicability.",
+            "The condition is only changing local behavior inside a path that is already valid.",
             "You are relying on downstream action failure instead of declaring a reviewable workflow-level precondition.",
         ],
         "inspect_next": ["workflow-authoring.early_guards", "workflow-authoring.input_validation_default", "workflow-authoring.delegated_applicability", "workflow.local_expression.filter_surface", "workflow.local_expression.builtin.is_missing"],
@@ -762,14 +765,16 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     },
     {
         "name": "gates",
-        "summary": "Step-admission surface that blocks one step body after earlier reads but before the protected effectful work executes.",
+        "summary": "Step-admission surface that decides whether a path or step may run at all after earlier reads but before the protected work executes.",
         "keywords": ["gate", "on_fail", "admission", "step checkpoint", "blocked step"],
         "appropriate_when": [
             "A step should be admitted or blocked based on earlier observed or computed facts without redefining whole-workflow applicability.",
+            "The real question is whether the protected path may execute at all, not how one valid path should branch locally.",
             "Failure-focused gate context should be emitted through structured on_fail metadata instead of broad register dumps.",
         ],
         "inappropriate_when": [
             "The decision really belongs in workflow guards near the start of the workflow.",
+            "The condition is only local behavioral variation inside an already-valid path; use if instead.",
             "You are trying to mix gate admission with register publication or current-step output reads; split the gate into a standalone checkpoint step before the registered step.",
         ],
         "inspect_next": ["workflow.step.gate", "workflow.step_forms.gate_checkpoint", "workflow.run.gate", "workflow-authoring.separate_control_surfaces", "workflow-authoring.guard_result_contract"],
@@ -779,7 +784,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     },
     {
         "name": "conditions",
-        "summary": "Boolean condition-authoring surface shared by step if and gate, including expression and structured all/any/not forms.",
+        "summary": "Boolean condition-authoring surface shared by step if and gate, with if for local branching and gate for admission decisions.",
         "keywords": ["if", "gate", "all", "any", "not", "structured condition", "implicit_all"],
         "appropriate_when": [
             "Branching or admission logic needs an explicit boolean condition surface with readable operator structure.",
@@ -787,6 +792,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         ],
         "inappropriate_when": [
             "The authored value is data shaping or payload construction rather than a boolean decision.",
+            "You are using if as a catch-all control mechanism instead of separating workflow applicability, admission, and local branching.",
             "You are using control-surface syntax where workflow-level guards or local-expression value fields would be clearer.",
         ],
         "inspect_next": ["workflow.step.if", "workflow.step.gate", "workflow-authoring.native_expression_contexts", "workflow-authoring.fan_out_scope_and_conditions"],
@@ -912,6 +918,13 @@ def build_overview_response() -> JSONObject:
         "document_kind": "overview",
         "purpose": "World map for Ordo discovery and authoring bootstrap",
         "document_kinds": sorted(set(document_kinds)),
+        "conditional_roles": {
+            "rule": "Use each conditional surface for its own job: guards handle applicability and early rejection, gates handle whether a path or step may run at all, and if handles local behavioral variation inside an already-valid path.",
+            "avoid": [
+                "Do not use if as a catch-all control mechanism.",
+                "If a condition is really deciding applicability, admission, or routing, move it into guards, gates, or a higher structural choice instead.",
+            ],
+        },
         "execution_concepts": {
             "modes": [mode.value for mode in Mode],
             "statuses": [status.value for status in RuntimeStatus],
@@ -1191,6 +1204,9 @@ def build_workflow_authoring_response() -> JSONObject:
             "when adding or changing inputs, validate them before continuing",
             "validate both the request shape and the observed target context",
             "name important values early",
+            "use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only for local branching inside an already-valid path",
+            "when the first effectful action is skipped by an if that depends only on pre-step facts, treat that as a strong signal to consider guards instead",
+            "distinguish authored probe intent from successful probe materialization: a guard may already express the right probe shape even when the observation could not be completed from the currently available pre-step facts",
             "prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text",
             "do not use with{root: ...} if the same adapter binding can be expressed with pipe-style syntax; use with{root: ...} only as a fallback when the pipe-style form is not valid in the current construct",
             "stage reusable payloads with value + register before emitting them through result or publish",
@@ -1550,6 +1566,29 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 summary="Published workflow step field metadata",
                 metadata={"name": field_name, "optional_in_forms": [form["name"]]},
             )
+    if "workflow.step.if" in lookup:
+        lookup["workflow.step.if"]["summary"] = "Local step-branching field for behavioral variation inside an already-valid path"
+        lookup["workflow.step.if"]["metadata"]["role"] = "local_behavioral_variation"
+        lookup["workflow.step.if"]["metadata"]["use_when"] = [
+            "a valid path needs local branching",
+            "the condition changes one step's behavior without deciding workflow applicability or step admission",
+        ]
+        lookup["workflow.step.if"]["metadata"]["do_not_use_for"] = [
+            "workflow applicability or early rejection",
+            "whether a path or step may run at all",
+            "catch-all routing or policy admission",
+        ]
+    if "workflow.step.gate" in lookup:
+        lookup["workflow.step.gate"]["summary"] = "Step-admission field for deciding whether a path or step may run at all"
+        lookup["workflow.step.gate"]["metadata"]["role"] = "step_admission"
+        lookup["workflow.step.gate"]["metadata"]["use_when"] = [
+            "the real question is whether the protected path or step may execute at all",
+            "admission depends on facts observed or computed earlier in the workflow",
+        ]
+        lookup["workflow.step.gate"]["metadata"]["do_not_use_for"] = [
+            "whole-workflow applicability; use guards instead",
+            "local behavioral variation inside an already-valid path; use if instead",
+        ]
     for field in model["profile"]["top_level_fields"]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)
     for field in model["profile"]["override_fields"]:
@@ -2232,6 +2271,16 @@ def render_overview_text(payload: JSONObject) -> str:
         "Document kinds:",
     ]
     lines.extend(f"- {item}" for item in payload["document_kinds"])
+    conditional_roles = payload.get("conditional_roles")
+    if isinstance(conditional_roles, dict):
+        lines.extend(
+            [
+                "",
+                "Conditional roles:",
+                f"- rule: {conditional_roles['rule']}",
+                *[f"- avoid: {item}" for item in conditional_roles.get("avoid", [])],
+            ]
+        )
     lines.extend(
         [
             "",
@@ -2488,6 +2537,8 @@ def render_capability_node_text(payload: JSONObject) -> str:
     lines = [payload["name"], payload["node_kind"], f"snippet coverage: {payload.get('snippet_coverage', 'none')}"]
     if payload["node_kind"] == "capability":
         lines.extend([f"status: {payload['status']}", f"scope: {payload['scope']}"])
+        for item in payload.get("must_not_infer", []):
+            lines.append(f"must not infer: {item}")
     else:
         lines.extend([f"surface: {payload['surface']}", payload["rule"]])
     _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
@@ -2505,6 +2556,15 @@ def render_model_node_text(payload: JSONObject) -> str:
         f"node kind: {payload['node_kind']}",
         f"snippet coverage: {payload.get('snippet_coverage', 'none')}",
     ]
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        role = metadata.get("role")
+        if isinstance(role, str):
+            lines.append(f"role: {role}")
+        for item in metadata.get("use_when", []):
+            lines.append(f"use when: {item}")
+        for item in metadata.get("do_not_use_for", []):
+            lines.append(f"do not use for: {item}")
     _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
     return "\n".join(lines)
 
