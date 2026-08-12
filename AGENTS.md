@@ -90,6 +90,17 @@
 - Any engine change that affects workflow authoring surfaces, discoverability, named primitives, fallback paths, recommended patterns, discouraged patterns, or cluster boundaries must review and update `ordo-help features` in the same work.
 - If a new or changed behavior exists but is not surfaced correctly in `ordo-help features`, the change is incomplete.
 
+### Snippet-backed example parity
+
+- After completing a task that changes a public authoring or discovery surface, review whether any relevant snippet-backed examples must be updated in the same work.
+- This applies to help surfaces such as `ordo-help describe ...`, `ordo-help workflow-authoring`, `ordo-help features`, and other published discovery output that teaches or confirms authored shapes.
+- If a relevant verified snippet already exists for the affected surface, update it in the same work so the published example stays aligned with the implemented behavior.
+- If no relevant snippet exists but the supported snippet-world path can represent the changed surface honestly, add the missing snippet in the same work rather than treating snippet coverage as optional follow-up polish.
+- If the supported snippet-world path does not yet support the required example shape, do not silently ignore the gap.
+- In that case, explicitly call out the unsupported snippet shape as a problem before closing the work, because the lack of snippet support is now blocking accurate help parity.
+- Do not paper over the gap with decorative rendering tricks, silently transformed examples, or unverifiable prose that pretends to be a real snippet.
+- Snippet updates belong to the same parity discipline as help text updates: if the public surface changed, the relevant verified examples must change with it, or the work is incomplete.
+
 ### Ambiguity requires discussion
 
 - For engine changes, ambiguity is a stop signal, not a license to guess.
