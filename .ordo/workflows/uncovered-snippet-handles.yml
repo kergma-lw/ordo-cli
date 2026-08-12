@@ -1,0 +1,12 @@
+version: 0
+workflow: uncovered-snippet-handles
+blocks:
+- steps:
+  - name: Load uncovered snippet handles
+    uses: routine.help.snippet-coverage.uncovered-list
+    register: uncovered_snippets
+  - name: Publish uncovered snippet handle names
+    publish:
+      summary: "Uncovered snippet handles loaded"
+      count: step.uncovered_snippets.outputs.data.total_none
+      handles: step.uncovered_snippets.outputs.data.handles | field("handle")

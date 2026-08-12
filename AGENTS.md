@@ -94,6 +94,8 @@
 
 - After completing a task that changes a public authoring or discovery surface, review whether any relevant snippet-backed examples must be updated in the same work.
 - This applies to help surfaces such as `ordo-help describe ...`, `ordo-help workflow-authoring`, `ordo-help features`, and other published discovery output that teaches or confirms authored shapes.
+- Any task that changes one or more public `ordo-help describe ...` surfaces must explicitly run those affected describe surfaces against the describe readiness checklist and treat that review as part of the work, not as optional follow-up polish.
+- If one or more affected describe surfaces do not satisfy the checklist cleanly, discuss the gap before closing the work instead of silently accepting a half-ready describe surface.
 - If a relevant verified snippet already exists for the affected surface, update it in the same work so the published example stays aligned with the implemented behavior.
 - If no relevant snippet exists but the supported snippet-world path can represent the changed surface honestly, add the missing snippet in the same work rather than treating snippet coverage as optional follow-up polish.
 - If the supported snippet-world path does not yet support the required example shape, do not silently ignore the gap.

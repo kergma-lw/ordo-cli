@@ -84,6 +84,9 @@ The goal is for `describe` to act as a short syntax confirmer for disputed autho
 Snippet worlds are publication and verification context for help examples, not runtime workflow semantics.
 They provide stable shared teaching context for snippets that are too small to stand alone while preserving the invariant that the published example remains the example that was actually verified.
 
+`describe` surfaces should be reviewed against the runtime help-discovery describe readiness checklist.
+That checklist exists to keep `describe` surfaces understandable as teaching material rather than merely technically accurate metadata dumps.
+
 ## Workflow authoring pass pair
 
 When a caller is adding or changing a workflow, `ordo-help` should make the authoring loop explicit:

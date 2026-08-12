@@ -40,6 +40,11 @@ workflows:
     category: inspect
     when: Use when you need a human-oriented pull request digest rather than a compact
       snapshot.
+  uncovered-snippet-handles:
+    file: workflows/uncovered-snippet-handles.yml
+    description: Show the public help handles that still lack snippet-backed examples
+    category: inspect
+    when: Use when you want only the unresolved handle names rather than the full snippet coverage payload.
   issue-comment:
     file: workflows/issue-comment.yml
     description: Add a comment to one issue from this repository context

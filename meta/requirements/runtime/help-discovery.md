@@ -56,3 +56,17 @@
 - `ordo-help` must explain that `ordo-playbook check <workflow>` and `ordo-playbook review <workflow>` serve different authoring purposes.
 - `ordo-help` must not imply that `check` alone is sufficient workflow-authoring sign-off when a workflow was added or changed.
 - The `overview`, `workflow-authoring`, and `command-line` topics must make the paired use of `check` and `review` explicit for workflow authoring work.
+
+## Describe readiness checklist
+
+Before treating a public `describe` surface as ready, confirm that it satisfies all of the following:
+
+- it gives one short positive definition of the surface rather than relying mainly on misuse warnings;
+- it explains negative boundaries such as misuse or non-goals without making those boundaries carry the whole meaning;
+- it distinguishes the surface from its nearest neighboring mechanisms when confusion between them is likely;
+- it uses terminology that remains understandable to a zero-knowledge caller rather than only to an engine author;
+- its canonical examples demonstrate intended use rather than merely minimal syntactic validity;
+- when one value-only example would be insufficient for imitation, the surface also publishes a larger fragment example;
+- the meaning of the surface is understandable from the `describe` output itself rather than requiring reconstruction across several help topics;
+- text output stays optimized for semantic comprehension, while machine-readable metadata remains available through JSON;
+- example wording, contrast, and examples remain aligned with the surrounding `features`, `workflow-authoring`, and related discovery surfaces.

@@ -37,3 +37,16 @@ routines:
     - diff_render_failed
     - viewer_launch_failed
     - runtime_unavailable
+  help.snippet-coverage.uncovered-list:
+    kind: probe
+    summary: Return the current list of public help handles that still have no snippet-backed examples.
+    implementation:
+      argv:
+      - ".ordo/scripts/list-uncovered-help-snippets.py"
+    outputs:
+      mode: data
+      format: json
+    failure_modes:
+    - help_discovery_failed
+    - snippet_coverage_parse_failed
+    - runtime_unavailable
