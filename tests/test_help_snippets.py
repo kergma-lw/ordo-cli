@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 
+from ordo.model.help_snippet_worlds import describe_help_snippet_worlds
 from ordo.model.help_snippets import describe_help_snippets
 from ordo.model.runtime import RuntimeStatus
 from ordo.runtime import validate_workflow_text
@@ -10,6 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class HelpSnippetRegistryTest(unittest.TestCase):
+    def test_default_snippet_world_is_declared_with_explicit_fixture_buckets(self) -> None:
+        worlds = describe_help_snippet_worlds()
+
+        self.assertIn("default", worlds)
+        default = worlds["default"]
+        self.assertEqual(default["name"], "default")
+        self.assertEqual(set(default.keys()), {"name", "summary", "inputs", "state", "probes", "actions"})
+        self.assertIn("repository", default["inputs"])
+        self.assertIn("shared_state", default["state"])
+        self.assertIn("gh.issue", default["probes"])
+        self.assertIn("gh.issue.comment.add", default["actions"])
+
     def test_harness_verified_snippets_validate_in_declared_hosts(self) -> None:
         registry = describe_help_snippets()
 
