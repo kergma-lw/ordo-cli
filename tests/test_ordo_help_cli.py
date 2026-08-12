@@ -489,7 +489,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["document_kind"], "model_node")
         self.assertEqual(payload["name"], "state")
         self.assertIn("workflow_surface", payload["metadata"])
-        self.assertEqual(payload["snippet_coverage"], "harness_verified")
+        self.assertEqual(payload["snippet_coverage"], "runner_verified")
         self.assertEqual(payload["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"]')
 
     def test_describe_state_step_and_filter_nodes_publish_canonical_snippets(self) -> None:
@@ -501,20 +501,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(state_set["canonical_examples"][0]["yaml"], 'state_set:\n  state.shared_state["active_profile"]: review')
         self.assertEqual(state_set["canonical_examples"][1]["yaml"], 'state_set:\n  state.shared_state["active_profile"].enabled: true')
         self.assertIn("state.task_memory[inputs.task_key].issue_number", state_set["canonical_examples"][2]["yaml"])
-        self.assertEqual(step_if["snippet_coverage"], "harness_verified")
+        self.assertEqual(step_if["snippet_coverage"], "runner_verified")
         self.assertEqual(step_if["metadata"]["role"], "local_behavioral_variation")
         self.assertIn("workflow applicability or early rejection", step_if["metadata"]["do_not_use_for"])
         self.assertEqual(step_if["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"] == "review"')
-        self.assertEqual(lookup["snippet_coverage"], "harness_verified")
+        self.assertEqual(lookup["snippet_coverage"], "runner_verified")
         self.assertEqual(lookup["canonical_examples"][0]["yaml"], 'inputs.status_labels | lookup("ready")')
 
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
-        self.assertEqual(payload["summary"]["coverage_counts"]["harness_verified"], 4)
+        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 3)
+        self.assertEqual(payload["summary"]["coverage_counts"]["harness_verified"], 1)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
-        self.assertEqual(handles["state"]["snippet_coverage"], "harness_verified")
+        self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "harness_verified")
         self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "none")
 
@@ -531,7 +532,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         result = self.run_help("describe", "state")
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("snippet coverage: harness_verified", result.stdout)
+        self.assertIn("snippet coverage: runner_verified", result.stdout)
         self.assertIn('state.shared_state["active_profile"]', result.stdout)
 
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:

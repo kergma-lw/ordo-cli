@@ -34,7 +34,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
     "state": {
-        "snippet_coverage": "harness_verified",
+        "snippet_coverage": "runner_verified",
         "canonical_examples": [
             {
                 "name": "fixed_shared_state_key",
@@ -43,8 +43,10 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Read one fixed shared-state key directly with a literal key selector.",
                 "yaml": 'state.shared_state["active_profile"]',
                 "verification": {
-                    "kind": "harness_verified",
-                    "harness": "state_expression_in_let",
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "expression_value",
+                    "target": "state",
                     "expected_status": "ok",
                 },
             },
@@ -55,15 +57,17 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Read one shared-state value through a dynamic key from inputs.",
                 "yaml": "state.shared_state[inputs.active_profile_key]",
                 "verification": {
-                    "kind": "harness_verified",
-                    "harness": "state_expression_in_let",
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "expression_value",
+                    "target": "state",
                     "expected_status": "ok",
                 },
             },
         ],
     },
     "workflow.step.if": {
-        "snippet_coverage": "harness_verified",
+        "snippet_coverage": "runner_verified",
         "canonical_examples": [
             {
                 "name": "step_if_reads_state_directly",
@@ -72,8 +76,10 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Gate one step with a direct fixed-key state read.",
                 "yaml": 'state.shared_state["active_profile"] == "review"',
                 "verification": {
-                    "kind": "harness_verified",
-                    "harness": "step_if_expression",
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.if",
                     "expected_status": "ok",
                 },
             }
@@ -125,7 +131,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
         ],
     },
     "workflow.local_expression.filter.lookup": {
-        "snippet_coverage": "harness_verified",
+        "snippet_coverage": "runner_verified",
         "canonical_examples": [
             {
                 "name": "lookup_fixed_mapping_key",
@@ -134,8 +140,10 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "summary": "Select one mapping value with the lookup pipeline filter.",
                 "yaml": 'inputs.status_labels | lookup("ready")',
                 "verification": {
-                    "kind": "harness_verified",
-                    "harness": "value_expression_lookup",
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "expression_value",
+                    "target": "workflow.local_expression.filter.lookup",
                     "expected_status": "ok",
                 },
             }
@@ -196,5 +204,7 @@ def validate_help_snippet_registry(registry: dict[str, JSONObject]) -> None:
                     raise ValueError(
                         f"Unsupported runner insertion mode for {handle}:{example.get('name')}: {insertion_mode!r}"
                     )
+                if not isinstance(verification.get("target"), str):
+                    raise ValueError(f"runner_verified snippet must declare target for {handle}:{example.get('name')}")
                 if "expected_status" not in verification:
                     raise ValueError(f"runner_verified snippet must declare expected_status for {handle}:{example.get('name')}")

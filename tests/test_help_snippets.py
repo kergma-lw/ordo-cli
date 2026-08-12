@@ -5,6 +5,7 @@ from ordo.model.help_snippet_worlds import describe_help_snippet_worlds
 from ordo.model.help_snippets import describe_help_snippets, validate_help_snippet_registry
 from ordo.model.runtime import RuntimeStatus
 from ordo.runtime import validate_workflow_text
+from ordo.runtime.help_snippet_runner import verify_help_snippet
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +35,23 @@ class HelpSnippetRegistryTest(unittest.TestCase):
                 workflow_text = _workflow_text_for_harness(verification["harness"], example["yaml"])
                 report = validate_workflow_text(workflow_text, source=f"snippet:{handle}:{example['name']}")
                 self.assertEqual(report.status, RuntimeStatus.OK, f"{handle}:{example['name']}")
+
+    def test_runner_verified_snippets_validate_in_declared_worlds(self) -> None:
+        registry = describe_help_snippets()
+
+        for handle, entry in registry.items():
+            for example in entry["canonical_examples"]:
+                verification = example["verification"]
+                if verification["kind"] != "runner_verified":
+                    continue
+                result = verify_help_snippet(
+                    snippet=example["yaml"],
+                    world=verification["world"],
+                    insertion_mode=verification["insertion_mode"],
+                    target=verification["target"],
+                    overrides=verification.get("overrides"),
+                )
+                self.assertEqual(result.status, verification["expected_status"], f"{handle}:{example['name']}")
 
     def test_excerpt_verified_snippets_match_their_declared_source_lines(self) -> None:
         registry = describe_help_snippets()
@@ -70,6 +88,7 @@ class HelpSnippetRegistryTest(unittest.TestCase):
                         "kind": "runner_verified",
                         "world": "default",
                         "insertion_mode": "expression_value",
+                        "target": "state",
                         "expected_status": "ok",
                     },
                 }
