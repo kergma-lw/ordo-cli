@@ -9,7 +9,7 @@ from ordo.model.help_snippet_worlds import describe_help_snippet_worlds
 from ordo.model.runtime import RuntimeStatus
 
 from . import validate_workflow_text
-from .help_snippet_scaffolds import build_expression_value_scaffold, build_step_field_scaffold
+from .help_snippet_scaffolds import build_expression_value_scaffold, build_step_field_scaffold, build_step_fragment_scaffold
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,8 @@ def verify_help_snippet(
         workflow_text = build_expression_value_scaffold(target=target, snippet=snippet)
     elif insertion_mode == "step_field":
         workflow_text = build_step_field_scaffold(target=target, snippet=snippet)
+    elif insertion_mode == "step_fragment":
+        workflow_text = build_step_fragment_scaffold(target=target, snippet=snippet)
     else:
         raise ValueError(f"Unsupported insertion mode: {insertion_mode}")
 

@@ -86,7 +86,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
         ],
     },
     "workflow.step.state_set": {
-        "snippet_coverage": "harness_verified",
+        "snippet_coverage": "runner_verified",
         "canonical_examples": [
             {
                 "name": "state_set_fixed_shared_state_key",
@@ -126,6 +126,20 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "verification": {
                     "kind": "excerpt_verified",
                     "example": "examples.set-active-task-from-gitx",
+                },
+            },
+            {
+                "name": "state_set_step_fragment_remembers_profile",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete step fragment that stores a shared-state profile value.",
+                "yaml": '- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.state_set",
+                    "expected_status": "ok",
                 },
             }
         ],

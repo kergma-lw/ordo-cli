@@ -49,6 +49,17 @@ class HelpSnippetRunnerTest(unittest.TestCase):
                 target="state",
             )
 
+    def test_runner_verifies_step_fragment_snippet_in_named_world(self) -> None:
+        result = verify_help_snippet(
+            snippet='- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review',
+            world="default",
+            insertion_mode="step_fragment",
+            target="workflow.step.state_set",
+        )
+
+        self.assertEqual(result.status, "ok")
+        self.assertIn('- name: remember-profile', result.workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()

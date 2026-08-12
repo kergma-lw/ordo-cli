@@ -31,9 +31,18 @@ STEP_FIELD_CONTRACT = SnippetInsertionContract(
 )
 
 
+STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
+    mode="step_fragment",
+    supported_targets=("workflow.step.state_set",),
+    workflow_surface="steps list inside a standard workflow scaffold",
+    summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
+)
+
+
 INSERTION_CONTRACTS: dict[str, SnippetInsertionContract] = {
     EXPRESSION_VALUE_CONTRACT.mode: EXPRESSION_VALUE_CONTRACT,
     STEP_FIELD_CONTRACT.mode: STEP_FIELD_CONTRACT,
+    STEP_FRAGMENT_CONTRACT.mode: STEP_FRAGMENT_CONTRACT,
 }
 
 
@@ -90,3 +99,20 @@ blocks:
     {snippet.replace(chr(10), chr(10) + '    ')}
 """
     raise ValueError(f"Unsupported step-field target: {target}")
+
+
+def build_step_fragment_scaffold(*, target: str, snippet: str) -> str:
+    """Return a standard workflow scaffold for one authored step fragment."""
+
+    if target == "workflow.step.state_set":
+        indented = snippet.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-step-fragment
+state_needs:
+  shared_state: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
+    raise ValueError(f"Unsupported step-fragment target: {target}")

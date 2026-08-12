@@ -498,10 +498,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         step_if = json.loads(self.run_help("describe", "workflow.step.if", "--json").stdout)
         lookup = json.loads(self.run_help("describe", "workflow.local_expression.filter.lookup", "--json").stdout)
 
-        self.assertEqual(state_set["snippet_coverage"], "harness_verified")
+        self.assertEqual(state_set["snippet_coverage"], "runner_verified")
         self.assertEqual(state_set["canonical_examples"][0]["yaml"], 'state_set:\n  state.shared_state["active_profile"]: review')
         self.assertEqual(state_set["canonical_examples"][1]["yaml"], 'state_set:\n  state.shared_state["active_profile"].enabled: true')
         self.assertIn("state.task_memory[inputs.task_key].issue_number", state_set["canonical_examples"][2]["yaml"])
+        self.assertEqual(state_set["canonical_examples"][3]["form"], "step_fragment")
+        self.assertIn('state.shared_state["active_profile"]: review', state_set["canonical_examples"][3]["yaml"])
         self.assertEqual(step_if["snippet_coverage"], "runner_verified")
         self.assertEqual(step_if["metadata"]["role"], "local_behavioral_variation")
         self.assertIn("workflow applicability or early rejection", step_if["metadata"]["do_not_use_for"])
@@ -515,22 +517,24 @@ class OrdoHelpCliTest(unittest.TestCase):
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
-        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 3)
-        self.assertEqual(payload["summary"]["coverage_counts"]["harness_verified"], 1)
+        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 4)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
-        self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "harness_verified")
+        self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "none")
 
     def test_text_describe_state_set_shows_snippet_coverage_and_yaml(self) -> None:
         result = self.run_help("describe", "workflow.step.state_set")
 
         self.assertEqual(result.returncode, 0)
-        self.assertIn("snippet coverage: harness_verified", result.stdout)
+        self.assertIn("snippet coverage: runner_verified", result.stdout)
         self.assertIn("canonical examples:", result.stdout)
         self.assertIn("form: field_fragment", result.stdout)
+        self.assertIn("form: step_fragment", result.stdout)
         self.assertIn('state.shared_state["active_profile"]: review', result.stdout)
         self.assertIn("verification: excerpt_verified from examples.set-active-task-from-gitx", result.stdout)
+        self.assertIn("verification: runner_verified in world default via step_fragment", result.stdout)
 
     def test_text_describe_state_shows_snippet_yaml(self) -> None:
         result = self.run_help("describe", "state")
