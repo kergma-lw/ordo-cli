@@ -244,6 +244,12 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
 def apply_profile_defaults_to_subsequent_steps(workflow: Workflow, profile: Profile) -> WorkflowProfileApplicationResult:
     """Apply profile missing-input defaults forward-only for subsequent execution."""
 
+    return apply_runtime_profile_switch(workflow, profile)
+
+
+def apply_runtime_profile_switch(workflow: Workflow, profile: Profile) -> WorkflowProfileApplicationResult:
+    """Apply one runtime profile switch to workflow context for subsequent execution."""
+
     merged_inputs = dict(workflow.inputs)
     protected_keys = set(workflow.protected_input_keys) | set(workflow.explicit_input_keys)
     for key, value in profile.inputs.items():

@@ -4,7 +4,7 @@ from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
-from ordo.runtime import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, compose_profiles
+from ordo.runtime import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch, compose_profiles
 
 
 class ProfileCompositionTest(unittest.TestCase):
@@ -86,6 +86,22 @@ class ProfileCompositionTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.workflow.inputs["repository"], "explicit/repo")
         self.assertEqual(result.workflow.inputs["repo_dir"], "../frontend")
+
+    def test_runtime_profile_switch_rebinds_non_explicit_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            inputs={"repository": "profile/mobile", "repo_dir": "/tmp/mobile", "explicit_key": "keep"},
+            explicit_input_keys=("explicit_key",),
+        )
+        profile = Profile(name="meta", inputs={"repository": "profile/meta", "repo_dir": "/tmp/meta", "explicit_key": "do-not-overwrite"})
+
+        result = apply_runtime_profile_switch(workflow, profile)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.workflow.inputs["repository"], "profile/meta")
+        self.assertEqual(result.workflow.inputs["repo_dir"], "/tmp/meta")
+        self.assertEqual(result.workflow.inputs["explicit_key"], "keep")
 
     def test_profile_composition_preserves_launchers_when_non_conflicting(self) -> None:
         first = Profile(name="repo-a", launchers={"shell_frontend": Launcher(connector="shell.command", before="nvm use")})

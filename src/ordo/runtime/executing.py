@@ -21,7 +21,7 @@ from .launchers import apply_launcher_to_step
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import evaluate_condition_report
 from .preflight_interpreter import evaluate_preflight_step_condition, evaluate_preflight_value_step
-from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
+from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
 from .routines import execute_routine_step
@@ -1187,7 +1187,7 @@ def _execute_profile_switch_step(
     target_profile = available_profiles[profile_name]
     target_working_directory = None if profile_working_directories is None else profile_working_directories.get(profile_name)
     previous = None if current_profile is None else current_profile.name
-    applied = apply_profile_defaults_to_subsequent_steps(workflow, target_profile)
+    applied = apply_runtime_profile_switch(workflow, target_profile)
     switched_workflow = workflow if applied.workflow is None else applied.workflow
     return (
         OperationResult(

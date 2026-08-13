@@ -32,7 +32,7 @@ from .preflight_interpreter import (
     store_preflight_register_output,
 )
 from .preflight_steps import classify_preflight_step
-from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow
+from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
 from .value_resolution import ValueResolutionError, resolve_runtime_value
@@ -1986,7 +1986,7 @@ def _apply_static_profile_switch_block(
             return None
         current_profile = available_profiles[profile_name]
         current_profile_name = profile_name
-        applied = apply_profile_defaults_to_subsequent_steps(current_workflow, current_profile)
+        applied = apply_runtime_profile_switch(current_workflow, current_profile)
         current_workflow = current_workflow if applied.workflow is None else applied.workflow
         current_overrides = current_profile.overrides
     if current_profile_name is None or current_profile is None:
