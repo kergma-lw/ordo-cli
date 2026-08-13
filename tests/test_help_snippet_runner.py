@@ -71,6 +71,17 @@ class HelpSnippetRunnerTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertIn("uses: gh.issue.comment.add", result.workflow_text)
 
+    def test_runner_verifies_workflow_fragment_snippet_in_named_world(self) -> None:
+        result = verify_help_snippet(
+            snippet='version: 0\nworkflow: inspect-issue\nprofile: backend-default\ninputs:\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == "acme/backend"\n  - steps:\n      - name: remember\n        value: "ok"',
+            world="default",
+            insertion_mode="workflow_fragment",
+            target="workflow.profile",
+        )
+
+        self.assertEqual(result.status, "ok")
+        self.assertIn("profile: backend-default", result.workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()

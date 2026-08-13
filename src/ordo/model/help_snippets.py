@@ -99,6 +99,25 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.profile": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "workflow_profile_project_local_binding",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Bind one project-local workflow subtree to a fixed execution profile before guards run.",
+                "yaml": 'version: 0\nworkflow: inspect-issue\nprofile: backend-default\ninputs:\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == "acme/backend"\n  - steps:\n      - name: remember\n        value: "ok"',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "workflow.profile",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
     "workflow.step.state_set": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [

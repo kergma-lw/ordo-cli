@@ -80,6 +80,27 @@ WORKFLOW_AUTHORING_RULES: tuple[dict[str, object], ...] = (
         ],
     },
     {
+        "name": "workflow_profile_binding_is_project_local",
+        "priority": "strong_recommendation",
+        "guidance_level": "recommended",
+        "rule": "Use top-level workflow.profile only when one workflow is intentionally bound to one project-local execution profile. Treat it as a restrictive local binding, not as the default reusable pattern.",
+        "why": [
+            "workflow.profile binds execution context before guards and therefore changes the workflow's activation contract",
+            "hard-binding one workflow to one named profile reduces portability across playbooks and projects",
+            "the binding scopes to the current workflow subtree, so it is appropriate only when that local execution contract is intentional",
+        ],
+        "prefer": [
+            "prefer playbook-owned or caller-selected profile activation for portable workflows",
+            "use workflow.profile only for internal or project-bound workflows whose meaning depends on one execution profile",
+            "treat descendant workflow.profile declarations as subtree-local overrides rather than as caller-wide mutations",
+        ],
+        "avoid": [
+            "using workflow.profile merely as a convenience default for otherwise reusable workflows",
+            "assuming workflow.profile should leak upward into the caller workflow after a nested run returns",
+            "treating workflow.profile and profile_switch as the same authoring surface",
+        ],
+    },
+    {
         "name": "minimal_publish_payload",
         "priority": "strong_recommendation",
         "guidance_level": "recommended",
@@ -684,13 +705,15 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "appropriate_when": [
             "The task needs one explicit executable contract with declared activation inputs and reviewable runtime structure.",
             "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only.",
+            "One intentionally project-local workflow subtree must bind itself to one fixed execution profile through workflow.profile.",
         ],
         "inappropriate_when": [
             "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
             "You are trying to hide multiple unrelated concerns instead of exposing clear inputs, guards, and step forms.",
+            "You only want a soft reusable launch default; prefer playbook or caller-selected profile activation instead of workflow.profile.",
         ],
-        "inspect_next": ["workflow.inputs_contract", "workflow.step_forms.operation_call", "workflow.step.profile_switch", "workflow.step.value", "workflow.step.publish", "workflow.run_contract"],
-        "related_rules": ["early_let", "value_register_before_result", "publish_outputs"],
+        "inspect_next": ["workflow.inputs_contract", "workflow.profile", "workflow.step.profile_switch", "workflow.step_forms.operation_call", "workflow.step.value", "workflow.step.publish", "workflow.run_contract"],
+        "related_rules": ["early_let", "value_register_before_result", "publish_outputs", "workflow_profile_binding_is_project_local"],
         "related_examples": ["examples.minimal", "examples.inspect-issue"],
         "published_names_kind": "workflow",
     },
@@ -1217,6 +1240,7 @@ def build_workflow_authoring_response() -> JSONObject:
             "use ordo-playbook review <workflow> during authoring to catch workflow authoring-quality findings early",
             "after adding or changing a workflow, run both check and review before calling the work complete",
             "keep publish payloads minimal and follow stricter local agent or project output rules when they exist",
+            "use top-level workflow.profile only for intentionally project-local workflows that truly need one fixed execution profile subtree",
             "use structured Ordo surfaces before falling back to routines",
             "when a routine truly needs ambient context, use with.env only as a short explicit list of scalar workflow references such as inputs.* or step.*",
             "treat semantic ambiguity as a reason to clarify rather than improvise",

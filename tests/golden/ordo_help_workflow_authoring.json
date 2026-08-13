@@ -21,6 +21,7 @@
     "use ordo-playbook review <workflow> during authoring to catch workflow authoring-quality findings early",
     "after adding or changing a workflow, run both check and review before calling the work complete",
     "keep publish payloads minimal and follow stricter local agent or project output rules when they exist",
+    "use top-level workflow.profile only for intentionally project-local workflows that truly need one fixed execution profile subtree",
     "use structured Ordo surfaces before falling back to routines",
     "when a routine truly needs ambient context, use with.env only as a short explicit list of scalar workflow references such as inputs.* or step.*",
     "treat semantic ambiguity as a reason to clarify rather than improvise"
@@ -95,6 +96,27 @@
         "check answers whether the workflow is applicable and execution-ready now",
         "review answers whether the workflow still has authoring-quality findings",
         "using both makes it harder to mistake execution readiness for authoring completeness"
+      ]
+    },
+    {
+      "avoid": [
+        "using workflow.profile merely as a convenience default for otherwise reusable workflows",
+        "assuming workflow.profile should leak upward into the caller workflow after a nested run returns",
+        "treating workflow.profile and profile_switch as the same authoring surface"
+      ],
+      "guidance_level": "recommended",
+      "name": "workflow_profile_binding_is_project_local",
+      "prefer": [
+        "prefer playbook-owned or caller-selected profile activation for portable workflows",
+        "use workflow.profile only for internal or project-bound workflows whose meaning depends on one execution profile",
+        "treat descendant workflow.profile declarations as subtree-local overrides rather than as caller-wide mutations"
+      ],
+      "priority": "strong_recommendation",
+      "rule": "Use top-level workflow.profile only when one workflow is intentionally bound to one project-local execution profile. Treat it as a restrictive local binding, not as the default reusable pattern.",
+      "why": [
+        "workflow.profile binds execution context before guards and therefore changes the workflow's activation contract",
+        "hard-binding one workflow to one named profile reduces portability across playbooks and projects",
+        "the binding scopes to the current workflow subtree, so it is appropriate only when that local execution contract is intentional"
       ]
     },
     {

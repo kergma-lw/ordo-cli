@@ -212,6 +212,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         profile_fields = {item["name"]: item for item in model["profile"]["top_level_fields"]}
         defaults_fields = {item["name"]: item for item in model["playbook"]["defaults_fields"]}
         workflow_entry_fields = {item["name"]: item for item in model["playbook"]["workflow_entry_fields"]}
+        workflow_fields = {item["name"]: item for item in model["workflow"]["top_level_fields"]}
         workflow_inputs = next(item for item in model["workflow"]["top_level_fields"] if item["name"] == "inputs")
 
         self.assertEqual(model["playbook"]["activation_semantics"]["pre_run"]["item_type"], "pre_run_entry")
@@ -225,6 +226,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(profile_fields["launchers"]["preferred_alternative"], "published_routines")
         self.assertEqual(defaults_fields["profile"]["runtime_effect"], "selects_active_profile")
         self.assertEqual(defaults_fields["working_directory"]["runtime_effect"], "sets_default_execution_working_directory")
+        self.assertEqual(workflow_fields["profile"]["authoring_role"], "workflow_owned_execution_profile_binding")
+        self.assertEqual(workflow_fields["profile"]["activation_timing"], "before_guard_evaluation")
+        self.assertEqual(workflow_fields["profile"]["applicability"], "internal_project_bound_workflows_only")
         self.assertEqual(workflow_inputs["authoring_role"], "declares_global_activation_inputs")
         self.assertEqual(workflow_entry_fields["with"]["runtime_effect"], "supplies_playbook_owned_workflow_entry_inputs_or_declares_caller_required_inputs")
         self.assertEqual(workflow_entry_fields["with"]["value_surface"], "static_yaml_values_or_null_caller_placeholders")
@@ -257,6 +261,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("register", step_forms["value"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["optional_fields"])
         self.assertIn("launcher", step_forms["operation_call"]["deprecated_optional_fields"])
+
+    def test_help_surfaces_workflow_profile_guidance_and_examples(self) -> None:
+        features = json.loads(self.run_help("features", "--json").stdout)
+        workflow_authoring = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+        describe_profile = json.loads(self.run_help("describe", "workflow.profile", "--json").stdout)
+
+        workflow_cluster = next(cluster for cluster in features["clusters"] if cluster["name"] == "workflow")
+        self.assertTrue(any("workflow.profile" in item for item in workflow_cluster["appropriate_when"]))
+        self.assertTrue(any("workflow.profile" in item for item in workflow_cluster["inappropriate_when"]))
+        self.assertTrue(any(rule["name"] == "workflow_profile_binding_is_project_local" for rule in workflow_authoring["rules"]))
+        self.assertEqual(describe_profile["snippet_coverage"], "runner_verified")
+        self.assertEqual(describe_profile["canonical_examples"][0]["verification"]["target"], "workflow.profile")
 
     def test_model_publishes_bounded_fan_out_run_contract_metadata(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -519,10 +535,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
-        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 4)
+        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 5)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "none")
 

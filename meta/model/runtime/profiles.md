@@ -82,3 +82,15 @@ Profiles describe where and under which approved activation context that intent 
 This separation allows the same workflow to remain reusable while still supporting project-specific operational contexts.
 
 When local projects need genuinely project-specific operations, those extensions should prefer an explicit local namespace rather than silent same-name replacement of base connector operations.
+
+## Workflow-owned profile binding
+
+One workflow may also declare a top-level `profile` as a workflow-owned execution binding.
+
+- This binding applies before the workflow's guards run.
+- The binding scopes to the current workflow run and its descendant `run` subtree.
+- A descendant workflow without its own `profile` inherits the caller workflow's active profile context.
+- A descendant workflow with its own `profile` overrides that inherited context only inside its own subtree.
+- When descendant execution returns, the caller workflow's profile context resumes.
+- This surface is intentionally restrictive and primarily for internal or project-bound workflows.
+- Because it hard-binds one workflow to one project-local profile name, it reduces portability and should not replace ordinary launch-time profile selection for reusable workflows.

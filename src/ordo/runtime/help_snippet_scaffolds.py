@@ -39,10 +39,19 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 )
 
 
+WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
+    mode="workflow_fragment",
+    supported_targets=("workflow.profile",),
+    workflow_surface="full workflow document scaffold",
+    summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
+)
+
+
 INSERTION_CONTRACTS: dict[str, SnippetInsertionContract] = {
     EXPRESSION_VALUE_CONTRACT.mode: EXPRESSION_VALUE_CONTRACT,
     STEP_FIELD_CONTRACT.mode: STEP_FIELD_CONTRACT,
     STEP_FRAGMENT_CONTRACT.mode: STEP_FRAGMENT_CONTRACT,
+    WORKFLOW_FRAGMENT_CONTRACT.mode: WORKFLOW_FRAGMENT_CONTRACT,
 }
 
 
@@ -129,3 +138,11 @@ blocks:
   {indented}
 """
     raise ValueError(f"Unsupported step-fragment target: {target}")
+
+
+def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
+    """Return a standard workflow scaffold for one authored workflow fragment."""
+
+    if target == "workflow.profile":
+        return f"{snippet}\n"
+    raise ValueError(f"Unsupported workflow-fragment target: {target}")

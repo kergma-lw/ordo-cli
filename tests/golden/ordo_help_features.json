@@ -222,11 +222,13 @@
     {
       "appropriate_when": [
         "The task needs one explicit executable contract with declared activation inputs and reviewable runtime structure.",
-        "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only."
+        "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only.",
+        "One intentionally project-local workflow subtree must bind itself to one fixed execution profile through workflow.profile."
       ],
       "inappropriate_when": [
         "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
-        "You are trying to hide multiple unrelated concerns instead of exposing clear inputs, guards, and step forms."
+        "You are trying to hide multiple unrelated concerns instead of exposing clear inputs, guards, and step forms.",
+        "You only want a soft reusable launch default; prefer playbook or caller-selected profile activation instead of workflow.profile."
       ],
       "inspect_next": [
         {
@@ -237,10 +239,10 @@
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow.step_forms.operation_call --json",
-          "handle": "workflow.step_forms.operation_call",
-          "kind": "step_form",
-          "summary": "Published workflow step-form metadata",
+          "command": "ordo-help describe workflow.profile --json",
+          "handle": "workflow.profile",
+          "kind": "field",
+          "summary": "Published workflow field metadata",
           "topic": "model"
         },
         {
@@ -248,6 +250,13 @@
           "handle": "workflow.step.profile_switch",
           "kind": "step_field",
           "summary": "Published workflow step field metadata",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe workflow.step_forms.operation_call --json",
+          "handle": "workflow.step_forms.operation_call",
+          "kind": "step_form",
+          "summary": "Published workflow step-form metadata",
           "topic": "model"
         },
         {
@@ -324,6 +333,7 @@
         "top_level_fields": [
           "version",
           "workflow",
+          "profile",
           "inputs",
           "let",
           "state_needs",
@@ -362,6 +372,12 @@
           "handle": "workflow-authoring.publish_outputs",
           "name": "publish_outputs",
           "summary": "Prefer publish: for intentional outward-facing workflow results."
+        },
+        {
+          "command": "ordo-help describe workflow-authoring.workflow_profile_binding_is_project_local --json",
+          "handle": "workflow-authoring.workflow_profile_binding_is_project_local",
+          "name": "workflow_profile_binding_is_project_local",
+          "summary": "Use top-level workflow.profile only when one workflow is intentionally bound to one project-local execution profile. Treat it as a restrictive local binding, not as the default reusable pattern."
         }
       ],
       "summary": "One executable authoring unit with declared inputs, let bindings, state needs, blocks, and typed step forms."

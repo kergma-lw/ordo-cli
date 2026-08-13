@@ -35,6 +35,7 @@ but workflow files do not own the implementation logic of either surface.
 - explicit authored global publication through `publish` steps.
 - optional author-provided invocation hints on input declarations.
 - future bounded fan-out on `run` when it remains one workflow-composition surface rather than a general looping language.
+- an optional top-level `profile` when one project-local workflow is intentionally bound to one execution profile.
 
 Project-local launch context such as named workflow catalog, named profile catalog, and runtime state declarations belongs to the playbook contract rather than to the workflow domain itself.
 
@@ -59,6 +60,17 @@ Assembly instructions may appear in source workflow material, but they do not su
 Assembly may still carry caller-scoped bindings into expanded material. That does not make the assembly instruction itself part of the assembled block model.
 
 Named launch-time profile selection and project-local state declaration belong to playbook context rather than to generic workflow shape.
+
+## Workflow-owned execution profile binding
+
+An optional top-level workflow `profile` belongs to the workflow domain only as an intentionally restrictive project-local execution binding surface.
+
+- `profile` binds execution context for the current workflow run before guard evaluation.
+- The binding applies to the current workflow body and to descendant `run` invocations unless a descendant workflow declares its own `profile`.
+- A descendant workflow that declares its own `profile` creates a new workflow-local subtree binding for itself and its descendants only.
+- Returning from a descendant workflow restores the caller workflow's active profile context.
+- This surface reduces portability and should not be treated as the default pattern for reusable workflows.
+- Portable or broadly reusable workflows should still prefer playbook-owned or caller-selected profile activation instead of hard workflow binding.
 
 Included fragment reuse still belongs to the workflow domain when it remains declarative and workflow-semantic.
 

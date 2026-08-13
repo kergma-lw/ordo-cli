@@ -7,16 +7,18 @@ from ordo.runtime.help_snippet_scaffolds import (
     build_expression_value_scaffold,
     build_step_field_scaffold,
     build_step_fragment_scaffold,
+    build_workflow_fragment_scaffold,
 )
 
 
 class HelpSnippetScaffoldTest(unittest.TestCase):
     def test_insertion_contracts_publish_supported_targets(self) -> None:
-        self.assertEqual(set(INSERTION_CONTRACTS.keys()), {"expression_value", "step_field", "step_fragment"})
+        self.assertEqual(set(INSERTION_CONTRACTS.keys()), {"expression_value", "step_field", "step_fragment", "workflow_fragment"})
         self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_field"].supported_targets)
         self.assertIn("state", INSERTION_CONTRACTS["expression_value"].supported_targets)
         self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_fragment"].supported_targets)
         self.assertIn("workflow.step.state_set", INSERTION_CONTRACTS["step_fragment"].supported_targets)
+        self.assertIn("workflow.profile", INSERTION_CONTRACTS["workflow_fragment"].supported_targets)
 
     def test_expression_value_scaffold_validates_for_state_target(self) -> None:
         workflow_text = build_expression_value_scaffold(target="state", snippet='state.shared_state["active_profile"]')
@@ -63,6 +65,16 @@ class HelpSnippetScaffoldTest(unittest.TestCase):
         )
 
         report = validate_workflow_text(workflow_text, source="snippet-scaffold:step-if-fragment")
+
+        self.assertEqual(report.status, RuntimeStatus.OK)
+
+    def test_workflow_fragment_scaffold_validates_for_workflow_profile_target(self) -> None:
+        workflow_text = build_workflow_fragment_scaffold(
+            target="workflow.profile",
+            snippet='version: 0\nworkflow: inspect-issue\nprofile: backend-default\ninputs:\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == "acme/backend"\n  - steps:\n      - name: remember\n        value: "ok"',
+        )
+
+        report = validate_workflow_text(workflow_text, source="snippet-scaffold:workflow-profile")
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
