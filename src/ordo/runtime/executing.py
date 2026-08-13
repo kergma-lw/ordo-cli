@@ -541,7 +541,7 @@ def execute_workflow(
                     diagnostics.extend(run_result.diagnostics)
                     operation_results.extend(run_result.operation_results)
                     propagated_profile = run_result.outputs.get("active_profile")
-                    if materialized.profile is None and isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
+                    if effective_workflow.profile is None and materialized.profile is None and isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
                         current_profile = available_profiles[propagated_profile]
                         current_profile_name = propagated_profile
                         current_working_directory = None if profile_working_directories is None else profile_working_directories.get(propagated_profile)

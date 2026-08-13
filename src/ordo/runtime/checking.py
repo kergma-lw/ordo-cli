@@ -1929,7 +1929,7 @@ def _expand_run_step_block_for_check(
             incomplete_reasons.extend(reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str))
             break
         next_profile_name = result.outputs.get("active_profile")
-        if decision.workflow.profile is None and isinstance(next_profile_name, str) and available_profiles is not None and next_profile_name in available_profiles:
+        if effective_workflow.profile is None and decision.workflow.profile is None and isinstance(next_profile_name, str) and available_profiles is not None and next_profile_name in available_profiles:
             effective_profile_name = next_profile_name
             effective_profile = available_profiles[next_profile_name]
             current_overrides = effective_profile.overrides

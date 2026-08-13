@@ -455,6 +455,7 @@ def _apply_input_overrides(
     overridden_workflow = Workflow(
         version=workflow.version,
         workflow=workflow.workflow,
+        profile=workflow.profile,
         inputs=merged_workflow_inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=tuple(sorted((input_overrides or {}).keys())),
@@ -695,6 +696,7 @@ def _prepend_pre_run_workflows(
     return Workflow(
         version=workflow.version,
         workflow=workflow.workflow,
+        profile=workflow.profile,
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=workflow.explicit_input_keys,
@@ -999,6 +1001,7 @@ def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Work
     return Workflow(
         version=workflow.version,
         workflow=workflow.workflow,
+        profile=workflow.profile,
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=workflow.explicit_input_keys,
@@ -1231,6 +1234,7 @@ def _working_directory_activation_workflow(
     return Workflow(
         version=template.version,
         workflow=template.workflow,
+        profile=template.profile,
         inputs=merged_inputs,
         declared_inputs=template.declared_inputs,
         explicit_input_keys=template.explicit_input_keys,
@@ -1399,6 +1403,7 @@ def _with_workflow_connector_contexts(workflow: Workflow, connector_contexts: di
     return Workflow(
         version=workflow.version,
         workflow=workflow.workflow,
+        profile=workflow.profile,
         inputs=workflow.inputs,
         declared_inputs=workflow.declared_inputs,
         explicit_input_keys=workflow.explicit_input_keys,

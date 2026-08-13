@@ -2149,6 +2149,121 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertIn("remember", result.outputs["executed_steps"])
 
+    def test_check_after_activation_workflow_profile_overrides_pre_run_switched_repository_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / "repo.json").write_text('{"active_profile": "mobile", "active_story_issue_number": 99}\n', encoding="utf-8")
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - file: workflows/switch-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    defaults:
+                      profile: meta
+                    workflows:
+                      story-get-task-for-work:
+                        file: story-get-task-for-work.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    profiles:
+                      mobile:
+                        file: mobile.yml
+                      meta:
+                        file: meta.yml
+                    states:
+                      shared_state:
+                        path: ../repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: active_profile\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "story-get-task-for-work.yml").write_text(
+                "version: 0\nworkflow: story-get-task-for-work\nprofile: meta\ninputs:\n  repository: {}\n  project_id: {}\nstate_needs:\n  shared_state: {}\nlet:\n  active_story_issue_number: state.shared_state[\"active_story_issue_number\"]\nblocks:\n  - guards:\n      - active_story_issue_number | is_integer\n      - inputs.repository == \"kergma-lw/checklist-meta\"\n  - steps:\n      - name: remember\n        value: inputs.repository\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "mobile.yml").write_text(
+                "name: mobile\ninputs:\n  repository: kergma-lw/checklist-mobile\n  project_id: mobile-project\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "meta.yml").write_text(
+                "name: meta\ninputs:\n  repository: kergma-lw/checklist-meta\n  project_id: meta-project\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="story-get-task-for-work", cwd=root)
+            self.assertEqual(activated.workflow.profile, "meta")
+            result = check_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                profile_working_directories=activated.profile_working_directories,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["active_profile"], "meta")
+            self.assertEqual(result.outputs["workflow_profile_declared"], "meta")
+            self.assertIsNone(result.failed_guard)
+            self.assertNotIn('kergma-lw/checklist-mobile', json.dumps(result.outputs, ensure_ascii=False, sort_keys=True))
+
+    def test_execute_after_activation_restores_parent_profile_after_nested_workflow_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    defaults:
+                      profile: backend
+                    workflows:
+                      parent:
+                        file: parent.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                      meta:
+                        file: meta.yml
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "parent.yml").write_text(
+                "version: 0\nworkflow: parent\nblocks:\n  - steps:\n      - name: run-child\n        run: child.yml\n      - name: switch-backend\n        profile_switch: \"backend\"\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "child.yml").write_text(
+                "version: 0\nworkflow: child\nprofile: meta\nblocks:\n  - steps:\n      - name: remember\n        value: \"ok\"\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text("name: backend\n", encoding="utf-8")
+            (root / ".ordo" / "profiles" / "meta.yml").write_text("name: meta\n", encoding="utf-8")
+
+            activated = activate_playbook(workflow_name="parent", cwd=root)
+            result = execute_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                profile_working_directories=activated.profile_working_directories,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["active_profile"], "backend")
+
     def test_execute_after_activation_accumulates_pre_run_results_before_main_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
