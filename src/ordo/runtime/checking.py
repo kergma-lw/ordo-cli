@@ -2033,7 +2033,7 @@ def _activate_workflow_declared_profile(
             },
         )
     target_profile = available_profiles[workflow.profile]
-    applied = apply_profile_to_workflow(workflow, target_profile)
+    applied = apply_runtime_profile_switch(workflow, target_profile)
     if not applied.ok or applied.workflow is None:
         return RuntimeResult(
             mode=Mode.CHECK,

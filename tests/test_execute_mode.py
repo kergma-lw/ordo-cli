@@ -1071,6 +1071,7 @@ blocks:
             version=0,
             workflow="open-task",
             profile="frontend",
+            inputs={"repo": "mobile"},
             steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
         )
         frontend = Profile(name="frontend", inputs={"repo": "frontend"})
@@ -1085,6 +1086,7 @@ blocks:
         self.assertEqual(context["active_profile"], "frontend")
         self.assertEqual(context["current_profile_name"], "frontend")
         self.assertEqual(context["current_working_directory"], Path("/tmp/frontend"))
+        self.assertEqual(context["workflow"].inputs["repo"], "frontend")
 
     def test_execute_uses_workflow_declared_profile_for_guards(self) -> None:
         workflow = Workflow(
@@ -1133,6 +1135,29 @@ blocks:
 
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(result.outputs["active_profile"], "backend")
+
+    def test_execute_workflow_profile_overrides_prior_profile_derived_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="meta",
+            inputs={"repository": "mobile/repo", "project_id": "mobile-project"},
+            steps=(Step(name="remember", value="ok"),),
+        )
+
+        context = _initialize_execute_context(
+            workflow,
+            profile=Profile(name="mobile", inputs={"repository": "mobile/repo", "project_id": "mobile-project"}),
+            available_profiles={
+                "mobile": Profile(name="mobile", inputs={"repository": "mobile/repo", "project_id": "mobile-project"}),
+                "meta": Profile(name="meta", inputs={"repository": "meta/repo", "project_id": "meta-project"}),
+            },
+            profile_working_directories=None,
+        )
+
+        self.assertEqual(context["active_profile"], "meta")
+        self.assertEqual(context["workflow"].inputs["repository"], "meta/repo")
+        self.assertEqual(context["workflow"].inputs["project_id"], "meta-project")
     def test_execute_preserves_blocked_before_execution(self) -> None:
         workflow = Workflow(
             version=0,

@@ -622,6 +622,25 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(result.diagnostics[0].code, "runtime.workflow.profile.not_available")
 
+    def test_check_workflow_profile_overrides_prior_profile_derived_inputs(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="meta",
+            inputs={"repository": "mobile/repo", "project_id": "mobile-project"},
+            declared_inputs={"repository": {}, "project_id": {}},
+            blocks=(StepBlock(steps=(Step(name="remember", value="ok"),)),),
+        )
+        profiles = {
+            "mobile": Profile(name="mobile", inputs={"repository": "mobile/repo", "project_id": "mobile-project"}),
+            "meta": Profile(name="meta", inputs={"repository": "meta/repo", "project_id": "meta-project"}),
+        }
+
+        result = check_workflow(workflow, profile=profiles["mobile"], available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "meta")
+
     def test_check_treats_publish_step_as_read_only_analyzable(self) -> None:
         workflow = Workflow(
             version=0,

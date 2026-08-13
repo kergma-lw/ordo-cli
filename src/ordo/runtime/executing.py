@@ -1054,7 +1054,7 @@ def _initialize_execute_context(
             current_profile_name = current_profile.name
             active_profile = current_profile.name
             active_overrides = current_profile.overrides
-            applied = apply_profile_to_workflow(workflow, current_profile)
+            applied = apply_runtime_profile_switch(effective_workflow, current_profile)
             if applied.ok and applied.workflow is not None:
                 effective_workflow = applied.workflow
     current_working_directory = None if current_profile_name is None or profile_working_directories is None else profile_working_directories.get(current_profile_name)
