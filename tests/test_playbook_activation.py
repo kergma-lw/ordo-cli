@@ -14,7 +14,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
-from ordo.runtime import check_workflow, execute_workflow, plan_workflow
+from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, discover_playbook_path, inspect_playbook_workflow
 from ordo.runtime.profiles import apply_profile_defaults_to_subsequent_steps
 
@@ -2215,6 +2215,29 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(result.outputs["workflow_profile_declared"], "meta")
             self.assertIsNone(result.failed_guard)
             self.assertNotIn('kergma-lw/checklist-mobile', json.dumps(result.outputs, ensure_ascii=False, sort_keys=True))
+
+            plan_result = plan_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                profile_working_directories=activated.profile_working_directories,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+            explain_result = explain_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                profile_working_directories=activated.profile_working_directories,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(plan_result.status, RuntimeStatus.OK)
+            self.assertEqual(plan_result.outputs["active_profile"], "meta")
+            self.assertEqual(plan_result.outputs["active_profile_source"], "workflow")
+            self.assertNotIn('kergma-lw/checklist-mobile', json.dumps(plan_result.outputs, ensure_ascii=False, sort_keys=True))
+
+            self.assertEqual(explain_result.status, RuntimeStatus.OK)
+            self.assertEqual(explain_result.outputs["active_profile"], "meta")
 
     def test_execute_after_activation_restores_parent_profile_after_nested_workflow_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
