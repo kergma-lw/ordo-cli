@@ -134,6 +134,7 @@ def _build_review_findings(
     findings.extend(_find_gate_recommendation_hints(workflow))
     findings.extend(_find_first_step_applicability_guard_hints(workflow))
     findings.extend(_find_unnecessary_with_root_adapter_bindings(workflow))
+    findings.extend(_find_workflow_profile_binding_hints(workflow))
     findings.extend(
         _find_bounded_fan_out_authoring_findings(
             workflow,
@@ -142,6 +143,26 @@ def _build_review_findings(
         )
     )
     return findings
+
+
+def _find_workflow_profile_binding_hints(workflow: Workflow) -> list[dict[str, object]]:
+    if workflow.profile is None:
+        return []
+    return [
+        {
+            "code": "review.workflow.profile.project_local_binding",
+            "level": "warning",
+            "category": "workflow_profile_binding",
+            "message": "workflow.profile is an intentionally restrictive project-local execution binding and reduces portability",
+            "path": ["profile"],
+            "evidence": {
+                "profile": workflow.profile,
+                "applicability": "internal_project_bound_workflows_only",
+                "binding_scope": "current_workflow_and_descendant_runs",
+                "reason": "portable or reusable workflows should prefer launch-time profile selection instead of hard binding",
+            },
+        }
+    ]
 
 
 def _find_string_condition_structured_form_hints(workflow: Workflow) -> list[dict[str, object]]:

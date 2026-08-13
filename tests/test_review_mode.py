@@ -86,6 +86,22 @@ blocks:
         self.assertEqual(unused["path"], ["inputs", "unused"])
         self.assertEqual(unused["evidence"]["classification"], "unused_input")
 
+    def test_review_reports_workflow_profile_as_project_local_binding(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue")),),
+        )
+        profiles = {"frontend": Profile(name="frontend")}
+
+        result = review_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.profile.project_local_binding")
+        self.assertEqual(finding["path"], ["profile"])
+        self.assertEqual(finding["evidence"]["binding_scope"], "current_workflow_and_descendant_runs")
+
     def test_review_counts_input_used_inside_adapter_outer_binding(self) -> None:
         workflow = load_workflow_text(
             '''

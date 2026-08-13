@@ -148,6 +148,24 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["active_profile"], "repo-defaults")
         self.assertTrue(result.outputs["execution_allowed"])
 
+    def test_plan_surfaces_workflow_profile_binding_source(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            declared_inputs={"repo_kind": {}},
+            blocks=(
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+                StepBlock(steps=(Step(name="remember", value="ok"),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+        result = plan_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+        self.assertEqual(result.outputs["active_profile_source"], "workflow")
+
     def test_plan_does_not_upgrade_unknown_check_result_to_allowed(self) -> None:
         workflow = Workflow(
             version=0,

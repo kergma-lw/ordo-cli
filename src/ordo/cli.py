@@ -673,6 +673,7 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
         "workflow": payload.get("workflow"),
         "playbook": payload.get("playbook"),
         "profile": payload.get("profile"),
+        "active_profile_source": outputs.get("active_profile_source"),
         "allowed": allowed,
         "diagnostics": payload.get("diagnostics", []),
         "observed_facts": _collect_observed_facts(outputs),

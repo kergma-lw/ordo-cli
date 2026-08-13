@@ -61,6 +61,28 @@ class CliSummaryTest(unittest.TestCase):
 
         self.assertEqual(summary["missing_facts"], ["fresh facts unavailable for gh.issue"])
 
+    def test_check_summary_preserves_active_profile_source(self) -> None:
+        payload = {
+            "mode": "check",
+            "status": "ok",
+            "workflow": "close-story",
+            "playbook": "/tmp/.ordo/ordo.yaml",
+            "profile": "backend",
+            "diagnostics": [],
+            "outputs": {
+                "can_execute": True,
+                "guard_details": [],
+                "stale_probe_scopes": [],
+                "verdict_basis_stale": False,
+                "unevaluated_relevant_guards": [],
+                "active_profile_source": "workflow",
+            },
+        }
+
+        summary = _summarize_check_payload(payload)
+
+        self.assertEqual(summary["active_profile_source"], "workflow")
+
     def test_check_summary_surfaces_gate_blockers(self) -> None:
         payload = {
             "mode": "check",

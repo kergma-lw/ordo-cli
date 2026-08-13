@@ -257,6 +257,12 @@ def plan_workflow(
         if applied.ok and applied.workflow is not None:
             effective_workflow = applied.workflow
 
+    workflow_profile_declared = base_outputs.get("workflow_profile_declared")
+    if isinstance(workflow_profile_declared, str) and available_profiles is not None and workflow_profile_declared in available_profiles:
+        applied = apply_profile_to_workflow(workflow, available_profiles[workflow_profile_declared])
+        if applied.ok and applied.workflow is not None:
+            effective_workflow = applied.workflow
+
     validation_report = validate_workflow_document(effective_workflow.to_contract())
     resolution: WorkflowResolution | None = None
     if validation_report.ok:
@@ -310,6 +316,7 @@ def plan_workflow(
         **base_outputs,
         "plan_ready": check_result.status is not RuntimeStatus.VALIDATION_ERROR,
         "execution_allowed": execution_allowed,
+        "active_profile_source": "workflow" if isinstance(workflow_profile_declared, str) else ("launch" if base_outputs.get("active_profile") is not None else None),
         "guard_items": guard_items,
         "step_items": step_items,
         "run_items": run_items,

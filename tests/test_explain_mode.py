@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow, load_workflow_text
@@ -66,6 +67,38 @@ class ExplainModeTest(unittest.TestCase):
             self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
             self.assertEqual(result.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
             self.assertEqual(result.outputs["explanation"]["category"], "validation")
+
+    def test_explain_reports_missing_workflow_declared_profile(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            steps=(Step(name="remember", value="ok"),),
+        )
+
+        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(result.outputs["reason_category"], "workflow_profile")
+        self.assertEqual(result.outputs["next_actions"][0]["action"], "make_workflow_profile_available")
+
+    def test_explain_preserves_workflow_profile_execution_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            declared_inputs={"repo_kind": {}},
+            blocks=(
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+                StepBlock(steps=(Step(name="remember", value="ok"),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+        result = explain_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "frontend")
 
     def test_explain_reports_ok_state_and_safe_next_action(self) -> None:
         workflow = Workflow(

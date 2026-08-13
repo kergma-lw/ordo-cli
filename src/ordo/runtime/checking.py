@@ -50,6 +50,7 @@ class _CheckAnalysisTree:
     workflow: Workflow
     initial_resolution: object
     active_profile: str | None
+    workflow_profile_declared: str | None
     active_overrides: tuple[object, ...]
     diagnostics: tuple[Diagnostic, ...]
     operation_results: tuple[OperationResult, ...]
@@ -270,7 +271,7 @@ def check_workflow(
     )
     if isinstance(workflow_profile_activation, RuntimeResult):
         return workflow_profile_activation
-    effective_workflow, current_profile, current_profile_name, active_profile, active_overrides = workflow_profile_activation
+    effective_workflow, current_profile, current_profile_name, active_profile, active_overrides, workflow_profile_declared = workflow_profile_activation
 
     semantic_report = validate_workflow_semantics(effective_workflow)
     if not semantic_report.ok:
@@ -315,6 +316,7 @@ def check_workflow(
     analysis = _build_check_analysis_tree(
         workflow=effective_workflow,
         active_profile=active_profile,
+        workflow_profile_declared=workflow_profile_declared,
         current_profile=current_profile,
         available_profiles=available_profiles,
         profile_working_directories=profile_working_directories,
@@ -376,6 +378,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
             "preflight_registers": dict(effective_workflow.step_results),
             "preflight_step_results": dict(effective_workflow.step_results),
             "active_profile": analysis.active_profile,
+            "workflow_profile_declared": analysis.workflow_profile_declared,
             "active_overrides": [override.to_contract() for override in analysis.active_overrides],
         }
         if analysis.bootstrap_details:
@@ -412,6 +415,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
             "preflight_registers": dict(effective_workflow.step_results),
             "preflight_step_results": dict(effective_workflow.step_results),
             "active_profile": analysis.active_profile,
+            "workflow_profile_declared": analysis.workflow_profile_declared,
             "active_overrides": [override.to_contract() for override in analysis.active_overrides],
         }
         if analysis.bootstrap_details:
@@ -451,6 +455,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
         "preflight_registers": dict(effective_workflow.step_results),
         "preflight_step_results": dict(effective_workflow.step_results),
         "active_profile": analysis.active_profile,
+        "workflow_profile_declared": analysis.workflow_profile_declared,
         "active_overrides": [override.to_contract() for override in analysis.active_overrides],
     }
     if frontier_ready_step is not None:
@@ -479,6 +484,7 @@ def _build_check_analysis_tree(
     *,
     workflow: Workflow,
     active_profile: str | None,
+    workflow_profile_declared: str | None,
     current_profile: Profile | None,
     available_profiles: dict[str, Profile] | None,
     profile_working_directories: dict[str, Path | None] | None = None,
@@ -747,6 +753,7 @@ def _build_check_analysis_tree(
         workflow=effective_workflow,
         initial_resolution=initial_resolution,
         active_profile=active_profile,
+        workflow_profile_declared=workflow_profile_declared,
         active_overrides=tuple(resolved_overrides),
         diagnostics=tuple(diagnostics),
         operation_results=tuple(operation_results),
@@ -1992,11 +1999,11 @@ def _activate_workflow_declared_profile(
     *,
     current_profile: Profile | None,
     available_profiles: dict[str, Profile] | None,
-) -> tuple[Workflow, Profile | None, str | None, str | None, tuple] | RuntimeResult:
+) -> tuple[Workflow, Profile | None, str | None, str | None, tuple, str | None] | RuntimeResult:
     if workflow.profile is None:
         current_profile_name = None if current_profile is None else current_profile.name
         active_overrides = () if current_profile is None else current_profile.overrides
-        return workflow, current_profile, current_profile_name, current_profile_name, active_overrides
+        return workflow, current_profile, current_profile_name, current_profile_name, active_overrides, None
     if available_profiles is None or workflow.profile not in available_profiles:
         diagnostic = Diagnostic(
             code="runtime.workflow.profile.not_available",
@@ -2020,6 +2027,7 @@ def _activate_workflow_declared_profile(
                 "unevaluated_relevant_guard_count": 0,
                 "unevaluated_relevant_guards": [],
                 "block_items": [],
+                "workflow_profile_declared": workflow.profile,
                 "active_profile": None,
                 "active_overrides": [],
             },
@@ -2042,11 +2050,12 @@ def _activate_workflow_declared_profile(
                 "unevaluated_relevant_guard_count": 0,
                 "unevaluated_relevant_guards": [],
                 "block_items": [],
+                "workflow_profile_declared": workflow.profile,
                 "active_profile": workflow.profile,
                 "active_overrides": [override.to_contract() for override in applied.active_overrides],
             },
         )
-    return applied.workflow, target_profile, target_profile.name, target_profile.name, applied.active_overrides
+    return applied.workflow, target_profile, target_profile.name, target_profile.name, applied.active_overrides, workflow.profile
 
 
 @contextlib.contextmanager

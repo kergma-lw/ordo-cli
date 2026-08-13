@@ -90,6 +90,14 @@ def _build_explanation(result: RuntimeResult) -> dict[str, object]:
     incomplete_reasons = [reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str)]
 
     if result.status is RuntimeStatus.VALIDATION_ERROR:
+        profile_name = result.outputs.get("workflow_profile_declared")
+        if isinstance(profile_name, str) and any(diagnostic.code == "runtime.workflow.profile.not_available" for diagnostic in result.diagnostics):
+            return {
+                "category": "workflow_profile",
+                "allowed": False,
+                "why": f"The workflow declares execution profile '{profile_name}', but that profile is not available in the current execution context",
+                "blockers": [profile_name],
+            }
         return {
             "category": "validation",
             "allowed": False,
@@ -274,6 +282,13 @@ def _preflight_support_steps(result: RuntimeResult) -> list[dict[str, object]]:
 
 def _infer_next_actions(result: RuntimeResult) -> list[dict[str, str]]:
     if result.status is RuntimeStatus.VALIDATION_ERROR:
+        if any(diagnostic.code == "runtime.workflow.profile.not_available" for diagnostic in result.diagnostics):
+            return [
+                {
+                    "action": "make_workflow_profile_available",
+                    "reason": "Provide the workflow-declared profile in the current playbook or execution context before retrying",
+                }
+            ]
         return [
             {
                 "action": "fix_validation_errors",
