@@ -1099,8 +1099,8 @@ class ValidationTest(unittest.TestCase):
         )
 
         codes = {diagnostic.code for diagnostic in report.diagnostics}
-        self.assertIn("validation.uses.type", codes)
-        self.assertIn("validation.name.type", codes)
+        self.assertIn("validation.uses.missing", codes)
+        self.assertIn("validation.name.missing", codes)
 
     def test_duplicate_step_names_fail(self) -> None:
         report = validate_workflow_text(

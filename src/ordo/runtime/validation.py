@@ -3389,6 +3389,8 @@ def _require_non_empty_string(
         return [] if not required else [_diagnostic(f"validation.{key}.missing", f"Field '{key}' is required", path or (key,), source)]
     value = data.get(key)
     result_path = path or (key,)
+    if value is None:
+        return [_diagnostic(f"validation.{key}.type", f"Field '{key}' must be a string", result_path, source, actual_type=type(value).__name__)]
     if not isinstance(value, str):
         return [_diagnostic(f"validation.{key}.type", f"Field '{key}' must be a string", result_path, source, actual_type=type(value).__name__)]
     if not value:

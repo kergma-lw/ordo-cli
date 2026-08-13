@@ -1797,6 +1797,7 @@ blocks:
         analysis = _build_check_analysis_tree(
             workflow=workflow,
             active_profile=None,
+            workflow_profile_declared=None,
             current_profile=None,
             available_profiles=None,
             active_overrides=(),
@@ -1871,6 +1872,7 @@ blocks:
         analysis = _build_check_analysis_tree(
             workflow=workflow,
             active_profile=None,
+            workflow_profile_declared=None,
             current_profile=None,
             available_profiles=None,
             active_overrides=(),
@@ -1911,6 +1913,7 @@ blocks:
         analysis = _build_check_analysis_tree(
             workflow=workflow,
             active_profile=None,
+            workflow_profile_declared=None,
             current_profile=None,
             available_profiles=None,
             active_overrides=(),
@@ -1948,6 +1951,7 @@ blocks:
         analysis = _build_check_analysis_tree(
             workflow=workflow,
             active_profile=None,
+            workflow_profile_declared=None,
             current_profile=None,
             available_profiles=None,
             active_overrides=(),
