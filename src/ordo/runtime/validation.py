@@ -140,6 +140,7 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_validate_unknown_fields(payload, WORKFLOW_ALLOWED_FIELDS, path=(), source=source))
     diagnostics.extend(_require_exact_int(payload, "version", 0, source=source))
     diagnostics.extend(_require_non_empty_string(payload, "workflow", source=source))
+    diagnostics.extend(_require_non_empty_string(payload, "profile", source=source, required=False))
     diagnostics.extend(_require_object_field(payload, "inputs", source=source, required=False))
     diagnostics.extend(_validate_workflow_input_declarations(payload.get("inputs"), source=source))
     diagnostics.extend(_require_object_field(payload, "let", source=source, required=False))
@@ -3380,9 +3381,12 @@ def _require_non_empty_string(
     *,
     source: str,
     path: tuple[str, ...] | None = None,
+    required: bool = True,
     pattern: re.Pattern[str] | None = None,
     pattern_message: str | None = None,
 ) -> list[Diagnostic]:
+    if key not in data:
+        return [] if not required else [_diagnostic(f"validation.{key}.missing", f"Field '{key}' is required", path or (key,), source)]
     value = data.get(key)
     result_path = path or (key,)
     if not isinstance(value, str):

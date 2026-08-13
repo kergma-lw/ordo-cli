@@ -18,6 +18,14 @@ WORKFLOW_CONTRACT: JSONObject = {
         {"name": "version", "required": True, "type": "integer"},
         {"name": "workflow", "required": True, "type": "string"},
         {
+            "name": "profile",
+            "required": False,
+            "type": "string",
+            "authoring_role": "workflow_owned_execution_profile_binding",
+            "activation_timing": "before_guard_evaluation",
+            "applicability": "internal_project_bound_workflows_only",
+        },
+        {
             "name": "inputs",
             "required": False,
             "type": "object",

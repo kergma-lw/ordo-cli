@@ -99,6 +99,7 @@ def load_workflow_payload(payload: JSONObject, *, source: str, launch_dir: str |
     return Workflow(
         version=_require_int(payload, "version", source=source),
         workflow=_require_string(payload, "workflow", source=source),
+        profile=_optional_string(payload, "profile", source=source),
         inputs=workflow_inputs,
         declared_inputs=declared_inputs,
         let_bindings=let_bindings,

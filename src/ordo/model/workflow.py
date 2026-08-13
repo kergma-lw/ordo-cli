@@ -204,6 +204,7 @@ class Workflow:
 
     version: int
     workflow: str
+    profile: str | None = None
     inputs: JSONObject = field(default_factory=dict)
     declared_inputs: JSONObject = field(default_factory=dict)
     explicit_input_keys: tuple[str, ...] = ()
@@ -223,6 +224,7 @@ class Workflow:
         *,
         version: int,
         workflow: str,
+        profile: str | None = None,
         inputs: JSONObject | None = None,
         declared_inputs: JSONObject | None = None,
         explicit_input_keys: tuple[str, ...] = (),
@@ -253,6 +255,7 @@ class Workflow:
 
         object.__setattr__(self, "version", version)
         object.__setattr__(self, "workflow", workflow)
+        object.__setattr__(self, "profile", profile)
         runtime_inputs = {} if inputs is None else dict(inputs)
         declared = {key: {} for key in runtime_inputs} if declared_inputs is None else dict(declared_inputs)
         object.__setattr__(self, "inputs", runtime_inputs)
@@ -283,6 +286,7 @@ class Workflow:
         return {
             "version": self.version,
             "workflow": self.workflow,
+            **({"profile": self.profile} if self.profile is not None else {}),
             "inputs": dict(self.declared_inputs),
             "let": dict(self.let_bindings),
             "state_needs": dict(self.state_needs),

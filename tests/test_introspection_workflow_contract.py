@@ -12,7 +12,7 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         field_names = {field["name"] for field in payload["top_level_fields"]}
         step_forms = {item["name"]: item for item in payload["step_forms"]}
         step_rules = {item["name"]: item for item in payload["step_form_rules"]}
-        self.assertEqual(field_names, {"version", "workflow", "inputs", "let", "state_needs", "blocks"})
+        self.assertEqual(field_names, {"version", "workflow", "profile", "inputs", "let", "state_needs", "blocks"})
         self.assertEqual(step_forms["run_invocation"]["required_fields"], ["name", "run"])
         self.assertIn("for_each", step_forms["run_invocation"]["optional_fields"])
         self.assertIn("register", step_forms["run_invocation"]["optional_fields"])
@@ -48,6 +48,9 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(payload["run_contract"]["call_fields"][3]["structured_optional_fields"][0]["name"], "on_fail")
         self.assertEqual(payload["surface_constraints"]["authored_surfaces"]["condition_field_forms"]["structured_object_operators"], ["all", "any", "not"])
         self.assertEqual(payload["surface_constraints"]["authored_surfaces"]["condition_field_forms"]["gate_structured_optional_fields"], ["on_fail"])
+        profile_field = next(field for field in payload["top_level_fields"] if field["name"] == "profile")
+        self.assertEqual(profile_field["activation_timing"], "before_guard_evaluation")
+        self.assertEqual(profile_field["applicability"], "internal_project_bound_workflows_only")
 
         from ordo.introspection import describe_playbook_contract
 

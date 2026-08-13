@@ -59,6 +59,7 @@ class LoadingTest(unittest.TestCase):
                 """
                 version: 0
                 workflow: open-task
+                profile: backend-default
                 inputs:
                   issue: repo#1
                 blocks:
@@ -75,8 +76,23 @@ class LoadingTest(unittest.TestCase):
         )
 
         self.assertIsInstance(workflow, Workflow)
+        self.assertEqual(workflow.profile, "backend-default")
+        self.assertEqual(workflow.to_contract()["profile"], "backend-default")
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["uses"], "gh.issue")
         self.assertEqual(workflow.to_contract()["blocks"][1]["steps"][0]["register"], "issue")
+
+    def test_load_rejects_empty_top_level_profile(self) -> None:
+        report = validate_workflow_document(
+            {
+                "version": 0,
+                "workflow": "open-task",
+                "profile": "",
+                "blocks": [{"steps": []}],
+            }
+        )
+
+        self.assertEqual(report.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(report.diagnostics[0].code, "validation.profile.empty")
 
     def test_loads_step_if_field_into_typed_model(self) -> None:
         workflow = load_workflow_text(
