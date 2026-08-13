@@ -57,6 +57,7 @@ def materialize_run_workflow(
         binding_workflow = Workflow(
             version=caller_workflow.version,
             workflow=caller_workflow.workflow,
+            profile=caller_workflow.profile,
             inputs={**caller_workflow.inputs, "__iteration_item__": extra_bindings["item"]},
             declared_inputs=caller_workflow.declared_inputs,
             explicit_input_keys=caller_workflow.explicit_input_keys,
@@ -154,6 +155,7 @@ def classify_run_for_check(
             binding_workflow = Workflow(
                 version=caller_workflow.version,
                 workflow=caller_workflow.workflow,
+                profile=caller_workflow.profile,
                 inputs={**caller_workflow.inputs, "__iteration_item__": extra_bindings["item"]},
                 declared_inputs=caller_workflow.declared_inputs,
                 explicit_input_keys=caller_workflow.explicit_input_keys,
@@ -295,6 +297,7 @@ def build_run_target_workflow(
         return Workflow(
             version=nested_workflow.version,
             workflow=f"{caller_workflow.workflow}::{nested_workflow.workflow}",
+            profile=nested_workflow.profile,
             inputs={**nested_workflow.inputs, **caller_workflow.inputs, **step.run_inputs, **effective_bindings, "__fragment_args__": effective_bindings},
             declared_inputs={**caller_workflow.declared_inputs, **nested_workflow.declared_inputs},
             explicit_input_keys=_merge_explicit_input_keys(caller_workflow, nested_workflow),

@@ -88,6 +88,7 @@ def execute_workflow(
     context = _initialize_execute_context(
         workflow,
         profile=profile,
+        available_profiles=available_profiles,
         profile_working_directories=profile_working_directories,
     )
     effective_workflow = context["workflow"]
@@ -540,7 +541,7 @@ def execute_workflow(
                     diagnostics.extend(run_result.diagnostics)
                     operation_results.extend(run_result.operation_results)
                     propagated_profile = run_result.outputs.get("active_profile")
-                    if isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
+                    if materialized.profile is None and isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
                         current_profile = available_profiles[propagated_profile]
                         current_profile_name = propagated_profile
                         current_working_directory = None if profile_working_directories is None else profile_working_directories.get(propagated_profile)
@@ -1028,6 +1029,7 @@ def _initialize_execute_context(
     workflow: Workflow,
     *,
     profile: Profile | None,
+    available_profiles: dict[str, Profile] | None = None,
     profile_working_directories: dict[str, Path | None] | None,
 ) -> dict[str, object]:
     effective_workflow = workflow
@@ -1039,13 +1041,28 @@ def _initialize_execute_context(
             effective_workflow = applied.workflow
             active_profile = applied.active_profile
             active_overrides = applied.active_overrides
+    current_profile = profile
     current_profile_name = None if profile is None else profile.name
+    if workflow.profile is not None:
+        if profile is not None and workflow.profile == profile.name:
+            current_profile = profile
+            current_profile_name = profile.name
+            active_profile = profile.name
+            active_overrides = profile.overrides
+        elif available_profiles is not None and workflow.profile in available_profiles:
+            current_profile = available_profiles[workflow.profile]
+            current_profile_name = current_profile.name
+            active_profile = current_profile.name
+            active_overrides = current_profile.overrides
+            applied = apply_profile_to_workflow(workflow, current_profile)
+            if applied.ok and applied.workflow is not None:
+                effective_workflow = applied.workflow
     current_working_directory = None if current_profile_name is None or profile_working_directories is None else profile_working_directories.get(current_profile_name)
     return {
         "workflow": effective_workflow,
         "active_profile": active_profile,
         "active_overrides": active_overrides,
-        "current_profile": profile,
+        "current_profile": current_profile,
         "current_profile_name": current_profile_name,
         "current_working_directory": current_working_directory,
     }

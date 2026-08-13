@@ -221,6 +221,7 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
         workflow=Workflow(
             version=workflow.version,
             workflow=workflow.workflow,
+            profile=workflow.profile,
             inputs=merged_inputs,
             declared_inputs=workflow.declared_inputs,
             explicit_input_keys=workflow.explicit_input_keys,
@@ -255,6 +256,7 @@ def apply_profile_defaults_to_subsequent_steps(workflow: Workflow, profile: Prof
         workflow=Workflow(
             version=workflow.version,
             workflow=workflow.workflow,
+            profile=workflow.profile,
             inputs=merged_inputs,
             declared_inputs=workflow.declared_inputs,
             explicit_input_keys=workflow.explicit_input_keys,

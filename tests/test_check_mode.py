@@ -589,6 +589,39 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["preflight_step_items"][0]["status"], "interpreted")
         self.assertEqual(result.outputs["preflight_step_items"][1]["status"], "interpreted")
 
+    def test_check_applies_workflow_declared_profile_before_guards(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            declared_inputs={"repo_kind": {}},
+            blocks=(
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+                StepBlock(steps=(Step(name="remember", value="ok"),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+        result = check_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
+
+    def test_check_rejects_missing_workflow_declared_profile_before_execution(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            blocks=(StepBlock(steps=(Step(name="remember", value="ok"),)),),
+        )
+
+        result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
+        self.assertEqual(result.diagnostics[0].code, "runtime.workflow.profile.not_available")
+
     def test_check_treats_publish_step_as_read_only_analyzable(self) -> None:
         workflow = Workflow(
             version=0,

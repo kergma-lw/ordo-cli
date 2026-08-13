@@ -1065,6 +1065,74 @@ blocks:
         self.assertEqual(context["active_profile"], "frontend")
         self.assertEqual(context["current_profile_name"], "frontend")
         self.assertEqual(context["current_working_directory"], Path("/tmp"))
+
+    def test_initialize_execute_context_applies_workflow_declared_profile(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+        frontend = Profile(name="frontend", inputs={"repo": "frontend"})
+
+        context = _initialize_execute_context(
+            workflow,
+            profile=None,
+            available_profiles={"frontend": frontend},
+            profile_working_directories={"frontend": Path("/tmp/frontend")},
+        )
+
+        self.assertEqual(context["active_profile"], "frontend")
+        self.assertEqual(context["current_profile_name"], "frontend")
+        self.assertEqual(context["current_working_directory"], Path("/tmp/frontend"))
+
+    def test_execute_uses_workflow_declared_profile_for_guards(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            profile="frontend",
+            declared_inputs={"repo_kind": {}},
+            blocks=(
+                GuardBlock(guards=(Guard(expr='inputs.repo_kind == "frontend"'),)),
+                StepBlock(steps=(Step(name="remember", value="ok"),)),
+            ),
+        )
+        profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
+
+        result = execute_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "frontend")
+
+    def test_execute_restores_parent_profile_after_nested_workflow_profile_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nprofile: frontend\nblocks:\n  - steps:\n      - name: nested\n        value: \"ok\"\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="publish",
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(name="expand", run="nested.yml", resolved_run_path=str(fragment)),
+                            Step(name="switch-backend", profile_switch="backend"),
+                        )
+                    ),
+                ),
+            )
+            result = execute_workflow(
+                workflow,
+                profile=Profile(name="backend"),
+                available_profiles={"backend": Profile(name="backend"), "frontend": Profile(name="frontend")},
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+            self.assertEqual(result.status, RuntimeStatus.OK)
+            self.assertEqual(result.outputs["active_profile"], "backend")
     def test_execute_preserves_blocked_before_execution(self) -> None:
         workflow = Workflow(
             version=0,

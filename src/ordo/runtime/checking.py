@@ -263,6 +263,15 @@ def check_workflow(
         effective_workflow = applied.workflow
         current_profile = profile
 
+    workflow_profile_activation = _activate_workflow_declared_profile(
+        effective_workflow,
+        current_profile=current_profile,
+        available_profiles=available_profiles,
+    )
+    if isinstance(workflow_profile_activation, RuntimeResult):
+        return workflow_profile_activation
+    effective_workflow, current_profile, current_profile_name, active_profile, active_overrides = workflow_profile_activation
+
     semantic_report = validate_workflow_semantics(effective_workflow)
     if not semantic_report.ok:
         return RuntimeResult(
@@ -1913,7 +1922,7 @@ def _expand_run_step_block_for_check(
             incomplete_reasons.extend(reason for reason in result.outputs.get("incomplete_reasons", []) if isinstance(reason, str))
             break
         next_profile_name = result.outputs.get("active_profile")
-        if isinstance(next_profile_name, str) and available_profiles is not None and next_profile_name in available_profiles:
+        if decision.workflow.profile is None and isinstance(next_profile_name, str) and available_profiles is not None and next_profile_name in available_profiles:
             effective_profile_name = next_profile_name
             effective_profile = available_profiles[next_profile_name]
             current_overrides = effective_profile.overrides
@@ -1976,6 +1985,68 @@ def _apply_static_profile_switch_block(
     if current_profile_name is None or current_profile is None:
         return None
     return current_profile_name, current_profile, current_overrides, current_workflow
+
+
+def _activate_workflow_declared_profile(
+    workflow: Workflow,
+    *,
+    current_profile: Profile | None,
+    available_profiles: dict[str, Profile] | None,
+) -> tuple[Workflow, Profile | None, str | None, str | None, tuple] | RuntimeResult:
+    if workflow.profile is None:
+        current_profile_name = None if current_profile is None else current_profile.name
+        active_overrides = () if current_profile is None else current_profile.overrides
+        return workflow, current_profile, current_profile_name, current_profile_name, active_overrides
+    if available_profiles is None or workflow.profile not in available_profiles:
+        diagnostic = Diagnostic(
+            code="runtime.workflow.profile.not_available",
+            level="error",
+            message=f"Workflow '{workflow.workflow}' declares profile '{workflow.profile}', but that profile is not available in this execution context.",
+            path=("profile",),
+            details={"workflow": workflow.workflow, "profile": workflow.profile},
+        )
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.VALIDATION_ERROR,
+            diagnostics=(diagnostic,),
+            plan=ExecutionPlan(),
+            outputs={
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+                "blockers": [],
+                "checked_guards": [],
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guards": [],
+                "block_items": [],
+                "active_profile": None,
+                "active_overrides": [],
+            },
+        )
+    target_profile = available_profiles[workflow.profile]
+    applied = apply_profile_to_workflow(workflow, target_profile)
+    if not applied.ok or applied.workflow is None:
+        return RuntimeResult(
+            mode=Mode.CHECK,
+            status=RuntimeStatus.VALIDATION_ERROR,
+            diagnostics=applied.diagnostics,
+            plan=ExecutionPlan(),
+            outputs={
+                **_base_verdict_outputs(can_execute=False, allowed_state="blocked", analysis_complete=True),
+                "blockers": [],
+                "checked_guards": [],
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guard_count": 0,
+                "unevaluated_relevant_guards": [],
+                "block_items": [],
+                "active_profile": workflow.profile,
+                "active_overrides": [override.to_contract() for override in applied.active_overrides],
+            },
+        )
+    return applied.workflow, target_profile, target_profile.name, target_profile.name, applied.active_overrides
 
 
 @contextlib.contextmanager
