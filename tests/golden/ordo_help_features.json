@@ -134,10 +134,10 @@
           "topic": "model"
         },
         {
-          "command": "ordo-help describe profile.overrides.with --json",
-          "handle": "profile.overrides.with",
-          "kind": "override_field",
-          "summary": "Published profile override field metadata",
+          "command": "ordo-help describe profile.overrides --json",
+          "handle": "profile.overrides",
+          "kind": "field",
+          "summary": "Published profile field metadata",
           "topic": "model"
         },
         {
@@ -223,7 +223,7 @@
           "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
         }
       ],
-      "summary": "Reusable runtime context for missing-input defaults, execution working directory, and profile-scoped launch metadata."
+      "summary": "Reusable runtime context for missing-input defaults, execution working directory, explicit override metadata, and profile-scoped launch metadata."
     },
     {
       "appropriate_when": [

@@ -109,6 +109,18 @@
     "workflow.profile": {
       "describe_readiness": "ready"
     },
+    "profile.overrides": {
+      "describe_readiness": "ready"
+    },
+    "profile.overrides.reason": {
+      "describe_readiness": "ready"
+    },
+    "profile.overrides.target": {
+      "describe_readiness": "ready"
+    },
+    "profile.overrides.with": {
+      "describe_readiness": "ready"
+    },
     "playbook.defaults": {
       "describe_readiness": "ready"
     },

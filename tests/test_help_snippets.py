@@ -72,6 +72,7 @@ class HelpSnippetRegistryTest(unittest.TestCase):
         self.assertEqual(registry["state"]["canonical_examples"][0]["form"], "value")
         self.assertEqual(registry["workflow.step.if"]["canonical_examples"][0]["form"], "value")
         self.assertEqual(registry["workflow.step.state_set"]["canonical_examples"][0]["form"], "field_fragment")
+        self.assertEqual(registry["profile.overrides"]["canonical_examples"][0]["form"], "field_fragment")
         self.assertEqual(registry["local-expressions"]["canonical_examples"][0]["form"], "value")
         self.assertEqual(registry["adapters"]["canonical_examples"][0]["form"], "value")
         self.assertEqual(registry["routine"]["canonical_examples"][0]["form"], "step_fragment")

@@ -844,13 +844,34 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(lookup["canonical_examples"][0]["form"], "value")
         self.assertEqual(lookup["canonical_examples"][0]["yaml"], 'inputs.status_labels | lookup("ready")')
 
+    def test_describe_profile_overrides_family_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        overrides = json.loads(self.run_help("describe", "profile.overrides", "--json").stdout)
+        target = json.loads(self.run_help("describe", "profile.overrides.target", "--json").stdout)
+        with_payload = json.loads(self.run_help("describe", "profile.overrides.with", "--json").stdout)
+        reason = json.loads(self.run_help("describe", "profile.overrides.reason", "--json").stdout)
+
+        self.assertEqual(overrides["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(overrides["canonical_examples"][0]["form"], "field_fragment")
+        self.assertIn("explicit override records", overrides["metadata"]["definition"])
+        self.assertEqual(overrides["metadata"]["fields"][0]["name"], "target")
+        self.assertIn("published metadata", overrides["metadata"]["do_not_use_for"][1])
+        self.assertEqual(target["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(target["canonical_examples"][0]["yaml"], "  - target: local.issue-triage")
+        self.assertIn("duplicate target names conflict", target["metadata"]["effects"][0])
+        self.assertEqual(with_payload["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(with_payload["canonical_examples"][0]["form"], "field_fragment")
+        self.assertIn("opaque object payload", with_payload["metadata"]["definition"])
+        self.assertEqual(reason["snippet_coverage"], "excerpt_verified")
+        self.assertIn("human-readable explanation", reason["metadata"]["definition"])
+        self.assertEqual(reason["canonical_examples"][0]["yaml"], "    reason: Share one profile-scoped triage adaptation record.")
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 10)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 23)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 27)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -873,6 +894,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.gh.pr.review_comments"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.pr.checks"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.pr.timeline"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.overrides.reason"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
@@ -910,6 +935,25 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Show one complete optional step guarded by `workflow.step.if`.", result.stdout)
         self.assertIn("is_present(inputs.close_comment)", result.stdout)
         self.assertIn("uses: gh.issue.comment.add", result.stdout)
+
+    def test_text_describe_profile_overrides_group_is_teaching_ready(self) -> None:
+        parent = self.run_help("describe", "profile.overrides")
+        target = self.run_help("describe", "profile.overrides.target")
+        with_payload = self.run_help("describe", "profile.overrides.with")
+        reason = self.run_help("describe", "profile.overrides.reason")
+
+        self.assertIn("publishing one or more explicit override records", parent.stdout)
+        self.assertIn("fields:", parent.stdout)
+        self.assertIn("- target (type=string, required=yes, role=consumer_owned_override_key)", parent.stdout)
+        self.assertIn("effects:", parent.stdout)
+        self.assertIn("canonical examples:", parent.stdout)
+        self.assertIn("overrides:", parent.stdout)
+        self.assertIn("consumer-owned target key", target.stdout)
+        self.assertIn("duplicate target names conflict", target.stdout)
+        self.assertIn("opaque object payload", with_payload.stdout)
+        self.assertIn("the engine preserves this object verbatim", with_payload.stdout)
+        self.assertIn("human-readable explanation", reason.stdout)
+        self.assertIn("reason text is optional", reason.stdout)
 
     def test_text_describe_connector_compose_group_is_teaching_ready(self) -> None:
         family = self.run_help("describe", "connector.compose")

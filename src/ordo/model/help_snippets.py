@@ -296,6 +296,90 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "profile.overrides": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_overrides_block",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Publish one profile-scoped override record with a target, an opaque payload object, and a short reason note.",
+                "yaml": "overrides:\n  - target: local.issue-triage\n    with:\n      default_label: bug\n      board: intake\n    reason: Share one profile-scoped triage adaptation record.",
+                "source_excerpt": {
+                    "path": "examples/profile-overrides.yaml",
+                    "start_line": 2,
+                    "end_line": 7
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profile-overrides"
+                }
+            }
+        ],
+    },
+    "profile.overrides.target": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_override_target_field",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Name the consumer-owned target key that this override record is for.",
+                "yaml": "  - target: local.issue-triage",
+                "source_excerpt": {
+                    "path": "examples/profile-overrides.yaml",
+                    "start_line": 3,
+                    "end_line": 3
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profile-overrides"
+                }
+            }
+        ],
+    },
+    "profile.overrides.with": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_override_with_payload",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Attach one opaque object payload that the named override target may interpret.",
+                "yaml": "    with:\n      default_label: bug\n      board: intake",
+                "source_excerpt": {
+                    "path": "examples/profile-overrides.yaml",
+                    "start_line": 4,
+                    "end_line": 6
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profile-overrides"
+                }
+            }
+        ],
+    },
+    "profile.overrides.reason": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_override_reason_note",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Annotate the override record with one short explanation for later readers.",
+                "yaml": "    reason: Share one profile-scoped triage adaptation record.",
+                "source_excerpt": {
+                    "path": "examples/profile-overrides.yaml",
+                    "start_line": 7,
+                    "end_line": 7
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profile-overrides"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

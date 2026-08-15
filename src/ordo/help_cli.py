@@ -683,7 +683,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     },
     {
         "name": "profile",
-        "summary": "Reusable runtime context for missing-input defaults, execution working directory, and profile-scoped launch metadata.",
+        "summary": "Reusable runtime context for missing-input defaults, execution working directory, explicit override metadata, and profile-scoped launch metadata.",
         "keywords": ["profile", "inputs", "working_directory", "checks", "overrides", "launchers", "deprecated", "routines"],
         "appropriate_when": [
             "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
@@ -693,7 +693,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
             "The value is only relevant to one workflow body and does not justify reusable launch context.",
         ],
-        "inspect_next": ["profile.inputs", "profile.working_directory", "profile.overrides.with", "profile.launchers", "playbook.defaults.profile", "command-line.ordo-playbook"],
+        "inspect_next": ["profile.inputs", "profile.working_directory", "profile.overrides", "profile.launchers", "playbook.defaults.profile", "command-line.ordo-playbook"],
         "related_rules": ["explicit_execution_context", "local_artifacts_are_context"],
         "related_examples": ["examples.playbook-pre-run", "examples.launcher-step"],
         "published_names_kind": "profile",
@@ -2679,6 +2679,102 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "profile", "summary": "Profile contract surface for declared execution-context data that a binding selects"},
             ],
             "inspect_next": ["workflow.step.profile_switch", "workflow-authoring.workflow_profile_binding_is_project_local", "profile"],
+        },
+        "profile.overrides": {
+            "definition": "Profile field for publishing one or more explicit override records, each with a consumer-owned target plus optional payload and reason text.",
+            "use_when": [
+                "Several runs under one profile should expose the same project-local adaptation metadata without pretending that the profile silently rewrites workflow behavior.",
+                "A known consumer, compatibility seam, or local convention already understands one named override target and should read a stable record from the active profile.",
+            ],
+            "do_not_use_for": [
+                "Workflow inputs, guards, or step branching that should be authored on the workflow or playbook surfaces that actually drive runtime behavior.",
+                "Assuming the engine will infer behavior from the payload automatically; overrides are published metadata, not implicit workflow mutation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "profile.inputs", "summary": "Profile field for missing-input defaults that do affect workflow activation data"},
+                {"handle": "profile.overrides.target", "summary": "Required child field that names which consumer-owned override slot this record is for"},
+                {"handle": "workflow.profile", "summary": "Workflow-owned fixed profile binding rather than profile-scoped adaptation metadata"},
+            ],
+            "fields": [
+                {"name": "target", "type": "string", "required": True, "role": "consumer_owned_override_key"},
+                {"name": "with", "type": "object", "required": False, "role": "opaque_override_payload"},
+                {"name": "reason", "type": "string", "required": False, "role": "human_readable_override_explanation"},
+            ],
+            "effects": [
+                "each active profile may publish at most one override record per target",
+                "the override payload is preserved as published metadata rather than interpreted as workflow logic by the engine",
+            ],
+            "examples": [
+                {
+                    "reference": "profile.overrides",
+                    "inputs": {
+                        "overrides": [
+                            {
+                                "target": "local.issue-triage",
+                                "with": {"default_label": "bug", "board": "intake"},
+                                "reason": "Share one profile-scoped triage adaptation record.",
+                            }
+                        ]
+                    },
+                }
+            ],
+            "inspect_next": ["profile.overrides.target", "profile.overrides.with", "profile.overrides.reason"],
+        },
+        "profile.overrides.target": {
+            "definition": "Required override field that names the consumer-owned target key for one override record.",
+            "use_when": [
+                "One consumer or local convention expects a stable target name so it can pick the right override record from the active profile.",
+            ],
+            "do_not_use_for": [
+                "Workflow input names or connector context fields; this key selects one override record, not ordinary workflow data.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "profile.overrides", "summary": "Parent profile field that collects the override records"},
+                {"handle": "profile.overrides.with", "summary": "Sibling field that carries the payload for the named target"},
+                {"handle": "profile.overrides.reason", "summary": "Sibling field that explains why this target-specific record exists"},
+            ],
+            "effects": [
+                "duplicate target names conflict when profiles are composed or when one profile repeats the same target",
+            ],
+            "inspect_next": ["profile.overrides.with", "profile.overrides.reason", "profile.overrides"],
+        },
+        "profile.overrides.with": {
+            "definition": "Optional override field for the opaque object payload that a target-specific consumer may interpret.",
+            "use_when": [
+                "The named override target needs structured profile-scoped data in addition to the target key itself.",
+            ],
+            "do_not_use_for": [
+                "Fields that the engine should validate as first-class workflow or playbook contract data; this payload is consumer-owned metadata.",
+                "Free-form text explanation; use profile.overrides.reason for the human-facing why.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "profile.overrides", "summary": "Parent profile field that publishes override records"},
+                {"handle": "profile.overrides.target", "summary": "Sibling field that names which consumer should read this payload"},
+                {"handle": "profile.inputs", "summary": "Profile-owned input defaults that do change workflow activation data"},
+            ],
+            "effects": [
+                "the engine preserves this object verbatim instead of interpreting its keys as built-in behavior",
+            ],
+            "inspect_next": ["profile.overrides.reason", "profile.overrides.target", "profile.overrides"],
+        },
+        "profile.overrides.reason": {
+            "definition": "Optional override field for one short human-readable explanation of why the target-specific override record exists.",
+            "use_when": [
+                "Later readers would benefit from a short intent note instead of reverse-engineering the payload alone.",
+            ],
+            "do_not_use_for": [
+                "Machine-readable override data that belongs in profile.overrides.with.",
+                "The required target identifier itself; use profile.overrides.target for that.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "profile.overrides", "summary": "Parent profile field that groups the override record"},
+                {"handle": "profile.overrides.target", "summary": "Sibling field that names the override target"},
+                {"handle": "profile.overrides.with", "summary": "Sibling field that carries the target-specific object payload"},
+            ],
+            "effects": [
+                "reason text is optional but, when present, must stay a non-empty string",
+            ],
+            "inspect_next": ["profile.overrides.with", "profile.overrides.target", "profile.overrides"],
         },
         "playbook.defaults": {
             "definition": "Playbook field for declaring launch-time defaults that apply when the caller and workflow entry did not choose a value explicitly.",
