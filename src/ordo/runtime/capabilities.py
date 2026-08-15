@@ -94,7 +94,7 @@ class NegativeRuleSpec:
 RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
     CapabilitySpec(name="workflow.local_expressions", status="supported", scope="workflow"),
     CapabilitySpec(
-        name="workflow.local_expression.adapters",
+        name="workflow.local_expression.adapter",
         status="supported",
         scope="workflow",
         related_capabilities=("workflow.local_expressions",),

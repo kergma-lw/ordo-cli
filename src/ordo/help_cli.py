@@ -1441,12 +1441,29 @@ def build_operation_response(reference: str) -> JSONObject | None:
 def _build_capability_lookup() -> dict[str, JSONObject]:
     payload = describe_capabilities()
     lookup: dict[str, JSONObject] = {}
+
+    capability_overrides: dict[str, JSONObject] = {
+        "workflow.local_expression.adapter": {
+            "definition": "Workflow capability for representation-adapter families that project or transform values after a source has already been interpreted as json, yaml, markdown, text, or key-value data.",
+            "use_when": [
+                "Inline workflow logic first needs family-owned parsing or structured selection that would be awkward as plain local-expression filters alone.",
+            ],
+            "do_not_use_for": [
+                "Simple root reads, comparisons, or short pipeline shaping that are already clear with ordinary local-expression filters or builtins.",
+                "Implicit host binding inside adapter-owned syntax; use the published adapter binding seam when host references must enter the adapter body.",
+            ],
+        }
+    }
     for capability in payload["capabilities"]:
         snippet_surface = _snippet_surface_for_handle(str(capability["name"]))
+        effective_capability = dict(capability)
+        overrides = capability_overrides.get(str(capability["name"]))
+        if isinstance(overrides, dict):
+            effective_capability.update(overrides)
         lookup[capability["name"]] = {
             "document_kind": "capability_node",
             "node_kind": "capability",
-            **capability,
+            **effective_capability,
             "snippet_coverage": snippet_surface["snippet_coverage"],
             "canonical_examples": snippet_surface["canonical_examples"],
         }
@@ -1735,6 +1752,114 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "workflow.local_expression.builtin.is_present", "summary": "Representative builtin for checking whether a referenced value is present"},
             ],
             "inspect_next": ["workflow.local_expression.builtin.is_present", "workflow.local_expression.builtin.is_missing", "workflow.local_expression.filter"],
+        },
+        "workflow.local_expression.adapter_binding": {
+            "definition": "Outer adapter-binding form for passing host workflow references into adapter-owned body syntax explicitly through `with{...}`.",
+            "use_when": [
+                "An adapter family needs host workflow values bound explicitly before the adapter-owned selector or action body runs.",
+            ],
+            "do_not_use_for": [
+                "Ordinary pipeline filters or builtins that already read the host value directly without an adapter-owned body.",
+                "Bare host references inside adapter-owned syntax; the binding seam exists specifically to prevent that ambiguity.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expression.adapter", "summary": "Overview for representation-adapter families"},
+                {"handle": "workflow.local_expression.adapter_seam", "summary": "Shared read/write seam and host-binding rules for adapters"},
+                {"handle": "workflow.local_expression.adapter.json", "summary": "One adapter family that may consume host values through the outer binding form"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter_seam", "workflow.local_expression.adapter.json", "workflow.local_expression.adapter"],
+        },
+        "workflow.local_expression.adapter_seam": {
+            "definition": "Shared adapter seam that separates host workflow references from family-owned adapter syntax and distinguishes read projections from write updates.",
+            "use_when": [
+                "You need to understand the common host-binding and read/write boundary that all representation-adapter families share.",
+            ],
+            "do_not_use_for": [
+                "Pretending each adapter family invents its own host-binding rules from scratch; this seam is shared across families.",
+                "Using write-path semantics in contexts that only admit read projections, such as guard logic.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expression.adapter", "summary": "Overview for representation-adapter families"},
+                {"handle": "workflow.local_expression.adapter_binding", "summary": "Outer binding form that introduces host references into adapter-owned syntax"},
+                {"handle": "workflow-authoring.representation_adapters", "summary": "Authoring guidance for when adapters are preferable to ad hoc inline shaping"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter_binding", "workflow.local_expression.adapter.json", "workflow-authoring.representation_adapters"],
+        },
+        "workflow.local_expression.adapter.json": {
+            "definition": "Representation-adapter family for selecting or updating strict JSON text through exact structural selectors and JSON-owned actions.",
+            "use_when": [
+                "The source value is JSON text and workflow logic needs structural selection or update semantics that are clearer than ad hoc inline parsing.",
+            ],
+            "do_not_use_for": [
+                "Markdown, plain text, yaml, or key-value representations; use the family that matches the source format instead of treating every source as JSON.",
+                "Simple root comparisons that do not need representation-aware parsing or structural selection.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expression.adapter", "summary": "Overview for representation-adapter families"},
+                {"handle": "workflow.local_expression.adapter_seam", "summary": "Shared host-binding and read/write seam across adapter families"},
+                {"handle": "workflow.local_expression.adapter.yaml", "summary": "Sibling structured-text family for yaml rather than JSON text"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter.yaml", "workflow.local_expression.adapter_binding", "workflow.local_expression.adapter"],
+        },
+        "workflow.local_expression.adapter.key_value": {
+            "definition": "Representation-adapter family for key-value text where selectors and shortcuts are intentionally minimal and the primary surface is the family match itself.",
+            "use_when": [
+                "The source value is key-value style text and workflow logic needs that family-specific interpretation instead of generic line parsing.",
+            ],
+            "do_not_use_for": [
+                "Structured JSON/YAML documents or markdown block/list semantics; use the matching adapter family for those representations.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expression.adapter", "summary": "Overview for representation-adapter families"},
+                {"handle": "workflow.local_expression.adapter.text", "summary": "Sibling family for plain text line-oriented selection"},
+                {"handle": "workflow.local_expression.adapter_seam", "summary": "Shared host-binding and read/write seam across adapter families"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter.text", "workflow.local_expression.adapter_binding", "workflow.local_expression.adapter"],
+        },
+        "workflow.local_expression.adapter.markdown": {
+            "definition": "Representation-adapter family for selecting or transforming markdown sections, blocks, lists, and task-list structures through markdown-owned selectors and actions.",
+            "use_when": [
+                "The source value is markdown and workflow logic needs heading, block, list, or task-list semantics rather than plain string slicing.",
+            ],
+            "do_not_use_for": [
+                "Strict structural JSON/YAML access or plain text line slicing; use the family that matches the representation instead of flattening markdown semantics.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expression.adapter", "summary": "Overview for representation-adapter families"},
+                {"handle": "workflow.local_expression.adapter.text", "summary": "Sibling family for plain text selectors without markdown-aware structure"},
+                {"handle": "workflow.local_expression.adapter_seam", "summary": "Shared host-binding and read/write seam across adapter families"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter.text", "workflow.local_expression.adapter_binding", "workflow.local_expression.adapter"],
+        },
+        "workflow.local_expression.adapter.text": {
+            "definition": "Representation-adapter family for plain text line-oriented selectors and simple text-owned update actions.",
+            "use_when": [
+                "The source value is plain text and line/substring-oriented selection is clearer than treating it as markdown or a structured data format.",
+            ],
+            "do_not_use_for": [
+                "Markdown section/list semantics or strict structured JSON/YAML traversal; use the family that matches the representation shape.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expression.adapter", "summary": "Overview for representation-adapter families"},
+                {"handle": "workflow.local_expression.adapter.markdown", "summary": "Sibling family for markdown-aware selectors and actions"},
+                {"handle": "workflow.local_expression.adapter_seam", "summary": "Shared host-binding and read/write seam across adapter families"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter.markdown", "workflow.local_expression.adapter_binding", "workflow.local_expression.adapter"],
+        },
+        "workflow.local_expression.adapter.yaml": {
+            "definition": "Representation-adapter family for selecting structured YAML values through YAML-owned selectors while preserving YAML-specific interpretation rather than treating the source as raw text.",
+            "use_when": [
+                "The source value is YAML text and workflow logic needs structural selection that should respect YAML interpretation.",
+            ],
+            "do_not_use_for": [
+                "Strict JSON parsing or markdown/text families; use the family that matches the representation instead of assuming YAML and JSON are interchangeable authoring surfaces.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expression.adapter", "summary": "Overview for representation-adapter families"},
+                {"handle": "workflow.local_expression.adapter.json", "summary": "Sibling structured-text family for JSON rather than YAML"},
+                {"handle": "workflow.local_expression.adapter_seam", "summary": "Shared host-binding and read/write seam across adapter families"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter.json", "workflow.local_expression.adapter_binding", "workflow.local_expression.adapter"],
         },
         "workflow.profile": {
             "definition": "Top-level workflow field for binding the current workflow subtree to one fixed declared execution profile before guards run.",
@@ -3358,9 +3483,24 @@ def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]
 def render_capability_node_text(payload: JSONObject) -> str:
     """Return the text capability-node surface."""
 
-    lines = [payload["name"], payload["node_kind"], f"snippet coverage: {payload.get('snippet_coverage', 'none')}"]
+    definition = payload.get("definition") or payload["node_kind"]
+    lines = [payload["name"], str(definition), "", f"node kind: {payload['node_kind']}", f"snippet coverage: {payload.get('snippet_coverage', 'none')}"]
     if payload["node_kind"] == "capability":
-        lines.extend([f"status: {payload['status']}", f"scope: {payload['scope']}"])
+        lines.extend(["", f"status: {payload['status']}", f"scope: {payload['scope']}"])
+        use_when = payload.get("use_when", [])
+        if isinstance(use_when, list) and use_when:
+            lines.extend(["", "use when:"])
+            lines.extend(f"- {item}" for item in use_when if isinstance(item, str))
+        do_not_use_for = payload.get("do_not_use_for", [])
+        if isinstance(do_not_use_for, list) and do_not_use_for:
+            lines.extend(["", "do not use for:"])
+            lines.extend(f"- {item}" for item in do_not_use_for if isinstance(item, str))
+        related_capabilities = payload.get("related_capabilities", [])
+        related_model_nodes = payload.get("related_model_nodes", [])
+        if related_capabilities or related_model_nodes:
+            lines.extend(["", "related surfaces:"])
+            lines.extend(f"- {item}" for item in related_capabilities if isinstance(item, str))
+            lines.extend(f"- {item}" for item in related_model_nodes if isinstance(item, str))
         for item in payload.get("must_not_infer", []):
             lines.append(f"must not infer: {item}")
     else:
@@ -3555,6 +3695,47 @@ def render_model_node_text(payload: JSONObject) -> str:
                     lines.append(f"- {name}: {summary}")
                 else:
                     lines.append(f"- {name}")
+
+    selectors = metadata.get("selectors", [])
+    if isinstance(selectors, list) and selectors:
+        lines.extend(["", "selectors:"])
+        lines.extend(f"- {item}" for item in selectors if isinstance(item, str))
+
+    actions = metadata.get("actions", [])
+    if isinstance(actions, list) and actions:
+        lines.extend(["", "actions:"])
+        lines.extend(f"- {item}" for item in actions if isinstance(item, str))
+
+    shortcuts = metadata.get("shortcuts", [])
+    if isinstance(shortcuts, list) and shortcuts:
+        lines.extend(["", "shortcuts:"])
+        lines.extend(f"- {item}" for item in shortcuts if isinstance(item, str))
+
+    outer_binding_form = metadata.get("outer_binding_form")
+    host_binding_rules = metadata.get("host_binding_rules", [])
+    family_owned_body = metadata.get("family_owned_body")
+    read_write_boundary = metadata.get("read_write_boundary")
+    if any([
+        isinstance(outer_binding_form, str),
+        isinstance(host_binding_rules, list) and bool(host_binding_rules),
+        isinstance(family_owned_body, bool),
+        isinstance(read_write_boundary, dict) and bool(read_write_boundary),
+    ]):
+        lines.extend(["", "adapter seam:"])
+        if isinstance(outer_binding_form, str):
+            lines.append(f"- outer binding form: {outer_binding_form}")
+        if isinstance(family_owned_body, bool):
+            lines.append(f"- family-owned body: {'yes' if family_owned_body else 'no'}")
+        if isinstance(host_binding_rules, list) and host_binding_rules:
+            lines.append("- host binding rules:")
+            lines.extend(f"  - {item}" for item in host_binding_rules if isinstance(item, str))
+        if isinstance(read_write_boundary, dict) and read_write_boundary:
+            read_value = read_write_boundary.get("read")
+            write_value = read_write_boundary.get("write")
+            if isinstance(read_value, str):
+                lines.append(f"- read path returns: {read_value}")
+            if isinstance(write_value, str):
+                lines.append(f"- write path returns: {write_value}")
 
     invalidates = metadata.get("invalidates_observations", [])
     if isinstance(invalidates, list) and invalidates:

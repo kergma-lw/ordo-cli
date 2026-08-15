@@ -198,7 +198,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_capabilities_publish_representation_adapter_capability(self) -> None:
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
-        adapter_capability = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.local_expression.adapters")
+        adapter_capability = next(item for item in capabilities["capabilities"] if item["name"] == "workflow.local_expression.adapter")
 
         self.assertEqual(adapter_capability["status"], "supported")
         self.assertIn("workflow.local_expression.adapter.json", adapter_capability["related_model_nodes"])
@@ -428,6 +428,39 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Function-style local-expression builtin `is_present(...)`", is_present_builtin.stdout)
         self.assertIn("- allowed roots: args, inputs, probe, state, step", is_present_builtin.stdout)
         self.assertIn("workflow.local_expression.builtin", is_present_builtin.stdout)
+
+    def test_text_describe_local_expression_adapter_group_is_teaching_ready(self) -> None:
+        adapters = self.run_help("describe", "workflow.local_expression.adapter")
+        binding = self.run_help("describe", "workflow.local_expression.adapter_binding")
+        seam = self.run_help("describe", "workflow.local_expression.adapter_seam")
+        markdown = self.run_help("describe", "workflow.local_expression.adapter.markdown")
+        json_family = self.run_help("describe", "workflow.local_expression.adapter.json")
+
+        self.assertEqual(adapters.returncode, 0)
+        self.assertIn("Workflow capability for representation-adapter families", adapters.stdout)
+        self.assertIn("related surfaces:", adapters.stdout)
+        self.assertIn("workflow.local_expression.adapter.markdown", adapters.stdout)
+
+        self.assertEqual(binding.returncode, 0)
+        self.assertIn("Outer adapter-binding form for passing host workflow references", binding.stdout)
+        self.assertIn("adapter seam:", binding.stdout)
+        self.assertIn("- outer binding form:  with{...}", binding.stdout)
+
+        self.assertEqual(seam.returncode, 0)
+        self.assertIn("Shared adapter seam that separates host workflow references", seam.stdout)
+        self.assertIn("- family-owned body: yes", seam.stdout)
+        self.assertIn("- read path returns: returns selected_or_derived_value", seam.stdout)
+
+        self.assertEqual(markdown.returncode, 0)
+        self.assertIn("Representation-adapter family for selecting or transforming markdown sections", markdown.stdout)
+        self.assertIn("selectors:", markdown.stdout)
+        self.assertIn("shortcuts:", markdown.stdout)
+        self.assertIn("- task_list", markdown.stdout)
+
+        self.assertEqual(json_family.returncode, 0)
+        self.assertIn("Representation-adapter family for selecting or updating strict JSON text", json_family.stdout)
+        self.assertIn("actions:", json_family.stdout)
+        self.assertIn("- set", json_family.stdout)
 
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)

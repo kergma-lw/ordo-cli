@@ -106,6 +106,9 @@
     "workflow.local_expression.builtin": {
       "describe_readiness": "ready"
     },
+    "workflow.local_expression.adapter": {
+      "describe_readiness": "ready"
+    },
     "workflow-authoring.bounded_fan_out_is_structured_invocation": {
       "describe_readiness": "ready"
     },
