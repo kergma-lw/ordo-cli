@@ -2028,6 +2028,82 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["routine_contract.workflow_call.args", "workflow-authoring.routine.*", "routine_contract.workflow_call_surface"],
         },
+        "routine_contract.entry.args": {
+            "definition": "Routine registry-entry field for declaring which business arguments a routine accepts from workflow_call.args.",
+            "use_when": [
+                "A routine needs an explicit declaration of its accepted business payload instead of silently consuming arbitrary caller data.",
+            ],
+            "do_not_use_for": [
+                "Forwarded ambient context references; those belong to workflow_call.env rather than to registry-side business arg declaration.",
+                "Encoding the execution command itself; accepted business args are separate from the implementation envelope.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.workflow_call.args", "summary": "Call-side field that supplies concrete values for the declared business args"},
+                {"handle": "routine_contract.entry.implementation", "summary": "Sibling registry field that defines the bounded execution envelope"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance that treats routines as a narrow exception path"},
+            ],
+            "related_examples": [
+                {"reference": "entry.args", "inputs": {"target": {"type": "string", "required": True}}},
+            ],
+            "inspect_next": ["routine_contract.workflow_call.args", "routine_contract.entry.implementation", "workflow-authoring.routine.*"],
+        },
+        "routine_contract.entry.implementation": {
+            "definition": "Routine registry-entry field for the bounded execution envelope that actually runs the project-local automation step.",
+            "use_when": [
+                "A routine entry must declare exactly how its bounded local automation is executed instead of hiding execution behavior in ambient conventions.",
+            ],
+            "do_not_use_for": [
+                "Business semantics such as accepted args or failure class meaning; those belong to sibling registry fields.",
+                "General free-form shell authoring; the implementation surface is intentionally narrow and bounded.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.implementation.argv", "summary": "Required bounded execution field that lists the concrete argv vector"},
+                {"handle": "routine_contract.entry.args", "summary": "Sibling field that declares accepted business arguments"},
+                {"handle": "routine_contract.entry.failure_modes", "summary": "Sibling field that declares expected failure classes for this implementation"},
+            ],
+            "related_examples": [
+                {"reference": "entry.implementation", "inputs": {"argv": [".ordo/scripts/demo-check", "{target}"]}},
+            ],
+            "inspect_next": ["routine_contract.implementation.argv", "routine_contract.entry.failure_modes", "routine_contract.entry.args"],
+        },
+        "routine_contract.implementation.argv": {
+            "definition": "Routine implementation field for the bounded argv vector that launches the local helper behind one routine entry.",
+            "use_when": [
+                "The routine's bounded execution step must state the exact command vector that runs the helper process.",
+            ],
+            "do_not_use_for": [
+                "Inline shell-language authoring or broad command synthesis; argv is an explicit argument vector, not a generic script body.",
+                "Routine business-argument declaration; argv consumes already-declared args rather than defining them.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.entry.implementation", "summary": "Parent implementation envelope that requires argv"},
+                {"handle": "routine_contract.entry.args", "summary": "Registry-side declaration of business args that argv placeholders may consume"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance that keeps routine execution bounded and exceptional"},
+            ],
+            "related_examples": [
+                {"reference": "implementation.argv", "inputs": {"argv": [".ordo/scripts/demo-check", "{target}"]}},
+            ],
+            "inspect_next": ["routine_contract.entry.implementation", "routine_contract.entry.args", "workflow-authoring.routine.*"],
+        },
+        "routine_contract.entry.failure_modes": {
+            "definition": "Routine registry-entry field for declaring the expected named failure classes that this bounded local automation may report.",
+            "use_when": [
+                "A routine should expose reviewable failure semantics instead of collapsing every implementation problem into one opaque generic failure.",
+            ],
+            "do_not_use_for": [
+                "Ad hoc debug notes or implementation detail dumps; failure_modes should stay as named outward-facing failure classes.",
+                "Skipping failure declaration because the helper might fail unpredictably; opaque fallback becomes less reviewable without explicit failure classes.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.entry.implementation", "summary": "Sibling field that defines the bounded execution envelope whose failures are being classified"},
+                {"handle": "routine_contract.entry.outputs", "summary": "Sibling outward contract field for successful routine result shape"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance that treats routines as narrow, reviewable exception surfaces"},
+            ],
+            "related_examples": [
+                {"reference": "entry.failure_modes", "inputs": {"failure_modes": ["check_failed", "helper_failed"]}},
+            ],
+            "inspect_next": ["routine_contract.entry.outputs", "routine_contract.entry.implementation", "workflow-authoring.routine.*"],
+        },
         "workflow.inputs": {
             "definition": "Top-level workflow field for declaring the named activation inputs that the caller must provide before the workflow may run.",
             "use_when": [

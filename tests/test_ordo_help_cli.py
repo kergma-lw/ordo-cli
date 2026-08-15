@@ -555,6 +555,32 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow-authoring.routine.*", call_env.stdout)
         self.assertIn("related examples:", call_env.stdout)
 
+    def test_text_describe_routine_entry_core_group_is_teaching_ready(self) -> None:
+        entry_args = self.run_help("describe", "routine_contract.entry.args")
+        entry_implementation = self.run_help("describe", "routine_contract.entry.implementation")
+        implementation_argv = self.run_help("describe", "routine_contract.implementation.argv")
+        failure_modes = self.run_help("describe", "routine_contract.entry.failure_modes")
+
+        self.assertEqual(entry_args.returncode, 0)
+        self.assertIn("Routine registry-entry field for declaring which business arguments a routine accepts", entry_args.stdout)
+        self.assertIn("routine_contract.workflow_call.args", entry_args.stdout)
+        self.assertIn("related examples:", entry_args.stdout)
+
+        self.assertEqual(entry_implementation.returncode, 0)
+        self.assertIn("Routine registry-entry field for the bounded execution envelope", entry_implementation.stdout)
+        self.assertIn("routine_contract.implementation.argv", entry_implementation.stdout)
+        self.assertIn("related examples:", entry_implementation.stdout)
+
+        self.assertEqual(implementation_argv.returncode, 0)
+        self.assertIn("Routine implementation field for the bounded argv vector", implementation_argv.stdout)
+        self.assertIn("workflow-authoring.routine.*", implementation_argv.stdout)
+        self.assertIn("related examples:", implementation_argv.stdout)
+
+        self.assertEqual(failure_modes.returncode, 0)
+        self.assertIn("Routine registry-entry field for declaring the expected named failure classes", failure_modes.stdout)
+        self.assertIn("workflow-authoring.routine.*", failure_modes.stdout)
+        self.assertIn("related examples:", failure_modes.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)

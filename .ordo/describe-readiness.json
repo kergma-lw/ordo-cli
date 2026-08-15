@@ -324,6 +324,18 @@
     },
     "routine_contract.workflow_call.env": {
       "describe_readiness": "ready"
+    },
+    "routine_contract.entry.args": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.entry.implementation": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.implementation.argv": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.entry.failure_modes": {
+      "describe_readiness": "ready"
     }
   }
 }
