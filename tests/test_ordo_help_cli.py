@@ -915,13 +915,29 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("visible option name", single_select["metadata"]["definition"])
         self.assertEqual(single_select["canonical_examples"][0]["form"], "step_fragment")
 
+    def test_describe_connector_gh_project_items_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        items = json.loads(self.run_help("describe", "connector.gh.project.items", "--json").stdout)
+        details = json.loads(self.run_help("describe", "connector.gh.project.items.details", "--json").stdout)
+
+        self.assertEqual(items["snippet_coverage"], "runner_verified")
+        self.assertIn("collection of normalized project items", items["metadata"]["definition"])
+        self.assertEqual(items["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(items["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.gh.project.items.details", [item["handle"] for item in items["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(details["snippet_coverage"], "runner_verified")
+        self.assertIn("stable content details", details["metadata"]["definition"])
+        self.assertEqual(details["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.gh.project.items", [item["handle"] for item in details["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
+        self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 15)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 17)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -952,6 +968,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.gh.project.issue.field_iteration.set"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.project.issue.field_number.set"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.project.issue.field_single_select.set"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.gh.project.items"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.gh.project.items.details"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1336,6 +1354,19 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(single_select.returncode, 0)
         self.assertIn("Set one single-select GitHub Project field", single_select.stdout)
         self.assertIn("connector.gh.project.field.option", single_select.stdout)
+
+    def test_text_describe_connector_gh_project_items_group_is_teaching_ready(self) -> None:
+        items = self.run_help("describe", "connector.gh.project.items")
+        details = self.run_help("describe", "connector.gh.project.items.details")
+
+        self.assertEqual(items.returncode, 0)
+        self.assertIn("Probe one GitHub Project as a collection of normalized project items", items.stdout)
+        self.assertIn("connector.gh.project.items.details", items.stdout)
+        self.assertIn("example_for: workflow_fragment", items.stdout)
+
+        self.assertEqual(details.returncode, 0)
+        self.assertIn("Probe one GitHub Project as a normalized item collection with stable content details", details.stdout)
+        self.assertIn("connector.gh.project.items", details.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")

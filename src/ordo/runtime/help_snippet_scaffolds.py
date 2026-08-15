@@ -48,6 +48,8 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "connector.gh.project.issue.field_iteration.set",
         "connector.gh.project.issue.field_number.set",
         "connector.gh.project.issue.field_single_select.set",
+        "connector.gh.project.items",
+        "connector.gh.project.items.details",
     ),
     workflow_surface="steps list inside a standard workflow scaffold",
     summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
@@ -56,7 +58,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue"),
+    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -301,10 +303,12 @@ blocks:
         "connector.gh.project.issue.field_iteration.set",
         "connector.gh.project.issue.field_number.set",
         "connector.gh.project.issue.field_single_select.set",
+        "connector.gh.project.items",
+        "connector.gh.project.items.details",
     }:
         indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
-workflow: snippet-gh-project-issue
+workflow: snippet-gh-project-probe
 inputs:
   repository: {{}}
   issue_number: {{}}
@@ -327,5 +331,7 @@ def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     if target == "workflow.state_bindings":
         return f"{snippet}\n"
     if target == "connector.gh.project.issue":
+        return f"{snippet}\n"
+    if target == "connector.gh.project.items":
         return f"{snippet}\n"
     raise ValueError(f"Unsupported workflow-fragment target: {target}")

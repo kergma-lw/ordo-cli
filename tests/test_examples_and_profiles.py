@@ -19,6 +19,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/inspect-issue.yaml"),
             Path("examples/inspect-pr.yaml"),
             Path("examples/project-field-probes.yaml"),
+            Path("examples/project-item-collections.yaml"),
             Path("examples/project-issue-membership.yaml"),
             Path("examples/blocked-main-branch.yaml"),
             Path("examples/launcher-step.yaml"),
@@ -164,6 +165,11 @@ class ExampleSurfaceTest(unittest.TestCase):
         workflow = load_workflow_file(Path("examples/project-issue-membership.yaml"))
 
         self.assertEqual(workflow.workflow, "prepare-project-issue-membership")
+
+    def test_project_item_collections_example_loads(self) -> None:
+        workflow = load_workflow_file(Path("examples/project-item-collections.yaml"))
+
+        self.assertEqual(workflow.workflow, "inspect-project-item-collections")
 
 
 def _completed(*, returncode: int, stdout: str, stderr: str) -> CompletedProcess[str]:

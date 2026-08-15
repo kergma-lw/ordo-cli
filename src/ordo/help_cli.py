@@ -1970,6 +1970,51 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.gh.project.field.option", "connector.gh.project.issue", "connector.gh.project.issue.add"],
         },
+        ("gh", "project.items"): {
+            "definition": "Probe one GitHub Project as a collection of normalized project items, with optional narrowing by content kind, project field filters, and explicit GitHub content references.",
+            "use_when": [
+                "A workflow needs one project-scoped membership scan across many items rather than one issue-specific membership lookup.",
+                "Later logic only needs stable collection facts such as repository, number, title, url, and content kind without loading richer content details like issue state and labels.",
+            ],
+            "do_not_use_for": [
+                "Inspecting one specific issue's membership or project field values; use connector.gh.project.issue for the one-issue membership surface.",
+                "Loading richer content details such as issue state and label_names for the matched items; use connector.gh.project.items.details for that heavier collection probe.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project", "summary": "Parent project probe for confirming the target project identity before collection scans"},
+                {"handle": "connector.gh.project.items.details", "summary": "Sibling probe for the same collection scan with richer issue and pull-request details"},
+                {"handle": "connector.gh.project.issue", "summary": "Sibling probe for one issue-specific membership snapshot instead of a collection scan"},
+                {"handle": "connector.gh.project.field", "summary": "Sibling probe for one project field definition when the workflow needs field metadata rather than matched items"},
+            ],
+            "examples": [
+                {"reference": "gh.project.items", "inputs": {"project_id": "PVT_demo"}},
+                {"reference": "gh.project.items", "inputs": {"project_id": "PVT_demo", "content_kind": "Issue", "filters": [{"field": "Status", "value": "Ready"}]}},
+                {"reference": "gh.project.items", "inputs": {"project_id": "PVT_demo", "content_kind": "Issue", "filters": [{"field": "Type", "value": "Task"}], "content_refs": ["owner/repo#7", "owner/repo#8"]}},
+            ],
+            "inspect_next": ["connector.gh.project.items.details", "connector.gh.project.issue", "connector.gh.project.field"],
+        },
+        ("gh", "project.items.details"): {
+            "definition": "Probe one GitHub Project as a normalized item collection with stable content details such as issue state and label names in addition to the base membership facts.",
+            "use_when": [
+                "A workflow needs project-scoped item matching plus richer content details that are not present on connector.gh.project.items alone.",
+                "Later branching or publishing depends on issue or pull-request state, or on label_names for the matched project-backed content.",
+            ],
+            "do_not_use_for": [
+                "Cheap project membership scans where repository, number, title, and url are already enough; use connector.gh.project.items for the lighter collection probe.",
+                "Checking or mutating one specific issue membership; use connector.gh.project.issue or connector.gh.project.issue.* for the one-item membership family.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project.items", "summary": "Parent collection probe for lighter normalized project items without extra content details"},
+                {"handle": "connector.gh.project.issue", "summary": "Sibling probe for one issue-specific membership snapshot instead of a collection result set"},
+                {"handle": "connector.gh.issue", "summary": "Sibling probe for one repository issue snapshot outside the project-collection context"},
+                {"handle": "connector.gh.project.field", "summary": "Sibling probe for project field metadata rather than matched item details"},
+            ],
+            "examples": [
+                {"reference": "gh.project.items.details", "inputs": {"project_id": "PVT_demo", "content_kind": "Issue"}},
+                {"reference": "gh.project.items.details", "inputs": {"project_id": "PVT_demo", "content_kind": "Issue", "filters": [{"field": "Type", "value": "Task"}], "content_refs": ["owner/repo#7", "owner/repo#8"]}},
+            ],
+            "inspect_next": ["connector.gh.project.items", "connector.gh.project.issue", "connector.gh.issue"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [
@@ -4085,7 +4130,7 @@ def build_snippet_coverage_response() -> JSONObject:
     return {
         "document_kind": "snippet_coverage",
         "purpose": "Coverage map for canonical verified snippets published through ordo-help describe.",
-        "coverage_levels": ["none", "excerpt_verified", "harness_verified"],
+        "coverage_levels": ["none", "excerpt_verified", "harness_verified", "runner_verified"],
         "summary": {
             "total_handles": len(handles),
             "coverage_counts": coverage_counts,

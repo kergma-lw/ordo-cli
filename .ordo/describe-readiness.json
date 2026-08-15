@@ -112,6 +112,12 @@
     "connector.gh.project.issue.field_single_select.set": {
       "describe_readiness": "ready"
     },
+    "connector.gh.project.items": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.project.items.details": {
+      "describe_readiness": "ready"
+    },
     "connector.runtime": {
       "describe_readiness": "ready"
     },

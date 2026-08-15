@@ -598,6 +598,73 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.gh.project.items": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_items_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Scan one GitHub Project for matching items before branching on collection size or reusing the matched item list later.",
+                "source_example": "project-item-collections",
+                "source_excerpt": {
+                    "path": "examples/project-item-collections.yaml",
+                    "start_line": 8,
+                    "end_line": 16
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.gh.project.items",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "gh_project_items_collection_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Load one light project-item collection first, then load richer item details for an explicit matched subset before publishing a compact summary.",
+                "source_example": "project-item-collections",
+                "source_excerpt": {
+                    "path": "examples/project-item-collections.yaml",
+                    "start_line": 1,
+                    "end_line": 33
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.gh.project.items",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.gh.project.items.details": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_items_details_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Load richer project-backed content details such as state and label_names for a previously narrowed project item subset.",
+                "source_example": "project-item-collections",
+                "source_excerpt": {
+                    "path": "examples/project-item-collections.yaml",
+                    "start_line": 17,
+                    "end_line": 28
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.gh.project.items.details",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [
