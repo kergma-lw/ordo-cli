@@ -1467,6 +1467,23 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     lookup: dict[str, JSONObject] = {}
 
     connector_family_overrides: dict[str, JSONObject] = {
+        "runtime": {
+            "definition": "Published runtime connector family for legacy execution-context actions that affect the current run itself.",
+            "use_when": [
+                "You are inspecting or maintaining a legacy runtime action surface that predates the dedicated workflow profile-switch step form.",
+            ],
+            "do_not_use_for": [
+                "New workflow authoring when workflow.step.profile_switch can express the intent directly and more honestly.",
+                "External system operations; this family changes local Ordo runtime context rather than calling a remote tool or service.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
+                {"handle": "connector.runtime.profile.use", "summary": "Legacy runtime action for switching the active execution profile in the current run"},
+                {"handle": "workflow.step.profile_switch", "summary": "Preferred workflow-native step surface for profile switching"},
+            ],
+            "inspect_next": ["connector.runtime.profile.use", "workflow.step.profile_switch", "profile"],
+        },
         "fs": {
             "definition": "Published filesystem connector family for probing one filesystem path as a readable file snapshot.",
             "use_when": [
@@ -1518,6 +1535,25 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     }
 
     connector_operation_overrides: dict[tuple[str, str], JSONObject] = {
+        ("runtime", "profile.use"): {
+            "definition": "Legacy runtime action for switching later execution in the current run to another declared profile.",
+            "use_when": [
+                "You are reading or migrating older workflow logic that still invokes runtime.profile.use directly.",
+            ],
+            "do_not_use_for": [
+                "New profile-switch authoring; use workflow.step.profile_switch instead of a legacy runtime action call.",
+                "Declaring a fixed workflow-owned profile binding; use workflow.profile when the subtree should always start under one profile.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.runtime", "summary": "Parent runtime connector family"},
+                {"handle": "workflow.step.profile_switch", "summary": "Preferred workflow-native step surface that replaces this legacy action"},
+                {"handle": "workflow.profile", "summary": "Workflow field for fixed project-local profile binding before guards run"},
+            ],
+            "examples": [
+                {"inputs": {"profile": "frontend"}, "reference": "runtime.profile.use"},
+            ],
+            "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "profile"],
+        },
         ("fs", "file"): {
             "definition": "Probe one filesystem path as one UTF-8 file snapshot with canonical content and file metadata.",
             "use_when": [
@@ -3000,6 +3036,7 @@ def render_model_node_text(payload: JSONObject) -> str:
     namespace = metadata.get("namespace")
     kind = metadata.get("kind")
     maturity = metadata.get("maturity")
+    deprecated = metadata.get("deprecated")
     if any(isinstance(item, str) for item in (namespace, kind, maturity)):
         lines.extend(["", "published contract:"])
         if isinstance(namespace, str):
@@ -3008,6 +3045,8 @@ def render_model_node_text(payload: JSONObject) -> str:
             lines.append(f"- kind: {kind}")
         if isinstance(maturity, str):
             lines.append(f"- maturity: {maturity}")
+        if isinstance(deprecated, bool):
+            lines.append(f"- deprecated: {'yes' if deprecated else 'no'}")
 
     operations = metadata.get("operations", [])
     if isinstance(operations, list) and operations:
@@ -3069,6 +3108,16 @@ def render_model_node_text(payload: JSONObject) -> str:
     if isinstance(failure_modes, list) and failure_modes:
         lines.extend(["", "failure modes:"])
         lines.extend(f"- {item}" for item in failure_modes if isinstance(item, str))
+
+    effects = metadata.get("effects", [])
+    if isinstance(effects, list) and effects:
+        lines.extend(["", "effects:"])
+        lines.extend(f"- {item}" for item in effects if isinstance(item, str))
+
+    replaced_by = metadata.get("replaced_by", [])
+    if isinstance(replaced_by, list) and replaced_by:
+        lines.extend(["", "replaced by:"])
+        lines.extend(f"- {item}" for item in replaced_by if isinstance(item, str))
 
     examples = metadata.get("examples", [])
     if isinstance(examples, list) and examples:

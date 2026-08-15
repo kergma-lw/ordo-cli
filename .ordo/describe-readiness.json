@@ -43,6 +43,12 @@
     "connector.fs.file": {
       "describe_readiness": "ready"
     },
+    "connector.runtime": {
+      "describe_readiness": "ready"
+    },
+    "connector.runtime.profile.use": {
+      "describe_readiness": "ready"
+    },
     "routine": {
       "describe_readiness": "ready"
     },

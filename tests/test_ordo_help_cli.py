@@ -631,6 +631,24 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.local_expression.adapter.key_value", file_probe.stdout)
         self.assertIn("fs.file(path=/workspace/app.env)", file_probe.stdout)
 
+    def test_text_describe_connector_runtime_group_is_teaching_ready(self) -> None:
+        family = self.run_help("describe", "connector.runtime")
+        profile_use = self.run_help("describe", "connector.runtime.profile.use")
+
+        self.assertEqual(family.returncode, 0)
+        self.assertIn("Published runtime connector family for legacy execution-context actions", family.stdout)
+        self.assertIn("workflow.step.profile_switch", family.stdout)
+        self.assertIn("do not use for:", family.stdout)
+
+        self.assertEqual(profile_use.returncode, 0)
+        self.assertIn("Legacy runtime action for switching later execution in the current run to another declared profile.", profile_use.stdout)
+        self.assertIn("published contract:", profile_use.stdout)
+        self.assertIn("- deprecated: yes", profile_use.stdout)
+        self.assertIn("effects:", profile_use.stdout)
+        self.assertIn("replaced by:", profile_use.stdout)
+        self.assertIn("workflow.step.profile_switch", profile_use.stdout)
+        self.assertIn("runtime.profile.use(profile=frontend)", profile_use.stdout)
+
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 
