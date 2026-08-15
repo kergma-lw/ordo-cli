@@ -1638,13 +1638,15 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
                 {"handle": "connector.gh.pr", "summary": "Pull-request metadata probe that anchors the PR inspection subgroup"},
                 {"handle": "connector.gh.issue", "summary": "Issue snapshot probe for issue maintenance and routing workflows"},
+                {"handle": "connector.gh.project", "summary": "Project identity probe that anchors the GitHub Project field and membership subgroup"},
                 {"handle": "connector.gh.project.items", "summary": "Project membership probe when the workflow needs GitHub Project item collections"},
             ],
             "examples": [
                 {"reference": "gh.pr", "inputs": {"repository": "owner/repo", "pull_number": 42}},
                 {"reference": "gh.issue", "inputs": {"repository": "owner/repo", "issue_number": 17}},
+                {"reference": "gh.project", "inputs": {"project_id": "PVT_kwDOExample"}},
             ],
-            "inspect_next": ["connector.gh.pr", "connector.gh.issue", "connector.gh.project.items", "operations"],
+            "inspect_next": ["connector.gh.pr", "connector.gh.issue", "connector.gh.project", "connector.gh.project.items", "operations"],
         }
     }
 
@@ -1800,6 +1802,68 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.issue", "summary": "Probe the current issue body before deciding whether a full rewrite is appropriate"},
             ],
             "inspect_next": ["connector.gh.issue.body.append", "connector.gh.issue.comment.add", "connector.gh.issue"],
+        },
+        ("gh", "project"): {
+            "definition": "Probe one GitHub Project by its stable project id and return a typed existence snapshot with the canonical id and title.",
+            "use_when": [
+                "A workflow first needs to confirm that one GitHub Project exists before inspecting its fields, issue membership, or item collections.",
+                "Later steps need the project's canonical title or want a narrow project-identity probe instead of jumping straight to field or membership surfaces.",
+            ],
+            "do_not_use_for": [
+                "Inspecting one named field or its selectable values; use connector.gh.project.field or connector.gh.project.field.option for that narrower field story.",
+                "Enumerating project items or checking whether one issue is already attached to the project; use connector.gh.project.items or connector.gh.project.issue for membership questions.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh", "summary": "Parent GitHub connector family for issue, pull-request, and project operations"},
+                {"handle": "connector.gh.project.field", "summary": "Sibling probe for one named project field rather than the project identity itself"},
+                {"handle": "connector.gh.project.items", "summary": "Sibling probe for project membership collections rather than top-level project identity"},
+                {"handle": "connector.gh.project.issue", "summary": "Sibling probe for whether one repository issue is already in the project"},
+            ],
+            "examples": [
+                {"reference": "gh.project", "inputs": {"project_id": "PVT_kwDOExample"}},
+            ],
+            "inspect_next": ["connector.gh.project.field", "connector.gh.project.items", "connector.gh.project.issue"],
+        },
+        ("gh", "project.field"): {
+            "definition": "Probe one named field in one GitHub Project and return whether it exists, what field kind it is, and which selectable option names it exposes when applicable.",
+            "use_when": [
+                "A workflow needs to confirm that a field such as Status or Priority exists before publishing, validating, or mutating project-backed issue data.",
+                "Later logic needs field metadata such as kind or allowed option names instead of only a yes/no answer about one candidate option.",
+            ],
+            "do_not_use_for": [
+                "Checking only whether one named allowed value exists; use connector.gh.project.field.option for that narrower yes/no probe.",
+                "Setting a field value on a project item; use the relevant connector.gh.project.issue.field_* action surface for mutation rather than this read-only metadata probe.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project", "summary": "Parent project probe for confirming the project identity before field-specific inspection"},
+                {"handle": "connector.gh.project.field.option", "summary": "Sibling probe for one candidate selectable value rather than the whole field metadata surface"},
+                {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Action for writing one selectable field value after field inspection confirms the target field"},
+                {"handle": "connector.gh.project.issue.field_number.set", "summary": "Action for writing one numeric field value after field inspection confirms the target field"},
+            ],
+            "examples": [
+                {"reference": "gh.project.field", "inputs": {"project_id": "PVT_kwDOExample", "field": "Status"}},
+            ],
+            "inspect_next": ["connector.gh.project.field.option", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.issue.field_number.set"],
+        },
+        ("gh", "project.field.option"): {
+            "definition": "Probe whether one named selectable value exists inside one GitHub Project field when that field publishes an allowed-value set.",
+            "use_when": [
+                "A workflow needs one explicit yes/no check that a candidate value such as Done is valid before publishing or applying it elsewhere.",
+                "A guard or preparatory step should fail early when one expected project field option is missing but the full field metadata is not otherwise needed later.",
+            ],
+            "do_not_use_for": [
+                "Inspecting the field's broader metadata such as kind or the full option list; use connector.gh.project.field for the parent field surface.",
+                "Mutating an issue's project field value; use connector.gh.project.issue.field_single_select.set when the workflow should actually set the value after validation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project.field", "summary": "Parent field probe that returns the field kind and full option list instead of only one boolean option check"},
+                {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Action for setting one single-select project field value after the option check succeeds"},
+                {"handle": "connector.gh.project.issue.field_iteration.set", "summary": "Action for setting one iteration field value when the project field is iteration-backed rather than free-form"},
+            ],
+            "examples": [
+                {"reference": "gh.project.field.option", "inputs": {"project_id": "PVT_kwDOExample", "field": "Status", "option": "Done"}},
+            ],
+            "inspect_next": ["connector.gh.project.field", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.issue.field_iteration.set"],
         },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",

@@ -88,6 +88,15 @@
     "connector.gh.pr.timeline": {
       "describe_readiness": "ready"
     },
+    "connector.gh.project": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.project.field": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.project.field.option": {
+      "describe_readiness": "ready"
+    },
     "connector.runtime": {
       "describe_readiness": "ready"
     },

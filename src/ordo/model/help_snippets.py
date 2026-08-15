@@ -380,6 +380,85 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.gh.project": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Confirm one GitHub Project identity before branching into field-level or membership-level project logic.",
+                "source_example": "project-field-probes",
+                "source_excerpt": {
+                    "path": "examples/project-field-probes.yaml",
+                    "start_line": 8,
+                    "end_line": 12
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "project-field-probes"
+                }
+            },
+            {
+                "name": "gh_project_field_probe_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect one project, one named field, and one candidate selectable option, then publish a compact readiness summary.",
+                "source_example": "project-field-probes",
+                "source_excerpt": {
+                    "path": "examples/project-field-probes.yaml",
+                    "start_line": 1,
+                    "end_line": 30
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "project-field-probes"
+                }
+            }
+        ],
+    },
+    "connector.gh.project.field": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_field_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect one named GitHub Project field and register its kind and option metadata for later decisions.",
+                "source_example": "project-field-probes",
+                "source_excerpt": {
+                    "path": "examples/project-field-probes.yaml",
+                    "start_line": 13,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "project-field-probes"
+                }
+            }
+        ],
+    },
+    "connector.gh.project.field.option": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_field_option_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Check whether one named selectable value is valid for the inspected GitHub Project field.",
+                "source_example": "project-field-probes",
+                "source_excerpt": {
+                    "path": "examples/project-field-probes.yaml",
+                    "start_line": 19,
+                    "end_line": 25
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "project-field-probes"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

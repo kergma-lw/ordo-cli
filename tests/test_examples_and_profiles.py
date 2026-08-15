@@ -18,6 +18,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/minimal.yaml"),
             Path("examples/inspect-issue.yaml"),
             Path("examples/inspect-pr.yaml"),
+            Path("examples/project-field-probes.yaml"),
             Path("examples/blocked-main-branch.yaml"),
             Path("examples/launcher-step.yaml"),
             Path("examples/let-bindings.yaml"),
@@ -152,6 +153,11 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(published["review_comment_count"], 1)
         self.assertEqual(published["check_count"], 2)
         self.assertEqual(published["timeline_count"], 1)
+
+    def test_project_field_probes_example_loads(self) -> None:
+        workflow = load_workflow_file(Path("examples/project-field-probes.yaml"))
+
+        self.assertEqual(workflow.workflow, "inspect-project-field-probes")
 
 
 def _completed(*, returncode: int, stdout: str, stderr: str) -> CompletedProcess[str]:

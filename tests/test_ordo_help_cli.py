@@ -865,13 +865,34 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("human-readable explanation", reason["metadata"]["definition"])
         self.assertEqual(reason["canonical_examples"][0]["yaml"], "    reason: Share one profile-scoped triage adaptation record.")
 
+    def test_describe_connector_gh_project_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        project = json.loads(self.run_help("describe", "connector.gh.project", "--json").stdout)
+        field = json.loads(self.run_help("describe", "connector.gh.project.field", "--json").stdout)
+        option = json.loads(self.run_help("describe", "connector.gh.project.field.option", "--json").stdout)
+
+        self.assertEqual(project["snippet_coverage"], "excerpt_verified")
+        self.assertIn("stable project id", project["metadata"]["definition"])
+        self.assertEqual(project["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(project["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.gh.project.field", [item["handle"] for item in project["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(field["snippet_coverage"], "excerpt_verified")
+        self.assertIn("named field", field["metadata"]["definition"])
+        self.assertEqual(field["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.gh.project.field.option", [item["handle"] for item in field["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(option["snippet_coverage"], "excerpt_verified")
+        self.assertIn("named selectable value", option["metadata"]["definition"])
+        self.assertEqual(option["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.gh.project.issue.field_single_select.set", [item["handle"] for item in option["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 10)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 27)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -894,6 +915,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.gh.pr.review_comments"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.pr.checks"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.pr.timeline"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.project"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.project.field"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.project.field.option"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1226,6 +1250,30 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(pr_timeline.returncode, 0)
         self.assertIn("Probe one GitHub pull request timeline as normalized lifecycle events", pr_timeline.stdout)
         self.assertIn("connector.gh.pr.comments", pr_timeline.stdout)
+
+    def test_text_describe_connector_gh_project_group_is_teaching_ready(self) -> None:
+        gh_family = self.run_help("describe", "connector.gh")
+        project = self.run_help("describe", "connector.gh.project")
+        field = self.run_help("describe", "connector.gh.project.field")
+        option = self.run_help("describe", "connector.gh.project.field.option")
+
+        self.assertEqual(gh_family.returncode, 0)
+        self.assertIn("connector.gh.project", gh_family.stdout)
+        self.assertIn("gh.project(project_id=PVT_kwDOExample)", gh_family.stdout)
+
+        self.assertEqual(project.returncode, 0)
+        self.assertIn("Probe one GitHub Project by its stable project id", project.stdout)
+        self.assertIn("connector.gh.project.field", project.stdout)
+        self.assertIn("example_for: workflow_fragment", project.stdout)
+
+        self.assertEqual(field.returncode, 0)
+        self.assertIn("Probe one named field in one GitHub Project", field.stdout)
+        self.assertIn("connector.gh.project.field.option", field.stdout)
+        self.assertIn("example_for: step_fragment", field.stdout)
+
+        self.assertEqual(option.returncode, 0)
+        self.assertIn("Probe whether one named selectable value exists", option.stdout)
+        self.assertIn("connector.gh.project.issue.field_single_select.set", option.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
