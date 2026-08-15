@@ -354,6 +354,18 @@
     },
     "routine_contract.version": {
       "describe_readiness": "ready"
+    },
+    "workflow.step.state_set": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.state_set": {
+      "describe_readiness": "ready"
+    },
+    "state.workflow_surface.step_state_set_field": {
+      "describe_readiness": "ready"
+    },
+    "state_set.single_target_entry": {
+      "describe_readiness": "ready"
     }
   }
 }

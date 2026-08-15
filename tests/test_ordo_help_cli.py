@@ -613,6 +613,32 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Routine-registry top-level field for the schema version", version_field.stdout)
         self.assertIn("routine_contract.routines", version_field.stdout)
 
+    def test_text_describe_state_set_group_is_teaching_ready(self) -> None:
+        step_capability = self.run_help("describe", "workflow.step.state_set")
+        step_form = self.run_help("describe", "workflow.step_forms.state_set")
+        state_field = self.run_help("describe", "state.workflow_surface.step_state_set_field")
+        single_target = self.run_help("describe", "state_set.single_target_entry")
+
+        self.assertEqual(step_capability.returncode, 0)
+        self.assertIn("Workflow step capability for writing one explicit value into one bound state target", step_capability.stdout)
+        self.assertIn("each state_set step writes exactly one resolved target entry", step_capability.stdout)
+        self.assertIn("example_for: field_fragment", step_capability.stdout)
+        self.assertIn("example_for: step_fragment", step_capability.stdout)
+
+        self.assertEqual(step_form.returncode, 0)
+        self.assertIn("Workflow step form for one named state-write checkpoint", step_form.stdout)
+        self.assertIn("state.workflow_surface.step_state_set_field", step_form.stdout)
+        self.assertIn("state_set.single_target_entry", step_form.stdout)
+
+        self.assertEqual(state_field.returncode, 0)
+        self.assertIn("State workflow-surface field that marks `state_set` as the explicit step-owned durable write surface", state_field.stdout)
+        self.assertIn("workflow.step.state_set", state_field.stdout)
+
+        self.assertEqual(single_target.returncode, 0)
+        self.assertIn("state_set must contain exactly one target entry", single_target.stdout)
+        self.assertIn("reason:", single_target.stdout)
+        self.assertIn("related codes:", single_target.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)

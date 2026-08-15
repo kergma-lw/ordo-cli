@@ -1456,6 +1456,26 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
                 "Anything that mutates the outside world, performs execution steps, or encodes workflow control flow such as branching, admission, or orchestration.",
             ],
         },
+        "workflow.state_bindings": {
+            "definition": "Workflow capability for binding declared playbook state locations into workflow roles so steps may read, write, or delete durable state explicitly.",
+            "use_when": [
+                "A workflow needs durable named storage that persists across steps or runs instead of relying on implicit files or transient outputs.",
+            ],
+            "do_not_use_for": [
+                "Short-lived local values that belong in step outputs, workflow values, or direct inputs rather than declared state storage.",
+                "Writing state directly without first binding a declared location into the workflow's explicit state contract.",
+            ],
+        },
+        "workflow.step.state_set": {
+            "definition": "Workflow step capability for writing one explicit value into one bound state target as a deliberate durable state mutation.",
+            "use_when": [
+                "The workflow must persist one value into a declared state location so later steps or later runs can read it.",
+            ],
+            "do_not_use_for": [
+                "Ordinary local dataflow that should stay in step outputs or workflow values instead of becoming durable state.",
+                "Writing several unrelated state targets in one step; each state_set step writes exactly one resolved target entry.",
+            ],
+        },
         "workflow.include_fragments": {
             "definition": "Workflow capability for source-time fragment reuse through include expansion with fragment-local args resolved before assembled-workflow validation.",
             "use_when": [
@@ -1969,6 +1989,37 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "examples.include-plain", "summary": "Verified example that shows a simple include fragment call shape"},
             ],
             "inspect_next": ["workflow.fragment.args", "examples.include-plain", "workflow.include.include"],
+        },
+        "workflow.step_forms.state_set": {
+            "definition": "Workflow step form for one named state-write checkpoint that stores one explicit value into one bound state target.",
+            "use_when": [
+                "A step's primary job is persisting one durable state update rather than calling an operation or producing only ephemeral workflow data.",
+            ],
+            "do_not_use_for": [
+                "Bundling several state writes into one synthetic step; the public state_set form is intentionally one-target-at-a-time.",
+                "Purely local value staging that should remain outside durable state surfaces.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.state_set", "summary": "Field that carries the single state target entry for this step form"},
+                {"handle": "state.workflow_surface.step_state_set_field", "summary": "State contract surface for what the state_set field means inside a workflow step"},
+                {"handle": "workflow.step_forms.state_delete", "summary": "Sibling state mutation form for explicit durable state deletion"},
+            ],
+            "inspect_next": ["workflow.step.state_set", "state.workflow_surface.step_state_set_field", "state_set.single_target_entry"],
+        },
+        "state.workflow_surface.step_state_set_field": {
+            "definition": "State workflow-surface field that marks `state_set` as the explicit step-owned durable write surface inside workflow authoring.",
+            "use_when": [
+                "You need the contract meaning of the state_set step field rather than just one example of writing state.",
+            ],
+            "do_not_use_for": [
+                "Assuming any state path write is valid without the surrounding workflow state-binding contract and single-target rule.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.state_set", "summary": "Step capability for writing one explicit value into one bound state target"},
+                {"handle": "workflow.step_forms.state_set", "summary": "Named step form that requires state_set as its primary field"},
+                {"handle": "state_set.single_target_entry", "summary": "Negative rule that forbids more than one target entry in a state_set step"},
+            ],
+            "inspect_next": ["workflow.step.state_set", "workflow.step_forms.state_set", "state_set.single_target_entry"],
         },
         "routine_contract.workflow_call_surface": {
             "definition": "Routine workflow-call surface for passing declared business args and a short explicit list of forwarded scalar context references into one routine call.",
@@ -3875,6 +3926,13 @@ def render_capability_node_text(payload: JSONObject) -> str:
             lines.append(f"must not infer: {item}")
     else:
         lines.extend([f"surface: {payload['surface']}", payload["rule"]])
+        reason = payload.get("reason")
+        if isinstance(reason, str) and reason:
+            lines.extend(["", f"reason: {reason}"])
+        related_codes = payload.get("related_codes", [])
+        if isinstance(related_codes, list) and related_codes:
+            lines.extend(["", "related codes:"])
+            lines.extend(f"- {item}" for item in related_codes if isinstance(item, str))
     _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
     return "\n".join(lines)
 
