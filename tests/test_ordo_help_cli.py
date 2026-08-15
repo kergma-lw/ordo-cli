@@ -614,6 +614,23 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connector.compose", profile_connectors.stdout)
         self.assertIn("compose.directory=./deploy", profile_connectors.stdout)
 
+    def test_text_describe_connector_fs_group_is_teaching_ready(self) -> None:
+        family = self.run_help("describe", "connector.fs")
+        file_probe = self.run_help("describe", "connector.fs.file")
+
+        self.assertEqual(family.returncode, 0)
+        self.assertIn("Published filesystem connector family for probing one filesystem path as a readable file snapshot.", family.stdout)
+        self.assertIn("use when:", family.stdout)
+        self.assertIn("do not use for:", family.stdout)
+        self.assertIn("connector.fs.file", family.stdout)
+        self.assertIn("connector.shell.command", family.stdout)
+
+        self.assertEqual(file_probe.returncode, 0)
+        self.assertIn("Probe one filesystem path as one UTF-8 file snapshot with canonical content and file metadata.", file_probe.stdout)
+        self.assertIn("Directory inspection or generic filesystem traversal", file_probe.stdout)
+        self.assertIn("workflow.local_expression.adapter.key_value", file_probe.stdout)
+        self.assertIn("fs.file(path=/workspace/app.env)", file_probe.stdout)
+
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 

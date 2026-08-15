@@ -37,6 +37,12 @@
     "connector.compose.stop": {
       "describe_readiness": "ready"
     },
+    "connector.fs": {
+      "describe_readiness": "ready"
+    },
+    "connector.fs.file": {
+      "describe_readiness": "ready"
+    },
     "routine": {
       "describe_readiness": "ready"
     },

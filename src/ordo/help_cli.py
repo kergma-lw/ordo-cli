@@ -1467,6 +1467,23 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     lookup: dict[str, JSONObject] = {}
 
     connector_family_overrides: dict[str, JSONObject] = {
+        "fs": {
+            "definition": "Published filesystem connector family for probing one filesystem path as a readable file snapshot.",
+            "use_when": [
+                "You need one typed filesystem probe instead of a broader shell command just to inspect a file.",
+            ],
+            "do_not_use_for": [
+                "Writing, mutating, or deleting files; this family currently publishes observation only.",
+                "Repository-local parsing logic when one file snapshot is enough and later workflow logic can inspect its outputs directly.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
+                {"handle": "connector.fs.file", "summary": "Probe one filesystem path as one file snapshot"},
+                {"handle": "connector.shell.command", "summary": "Broader shell surface for cases that are not covered by published filesystem probes"},
+            ],
+            "inspect_next": ["connector.fs.file", "operations", "connector.shell.command"],
+        },
         "compose": {
             "definition": "Published Docker Compose connector family for observing one Compose project or service and for starting, stopping, or removing service runtime instances.",
             "use_when": [
@@ -1501,6 +1518,25 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     }
 
     connector_operation_overrides: dict[tuple[str, str], JSONObject] = {
+        ("fs", "file"): {
+            "definition": "Probe one filesystem path as one UTF-8 file snapshot with canonical content and file metadata.",
+            "use_when": [
+                "You need one file's content and metadata inside workflow logic, guards, or later adapters.",
+            ],
+            "do_not_use_for": [
+                "Directory inspection or generic filesystem traversal; this probe requires one regular file path.",
+                "Binary or non-UTF-8 content when canonical text content cannot be produced reliably.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.fs", "summary": "Parent filesystem connector family"},
+                {"handle": "connector.shell.command", "summary": "Fallback shell surface when you need broader filesystem behavior than one published file snapshot"},
+                {"handle": "workflow.local_expression.adapter.key_value", "summary": "One downstream adapter family that can project structured values from fs.file content"},
+            ],
+            "examples": [
+                {"inputs": {"path": "/workspace/app.env"}, "reference": "fs.file"},
+            ],
+            "inspect_next": ["workflow.local_expression.adapter.key_value", "connector.shell.command", "operations"],
+        },
         ("compose", "project"): {
             "definition": "Probe one Compose project as a single orchestration unit.",
             "use_when": [
