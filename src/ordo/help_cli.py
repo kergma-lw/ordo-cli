@@ -1825,6 +1825,96 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
     payload = build_command_line_response()
     lookup: dict[str, JSONObject] = {}
 
+    flag_overrides: dict[tuple[str, str], JSONObject] = {
+        (
+            "ordo-playbook",
+            "--file",
+        ): {
+            "definition": "Use one explicit playbook file for this invocation instead of the default playbook discovery path.",
+            "use_when": [
+                "You need to point this run at a different playbook file without changing repository defaults.",
+            ],
+            "do_not_use_for": [
+                "Selecting a workflow profile; use --profile for that.",
+                "Passing business inputs into the workflow; use --input or --input-file for those values.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "command-line.ordo-playbook", "summary": "Parent command surface for ordo-playbook"},
+                {"handle": "playbook.workflows.file", "summary": "Playbook field that binds a published workflow name to a workflow file inside a playbook"},
+            ],
+        },
+        (
+            "ordo-playbook",
+            "--profile",
+        ): {
+            "definition": "Select one named execution profile for this run.",
+            "use_when": [
+                "You need one project-local profile override for this invocation.",
+            ],
+            "do_not_use_for": [
+                "Passing workflow business inputs; use --input or --input-file for those.",
+                "Changing the playbook file itself; use --file for that.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "command-line.ordo-playbook", "summary": "Parent command surface for ordo-playbook"},
+                {"handle": "workflow.profile", "summary": "Workflow-declared fixed profile binding inside authored workflow source"},
+                {"handle": "profile.inputs", "summary": "Profile-owned input defaults that may supply declared workflow inputs"},
+            ],
+        },
+        (
+            "ordo-playbook",
+            "--input",
+        ): {
+            "definition": "Set one top-level workflow input from inline command-line text for this run.",
+            "use_when": [
+                "You need a quick one-run workflow input override that fits naturally on the command line.",
+            ],
+            "do_not_use_for": [
+                "Large text bodies or file-backed content; use --input-file when the value already lives in a file.",
+                "Selecting a profile or playbook file; use --profile or --file for those launch concerns.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "command-line.ordo-playbook", "summary": "Parent command surface for ordo-playbook"},
+                {"handle": "command-line.ordo-playbook.flag.input_file", "summary": "Sibling flag for loading one workflow input value from a file"},
+                {"handle": "workflow.inputs_contract", "summary": "Workflow contract that defines which activation inputs are allowed and required"},
+            ],
+        },
+        (
+            "ordo-playbook",
+            "--input-file",
+        ): {
+            "definition": "Set one top-level workflow input by reading its raw UTF-8 value from a file for this run.",
+            "use_when": [
+                "You need to pass longer text or file-backed content into one workflow input without shell quoting it inline.",
+            ],
+            "do_not_use_for": [
+                "Short inline values that are clearer directly on the command line; use --input for those.",
+                "Selecting a profile or playbook file; use --profile or --file for those launch concerns.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "command-line.ordo-playbook", "summary": "Parent command surface for ordo-playbook"},
+                {"handle": "command-line.ordo-playbook.flag.input", "summary": "Sibling flag for setting one workflow input inline on the command line"},
+                {"handle": "workflow.inputs_contract", "summary": "Workflow contract that defines which activation inputs are allowed and required"},
+            ],
+        },
+        (
+            "ordo-playbook",
+            "--json",
+        ): {
+            "definition": "Emit machine-readable JSON for this invocation instead of the default text rendering.",
+            "use_when": [
+                "You need stable machine-readable output for automation, tooling, or precise inspection.",
+            ],
+            "do_not_use_for": [
+                "Changing workflow behavior; this flag changes output format, not execution semantics.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "command-line.ordo-playbook", "summary": "Parent command surface for ordo-playbook"},
+                {"handle": "overview", "summary": "Public discovery overview that teaches the main JSON-capable help surfaces"},
+            ],
+        },
+    }
+
     for command in payload["commands"]:
         command_name = command["name"]
         lookup[f"command-line.{command_name}"] = {
@@ -1869,13 +1959,16 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
                 [
                     example
                     for example in command.get("examples", [])
-                    if isinstance(example, str) and flag["name"] in example
+                    if isinstance(example, str) and f"{flag['name']} " in example
                 ],
             )
             flag_metadata.setdefault(
                 "inspect_next",
                 [f"command-line.{command_name}", "command-line"],
             )
+            overrides = flag_overrides.get((command_name, flag["name"]))
+            if isinstance(overrides, dict):
+                flag_metadata.update(overrides)
             lookup[f"command-line.{command_name}.flag.{normalized}"] = {
                 "document_kind": "command_line_node",
                 "node_kind": "flag",
@@ -2725,7 +2818,12 @@ def render_command_line_node_text(payload: JSONObject) -> str:
     examples = metadata.get("examples", [])
     if isinstance(examples, list) and examples:
         lines.extend(["", "examples:"])
-        lines.extend(f"- {item}" for item in examples if isinstance(item, str))
+        seen_examples: set[str] = set()
+        for item in examples:
+            if not isinstance(item, str) or item in seen_examples:
+                continue
+            seen_examples.add(item)
+            lines.append(f"- {item}")
 
     run_success_surface = metadata.get("run_success_surface")
     if isinstance(run_success_surface, str) and run_success_surface:

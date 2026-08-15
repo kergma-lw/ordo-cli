@@ -4,6 +4,21 @@
     "command-line.ordo-playbook": {
       "describe_readiness": "ready"
     },
+    "command-line.ordo-playbook.flag.file": {
+      "describe_readiness": "ready"
+    },
+    "command-line.ordo-playbook.flag.input": {
+      "describe_readiness": "ready"
+    },
+    "command-line.ordo-playbook.flag.input_file": {
+      "describe_readiness": "ready"
+    },
+    "command-line.ordo-playbook.flag.json": {
+      "describe_readiness": "ready"
+    },
+    "command-line.ordo-playbook.flag.profile": {
+      "describe_readiness": "ready"
+    },
     "routine": {
       "describe_readiness": "ready"
     },

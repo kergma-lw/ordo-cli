@@ -587,6 +587,33 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("inspect next:", result.stdout)
         self.assertIn("workflow-authoring.paired_authoring_passes", result.stdout)
 
+    def test_text_describe_command_line_flag_group_is_compact_and_distinct(self) -> None:
+        input_result = self.run_help("describe", "command-line.ordo-playbook.flag.input")
+        input_file_result = self.run_help("describe", "command-line.ordo-playbook.flag.input_file")
+        profile_result = self.run_help("describe", "command-line.ordo-playbook.flag.profile")
+        json_result = self.run_help("describe", "command-line.ordo-playbook.flag.json")
+
+        self.assertEqual(input_result.returncode, 0)
+        self.assertIn("Set one top-level workflow input from inline command-line text for this run.", input_result.stdout)
+        self.assertIn("use when:", input_result.stdout)
+        self.assertIn("do not use for:", input_result.stdout)
+        self.assertIn("workflow.inputs_contract", input_result.stdout)
+        self.assertIn("ordo-playbook --input enabled=true plan inspect-issue", input_result.stdout)
+        self.assertNotIn("ordo-playbook --input-file body=./prompt.md plan inspect-issue", input_result.stdout)
+
+        self.assertEqual(input_file_result.returncode, 0)
+        self.assertIn("Set one top-level workflow input by reading its raw UTF-8 value from a file for this run.", input_file_result.stdout)
+        self.assertIn("command-line.ordo-playbook.flag.input", input_file_result.stdout)
+
+        self.assertEqual(profile_result.returncode, 0)
+        self.assertIn("Select one named execution profile for this run.", profile_result.stdout)
+        self.assertIn("workflow.profile", profile_result.stdout)
+        self.assertIn("profile.inputs", profile_result.stdout)
+
+        self.assertEqual(json_result.returncode, 0)
+        self.assertIn("Emit machine-readable JSON for this invocation instead of the default text rendering.", json_result.stdout)
+        self.assertIn("Changing workflow behavior; this flag changes output format, not execution semantics.", json_result.stdout)
+
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:
         include_contract_node = json.loads(self.run_help("describe", "workflow.include_contract", "--json").stdout)
 
