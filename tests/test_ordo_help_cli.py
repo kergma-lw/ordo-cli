@@ -675,6 +675,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.state_needs", needs_field.stdout)
         self.assertIn("workflow.state_bindings", needs_field.stdout)
 
+    def test_text_describe_state_bindings_group_is_teaching_ready(self) -> None:
+        bindings_capability = self.run_help("describe", "workflow.state_bindings")
+        bindings_field = self.run_help("describe", "state.workflow_surface.state_binding_field")
+
+        self.assertEqual(bindings_capability.returncode, 0)
+        self.assertIn("Workflow capability for binding declared playbook state locations into workflow roles", bindings_capability.stdout)
+        self.assertIn("playbook.states", bindings_capability.stdout)
+        self.assertIn("example_for: workflow_fragment", bindings_capability.stdout)
+
+        self.assertEqual(bindings_field.returncode, 0)
+        self.assertIn("State workflow-surface field that marks `state_bindings` as the workflow contract surface", bindings_field.stdout)
+        self.assertIn("workflow.state_needs", bindings_field.stdout)
+        self.assertIn("playbook.states", bindings_field.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -821,10 +835,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 9)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 1)
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.state_bindings"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "none")
 
     def test_text_describe_state_set_shows_snippet_coverage_and_yaml(self) -> None:

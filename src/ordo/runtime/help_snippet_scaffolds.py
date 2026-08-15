@@ -41,7 +41,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=("workflow.profile", "workflow.state_needs"),
+    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -244,5 +244,7 @@ def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     if target == "workflow.profile":
         return f"{snippet}\n"
     if target == "workflow.state_needs":
+        return f"{snippet}\n"
+    if target == "workflow.state_bindings":
         return f"{snippet}\n"
     raise ValueError(f"Unsupported workflow-fragment target: {target}")

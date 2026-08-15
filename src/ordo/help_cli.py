@@ -1460,6 +1460,7 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
             "definition": "Workflow capability for binding declared playbook state locations into workflow roles so steps may read, write, or delete durable state explicitly.",
             "use_when": [
                 "A workflow needs durable named storage that persists across steps or runs instead of relying on implicit files or transient outputs.",
+                "The workflow has already declared state_needs and now must connect those workflow roles to concrete named playbook state locations.",
             ],
             "do_not_use_for": [
                 "Short-lived local values that belong in step outputs, workflow values, or direct inputs rather than declared state storage.",
@@ -2055,6 +2056,22 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "playbook.states", "summary": "Playbook surface that declares the named durable state locations a workflow may later bind"},
             ],
             "inspect_next": ["workflow.state_needs", "workflow.state_bindings", "playbook.states"],
+        },
+        "state.workflow_surface.state_binding_field": {
+            "definition": "State workflow-surface field that marks `state_bindings` as the workflow contract surface for connecting declared workflow state roles to named playbook state locations.",
+            "use_when": [
+                "You need the contract meaning of the workflow's state_bindings declaration rather than only one later step that reads or mutates state.",
+            ],
+            "do_not_use_for": [
+                "Declaring state requirements in the abstract; that earlier declaration belongs to state_needs.",
+                "Inventing undeclared playbook state locations on the fly; bindings connect to already-declared state catalog names.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.state_bindings", "summary": "Workflow capability for binding state roles to declared playbook locations"},
+                {"handle": "workflow.state_needs", "summary": "Earlier workflow declaration of which state roles are needed before binding"},
+                {"handle": "playbook.states", "summary": "Playbook catalog that declares the named durable state locations a binding may target"},
+            ],
+            "inspect_next": ["workflow.state_bindings", "workflow.state_needs", "playbook.states"],
         },
         "workflow.step_forms.state_set": {
             "definition": "Workflow step form for one named state-write checkpoint that stores one explicit value into one bound state target.",

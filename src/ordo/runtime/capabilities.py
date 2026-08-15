@@ -122,6 +122,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         status="supported",
         scope="workflow",
         related_model_nodes=(
+            "playbook.states",
             "state.workflow_surface.state_binding_field",
             "state.workflow_surface.storage_targets_field",
             "workflow.step.state_set",

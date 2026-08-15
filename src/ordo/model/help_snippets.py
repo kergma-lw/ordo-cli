@@ -139,6 +139,27 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.state_bindings": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "workflow_state_bindings_shared_state_role",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Bind one workflow state role to one declared playbook state location before reading and mutating durable state.",
+                "source_example": "examples.state-bindings",
+                "source_excerpt": {
+                    "path": "examples/state-bindings.yaml",
+                    "start_line": 1,
+                    "end_line": 13
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.state-bindings"
+                },
+            }
+        ],
+    },
     "workflow.step.profile_switch": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
