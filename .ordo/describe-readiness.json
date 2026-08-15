@@ -267,6 +267,27 @@
     },
     "workflow.local_expression.filter.unique": {
       "describe_readiness": "ready"
+    },
+    "workflow.local_expression.adapter_binding": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.adapter_seam": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.adapter.json": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.adapter.key_value": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.adapter.markdown": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.adapter.text": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.adapter.yaml": {
+      "describe_readiness": "ready"
     }
   }
 }
