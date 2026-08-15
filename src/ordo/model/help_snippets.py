@@ -296,6 +296,169 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.gh.issue": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_issue_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect one GitHub issue and register the typed snapshot for later workflow decisions.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 17,
+                    "end_line": 22
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            },
+            {
+                "name": "gh_issue_full_maintenance_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Create an issue, inspect it, comment on it, edit the body, inspect comments, and close it with typed GitHub issue operations.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 1,
+                    "end_line": 56
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            }
+        ],
+    },
+    "connector.gh.issue.create": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_issue_create_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Create one new GitHub issue and register its returned reference for later steps.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 10,
+                    "end_line": 16
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            }
+        ],
+    },
+    "connector.gh.issue.close": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_issue_close_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Close one existing GitHub issue after earlier workflow steps have already selected the target issue number.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 52,
+                    "end_line": 56
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            }
+        ],
+    },
+    "connector.gh.issue.comments": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_issue_comments_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect the issue comment thread with one explicit limit and register the resulting comment snapshot.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 45,
+                    "end_line": 51
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            }
+        ],
+    },
+    "connector.gh.issue.comment.add": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_issue_comment_add_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Add one human-facing follow-up comment to the issue conversation without rewriting the issue body.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 23,
+                    "end_line": 28
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            }
+        ],
+    },
+    "connector.gh.issue.body.append": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_issue_body_append_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Append one extra note to the existing issue body while preserving earlier body content.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 29,
+                    "end_line": 35
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            }
+        ],
+    },
+    "connector.gh.issue.body.replace": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_issue_body_replace_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Rewrite the full issue body when the workflow owns the canonical issue description.",
+                "source_example": "examples.gh-issue-maintenance",
+                "source_excerpt": {
+                    "path": "examples/gh-issue-maintenance.yaml",
+                    "start_line": 36,
+                    "end_line": 44
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.gh-issue-maintenance"
+                },
+            }
+        ],
+    },
     "workflow.state_needs": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [

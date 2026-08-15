@@ -1664,6 +1664,120 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.local_expression.adapter.key_value", "connector.shell.command", "operations"],
         },
+        ("gh", "issue"): {
+            "definition": "Probe one GitHub issue as a typed snapshot of its current metadata, body, labels, assignees, and project-item context.",
+            "use_when": [
+                "Workflow logic needs to inspect one issue before deciding whether to comment, edit the body, close it, or publish a summary.",
+                "A guard or later step needs typed issue facts such as state, title, labels, or body rather than a coarse shell response.",
+            ],
+            "do_not_use_for": [
+                "Listing the issue's comment thread only; use connector.gh.issue.comments for that narrower conversation surface.",
+                "Mutating the issue; use connector.gh.issue.create, connector.gh.issue.comment.add, connector.gh.issue.body.append, connector.gh.issue.body.replace, or connector.gh.issue.close for effectful changes.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh", "summary": "Parent GitHub connector family for issue, pull request, and project operations"},
+                {"handle": "connector.gh.issue.comments", "summary": "Sibling probe for the issue comment thread rather than the issue snapshot itself"},
+                {"handle": "connector.gh.issue.comment.add", "summary": "Action for adding one new issue comment after inspection"},
+                {"handle": "connector.gh.issue.close", "summary": "Action for closing the issue after inspection or cleanup"},
+            ],
+            "inspect_next": ["connector.gh.issue.comments", "connector.gh.issue.comment.add", "connector.gh.issue.body.replace", "connector.gh.issue.close"],
+        },
+        ("gh", "issue.create"): {
+            "definition": "Create one new GitHub issue in one repository and return its canonical reference, number, title, and URL for later workflow steps.",
+            "use_when": [
+                "The workflow must open a new issue and then reuse the returned issue number or URL in later steps.",
+            ],
+            "do_not_use_for": [
+                "Editing or commenting on an already existing issue; use the narrower body or comment actions for that follow-up work.",
+                "Reading current issue metadata before deciding whether creation is necessary; use connector.gh.issue or other probe surfaces first when the issue already exists.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.issue", "summary": "Probe the created issue later when you need its full current snapshot"},
+                {"handle": "connector.gh.issue.comment.add", "summary": "Add a follow-up comment to an existing issue instead of creating a new one"},
+                {"handle": "connector.gh.issue.body.replace", "summary": "Rewrite the body of an existing issue instead of creating a fresh issue"},
+            ],
+            "inspect_next": ["connector.gh.issue", "connector.gh.issue.comment.add", "connector.gh.issue.body.append"],
+        },
+        ("gh", "issue.close"): {
+            "definition": "Close one existing GitHub issue by repository and issue number.",
+            "use_when": [
+                "A workflow has already decided that the issue should be closed and needs one typed action result instead of a shell-level command.",
+            ],
+            "do_not_use_for": [
+                "Explaining the closure in conversation text; add a comment first when the workflow should leave a human-facing note.",
+                "Closing a pull request; use the pull-request connector family for PR-specific lifecycle actions.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.issue", "summary": "Probe the issue first when closure depends on current issue state or metadata"},
+                {"handle": "connector.gh.issue.comment.add", "summary": "Leave one final note on the issue before or instead of closing it"},
+                {"handle": "connector.gh.issue.body.append", "summary": "Append a closing note to the body when the workflow needs body mutation rather than state transition"},
+            ],
+            "inspect_next": ["connector.gh.issue", "connector.gh.issue.comment.add", "connector.gh.issue.body.append"],
+        },
+        ("gh", "issue.comments"): {
+            "definition": "Probe the comment thread of one GitHub issue as a typed list of recent comments plus total count metadata.",
+            "use_when": [
+                "Workflow logic needs to inspect prior discussion, count comments, or publish a compact conversation summary before taking another step.",
+            ],
+            "do_not_use_for": [
+                "Reading the issue's main body, labels, or state; use connector.gh.issue for the broader issue snapshot.",
+                "Posting a new comment; use connector.gh.issue.comment.add for that effectful change.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.issue", "summary": "Sibling probe for the issue snapshot rather than its comment list"},
+                {"handle": "connector.gh.issue.comment.add", "summary": "Action for appending one new comment to the same thread"},
+                {"handle": "connector.gh.issue.body.append", "summary": "Issue-body mutation surface when the update belongs in the issue body rather than the comment thread"},
+            ],
+            "inspect_next": ["connector.gh.issue", "connector.gh.issue.comment.add", "connector.gh.issue.body.append"],
+        },
+        ("gh", "issue.comment.add"): {
+            "definition": "Add one new comment to an existing GitHub issue and return the created comment id, URL, and body.",
+            "use_when": [
+                "The workflow should leave a human-facing note in the issue conversation without rewriting the issue body.",
+            ],
+            "do_not_use_for": [
+                "Updating the canonical issue description; use connector.gh.issue.body.append or connector.gh.issue.body.replace when the change belongs in the body itself.",
+                "Reading prior comments; use connector.gh.issue.comments when the workflow needs observation rather than mutation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.issue.comments", "summary": "Probe the existing comment thread before or after adding a new comment"},
+                {"handle": "connector.gh.issue.body.append", "summary": "Append durable text to the issue body instead of the comment thread"},
+                {"handle": "connector.gh.issue.body.replace", "summary": "Rewrite the full issue body when the workflow owns the canonical description"},
+            ],
+            "inspect_next": ["connector.gh.issue.comments", "connector.gh.issue.body.append", "connector.gh.issue.close"],
+        },
+        ("gh", "issue.body.append"): {
+            "definition": "Append one text fragment to the end of an existing GitHub issue body, optionally separated from the prior body by one explicit separator.",
+            "use_when": [
+                "The workflow should preserve the current issue body and add one extra section, note, or footer to it.",
+            ],
+            "do_not_use_for": [
+                "Regenerating the whole canonical body from scratch; use connector.gh.issue.body.replace for a full rewrite.",
+                "Adding conversational discussion that belongs in the comment thread instead of the issue body; use connector.gh.issue.comment.add.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.issue.body.replace", "summary": "Rewrite the full body instead of appending one trailing fragment"},
+                {"handle": "connector.gh.issue.comment.add", "summary": "Write a discussion comment instead of mutating the issue body"},
+                {"handle": "connector.gh.issue", "summary": "Probe the current body first when the append decision depends on existing issue metadata"},
+            ],
+            "inspect_next": ["connector.gh.issue.body.replace", "connector.gh.issue.comment.add", "connector.gh.issue"],
+        },
+        ("gh", "issue.body.replace"): {
+            "definition": "Replace the entire GitHub issue body with one new body string and report whether the resulting body changed.",
+            "use_when": [
+                "The workflow owns the canonical issue description and should rewrite the full body deterministically.",
+            ],
+            "do_not_use_for": [
+                "Preserving the current body and merely adding one extra section; use connector.gh.issue.body.append for that narrower update.",
+                "Thread-style follow-up notes; use connector.gh.issue.comment.add when the update belongs in conversation history rather than the body.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.issue.body.append", "summary": "Append one extra fragment while preserving the rest of the current body"},
+                {"handle": "connector.gh.issue.comment.add", "summary": "Add a conversational note instead of rewriting the body"},
+                {"handle": "connector.gh.issue", "summary": "Probe the current issue body before deciding whether a full rewrite is appropriate"},
+            ],
+            "inspect_next": ["connector.gh.issue.body.append", "connector.gh.issue.comment.add", "connector.gh.issue"],
+        },
         ("compose", "project"): {
             "definition": "Probe one Compose project as a single orchestration unit.",
             "use_when": [

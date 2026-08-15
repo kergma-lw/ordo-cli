@@ -14,6 +14,7 @@ from tests.support import STANDARD_CONNECTOR_PROVIDER
 class ExampleSurfaceTest(unittest.TestCase):
     def test_example_workflows_validate(self) -> None:
         for path in (
+            Path("examples/gh-issue-maintenance.yaml"),
             Path("examples/minimal.yaml"),
             Path("examples/inspect-issue.yaml"),
             Path("examples/inspect-pr.yaml"),

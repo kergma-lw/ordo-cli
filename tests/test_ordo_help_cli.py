@@ -850,7 +850,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 10)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 9)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 16)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -859,6 +859,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["playbook.workflows.when"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.working_directory"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.state_bindings"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.issue"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.issue.create"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.issue.close"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.issue.comments"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.issue.comment.add"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.issue.body.append"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.issue.body.replace"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
@@ -1083,6 +1090,47 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.state_bindings", workflow_state_bindings.stdout)
         self.assertIn("playbook.pre_run.state_bindings", workflow_state_bindings.stdout)
         self.assertIn("shared_state: shared_state", workflow_state_bindings.stdout)
+
+    def test_text_describe_connector_gh_issue_group_is_teaching_ready(self) -> None:
+        issue = self.run_help("describe", "connector.gh.issue")
+        issue_create = self.run_help("describe", "connector.gh.issue.create")
+        issue_close = self.run_help("describe", "connector.gh.issue.close")
+        issue_comments = self.run_help("describe", "connector.gh.issue.comments")
+        issue_comment_add = self.run_help("describe", "connector.gh.issue.comment.add")
+        issue_body_append = self.run_help("describe", "connector.gh.issue.body.append")
+        issue_body_replace = self.run_help("describe", "connector.gh.issue.body.replace")
+
+        self.assertEqual(issue.returncode, 0)
+        self.assertIn("Probe one GitHub issue as a typed snapshot", issue.stdout)
+        self.assertIn("use when:", issue.stdout)
+        self.assertIn("do not use for:", issue.stdout)
+        self.assertIn("connector.gh.issue.comments", issue.stdout)
+        self.assertIn("example_for: workflow_fragment", issue.stdout)
+
+        self.assertEqual(issue_create.returncode, 0)
+        self.assertIn("Create one new GitHub issue", issue_create.stdout)
+        self.assertIn("connector.gh.issue.comment.add", issue_create.stdout)
+        self.assertIn("example_for: step_fragment", issue_create.stdout)
+
+        self.assertEqual(issue_close.returncode, 0)
+        self.assertIn("Close one existing GitHub issue", issue_close.stdout)
+        self.assertIn("connector.gh.issue.comment.add", issue_close.stdout)
+
+        self.assertEqual(issue_comments.returncode, 0)
+        self.assertIn("Probe the comment thread of one GitHub issue", issue_comments.stdout)
+        self.assertIn("connector.gh.issue.comment.add", issue_comments.stdout)
+
+        self.assertEqual(issue_comment_add.returncode, 0)
+        self.assertIn("Add one new comment to an existing GitHub issue", issue_comment_add.stdout)
+        self.assertIn("connector.gh.issue.body.append", issue_comment_add.stdout)
+
+        self.assertEqual(issue_body_append.returncode, 0)
+        self.assertIn("Append one text fragment to the end of an existing GitHub issue body", issue_body_append.stdout)
+        self.assertIn("connector.gh.issue.body.replace", issue_body_append.stdout)
+
+        self.assertEqual(issue_body_replace.returncode, 0)
+        self.assertIn("Replace the entire GitHub issue body", issue_body_replace.stdout)
+        self.assertIn("connector.gh.issue.body.append", issue_body_replace.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
