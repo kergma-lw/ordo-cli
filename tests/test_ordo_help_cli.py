@@ -673,6 +673,17 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.step.gate", form_result.stdout)
         self.assertIn("example_for: step_fragment", form_result.stdout)
 
+    def test_text_describe_workflow_profile_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "workflow.profile")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Top-level workflow field for binding the current workflow subtree to one fixed declared execution profile before guards run.", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("workflow.step.profile_switch", result.stdout)
+        self.assertIn("workflow-authoring.workflow_profile_binding_is_project_local", result.stdout)
+        self.assertIn("example_for: workflow_fragment", result.stdout)
+
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 

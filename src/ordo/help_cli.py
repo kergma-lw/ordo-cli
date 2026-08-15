@@ -1704,6 +1704,23 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "workflow.step.gate"],
         },
+        "workflow.profile": {
+            "definition": "Top-level workflow field for binding the current workflow subtree to one fixed declared execution profile before guards run.",
+            "use_when": [
+                "The workflow is intentionally project-local and should always start under one fixed profile binding.",
+                "Guard evaluation and later steps must both see the same fixed profile-owned context from the start of this workflow subtree.",
+            ],
+            "do_not_use_for": [
+                "Portable workflows that should let the caller, playbook, or launch context choose the active profile.",
+                "Mid-workflow context switches; use workflow.step.profile_switch when the profile changes later in the path instead of at workflow start.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.profile_switch", "summary": "Step-local profile change for later execution inside an already-started workflow path"},
+                {"handle": "workflow-authoring.workflow_profile_binding_is_project_local", "summary": "Authoring guidance that explains why workflow.profile is intentionally restrictive"},
+                {"handle": "profile", "summary": "Profile contract surface for declared execution-context data that a binding selects"},
+            ],
+            "inspect_next": ["workflow.step.profile_switch", "workflow-authoring.workflow_profile_binding_is_project_local", "profile"],
+        },
         "profile.connectors": {
             "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
             "use_when": [

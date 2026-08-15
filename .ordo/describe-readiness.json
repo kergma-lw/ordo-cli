@@ -60,6 +60,9 @@
     },
     "workflow.step_forms.profile_switch": {
       "describe_readiness": "ready"
+    },
+    "workflow.profile": {
+      "describe_readiness": "ready"
     }
   }
 }
