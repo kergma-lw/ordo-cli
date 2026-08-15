@@ -1456,6 +1456,16 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
                 "Anything that mutates the outside world, performs execution steps, or encodes workflow control flow such as branching, admission, or orchestration.",
             ],
         },
+        "workflow.include_fragments": {
+            "definition": "Workflow capability for source-time fragment reuse through include expansion with fragment-local args resolved before assembled-workflow validation.",
+            "use_when": [
+                "The same authored structure should be reused by expansion into the assembled workflow before execution rather than invoked as a runtime step.",
+            ],
+            "do_not_use_for": [
+                "Runtime invocation, isolated callee scope, or repeated execution per item; use run surfaces for those runtime behaviors.",
+                "Treating include as a hidden control-flow mechanism after execution has already started; include is source-time assembly, not runtime branching.",
+            ],
+        },
         "workflow.local_expression.adapter": {
             "definition": "Workflow capability for representation-adapter families that project or transform values after a source has already been interpreted as json, yaml, markdown, text, or key-value data.",
             "use_when": [
@@ -1873,6 +1883,92 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "workflow.local_expression.adapter_seam", "summary": "Shared host-binding and read/write seam across adapter families"},
             ],
             "inspect_next": ["workflow.local_expression.adapter.json", "workflow.local_expression.adapter_binding", "workflow.local_expression.adapter"],
+        },
+        "workflow.include_contract": {
+            "definition": "Workflow include contract for resolving fragment files, binding fragment-local args, and validating the assembled workflow only after include expansion finishes.",
+            "use_when": [
+                "You need the execution boundary and resolution rules for source-time include expansion rather than runtime invocation semantics.",
+            ],
+            "do_not_use_for": [
+                "Assuming include runs as an isolated runtime call; include replaces source structure before validation and execution start.",
+                "Guessing fragment argument rules from ordinary workflow inputs; fragment args have their own declaration and default semantics.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.include_fragments", "summary": "Capability overview for source-time include fragment reuse"},
+                {"handle": "workflow.include.include", "summary": "Call field that points at the fragment file to expand"},
+                {"handle": "workflow.include.with", "summary": "Call field for binding fragment-local args into the included fragment"},
+            ],
+            "required_fields": ["include"],
+            "optional_fields": ["with"],
+            "inspect_next": ["workflow.include.include", "workflow.include.with", "workflow.fragment.args"],
+        },
+        "workflow.include.include": {
+            "definition": "Included-fragment call field that names the fragment file to resolve and expand at source time.",
+            "use_when": [
+                "A workflow block should be replaced by reusable fragment content loaded from a fragment file before validation begins.",
+            ],
+            "do_not_use_for": [
+                "Selecting a runtime workflow to invoke later; use run or playbook workflow-entry surfaces for runtime selection instead of source-time expansion.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.include_contract", "summary": "Contract that requires include and resolves fragment files before assembled-workflow validation"},
+                {"handle": "workflow.include.with", "summary": "Sibling field for binding fragment-local args during include expansion"},
+                {"handle": "workflow.fragment.description", "summary": "Fragment metadata field inside the included fragment file itself"},
+            ],
+            "examples": [
+                {"reference": "workflow.include.include", "inputs": {"include": "fragments/check_issue.yaml"}},
+            ],
+            "inspect_next": ["workflow.include.with", "workflow.fragment.args", "examples.include-plain"],
+        },
+        "workflow.include.with": {
+            "definition": "Included-fragment call field for binding fragment-local args into the included fragment during source-time expansion.",
+            "use_when": [
+                "The included fragment declares args and the caller needs to provide concrete values before the assembled workflow is validated.",
+            ],
+            "do_not_use_for": [
+                "Runtime step with-binding or ordinary workflow input activation; this field only feeds fragment-local args during include expansion.",
+                "Host-side arbitrary expressions that should be delayed until runtime invocation; include.with is part of source-time fragment assembly.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.include_contract", "summary": "Contract that defines fragment argument binding and validation semantics"},
+                {"handle": "workflow.fragment.args", "summary": "Fragment metadata field that declares which args may be bound"},
+                {"handle": "workflow.run.with", "summary": "Runtime invocation binding surface rather than source-time include arg binding"},
+            ],
+            "examples": [
+                {"reference": "workflow.include.with", "inputs": {"issue_number": "${inputs.issue_number}"}},
+            ],
+            "inspect_next": ["workflow.fragment.args", "examples.include-args", "workflow.run.with"],
+        },
+        "workflow.fragment.args": {
+            "definition": "Included-fragment metadata field that declares fragment-local args available through args.name inside the expanded fragment body.",
+            "use_when": [
+                "A reusable fragment needs a small explicit local input contract rather than reading all caller context implicitly.",
+            ],
+            "do_not_use_for": [
+                "Ordinary top-level workflow activation inputs; use workflow.inputs for the executable workflow contract rather than fragment-local include args.",
+                "Implicitly assuming any caller value is available inside the fragment without declaration.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.include.with", "summary": "Call field that binds declared fragment args during include expansion"},
+                {"handle": "workflow.include_contract", "summary": "Contract that defines allowed fragment arg declaration forms and defaults"},
+                {"handle": "workflow.inputs", "summary": "Executable workflow activation-input contract rather than fragment-local reuse metadata"},
+            ],
+            "inspect_next": ["workflow.include.with", "workflow.include_contract", "examples.include-args"],
+        },
+        "workflow.fragment.description": {
+            "definition": "Included-fragment metadata field for documenting the reusable fragment's purpose without changing the assembled workflow contract.",
+            "use_when": [
+                "A reusable fragment benefits from a short human-facing description so authors can discover why it exists before expanding it.",
+            ],
+            "do_not_use_for": [
+                "Executable workflow semantics or activation inputs; description is documentation, not contract shape.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.include.include", "summary": "Call field that selects the fragment file to expand"},
+                {"handle": "workflow.fragment.args", "summary": "Sibling fragment metadata field for declaring local args"},
+                {"handle": "examples.include-plain", "summary": "Verified example that shows a simple include fragment call shape"},
+            ],
+            "inspect_next": ["workflow.fragment.args", "examples.include-plain", "workflow.include.include"],
         },
         "workflow.profile": {
             "definition": "Top-level workflow field for binding the current workflow subtree to one fixed declared execution profile before guards run.",
@@ -3770,9 +3866,10 @@ def render_model_node_text(payload: JSONObject) -> str:
         lines.extend(["", "replaced by:"])
         lines.extend(f"- {item}" for item in replaced_by if isinstance(item, str))
 
-    examples = metadata.get("examples", [])
+    related_examples = metadata.get("related_examples")
+    examples = related_examples if isinstance(related_examples, list) else metadata.get("examples", [])
     if isinstance(examples, list) and examples:
-        lines.extend(["", "examples:"])
+        lines.extend(["", "related examples:"])
         for item in examples:
             if not isinstance(item, dict):
                 continue

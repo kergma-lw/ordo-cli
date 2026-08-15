@@ -291,6 +291,24 @@
     },
     "workflow.local_expressions": {
       "describe_readiness": "ready"
+    },
+    "workflow.include_fragments": {
+      "describe_readiness": "ready"
+    },
+    "workflow.include_contract": {
+      "describe_readiness": "ready"
+    },
+    "workflow.include.include": {
+      "describe_readiness": "ready"
+    },
+    "workflow.include.with": {
+      "describe_readiness": "ready"
+    },
+    "workflow.fragment.args": {
+      "describe_readiness": "ready"
+    },
+    "workflow.fragment.description": {
+      "describe_readiness": "ready"
     }
   }
 }

@@ -474,6 +474,44 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.local_expression.builtin", result.stdout)
         self.assertIn("workflow.local_expression.adapter", result.stdout)
 
+    def test_text_describe_workflow_include_group_is_teaching_ready(self) -> None:
+        include_capability = self.run_help("describe", "workflow.include_fragments")
+        include_contract = self.run_help("describe", "workflow.include_contract")
+        include_field = self.run_help("describe", "workflow.include.include")
+        include_with = self.run_help("describe", "workflow.include.with")
+        fragment_args = self.run_help("describe", "workflow.fragment.args")
+        fragment_description = self.run_help("describe", "workflow.fragment.description")
+
+        self.assertEqual(include_capability.returncode, 0)
+        self.assertIn("Workflow capability for source-time fragment reuse through include expansion", include_capability.stdout)
+        self.assertIn("do not use for:", include_capability.stdout)
+        self.assertIn("workflow.include_contract", include_capability.stdout)
+
+        self.assertEqual(include_contract.returncode, 0)
+        self.assertIn("Workflow include contract for resolving fragment files", include_contract.stdout)
+        self.assertIn("required fields:", include_contract.stdout)
+        self.assertIn("- include", include_contract.stdout)
+        self.assertIn("optional fields:", include_contract.stdout)
+        self.assertIn("- with", include_contract.stdout)
+
+        self.assertEqual(include_field.returncode, 0)
+        self.assertIn("Included-fragment call field that names the fragment file", include_field.stdout)
+        self.assertIn("workflow.include.with", include_field.stdout)
+        self.assertIn("workflow.include.include(include=fragments/check_issue.yaml)", include_field.stdout)
+
+        self.assertEqual(include_with.returncode, 0)
+        self.assertIn("Included-fragment call field for binding fragment-local args", include_with.stdout)
+        self.assertIn("workflow.fragment.args", include_with.stdout)
+        self.assertIn("workflow.run.with", include_with.stdout)
+
+        self.assertEqual(fragment_args.returncode, 0)
+        self.assertIn("Included-fragment metadata field that declares fragment-local args", fragment_args.stdout)
+        self.assertIn("workflow.inputs", fragment_args.stdout)
+
+        self.assertEqual(fragment_description.returncode, 0)
+        self.assertIn("Included-fragment metadata field for documenting the reusable fragment's purpose", fragment_description.stdout)
+        self.assertIn("examples.include-plain", fragment_description.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
