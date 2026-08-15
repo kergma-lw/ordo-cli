@@ -3552,7 +3552,69 @@ def render_command_line_node_text(payload: JSONObject) -> str:
 def render_workflow_authoring_node_text(payload: JSONObject) -> str:
     """Return the text workflow-authoring-node surface."""
 
-    return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
+    lines = [payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}", f"snippet coverage: {payload.get('snippet_coverage', 'none')}"]
+
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return "\n".join(lines)
+
+    guidance_level = metadata.get("guidance_level")
+    priority = metadata.get("priority")
+    if isinstance(guidance_level, str) or isinstance(priority, str):
+        lines.append("")
+        if isinstance(guidance_level, str):
+            lines.append(f"guidance level: {guidance_level}")
+        if isinstance(priority, str):
+            lines.append(f"priority: {priority}")
+
+    why = metadata.get("why")
+    if isinstance(why, list) and why:
+        lines.extend(["", "why:"])
+        lines.extend(f"- {item}" for item in why if isinstance(item, str))
+
+    prefer = metadata.get("prefer")
+    if isinstance(prefer, list) and prefer:
+        lines.extend(["", "prefer:"])
+        lines.extend(f"- {item}" for item in prefer if isinstance(item, str))
+
+    avoid = metadata.get("avoid")
+    if isinstance(avoid, list) and avoid:
+        lines.extend(["", "avoid:"])
+        lines.extend(f"- {item}" for item in avoid if isinstance(item, str))
+
+    stop_when = metadata.get("stop_when")
+    if isinstance(stop_when, list) and stop_when:
+        lines.extend(["", "stop when:"])
+        lines.extend(f"- {item}" for item in stop_when if isinstance(item, str))
+
+    examples = metadata.get("examples")
+    if isinstance(examples, list) and examples:
+        lines.extend(["", "examples:"])
+        lines.extend(f"- {item}" for item in examples if isinstance(item, str))
+
+    why_invalid = metadata.get("why_invalid")
+    if isinstance(why_invalid, str) and why_invalid:
+        lines.extend(["", f"why invalid: {why_invalid}"])
+
+    generated_env = metadata.get("generated_env")
+    if isinstance(generated_env, list) and generated_env:
+        lines.extend(["", "generated env:"])
+        lines.extend(f"- {item}" for item in generated_env if isinstance(item, str))
+
+    recommended = metadata.get("recommended")
+    if isinstance(recommended, str) and recommended:
+        lines.extend(["", f"recommended: {recommended}"])
+
+    invalid = metadata.get("invalid")
+    if isinstance(invalid, str) and invalid:
+        lines.extend(["", f"invalid: {invalid}"])
+
+    yaml = metadata.get("yaml")
+    if isinstance(yaml, str) and yaml:
+        lines.extend(["", "yaml:"])
+        lines.extend(f"  {line}" for line in yaml.splitlines())
+
+    return "\n".join(lines)
 
 
 def render_example_node_text(payload: JSONObject) -> str:
