@@ -1970,6 +1970,39 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.fragment.args", "examples.include-plain", "workflow.include.include"],
         },
+        "workflow.inputs": {
+            "definition": "Top-level workflow field for declaring the named activation inputs that the caller must provide before the workflow may run.",
+            "use_when": [
+                "The workflow needs a declared external request shape instead of reading undeclared caller values implicitly.",
+                "Guards, steps, or result logic should be able to reference activation inputs through one explicit contract surface.",
+            ],
+            "do_not_use_for": [
+                "Fragment-local include args; use workflow.fragment.args when the values belong only to source-time fragment reuse.",
+                "Playbook entry-owned static launch inputs; use playbook.workflows.with when the values belong to one named launch entry rather than to the workflow contract itself.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.inputs_contract", "summary": "Contract surface for declaration shape, access path, and activation rules"},
+                {"handle": "playbook.workflows.with", "summary": "Launch-time entry surface that supplies concrete values for declared workflow inputs"},
+                {"handle": "command-line.ordo-playbook.flag.input", "summary": "One-run caller override for declared workflow input values"},
+            ],
+            "inspect_next": ["workflow.inputs_contract", "playbook.workflows.with", "command-line.ordo-playbook.flag.input"],
+        },
+        "workflow.inputs_contract": {
+            "definition": "Workflow activation-input contract for how inputs are declared, accessed, validated, and rejected at runtime.",
+            "use_when": [
+                "You need to understand what declaring workflow inputs means at activation time, including required-key and unknown-input rules.",
+            ],
+            "do_not_use_for": [
+                "Assuming undeclared caller keys are tolerated; unknown activation inputs are rejected by contract.",
+                "Treating input declaration as sufficient validation guidance; authoring still needs explicit input validation guards when semantics require them.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.inputs", "summary": "Top-level field that declares the workflow activation-input catalog"},
+                {"handle": "workflow-authoring.input_validation_default", "summary": "Authoring guidance for validating newly introduced or changed workflow inputs"},
+                {"handle": "command-line.ordo-playbook.flag.input", "summary": "Launch-time surface that supplies one concrete value for a declared workflow input"},
+            ],
+            "inspect_next": ["workflow.inputs", "workflow-authoring.input_validation_default", "command-line.ordo-playbook.flag.input"],
+        },
         "workflow.profile": {
             "definition": "Top-level workflow field for binding the current workflow subtree to one fixed declared execution profile before guards run.",
             "use_when": [
@@ -3723,6 +3756,61 @@ def render_model_node_text(payload: JSONObject) -> str:
     if isinstance(optional_fields, list) and optional_fields:
         lines.extend(["", "optional fields:"])
         lines.extend(f"- {item}" for item in optional_fields if isinstance(item, str))
+
+    access_surface = metadata.get("access_surface")
+    declaration_shape = metadata.get("declaration_shape")
+    activation_requirement = metadata.get("activation_requirement")
+    unknown_input_policy = metadata.get("unknown_input_policy")
+    declared_keys_required_at_activation = metadata.get("declared_keys_required_at_activation")
+    rejects_unknown_activation_inputs = metadata.get("rejects_unknown_activation_inputs")
+    validated_by = metadata.get("validated_by")
+    if any(
+        [
+            isinstance(access_surface, str),
+            isinstance(declaration_shape, str),
+            isinstance(activation_requirement, str),
+            isinstance(unknown_input_policy, str),
+            isinstance(declared_keys_required_at_activation, bool),
+            isinstance(rejects_unknown_activation_inputs, bool),
+            isinstance(validated_by, str),
+        ]
+    ):
+        lines.extend(["", "activation contract:"])
+        if isinstance(declaration_shape, str):
+            lines.append(f"- declaration shape: {declaration_shape}")
+        if isinstance(access_surface, str):
+            lines.append(f"- access surface: {access_surface}")
+        if isinstance(activation_requirement, str):
+            lines.append(f"- activation requirement: {activation_requirement}")
+        if isinstance(unknown_input_policy, str):
+            lines.append(f"- unknown input policy: {unknown_input_policy}")
+        if isinstance(declared_keys_required_at_activation, bool):
+            lines.append(f"- declared keys required at activation: {'yes' if declared_keys_required_at_activation else 'no'}")
+        if isinstance(rejects_unknown_activation_inputs, bool):
+            lines.append(f"- rejects unknown activation inputs: {'yes' if rejects_unknown_activation_inputs else 'no'}")
+        if isinstance(validated_by, str):
+            lines.append(f"- validated by: {validated_by}")
+
+    declaration_fields = metadata.get("declaration_fields", [])
+    if isinstance(declaration_fields, list) and declaration_fields:
+        lines.extend(["", "declaration fields:"])
+        for item in declaration_fields:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            type_name = item.get("type")
+            required = item.get("required")
+            role = item.get("authoring_role")
+            parts = []
+            if isinstance(type_name, str):
+                parts.append(f"type={type_name}")
+            if isinstance(required, bool):
+                parts.append(f"required={'yes' if required else 'no'}")
+            if isinstance(role, str):
+                parts.append(f"role={role}")
+            suffix = f" ({', '.join(parts)})" if parts else ""
+            if isinstance(name, str):
+                lines.append(f"- {name}{suffix}")
 
     outputs = metadata.get("outputs")
     if isinstance(outputs, dict) and outputs:

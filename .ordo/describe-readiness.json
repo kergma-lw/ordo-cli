@@ -309,6 +309,12 @@
     },
     "workflow.fragment.description": {
       "describe_readiness": "ready"
+    },
+    "workflow.inputs": {
+      "describe_readiness": "ready"
+    },
+    "workflow.inputs_contract": {
+      "describe_readiness": "ready"
     }
   }
 }

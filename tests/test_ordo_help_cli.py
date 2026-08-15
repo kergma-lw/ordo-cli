@@ -512,6 +512,26 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Included-fragment metadata field for documenting the reusable fragment's purpose", fragment_description.stdout)
         self.assertIn("examples.include-plain", fragment_description.stdout)
 
+    def test_text_describe_workflow_inputs_group_is_teaching_ready(self) -> None:
+        inputs_field = self.run_help("describe", "workflow.inputs")
+        inputs_contract = self.run_help("describe", "workflow.inputs_contract")
+
+        self.assertEqual(inputs_field.returncode, 0)
+        self.assertIn("Top-level workflow field for declaring the named activation inputs", inputs_field.stdout)
+        self.assertIn("workflow.inputs_contract", inputs_field.stdout)
+        self.assertIn("playbook.workflows.with", inputs_field.stdout)
+        self.assertIn("command-line.ordo-playbook.flag.input", inputs_field.stdout)
+
+        self.assertEqual(inputs_contract.returncode, 0)
+        self.assertIn("Workflow activation-input contract for how inputs are declared", inputs_contract.stdout)
+        self.assertIn("activation contract:", inputs_contract.stdout)
+        self.assertIn("- declaration shape: mapping", inputs_contract.stdout)
+        self.assertIn("- access surface: inputs.name", inputs_contract.stdout)
+        self.assertIn("- rejects unknown activation inputs: yes", inputs_contract.stdout)
+        self.assertIn("declaration fields:", inputs_contract.stdout)
+        self.assertIn("- description (type=string, required=no, role=input_meaning)", inputs_contract.stdout)
+        self.assertIn("workflow-authoring.input_validation_default", inputs_contract.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
