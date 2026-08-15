@@ -535,7 +535,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
-        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 5)
+        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 7)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
@@ -648,6 +648,30 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("replaced by:", profile_use.stdout)
         self.assertIn("workflow.step.profile_switch", profile_use.stdout)
         self.assertIn("runtime.profile.use(profile=frontend)", profile_use.stdout)
+
+    def test_text_describe_workflow_profile_switch_group_is_teaching_ready(self) -> None:
+        field_result = self.run_help("describe", "workflow.step.profile_switch")
+        form_result = self.run_help("describe", "workflow.step_forms.profile_switch")
+
+        self.assertEqual(field_result.returncode, 0)
+        self.assertIn("Workflow step field for switching later execution in the current workflow subtree to another declared profile.", field_result.stdout)
+        self.assertIn("required in forms:", field_result.stdout)
+        self.assertIn("- profile_switch", field_result.stdout)
+        self.assertIn("workflow.profile", field_result.stdout)
+        self.assertIn("connector.runtime.profile.use", field_result.stdout)
+        self.assertIn("example_for: value", field_result.stdout)
+        self.assertIn("example_for: step_fragment", field_result.stdout)
+
+        self.assertEqual(form_result.returncode, 0)
+        self.assertIn("Workflow step form for one explicit profile-switch checkpoint inside the current workflow path.", form_result.stdout)
+        self.assertIn("required fields:", form_result.stdout)
+        self.assertIn("- name", form_result.stdout)
+        self.assertIn("- profile_switch", form_result.stdout)
+        self.assertIn("optional fields:", form_result.stdout)
+        self.assertIn("- if", form_result.stdout)
+        self.assertIn("- gate", form_result.stdout)
+        self.assertIn("workflow.step.gate", form_result.stdout)
+        self.assertIn("example_for: step_fragment", form_result.stdout)
 
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")

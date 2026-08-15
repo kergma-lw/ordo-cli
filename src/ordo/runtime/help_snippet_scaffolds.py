@@ -25,7 +25,7 @@ EXPRESSION_VALUE_CONTRACT = SnippetInsertionContract(
 
 STEP_FIELD_CONTRACT = SnippetInsertionContract(
     mode="step_field",
-    supported_targets=("workflow.step.if", "workflow.step.state_set"),
+    supported_targets=("workflow.step.if", "workflow.step.state_set", "workflow.step.profile_switch", "workflow.step_forms.profile_switch"),
     workflow_surface="step-local field host inside a standard workflow scaffold",
     summary="Place one step-field snippet into one explicit step shell without moving placement rules into snippet worlds.",
 )
@@ -33,7 +33,7 @@ STEP_FIELD_CONTRACT = SnippetInsertionContract(
 
 STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="step_fragment",
-    supported_targets=("workflow.step.if", "workflow.step.state_set", "routine"),
+    supported_targets=("workflow.step.if", "workflow.step.state_set", "workflow.step.profile_switch", "workflow.step_forms.profile_switch", "routine"),
     workflow_surface="steps list inside a standard workflow scaffold",
     summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
 )
@@ -140,6 +140,17 @@ blocks:
   - name: demo
     {snippet.replace(chr(10), chr(10) + '    ')}
 """
+    if target in {"workflow.step.profile_switch", "workflow.step_forms.profile_switch"}:
+        return f"""version: 0
+workflow: snippet-profile-switch-field
+inputs:
+  selected_profile: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    profile_switch: {snippet}
+"""
     raise ValueError(f"Unsupported step-field target: {target}")
 
 
@@ -165,6 +176,17 @@ blocks:
 workflow: snippet-step-fragment
 state_needs:
   shared_state: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
+    if target in {"workflow.step.profile_switch", "workflow.step_forms.profile_switch"}:
+        indented = snippet.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-profile-switch-fragment
+inputs:
+  selected_profile: {{}}
 blocks:
 - guards: []
 - steps:

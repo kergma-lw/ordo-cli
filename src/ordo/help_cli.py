@@ -1671,6 +1671,39 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     }
 
     model_node_overrides: dict[str, JSONObject] = {
+        "workflow.step.profile_switch": {
+            "definition": "Workflow step field for switching later execution in the current workflow subtree to another declared profile.",
+            "use_when": [
+                "A later part of the workflow must continue under another declared profile based on workflow-owned logic.",
+                "The profile change is a mid-workflow context switch rather than a fixed whole-workflow binding from the start.",
+            ],
+            "do_not_use_for": [
+                "A fixed workflow-local profile that should apply before guards run; use workflow.profile for that contract.",
+                "Legacy runtime connector migration targets; prefer this field instead of connector.runtime.profile.use for new authoring.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step_forms.profile_switch", "summary": "Step form that requires name + profile_switch and optionally allows if/gate"},
+                {"handle": "workflow.profile", "summary": "Top-level workflow field for fixed project-local profile binding before guards run"},
+                {"handle": "connector.runtime.profile.use", "summary": "Legacy runtime action replaced by this workflow-native field"},
+            ],
+            "inspect_next": ["workflow.step_forms.profile_switch", "workflow.profile", "profile"],
+        },
+        "workflow.step_forms.profile_switch": {
+            "definition": "Workflow step form for one explicit profile-switch checkpoint inside the current workflow path.",
+            "use_when": [
+                "The workflow needs one named step whose only primary job is switching later execution to another declared profile.",
+            ],
+            "do_not_use_for": [
+                "Ordinary operation calls or value-producing steps; this form is context-only rather than an external action or payload step.",
+                "Whole-workflow fixed profile binding; use workflow.profile when the subtree should start under one profile from the beginning.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.profile_switch", "summary": "Field that carries the target profile expression or literal"},
+                {"handle": "workflow.profile", "summary": "Top-level workflow field for fixed project-local profile binding before guards run"},
+                {"handle": "workflow.step.gate", "summary": "Optional admission field that may guard this step form before the profile switch executes"},
+            ],
+            "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "workflow.step.gate"],
+        },
         "profile.connectors": {
             "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
             "use_when": [
@@ -3078,6 +3111,26 @@ def render_model_node_text(payload: JSONObject) -> str:
         lines.extend(["", "inputs:"])
         for name, shape in inputs.items():
             lines.append(f"- {name}: {shape}")
+
+    required_in_forms = metadata.get("required_in_forms", [])
+    if isinstance(required_in_forms, list) and required_in_forms:
+        lines.extend(["", "required in forms:"])
+        lines.extend(f"- {item}" for item in required_in_forms if isinstance(item, str))
+
+    optional_in_forms = metadata.get("optional_in_forms", [])
+    if isinstance(optional_in_forms, list) and optional_in_forms:
+        lines.extend(["", "optional in forms:"])
+        lines.extend(f"- {item}" for item in optional_in_forms if isinstance(item, str))
+
+    required_fields = metadata.get("required_fields", [])
+    if isinstance(required_fields, list) and required_fields:
+        lines.extend(["", "required fields:"])
+        lines.extend(f"- {item}" for item in required_fields if isinstance(item, str))
+
+    optional_fields = metadata.get("optional_fields", [])
+    if isinstance(optional_fields, list) and optional_fields:
+        lines.extend(["", "optional fields:"])
+        lines.extend(f"- {item}" for item in optional_fields if isinstance(item, str))
 
     outputs = metadata.get("outputs")
     if isinstance(outputs, dict) and outputs:

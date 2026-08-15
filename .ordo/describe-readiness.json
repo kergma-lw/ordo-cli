@@ -54,6 +54,12 @@
     },
     "routine_contract": {
       "describe_readiness": "ready"
+    },
+    "workflow.step.profile_switch": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.profile_switch": {
+      "describe_readiness": "ready"
     }
   }
 }

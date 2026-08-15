@@ -120,6 +120,58 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step.profile_switch": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_switch_fixed_literal_value",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Switch later execution to one explicit declared profile with a quoted literal step-field value.",
+                "yaml": '"frontend"',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.profile_switch",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "profile_switch_step_fragment_with_guard",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete profile-switch step that changes later execution only when the selected profile is present.",
+                "yaml": '- name: switch-profile\n  if: is_present(inputs.selected_profile)\n  profile_switch: inputs.selected_profile',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.profile_switch",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
+    "workflow.step_forms.profile_switch": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_switch_form_minimal_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Use the dedicated profile-switch step form when one named step only changes later execution context.",
+                "yaml": '- name: switch-frontend\n  profile_switch: "frontend"',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step_forms.profile_switch",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
     "workflow.step.state_set": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
