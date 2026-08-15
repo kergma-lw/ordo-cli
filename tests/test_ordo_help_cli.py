@@ -564,14 +564,55 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0)
         self.assertIn("Local step-branching field for an optional step or local branch inside an already-valid path", result.stdout)
-        self.assertIn("use when: one local step is optional inside a path that is already valid", result.stdout)
-        self.assertIn("do not use for: workflow applicability or early rejection", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("- one local step is optional inside a path that is already valid", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("- workflow applicability or early rejection", result.stdout)
         self.assertIn("example_for: value", result.stdout)
         self.assertIn("example_for: step_fragment", result.stdout)
         self.assertIn("Show a valid `workflow.step.if` value for the case when a close comment is present.", result.stdout)
         self.assertIn("Show one complete optional step guarded by `workflow.step.if`.", result.stdout)
         self.assertIn("is_present(inputs.close_comment)", result.stdout)
         self.assertIn("uses: gh.issue.comment.add", result.stdout)
+
+    def test_text_describe_connector_compose_group_is_teaching_ready(self) -> None:
+        family = self.run_help("describe", "connector.compose")
+        service = self.run_help("describe", "connector.compose.service")
+        start = self.run_help("describe", "connector.compose.start")
+        remove = self.run_help("describe", "connector.compose.remove")
+        profile_connectors = self.run_help("describe", "profile.connectors")
+
+        self.assertEqual(family.returncode, 0)
+        self.assertIn("Published Docker Compose connector family", family.stdout)
+        self.assertIn("published operations:", family.stdout)
+        self.assertIn("bootstrap prerequisites:", family.stdout)
+        self.assertIn("authored connector context fields:", family.stdout)
+        self.assertIn("directory: working directory for docker compose commands", family.stdout)
+        self.assertIn("profile.connectors", family.stdout)
+        self.assertIn("connector.compose.project", family.stdout)
+
+        self.assertEqual(service.returncode, 0)
+        self.assertIn("Probe one declared Compose service as a single orchestration unit.", service.stdout)
+        self.assertIn("do not use for:", service.stdout)
+        self.assertIn("connector.compose.project", service.stdout)
+        self.assertIn("compose.service(service=api)", service.stdout)
+
+        self.assertEqual(start.returncode, 0)
+        self.assertIn("Start one Compose project or one declared Compose service.", start.stdout)
+        self.assertIn("preflight observations:", start.stdout)
+        self.assertIn("invalidates observations:", start.stdout)
+        self.assertIn("compose.start(service=api)", start.stdout)
+        self.assertIn("compose.start", start.stdout)
+
+        self.assertEqual(remove.returncode, 0)
+        self.assertIn("Remove one stopped materialized Compose service instance.", remove.stdout)
+        self.assertIn("connector.compose.stop", remove.stdout)
+        self.assertIn("compose.remove(service=api)", remove.stdout)
+
+        self.assertEqual(profile_connectors.returncode, 0)
+        self.assertIn("Profile field for supplying family-keyed connector context objects", profile_connectors.stdout)
+        self.assertIn("connector.compose", profile_connectors.stdout)
+        self.assertIn("compose.directory=./deploy", profile_connectors.stdout)
 
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")

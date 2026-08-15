@@ -19,6 +19,24 @@
     "command-line.ordo-playbook.flag.profile": {
       "describe_readiness": "ready"
     },
+    "connector.compose": {
+      "describe_readiness": "ready"
+    },
+    "connector.compose.project": {
+      "describe_readiness": "ready"
+    },
+    "connector.compose.remove": {
+      "describe_readiness": "ready"
+    },
+    "connector.compose.service": {
+      "describe_readiness": "ready"
+    },
+    "connector.compose.start": {
+      "describe_readiness": "ready"
+    },
+    "connector.compose.stop": {
+      "describe_readiness": "ready"
+    },
     "routine": {
       "describe_readiness": "ready"
     },

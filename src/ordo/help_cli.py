@@ -1466,15 +1466,204 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     model = build_model_response()
     lookup: dict[str, JSONObject] = {}
 
+    connector_family_overrides: dict[str, JSONObject] = {
+        "compose": {
+            "definition": "Published Docker Compose connector family for observing one Compose project or service and for starting, stopping, or removing service runtime instances.",
+            "use_when": [
+                "You need published Compose-aware project or service operations instead of shelling out to ad hoc docker compose commands.",
+                "You want one shared family surface that separates observation from lifecycle-changing actions.",
+            ],
+            "do_not_use_for": [
+                "Pure workflow-local branching or value shaping that does not need an external orchestrator call.",
+                "Repository-local helper scripts when the published Compose operations already express the intent directly.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
+                {"handle": "profile.connectors", "summary": "Profile field where family-specific connector context such as compose.directory or compose.file can be authored"},
+                {"handle": "connector.compose.project", "summary": "Probe one whole Compose project"},
+                {"handle": "connector.compose.service", "summary": "Probe one declared Compose service"},
+                {"handle": "connector.compose.start", "summary": "Start one Compose project or one declared service"},
+            ],
+            "authored_context_fields": [
+                {"name": "directory", "summary": "working directory for docker compose commands"},
+                {"name": "file", "summary": "explicit Compose file path, resolved relative to directory when needed"},
+                {"name": "project_name", "summary": "explicit Compose project name override"},
+            ],
+            "inspect_next": [
+                "connector.compose.project",
+                "connector.compose.service",
+                "connector.compose.start",
+                "connector.compose.stop",
+                "connector.compose.remove",
+            ],
+        }
+    }
+
+    connector_operation_overrides: dict[tuple[str, str], JSONObject] = {
+        ("compose", "project"): {
+            "definition": "Probe one Compose project as a single orchestration unit.",
+            "use_when": [
+                "You need project-level runtime state before deciding whether to start, stop, or inspect one service.",
+            ],
+            "do_not_use_for": [
+                "Service-specific health or container details; use connector.compose.service for that narrower observation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.compose", "summary": "Parent Compose connector family"},
+                {"handle": "connector.compose.service", "summary": "Sibling probe for one declared service"},
+                {"handle": "connector.compose.start", "summary": "Lifecycle action that commonly follows a project-level observation"},
+            ],
+            "examples": [
+                {"inputs": {}, "reference": "compose.project"},
+            ],
+            "inspect_next": ["connector.compose.service", "connector.compose.start", "operations"],
+        },
+        ("compose", "service"): {
+            "definition": "Probe one declared Compose service as a single orchestration unit.",
+            "use_when": [
+                "You need service-specific declared/running/healthy state before acting on that service.",
+            ],
+            "do_not_use_for": [
+                "Whole-project state; use connector.compose.project when the decision is about the project as a whole.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.compose", "summary": "Parent Compose connector family"},
+                {"handle": "connector.compose.project", "summary": "Sibling probe for project-level state"},
+                {"handle": "connector.compose.remove", "summary": "Lifecycle action that targets one stopped service instance"},
+            ],
+            "examples": [
+                {"inputs": {"service": "api"}, "reference": "compose.service"},
+            ],
+            "inspect_next": ["connector.compose.remove", "connector.compose.start", "connector.compose.stop"],
+        },
+        ("compose", "start"): {
+            "definition": "Start one Compose project or one declared Compose service.",
+            "use_when": [
+                "You need the requested Compose target running before later workflow steps continue.",
+            ],
+            "do_not_use_for": [
+                "Pure observation; use connector.compose.project or connector.compose.service when you only need state.",
+                "Removing stopped runtime instances; use connector.compose.remove for that cleanup action.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.compose", "summary": "Parent Compose connector family"},
+                {"handle": "connector.compose.project", "summary": "Project-level observation that can precede a start decision"},
+                {"handle": "connector.compose.stop", "summary": "Sibling lifecycle action for bringing a running target down"},
+            ],
+            "examples": [
+                {"inputs": {}, "reference": "compose.start"},
+                {"inputs": {"service": "api"}, "reference": "compose.start"},
+            ],
+            "inspect_next": ["connector.compose.stop", "connector.compose.project", "operations"],
+        },
+        ("compose", "stop"): {
+            "definition": "Stop one Compose project or one declared Compose service.",
+            "use_when": [
+                "You need a running Compose target quiesced before cleanup, mutation, or another orchestration phase.",
+            ],
+            "do_not_use_for": [
+                "Removing stopped runtime instances; use connector.compose.remove when the intent is cleanup rather than stop.",
+                "Pure observation; use connector.compose.project or connector.compose.service when you only need state.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.compose", "summary": "Parent Compose connector family"},
+                {"handle": "connector.compose.start", "summary": "Sibling lifecycle action for bringing a target up"},
+                {"handle": "connector.compose.remove", "summary": "Cleanup action that often follows a successful stop"},
+            ],
+            "examples": [
+                {"inputs": {}, "reference": "compose.stop"},
+                {"inputs": {"service": "api"}, "reference": "compose.stop"},
+            ],
+            "inspect_next": ["connector.compose.remove", "connector.compose.start", "connector.compose.service"],
+        },
+        ("compose", "remove"): {
+            "definition": "Remove one stopped materialized Compose service instance.",
+            "use_when": [
+                "You need cleanup of one stopped service instance after it is no longer needed.",
+            ],
+            "do_not_use_for": [
+                "Stopping a still-running target; use connector.compose.stop first when runtime is still active.",
+                "Whole-project lifecycle changes; use connector.compose.start or connector.compose.stop when the intent is project/service runtime state rather than removal.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.compose", "summary": "Parent Compose connector family"},
+                {"handle": "connector.compose.service", "summary": "Service-level observation that can confirm stopped state before removal"},
+                {"handle": "connector.compose.stop", "summary": "Sibling lifecycle action often needed before removal"},
+            ],
+            "examples": [
+                {"inputs": {"service": "api"}, "reference": "compose.remove"},
+            ],
+            "inspect_next": ["connector.compose.stop", "connector.compose.service", "operations"],
+        },
+    }
+
+    model_node_overrides: dict[str, JSONObject] = {
+        "profile.connectors": {
+            "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
+            "use_when": [
+                "Several runs under one profile need the same connector context, such as Compose directory/file/project settings, without repeating it in every workflow call.",
+            ],
+            "do_not_use_for": [
+                "Publishing connector operations themselves; use connector.* handles to learn the public operation surface.",
+                "Workflow business inputs that belong in declared workflow inputs rather than connector bootstrap context.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.connectors", "summary": "Playbook-level connector context before profile-specific overrides"},
+                {"handle": "connector.compose", "summary": "One connector family that reads concrete context fields such as directory, file, and project_name"},
+                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+            ],
+            "examples": [
+                {
+                    "reference": "profile.connectors",
+                    "inputs": {
+                        "compose.directory": "./deploy",
+                        "compose.file": "compose.prod.yaml",
+                        "compose.project_name": "orders-prod",
+                    },
+                }
+            ],
+            "inspect_next": ["playbook.connectors", "connector.compose", "operations"],
+        },
+        "playbook.connectors": {
+            "definition": "Playbook field for supplying default family-keyed connector context objects across published workflows in this playbook.",
+            "use_when": [
+                "One repository-wide connector context default should apply before any profile-specific connector overrides are considered.",
+            ],
+            "do_not_use_for": [
+                "Per-profile connector context variation; use profile.connectors for that narrower launch context.",
+                "Publishing connector operations themselves; use connector.* handles to inspect the public connector surface.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "profile.connectors", "summary": "Profile-level connector context that can narrow or override playbook defaults"},
+                {"handle": "connector.compose", "summary": "One connector family that reads concrete context fields such as directory, file, and project_name"},
+                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+            ],
+            "examples": [
+                {
+                    "reference": "playbook.connectors",
+                    "inputs": {
+                        "compose.directory": "./deploy",
+                    },
+                }
+            ],
+            "inspect_next": ["profile.connectors", "connector.compose", "operations"],
+        },
+    }
+
     def add_node(name: str, *, contract: str, node_category: str, summary: str, metadata: JSONObject) -> None:
         snippet_surface = _snippet_surface_for_handle(name)
+        effective_metadata = dict(metadata)
+        overrides = model_node_overrides.get(name)
+        if isinstance(overrides, dict):
+            effective_metadata.update(overrides)
         lookup[name] = {
             "document_kind": "model_node",
             "node_kind": node_category,
             "name": name,
             "contract": contract,
             "summary": summary,
-            "metadata": metadata,
+            "metadata": effective_metadata,
             "snippet_coverage": snippet_surface["snippet_coverage"],
             "canonical_examples": snippet_surface["canonical_examples"],
         }
@@ -1724,20 +1913,30 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         add_node(f"playbook.states.{field['name']}", contract="playbook", node_category="state_entry_field", summary="Published playbook state-entry field metadata", metadata=field)
 
     for connector in model["connectors"]:
+        connector_metadata = dict(connector)
+        overrides = connector_family_overrides.get(connector["namespace"])
+        if isinstance(overrides, dict):
+            connector_metadata.update(overrides)
         add_node(
             f"connector.{connector['namespace']}",
             contract="connectors",
             node_category="connector_family",
             summary=f"Published connector family metadata for the {connector['namespace']} namespace",
-            metadata=connector,
+            metadata=connector_metadata,
         )
         for operation in connector["operations"]:
+            operation_metadata = dict(operation)
+            operation_metadata.setdefault("namespace", connector["namespace"])
+            operation_metadata.setdefault("reference", f"{connector['namespace']}.{operation['name']}")
+            operation_overrides = connector_operation_overrides.get((connector["namespace"], operation["name"]))
+            if isinstance(operation_overrides, dict):
+                operation_metadata.update(operation_overrides)
             add_node(
                 f"connector.{connector['namespace']}.{operation['name']}",
                 contract="connectors",
                 node_category="connector_operation",
                 summary=f"Published connector operation metadata for {connector['namespace']}.{operation['name']}",
-                metadata=operation,
+                metadata=operation_metadata,
             )
 
     for field_name, value in model["state"]["workflow_surface"].items():
@@ -2730,17 +2929,130 @@ def render_capability_node_text(payload: JSONObject) -> str:
 def render_model_node_text(payload: JSONObject) -> str:
     """Return the text model-node surface."""
 
-    lines = [
-        payload["name"],
-        payload["summary"],
-    ]
+    lines = [payload["name"]]
     metadata = payload.get("metadata")
-    if isinstance(metadata, dict):
-        lines.append("")
-        for item in metadata.get("use_when", []):
-            lines.append(f"use when: {item}")
-        for item in metadata.get("do_not_use_for", []):
-            lines.append(f"do not use for: {item}")
+    if not isinstance(metadata, dict):
+        lines.append(payload["summary"])
+        _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
+        return "\n".join(lines)
+
+    definition = metadata.get("definition") or payload["summary"]
+    lines.extend([
+        str(definition),
+        "",
+        f"node kind: {payload['node_kind']}",
+        f"snippet coverage: {payload.get('snippet_coverage', 'none')}",
+    ])
+
+    use_when = metadata.get("use_when", [])
+    if isinstance(use_when, list) and use_when:
+        lines.extend(["", "use when:"])
+        lines.extend(f"- {item}" for item in use_when if isinstance(item, str))
+
+    do_not_use_for = metadata.get("do_not_use_for", [])
+    if isinstance(do_not_use_for, list) and do_not_use_for:
+        lines.extend(["", "do not use for:"])
+        lines.extend(f"- {item}" for item in do_not_use_for if isinstance(item, str))
+
+    nearest_surfaces = metadata.get("nearest_surfaces", [])
+    if isinstance(nearest_surfaces, list) and nearest_surfaces:
+        lines.extend(["", "nearest surfaces:"])
+        for item in nearest_surfaces:
+            if isinstance(item, dict):
+                lines.append(f"- {item['handle']}: {item['summary']}")
+
+    namespace = metadata.get("namespace")
+    kind = metadata.get("kind")
+    maturity = metadata.get("maturity")
+    if any(isinstance(item, str) for item in (namespace, kind, maturity)):
+        lines.extend(["", "published contract:"])
+        if isinstance(namespace, str):
+            lines.append(f"- namespace: {namespace}")
+        if isinstance(kind, str):
+            lines.append(f"- kind: {kind}")
+        if isinstance(maturity, str):
+            lines.append(f"- maturity: {maturity}")
+
+    operations = metadata.get("operations", [])
+    if isinstance(operations, list) and operations:
+        lines.extend(["", "published operations:"])
+        for item in operations:
+            if isinstance(item, dict):
+                lines.append(f"- {item['name']}: {item['summary']}")
+
+    bootstrap = metadata.get("bootstrap")
+    if isinstance(bootstrap, dict):
+        prerequisites = bootstrap.get("prerequisites", [])
+        context_fields = bootstrap.get("context_fields", [])
+        if isinstance(prerequisites, list) and prerequisites:
+            lines.extend(["", "bootstrap prerequisites:"])
+            lines.extend(f"- {item}" for item in prerequisites if isinstance(item, str))
+        if isinstance(context_fields, list) and context_fields:
+            lines.extend(["", "bootstrap context:"])
+            lines.extend(f"- {item}" for item in context_fields if isinstance(item, str))
+
+    authored_context_fields = metadata.get("authored_context_fields", [])
+    if isinstance(authored_context_fields, list) and authored_context_fields:
+        lines.extend(["", "authored connector context fields:"])
+        for item in authored_context_fields:
+            if isinstance(item, dict):
+                lines.append(f"- {item['name']}: {item['summary']}")
+
+    inputs = metadata.get("inputs")
+    if isinstance(inputs, dict) and inputs:
+        lines.extend(["", "inputs:"])
+        for name, shape in inputs.items():
+            lines.append(f"- {name}: {shape}")
+
+    outputs = metadata.get("outputs")
+    if isinstance(outputs, dict) and outputs:
+        lines.extend(["", "outputs:"])
+        for name, shape in outputs.items():
+            lines.append(f"- {name}: {shape}")
+
+    preflight_observations = metadata.get("preflight_observations", [])
+    if isinstance(preflight_observations, list) and preflight_observations:
+        lines.extend(["", "preflight observations:"])
+        for item in preflight_observations:
+            if not isinstance(item, dict):
+                continue
+            probe = item.get("probe")
+            with_payload = item.get("with")
+            if isinstance(probe, str) and isinstance(with_payload, dict) and with_payload:
+                rendered_args = ", ".join(f"{key}={value}" for key, value in with_payload.items())
+                lines.append(f"- {probe}({rendered_args})")
+            elif isinstance(probe, str):
+                lines.append(f"- {probe}")
+
+    invalidates = metadata.get("invalidates_observations", [])
+    if isinstance(invalidates, list) and invalidates:
+        lines.extend(["", "invalidates observations:"])
+        lines.extend(f"- {item}" for item in invalidates if isinstance(item, str))
+
+    failure_modes = metadata.get("failure_modes", [])
+    if isinstance(failure_modes, list) and failure_modes:
+        lines.extend(["", "failure modes:"])
+        lines.extend(f"- {item}" for item in failure_modes if isinstance(item, str))
+
+    examples = metadata.get("examples", [])
+    if isinstance(examples, list) and examples:
+        lines.extend(["", "examples:"])
+        for item in examples:
+            if not isinstance(item, dict):
+                continue
+            reference = item.get("reference")
+            inputs = item.get("inputs")
+            if isinstance(reference, str) and isinstance(inputs, dict) and inputs:
+                rendered_args = ", ".join(f"{key}={value}" for key, value in inputs.items())
+                lines.append(f"- {reference}({rendered_args})")
+            elif isinstance(reference, str):
+                lines.append(f"- {reference}")
+
+    inspect_next = metadata.get("inspect_next", [])
+    if isinstance(inspect_next, list) and inspect_next:
+        lines.extend(["", "inspect next:"])
+        lines.extend(f"- {item}" for item in inspect_next if isinstance(item, str))
+
     _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
     return "\n".join(lines)
 
