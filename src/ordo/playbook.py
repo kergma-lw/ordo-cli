@@ -507,6 +507,10 @@ def _validate_activation_inputs(
     surplus_profile_inputs = set() if input_analysis is None else set(input_analysis.surplus_profile_inputs)
     unknown = sorted(key for key in inputs if key not in declared_keys and key not in surplus_profile_inputs)
     diagnostics: list[Diagnostic] = []
+    declared_inputs = () if input_analysis is None else tuple(input_analysis.declared_inputs)
+    relevant_inputs = declared_inputs if input_analysis is None else tuple(input_analysis.relevant_inputs)
+    example_parts = [f"--input {key}=<value>" for key in missing]
+    example = None if not example_parts else f"ordo-playbook {' '.join(example_parts)} run {workflow.workflow}"
     for key in missing:
         diagnostics.append(
             Diagnostic(
@@ -514,7 +518,16 @@ def _validate_activation_inputs(
                 level="error",
                 message=f"Workflow input '{key}' is required at activation time",
                 path=("inputs", key),
-                details={"workflow": workflow.workflow, "input": key},
+                details={
+                    "workflow": workflow.workflow,
+                    "input": key,
+                    "missing_inputs": missing,
+                    "declared_inputs": declared_inputs,
+                    "relevant_inputs": relevant_inputs,
+                    "input_transport": "--input NAME=VALUE",
+                    "input_file_transport": "--input-file NAME=PATH",
+                    "example": example,
+                },
             )
         )
     for key in unknown:

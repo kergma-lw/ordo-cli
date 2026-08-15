@@ -13,12 +13,13 @@ from ordo.runtime.help_snippet_scaffolds import (
 
 class HelpSnippetScaffoldTest(unittest.TestCase):
     def test_insertion_contracts_publish_supported_targets(self) -> None:
-        self.assertEqual(set(INSERTION_CONTRACTS.keys()), {"expression_value", "step_field", "step_fragment", "workflow_fragment"})
+        self.assertEqual(set(INSERTION_CONTRACTS.keys()), {"expression_value", "step_field", "step_fragment", "workflow_fragment", "routine_bundle"})
         self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_field"].supported_targets)
         self.assertIn("state", INSERTION_CONTRACTS["expression_value"].supported_targets)
         self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_fragment"].supported_targets)
         self.assertIn("workflow.step.state_set", INSERTION_CONTRACTS["step_fragment"].supported_targets)
         self.assertIn("workflow.profile", INSERTION_CONTRACTS["workflow_fragment"].supported_targets)
+        self.assertIn("routine", INSERTION_CONTRACTS["routine_bundle"].supported_targets)
 
     def test_expression_value_scaffold_validates_for_state_target(self) -> None:
         workflow_text = build_expression_value_scaffold(target="state", snippet='state.shared_state["active_profile"]')

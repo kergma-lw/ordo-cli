@@ -345,6 +345,88 @@ class CliSummaryTest(unittest.TestCase):
         self.assertEqual(summary["on_fail_context"], {"profile": "mobile", "issue_number": "1"})
         self.assertNotIn("next context:", summary["message"])
 
+    def test_run_summary_rebuilds_gate_message_from_diagnostic_details(self) -> None:
+        payload = {
+            "mode": "run",
+            "status": "execution_error",
+            "workflow": "story-to-ready",
+            "profile": "meta",
+            "failed_step": "Publish selected story task",
+            "diagnostics": [
+                {
+                    "code": "runtime.step.gate.failed",
+                    "message": "Step gate blocked execution for 'Publish selected story task'",
+                    "details": {
+                        "step": "Publish selected story task",
+                        "failed_conditions": ["git.worktree.clean"],
+                        "unknown_conditions": [],
+                    },
+                }
+            ],
+        }
+
+        summary = _summarize_run_payload(payload)
+
+        self.assertEqual(summary["message"], "Step gate blocked execution for 'Publish selected story task': git.worktree.clean")
+
+    def test_run_summary_surfaces_guard_failure_without_diagnostics(self) -> None:
+        payload = {
+            "mode": "run",
+            "status": "guard_failed",
+            "workflow": "story-to-ready",
+            "profile": "meta",
+            "failed_guard": "git.worktree.clean",
+            "diagnostics": [],
+        }
+
+        summary = _summarize_run_payload(payload)
+
+        self.assertEqual(summary["message"], "Guard blocked execution for 'git.worktree.clean'")
+
+    def test_check_summary_surfaces_guard_failure_message(self) -> None:
+        payload = {
+            "mode": "check",
+            "status": "guard_failed",
+            "workflow": "story-to-ready",
+            "playbook": "/tmp/.ordo/ordo.yaml",
+            "profile": "meta",
+            "active_profile": "mobile",
+            "working_directory": "/tmp/mobile",
+            "failed_guard": "git.worktree.clean",
+            "diagnostics": [],
+            "outputs": {
+                "can_execute": False,
+                "guard_details": [
+                    {
+                        "reference": "git.worktree.clean",
+                        "failed_subcondition": "git.worktree.clean",
+                    }
+                ],
+                "unevaluated_relevant_guards": [],
+            },
+        }
+
+        summary = _summarize_check_payload(payload)
+
+        self.assertEqual(summary["message"], "Guard blocked execution for 'git.worktree.clean'")
+        self.assertEqual(summary["active_profile"], "mobile")
+        self.assertEqual(summary["working_directory"], "/tmp/mobile")
+
+    def test_run_summary_surfaces_runtime_context_fields(self) -> None:
+        payload = {
+            "mode": "run",
+            "status": "execution_error",
+            "active_profile": "mobile",
+            "working_directory": "/tmp/mobile",
+            "failed_guard": "git.worktree.clean",
+            "diagnostics": [],
+        }
+
+        summary = _summarize_run_payload(payload)
+
+        self.assertEqual(summary["active_profile"], "mobile")
+        self.assertEqual(summary["working_directory"], "/tmp/mobile")
+
     def test_run_summary_omits_null_mode_profile_workflow(self) -> None:
         payload = {
             "mode": None,

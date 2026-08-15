@@ -17,7 +17,7 @@ class SnippetInsertionContract:
 
 EXPRESSION_VALUE_CONTRACT = SnippetInsertionContract(
     mode="expression_value",
-    supported_targets=("state", "workflow.local_expression.filter.lookup"),
+    supported_targets=("state", "workflow.local_expression.filter.lookup", "local-expressions", "adapters"),
     workflow_surface="expression host inside a standard workflow scaffold",
     summary="Place one expression-valued snippet into a standard expression host without changing the authored snippet text.",
 )
@@ -33,7 +33,7 @@ STEP_FIELD_CONTRACT = SnippetInsertionContract(
 
 STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="step_fragment",
-    supported_targets=("workflow.step.if", "workflow.step.state_set"),
+    supported_targets=("workflow.step.if", "workflow.step.state_set", "routine"),
     workflow_surface="steps list inside a standard workflow scaffold",
     summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
 )
@@ -47,11 +47,20 @@ WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
 )
 
 
+ROUTINE_BUNDLE_CONTRACT = SnippetInsertionContract(
+    mode="routine_bundle",
+    supported_targets=("routine",),
+    workflow_surface="temporary routine bundle project with registry, implementation, and optional workflow call",
+    summary="Materialize one temporary project-local routine bundle so help verification can check the registry entry, implementation file, and optional workflow call together.",
+)
+
+
 INSERTION_CONTRACTS: dict[str, SnippetInsertionContract] = {
     EXPRESSION_VALUE_CONTRACT.mode: EXPRESSION_VALUE_CONTRACT,
     STEP_FIELD_CONTRACT.mode: STEP_FIELD_CONTRACT,
     STEP_FRAGMENT_CONTRACT.mode: STEP_FRAGMENT_CONTRACT,
     WORKFLOW_FRAGMENT_CONTRACT.mode: WORKFLOW_FRAGMENT_CONTRACT,
+    ROUTINE_BUNDLE_CONTRACT.mode: ROUTINE_BUNDLE_CONTRACT,
 }
 
 
@@ -72,6 +81,30 @@ blocks: []
 workflow: snippet-lookup
 inputs:
   status_labels: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    value: {snippet}
+"""
+    if target == "local-expressions":
+        return f"""version: 0
+workflow: snippet-local-expressions
+inputs:
+  status: {{}}
+  allowed: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    value: {snippet}
+"""
+    if target == "adapters":
+        return f"""version: 0
+workflow: snippet-adapters
+inputs:
+  body: {{}}
+  replacement: {{}}
 blocks:
 - guards: []
 - steps:
@@ -132,6 +165,19 @@ blocks:
 workflow: snippet-step-fragment
 state_needs:
   shared_state: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
+    if target == "routine":
+        indented = snippet.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-routine
+inputs:
+  target: {{}}
+  repository: {{}}
+  review_mode: {{}}
 blocks:
 - guards: []
 - steps:

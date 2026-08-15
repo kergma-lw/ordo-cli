@@ -139,6 +139,9 @@ Primary result fields should include:
 
 Full logs belong in runtime-owned temporary artifacts rather than inline as the primary payload.
 
+When a routine primarily gathers data, that payload should stay honest and low-level.
+Routine output should avoid silently embedding workflow-facing interpretation that would be clearer in published workflow surfaces.
+
 ## Probe output modes
 
 Probe routines may be useful in at least two different ways:
@@ -147,6 +150,14 @@ Probe routines may be useful in at least two different ways:
 - `mode: verify` — the routine's main value is a compact verification verdict plus bounded excerpts or highlights.
 
 This distinction helps avoid treating all probe routines as if they returned the same kind of observation surface.
+
+## Workflow-facing interpretation boundary
+
+Routine implementation should prefer leaving shaping, projection, filtering, and lightweight interpretation to published workflow surfaces.
+
+- Use routine logic for the narrow local mechanical gap itself.
+- Keep workflow-facing data shaping visible in summary workflow surfaces such as representation adapters and local expressions.
+- Avoid turning one probe routine into a hidden semantic adapter layer just because the local script already knows how to reshape the data.
 
 ## Boundary rule
 

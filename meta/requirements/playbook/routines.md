@@ -56,7 +56,10 @@
 ## Product boundary
 
 - Routines are a bounded opaque local-automation surface.
+- Routines should stay narrow, orthogonal, and mechanical rather than expanding into multi-purpose local subsystems.
 - Routines must not become the preferred permanent home for semantics that belong in reusable connector families.
 - When a stable cross-project domain model exists, that model should prefer connector publication over indefinite routine accretion.
 - Routine implementation may be restricted to an explicit project-owned publication area such as `.ordo/scripts/` so the registry does not silently adopt arbitrary repository history as workflow surface.
 - Ambient routine context from profiles or workflow-owned environment mappings must remain a bounded execution aid, not a back door that turns routines into hidden workflow interpreters.
+- When a routine primarily gathers data, it should return an honest low-level output contract with minimal interpretation rather than silently baking workflow-facing semantics into the routine body.
+- Workflow-facing shaping, projection, filtering, and lightweight interpretation should prefer published workflow surfaces such as representation-adapter summaries and local-expression summaries rather than being hidden inside routine implementation.

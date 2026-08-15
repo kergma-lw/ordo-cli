@@ -947,6 +947,49 @@ blocks:
         diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
         self.assertNotIn("visible_registers", diagnostic.details)
 
+    def test_execute_gate_failure_diagnostic_surfaces_single_failed_condition_in_message(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="publish",
+                            gate="git.worktree.clean",
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
+        self.assertEqual(diagnostic.message, "Step gate blocked execution for 'publish': git.worktree.clean")
+
+    def test_execute_gate_failure_diagnostic_surfaces_multiple_failed_conditions_in_message(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="gate-check",
+            blocks=(
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="publish",
+                            gate={"all": ["git.worktree.clean", 'git.branch.value | eq("main")']},
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
+        self.assertIn("git.worktree.clean", diagnostic.message)
+        self.assertNotEqual(diagnostic.message, "Step gate blocked execution for 'publish'")
+
     def test_execute_gate_failure_diagnostic_includes_on_fail_context(self) -> None:
         workflow = Workflow(
             version=0,

@@ -11,6 +11,7 @@ from ordo import check_workflow, clear_default_connector_provider, configure_sta
 from ordo.external_failures import describe_external_failure_context
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
+from ordo.runtime.human_messages import render_gate_failure_message, render_guard_failure_message
 
 
 WORKFLOWS_HELP = """usage: ordo-playbook workflows <list|show>
@@ -185,7 +186,7 @@ def main() -> int:
                 playbook_path=args.playbook_file,
             )
         except PlaybookError as exc:
-            return _emit_error(exc, as_json=args.json)
+            return _emit_error(exc, as_json=args.json, requested_mode=args.mode, requested_workflow=args.workflow)
 
         with activated_working_directory(activated):
             result = _run_mode(
@@ -223,6 +224,13 @@ def main() -> int:
                         "profile": None if activated.profile is None else activated.profile.name,
                     }
                 )
+            payload.update(
+                _runtime_context_fields(
+                    payload,
+                    fallback_profile=None if activated.profile is None else activated.profile.name,
+                    fallback_working_directory=None if activated.working_directory is None else str(activated.working_directory),
+                )
+            )
 
         if args.mode == "explain" and not args.json:
             payload = _summarize_explain_payload(payload)
@@ -294,6 +302,8 @@ def _summarize_review_payload(payload: dict[str, object]) -> dict[str, object]:
         "status": payload.get("status"),
         "workflow": payload.get("workflow"),
         "profile": payload.get("profile"),
+        "active_profile": payload.get("active_profile"),
+        "working_directory": payload.get("working_directory"),
         "review_status": payload.get("outputs", {}).get("review_status"),
         "finding_count": payload.get("outputs", {}).get("finding_count"),
         "top_findings": top_findings,
@@ -322,6 +332,8 @@ def _summarize_review_finding(item: dict[str, object]) -> dict[str, object]:
 def _summarize_run_payload(payload: dict[str, object]) -> dict[str, object]:
     summary = {
         "status": payload.get("status"),
+        "active_profile": payload.get("active_profile"),
+        "working_directory": payload.get("working_directory"),
     }
     if payload.get("mode") is not None:
         summary["mode"] = payload.get("mode")
@@ -339,15 +351,22 @@ def _summarize_run_payload(payload: dict[str, object]) -> dict[str, object]:
         summary["failed_guard"] = payload.get("failed_guard")
     if payload.get("failed_step") is not None:
         summary["failed_step"] = payload.get("failed_step")
+    if isinstance(payload.get("message"), str):
+        summary["message"] = payload.get("message")
     diagnostics = [item for item in payload.get("diagnostics", []) if isinstance(item, dict)]
+    if diagnostics and "message" not in summary:
+        message = _build_run_summary_message_from_diagnostic(diagnostics[0], failed_step=payload.get("failed_step"))
+        if message is not None:
+            summary["message"] = message
     if diagnostics:
-        summary["message"] = diagnostics[0].get("message")
         details = diagnostics[0].get("details")
         if isinstance(details, dict):
             if isinstance(details.get("fan_out_item"), (str, int, float, bool)):
                 summary["item"] = details.get("fan_out_item")
             if isinstance(details.get("on_fail_context"), dict):
                 summary["on_fail_context"] = details.get("on_fail_context")
+    if "message" not in summary and isinstance(payload.get("failed_guard"), str):
+        summary["message"] = render_guard_failure_message(guard_reference=payload["failed_guard"])
     if isinstance(payload.get("failure"), dict):
         summary["failure"] = payload.get("failure")
     return summary
@@ -367,15 +386,72 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
                 payload["results"] = results
             if published:
                 payload["published"] = published
+            payload.update(
+                _runtime_context_fields(
+                    {"outputs": result.outputs},
+                    fallback_profile=None,
+                    fallback_working_directory=None,
+                )
+            )
             return payload
-        return {
+        payload = {
             "status": result.status.value,
             "failed_guard": result.failed_guard,
             "failed_step": result.failed_step,
             "diagnostics": [diagnostic.to_contract() for diagnostic in result.diagnostics],
             **({"failure": failure} if (failure := _build_run_failure_payload(result)) is not None else {}),
         }
+        payload.update(
+            _runtime_context_fields(
+                {"outputs": result.outputs},
+                fallback_profile=None,
+                fallback_working_directory=None,
+            )
+        )
+        if message := _build_run_failure_message(result):
+            payload["message"] = message
+        return payload
     return result.to_contract()
+
+
+def _build_run_failure_message(result: RuntimeResult) -> str | None:
+    if result.diagnostics:
+        return _build_run_summary_message_from_diagnostic(result.diagnostics[0].to_contract(), failed_step=result.failed_step)
+    if isinstance(result.failed_guard, str):
+        return render_guard_failure_message(
+            guard_reference=result.failed_guard,
+            failed_subcondition=_failed_subcondition_from_guard_details(result.outputs.get("guard_details"), result.failed_guard),
+        )
+    return None
+
+
+def _build_run_summary_message_from_diagnostic(diagnostic: dict[str, object], *, failed_step: object) -> str | None:
+    details = diagnostic.get("details")
+    code = diagnostic.get("code")
+    if code in {"runtime.step.gate.failed", "runtime.step.gate.unknown"} and isinstance(details, dict):
+        step_name = details.get("step") if isinstance(details.get("step"), str) else failed_step if isinstance(failed_step, str) else None
+        if step_name is not None:
+            verdict = details.get("verdict") if isinstance(details.get("verdict"), str) else ("unknown" if code == "runtime.step.gate.unknown" else "failed")
+            return render_gate_failure_message(
+                step_name=step_name,
+                verdict=verdict,
+                failed_conditions=[value for value in details.get("failed_conditions", []) if isinstance(value, str)],
+                unknown_conditions=[value for value in details.get("unknown_conditions", []) if isinstance(value, str)],
+                item=details.get("fan_out_item"),
+            )
+    message = diagnostic.get("message")
+    return message if isinstance(message, str) else None
+
+
+def _failed_subcondition_from_guard_details(guard_details: object, failed_guard: str) -> str | None:
+    if not isinstance(guard_details, list):
+        return None
+    for item in guard_details:
+        if not isinstance(item, dict) or item.get("reference") != failed_guard:
+            continue
+        failed_subcondition = item.get("failed_subcondition")
+        return failed_subcondition if isinstance(failed_subcondition, str) else None
+    return None
 
 
 def _build_run_failure_payload(result: RuntimeResult) -> dict[str, object] | None:
@@ -572,12 +648,13 @@ def _parse_input_file_overrides(raw_items: list[str], *, parser: argparse.Argume
     return overrides
 
 
-def _emit_error(exc: PlaybookError, *, as_json: bool) -> int:
+def _emit_error(exc: PlaybookError, *, as_json: bool, requested_mode: str | None = None, requested_workflow: str | None = None) -> int:
     payload = {
         "mode": "activation",
         "status": "resolution_error",
         "diagnostics": [diagnostic.to_contract() for diagnostic in exc.diagnostics],
     }
+    payload.update(_activation_error_guidance(exc.diagnostics, requested_mode=requested_mode, requested_workflow=requested_workflow))
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
@@ -600,6 +677,8 @@ def _summarize_explain_payload(payload: dict[str, object]) -> dict[str, object]:
         "workflow": payload.get("workflow"),
         "playbook": payload.get("playbook"),
         "profile": payload.get("profile"),
+        "active_profile": payload.get("active_profile"),
+        "working_directory": payload.get("working_directory"),
         "allowed": explanation.get("allowed", outputs.get("execution_allowed")),
         "category": explanation.get("category", outputs.get("reason_category")),
         "why": explanation.get("why"),
@@ -645,6 +724,8 @@ def _summarize_plan_payload(payload: dict[str, object]) -> dict[str, object]:
         "workflow": payload.get("workflow"),
         "playbook": payload.get("playbook"),
         "profile": payload.get("profile"),
+        "active_profile": payload.get("active_profile"),
+        "working_directory": payload.get("working_directory"),
         "allowed": outputs.get("execution_allowed", outputs.get("can_execute")),
         "diagnostics": payload.get("diagnostics", []),
     }
@@ -673,6 +754,8 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
         "workflow": payload.get("workflow"),
         "playbook": payload.get("playbook"),
         "profile": payload.get("profile"),
+        "active_profile": payload.get("active_profile"),
+        "working_directory": payload.get("working_directory"),
         "active_profile_source": outputs.get("active_profile_source"),
         "allowed": allowed,
         "diagnostics": payload.get("diagnostics", []),
@@ -691,6 +774,11 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
 
     if payload.get("failed_guard") is not None:
         summary["failed_guard"] = payload.get("failed_guard")
+        if "message" not in summary and isinstance(payload.get("failed_guard"), str):
+            summary["message"] = render_guard_failure_message(
+                guard_reference=payload["failed_guard"],
+                failed_subcondition=_failed_subcondition_from_guard_details(outputs.get("guard_details"), payload["failed_guard"]),
+            )
 
     preflight_halts = [item for item in outputs.get("preflight_halts", []) if isinstance(item, dict)]
     if preflight_halts and "message" not in summary:
@@ -744,6 +832,80 @@ def _extract_check_gate_failure_summary(outputs: dict[str, object]) -> dict[str,
     return {}
 
 
+def _activation_error_guidance(
+    diagnostics: tuple[object, ...],
+    *,
+    requested_mode: str | None = None,
+    requested_workflow: str | None = None,
+) -> dict[str, object]:
+    structured = [item.to_contract() for item in diagnostics if hasattr(item, "to_contract")]
+    if not structured:
+        return {}
+    missing = [item for item in structured if item.get("code") == "playbook.workflow.input_missing" and isinstance(item.get("details"), dict)]
+    if not missing:
+        return {}
+    first_details = missing[0]["details"]
+    workflow = requested_workflow if isinstance(requested_workflow, str) else first_details.get("workflow") if isinstance(first_details.get("workflow"), str) else None
+    declared_inputs = [value for value in first_details.get("declared_inputs", []) if isinstance(value, str)]
+    relevant_inputs = [value for value in first_details.get("relevant_inputs", []) if isinstance(value, str)]
+    missing_inputs: list[str] = []
+    for item in missing:
+        details = item["details"]
+        for value in details.get("missing_inputs", []):
+            if isinstance(value, str) and value not in missing_inputs:
+                missing_inputs.append(value)
+    if not missing_inputs:
+        for item in missing:
+            details = item["details"]
+            value = details.get("input")
+            if isinstance(value, str) and value not in missing_inputs:
+                missing_inputs.append(value)
+    payload: dict[str, object] = {}
+    if workflow is not None:
+        payload["workflow"] = workflow
+    if declared_inputs:
+        payload["declared_inputs"] = declared_inputs
+    if relevant_inputs:
+        payload["relevant_inputs"] = relevant_inputs
+    if missing_inputs:
+        payload["missing_inputs"] = missing_inputs
+        payload["message"] = f"Missing required workflow inputs at activation time: {', '.join(missing_inputs)}"
+    input_transport = first_details.get("input_transport")
+    if isinstance(input_transport, str):
+        payload["input_transport"] = input_transport
+    input_file_transport = first_details.get("input_file_transport")
+    if isinstance(input_file_transport, str):
+        payload["input_file_transport"] = input_file_transport
+    example = _activation_example_command(workflow=workflow, missing_inputs=missing_inputs, requested_mode=requested_mode)
+    if example is None:
+        example = first_details.get("example")
+    if isinstance(example, str):
+        payload["example"] = example
+    return payload
+
+
+def _activation_example_command(*, workflow: str | None, missing_inputs: list[str], requested_mode: str | None) -> str | None:
+    if workflow is None or not missing_inputs:
+        return None
+    mode = requested_mode if requested_mode in {"run", "check", "plan", "explain", "review", "next"} else "run"
+    input_args = " ".join(f"--input {key}=<value>" for key in missing_inputs)
+    return f"ordo-playbook {input_args} {mode} {workflow}"
+
+
+def _runtime_context_fields(payload: dict[str, object], *, fallback_profile: str | None, fallback_working_directory: str | None) -> dict[str, object]:
+    outputs = payload.get("outputs")
+    if not isinstance(outputs, dict):
+        outputs = {}
+    active_profile = outputs.get("active_profile") if isinstance(outputs.get("active_profile"), str) else fallback_profile
+    working_directory = outputs.get("current_working_directory") if isinstance(outputs.get("current_working_directory"), str) else fallback_working_directory
+    context: dict[str, object] = {}
+    if active_profile is not None:
+        context["active_profile"] = active_profile
+    if working_directory is not None:
+        context["working_directory"] = working_directory
+    return context
+
+
 def _build_gate_failure_summary(*, step_name: str, gate_report: dict[str, object], item: object) -> dict[str, object]:
     summary: dict[str, object] = {"failed_step": step_name}
     if isinstance(item, (str, int, float, bool)):
@@ -768,24 +930,13 @@ def _render_gate_failure_message(*, step_name: str, gate_report: dict[str, objec
         unknown = gate_report.get("unknown")
     failed_conditions = _gate_rendered_conditions(failed)
     unknown_conditions = _gate_rendered_conditions(unknown)
-    if item is not None:
-        return _render_fan_out_gate_failure_message(
-            step_name=step_name,
-            item=item,
-            failed_conditions=failed_conditions,
-            unknown_conditions=unknown_conditions,
-        )
-    if verdict == "unknown":
-        if len(unknown_conditions) == 1:
-            return f"Step gate could not be fully established for '{step_name}': {unknown_conditions[0]}"
-        if unknown_conditions:
-            return f"Step gate could not be fully established for '{step_name}'. Unknown conditions: {'; '.join(unknown_conditions)}"
-        return f"Step gate could not be fully established for '{step_name}'"
-    if len(failed_conditions) == 1:
-        return f"Step gate blocked execution for '{step_name}': {failed_conditions[0]}"
-    if failed_conditions:
-        return f"Step gate blocked execution for '{step_name}'. Failed conditions: {'; '.join(failed_conditions)}"
-    return f"Step gate blocked execution for '{step_name}'"
+    return render_gate_failure_message(
+        step_name=step_name,
+        verdict=verdict if isinstance(verdict, str) else "failed",
+        failed_conditions=failed_conditions,
+        unknown_conditions=unknown_conditions,
+        item=item,
+    )
 
 
 def _gate_rendered_conditions(nodes: object) -> list[str]:
@@ -799,19 +950,6 @@ def _gate_rendered_conditions(nodes: object) -> list[str]:
         if isinstance(text, str):
             rendered.append(text)
     return rendered
-
-
-def _render_fan_out_gate_failure_message(*, step_name: str, item: object, failed_conditions: list[str], unknown_conditions: list[str]) -> str:
-    item_label = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, sort_keys=True)
-    if failed_conditions:
-        if len(failed_conditions) == 1:
-            return f"Item '{item_label}' failed gate '{step_name}': {failed_conditions[0]}"
-        return f"Item '{item_label}' failed gate '{step_name}'. Failed conditions: {'; '.join(failed_conditions)}"
-    if unknown_conditions:
-        if len(unknown_conditions) == 1:
-            return f"Item '{item_label}' could not establish gate '{step_name}': {unknown_conditions[0]}"
-        return f"Item '{item_label}' could not establish gate '{step_name}'. Unknown conditions: {'; '.join(unknown_conditions)}"
-    return f"Item '{item_label}' failed gate '{step_name}'"
 
 
 def _collect_observed_facts(outputs: dict[str, object]) -> list[str]:

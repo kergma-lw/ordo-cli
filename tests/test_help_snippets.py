@@ -72,6 +72,10 @@ class HelpSnippetRegistryTest(unittest.TestCase):
         self.assertEqual(registry["state"]["canonical_examples"][0]["form"], "value")
         self.assertEqual(registry["workflow.step.if"]["canonical_examples"][0]["form"], "value")
         self.assertEqual(registry["workflow.step.state_set"]["canonical_examples"][0]["form"], "field_fragment")
+        self.assertEqual(registry["local-expressions"]["canonical_examples"][0]["form"], "value")
+        self.assertEqual(registry["adapters"]["canonical_examples"][0]["form"], "value")
+        self.assertEqual(registry["routine"]["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(registry["routine"]["canonical_examples"][3]["form"], "routine_bundle")
 
     def test_registry_validator_accepts_runner_verified_metadata_shape(self) -> None:
         registry = describe_help_snippets()

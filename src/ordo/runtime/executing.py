@@ -17,6 +17,7 @@ from .conditions import ConditionEvaluationReport, summarize_failed_condition_ca
 from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
 from .gate_failure_context import evaluate_gate_failure_context
+from .human_messages import render_gate_failure_message
 from .launchers import apply_launcher_to_step
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import evaluate_condition_report
@@ -66,6 +67,7 @@ def execute_workflow(
                     can_execute=False,
                     active_profile=None,
                     active_overrides=(),
+                    current_working_directory=None,
                     execution_tree=execution_tree_output,
                     execution_tree_mode=execution_tree_mode,
                     execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -179,6 +181,7 @@ def execute_workflow(
                         can_execute=False,
                         active_profile=active_profile,
                         active_overrides=active_overrides,
+                        current_working_directory=current_working_directory,
                         execution_tree=execution_tree_output,
                         execution_tree_mode=execution_tree_mode,
                         execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -248,6 +251,7 @@ def execute_workflow(
                             can_execute=False,
                             active_profile=active_profile,
                             active_overrides=active_overrides,
+                            current_working_directory=current_working_directory,
                             execution_tree=execution_tree_output,
                             execution_tree_mode=execution_tree_mode,
                             execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -319,6 +323,7 @@ def execute_workflow(
                             can_execute=False,
                             active_profile=active_profile,
                             active_overrides=active_overrides,
+                            current_working_directory=current_working_directory,
                             execution_tree=execution_tree_output,
                             execution_tree_mode=execution_tree_mode,
                             execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -373,6 +378,7 @@ def execute_workflow(
                             can_execute=False,
                             active_profile=active_profile,
                             active_overrides=active_overrides,
+                            current_working_directory=current_working_directory,
                             execution_tree=execution_tree_output,
                             execution_tree_mode=execution_tree_mode,
                             execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -418,6 +424,7 @@ def execute_workflow(
                             can_execute=False,
                             active_profile=active_profile,
                             active_overrides=active_overrides,
+                            current_working_directory=current_working_directory,
                             execution_tree=execution_tree_output,
                             execution_tree_mode=execution_tree_mode,
                             execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -464,6 +471,7 @@ def execute_workflow(
                             can_execute=False,
                             active_profile=active_profile,
                             active_overrides=active_overrides,
+                            current_working_directory=current_working_directory,
                             execution_tree=execution_tree_output,
                             execution_tree_mode=execution_tree_mode,
                             execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -651,6 +659,7 @@ def execute_workflow(
                                 can_execute=False,
                                 active_profile=active_profile,
                                 active_overrides=active_overrides,
+                                current_working_directory=current_working_directory,
                                 execution_tree=execution_tree_output,
                                 execution_tree_mode=execution_tree_mode,
                                 execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -704,6 +713,7 @@ def execute_workflow(
                                 can_execute=False,
                                 active_profile=active_profile,
                                 active_overrides=active_overrides,
+                                current_working_directory=current_working_directory,
                                 execution_tree=execution_tree_output,
                                 execution_tree_mode=execution_tree_mode,
                                 execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -777,6 +787,7 @@ def execute_workflow(
                         can_execute=False,
                         active_profile=active_profile,
                         active_overrides=active_overrides,
+                        current_working_directory=current_working_directory,
                         execution_tree=execution_tree_output,
                         execution_tree_mode=execution_tree_mode,
                         execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -819,6 +830,7 @@ def execute_workflow(
             can_execute=True,
             active_profile=active_profile,
             active_overrides=active_overrides,
+            current_working_directory=current_working_directory,
             execution_tree=execution_tree_output,
             execution_tree_mode=execution_tree_mode,
             execution_tree_fallback_reason=execution_tree_fallback_reason,
@@ -905,9 +917,12 @@ def _gate_detail(step: Step, report: ConditionEvaluationReport, *, source: str, 
 def _gate_failure_diagnostic(step: Step, report: ConditionEvaluationReport, *, workflow: Workflow, step_results: dict[str, object]) -> Diagnostic:
     failed = [node.expression or node.to_contract().get("rendered") for node in summarize_failed_condition_causes(report.root) if isinstance(node.expression or node.to_contract().get("rendered"), str)]
     unknown = [node.expression or node.to_contract().get("rendered") for node in summarize_unknown_condition_causes(report.root) if isinstance(node.expression or node.to_contract().get("rendered"), str)]
-    message = f"Step gate blocked execution for '{step.name}'"
-    if report.verdict == "unknown":
-        message = f"Step gate could not be fully established for '{step.name}'"
+    message = render_gate_failure_message(
+        step_name=step.name,
+        verdict=report.verdict,
+        failed_conditions=failed,
+        unknown_conditions=unknown,
+    )
     details: dict[str, object] = {
         "step": step.name,
         "verdict": report.verdict,
@@ -929,21 +944,6 @@ def _gate_failure_diagnostic(step: Step, report: ConditionEvaluationReport, *, w
     )
 
 
-def _fan_out_gate_failure_human_summary(*, step_name: str, item: JSONValue, failed_conditions: list[str], unknown_conditions: list[str]) -> str:
-    item_label = item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, sort_keys=True)
-    if failed_conditions:
-        if len(failed_conditions) == 1:
-            return f"Item '{item_label}' failed gate '{step_name}': {failed_conditions[0]}"
-        rendered = "; ".join(failed_conditions)
-        return f"Item '{item_label}' failed gate '{step_name}'. Failed conditions: {rendered}"
-    if unknown_conditions:
-        if len(unknown_conditions) == 1:
-            return f"Item '{item_label}' could not establish gate '{step_name}': {unknown_conditions[0]}"
-        rendered = "; ".join(unknown_conditions)
-        return f"Item '{item_label}' could not establish gate '{step_name}'. Unknown conditions: {rendered}"
-    return f"Item '{item_label}' failed gate '{step_name}'"
-
-
 def _contextualize_fan_out_diagnostics(
     diagnostics: tuple[Diagnostic, ...],
     *,
@@ -963,8 +963,9 @@ def _contextualize_fan_out_diagnostics(
         if diagnostic.code in {"runtime.step.gate.failed", "runtime.step.gate.unknown"}:
             failed_conditions = [value for value in details.get("failed_conditions", []) if isinstance(value, str)]
             unknown_conditions = [value for value in details.get("unknown_conditions", []) if isinstance(value, str)]
-            human_summary = _fan_out_gate_failure_human_summary(
+            human_summary = render_gate_failure_message(
                 step_name=str(details.get("step", step.name)),
+                verdict="unknown" if diagnostic.code == "runtime.step.gate.unknown" else "failed",
                 item=item,
                 failed_conditions=failed_conditions,
                 unknown_conditions=unknown_conditions,
@@ -1678,6 +1679,7 @@ def _build_execute_outputs(
     can_execute: bool,
     active_profile: str | None,
     active_overrides,
+    current_working_directory: Path | None = None,
     execution_tree: dict[str, object] | None,
     execution_tree_mode: str,
     execution_tree_fallback_reason: str | None,
@@ -1695,6 +1697,7 @@ def _build_execute_outputs(
     outputs = {
         "can_execute": can_execute,
         "active_profile": active_profile,
+        "current_working_directory": None if current_working_directory is None else str(current_working_directory),
         "active_overrides": [override.to_contract() for override in active_overrides],
         **_execution_step_summaries_from_tree(execution_tree, executed_steps=executed_steps, reused_steps=reused_steps, skipped_steps=skipped_steps),
         "step_condition_details": step_condition_details,

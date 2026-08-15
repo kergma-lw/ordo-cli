@@ -65,6 +65,7 @@ class _CheckAnalysisTree:
     incomplete_reasons: tuple[str, ...]
     observed_probe_calls: tuple[dict[str, object], ...]
     input_usages: tuple[dict[str, object], ...]
+    current_working_directory: Path | None = None
     failed_guard: str | None = None
 
 
@@ -378,6 +379,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
             "preflight_registers": dict(effective_workflow.step_results),
             "preflight_step_results": dict(effective_workflow.step_results),
             "active_profile": analysis.active_profile,
+            "current_working_directory": None if analysis.current_working_directory is None else str(analysis.current_working_directory),
             "workflow_profile_declared": analysis.workflow_profile_declared,
             "active_overrides": [override.to_contract() for override in analysis.active_overrides],
         }
@@ -415,6 +417,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
             "preflight_registers": dict(effective_workflow.step_results),
             "preflight_step_results": dict(effective_workflow.step_results),
             "active_profile": analysis.active_profile,
+            "current_working_directory": None if analysis.current_working_directory is None else str(analysis.current_working_directory),
             "workflow_profile_declared": analysis.workflow_profile_declared,
             "active_overrides": [override.to_contract() for override in analysis.active_overrides],
         }
@@ -455,6 +458,7 @@ def _project_check_runtime_result(analysis: _CheckAnalysisTree) -> RuntimeResult
         "preflight_registers": dict(effective_workflow.step_results),
         "preflight_step_results": dict(effective_workflow.step_results),
         "active_profile": analysis.active_profile,
+        "current_working_directory": None if analysis.current_working_directory is None else str(analysis.current_working_directory),
         "workflow_profile_declared": analysis.workflow_profile_declared,
         "active_overrides": [override.to_contract() for override in analysis.active_overrides],
     }
@@ -772,6 +776,7 @@ def _build_check_analysis_tree(
             connector_provider=connector_provider,
             active_overrides=resolved_overrides,
         ),
+        current_working_directory=current_working_directory,
         failed_guard=failed_guard,
     )
 

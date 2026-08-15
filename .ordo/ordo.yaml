@@ -45,6 +45,11 @@ workflows:
     description: Show the public help handles that still lack snippet-backed examples
     category: inspect
     when: Use when you want only the unresolved handle names rather than the full snippet coverage payload.
+  not-ready-describe-handles:
+    file: workflows/not-ready-describe-handles.yml
+    description: Show the public help handles whose describe surfaces are not yet marked ready
+    category: inspect
+    when: Use when you want the describe-quality backlog rather than snippet coverage gaps.
   issue-comment:
     file: workflows/issue-comment.yml
     description: Add a comment to one issue from this repository context

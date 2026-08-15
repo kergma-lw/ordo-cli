@@ -261,6 +261,8 @@ class PlaybookActivationTest(unittest.TestCase):
             activated = activate_playbook(workflow_name="inspect-issue", input_overrides={"issue_number": 42}, cwd=root)
 
         self.assertEqual(ctx.exception.diagnostics[0].code, "playbook.workflow.input_missing")
+        self.assertEqual(ctx.exception.diagnostics[0].details["declared_inputs"], ("repository", "issue_number"))
+        self.assertEqual(ctx.exception.diagnostics[0].details["missing_inputs"], ["issue_number"])
         self.assertEqual(activated.workflow.inputs["repository"], "owner/repo")
         self.assertEqual(activated.workflow.inputs["issue_number"], 42)
 
@@ -3253,6 +3255,81 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["diagnostics"][0]["code"], "playbook.discovery.missing")
             self.assertEqual(payload["diagnostics"][0]["details"]["category"], "discovery")
 
+    def test_cli_activation_error_surfaces_missing_input_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      story-get-task-for-work:
+                        file: story-get-task-for-work.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "story-get-task-for-work.yml").write_text(
+                "version: 0\nworkflow: story-get-task-for-work\ninputs:\n  issue_number: {}\n  profile: {}\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "run", "story-get-task-for-work", "--json"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 1)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["mode"], "activation")
+            self.assertEqual(payload["workflow"], "story-get-task-for-work")
+            self.assertEqual(payload["missing_inputs"], ["issue_number", "profile"])
+            self.assertEqual(payload["declared_inputs"], ["issue_number", "profile"])
+            self.assertEqual(payload["input_transport"], "--input NAME=VALUE")
+            self.assertIn("--input issue_number=<value>", payload["example"])
+            self.assertIn("run story-get-task-for-work", payload["example"])
+
+    def test_cli_activation_error_example_uses_requested_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      story-get-task-for-work:
+                        file: story-get-task-for-work.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "story-get-task-for-work.yml").write_text(
+                "version: 0\nworkflow: story-get-task-for-work\ninputs:\n  issue_number: {}\n  profile: {}\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "check", "story-get-task-for-work", "--json"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 1)
+            payload = json.loads(stdout.getvalue())
+            self.assertIn(" check story-get-task-for-work", payload["example"])
+            self.assertNotIn(" run story-get-task-for-work", payload["example"])
+
     def test_cli_run_mode_executes_empty_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -3514,6 +3591,50 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertIn("failed gate", payload["message"])
         self.assertNotIn("diagnostics", payload)
 
+    def test_cli_run_surfaces_guard_failure_message_without_diagnostics(self) -> None:
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="story-to-ready",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            diagnostics=(),
+            available_profiles={},
+            profile_working_directories={},
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXECUTE,
+            status=RuntimeStatus.GUARD_FAILED,
+            diagnostics=(),
+            failed_guard="git.worktree.clean",
+            outputs={
+                "active_profile": "mobile",
+                "current_working_directory": "/tmp/mobile",
+                "guard_details": [
+                    {
+                        "reference": "git.worktree.clean",
+                        "failed_subcondition": "git.worktree.clean",
+                    }
+                ]
+            },
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "run", "story-to-ready"]):
+            with patch("ordo.cli.activate_playbook", return_value=activated):
+                with patch("ordo.cli._run_mode", return_value=runtime_result):
+                    stdout = io.StringIO()
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["failed_guard"], "git.worktree.clean")
+        self.assertEqual(payload["message"], "Guard blocked execution for 'git.worktree.clean'")
+        self.assertEqual(payload["active_profile"], "mobile")
+        self.assertEqual(payload["working_directory"], "/tmp/mobile")
+        self.assertNotIn("diagnostics", payload)
+
     def test_cli_run_includes_routine_start_failure_details(self) -> None:
         activated = SimpleNamespace(
             playbook_path=Path("/tmp/.ordo/ordo.yaml"),
@@ -3613,7 +3734,14 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload, {"status": "ok", "results": [{"summary": "Workflow completed with no explicit result or published output."}]})
+            self.assertEqual(
+                payload,
+                {
+                    "status": "ok",
+                    "active_profile": "backend",
+                    "results": [{"summary": "Workflow completed with no explicit result or published output."}],
+                },
+            )
 
     def test_cli_passes_input_overrides_to_playbook_activation(self) -> None:
         activated = SimpleNamespace(

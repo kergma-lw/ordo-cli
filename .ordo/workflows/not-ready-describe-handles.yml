@@ -1,0 +1,12 @@
+version: 0
+workflow: not-ready-describe-handles
+blocks:
+- steps:
+  - name: Load not-ready describe handles
+    uses: routine.help.describe-readiness.not-ready-list
+    register: not_ready_describes
+  - name: Publish not-ready describe handle names
+    publish:
+      summary: "Not-ready describe handles loaded"
+      count: step.not_ready_describes.outputs.data.total_not_ready
+      handles: step.not_ready_describes.outputs.data.handles | field("handle")

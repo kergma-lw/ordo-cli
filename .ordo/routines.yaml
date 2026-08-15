@@ -50,3 +50,16 @@ routines:
     - help_discovery_failed
     - snippet_coverage_parse_failed
     - runtime_unavailable
+  help.describe-readiness.not-ready-list:
+    kind: probe
+    summary: Return the current list of public help handles whose describe surfaces are not yet marked ready.
+    implementation:
+      argv:
+      - ".ordo/scripts/list-not-ready-describe-handles.py"
+    outputs:
+      mode: data
+      format: json
+    failure_modes:
+    - help_discovery_failed
+    - snippet_coverage_parse_failed
+    - runtime_unavailable
