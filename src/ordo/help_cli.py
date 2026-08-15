@@ -781,7 +781,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The condition is only changing local behavior inside a path that is already valid.",
             "You are relying on downstream action failure instead of declaring a reviewable workflow-level precondition.",
         ],
-        "inspect_next": ["workflow-authoring.early_guards", "workflow-authoring.input_validation_default", "workflow-authoring.delegated_applicability", "workflow.local_expression.filter_surface", "workflow.local_expression.builtin.is_missing"],
+        "inspect_next": ["workflow-authoring.early_guards", "workflow-authoring.input_validation_default", "workflow-authoring.delegated_applicability", "workflow.local_expression.filter", "workflow.local_expression.builtin.is_missing"],
         "related_rules": ["early_guards", "input_validation_default", "delegated_applicability", "guard_result_contract"],
         "related_examples": ["examples.inspect-issue"],
         "published_names_kind": "guards",
@@ -835,7 +835,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The expression is becoming long, repetitive, or difficult to review as inline logic.",
             "Representation shaping would be clearer through an adapter family or another more explicit surface.",
         ],
-        "inspect_next": ["workflow.local_expression.filter_surface", "workflow.local_expression.builtin_surface", "workflow.local_expression.builtin.is_missing", "workflow.local_expression.filter.lookup", "workflow.local_expression.filter.only", "workflow-authoring.native_expression_contexts", "workflow.local_expression.adapter_seam"],
+        "inspect_next": ["workflow.local_expression.filter", "workflow.local_expression.builtin", "workflow.local_expression.builtin.is_missing", "workflow.local_expression.filter.lookup", "workflow.local_expression.filter.only", "workflow-authoring.native_expression_contexts", "workflow.local_expression.adapter_seam"],
         "related_rules": ["native_expression_contexts", "guard_result_contract", "representation_adapters"],
         "related_examples": ["examples.local-expression-filters"],
         "published_names_kind": "local-expressions",
@@ -1704,6 +1704,38 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "workflow.step.gate"],
         },
+        "workflow.local_expression.filter": {
+            "definition": "Overview of pipeline-style local-expression filters that transform, project, or check one value after an expression root has already been selected.",
+            "use_when": [
+                "You need short inline value shaping such as projection, normalization, comparison, type checks, or collection helpers in one expression pipeline.",
+            ],
+            "do_not_use_for": [
+                "Function-style helpers such as is_present(...) or format(...); those belong to workflow.local_expression.builtin.",
+                "Representation-owned parsing or structural selection across text families; use adapter families when the value first needs json/yaml/markdown/text interpretation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions across roots, builtins, filters, and conditions"},
+                {"handle": "workflow.local_expression.builtin", "summary": "Overview of function-style local-expression helpers rather than pipeline filters"},
+                {"handle": "workflow.local_expression.filter.lookup", "summary": "Representative pipeline filter for selecting one mapping value by key"},
+            ],
+            "inspect_next": ["workflow.local_expression.filter.lookup", "workflow.local_expression.filter.only", "workflow.local_expression.builtin"],
+        },
+        "workflow.local_expression.builtin": {
+            "definition": "Overview of function-style local-expression builtins that perform special checks or formatting outside the pipeline filter chain.",
+            "use_when": [
+                "You need one helper such as presence checks or formatting that reads more honestly as a builtin call than as a pipeline stage.",
+            ],
+            "do_not_use_for": [
+                "Ordinary pipeline shaping after one root value; prefer workflow.local_expression.filter for those transformations.",
+                "Representation parsing or structured selection from text families; use adapter surfaces when the source first needs format-aware interpretation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions across roots, builtins, filters, and conditions"},
+                {"handle": "workflow.local_expression.filter", "summary": "Overview of pipeline-style filters rather than function-style builtins"},
+                {"handle": "workflow.local_expression.builtin.is_present", "summary": "Representative builtin for checking whether a referenced value is present"},
+            ],
+            "inspect_next": ["workflow.local_expression.builtin.is_present", "workflow.local_expression.builtin.is_missing", "workflow.local_expression.filter"],
+        },
         "workflow.profile": {
             "definition": "Top-level workflow field for binding the current workflow subtree to one fixed declared execution profile before guards run.",
             "use_when": [
@@ -2095,16 +2127,16 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         },
     )
     add_node(
-        "workflow.local_expression.filter_surface",
+        "workflow.local_expression.filter",
         contract="workflow",
-        node_category="filter_surface",
+        node_category="overview",
         summary="Published local-expression pipeline filter metadata",
         metadata=model["local_expressions"],
     )
     add_node(
-        "workflow.local_expression.builtin_surface",
+        "workflow.local_expression.builtin",
         contract="workflow",
-        node_category="builtin_surface",
+        node_category="overview",
         summary="Published local-expression builtin metadata",
         metadata={"builtins": model["local_expressions"]["builtins"]},
     )
@@ -3400,6 +3432,41 @@ def render_model_node_text(payload: JSONObject) -> str:
                 lines.append(f"- {probe}({rendered_args})")
             elif isinstance(probe, str):
                 lines.append(f"- {probe}")
+
+    pipeline_filters = metadata.get("pipeline_filters", [])
+    if isinstance(pipeline_filters, list) and pipeline_filters:
+        lines.extend(["", "pipeline filters:"])
+        for item in pipeline_filters:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            input_type = item.get("input_type")
+            output_type = item.get("output_type")
+            argument_count = item.get("argument_count")
+            if isinstance(name, str):
+                detail = []
+                if isinstance(input_type, str):
+                    detail.append(f"in={input_type}")
+                if isinstance(output_type, str):
+                    detail.append(f"out={output_type}")
+                if isinstance(argument_count, int):
+                    detail.append(f"args={argument_count}")
+                suffix = f" ({', '.join(detail)})" if detail else ""
+                lines.append(f"- {name}{suffix}")
+
+    builtins = metadata.get("builtins", [])
+    if isinstance(builtins, list) and builtins:
+        lines.extend(["", "builtins:"])
+        for item in builtins:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            summary = item.get("summary")
+            if isinstance(name, str):
+                if isinstance(summary, str) and summary:
+                    lines.append(f"- {name}: {summary}")
+                else:
+                    lines.append(f"- {name}")
 
     invalidates = metadata.get("invalidates_observations", [])
     if isinstance(invalidates, list) and invalidates:

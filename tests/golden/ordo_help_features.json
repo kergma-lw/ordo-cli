@@ -751,9 +751,9 @@
           "topic": "workflow-authoring"
         },
         {
-          "command": "ordo-help describe workflow.local_expression.filter_surface --json",
-          "handle": "workflow.local_expression.filter_surface",
-          "kind": "filter_surface",
+          "command": "ordo-help describe workflow.local_expression.filter --json",
+          "handle": "workflow.local_expression.filter",
+          "kind": "overview",
           "summary": "Published local-expression pipeline filter metadata",
           "topic": "model"
         },
@@ -1067,16 +1067,16 @@
       ],
       "inspect_next": [
         {
-          "command": "ordo-help describe workflow.local_expression.filter_surface --json",
-          "handle": "workflow.local_expression.filter_surface",
-          "kind": "filter_surface",
+          "command": "ordo-help describe workflow.local_expression.filter --json",
+          "handle": "workflow.local_expression.filter",
+          "kind": "overview",
           "summary": "Published local-expression pipeline filter metadata",
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow.local_expression.builtin_surface --json",
-          "handle": "workflow.local_expression.builtin_surface",
-          "kind": "builtin_surface",
+          "command": "ordo-help describe workflow.local_expression.builtin --json",
+          "handle": "workflow.local_expression.builtin",
+          "kind": "overview",
           "summary": "Published local-expression builtin metadata",
           "topic": "model"
         },

@@ -359,7 +359,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(yaml_adapter["actions"], [])
         self.assertEqual(yaml_adapter["shortcuts"], [])
 
-    def test_model_publishes_local_expression_filter_surface(self) -> None:
+    def test_model_publishes_local_expression_filter_overview(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         filters = {item["name"]: item for item in model["local_expressions"]["pipeline_filters"]}
 
@@ -390,6 +390,22 @@ class OrdoHelpCliTest(unittest.TestCase):
         model = json.loads(self.run_help("model", "--json").stdout)
 
         self.assertEqual([item["name"] for item in model["local_expressions"]["pipeline_filters"]], list(VALUE_EXPRESSION_FILTERS))
+
+    def test_text_describe_local_expression_overview_nodes_are_teaching_ready(self) -> None:
+        filter_overview = self.run_help("describe", "workflow.local_expression.filter")
+        builtin_overview = self.run_help("describe", "workflow.local_expression.builtin")
+
+        self.assertEqual(filter_overview.returncode, 0)
+        self.assertIn("Overview of pipeline-style local-expression filters", filter_overview.stdout)
+        self.assertIn("workflow.local_expression.builtin", filter_overview.stdout)
+        self.assertIn("pipeline filters:", filter_overview.stdout)
+        self.assertIn("- lookup (in=json, out=json, args=1)", filter_overview.stdout)
+
+        self.assertEqual(builtin_overview.returncode, 0)
+        self.assertIn("Overview of function-style local-expression builtins", builtin_overview.stdout)
+        self.assertIn("workflow.local_expression.filter", builtin_overview.stdout)
+        self.assertIn("builtins:", builtin_overview.stdout)
+        self.assertIn("- is_present: Published local-expression builtin for inline workflow expressions.", builtin_overview.stdout)
 
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -889,7 +905,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.adapter.yaml" for item in result["facts"]))
 
     def test_describe_resolves_local_expression_filter_model_nodes(self) -> None:
-        surface_node = json.loads(self.run_help("describe", "workflow.local_expression.filter_surface", "--json").stdout)
+        surface_node = json.loads(self.run_help("describe", "workflow.local_expression.filter", "--json").stdout)
         filter_node = json.loads(self.run_help("describe", "workflow.local_expression.filter.is_integer", "--json").stdout)
 
         self.assertEqual(surface_node["document_kind"], "model_node")
@@ -899,7 +915,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(filter_node["metadata"]["output_type"], "boolean")
 
     def test_describe_resolves_local_expression_builtin_model_nodes(self) -> None:
-        surface_node = json.loads(self.run_help("describe", "workflow.local_expression.builtin_surface", "--json").stdout)
+        surface_node = json.loads(self.run_help("describe", "workflow.local_expression.builtin", "--json").stdout)
         builtin_node = json.loads(self.run_help("describe", "workflow.local_expression.builtin.is_missing", "--json").stdout)
 
         self.assertEqual(surface_node["document_kind"], "model_node")
@@ -927,7 +943,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         surface_result = json.loads(self.run_help("search", "pipeline filter", "--json").stdout)
 
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter.is_integer" for item in result["facts"]))
-        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter_surface" for item in surface_result["facts"]))
+        self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.filter" for item in surface_result["facts"]))
 
     def test_search_indexes_local_expression_builtins_and_state_aliases(self) -> None:
         builtin_result = json.loads(self.run_help("search", "is_missing", "--json").stdout)
