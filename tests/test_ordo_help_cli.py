@@ -407,6 +407,28 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("builtins:", builtin_overview.stdout)
         self.assertIn("- is_present: Published local-expression builtin for inline workflow expressions.", builtin_overview.stdout)
 
+    def test_text_describe_local_expression_leaf_nodes_are_teaching_ready(self) -> None:
+        lookup_filter = self.run_help("describe", "workflow.local_expression.filter.lookup")
+        only_filter = self.run_help("describe", "workflow.local_expression.filter.only")
+        is_present_builtin = self.run_help("describe", "workflow.local_expression.builtin.is_present")
+
+        self.assertEqual(lookup_filter.returncode, 0)
+        self.assertIn("Pipeline-style local-expression filter `lookup`", lookup_filter.stdout)
+        self.assertIn("expression contract:", lookup_filter.stdout)
+        self.assertIn("- input type: json", lookup_filter.stdout)
+        self.assertIn("- output type: json", lookup_filter.stdout)
+        self.assertIn("example_for: value", lookup_filter.stdout)
+
+        self.assertEqual(only_filter.returncode, 0)
+        self.assertIn("Pipeline-style local-expression filter `only`", only_filter.stdout)
+        self.assertIn("- authored form: only(field=value) / only(field!=value)", only_filter.stdout)
+        self.assertIn("workflow.local_expression.filter", only_filter.stdout)
+
+        self.assertEqual(is_present_builtin.returncode, 0)
+        self.assertIn("Function-style local-expression builtin `is_present(...)`", is_present_builtin.stdout)
+        self.assertIn("- allowed roots: args, inputs, probe, state, step", is_present_builtin.stdout)
+        self.assertIn("workflow.local_expression.builtin", is_present_builtin.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)

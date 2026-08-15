@@ -2141,20 +2141,82 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         metadata={"builtins": model["local_expressions"]["builtins"]},
     )
     for filter_spec in model["local_expressions"]["pipeline_filters"]:
+        filter_metadata = dict(filter_spec)
+        filter_name = filter_spec["name"]
+        filter_metadata.setdefault(
+            "definition",
+            f"Pipeline-style local-expression filter `{filter_name}` for transforming, projecting, or checking one value after an expression root has already been selected.",
+        )
+        filter_metadata.setdefault(
+            "use_when",
+            [
+                f"You need `{filter_name}` as one short pipeline stage inside an inline local expression rather than a function-style builtin call.",
+            ],
+        )
+        filter_metadata.setdefault(
+            "do_not_use_for",
+            [
+                "Function-style helper calls such as is_present(...) or format(...); those belong to workflow.local_expression.builtin.*.",
+                "Representation parsing across text families before projection; use adapter families when the source first needs json/yaml/markdown/text interpretation.",
+            ],
+        )
+        filter_metadata.setdefault(
+            "nearest_surfaces",
+            [
+                {"handle": "workflow.local_expression.filter", "summary": "Overview of the pipeline filter family"},
+                {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions"},
+                {"handle": "workflow.local_expression.builtin", "summary": "Overview of function-style local-expression builtins"},
+            ],
+        )
+        filter_metadata.setdefault(
+            "inspect_next",
+            ["workflow.local_expression.filter", "workflow.local_expression.builtin", "workflow.local_expressions"],
+        )
         add_node(
             f"workflow.local_expression.filter.{filter_spec['name']}",
             contract="workflow",
             node_category="filter",
             summary="Published local-expression pipeline filter metadata",
-            metadata=filter_spec,
+            metadata=filter_metadata,
         )
     for builtin_spec in model["local_expressions"]["builtins"]:
+        builtin_metadata = dict(builtin_spec)
+        builtin_name = builtin_spec["name"]
+        builtin_metadata.setdefault(
+            "definition",
+            f"Function-style local-expression builtin `{builtin_name}(...)` for special checks or formatting that read more honestly as a helper call than as a pipeline stage.",
+        )
+        builtin_metadata.setdefault(
+            "use_when",
+            [
+                f"You need `{builtin_name}(...)` as a short helper call inside a workflow-owned expression.",
+            ],
+        )
+        builtin_metadata.setdefault(
+            "do_not_use_for",
+            [
+                "Ordinary pipeline shaping after one root value; prefer workflow.local_expression.filter.* for those transformations.",
+                "Representation-aware parsing or projection from text families; use adapter families when the source first needs format-aware interpretation.",
+            ],
+        )
+        builtin_metadata.setdefault(
+            "nearest_surfaces",
+            [
+                {"handle": "workflow.local_expression.builtin", "summary": "Overview of function-style local-expression builtins"},
+                {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions"},
+                {"handle": "workflow.local_expression.filter", "summary": "Overview of pipeline-style local-expression filters"},
+            ],
+        )
+        builtin_metadata.setdefault(
+            "inspect_next",
+            ["workflow.local_expression.builtin", "workflow.local_expression.filter", "workflow.local_expressions"],
+        )
         add_node(
             f"workflow.local_expression.builtin.{builtin_spec['name']}",
             contract="workflow",
             node_category="builtin",
             summary="Published local-expression builtin metadata",
-            metadata=builtin_spec,
+            metadata=builtin_metadata,
         )
     for adapter in model["representation_adapters"]["families"]:
         add_node(
@@ -3418,6 +3480,32 @@ def render_model_node_text(payload: JSONObject) -> str:
         lines.extend(["", "outputs:"])
         for name, shape in outputs.items():
             lines.append(f"- {name}: {shape}")
+
+    input_type = metadata.get("input_type")
+    output_type = metadata.get("output_type")
+    argument_count = metadata.get("argument_count")
+    authored_form = metadata.get("authored_form")
+    allowed_roots = metadata.get("allowed_roots", [])
+    if any(
+        [
+            isinstance(input_type, str),
+            isinstance(output_type, str),
+            isinstance(argument_count, int),
+            isinstance(authored_form, str),
+            isinstance(allowed_roots, list) and bool(allowed_roots),
+        ]
+    ):
+        lines.extend(["", "expression contract:"])
+        if isinstance(input_type, str):
+            lines.append(f"- input type: {input_type}")
+        if isinstance(output_type, str):
+            lines.append(f"- output type: {output_type}")
+        if isinstance(argument_count, int):
+            lines.append(f"- argument count: {argument_count}")
+        if isinstance(authored_form, str):
+            lines.append(f"- authored form: {authored_form}")
+        if isinstance(allowed_roots, list) and allowed_roots:
+            lines.append(f"- allowed roots: {', '.join(str(item) for item in allowed_roots)}")
 
     preflight_observations = metadata.get("preflight_observations", [])
     if isinstance(preflight_observations, list) and preflight_observations:

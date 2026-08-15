@@ -198,6 +198,72 @@
     },
     "workflow-authoring.workflow_profile_binding_is_project_local": {
       "describe_readiness": "ready"
+    },
+    "workflow.local_expression.builtin.format": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.builtin.is_missing": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.builtin.is_present": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.eq": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.field": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.first": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.flatten": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.in": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.is_boolean": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.is_integer": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.is_number": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.is_string": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.last": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.length": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.lookup": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.lower": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.ne": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.not": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.only": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.slug": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.trim": {
+      "describe_readiness": "ready"
+    },
+    "workflow.local_expression.filter.unique": {
+      "describe_readiness": "ready"
     }
   }
 }
