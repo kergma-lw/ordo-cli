@@ -120,6 +120,25 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.state_needs": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "workflow_state_needs_shared_state_requirement",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Declare one shared-state requirement before reading that state from let and mutating steps.",
+                "yaml": 'version: 0\nworkflow: remember-profile\ninputs:\n  active_profile_key: {}\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: remember\n        state_set:\n          state.shared_state["active_profile"]: active_profile',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "workflow.state_needs",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
     "workflow.step.profile_switch": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [

@@ -660,6 +660,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("State workflow-surface field that marks `state_delete` as the explicit step-owned durable deletion surface", state_field.stdout)
         self.assertIn("workflow.step.state_delete", state_field.stdout)
 
+    def test_text_describe_state_needs_group_is_teaching_ready(self) -> None:
+        needs_capability = self.run_help("describe", "workflow.state_needs")
+        needs_field = self.run_help("describe", "state.workflow_surface.state_needs_field")
+
+        self.assertEqual(needs_capability.returncode, 0)
+        self.assertIn("Workflow capability for declaring which state roles and storage targets the workflow requires", needs_capability.stdout)
+        self.assertIn("workflow.state_bindings", needs_capability.stdout)
+        self.assertIn("playbook.states", needs_capability.stdout)
+        self.assertIn("example_for: workflow_fragment", needs_capability.stdout)
+
+        self.assertEqual(needs_field.returncode, 0)
+        self.assertIn("State workflow-surface field that marks `state_needs` as the top-level workflow contract surface", needs_field.stdout)
+        self.assertIn("workflow.state_needs", needs_field.stdout)
+        self.assertIn("workflow.state_bindings", needs_field.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -804,7 +819,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
-        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 8)
+        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 9)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")

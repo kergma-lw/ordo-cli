@@ -375,6 +375,12 @@
     },
     "state.workflow_surface.step_state_delete_field": {
       "describe_readiness": "ready"
+    },
+    "workflow.state_needs": {
+      "describe_readiness": "ready"
+    },
+    "state.workflow_surface.state_needs_field": {
+      "describe_readiness": "ready"
     }
   }
 }

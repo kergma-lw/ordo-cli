@@ -1466,6 +1466,16 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
                 "Writing state directly without first binding a declared location into the workflow's explicit state contract.",
             ],
         },
+        "workflow.state_needs": {
+            "definition": "Workflow capability for declaring which state roles and storage targets the workflow requires before durable state reads, writes, or deletions are valid.",
+            "use_when": [
+                "A workflow intends to interact with durable state and must declare that need explicitly before step-level state surfaces become legitimate.",
+            ],
+            "do_not_use_for": [
+                "Binding one concrete role to one declared playbook state location; that next step belongs to workflow.state_bindings.",
+                "Implicitly relying on state availability just because a later step mentions state.*; durable state access still needs an explicit workflow need declaration.",
+            ],
+        },
         "workflow.step.state_delete": {
             "definition": "Workflow step capability for deleting one explicit bound state target as a deliberate durable state mutation.",
             "use_when": [
@@ -2030,6 +2040,21 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "workflow.step.state_set", "summary": "Sibling durable state mutation capability for explicit writes instead of deletion"},
             ],
             "inspect_next": ["workflow.step.state_delete", "workflow.step_forms.state_delete", "workflow.step.state_set"],
+        },
+        "state.workflow_surface.state_needs_field": {
+            "definition": "State workflow-surface field that marks `state_needs` as the top-level workflow contract surface for declaring durable state requirements before binding and mutation surfaces are used.",
+            "use_when": [
+                "You need the contract meaning of the workflow's state_needs declaration rather than only one example of a later bound state operation.",
+            ],
+            "do_not_use_for": [
+                "Assuming a later state_set, state_delete, or state read implicitly declares workflow state requirements on its own.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.state_needs", "summary": "Workflow capability for declaring durable state requirements before binding and mutation"},
+                {"handle": "workflow.state_bindings", "summary": "Capability for binding declared playbook state locations into workflow roles after state_needs exists"},
+                {"handle": "playbook.states", "summary": "Playbook surface that declares the named durable state locations a workflow may later bind"},
+            ],
+            "inspect_next": ["workflow.state_needs", "workflow.state_bindings", "playbook.states"],
         },
         "workflow.step_forms.state_set": {
             "definition": "Workflow step form for one named state-write checkpoint that stores one explicit value into one bound state target.",

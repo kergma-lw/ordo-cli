@@ -129,6 +129,17 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         ),
     ),
     CapabilitySpec(
+        name="workflow.state_needs",
+        status="supported",
+        scope="workflow",
+        related_capabilities=("workflow.state_bindings",),
+        related_model_nodes=(
+            "state.workflow_surface.state_needs_field",
+            "playbook.states",
+            "state.workflow_surface.state_binding_field",
+        ),
+    ),
+    CapabilitySpec(
         name="workflow.step.state_set",
         status="supported",
         scope="workflow.step",
@@ -163,10 +174,6 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
             "workflow.local_expression_root.args",
         ),
     ),
-    CapabilitySpec(name="workflow.state_needs", status="supported", scope="workflow"),
-    CapabilitySpec(name="workflow.state_bindings", status="supported", scope="workflow"),
-    CapabilitySpec(name="workflow.step.state_set", status="supported", scope="workflow.step"),
-    CapabilitySpec(name="workflow.step.state_delete", status="supported", scope="workflow.step"),
     CapabilitySpec(name="workflow.step.value", status="supported", scope="workflow.step"),
     CapabilitySpec(
         name="runtime.launchers",
