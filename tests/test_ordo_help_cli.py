@@ -532,6 +532,29 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("- description (type=string, required=no, role=input_meaning)", inputs_contract.stdout)
         self.assertIn("workflow-authoring.input_validation_default", inputs_contract.stdout)
 
+    def test_text_describe_routine_workflow_call_group_is_teaching_ready(self) -> None:
+        call_surface = self.run_help("describe", "routine_contract.workflow_call_surface")
+        call_args = self.run_help("describe", "routine_contract.workflow_call.args")
+        call_env = self.run_help("describe", "routine_contract.workflow_call.env")
+
+        self.assertEqual(call_surface.returncode, 0)
+        self.assertIn("Routine workflow-call surface for passing declared business args", call_surface.stdout)
+        self.assertIn("fields:", call_surface.stdout)
+        self.assertIn("- args (type=object, required=no, role=declared_business_arguments)", call_surface.stdout)
+        self.assertIn("env forwarding contract:", call_surface.stdout)
+        self.assertIn("- automatic input env projection: no", call_surface.stdout)
+        self.assertIn("- generated env examples:", call_surface.stdout)
+
+        self.assertEqual(call_args.returncode, 0)
+        self.assertIn("Routine workflow-call field for business arguments", call_args.stdout)
+        self.assertIn("routine_contract.entry.args", call_args.stdout)
+        self.assertIn("related examples:", call_args.stdout)
+
+        self.assertEqual(call_env.returncode, 0)
+        self.assertIn("Routine workflow-call field for forwarding a short explicit list of scalar caller references", call_env.stdout)
+        self.assertIn("workflow-authoring.routine.*", call_env.stdout)
+        self.assertIn("related examples:", call_env.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)

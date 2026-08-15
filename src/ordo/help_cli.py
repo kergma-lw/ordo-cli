@@ -1970,6 +1970,64 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.fragment.args", "examples.include-plain", "workflow.include.include"],
         },
+        "routine_contract.workflow_call_surface": {
+            "definition": "Routine workflow-call surface for passing declared business args and a short explicit list of forwarded scalar context references into one routine call.",
+            "use_when": [
+                "A workflow step calls routine.* and must distinguish business arguments from forwarded ambient context explicitly.",
+            ],
+            "do_not_use_for": [
+                "Broad implicit environment mirroring; routine calls forward context only through explicit env references.",
+                "Treating routine call fields as ordinary workflow input declaration; this surface configures one routine invocation only.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.workflow_call.args", "summary": "Call field for declared routine business arguments"},
+                {"handle": "routine_contract.workflow_call.env", "summary": "Call field for explicit forwarded scalar context references"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance for when routine.* is acceptable at all"},
+            ],
+            "related_examples": [
+                {"reference": "with.args", "inputs": {"target": "inputs.issue_number"}},
+                {"reference": "with.env", "inputs": {"refs": ["inputs.profile", "step.collect.outputs.value.path"]}},
+            ],
+            "inspect_next": ["routine_contract.workflow_call.args", "routine_contract.workflow_call.env", "workflow-authoring.routine.*"],
+        },
+        "routine_contract.workflow_call.args": {
+            "definition": "Routine workflow-call field for business arguments that satisfy the routine entry's declared args contract.",
+            "use_when": [
+                "The routine entry declares business args and the caller must supply concrete domain values to that call.",
+            ],
+            "do_not_use_for": [
+                "Forwarding ambient caller context such as inputs.* or step outputs; use workflow_call.env for those scalar references.",
+                "Declaring the routine entry's accepted arg schema; that belongs to routine_contract.entry.args on the registry side.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.workflow_call_surface", "summary": "Parent routine workflow-call surface"},
+                {"handle": "routine_contract.workflow_call.env", "summary": "Sibling field for explicit forwarded scalar context references"},
+                {"handle": "routine_contract.entry.args", "summary": "Registry-side declaration of which business args the routine accepts"},
+            ],
+            "related_examples": [
+                {"reference": "with.args", "inputs": {"target": "inputs.issue_number"}},
+            ],
+            "inspect_next": ["routine_contract.workflow_call.env", "routine_contract.entry.args", "routine_contract.workflow_call_surface"],
+        },
+        "routine_contract.workflow_call.env": {
+            "definition": "Routine workflow-call field for forwarding a short explicit list of scalar caller references as generated environment variables for the routine process.",
+            "use_when": [
+                "The routine truly needs ambient caller context and that context can be expressed as a short explicit list of scalar references.",
+            ],
+            "do_not_use_for": [
+                "Business arguments that belong in with.args; env is for forwarded context references, not the main domain payload.",
+                "Objects, arrays, or custom environment-variable naming; non-scalar forwarding errors and env names are generated mechanically.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.workflow_call_surface", "summary": "Parent routine workflow-call surface"},
+                {"handle": "routine_contract.workflow_call.args", "summary": "Sibling field for declared business arguments"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance that limits routine env forwarding to short explicit scalar lists"},
+            ],
+            "related_examples": [
+                {"reference": "with.env", "inputs": {"refs": ["inputs.profile", "step.collect.outputs.value.path"]}},
+            ],
+            "inspect_next": ["routine_contract.workflow_call.args", "workflow-authoring.routine.*", "routine_contract.workflow_call_surface"],
+        },
         "workflow.inputs": {
             "definition": "Top-level workflow field for declaring the named activation inputs that the caller must provide before the workflow may run.",
             "use_when": [
@@ -3811,6 +3869,61 @@ def render_model_node_text(payload: JSONObject) -> str:
             suffix = f" ({', '.join(parts)})" if parts else ""
             if isinstance(name, str):
                 lines.append(f"- {name}{suffix}")
+
+    fields = metadata.get("fields", [])
+    if isinstance(fields, list) and fields:
+        lines.extend(["", "fields:"])
+        for item in fields:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            type_name = item.get("type")
+            required = item.get("required")
+            role = item.get("role") or item.get("authoring_role")
+            parts = []
+            if isinstance(type_name, str):
+                parts.append(f"type={type_name}")
+            if isinstance(required, bool):
+                parts.append(f"required={'yes' if required else 'no'}")
+            if isinstance(role, str):
+                parts.append(f"role={role}")
+            suffix = f" ({', '.join(parts)})" if parts else ""
+            if isinstance(name, str):
+                lines.append(f"- {name}{suffix}")
+
+    env_reference_roots = metadata.get("env_reference_roots", [])
+    env_reference_pattern = metadata.get("env_reference_pattern")
+    automatic_input_env_projection = metadata.get("automatic_input_env_projection")
+    env_scalar_only = metadata.get("env_scalar_only")
+    env_non_scalar_behavior = metadata.get("env_non_scalar_behavior")
+    generated_env_name_prefix = metadata.get("generated_env_name_prefix")
+    generated_env_name_examples = metadata.get("generated_env_name_examples")
+    if any([
+        isinstance(env_reference_roots, list) and bool(env_reference_roots),
+        isinstance(env_reference_pattern, str),
+        isinstance(automatic_input_env_projection, bool),
+        isinstance(env_scalar_only, bool),
+        isinstance(env_non_scalar_behavior, str),
+        isinstance(generated_env_name_prefix, str),
+        isinstance(generated_env_name_examples, dict) and bool(generated_env_name_examples),
+    ]):
+        lines.extend(["", "env forwarding contract:"])
+        if isinstance(automatic_input_env_projection, bool):
+            lines.append(f"- automatic input env projection: {'yes' if automatic_input_env_projection else 'no'}")
+        if isinstance(env_reference_pattern, str):
+            lines.append(f"- env reference pattern: {env_reference_pattern}")
+        if isinstance(env_reference_roots, list) and env_reference_roots:
+            lines.append(f"- env reference roots: {', '.join(str(item) for item in env_reference_roots)}")
+        if isinstance(env_scalar_only, bool):
+            lines.append(f"- env scalar only: {'yes' if env_scalar_only else 'no'}")
+        if isinstance(env_non_scalar_behavior, str):
+            lines.append(f"- env non-scalar behavior: {env_non_scalar_behavior}")
+        if isinstance(generated_env_name_prefix, str):
+            lines.append(f"- generated env prefix: {generated_env_name_prefix}")
+        if isinstance(generated_env_name_examples, dict) and generated_env_name_examples:
+            lines.append("- generated env examples:")
+            for ref, name in generated_env_name_examples.items():
+                lines.append(f"  - {ref} -> {name}")
 
     outputs = metadata.get("outputs")
     if isinstance(outputs, dict) and outputs:

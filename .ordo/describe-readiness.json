@@ -315,6 +315,15 @@
     },
     "workflow.inputs_contract": {
       "describe_readiness": "ready"
+    },
+    "routine_contract.workflow_call_surface": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.workflow_call.args": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.workflow_call.env": {
+      "describe_readiness": "ready"
     }
   }
 }
