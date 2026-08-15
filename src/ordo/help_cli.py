@@ -1910,6 +1910,44 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["profile.name", "playbook.defaults.profile", "playbook.workflows.file"],
         },
+        "playbook.states": {
+            "definition": "Playbook field for declaring the named state storage locations that workflows and playbook entries may bind explicitly.",
+            "use_when": [
+                "The project needs durable named storage targets that workflows may read, write, or delete through explicit state contracts instead of implicit files.",
+            ],
+            "do_not_use_for": [
+                "Workflow-local transient dataflow; keep short-lived values in workflow values, step outputs, or direct inputs instead of declared state storage.",
+                "Binding a workflow to one state location; use workflow.state_bindings or playbook entry state_bindings for the binding step rather than editing the catalog itself.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.states.path", "summary": "Child field that maps one declared state name to its storage path"},
+                {"handle": "workflow.state_bindings", "summary": "Capability surface for binding declared state names into a workflow or entry"},
+                {"handle": "state.workflow_surface.state_binding_field", "summary": "State-binding surface that consumes declared playbook state names"},
+            ],
+            "examples": [
+                {"reference": "playbook.states", "inputs": {"shared_state": {"path": "repo.json"}, "cache": {"path": ".ordo/cache.json"}}},
+            ],
+            "inspect_next": ["playbook.states.path", "workflow.state_bindings", "state.workflow_surface.state_binding_field"],
+        },
+        "playbook.states.path": {
+            "definition": "Playbook state-entry field that assigns one declared state location name to the filesystem path where that durable state is stored.",
+            "use_when": [
+                "A declared state location needs one concrete storage target so workflows can bind and resolve it explicitly.",
+            ],
+            "do_not_use_for": [
+                "Binding a workflow role to a declared state location name; use workflow.state_bindings or entry state_bindings for that authoring step.",
+                "Ordinary working-directory defaults or workflow file selection; this field declares state storage, not execution context.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.states", "summary": "Parent playbook state-location catalog"},
+                {"handle": "workflow.state_bindings", "summary": "Binding surface that references declared state location names"},
+                {"handle": "profile.working_directory", "summary": "Execution-directory context surface rather than a durable state storage declaration"},
+            ],
+            "examples": [
+                {"reference": "playbook.states.path", "inputs": {"path": "repo.json"}},
+            ],
+            "inspect_next": ["workflow.state_bindings", "state.workflow_surface.state_binding_field", "playbook.states"],
+        },
         "profile.connectors": {
             "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
             "use_when": [

@@ -754,6 +754,22 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("playbook.workflows.file", profile_file.stdout)
         self.assertIn("playbook.profiles.file(file=backend.yml)", profile_file.stdout)
 
+    def test_text_describe_playbook_states_group_is_teaching_ready(self) -> None:
+        states = self.run_help("describe", "playbook.states")
+        state_path = self.run_help("describe", "playbook.states.path")
+
+        self.assertEqual(states.returncode, 0)
+        self.assertIn("Playbook field for declaring the named state storage locations", states.stdout)
+        self.assertIn("workflow.state_bindings", states.stdout)
+        self.assertIn("state.workflow_surface.state_binding_field", states.stdout)
+        self.assertIn("playbook.states(shared_state={\"path\": \"repo.json\"}, cache={\"path\": \".ordo/cache.json\"})", states.stdout)
+
+        self.assertEqual(state_path.returncode, 0)
+        self.assertIn("Playbook state-entry field that assigns one declared state location name to the filesystem path", state_path.stdout)
+        self.assertIn("workflow.state_bindings", state_path.stdout)
+        self.assertIn("profile.working_directory", state_path.stdout)
+        self.assertIn("playbook.states.path(path=repo.json)", state_path.stdout)
+
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 

@@ -93,6 +93,12 @@
     },
     "playbook.profiles.file": {
       "describe_readiness": "ready"
+    },
+    "playbook.states": {
+      "describe_readiness": "ready"
+    },
+    "playbook.states.path": {
+      "describe_readiness": "ready"
     }
   }
 }
