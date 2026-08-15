@@ -72,6 +72,21 @@
     },
     "playbook.defaults.working_directory": {
       "describe_readiness": "ready"
+    },
+    "playbook.pre_run": {
+      "describe_readiness": "ready"
+    },
+    "playbook.pre_run.file": {
+      "describe_readiness": "ready"
+    },
+    "playbook.pre_run.with": {
+      "describe_readiness": "ready"
+    },
+    "playbook.pre_run.state_bindings": {
+      "describe_readiness": "ready"
+    },
+    "playbook.pre_run_contract": {
+      "describe_readiness": "ready"
     }
   }
 }

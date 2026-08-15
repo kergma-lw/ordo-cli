@@ -1779,6 +1779,99 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["playbook.workflows.working_directory", "profile.working_directory", "playbook.defaults"],
         },
+        "playbook.pre_run": {
+            "definition": "Playbook field for declaring one or more playbook-owned workflows that run before the requested published workflow in the same runtime session.",
+            "use_when": [
+                "The project needs shared launch-time preparation, validation, or state setup before whichever published workflow the caller selected.",
+            ],
+            "do_not_use_for": [
+                "Workflow-internal sequencing that belongs inside one workflow body rather than in the playbook wrapper.",
+                "Per-workflow-entry preparation that should only happen for one published workflow; keep that logic closer to the workflow entry or workflow body instead.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.pre_run_contract", "summary": "Contract surface for what a pre_run entry may declare and what boundaries it must respect"},
+                {"handle": "playbook.pre_run.file", "summary": "Child field that selects the workflow file to run before the requested workflow"},
+                {"handle": "playbook.workflows.with", "summary": "Sibling launch-time input surface for the requested workflow entry rather than for pre_run setup"},
+            ],
+            "examples": [
+                {"reference": "playbook.pre_run", "inputs": {"file": ".ordo/workflows/bootstrap.yaml", "with": {"repo": "acme/app"}, "state_bindings": {"shared_state": "global"}}},
+            ],
+            "inspect_next": ["playbook.pre_run_contract", "playbook.pre_run.file", "playbook.pre_run.with"],
+        },
+        "playbook.pre_run_contract": {
+            "definition": "Playbook contract for pre_run entries that execute before the requested workflow in the same runtime session with playbook-owned launch context.",
+            "use_when": [
+                "You need to understand the execution boundary, allowed fields, and state-scope limits for playbook pre_run orchestration.",
+            ],
+            "do_not_use_for": [
+                "Ordinary workflow-entry invocation rules; use playbook.workflows.* when describing the requested workflow launch itself.",
+                "Assuming pre_run may silently widen the main workflow's declared state contract; that boundary is intentionally restricted.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.pre_run", "summary": "Parent playbook field that lists pre_run entries"},
+                {"handle": "playbook.pre_run.state_bindings", "summary": "Entry field for explicitly binding state locations into the pre_run workflow only"},
+                {"handle": "playbook.workflows.with", "summary": "Requested-workflow launch inputs rather than playbook-owned pre_run inputs"},
+            ],
+            "required_fields": ["file"],
+            "optional_fields": ["with", "state_bindings"],
+            "inspect_next": ["playbook.pre_run.file", "playbook.pre_run.with", "playbook.pre_run.state_bindings"],
+        },
+        "playbook.pre_run.file": {
+            "definition": "Pre-run entry field that selects which workflow file executes before the requested workflow.",
+            "use_when": [
+                "A specific bootstrap workflow should always run first when this playbook is used.",
+            ],
+            "do_not_use_for": [
+                "Selecting the requested published workflow by name; that belongs to playbook.workflows entries and ordo-playbook commands.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.pre_run", "summary": "Parent pre_run list surface"},
+                {"handle": "playbook.pre_run_contract", "summary": "Contract that requires file on every pre_run entry"},
+                {"handle": "playbook.workflows.file", "summary": "Sibling field for the requested workflow entry rather than pre_run setup"},
+            ],
+            "examples": [
+                {"reference": "playbook.pre_run.file", "inputs": {"file": ".ordo/workflows/bootstrap.yaml"}},
+            ],
+            "inspect_next": ["playbook.pre_run.with", "playbook.pre_run_contract", "playbook.workflows.file"],
+        },
+        "playbook.pre_run.with": {
+            "definition": "Pre-run entry field for static playbook-owned invocation inputs passed only to the pre_run workflow.",
+            "use_when": [
+                "The bootstrap workflow needs fixed launch-time values owned by the playbook rather than by the caller.",
+            ],
+            "do_not_use_for": [
+                "Caller-supplied activation inputs for the requested workflow; use playbook.workflows.with or command-line overrides for those.",
+                "Dynamic workflow expressions; this surface is static YAML values only.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.pre_run", "summary": "Parent pre_run list surface"},
+                {"handle": "playbook.workflows.with", "summary": "Sibling launch-time input surface for the requested workflow entry"},
+                {"handle": "command-line.ordo-playbook.flag.input", "summary": "One-run caller override surface instead of playbook-owned static pre_run inputs"},
+            ],
+            "examples": [
+                {"reference": "playbook.pre_run.with", "inputs": {"repo": "acme/app", "strict": True}},
+            ],
+            "inspect_next": ["playbook.workflows.with", "command-line.ordo-playbook.flag.input", "playbook.pre_run.state_bindings"],
+        },
+        "playbook.pre_run.state_bindings": {
+            "definition": "Pre-run entry field for explicit state-location bindings that the pre_run workflow may use without widening the requested workflow's own state contract.",
+            "use_when": [
+                "The bootstrap workflow needs declared state access, but that access should stay explicit and scoped to pre_run setup.",
+            ],
+            "do_not_use_for": [
+                "Sneaking extra state requirements into the main requested workflow; state widening is explicitly disallowed here.",
+                "Ordinary requested-workflow state bindings; use playbook.workflows.state_bindings for those entry-specific bindings.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.pre_run_contract", "summary": "Contract that explains the pre_run state-scope boundary"},
+                {"handle": "playbook.workflows.state_bindings", "summary": "Sibling binding surface for the requested workflow entry rather than pre_run setup"},
+                {"handle": "state.workflow_surface.state_binding_field", "summary": "State contract surface for what one state binding means"},
+            ],
+            "examples": [
+                {"reference": "playbook.pre_run.state_bindings", "inputs": {"shared_state": "global"}},
+            ],
+            "inspect_next": ["playbook.workflows.state_bindings", "state.workflow_surface.state_binding_field", "playbook.pre_run_contract"],
+        },
         "profile.connectors": {
             "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
             "use_when": [
@@ -3109,6 +3202,11 @@ def render_capability_node_text(payload: JSONObject) -> str:
 def render_model_node_text(payload: JSONObject) -> str:
     """Return the text model-node surface."""
 
+    def _render_arg_value(value: object) -> str:
+        if isinstance(value, str):
+            return value
+        return json.dumps(value, ensure_ascii=False)
+
     lines = [payload["name"]]
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
@@ -3222,7 +3320,7 @@ def render_model_node_text(payload: JSONObject) -> str:
             probe = item.get("probe")
             with_payload = item.get("with")
             if isinstance(probe, str) and isinstance(with_payload, dict) and with_payload:
-                rendered_args = ", ".join(f"{key}={value}" for key, value in with_payload.items())
+                rendered_args = ", ".join(f"{key}={_render_arg_value(value)}" for key, value in with_payload.items())
                 lines.append(f"- {probe}({rendered_args})")
             elif isinstance(probe, str):
                 lines.append(f"- {probe}")
@@ -3256,7 +3354,7 @@ def render_model_node_text(payload: JSONObject) -> str:
             reference = item.get("reference")
             inputs = item.get("inputs")
             if isinstance(reference, str) and isinstance(inputs, dict) and inputs:
-                rendered_args = ", ".join(f"{key}={value}" for key, value in inputs.items())
+                rendered_args = ", ".join(f"{key}={_render_arg_value(value)}" for key, value in inputs.items())
                 lines.append(f"- {reference}({rendered_args})")
             elif isinstance(reference, str):
                 lines.append(f"- {reference}")

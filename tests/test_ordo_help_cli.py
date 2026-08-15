@@ -704,6 +704,40 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("playbook.workflows.working_directory", default_workdir.stdout)
         self.assertIn("profile.working_directory", default_workdir.stdout)
 
+    def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
+        pre_run = self.run_help("describe", "playbook.pre_run")
+        pre_run_file = self.run_help("describe", "playbook.pre_run.file")
+        pre_run_with = self.run_help("describe", "playbook.pre_run.with")
+        pre_run_state_bindings = self.run_help("describe", "playbook.pre_run.state_bindings")
+        pre_run_contract = self.run_help("describe", "playbook.pre_run_contract")
+
+        self.assertEqual(pre_run.returncode, 0)
+        self.assertIn("Playbook field for declaring one or more playbook-owned workflows that run before the requested published workflow", pre_run.stdout)
+        self.assertIn("playbook.pre_run_contract", pre_run.stdout)
+        self.assertIn("playbook.pre_run(file=.ordo/workflows/bootstrap.yaml", pre_run.stdout)
+
+        self.assertEqual(pre_run_file.returncode, 0)
+        self.assertIn("Pre-run entry field that selects which workflow file executes before the requested workflow.", pre_run_file.stdout)
+        self.assertIn("playbook.workflows.file", pre_run_file.stdout)
+
+        self.assertEqual(pre_run_with.returncode, 0)
+        self.assertIn("Pre-run entry field for static playbook-owned invocation inputs passed only to the pre_run workflow.", pre_run_with.stdout)
+        self.assertIn("command-line.ordo-playbook.flag.input", pre_run_with.stdout)
+        self.assertIn("strict=true", pre_run_with.stdout)
+
+        self.assertEqual(pre_run_state_bindings.returncode, 0)
+        self.assertIn("Pre-run entry field for explicit state-location bindings", pre_run_state_bindings.stdout)
+        self.assertIn("playbook.workflows.state_bindings", pre_run_state_bindings.stdout)
+        self.assertIn("state.workflow_surface.state_binding_field", pre_run_state_bindings.stdout)
+
+        self.assertEqual(pre_run_contract.returncode, 0)
+        self.assertIn("Playbook contract for pre_run entries that execute before the requested workflow", pre_run_contract.stdout)
+        self.assertIn("required fields:", pre_run_contract.stdout)
+        self.assertIn("- file", pre_run_contract.stdout)
+        self.assertIn("optional fields:", pre_run_contract.stdout)
+        self.assertIn("- with", pre_run_contract.stdout)
+        self.assertIn("- state_bindings", pre_run_contract.stdout)
+
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 
