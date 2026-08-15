@@ -140,6 +140,16 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         related_negative_rules=("state_set.single_target_entry",),
     ),
     CapabilitySpec(
+        name="workflow.step.state_delete",
+        status="supported",
+        scope="workflow.step",
+        related_capabilities=("workflow.state_bindings",),
+        related_model_nodes=(
+            "state.workflow_surface.step_state_delete_field",
+            "workflow.step_forms.state_delete",
+        ),
+    ),
+    CapabilitySpec(
         name="workflow.include_fragments",
         status="supported",
         scope="workflow",

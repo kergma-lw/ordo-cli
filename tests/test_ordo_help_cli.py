@@ -639,6 +639,27 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("reason:", single_target.stdout)
         self.assertIn("related codes:", single_target.stdout)
 
+    def test_text_describe_state_delete_group_is_teaching_ready(self) -> None:
+        step_capability = self.run_help("describe", "workflow.step.state_delete")
+        step_form = self.run_help("describe", "workflow.step_forms.state_delete")
+        state_field = self.run_help("describe", "state.workflow_surface.step_state_delete_field")
+
+        self.assertEqual(step_capability.returncode, 0)
+        self.assertIn("Workflow step capability for deleting one explicit bound state target", step_capability.stdout)
+        self.assertIn("use when:", step_capability.stdout)
+        self.assertIn("workflow.step.state_set", step_capability.stdout)
+        self.assertIn("example_for: field_fragment", step_capability.stdout)
+        self.assertIn("example_for: step_fragment", step_capability.stdout)
+
+        self.assertEqual(step_form.returncode, 0)
+        self.assertIn("Workflow step form for one named state-deletion checkpoint", step_form.stdout)
+        self.assertIn("state.workflow_surface.step_state_delete_field", step_form.stdout)
+        self.assertIn("workflow.step_forms.state_set", step_form.stdout)
+
+        self.assertEqual(state_field.returncode, 0)
+        self.assertIn("State workflow-surface field that marks `state_delete` as the explicit step-owned durable deletion surface", state_field.stdout)
+        self.assertIn("workflow.step.state_delete", state_field.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -783,7 +804,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
-        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 7)
+        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 8)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 0)
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")

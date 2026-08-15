@@ -366,6 +366,15 @@
     },
     "state_set.single_target_entry": {
       "describe_readiness": "ready"
+    },
+    "workflow.step.state_delete": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.state_delete": {
+      "describe_readiness": "ready"
+    },
+    "state.workflow_surface.step_state_delete_field": {
+      "describe_readiness": "ready"
     }
   }
 }

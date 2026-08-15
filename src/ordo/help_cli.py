@@ -1466,6 +1466,16 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
                 "Writing state directly without first binding a declared location into the workflow's explicit state contract.",
             ],
         },
+        "workflow.step.state_delete": {
+            "definition": "Workflow step capability for deleting one explicit bound state target as a deliberate durable state mutation.",
+            "use_when": [
+                "The workflow must remove a previously bound durable state value so later steps or later runs no longer see it.",
+            ],
+            "do_not_use_for": [
+                "Local ephemeral data cleanup that should stay in step-local values instead of altering durable state.",
+                "Writing or reshaping durable state; use workflow.step.state_set when the intent is persistence rather than deletion.",
+            ],
+        },
         "workflow.step.state_set": {
             "definition": "Workflow step capability for writing one explicit value into one bound state target as a deliberate durable state mutation.",
             "use_when": [
@@ -1989,6 +1999,37 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "examples.include-plain", "summary": "Verified example that shows a simple include fragment call shape"},
             ],
             "inspect_next": ["workflow.fragment.args", "examples.include-plain", "workflow.include.include"],
+        },
+        "workflow.step_forms.state_delete": {
+            "definition": "Workflow step form for one named state-deletion checkpoint that removes one explicit bound state target.",
+            "use_when": [
+                "A step's primary job is deleting durable state rather than calling an operation or only shaping ephemeral workflow data.",
+            ],
+            "do_not_use_for": [
+                "Bundling deletion with a write or other unrelated step behavior; the public state_delete form exists for explicit durable removal.",
+                "Purely local value cleanup that should not affect declared durable state storage.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.state_delete", "summary": "Field that carries the bound state target to delete"},
+                {"handle": "state.workflow_surface.step_state_delete_field", "summary": "State contract surface for what the state_delete field means inside a workflow step"},
+                {"handle": "workflow.step_forms.state_set", "summary": "Sibling state mutation form for explicit durable writes instead of deletion"},
+            ],
+            "inspect_next": ["workflow.step.state_delete", "state.workflow_surface.step_state_delete_field", "workflow.step_forms.state_set"],
+        },
+        "state.workflow_surface.step_state_delete_field": {
+            "definition": "State workflow-surface field that marks `state_delete` as the explicit step-owned durable deletion surface inside workflow authoring.",
+            "use_when": [
+                "You need the contract meaning of the state_delete step field rather than only an example of removing state.",
+            ],
+            "do_not_use_for": [
+                "Assuming durable state can be removed implicitly without the workflow's surrounding state-binding contract.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.state_delete", "summary": "Step capability for deleting one explicit bound state target"},
+                {"handle": "workflow.step_forms.state_delete", "summary": "Named step form that requires state_delete as its primary field"},
+                {"handle": "workflow.step.state_set", "summary": "Sibling durable state mutation capability for explicit writes instead of deletion"},
+            ],
+            "inspect_next": ["workflow.step.state_delete", "workflow.step_forms.state_delete", "workflow.step.state_set"],
         },
         "workflow.step_forms.state_set": {
             "definition": "Workflow step form for one named state-write checkpoint that stores one explicit value into one bound state target.",

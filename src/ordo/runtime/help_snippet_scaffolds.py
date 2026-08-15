@@ -25,7 +25,7 @@ EXPRESSION_VALUE_CONTRACT = SnippetInsertionContract(
 
 STEP_FIELD_CONTRACT = SnippetInsertionContract(
     mode="step_field",
-    supported_targets=("workflow.step.if", "workflow.step.state_set", "workflow.step.profile_switch", "workflow.step_forms.profile_switch"),
+    supported_targets=("workflow.step.if", "workflow.step.state_set", "workflow.step.state_delete", "workflow.step.profile_switch", "workflow.step_forms.profile_switch"),
     workflow_surface="step-local field host inside a standard workflow scaffold",
     summary="Place one step-field snippet into one explicit step shell without moving placement rules into snippet worlds.",
 )
@@ -33,7 +33,7 @@ STEP_FIELD_CONTRACT = SnippetInsertionContract(
 
 STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="step_fragment",
-    supported_targets=("workflow.step.if", "workflow.step.state_set", "workflow.step.profile_switch", "workflow.step_forms.profile_switch", "routine"),
+    supported_targets=("workflow.step.if", "workflow.step.state_set", "workflow.step.state_delete", "workflow.step.profile_switch", "workflow.step_forms.profile_switch", "routine"),
     workflow_surface="steps list inside a standard workflow scaffold",
     summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
 )
@@ -134,6 +134,21 @@ blocks:
 workflow: snippet-state-set
 state_needs:
   shared_state: {{}}
+  task_memory: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    {snippet.replace(chr(10), chr(10) + '    ')}
+"""
+    if target == "workflow.step.state_delete":
+        return f"""version: 0
+workflow: snippet-state-delete
+inputs:
+  issue_ref: {{}}
+state_needs:
+  shared_state: {{}}
+  task_memory: {{}}
 blocks:
 - guards: []
 - steps:
@@ -176,6 +191,21 @@ blocks:
 workflow: snippet-step-fragment
 state_needs:
   shared_state: {{}}
+  task_memory: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
+    if target == "workflow.step.state_delete":
+        indented = snippet.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-step-fragment-state-delete
+inputs:
+  issue_ref: {{}}
+state_needs:
+  shared_state: {{}}
+  task_memory: {{}}
 blocks:
 - guards: []
 - steps:

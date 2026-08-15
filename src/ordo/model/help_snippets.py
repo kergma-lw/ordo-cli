@@ -231,6 +231,53 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step.state_delete": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "state_delete_fixed_shared_state_key",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Delete one fixed shared-state key directly with a literal key selector.",
+                "yaml": 'state_delete: state.shared_state["active_profile"]',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.state_delete",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "state_delete_dynamic_task_memory_field",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Delete one state field under a task-memory key that comes from inputs.",
+                "yaml": 'state_delete: state.task_memory[inputs.issue_ref].branch',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.state_delete",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "state_delete_step_fragment_forgets_branch",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete step fragment that deletes a remembered task-memory branch value.",
+                "yaml": '- name: forget-branch\n  state_delete: state.task_memory[inputs.issue_ref].branch',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.state_delete",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
     "workflow.local_expression.filter.lookup": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
