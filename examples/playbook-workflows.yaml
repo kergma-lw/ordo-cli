@@ -1,0 +1,21 @@
+version: 1
+defaults:
+  profile: review
+states:
+  shared_state:
+    path: .ordo/example-state.json
+workflows:
+  remember-profile:
+    file: ./playbook-workflow-target.yaml
+    description: Read one remembered profile from shared state
+    category: inspect
+    when: Use when you need one state-backed profile lookup before choosing the next workflow.
+    with:
+      active_profile_key: active_profile
+      repo_dir: .
+    working_directory: ${inputs.repo_dir}
+    state_bindings:
+      shared_state: shared_state
+profiles:
+  review:
+    file: ../profiles/read-only-review.yaml

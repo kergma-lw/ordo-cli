@@ -120,6 +120,182 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "playbook.workflows": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_catalog_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Publish one named workflow entry with launch metadata, operator guidance, and explicit state bindings in the playbook catalog.",
+                "yaml": 'workflows:\n  remember-profile:\n    file: ./playbook-workflow-target.yaml\n    description: Read one remembered profile from shared state\n    category: inspect\n    when: Use when you need one state-backed profile lookup before choosing the next workflow.\n    with:\n      active_profile_key: active_profile\n      repo_dir: .\n    working_directory: ${inputs.repo_dir}\n    state_bindings:\n      shared_state: shared_state',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 7,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
+    "playbook.workflows.file": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_file_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Bind one published workflow name to the workflow file that the playbook should load for that entry.",
+                "yaml": 'file: ./playbook-workflow-target.yaml',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 9,
+                    "end_line": 9
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
+    "playbook.workflows.with": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_with_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Provide entry-owned launch inputs for one published workflow, including values that feed the workflow and the entry working-directory expression.",
+                "yaml": 'with:\n  active_profile_key: active_profile\n  repo_dir: .',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 13,
+                    "end_line": 15
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
+    "playbook.workflows.description": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_description_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Publish one short summary that tells operators what this workflow entry does.",
+                "yaml": 'description: Read one remembered profile from shared state',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 10,
+                    "end_line": 10
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
+    "playbook.workflows.category": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_category_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Group one published workflow under a lightweight catalog family label.",
+                "yaml": 'category: inspect',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 11,
+                    "end_line": 11
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
+    "playbook.workflows.when": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_when_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Teach operators when this published workflow is the right entry to run.",
+                "yaml": 'when: Use when you need one state-backed profile lookup before choosing the next workflow.',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 12,
+                    "end_line": 12
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
+    "playbook.workflows.working_directory": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_working_directory_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Override one workflow entry's execution directory through an activation-input expression resolved before the workflow starts.",
+                "yaml": 'working_directory: ${inputs.repo_dir}',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 16,
+                    "end_line": 16
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
+    "playbook.workflows.state_bindings": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_workflows_state_bindings_entry",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Bind the workflow entry's declared shared_state role to the named playbook state location.",
+                "yaml": 'state_bindings:\n  shared_state: shared_state',
+                "source_example": "examples.playbook-workflows",
+                "source_excerpt": {
+                    "path": "examples/playbook-workflows.yaml",
+                    "start_line": 17,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-workflows"
+                },
+            }
+        ],
+    },
     "workflow.state_needs": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [

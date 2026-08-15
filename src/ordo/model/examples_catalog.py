@@ -54,6 +54,12 @@ EXAMPLES_CATALOG: JSONObject = {
             "related_topics": ["capabilities", "model", "examples"],
         },
         {
+            "name": "playbook-workflows",
+            "path": "examples/playbook-workflows.yaml",
+            "shows": ["playbook_workflow_catalog", "workflow_entry_guidance", "entry_state_bindings"],
+            "related_topics": ["features", "model", "examples"],
+        },
+        {
             "name": "playbook-pre-run",
             "path": "examples/playbook-pre-run.yaml",
             "shows": ["playbook_pre_run", "runtime_profile_switch", "shared_preparation_stage"],

@@ -104,6 +104,21 @@
       "verified": true
     },
     {
+      "name": "playbook-workflows",
+      "path": "examples/playbook-workflows.yaml",
+      "related_topics": [
+        "features",
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "playbook_workflow_catalog",
+        "workflow_entry_guidance",
+        "entry_state_bindings"
+      ],
+      "verified": true
+    },
+    {
       "name": "playbook-pre-run",
       "path": "examples/playbook-pre-run.yaml",
       "related_topics": [

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from ordo.introspection import describe_examples_catalog
 from ordo.model.runtime import OperationResult, RuntimeStatus
+from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, explain_workflow, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -91,6 +92,21 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(result.outputs["executed_steps"], ["compute-membership", "announce"])
         self.assertEqual(result.operation_results[0].outputs.get("value"), True)
         self.assertEqual(result.operation_results[1].outputs.get("stdout"), "example-task")
+
+    def test_playbook_workflows_example_is_published_and_activates(self) -> None:
+        catalog = describe_examples_catalog()
+
+        self.assertTrue(any(item["name"] == "playbook-workflows" for item in catalog["examples"]))
+
+        activated = activate_playbook(
+            workflow_name="remember-profile",
+            playbook_path=Path("examples/playbook-workflows.yaml"),
+        )
+
+        self.assertEqual(activated.workflow_name, "remember-profile")
+        self.assertEqual(activated.workflow_description, "Read one remembered profile from shared state")
+        self.assertEqual(activated.working_directory, Path("examples").resolve())
+        self.assertIsNotNone(activated.profile)
 
     def test_inspect_pr_example_is_published_and_executes_end_to_end(self) -> None:
         catalog = describe_examples_catalog()

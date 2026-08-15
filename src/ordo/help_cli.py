@@ -678,7 +678,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         ],
         "inspect_next": ["command-line.ordo-playbook", "playbook.workflows.file", "playbook.workflows.with", "playbook.pre_run_contract", "playbook.defaults.profile"],
         "related_rules": ["paired_authoring_passes"],
-        "related_examples": ["examples.playbook-pre-run"],
+        "related_examples": ["examples.playbook-workflows", "examples.playbook-pre-run"],
         "published_names_kind": "playbook",
     },
     {
@@ -2465,6 +2465,164 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"reference": "playbook.defaults.working_directory", "inputs": {"working_directory": "${inputs.repo_dir}"}},
             ],
             "inspect_next": ["playbook.workflows.working_directory", "profile.working_directory", "playbook.defaults"],
+        },
+        "playbook.workflows": {
+            "definition": "Playbook field for publishing the named workflow catalog that `ordo-playbook` can list, inspect, and activate by workflow name.",
+            "use_when": [
+                "The project needs one stable launch catalog that maps public workflow names to workflow files plus entry-owned launch metadata.",
+                "Each published workflow should carry operator-facing discovery hints such as description, category, when, working_directory, with, or state_bindings at the playbook layer.",
+            ],
+            "do_not_use_for": [
+                "Workflow-internal guards, steps, branching, or dataflow; those belong inside the workflow file selected by the entry.",
+                "Bootstrap workflows that must always run before the requested workflow; use playbook.pre_run for that separate launch stage.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "command-line.ordo-playbook", "summary": "Public command surface that lists and launches one named playbook workflow entry"},
+                {"handle": "playbook.pre_run", "summary": "Sibling playbook surface for shared launch-time preparation before the requested workflow entry"},
+                {"handle": "playbook.workflows.file", "summary": "Required child field that binds each published workflow name to one workflow file"},
+            ],
+            "required_fields": ["file"],
+            "optional_fields": ["with", "description", "category", "when", "working_directory", "state_bindings"],
+            "related_examples": [
+                {"reference": "examples.playbook-workflows", "inputs": {}},
+                {"reference": "playbook.workflows", "inputs": {"remember-profile": {"file": "./playbook-workflow-target.yaml", "description": "Read one remembered profile from shared state", "category": "inspect", "when": "Use when you need one state-backed profile lookup before choosing the next workflow.", "with": {"active_profile_key": "active_profile", "repo_dir": "."}, "working_directory": "${inputs.repo_dir}", "state_bindings": {"shared_state": "shared_state"}}}},
+            ],
+            "inspect_next": ["command-line.ordo-playbook", "playbook.workflows.file", "playbook.workflows.with", "playbook.workflows.when"],
+        },
+        "playbook.workflows.file": {
+            "definition": "Workflow-entry field that points one published playbook workflow name at the workflow file to load when that entry is selected.",
+            "use_when": [
+                "A named playbook workflow entry should resolve to one concrete workflow document at activation time.",
+            ],
+            "do_not_use_for": [
+                "Selecting the active workflow at the command line; callers choose the workflow name through ordo-playbook commands, not by editing this field per run.",
+                "Profile file selection or pre_run workflow selection; use playbook.profiles.file or playbook.pre_run.file for those sibling catalogs.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.workflows", "summary": "Parent catalog that publishes named workflow entries"},
+                {"handle": "playbook.pre_run.file", "summary": "Sibling field for the bootstrap workflow that runs before the requested entry"},
+                {"handle": "playbook.profiles.file", "summary": "Sibling field that points at a profile file instead of a workflow file"},
+            ],
+            "related_examples": [
+                {"reference": "playbook.workflows.file", "inputs": {"file": "./playbook-workflow-target.yaml"}},
+            ],
+            "inspect_next": ["playbook.workflows.with", "playbook.pre_run.file", "playbook.profiles.file"],
+        },
+        "playbook.workflows.with": {
+            "definition": "Workflow-entry field for playbook-owned launch inputs that feed one published workflow entry before any one-run caller overrides are applied.",
+            "use_when": [
+                "One published workflow should always receive fixed entry-owned input values, or should explicitly mark some keys as caller-required through null placeholders.",
+                "The values belong to the launch catalog entry rather than to the reusable workflow contract or to one operator invocation only.",
+            ],
+            "do_not_use_for": [
+                "Declaring which inputs exist at all; use workflow.inputs for the workflow's activation contract.",
+                "Per-run operator overrides; use command-line.ordo-playbook.flag.input or command-line.ordo-playbook.flag.input_file when the caller should supply the value at launch time.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.inputs", "summary": "Workflow-owned declaration of which activation inputs are valid"},
+                {"handle": "playbook.pre_run.with", "summary": "Sibling input surface for playbook-owned pre_run setup rather than for the requested workflow entry"},
+                {"handle": "command-line.ordo-playbook.flag.input", "summary": "One-run caller override that can replace entry-owned input values"},
+            ],
+            "related_examples": [
+                {"reference": "playbook.workflows.with", "inputs": {"active_profile_key": "active_profile", "repo_dir": "."}},
+            ],
+            "inspect_next": ["workflow.inputs", "playbook.pre_run.with", "command-line.ordo-playbook.flag.input"],
+        },
+        "playbook.workflows.description": {
+            "definition": "Workflow-entry field for the short human-facing summary that explains what one published workflow does in the catalog listing.",
+            "use_when": [
+                "Operators need a quick one-line explanation before deciding whether this published workflow entry is the right launch choice.",
+            ],
+            "do_not_use_for": [
+                "Step-by-step operator guidance or applicability advice; use playbook.workflows.when when the user also needs selection guidance.",
+                "Replacing the actual workflow contract or launch metadata with prose alone.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.workflows.when", "summary": "Sibling field for operator-facing selection guidance rather than a short summary"},
+                {"handle": "playbook.workflows.category", "summary": "Sibling field for grouping entries in catalog output"},
+                {"handle": "playbook.workflows", "summary": "Parent catalog surface that publishes the named workflow entry"},
+            ],
+            "related_examples": [
+                {"reference": "playbook.workflows.description", "inputs": {"description": "Read one remembered profile from shared state"}},
+            ],
+            "inspect_next": ["playbook.workflows.when", "playbook.workflows.category", "command-line.ordo-playbook"],
+        },
+        "playbook.workflows.category": {
+            "definition": "Workflow-entry field for the lightweight catalog group label that helps cluster related published workflows in discovery output.",
+            "use_when": [
+                "Several published workflows belong to the same operator-facing family such as inspect, lifecycle, or collaboration, and the catalog should show that grouping explicitly.",
+            ],
+            "do_not_use_for": [
+                "Encoding workflow applicability, permissions, or step behavior; category is discovery metadata only and has no runtime effect.",
+                "Replacing the entry summary or selection guidance; pair category with description and when when the grouping label alone would be too vague.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.workflows.description", "summary": "Sibling field that explains what the entry does in one short sentence"},
+                {"handle": "playbook.workflows.when", "summary": "Sibling field that explains when an operator should choose this entry"},
+                {"handle": "playbook.workflows", "summary": "Parent workflow catalog that publishes grouped entries"},
+            ],
+            "related_examples": [
+                {"reference": "playbook.workflows.category", "inputs": {"category": "inspect"}},
+            ],
+            "inspect_next": ["playbook.workflows.description", "playbook.workflows.when", "command-line.ordo-playbook"],
+        },
+        "playbook.workflows.when": {
+            "definition": "Workflow-entry field for the operator-facing selection hint that explains when this published workflow is the right one to run.",
+            "use_when": [
+                "A short summary is not enough and the catalog should also teach the decision context for choosing this workflow entry.",
+            ],
+            "do_not_use_for": [
+                "Workflow guards or machine-enforced applicability; when is guidance for humans, not a runtime rule surface.",
+                "Category-style grouping labels or terse one-line summaries; keep those in category and description.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.workflows.description", "summary": "Sibling summary field for what the entry does"},
+                {"handle": "playbook.workflows.category", "summary": "Sibling grouping label for the catalog family"},
+                {"handle": "command-line.ordo-playbook", "summary": "Command surface that presents the workflow catalog to operators"},
+            ],
+            "related_examples": [
+                {"reference": "playbook.workflows.when", "inputs": {"when": "Use when you need one state-backed profile lookup before choosing the next workflow."}},
+            ],
+            "inspect_next": ["playbook.workflows.description", "command-line.ordo-playbook", "workflow-authoring.early_guards"],
+        },
+        "playbook.workflows.working_directory": {
+            "definition": "Workflow-entry field for overriding the execution working directory of one published workflow entry before the workflow starts running.",
+            "use_when": [
+                "One published workflow should resolve relative files from a narrower directory than the playbook-wide or profile-wide default.",
+                "The chosen directory depends only on activation inputs and should be computed before any workflow steps execute.",
+            ],
+            "do_not_use_for": [
+                "Step-local directory changes after the workflow has already started; keep that behavior in a narrower execution surface instead of the playbook entry.",
+                "Reading step outputs or state to decide the directory; this launch-time field only allows activation-input expressions.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.defaults.working_directory", "summary": "Playbook-wide soft default directory when no entry override is needed"},
+                {"handle": "profile.working_directory", "summary": "Reusable profile-owned execution directory context"},
+                {"handle": "playbook.workflows.with", "summary": "Sibling entry-owned launch inputs that may supply activation values referenced by the directory expression"},
+            ],
+            "related_examples": [
+                {"reference": "playbook.workflows.working_directory", "inputs": {"working_directory": "${inputs.repo_dir}"}},
+            ],
+            "inspect_next": ["playbook.defaults.working_directory", "profile.working_directory", "playbook.workflows.with"],
+        },
+        "playbook.workflows.state_bindings": {
+            "definition": "Workflow-entry field for binding the requested workflow's declared state roles to named playbook state locations at launch time.",
+            "use_when": [
+                "One published workflow needs explicit durable state access and that binding should be owned by the catalog entry rather than repeated by the caller.",
+            ],
+            "do_not_use_for": [
+                "Declaring which state roles the workflow itself needs; use workflow.state_needs for that workflow contract.",
+                "Binding state only for bootstrap preparation; use playbook.pre_run.state_bindings when the binding belongs to pre_run instead of the requested workflow entry.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.state_bindings", "summary": "Workflow capability surface for what one state-role binding means inside authored workflow source"},
+                {"handle": "playbook.pre_run.state_bindings", "summary": "Sibling binding surface scoped only to pre_run setup"},
+                {"handle": "playbook.states", "summary": "Catalog of declared state locations that entry bindings may target by name"},
+            ],
+            "related_examples": [
+                {"reference": "playbook.workflows.state_bindings", "inputs": {"shared_state": "shared_state"}},
+            ],
+            "inspect_next": ["workflow.state_bindings", "playbook.pre_run.state_bindings", "playbook.states"],
         },
         "playbook.pre_run": {
             "definition": "Playbook field for declaring one or more playbook-owned workflows that run before the requested published workflow in the same runtime session.",

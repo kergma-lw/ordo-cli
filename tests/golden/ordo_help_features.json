@@ -87,6 +87,12 @@
       },
       "related_examples": [
         {
+          "command": "ordo-help describe examples.playbook-workflows --json",
+          "handle": "examples.playbook-workflows",
+          "name": "playbook-workflows",
+          "summary": "Verified example at examples/playbook-workflows.yaml"
+        },
+        {
           "command": "ordo-help describe examples.playbook-pre-run --json",
           "handle": "examples.playbook-pre-run",
           "name": "playbook-pre-run",

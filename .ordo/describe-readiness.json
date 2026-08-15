@@ -88,6 +88,30 @@
     "playbook.pre_run_contract": {
       "describe_readiness": "ready"
     },
+    "playbook.workflows": {
+      "describe_readiness": "ready"
+    },
+    "playbook.workflows.file": {
+      "describe_readiness": "ready"
+    },
+    "playbook.workflows.with": {
+      "describe_readiness": "ready"
+    },
+    "playbook.workflows.description": {
+      "describe_readiness": "ready"
+    },
+    "playbook.workflows.category": {
+      "describe_readiness": "ready"
+    },
+    "playbook.workflows.when": {
+      "describe_readiness": "ready"
+    },
+    "playbook.workflows.working_directory": {
+      "describe_readiness": "ready"
+    },
+    "playbook.workflows.state_bindings": {
+      "describe_readiness": "ready"
+    },
     "playbook.profiles": {
       "describe_readiness": "ready"
     },

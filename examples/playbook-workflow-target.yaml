@@ -1,0 +1,13 @@
+version: 0
+workflow: remember-profile
+inputs:
+  active_profile_key: {}
+  repo_dir: {}
+state_needs:
+  shared_state: {}
+let:
+  active_profile: state.shared_state[inputs.active_profile_key]
+blocks:
+  - steps:
+      - name: announce
+        value: active_profile
