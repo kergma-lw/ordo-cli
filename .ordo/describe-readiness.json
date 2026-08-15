@@ -87,6 +87,12 @@
     },
     "playbook.pre_run_contract": {
       "describe_readiness": "ready"
+    },
+    "playbook.profiles": {
+      "describe_readiness": "ready"
+    },
+    "playbook.profiles.file": {
+      "describe_readiness": "ready"
     }
   }
 }

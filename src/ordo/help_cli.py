@@ -1872,6 +1872,44 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["playbook.workflows.state_bindings", "state.workflow_surface.state_binding_field", "playbook.pre_run_contract"],
         },
+        "playbook.profiles": {
+            "definition": "Playbook field for declaring the reusable named profiles that this playbook may activate by default, by entry policy, or by caller override.",
+            "use_when": [
+                "The project needs a playbook-local catalog of named execution contexts instead of hard-coding one profile inside each workflow body.",
+            ],
+            "do_not_use_for": [
+                "Choosing which profile wins for one invocation; use defaults, workflow entry policy, or command-line selection for that decision.",
+                "Encoding one workflow-owned fixed profile contract; use workflow.profile when the workflow itself must bind one profile before guards run.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.profiles.file", "summary": "Child field for loading one declared profile from a separate file"},
+                {"handle": "playbook.defaults.profile", "summary": "Soft default active profile choice drawn from the profiles catalog"},
+                {"handle": "workflow.profile", "summary": "Workflow-owned fixed binding rather than a reusable playbook profile declaration"},
+            ],
+            "examples": [
+                {"reference": "playbook.profiles", "inputs": {"backend": {"file": "backend.yml"}, "review": {"file": "review.yml"}}},
+            ],
+            "inspect_next": ["playbook.profiles.file", "playbook.defaults.profile", "profile"],
+        },
+        "playbook.profiles.file": {
+            "definition": "Playbook profile-entry field that points one declared profile name at the profile file to load for that catalog entry.",
+            "use_when": [
+                "A named playbook profile should load its reusable runtime context from a separate profile document.",
+            ],
+            "do_not_use_for": [
+                "Selecting the active profile for the current run; use playbook defaults or caller/entry selection surfaces for that choice.",
+                "Pointing at a workflow file; use playbook.workflows.file or playbook.pre_run.file for workflow launch surfaces.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.profiles", "summary": "Parent playbook profile catalog surface"},
+                {"handle": "profile.name", "summary": "Profile-owned internal name field inside the loaded profile document"},
+                {"handle": "playbook.workflows.file", "summary": "Sibling field that selects a workflow file rather than a profile file"},
+            ],
+            "examples": [
+                {"reference": "playbook.profiles.file", "inputs": {"file": "backend.yml"}},
+            ],
+            "inspect_next": ["profile.name", "playbook.defaults.profile", "playbook.workflows.file"],
+        },
         "profile.connectors": {
             "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
             "use_when": [

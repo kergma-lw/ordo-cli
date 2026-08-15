@@ -738,6 +738,22 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("- with", pre_run_contract.stdout)
         self.assertIn("- state_bindings", pre_run_contract.stdout)
 
+    def test_text_describe_playbook_profiles_group_is_teaching_ready(self) -> None:
+        profiles = self.run_help("describe", "playbook.profiles")
+        profile_file = self.run_help("describe", "playbook.profiles.file")
+
+        self.assertEqual(profiles.returncode, 0)
+        self.assertIn("Playbook field for declaring the reusable named profiles", profiles.stdout)
+        self.assertIn("playbook.defaults.profile", profiles.stdout)
+        self.assertIn("workflow.profile", profiles.stdout)
+        self.assertIn("playbook.profiles(backend={\"file\": \"backend.yml\"}, review={\"file\": \"review.yml\"})", profiles.stdout)
+
+        self.assertEqual(profile_file.returncode, 0)
+        self.assertIn("Playbook profile-entry field that points one declared profile name at the profile file to load for that catalog entry.", profile_file.stdout)
+        self.assertIn("profile.name", profile_file.stdout)
+        self.assertIn("playbook.workflows.file", profile_file.stdout)
+        self.assertIn("playbook.profiles.file(file=backend.yml)", profile_file.stdout)
+
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 
