@@ -13,6 +13,7 @@ SUPPORTED_SNIPPET_FORMS = {
     "field_fragment",
     "step_fragment",
     "workflow_fragment",
+    "routine_bundle",
 }
 
 SUPPORTED_SNIPPET_VERIFICATION_KINDS = {
@@ -26,6 +27,7 @@ SUPPORTED_SNIPPET_INSERTION_MODES = {
     "step_field",
     "step_fragment",
     "workflow_fragment",
+    "routine_bundle",
 }
 
 
@@ -191,6 +193,105 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                     "world": "default",
                     "insertion_mode": "expression_value",
                     "target": "workflow.local_expression.filter.lookup",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
+    "local-expressions": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "local_expression_boolean_pipeline",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Use one short local-expression pipeline for a workflow-owned boolean decision.",
+                "yaml": 'inputs.status | lower | eq("ready")',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "expression_value",
+                    "target": "local-expressions",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
+    "adapters": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "adapter_markdown_section_projection",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Project one markdown section through the published adapter surface instead of hand-rolled parsing.",
+                "yaml": 'inputs.body | markdown["Tasks"]',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "expression_value",
+                    "target": "adapters",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
+    "routine": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "routine_step_fragment_with_args",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Call one project-local routine step with explicit business arguments.",
+                "yaml": '- name: run-routine\n  uses: routine.demo.echo\n  with:\n    args:\n      target: inputs.target',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "routine",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "routine_step_fragment_with_env_forwarding",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Forward a short explicit list of scalar workflow references into one routine call.",
+                "yaml": '- name: collect\n  value:\n    path: "/tmp/demo.txt"\n  register: collect\n- name: run-routine\n  uses: routine.demo.echo\n  with:\n    args:\n      target: inputs.target\n    env:\n      - inputs.repository\n      - step.collect.outputs.value.path',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "routine",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "routine_step_fragment_with_register",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Register one routine call so later steps can read its structured outputs explicitly.",
+                "yaml": '- name: run-routine\n  uses: routine.demo.echo\n  with:\n    args:\n      target: inputs.target\n  register: routine_result',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "routine",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "routine_bundle_registry_and_implementation",
+                "kind": "positive",
+                "form": "routine_bundle",
+                "summary": "Publish one honest routine bundle with registry entry, implementation script, and sample execution contract.",
+                "yaml": 'routine_id: demo.echo\nregistry_entry:\n  kind: action\n  summary: Echo one target string through a local helper.\n  args:\n    target:\n      type: string\n      required: true\n  implementation:\n    argv:\n      - .ordo/scripts/echo_target.py\n      - "{target}"\n  outputs:\n    mode: data\n    format: json\n  failure_modes:\n    - runtime_unavailable\nimplementation_path: .ordo/scripts/echo_target.py\nimplementation_text: |\n  #!/usr/bin/env python3\n  import json\n  import sys\n\n  print(json.dumps({"target": sys.argv[1]}))\nsample_args:\n  target: demo-target\nexpected_stdout_json:\n  target: demo-target',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "routine_bundle",
+                    "target": "routine",
                     "expected_status": "ok",
                 },
             }

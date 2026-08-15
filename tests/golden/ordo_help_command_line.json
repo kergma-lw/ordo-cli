@@ -16,6 +16,7 @@
                 ],
                 "rule": "When authoring or modifying workflows, run both check and review. Neither replaces the other."
             },
+            "definition": "Public launch command for discovering playbook workflows and running one named workflow in a selected runtime mode.",
             "discovery_commands": [
                 {
                     "name": "workflows list",
@@ -25,6 +26,11 @@
                     "name": "workflows show <workflow>",
                     "summary": "show one workflow entry with file metadata, playbook-owned invocation inputs, and root-declared inputs"
                 }
+            ],
+            "do_not_use_for": [
+                "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-authoring discovery surfaces.",
+                "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
+                "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure."
             ],
             "examples": [
                 "ordo-playbook workflows list",
@@ -82,6 +88,13 @@
                 "unknown activation inputs are rejected=true",
                 "when both --input and --input-file set the same key, --input-file wins"
             ],
+            "inspect_next": [
+                "command-line.ordo-playbook.flag.profile",
+                "command-line.ordo-playbook.flag.input",
+                "command-line.ordo-playbook.flag.input_file",
+                "playbook.workflows.file",
+                "workflow-authoring.paired_authoring_passes"
+            ],
             "modes": [
                 {
                     "name": "review <workflow>",
@@ -109,6 +122,20 @@
                 }
             ],
             "name": "ordo-playbook",
+            "nearest_surfaces": [
+                {
+                    "handle": "command-line",
+                    "summary": "Top-level catalog of public launch commands and stable flags"
+                },
+                {
+                    "handle": "playbook.workflows.file",
+                    "summary": "Playbook workflow-entry field that binds one published workflow name to one workflow file"
+                },
+                {
+                    "handle": "workflow-authoring.paired_authoring_passes",
+                    "summary": "Why check and review are complementary authoring passes rather than substitutes"
+                }
+            ],
             "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
             "run_failure_surface": {
                 "external_payload_fields": [
@@ -123,7 +150,12 @@
                 "rule": "When a run failure has normalized external context, the public failure payload should identify that external cause instead of surfacing only a generic wrapper message."
             },
             "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
-            "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
+            "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>",
+            "use_when": [
+                "You need to discover which named workflows the current playbook publishes before choosing one.",
+                "You need to run one workflow through check, review, plan, explain, run, or next.",
+                "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook."
+            ]
         }
     ],
     "document_kind": "command_line"

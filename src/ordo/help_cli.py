@@ -1313,7 +1313,32 @@ def build_command_line_response() -> JSONObject:
         "commands": [
             {
                 "name": "ordo-playbook",
+                "definition": "Public launch command for discovering playbook workflows and running one named workflow in a selected runtime mode.",
                 "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
+                "use_when": [
+                    "You need to discover which named workflows the current playbook publishes before choosing one.",
+                    "You need to run one workflow through check, review, plan, explain, run, or next.",
+                    "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
+                ],
+                "do_not_use_for": [
+                    "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-authoring discovery surfaces.",
+                    "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
+                    "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure.",
+                ],
+                "nearest_surfaces": [
+                    {
+                        "handle": "command-line",
+                        "summary": "Top-level catalog of public launch commands and stable flags",
+                    },
+                    {
+                        "handle": "playbook.workflows.file",
+                        "summary": "Playbook workflow-entry field that binds one published workflow name to one workflow file",
+                    },
+                    {
+                        "handle": "workflow-authoring.paired_authoring_passes",
+                        "summary": "Why check and review are complementary authoring passes rather than substitutes",
+                    },
+                ],
                 "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>",
                 "discovery_commands": [
                     {"name": "workflows list", "summary": "list declared playbook workflows with project-local descriptions"},
@@ -1373,6 +1398,13 @@ def build_command_line_response() -> JSONObject:
                     "ordo-playbook --profile review plan inspect-issue",
                     "ordo-playbook --input enabled=true plan inspect-issue",
                     "ordo-playbook --input-file body=./prompt.md plan inspect-issue",
+                ],
+                "inspect_next": [
+                    "command-line.ordo-playbook.flag.profile",
+                    "command-line.ordo-playbook.flag.input",
+                    "command-line.ordo-playbook.flag.input_file",
+                    "playbook.workflows.file",
+                    "workflow-authoring.paired_authoring_passes",
                 ],
             }
         ],
@@ -1806,12 +1838,50 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
         }
         for flag in command.get("flags", []):
             normalized = flag["name"].lstrip("-").replace("-", "_")
+            flag_metadata = dict(flag)
+            flag_metadata.setdefault(
+                "definition",
+                f"Stable launch flag for {command_name} that changes one invocation property without editing workflow or playbook source.",
+            )
+            flag_metadata.setdefault(
+                "use_when",
+                [
+                    f"You need a one-run override for {command_name} instead of changing project-local source files.",
+                ],
+            )
+            flag_metadata.setdefault(
+                "do_not_use_for",
+                [
+                    "Encoding durable workflow semantics that should be declared in playbook or workflow source.",
+                ],
+            )
+            flag_metadata.setdefault(
+                "nearest_surfaces",
+                [
+                    {
+                        "handle": f"command-line.{command_name}",
+                        "summary": f"Parent command surface for {command_name}",
+                    }
+                ],
+            )
+            flag_metadata.setdefault(
+                "examples",
+                [
+                    example
+                    for example in command.get("examples", [])
+                    if isinstance(example, str) and flag["name"] in example
+                ],
+            )
+            flag_metadata.setdefault(
+                "inspect_next",
+                [f"command-line.{command_name}", "command-line"],
+            )
             lookup[f"command-line.{command_name}.flag.{normalized}"] = {
                 "document_kind": "command_line_node",
                 "node_kind": "flag",
                 "name": f"command-line.{command_name}.flag.{normalized}",
                 "summary": "Published command-line flag metadata",
-                "metadata": flag,
+                "metadata": flag_metadata,
                 "snippet_coverage": "none",
                 "canonical_examples": [],
             }
@@ -2585,7 +2655,101 @@ def render_model_node_text(payload: JSONObject) -> str:
 def render_command_line_node_text(payload: JSONObject) -> str:
     """Return the text command-line-node surface."""
 
-    return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
+    lines = [payload["name"]]
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        lines.extend([payload["summary"], "", f"node kind: {payload['node_kind']}"])
+        return "\n".join(lines)
+
+    definition = metadata.get("definition") or payload["summary"]
+    lines.extend([
+        str(definition),
+        "",
+        f"node kind: {payload['node_kind']}",
+        f"snippet coverage: {payload.get('snippet_coverage', 'none')}",
+    ])
+
+    use_when = metadata.get("use_when", [])
+    if isinstance(use_when, list) and use_when:
+        lines.extend(["", "use when:"])
+        lines.extend(f"- {item}" for item in use_when)
+
+    do_not_use_for = metadata.get("do_not_use_for", [])
+    if isinstance(do_not_use_for, list) and do_not_use_for:
+        lines.extend(["", "do not use for:"])
+        lines.extend(f"- {item}" for item in do_not_use_for)
+
+    nearest_surfaces = metadata.get("nearest_surfaces", [])
+    if isinstance(nearest_surfaces, list) and nearest_surfaces:
+        lines.extend(["", "nearest surfaces:"])
+        for item in nearest_surfaces:
+            if isinstance(item, dict):
+                lines.append(f"- {item['handle']}: {item['summary']}")
+
+    usage = metadata.get("usage")
+    if isinstance(usage, str) and usage:
+        lines.extend(["", f"usage: {usage}"])
+
+    discovery_commands = metadata.get("discovery_commands", [])
+    if isinstance(discovery_commands, list) and discovery_commands:
+        lines.extend(["", "start with:"])
+        for item in discovery_commands:
+            if isinstance(item, dict):
+                lines.append(f"- {item['name']}: {item['summary']}")
+
+    modes = metadata.get("modes", [])
+    if isinstance(modes, list) and modes:
+        lines.extend(["", "runtime modes:"])
+        for item in modes:
+            if isinstance(item, dict):
+                mode_name = item.get("name")
+                summary = item.get("summary")
+                lines.append(f"- {mode_name}: {summary}")
+
+    authoring_passes = metadata.get("authoring_passes")
+    if isinstance(authoring_passes, dict):
+        lines.extend(["", "workflow authoring passes:", f"- rule: {authoring_passes['rule']}"])
+        for item in authoring_passes.get("passes", []):
+            if isinstance(item, dict):
+                lines.append(f"- {item['mode']}: {item['purpose']} ({item['question']})")
+
+    flags = metadata.get("flags", [])
+    if isinstance(flags, list) and flags:
+        lines.extend(["", "stable flags:"])
+        for flag in flags:
+            if isinstance(flag, dict):
+                suffix = f" {flag.get('value_shape', '')}".rstrip()
+                repeatable = " (repeatable)" if flag.get("repeatable") else ""
+                lines.append(f"- {flag['name']}{suffix}{repeatable}: {flag['summary']}")
+
+    examples = metadata.get("examples", [])
+    if isinstance(examples, list) and examples:
+        lines.extend(["", "examples:"])
+        lines.extend(f"- {item}" for item in examples if isinstance(item, str))
+
+    run_success_surface = metadata.get("run_success_surface")
+    if isinstance(run_success_surface, str) and run_success_surface:
+        lines.extend(["", "run success surface:", f"- {run_success_surface}"])
+
+    run_failure_surface = metadata.get("run_failure_surface")
+    if isinstance(run_failure_surface, dict):
+        lines.extend(["", "run failure surface:", f"- rule: {run_failure_surface['rule']}"])
+        fields = run_failure_surface.get("external_payload_fields", [])
+        if isinstance(fields, list) and fields:
+            lines.append(f"- external payload fields: {', '.join(str(item) for item in fields)}")
+
+    input_override_precedence = metadata.get("input_override_precedence", [])
+    if isinstance(input_override_precedence, list) and input_override_precedence:
+        lines.extend(["", "input override precedence:"])
+        lines.extend(f"- {item}" for item in input_override_precedence if isinstance(item, str))
+
+    inspect_next = metadata.get("inspect_next", [])
+    if isinstance(inspect_next, list) and inspect_next:
+        lines.extend(["", "inspect next:"])
+        lines.extend(f"- {item}" for item in inspect_next if isinstance(item, str))
+
+    _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
+    return "\n".join(lines)
 
 
 def render_workflow_authoring_node_text(payload: JSONObject) -> str:

@@ -573,6 +573,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("is_present(inputs.close_comment)", result.stdout)
         self.assertIn("uses: gh.issue.comment.add", result.stdout)
 
+    def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "command-line.ordo-playbook")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Public launch command for discovering playbook workflows", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("nearest surfaces:", result.stdout)
+        self.assertIn("workflow authoring passes:", result.stdout)
+        self.assertIn("stable flags:", result.stdout)
+        self.assertIn("examples:", result.stdout)
+        self.assertIn("inspect next:", result.stdout)
+        self.assertIn("workflow-authoring.paired_authoring_passes", result.stdout)
+
     def test_describe_include_contract_reports_shared_step_scope(self) -> None:
         include_contract_node = json.loads(self.run_help("describe", "workflow.include_contract", "--json").stdout)
 

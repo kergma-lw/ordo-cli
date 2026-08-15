@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "handles": {
+    "command-line.ordo-playbook": {
+      "describe_readiness": "ready"
+    },
+    "routine": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract": {
+      "describe_readiness": "ready"
+    }
+  }
+}
