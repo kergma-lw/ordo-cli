@@ -462,6 +462,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("actions:", json_family.stdout)
         self.assertIn("- set", json_family.stdout)
 
+    def test_text_describe_workflow_local_expressions_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "workflow.local_expressions")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Workflow capability for short inline local expressions", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("related surfaces:", result.stdout)
+        self.assertIn("workflow.local_expression.filter", result.stdout)
+        self.assertIn("workflow.local_expression.builtin", result.stdout)
+        self.assertIn("workflow.local_expression.adapter", result.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)

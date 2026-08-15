@@ -1443,6 +1443,19 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
     lookup: dict[str, JSONObject] = {}
 
     capability_overrides: dict[str, JSONObject] = {
+        "workflow.local_expressions": {
+            "definition": "Workflow capability for short inline local expressions that only read and reshape already-available input data through workflow roots, pipeline filters, function-style builtins, and representation adapters.",
+            "use_when": [
+                "A workflow-owned field needs a concise inline read, check, comparison, or small transformation without escalating to a heavier execution surface.",
+                "Authoring intent is still local expression shaping rather than external operations, step orchestration, or long opaque helper logic.",
+                "The expression may transform input data in subtle ways, but it still stays inside pure local value-shaping rather than changing the outside world.",
+            ],
+            "do_not_use_for": [
+                "Long, repetitive, or representation-heavy logic that would be clearer through adapters, dedicated workflow structure, or another typed public surface.",
+                "Treating local expressions as a catch-all substitute for guards, gates, state surfaces, or other explicit workflow contracts.",
+                "Anything that mutates the outside world, performs execution steps, or encodes workflow control flow such as branching, admission, or orchestration.",
+            ],
+        },
         "workflow.local_expression.adapter": {
             "definition": "Workflow capability for representation-adapter families that project or transform values after a source has already been interpreted as json, yaml, markdown, text, or key-value data.",
             "use_when": [

@@ -288,6 +288,9 @@
     },
     "workflow.local_expression.adapter.yaml": {
       "describe_readiness": "ready"
+    },
+    "workflow.local_expressions": {
+      "describe_readiness": "ready"
     }
   }
 }
