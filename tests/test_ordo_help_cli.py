@@ -850,7 +850,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 10)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 16)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 23)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -866,6 +866,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.gh.issue.comment.add"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.issue.body.append"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.issue.body.replace"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.pr"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.pr.comments"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.pr.diff"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.pr.reviews"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.pr.review_comments"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.pr.checks"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.pr.timeline"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
@@ -1131,6 +1138,50 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(issue_body_replace.returncode, 0)
         self.assertIn("Replace the entire GitHub issue body", issue_body_replace.stdout)
         self.assertIn("connector.gh.issue.body.append", issue_body_replace.stdout)
+
+    def test_text_describe_connector_gh_pr_group_is_teaching_ready(self) -> None:
+        gh_family = self.run_help("describe", "connector.gh")
+        pr = self.run_help("describe", "connector.gh.pr")
+        pr_diff = self.run_help("describe", "connector.gh.pr.diff")
+        pr_comments = self.run_help("describe", "connector.gh.pr.comments")
+        pr_reviews = self.run_help("describe", "connector.gh.pr.reviews")
+        pr_review_comments = self.run_help("describe", "connector.gh.pr.review_comments")
+        pr_checks = self.run_help("describe", "connector.gh.pr.checks")
+        pr_timeline = self.run_help("describe", "connector.gh.pr.timeline")
+
+        self.assertEqual(gh_family.returncode, 0)
+        self.assertIn("Published GitHub connector family for typed issue, pull-request, and project operations", gh_family.stdout)
+        self.assertIn("connector.gh.pr", gh_family.stdout)
+        self.assertIn("gh.pr(repository=owner/repo, pull_number=42)", gh_family.stdout)
+
+        self.assertEqual(pr.returncode, 0)
+        self.assertIn("Probe one GitHub pull request as a typed metadata snapshot", pr.stdout)
+        self.assertIn("connector.gh.pr.diff", pr.stdout)
+        self.assertIn("example_for: workflow_fragment", pr.stdout)
+
+        self.assertEqual(pr_diff.returncode, 0)
+        self.assertIn("Probe one GitHub pull request diff as normalized changed-file summaries", pr_diff.stdout)
+        self.assertIn("connector.git.range", pr_diff.stdout)
+
+        self.assertEqual(pr_comments.returncode, 0)
+        self.assertIn("Probe the regular conversation thread on one GitHub pull request", pr_comments.stdout)
+        self.assertIn("connector.gh.pr.review_comments", pr_comments.stdout)
+
+        self.assertEqual(pr_reviews.returncode, 0)
+        self.assertIn("Probe submitted GitHub pull-request reviews", pr_reviews.stdout)
+        self.assertIn("connector.gh.pr.review_comments", pr_reviews.stdout)
+
+        self.assertEqual(pr_review_comments.returncode, 0)
+        self.assertIn("Probe line-level review comments on one GitHub pull request", pr_review_comments.stdout)
+        self.assertIn("connector.gh.pr.diff", pr_review_comments.stdout)
+
+        self.assertEqual(pr_checks.returncode, 0)
+        self.assertIn("Probe one GitHub pull request head for normalized status contexts and check runs", pr_checks.stdout)
+        self.assertIn("connector.gh.pr.reviews", pr_checks.stdout)
+
+        self.assertEqual(pr_timeline.returncode, 0)
+        self.assertIn("Probe one GitHub pull request timeline as normalized lifecycle events", pr_timeline.stdout)
+        self.assertIn("connector.gh.pr.comments", pr_timeline.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")

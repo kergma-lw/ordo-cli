@@ -64,6 +64,30 @@
     "connector.gh.issue.create": {
       "describe_readiness": "ready"
     },
+    "connector.gh": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.checks": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.comments": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.diff": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.review_comments": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.reviews": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.timeline": {
+      "describe_readiness": "ready"
+    },
     "connector.runtime": {
       "describe_readiness": "ready"
     },

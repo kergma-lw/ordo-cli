@@ -1622,6 +1622,29 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 "connector.compose.stop",
                 "connector.compose.remove",
             ],
+        },
+        "gh": {
+            "definition": "Published GitHub connector family for typed issue, pull-request, and project operations backed by GitHub CLI authentication rather than ad hoc shell calls.",
+            "use_when": [
+                "The workflow needs one published GitHub probe or action whose outputs and failure modes stay stable across repositories.",
+                "You want separate public surfaces for issue snapshots, pull-request review surfaces, and GitHub Project membership instead of one coarse GitHub command wrapper.",
+            ],
+            "do_not_use_for": [
+                "Repository-local helper scripts or opaque gh invocations when an existing published GitHub operation already expresses the intent more directly.",
+                "Non-GitHub repository state such as local branches, commits, or worktrees; use the git connector family for repository-local facts.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
+                {"handle": "connector.gh.pr", "summary": "Pull-request metadata probe that anchors the PR inspection subgroup"},
+                {"handle": "connector.gh.issue", "summary": "Issue snapshot probe for issue maintenance and routing workflows"},
+                {"handle": "connector.gh.project.items", "summary": "Project membership probe when the workflow needs GitHub Project item collections"},
+            ],
+            "examples": [
+                {"reference": "gh.pr", "inputs": {"repository": "owner/repo", "pull_number": 42}},
+                {"reference": "gh.issue", "inputs": {"repository": "owner/repo", "issue_number": 17}},
+            ],
+            "inspect_next": ["connector.gh.pr", "connector.gh.issue", "connector.gh.project.items", "operations"],
         }
     }
 
@@ -1777,6 +1800,141 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.issue", "summary": "Probe the current issue body before deciding whether a full rewrite is appropriate"},
             ],
             "inspect_next": ["connector.gh.issue.body.append", "connector.gh.issue.comment.add", "connector.gh.issue"],
+        },
+        ("gh", "pr"): {
+            "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
+            "use_when": [
+                "Workflow logic needs the pull request's current headline facts before deciding which narrower PR surfaces to inspect next.",
+                "A later step needs branch refs, draft/state flags, review decision, or change totals from one normalized PR snapshot.",
+            ],
+            "do_not_use_for": [
+                "Conversation history, submitted reviews, line comments, checks, or lifecycle events; use the dedicated PR sibling surfaces for those narrower views.",
+                "Mutating or merging the pull request; this published surface is observation only.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh", "summary": "Parent GitHub connector family for issue, pull-request, and project operations"},
+                {"handle": "connector.gh.pr.diff", "summary": "Sibling probe for changed files and patch content rather than PR headline metadata"},
+                {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for submitted review decisions rather than the PR snapshot"},
+                {"handle": "connector.gh.pr.checks", "summary": "Sibling probe for CI and status surfaces on the PR head SHA"},
+            ],
+            "examples": [
+                {"reference": "gh.pr", "inputs": {"repository": "owner/repo", "pull_number": 42}},
+            ],
+            "inspect_next": ["connector.gh.pr.diff", "connector.gh.pr.comments", "connector.gh.pr.reviews", "connector.gh.pr.checks"],
+        },
+        ("gh", "pr.comments"): {
+            "definition": "Probe the regular conversation thread on one GitHub pull request as top-level discussion comments plus total count metadata.",
+            "use_when": [
+                "The workflow needs human conversation on the PR itself before summarizing discussion or deciding whether follow-up is needed.",
+            ],
+            "do_not_use_for": [
+                "Line-level review discussion attached to changed files; use connector.gh.pr.review_comments for code-anchored comments.",
+                "Submitted review decisions such as APPROVED or CHANGES_REQUESTED; use connector.gh.pr.reviews for review verdicts.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr", "summary": "Parent PR snapshot probe that omits conversation thread details"},
+                {"handle": "connector.gh.pr.review_comments", "summary": "Sibling probe for line-level code review comments instead of top-level conversation comments"},
+                {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for submitted review decisions rather than free-form conversation comments"},
+            ],
+            "examples": [
+                {"reference": "gh.pr.comments", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+            ],
+            "inspect_next": ["connector.gh.pr.review_comments", "connector.gh.pr.reviews", "connector.gh.pr.timeline"],
+        },
+        ("gh", "pr.diff"): {
+            "definition": "Probe one GitHub pull request diff as normalized changed-file summaries with patch excerpts, rename metadata, and binary/truncation signals.",
+            "use_when": [
+                "The workflow needs to reason about which files changed or inspect bounded patch content without parsing raw git output itself.",
+            ],
+            "do_not_use_for": [
+                "Overall PR headline facts such as title, branch refs, or review decision; use connector.gh.pr for that metadata snapshot.",
+                "Conversation or review decision surfaces; use comments, review_comments, or reviews when the workflow is about discussion rather than code changes.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr", "summary": "Parent PR snapshot probe that reports change totals but not per-file diff content"},
+                {"handle": "connector.gh.pr.review_comments", "summary": "Sibling probe for line-level reviewer feedback that may reference files from this diff"},
+                {"handle": "connector.git.range", "summary": "Repository-local git diff surface when the workflow needs local git ranges instead of remote PR normalization"},
+            ],
+            "examples": [
+                {"reference": "gh.pr.diff", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+            ],
+            "inspect_next": ["connector.gh.pr.review_comments", "connector.git.range", "connector.gh.pr"],
+        },
+        ("gh", "pr.review_comments"): {
+            "definition": "Probe line-level review comments on one GitHub pull request as typed code-anchored discussion records with path and line metadata.",
+            "use_when": [
+                "The workflow needs reviewer feedback tied to concrete files or lines rather than only top-level PR conversation.",
+            ],
+            "do_not_use_for": [
+                "Top-level conversation comments on the PR body; use connector.gh.pr.comments for that broader discussion thread.",
+                "Submitted review verdicts without line detail; use connector.gh.pr.reviews for the review-level decisions.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr.diff", "summary": "Sibling probe for changed-file context that these line comments often reference"},
+                {"handle": "connector.gh.pr.comments", "summary": "Sibling probe for top-level conversation comments rather than file-anchored review remarks"},
+                {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for submitted review verdicts rather than individual line comments"},
+            ],
+            "examples": [
+                {"reference": "gh.pr.review_comments", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+            ],
+            "inspect_next": ["connector.gh.pr.diff", "connector.gh.pr.reviews", "connector.gh.pr.comments"],
+        },
+        ("gh", "pr.reviews"): {
+            "definition": "Probe submitted GitHub pull-request reviews as typed review records with verdict, author, timestamp, and optional reviewed commit id.",
+            "use_when": [
+                "The workflow needs reviewer decisions such as APPROVED or CHANGES_REQUESTED without reconstructing them from comments or timeline events.",
+            ],
+            "do_not_use_for": [
+                "Free-form top-level discussion; use connector.gh.pr.comments when the workflow needs ordinary PR conversation.",
+                "Per-line feedback details; use connector.gh.pr.review_comments for code-anchored remarks.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr", "summary": "Parent PR snapshot that carries only aggregate review decision, not the individual submitted reviews"},
+                {"handle": "connector.gh.pr.review_comments", "summary": "Sibling probe for detailed line-level review discussion"},
+                {"handle": "connector.gh.pr.timeline", "summary": "Sibling probe for lifecycle events that may surround review activity"},
+            ],
+            "examples": [
+                {"reference": "gh.pr.reviews", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+            ],
+            "inspect_next": ["connector.gh.pr.review_comments", "connector.gh.pr.timeline", "connector.gh.pr"],
+        },
+        ("gh", "pr.checks"): {
+            "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, including aggregate pass/pending/fail counts for that head SHA.",
+            "use_when": [
+                "The workflow needs CI readiness or status context outcomes before recommending merge, rerun, or escalation steps.",
+            ],
+            "do_not_use_for": [
+                "Review decisions from humans; use connector.gh.pr.reviews when the workflow cares about approvals or change requests.",
+                "Branch or headline PR metadata unrelated to execution status; use connector.gh.pr for the broader snapshot.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr", "summary": "Parent PR snapshot that supplies the head SHA and mergeability context"},
+                {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for human review decisions rather than machine status results"},
+                {"handle": "connector.gh.pr.timeline", "summary": "Sibling probe for lifecycle events that can explain why checks changed over time"},
+            ],
+            "examples": [
+                {"reference": "gh.pr.checks", "inputs": {"repository": "owner/repo", "pull_number": 42}},
+            ],
+            "inspect_next": ["connector.gh.pr.reviews", "connector.gh.pr.timeline", "connector.gh.pr"],
+        },
+        ("gh", "pr.timeline"): {
+            "definition": "Probe one GitHub pull request timeline as normalized lifecycle events such as ready-for-review, review requests, and base-ref changes.",
+            "use_when": [
+                "The workflow needs temporal PR lifecycle facts that are not equivalent to comments, checks, or the current PR snapshot alone.",
+            ],
+            "do_not_use_for": [
+                "The current PR state only; use connector.gh.pr when timeline history is unnecessary.",
+                "Top-level discussion or submitted review verdicts; use comments or reviews for those narrower surfaces.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr", "summary": "Parent PR snapshot for the current state without event history"},
+                {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for submitted review verdicts rather than timeline events"},
+                {"handle": "connector.gh.pr.comments", "summary": "Sibling probe for conversation comments rather than lifecycle history"},
+            ],
+            "examples": [
+                {"reference": "gh.pr.timeline", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+            ],
+            "inspect_next": ["connector.gh.pr.reviews", "connector.gh.pr.comments", "connector.gh.pr"],
         },
         ("compose", "project"): {
             "definition": "Probe one Compose project as a single orchestration unit.",

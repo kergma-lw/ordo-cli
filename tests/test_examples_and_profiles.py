@@ -120,6 +120,9 @@ class ExampleSurfaceTest(unittest.TestCase):
                 _completed(returncode=0, stdout="authenticated\n", stderr=""),
                 _completed(returncode=0, stdout='{"number":42,"title":"Add PR probes","body":"Body","state":"open","draft":false,"html_url":"https://github.com/kergma-lw/ordo-cli/pull/42","created_at":"2026-07-30T10:00:00Z","updated_at":"2026-07-30T11:00:00Z","user":{"login":"kergma-lw"},"base":{"ref":"main"},"head":{"ref":"feature/pr-probes","sha":"abc123"},"mergeable":true,"mergeable_state":"clean","review_decision":"APPROVED","additions":12,"deletions":3,"changed_files":2,"commits":4}', stderr=""),
                 _completed(returncode=0, stdout="authenticated\n", stderr=""),
+                _completed(returncode=0, stdout='[{"filename":"src/ordo/help_cli.py","status":"modified","additions":12,"deletions":3,"changes":15},{"filename":"docs/pr-checklist.md","status":"added","additions":8,"deletions":0,"changes":8}]', stderr=""),
+                _completed(returncode=0, stdout="", stderr=""),
+                _completed(returncode=0, stdout="authenticated\n", stderr=""),
                 _completed(returncode=0, stdout='{"number":42,"comments":1}', stderr=""),
                 _completed(returncode=0, stdout='[{"id":1,"body":"First","created_at":"2026-07-30T10:00:00Z","updated_at":"2026-07-30T10:00:00Z","html_url":"https://github.com/kergma-lw/ordo-cli/pull/42#issuecomment-1","user":{"login":"kergma-lw"}}]', stderr=""),
                 _completed(returncode=0, stdout="authenticated\n", stderr=""),
@@ -143,6 +146,7 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(published["pull_ref"], "kergma-lw/ordo-cli#42")
         self.assertEqual(published["title"], "Add PR probes")
         self.assertEqual(published["head_sha"], "abc123")
+        self.assertEqual(published["changed_file_count"], 2)
         self.assertEqual(published["comment_count"], 1)
         self.assertEqual(published["review_count"], 1)
         self.assertEqual(published["review_comment_count"], 1)

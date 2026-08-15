@@ -11,23 +11,33 @@ blocks:
       repository: inputs.repository
       pull_number: inputs.pull_number
     register: pr
+  - name: load-pr-diff
+    uses: gh.pr.diff
+    with:
+      repository: inputs.repository
+      pull_number: inputs.pull_number
+      limit: 20
+    register: pr_diff
   - name: load-pr-comments
     uses: gh.pr.comments
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
+      limit: 20
     register: pr_comments
   - name: load-pr-reviews
     uses: gh.pr.reviews
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
+      limit: 20
     register: pr_reviews
   - name: load-pr-review-comments
     uses: gh.pr.review_comments
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
+      limit: 20
     register: pr_review_comments
   - name: load-pr-checks
     uses: gh.pr.checks
@@ -40,6 +50,7 @@ blocks:
     with:
       repository: inputs.repository
       pull_number: inputs.pull_number
+      limit: 20
     register: pr_timeline
   - name: publish-pr-inspection
     publish:
@@ -51,6 +62,7 @@ blocks:
         - inputs.pull_number
       title: step.pr.outputs.title
       head_sha: step.pr.outputs.head_sha
+      changed_file_count: step.pr_diff.outputs.total_files
       comment_count: step.pr_comments.outputs.total_count
       review_count: step.pr_reviews.outputs.total_count
       review_comment_count: step.pr_review_comments.outputs.total_count

@@ -459,6 +459,169 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.gh.pr": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_pr_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect one pull request headline snapshot before branching into narrower diff, review, comment, and checks surfaces.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 8,
+                    "end_line": 13
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            },
+            {
+                "name": "gh_pr_full_inspection_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect one pull request through metadata, diff, comments, reviews, review comments, checks, and timeline surfaces, then publish a digest.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 1,
+                    "end_line": 70
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            }
+        ],
+    },
+    "connector.gh.pr.diff": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_pr_diff_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect changed files and bounded diff content from one pull request before reacting to code-level changes.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 14,
+                    "end_line": 20
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            }
+        ],
+    },
+    "connector.gh.pr.comments": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_pr_comments_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect the top-level pull request conversation thread with one explicit limit and register the resulting comment list.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 21,
+                    "end_line": 27
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            }
+        ],
+    },
+    "connector.gh.pr.reviews": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_pr_reviews_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect submitted pull-request reviews with one explicit limit before interpreting approval or change-request history.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 28,
+                    "end_line": 34
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            }
+        ],
+    },
+    "connector.gh.pr.review_comments": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_pr_review_comments_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect line-level review comments with one explicit limit when the workflow needs file-anchored reviewer feedback.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 35,
+                    "end_line": 41
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            }
+        ],
+    },
+    "connector.gh.pr.checks": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_pr_checks_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect status contexts and check runs for the pull request head before merge-readiness decisions.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 42,
+                    "end_line": 47
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            }
+        ],
+    },
+    "connector.gh.pr.timeline": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_pr_timeline_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect lifecycle events from the pull request timeline with one explicit limit before summarizing history.",
+                "source_example": "examples.inspect-pr",
+                "source_excerpt": {
+                    "path": "examples/inspect-pr.yaml",
+                    "start_line": 48,
+                    "end_line": 54
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-pr"
+                },
+            }
+        ],
+    },
     "workflow.state_needs": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
