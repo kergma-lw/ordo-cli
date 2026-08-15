@@ -1865,6 +1865,111 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.gh.project.field", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.issue.field_iteration.set"],
         },
+        ("gh", "project.issue"): {
+            "definition": "Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized membership item id plus the common project field values that Ordo reads from that membership.",
+            "use_when": [
+                "A workflow needs to know whether one issue is already in the target project before deciding to add it or update its project fields.",
+                "Later logic needs one compact project-membership snapshot such as Status, Type, Priority, Iteration, Size, or Estimate for one issue in one project.",
+            ],
+            "do_not_use_for": [
+                "Scanning many project items or filtering project membership collections; use connector.gh.project.items or connector.gh.project.items.details for collection-shaped project inspection.",
+                "Adding the issue to the project or mutating project field values; use connector.gh.project.issue.add or the connector.gh.project.issue.field_* setters for those effectful changes.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project", "summary": "Parent project probe for confirming the target project identity before issue-membership inspection"},
+                {"handle": "connector.gh.project.issue.add", "summary": "Sibling action for attaching the issue to the project when this probe reports exists=false"},
+                {"handle": "connector.gh.project.items", "summary": "Sibling probe for project-wide membership scans instead of one issue-specific membership lookup"},
+                {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Sibling action for mutating one project field after membership inspection confirms the target issue context"},
+            ],
+            "examples": [
+                {"reference": "gh.project.issue", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample"}},
+            ],
+            "inspect_next": ["connector.gh.project.issue.add", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.items"],
+        },
+        ("gh", "project.issue.add"): {
+            "definition": "Add one GitHub issue to one GitHub Project and return the project item id, while staying idempotent when the issue is already attached.",
+            "use_when": [
+                "A workflow has one concrete issue and one target project and needs to ensure that the issue becomes a project item before later project-field updates.",
+                "The workflow wants one typed membership-creation result instead of shelling out to ad hoc gh project mutations.",
+            ],
+            "do_not_use_for": [
+                "Checking membership without changing anything; use connector.gh.project.issue when the real question is whether the issue is already in the project.",
+                "Updating Status, Estimate, Iteration, or another project-backed field after membership exists; use the narrower connector.gh.project.issue.field_* setters for those follow-up mutations.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project.issue", "summary": "Sibling probe for membership inspection before or after this action"},
+                {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Follow-up action for setting one selectable project field after membership is ensured"},
+                {"handle": "connector.gh.project.issue.field_number.set", "summary": "Follow-up action for setting one numeric project field after membership is ensured"},
+                {"handle": "connector.gh.project.items", "summary": "Project-wide collection probe when the workflow needs many project items rather than attaching one issue"},
+            ],
+            "examples": [
+                {"reference": "gh.project.issue.add", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample"}},
+            ],
+            "inspect_next": ["connector.gh.project.issue", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.issue.field_number.set"],
+        },
+        ("gh", "project.issue.field_iteration.set"): {
+            "definition": "Set one iteration-valued GitHub Project field on one issue's project item by field name and human iteration title.",
+            "use_when": [
+                "A workflow needs to move one project-backed issue into a named iteration such as Sprint 12 after membership already exists or can be resolved.",
+                "The caller knows the field by its project-visible name and wants Ordo to resolve the underlying iteration id and item id automatically.",
+            ],
+            "do_not_use_for": [
+                "Attaching the issue to the project in the first place; use connector.gh.project.issue.add when membership may still be missing.",
+                "Updating numeric or single-select fields; use connector.gh.project.issue.field_number.set or connector.gh.project.issue.field_single_select.set for those different field kinds.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project.issue", "summary": "Parent issue-membership probe for reading current project field values before or after mutation"},
+                {"handle": "connector.gh.project.field", "summary": "Sibling probe for confirming the project field exists and is iteration-backed before mutation"},
+                {"handle": "connector.gh.project.issue.add", "summary": "Sibling action for ensuring the issue is a project item before setting iteration"},
+                {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Sibling setter for selectable fields rather than iteration-backed fields"},
+            ],
+            "examples": [
+                {"reference": "gh.project.issue.field_iteration.set", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Iteration", "iteration": "Sprint 12"}},
+            ],
+            "inspect_next": ["connector.gh.project.issue", "connector.gh.project.field", "connector.gh.project.issue.add"],
+        },
+        ("gh", "project.issue.field_number.set"): {
+            "definition": "Set one number-valued GitHub Project field on one issue's project item by field name and numeric value.",
+            "use_when": [
+                "A workflow needs to write one numeric project field such as Estimate to a project-backed issue item after membership and field resolution succeed.",
+                "The caller wants Ordo to reject non-numeric values early instead of discovering that mismatch only inside a raw project mutation.",
+            ],
+            "do_not_use_for": [
+                "Writing selectable or iteration-backed project fields; use connector.gh.project.issue.field_single_select.set or connector.gh.project.issue.field_iteration.set for those different field kinds.",
+                "Reading the current field value without changing it; use connector.gh.project.issue when the workflow only needs the observed membership snapshot.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project.issue", "summary": "Parent issue-membership probe for inspecting current project field values before or after mutation"},
+                {"handle": "connector.gh.project.field", "summary": "Sibling probe for confirming the target project field exists before mutation"},
+                {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Sibling setter for selectable fields rather than numeric fields"},
+                {"handle": "connector.gh.project.issue.field_iteration.set", "summary": "Sibling setter for iteration-backed fields rather than numeric fields"},
+            ],
+            "examples": [
+                {"reference": "gh.project.issue.field_number.set", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Estimate", "value": 3}},
+            ],
+            "inspect_next": ["connector.gh.project.issue", "connector.gh.project.field", "connector.gh.project.issue.field_single_select.set"],
+        },
+        ("gh", "project.issue.field_single_select.set"): {
+            "definition": "Set one single-select GitHub Project field on one issue's project item by field name and visible option name.",
+            "use_when": [
+                "A workflow needs to assign one selectable project value such as Status or Priority after membership and field-option validation succeed.",
+                "The caller knows the human-facing option label and wants Ordo to resolve the underlying option id automatically.",
+            ],
+            "do_not_use_for": [
+                "Writing iteration-backed or numeric project fields; use connector.gh.project.issue.field_iteration.set or connector.gh.project.issue.field_number.set for those different field kinds.",
+                "Checking whether the requested option exists without mutating anything; use connector.gh.project.field.option when the workflow only needs a yes/no option probe.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.project.issue", "summary": "Parent issue-membership probe for reading current project field values before or after mutation"},
+                {"handle": "connector.gh.project.field.option", "summary": "Sibling probe for validating one candidate selectable value before mutation"},
+                {"handle": "connector.gh.project.issue.add", "summary": "Sibling action for ensuring the issue is a project item before setting a selectable field"},
+                {"handle": "connector.gh.project.issue.field_number.set", "summary": "Sibling setter for numeric fields rather than selectable fields"},
+            ],
+            "examples": [
+                {"reference": "gh.project.issue.field_single_select.set", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Status", "option": "In review"}},
+            ],
+            "inspect_next": ["connector.gh.project.field.option", "connector.gh.project.issue", "connector.gh.project.issue.add"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [

@@ -459,6 +459,145 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.gh.project.issue": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_issue_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect whether one issue is already attached to the target GitHub Project before deciding whether to add it or mutate its fields.",
+                "source_example": "project-issue-membership",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 10,
+                    "end_line": 16
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.gh.project.issue",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "gh_project_issue_membership_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Probe one issue's project membership, attach it if needed, then set representative single-select, number, and iteration fields through typed project issue surfaces.",
+                "source_example": "project-issue-membership",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 1,
+                    "end_line": 48
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.gh.project.issue",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.gh.project.issue.add": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_issue_add_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Attach the issue to the target GitHub Project only when the earlier membership probe reported exists=false.",
+                "source_example": "project-issue-membership",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 17,
+                    "end_line": 24
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.gh.project.issue.add",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.gh.project.issue.field_iteration.set": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_issue_field_iteration_set_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Move the project-backed issue into one named iteration after membership is already ensured.",
+                "source_example": "project-issue-membership",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 33,
+                    "end_line": 40
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.gh.project.issue.field_iteration.set",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.gh.project.issue.field_number.set": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_issue_field_number_set_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Write one numeric project field such as Estimate after the issue is attached to the project.",
+                "source_example": "project-issue-membership",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 25,
+                    "end_line": 32
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.gh.project.issue.field_number.set",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.gh.project.issue.field_single_select.set": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_project_issue_field_single_select_set_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Set one selectable project field such as Status by its visible option name after membership is ensured.",
+                "source_example": "project-issue-membership",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 41,
+                    "end_line": 48
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.gh.project.issue.field_single_select.set",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

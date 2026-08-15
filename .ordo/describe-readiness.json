@@ -97,6 +97,21 @@
     "connector.gh.project.field.option": {
       "describe_readiness": "ready"
     },
+    "connector.gh.project.issue": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.project.issue.add": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.project.issue.field_iteration.set": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.project.issue.field_number.set": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.project.issue.field_single_select.set": {
+      "describe_readiness": "ready"
+    },
     "connector.runtime": {
       "describe_readiness": "ready"
     },

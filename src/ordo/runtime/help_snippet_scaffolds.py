@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import textwrap
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,21 @@ STEP_FIELD_CONTRACT = SnippetInsertionContract(
 
 STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="step_fragment",
-    supported_targets=("workflow.step.if", "workflow.step.state_set", "workflow.step.state_delete", "workflow.step.value", "workflow.step_forms.value", "workflow.step.profile_switch", "workflow.step_forms.profile_switch", "routine"),
+    supported_targets=(
+        "workflow.step.if",
+        "workflow.step.state_set",
+        "workflow.step.state_delete",
+        "workflow.step.value",
+        "workflow.step_forms.value",
+        "workflow.step.profile_switch",
+        "workflow.step_forms.profile_switch",
+        "routine",
+        "connector.gh.project.issue",
+        "connector.gh.project.issue.add",
+        "connector.gh.project.issue.field_iteration.set",
+        "connector.gh.project.issue.field_number.set",
+        "connector.gh.project.issue.field_single_select.set",
+    ),
     workflow_surface="steps list inside a standard workflow scaffold",
     summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
 )
@@ -41,7 +56,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings"),
+    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -184,8 +199,10 @@ blocks:
 def build_step_fragment_scaffold(*, target: str, snippet: str) -> str:
     """Return a standard workflow scaffold for one authored step fragment."""
 
+    normalized = textwrap.dedent(snippet)
+
     if target == "workflow.step.if":
-        indented = snippet.replace(chr(10), chr(10) + "  ")
+        indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
 workflow: snippet-step-fragment-if
 inputs:
@@ -198,7 +215,7 @@ blocks:
   {indented}
 """
     if target == "workflow.step.state_set":
-        indented = snippet.replace(chr(10), chr(10) + "  ")
+        indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
 workflow: snippet-step-fragment
 state_needs:
@@ -210,7 +227,7 @@ blocks:
   {indented}
 """
     if target == "workflow.step.state_delete":
-        indented = snippet.replace(chr(10), chr(10) + "  ")
+        indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
 workflow: snippet-step-fragment-state-delete
 inputs:
@@ -224,7 +241,7 @@ blocks:
   {indented}
 """
     if target in {"workflow.step.value", "workflow.step_forms.value"}:
-        indented = snippet.replace(chr(10), chr(10) + "  ")
+        indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
 workflow: snippet-step-fragment-value
 inputs:
@@ -236,7 +253,7 @@ blocks:
   {indented}
 """
     if target in {"workflow.step.profile_switch", "workflow.step_forms.profile_switch"}:
-        indented = snippet.replace(chr(10), chr(10) + "  ")
+        indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
 workflow: snippet-profile-switch-fragment
 inputs:
@@ -247,13 +264,51 @@ blocks:
   {indented}
 """
     if target == "routine":
-        indented = snippet.replace(chr(10), chr(10) + "  ")
+        indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
 workflow: snippet-routine
 inputs:
   target: {{}}
   repository: {{}}
   review_mode: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
+    if target == "connector.gh.project.issue.add":
+        indented = normalized.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-gh-project-issue-add
+inputs:
+  repository: {{}}
+  issue_number: {{}}
+  project_id: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: load-membership
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+    register: membership
+  {indented}
+"""
+    if target in {
+        "connector.gh.project.issue",
+        "connector.gh.project.issue.field_iteration.set",
+        "connector.gh.project.issue.field_number.set",
+        "connector.gh.project.issue.field_single_select.set",
+    }:
+        indented = normalized.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-gh-project-issue
+inputs:
+  repository: {{}}
+  issue_number: {{}}
+  project_id: {{}}
 blocks:
 - guards: []
 - steps:
@@ -270,5 +325,7 @@ def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     if target == "workflow.state_needs":
         return f"{snippet}\n"
     if target == "workflow.state_bindings":
+        return f"{snippet}\n"
+    if target == "connector.gh.project.issue":
         return f"{snippet}\n"
     raise ValueError(f"Unsupported workflow-fragment target: {target}")
