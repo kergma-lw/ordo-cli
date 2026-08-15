@@ -63,6 +63,15 @@
     },
     "workflow.profile": {
       "describe_readiness": "ready"
+    },
+    "playbook.defaults": {
+      "describe_readiness": "ready"
+    },
+    "playbook.defaults.profile": {
+      "describe_readiness": "ready"
+    },
+    "playbook.defaults.working_directory": {
+      "describe_readiness": "ready"
     }
   }
 }

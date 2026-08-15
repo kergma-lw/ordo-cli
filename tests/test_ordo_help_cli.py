@@ -684,6 +684,26 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow-authoring.workflow_profile_binding_is_project_local", result.stdout)
         self.assertIn("example_for: workflow_fragment", result.stdout)
 
+    def test_text_describe_playbook_defaults_group_is_teaching_ready(self) -> None:
+        defaults = self.run_help("describe", "playbook.defaults")
+        default_profile = self.run_help("describe", "playbook.defaults.profile")
+        default_workdir = self.run_help("describe", "playbook.defaults.working_directory")
+
+        self.assertEqual(defaults.returncode, 0)
+        self.assertIn("Playbook field for declaring launch-time defaults", defaults.stdout)
+        self.assertIn("workflow.profile", defaults.stdout)
+        self.assertIn("playbook.defaults(profile=review, working_directory=${inputs.repo_dir})", defaults.stdout)
+
+        self.assertEqual(default_profile.returncode, 0)
+        self.assertIn("Playbook default field for selecting the active profile when a run did not already choose one explicitly.", default_profile.stdout)
+        self.assertIn("command-line.ordo-playbook.flag.profile", default_profile.stdout)
+        self.assertIn("workflow.profile", default_profile.stdout)
+
+        self.assertEqual(default_workdir.returncode, 0)
+        self.assertIn("Playbook default field for setting the execution working directory when no narrower launch surface already provided one.", default_workdir.stdout)
+        self.assertIn("playbook.workflows.working_directory", default_workdir.stdout)
+        self.assertIn("profile.working_directory", default_workdir.stdout)
+
     def test_text_describe_command_line_ordo_playbook_is_teaching_ready(self) -> None:
         result = self.run_help("describe", "command-line.ordo-playbook")
 

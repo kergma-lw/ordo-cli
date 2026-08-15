@@ -1721,6 +1721,64 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.step.profile_switch", "workflow-authoring.workflow_profile_binding_is_project_local", "profile"],
         },
+        "playbook.defaults": {
+            "definition": "Playbook field for declaring launch-time defaults that apply when the caller and workflow entry did not choose a value explicitly.",
+            "use_when": [
+                "Several published workflows should share one soft default profile or working-directory policy without hard-binding each workflow body.",
+            ],
+            "do_not_use_for": [
+                "Workflow-local semantics that must be fixed inside one workflow contract; use workflow.profile or workflow-owned fields for those.",
+                "Per-workflow-entry overrides; use playbook.workflows.* fields when one published workflow needs a different launch contract.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.defaults.profile", "summary": "Child field for one soft default active profile selection"},
+                {"handle": "playbook.defaults.working_directory", "summary": "Child field for one soft default execution working directory"},
+                {"handle": "workflow.profile", "summary": "Workflow-owned fixed profile binding rather than a soft playbook launch default"},
+            ],
+            "examples": [
+                {"reference": "playbook.defaults", "inputs": {"profile": "review", "working_directory": "${inputs.repo_dir}"}},
+            ],
+            "inspect_next": ["playbook.defaults.profile", "playbook.defaults.working_directory", "playbook.workflows"],
+        },
+        "playbook.defaults.profile": {
+            "definition": "Playbook default field for selecting the active profile when a run did not already choose one explicitly.",
+            "use_when": [
+                "Most published workflows in this playbook should start under one reusable profile unless the caller or entry overrides it.",
+            ],
+            "do_not_use_for": [
+                "A fixed workflow-local profile contract; use workflow.profile when the workflow itself must always bind one profile before guards run.",
+                "One-run operator overrides; use --profile when the caller wants to override the default at launch time.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.defaults", "summary": "Parent playbook defaults object"},
+                {"handle": "command-line.ordo-playbook.flag.profile", "summary": "Launch-time override that wins over soft playbook defaults for one invocation"},
+                {"handle": "workflow.profile", "summary": "Workflow-owned fixed binding instead of a soft playbook launch default"},
+            ],
+            "examples": [
+                {"reference": "playbook.defaults.profile", "inputs": {"profile": "review"}},
+            ],
+            "inspect_next": ["command-line.ordo-playbook.flag.profile", "workflow.profile", "profile"],
+        },
+        "playbook.defaults.working_directory": {
+            "definition": "Playbook default field for setting the execution working directory when no narrower launch surface already provided one.",
+            "use_when": [
+                "Most published workflows in this playbook should resolve relative paths from one shared default directory.",
+                "The default directory depends only on activation inputs and should be computed before workflow execution starts.",
+            ],
+            "do_not_use_for": [
+                "Workflow-entry-specific directory overrides; use playbook.workflows.working_directory when one published workflow needs a narrower default.",
+                "Step-local directory shifts after the workflow has already started; use a narrower execution surface for that kind of local behavior.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.defaults", "summary": "Parent playbook defaults object"},
+                {"handle": "playbook.workflows.working_directory", "summary": "Per-workflow-entry override for the default execution directory"},
+                {"handle": "profile.working_directory", "summary": "Reusable profile-owned execution directory context instead of a playbook-wide soft default"},
+            ],
+            "examples": [
+                {"reference": "playbook.defaults.working_directory", "inputs": {"working_directory": "${inputs.repo_dir}"}},
+            ],
+            "inspect_next": ["playbook.workflows.working_directory", "profile.working_directory", "playbook.defaults"],
+        },
         "profile.connectors": {
             "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
             "use_when": [
