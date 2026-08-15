@@ -1487,6 +1487,16 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
                 "Writing or reshaping durable state; use workflow.step.state_set when the intent is persistence rather than deletion.",
             ],
         },
+        "workflow.step.value": {
+            "definition": "Workflow step capability for computing one explicit ephemeral value inside the workflow and optionally registering it for later local reuse.",
+            "use_when": [
+                "A step should produce one derived value for later guards, publishes, results, or step-local dataflow without mutating durable state or calling an external operation.",
+            ],
+            "do_not_use_for": [
+                "Durable persistence; use workflow.step.state_set when the value must survive beyond local workflow dataflow.",
+                "Outward-facing final result or publication surfaces when the main intent is emitting contract output rather than computing an intermediate value.",
+            ],
+        },
         "workflow.step.state_set": {
             "definition": "Workflow step capability for writing one explicit value into one bound state target as a deliberate durable state mutation.",
             "use_when": [
@@ -2026,6 +2036,22 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "workflow.step_forms.state_set", "summary": "Sibling state mutation form for explicit durable writes instead of deletion"},
             ],
             "inspect_next": ["workflow.step.state_delete", "state.workflow_surface.step_state_delete_field", "workflow.step_forms.state_set"],
+        },
+        "workflow.step_forms.value": {
+            "definition": "Workflow step form for one named ephemeral value checkpoint that computes one workflow-local value and may optionally register it for later reuse.",
+            "use_when": [
+                "A step's primary job is producing one derived local value rather than calling an operation, mutating durable state, or emitting final outward contract output.",
+            ],
+            "do_not_use_for": [
+                "Durable state writes or deletions; use state_set/state_delete forms when the intent is persistent mutation.",
+                "Final publish/result emission when the step should communicate outward contract rather than stage an intermediate local value.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.value", "summary": "Field that carries the computed local value for this step form"},
+                {"handle": "workflow.step.result", "summary": "Sibling field for final workflow result emission rather than local intermediate computation"},
+                {"handle": "workflow.step.publish", "summary": "Sibling field for publishing outward contract data rather than staging a local step value"},
+            ],
+            "inspect_next": ["workflow.step.value", "workflow.step.result", "workflow.step.publish"],
         },
         "state.workflow_surface.step_state_delete_field": {
             "definition": "State workflow-surface field that marks `state_delete` as the explicit step-owned durable deletion surface inside workflow authoring.",

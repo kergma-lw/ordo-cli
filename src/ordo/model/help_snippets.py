@@ -318,6 +318,39 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step.value": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_value_boolean_membership_check",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Compute one boolean membership check as a local step value.",
+                "yaml": 'inputs.status | in(inputs.allowed)',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.value",
+                    "expected_status": "ok",
+                },
+            },
+            {
+                "name": "step_value_step_fragment_with_register",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete value step that computes a local value and registers it for later reuse.",
+                "yaml": '- name: classify-status\n  value: inputs.status | in(inputs.allowed)\n  register: status_allowed',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.value",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
     "workflow.local_expression.filter.lookup": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [

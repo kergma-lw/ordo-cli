@@ -689,6 +689,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.state_needs", bindings_field.stdout)
         self.assertIn("playbook.states", bindings_field.stdout)
 
+    def test_text_describe_value_step_group_is_teaching_ready(self) -> None:
+        step_capability = self.run_help("describe", "workflow.step.value")
+        step_form = self.run_help("describe", "workflow.step_forms.value")
+
+        self.assertEqual(step_capability.returncode, 0)
+        self.assertIn("Workflow step capability for computing one explicit ephemeral value", step_capability.stdout)
+        self.assertIn("workflow.step.state_set", step_capability.stdout)
+        self.assertIn("example_for: field_fragment", step_capability.stdout)
+        self.assertIn("example_for: step_fragment", step_capability.stdout)
+
+        self.assertEqual(step_form.returncode, 0)
+        self.assertIn("Workflow step form for one named ephemeral value checkpoint", step_form.stdout)
+        self.assertIn("workflow.step.result", step_form.stdout)
+        self.assertIn("workflow.step.publish", step_form.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
@@ -833,7 +848,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
         handles = {item["handle"]: item for item in payload["handles"]}
-        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 9)
+        self.assertEqual(payload["summary"]["coverage_counts"]["runner_verified"], 10)
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 1)
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")

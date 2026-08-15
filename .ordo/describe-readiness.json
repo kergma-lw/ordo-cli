@@ -387,6 +387,12 @@
     },
     "state.workflow_surface.state_binding_field": {
       "describe_readiness": "ready"
+    },
+    "workflow.step.value": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.value": {
+      "describe_readiness": "ready"
     }
   }
 }

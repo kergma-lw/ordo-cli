@@ -162,6 +162,17 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         ),
     ),
     CapabilitySpec(
+        name="workflow.step.value",
+        status="supported",
+        scope="workflow.step",
+        related_capabilities=("workflow.local_expressions",),
+        related_model_nodes=(
+            "workflow.step_forms.value",
+            "workflow.step.result",
+            "workflow.step.publish",
+        ),
+    ),
+    CapabilitySpec(
         name="workflow.include_fragments",
         status="supported",
         scope="workflow",
