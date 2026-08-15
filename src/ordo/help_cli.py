@@ -2104,6 +2104,100 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["routine_contract.entry.outputs", "routine_contract.entry.implementation", "workflow-authoring.routine.*"],
         },
+        "routine_contract.entry.kind": {
+            "definition": "Routine registry-entry field for the narrow classification of a routine entry inside the routine exception surface.",
+            "use_when": [
+                "A routine entry needs its required kind marker so the registry records what bounded fallback shape this entry represents.",
+            ],
+            "do_not_use_for": [
+                "Business semantics or user-facing purpose text; those belong to summary, args, outputs, and failure contract fields.",
+                "Treating kind as a substitute for richer public connector modeling; routine kind still stays inside the exception-path registry.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.entry.summary", "summary": "Sibling field for the short human-facing purpose of the routine entry"},
+                {"handle": "routine_contract.entry.implementation", "summary": "Sibling field for the bounded execution envelope that actually runs the helper"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance that keeps routine publication narrow and exceptional"},
+            ],
+            "inspect_next": ["routine_contract.entry.summary", "routine_contract.entry.implementation", "workflow-authoring.routine.*"],
+        },
+        "routine_contract.entry.summary": {
+            "definition": "Routine registry-entry field for the short human-facing purpose statement that explains what one routine entry is for.",
+            "use_when": [
+                "A routine entry needs a concise reviewable explanation of its bounded local automation role.",
+            ],
+            "do_not_use_for": [
+                "Full business semantics or execution details; summary should stay short and pair with args, implementation, outputs, and failure_modes.",
+                "Replacing explicit output or failure contracts with prose alone.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.entry.kind", "summary": "Sibling field for the routine entry classification"},
+                {"handle": "routine_contract.entry.outputs", "summary": "Sibling field for declared successful result shape"},
+                {"handle": "routine_contract.entry.failure_modes", "summary": "Sibling field for declared outward-facing failure classes"},
+            ],
+            "inspect_next": ["routine_contract.entry.outputs", "routine_contract.entry.failure_modes", "routine_contract.entry.kind"],
+        },
+        "routine_contract.entry.outputs": {
+            "definition": "Routine registry-entry field for declaring the successful outward result shape that the routine may return to the workflow.",
+            "use_when": [
+                "A routine returns structured success data and that outward contract should be reviewable instead of remaining implicit in helper behavior.",
+            ],
+            "do_not_use_for": [
+                "Execution logs or debug-only helper chatter; outputs are the successful result contract, not generic process output.",
+                "Failure classification; use failure_modes for named outward-facing failure classes.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.entry.failure_modes", "summary": "Sibling field for declared outward-facing failure classes"},
+                {"handle": "routine_contract.entry.summary", "summary": "Sibling short purpose statement for the routine entry"},
+                {"handle": "routine_contract.workflow_call_surface", "summary": "Call surface that feeds args and env into a routine that may later return declared outputs"},
+            ],
+            "inspect_next": ["routine_contract.entry.failure_modes", "routine_contract.workflow_call_surface", "routine_contract.entry.summary"],
+        },
+        "routine_contract.entry.log_hints": {
+            "definition": "Routine registry-entry field for optional logging and observability hints that help explain helper execution without changing the business contract.",
+            "use_when": [
+                "A routine benefits from lightweight operator-facing log guidance beyond its summary and failure/output contracts.",
+            ],
+            "do_not_use_for": [
+                "Business outputs or failure classes; log_hints should not become a second implicit contract surface.",
+                "Replacing the required implementation or failure declaration with commentary alone.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.entry.summary", "summary": "Sibling field for the short human-facing purpose statement"},
+                {"handle": "routine_contract.entry.outputs", "summary": "Sibling field for declared successful outward result shape"},
+                {"handle": "routine_contract.entry.failure_modes", "summary": "Sibling field for declared failure classes"},
+            ],
+            "inspect_next": ["routine_contract.entry.summary", "routine_contract.entry.outputs", "routine_contract.entry.failure_modes"],
+        },
+        "routine_contract.routines": {
+            "definition": "Routine-registry top-level field that contains the declared set of named routine entries for this project-local exception-path registry.",
+            "use_when": [
+                "The registry needs one top-level map of named routine entries that workflows may reference through routine.* uses surfaces.",
+            ],
+            "do_not_use_for": [
+                "A connector family catalog or general extension registry; routines stay a bounded local exception surface.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.version", "summary": "Sibling top-level field for the routine registry schema version"},
+                {"handle": "routine_contract.entry.summary", "summary": "Representative entry field inside the named routines map"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance that treats the whole registry as an exception path"},
+            ],
+            "inspect_next": ["routine_contract.version", "routine_contract.entry.summary", "workflow-authoring.routine.*"],
+        },
+        "routine_contract.version": {
+            "definition": "Routine-registry top-level field for the schema version of the project-local routine contract document.",
+            "use_when": [
+                "The registry document needs an explicit contract version so tooling can validate it against the expected routine schema.",
+            ],
+            "do_not_use_for": [
+                "Routine helper release numbering or business data versioning; this field versions the routine registry contract itself.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "routine_contract.routines", "summary": "Sibling top-level field that contains the named routine entry map"},
+                {"handle": "routine_contract", "summary": "Top-level routine contract surface for the project-local registry"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance for when the routine registry should exist at all"},
+            ],
+            "inspect_next": ["routine_contract.routines", "routine_contract.entry.summary", "workflow-authoring.routine.*"],
+        },
         "workflow.inputs": {
             "definition": "Top-level workflow field for declaring the named activation inputs that the caller must provide before the workflow may run.",
             "use_when": [

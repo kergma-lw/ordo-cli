@@ -581,6 +581,38 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow-authoring.routine.*", failure_modes.stdout)
         self.assertIn("related examples:", failure_modes.stdout)
 
+    def test_text_describe_routine_metadata_tail_group_is_teaching_ready(self) -> None:
+        entry_kind = self.run_help("describe", "routine_contract.entry.kind")
+        entry_summary = self.run_help("describe", "routine_contract.entry.summary")
+        entry_outputs = self.run_help("describe", "routine_contract.entry.outputs")
+        entry_log_hints = self.run_help("describe", "routine_contract.entry.log_hints")
+        routines_field = self.run_help("describe", "routine_contract.routines")
+        version_field = self.run_help("describe", "routine_contract.version")
+
+        self.assertEqual(entry_kind.returncode, 0)
+        self.assertIn("Routine registry-entry field for the narrow classification", entry_kind.stdout)
+        self.assertIn("workflow-authoring.routine.*", entry_kind.stdout)
+
+        self.assertEqual(entry_summary.returncode, 0)
+        self.assertIn("Routine registry-entry field for the short human-facing purpose statement", entry_summary.stdout)
+        self.assertIn("routine_contract.entry.outputs", entry_summary.stdout)
+
+        self.assertEqual(entry_outputs.returncode, 0)
+        self.assertIn("Routine registry-entry field for declaring the successful outward result shape", entry_outputs.stdout)
+        self.assertIn("routine_contract.workflow_call_surface", entry_outputs.stdout)
+
+        self.assertEqual(entry_log_hints.returncode, 0)
+        self.assertIn("Routine registry-entry field for optional logging and observability hints", entry_log_hints.stdout)
+        self.assertIn("routine_contract.entry.failure_modes", entry_log_hints.stdout)
+
+        self.assertEqual(routines_field.returncode, 0)
+        self.assertIn("Routine-registry top-level field that contains the declared set of named routine entries", routines_field.stdout)
+        self.assertIn("workflow-authoring.routine.*", routines_field.stdout)
+
+        self.assertEqual(version_field.returncode, 0)
+        self.assertIn("Routine-registry top-level field for the schema version", version_field.stdout)
+        self.assertIn("routine_contract.routines", version_field.stdout)
+
     def test_model_and_capabilities_publish_guard_contract_details(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)

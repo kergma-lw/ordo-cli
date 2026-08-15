@@ -336,6 +336,24 @@
     },
     "routine_contract.entry.failure_modes": {
       "describe_readiness": "ready"
+    },
+    "routine_contract.entry.kind": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.entry.summary": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.entry.outputs": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.entry.log_hints": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.routines": {
+      "describe_readiness": "ready"
+    },
+    "routine_contract.version": {
+      "describe_readiness": "ready"
     }
   }
 }
