@@ -283,6 +283,36 @@
     "playbook.connectors": {
       "describe_readiness": "ready"
     },
+    "profile.connectors": {
+      "describe_readiness": "ready"
+    },
+    "profile.inputs": {
+      "describe_readiness": "ready"
+    },
+    "profile.working_directory": {
+      "describe_readiness": "ready"
+    },
+    "profile.name": {
+      "describe_readiness": "ready"
+    },
+    "profile.checks": {
+      "describe_readiness": "ready"
+    },
+    "profile.launchers": {
+      "describe_readiness": "ready"
+    },
+    "runtime.launchers": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step.launcher": {
+      "describe_readiness": "ready"
+    },
+    "workflow.version": {
+      "describe_readiness": "ready"
+    },
+    "workflow.workflow": {
+      "describe_readiness": "ready"
+    },
     "playbook.defaults.profile": {
       "describe_readiness": "ready"
     },

@@ -1,0 +1,6 @@
+name: frontend-workdir
+
+inputs:
+  repo_dir: ../frontend
+
+working_directory: ${inputs.repo_dir}

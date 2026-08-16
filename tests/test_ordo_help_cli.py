@@ -1179,8 +1179,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 32)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 40)
         self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 55)
+        self.assertEqual(handles["profile.checks"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.launchers"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.connectors"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.inputs"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.name"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["profile.working_directory"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.workflow"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.version"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.version"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.connectors"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
@@ -1402,6 +1410,130 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("playbook.workflows", connectors.stdout)
         self.assertIn("example_for: field_fragment", connectors.stdout)
         self.assertIn("compose:", connectors.stdout)
+
+    def test_text_describe_profile_connectors_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "profile.connectors")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Profile-scoped connector bootstrap field", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("playbook.connectors", result.stdout)
+        self.assertIn("profile.inputs", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("project_name: orders-prod", result.stdout)
+
+    def test_text_describe_profile_inputs_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "profile.inputs")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("default values for workflow-declared inputs", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("workflow.inputs_contract", result.stdout)
+        self.assertIn("playbook.workflows.with", result.stdout)
+        self.assertIn("fill only missing declared workflow inputs", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("issue: kergma-lw/ordo-cli#1", result.stdout)
+
+    def test_text_describe_profile_working_directory_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "profile.working_directory")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("reusable execution working-directory context", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("playbook.defaults.working_directory", result.stdout)
+        self.assertIn("playbook.workflows.working_directory", result.stdout)
+        self.assertIn("profile.inputs", result.stdout)
+        self.assertIn("may read only inputs.* roots", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("working_directory: ${inputs.repo_dir}", result.stdout)
+
+    def test_text_describe_profile_name_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "profile.name")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("stable internal name", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("playbook.defaults.profile", result.stdout)
+        self.assertIn("command-line.ordo-playbook.flag.profile", result.stdout)
+        self.assertIn("workflow.profile", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("name: read-only-review", result.stdout)
+
+    def test_text_describe_profile_checks_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "profile.checks")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("named review or verification labels", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("workflow-authoring.paired_authoring_passes", result.stdout)
+        self.assertIn("profile.overrides", result.stdout)
+        self.assertIn("does not treat the labels themselves as an automatic execution plan", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("- unit", result.stdout)
+        self.assertIn("- contract", result.stdout)
+
+    def test_text_describe_profile_launchers_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "profile.launchers")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Deprecated profile field", result.stdout)
+        self.assertIn("status: deprecated", result.stdout)
+        self.assertIn("preferred_alternative: published_routines", result.stdout)
+        self.assertIn("workflow.step.launcher", result.stdout)
+        self.assertIn("workflow-authoring.routine.*", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("shell_frontend:", result.stdout)
+        self.assertIn("file: ../launchers/shell-frontend.yaml", result.stdout)
+
+    def test_text_describe_runtime_launchers_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "runtime.launchers")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Deprecated runtime capability", result.stdout)
+        self.assertIn("status: deprecated", result.stdout)
+        self.assertIn("scope: runtime", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("profile.launchers", result.stdout)
+        self.assertIn("workflow.step.launcher", result.stdout)
+        self.assertIn("must not infer:", result.stdout)
+
+    def test_text_describe_workflow_step_launcher_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "workflow.step.launcher")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Deprecated workflow-step capability", result.stdout)
+        self.assertIn("status: deprecated", result.stdout)
+        self.assertIn("scope: workflow.step", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("runtime.launchers", result.stdout)
+        self.assertIn("profile.launchers", result.stdout)
+        self.assertIn("must not infer:", result.stdout)
+
+    def test_text_describe_workflow_version_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "workflow.version")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Required top-level workflow format marker", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("playbook.version", result.stdout)
+        self.assertIn("routine_contract.version", result.stdout)
+        self.assertIn("workflow.workflow", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("version: 0", result.stdout)
+
+    def test_text_describe_workflow_workflow_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "workflow.workflow")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Required top-level workflow identity field", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("playbook.workflows.file", result.stdout)
+        self.assertIn("profile.name", result.stdout)
+        self.assertIn("workflow.version", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
+        self.assertIn("workflow: set-active-task", result.stdout)
 
     def test_text_describe_connector_compose_group_is_teaching_ready(self) -> None:
         family = self.run_help("describe", "connector.compose")

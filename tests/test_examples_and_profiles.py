@@ -46,6 +46,8 @@ class ExampleSurfaceTest(unittest.TestCase):
     def test_example_profiles_validate(self) -> None:
         for path in (
             Path("profiles/backend-default.yaml"),
+            Path("profiles/compose-review.yaml"),
+            Path("profiles/frontend-workdir.yaml"),
             Path("profiles/read-only-review.yaml"),
             Path("profiles/frontend-launcher.yaml"),
         ):

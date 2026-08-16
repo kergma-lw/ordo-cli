@@ -1537,6 +1537,47 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
                 "Simple root reads, comparisons, or short pipeline shaping that are already clear with ordinary local-expression filters or builtins.",
                 "Implicit host binding inside adapter-owned syntax; use the published adapter binding seam when host references must enter the adapter body.",
             ],
+        },
+        "runtime.launchers": {
+            "definition": "Deprecated runtime capability for honoring legacy launcher-based execution setup when older workflows still reference launcher names at runtime.",
+            "use_when": [
+                "You are reading or maintaining an older workflow path that still resolves a named launcher through profile.launchers and workflow.step.launcher.",
+                "A migration discussion needs to distinguish current compatibility support from the preferred routines-based path for new work.",
+            ],
+            "do_not_use_for": [
+                "Treating launcher support as approval for new launcher-centric workflow authoring; the capability exists for compatibility, not as the preferred path.",
+                "Assuming a runtime capability automatically provides the authored syntax you should introduce next; prefer routines or explicit profile context for new execution setup.",
+            ],
+        },
+        "workflow.step.launcher": {
+            "definition": "Deprecated workflow-step capability for selecting one named legacy launcher record on an operation-shaped step when an older workflow still depends on launcher-based execution setup.",
+            "use_when": [
+                "You are reading or maintaining an existing workflow that already references one named launcher and need to understand that legacy step surface honestly.",
+                "A migration discussion needs to explain how one step-level launcher reference relates to profile.launchers and why routines are now preferred for new local automation.",
+            ],
+            "do_not_use_for": [
+                "New workflow authoring when a routine or another structured execution-context surface can express the behavior more honestly.",
+                "Treating step-level launcher selection as the preferred way to attach execution setup to a step; this capability is deprecated and retained for compatibility only.",
+            ],
+        },
+        "workflow.version": {
+            "definition": "Required top-level workflow format marker that declares which published workflow document shape this file is written against.",
+            "use_when": [
+                "Every workflow document must start by declaring the required published workflow format version before workflow, inputs, blocks, or other top-level workflow fields.",
+            ],
+            "do_not_use_for": [
+                "Publishing a domain, release, or business-process version for the workflow itself; this field is only the workflow document-format marker.",
+                "Declaring playbook or routine registry document formats; use playbook.version or routine_contract.version for those separate documents.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.version", "summary": "Required version marker for one playbook launch-catalog document rather than for one workflow file"},
+                {"handle": "routine_contract.version", "summary": "Required version marker for the routine registry document"},
+                {"handle": "workflow.workflow", "summary": "The top-level workflow identity field that the version marker makes safe to interpret"},
+            ],
+            "examples": [
+                {"reference": "workflow.version", "inputs": {"version": 0}},
+            ],
+            "inspect_next": ["workflow.workflow", "playbook.version", "routine_contract.version"],
         }
     }
     for capability in payload["capabilities"]:
@@ -3532,6 +3573,101 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.step.profile_switch", "workflow-authoring.workflow_profile_binding_is_project_local", "profile"],
         },
+        "workflow.version": {
+            "definition": "Required top-level workflow format marker that declares which published workflow document shape this file is written against.",
+            "use_when": [
+                "Every workflow document must start by declaring the required published workflow format version before workflow, inputs, blocks, or other top-level workflow fields.",
+            ],
+            "do_not_use_for": [
+                "Publishing a domain, release, or business-process version for the workflow itself; this field is only the workflow document-format marker.",
+                "Declaring playbook or routine registry document formats; use playbook.version or routine_contract.version for those separate documents.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.version", "summary": "Required version marker for one playbook launch-catalog document rather than for one workflow file"},
+                {"handle": "routine_contract.version", "summary": "Required version marker for the routine registry document"},
+                {"handle": "workflow.workflow", "summary": "The top-level workflow identity field that the version marker makes safe to interpret"},
+            ],
+            "examples": [
+                {"reference": "workflow.version", "inputs": {"version": 0}},
+            ],
+            "inspect_next": ["workflow.workflow", "playbook.version", "routine_contract.version"],
+        },
+        "workflow.workflow": {
+            "definition": "Required top-level workflow identity field that declares the stable authored name of the workflow contract in this document.",
+            "use_when": [
+                "Every workflow document must publish the stable workflow name that diagnostics, explain/check surfaces, and launch wrappers refer to when identifying this contract.",
+            ],
+            "do_not_use_for": [
+                "Naming one playbook entry, profile, or human-facing description; this field is the workflow document's own contract identity.",
+                "Selecting a different workflow to run from inside this document; that belongs to playbook launch surfaces or runtime invocation surfaces, not to the top-level workflow name field.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.workflows.file", "summary": "Playbook workflow-entry field that points one launch entry at a workflow file rather than naming the workflow contract inside that file"},
+                {"handle": "profile.name", "summary": "Profile document identity field for execution context, distinct from the workflow contract name"},
+                {"handle": "workflow.version", "summary": "Top-level workflow format marker that makes the named workflow contract safe to interpret"},
+            ],
+            "examples": [
+                {"reference": "workflow.workflow", "inputs": {"workflow": "set-active-task"}},
+            ],
+            "inspect_next": ["workflow.version", "playbook.workflows.file", "profile.name"],
+        },
+        "profile.inputs": {
+            "definition": "Profile field for declaring default values for workflow-declared inputs when the caller did not supply those inputs explicitly.",
+            "use_when": [
+                "Several runs under one profile should reuse the same declared workflow input defaults without copying them into every playbook entry or command invocation.",
+                "One execution mode such as review or backend should supply stable fallback input values while still allowing explicit caller overrides.",
+            ],
+            "do_not_use_for": [
+                "Undeclared workflow inputs or arbitrary profile-local scratch data; this field only supplies values for workflow-declared activation inputs.",
+                "Forcing one value even when the caller or playbook workflow entry already supplied it; profile.inputs is a missing-input default surface, not an unconditional override.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.inputs_contract", "summary": "Workflow contract that declares which activation inputs may be supplied or required"},
+                {"handle": "playbook.workflows.with", "summary": "Playbook workflow-entry field for entry-owned launch inputs rather than reusable profile defaults"},
+                {"handle": "profile.overrides", "summary": "Profile metadata records that do not feed workflow activation inputs directly"},
+            ],
+            "effects": [
+                "profile-owned values fill only missing declared workflow inputs during activation",
+                "explicit caller inputs and playbook entry-owned inputs remain higher-precedence than profile defaults",
+            ],
+            "examples": [
+                {
+                    "reference": "profile.inputs",
+                    "inputs": {
+                        "command": ".venv/bin/python -m unittest discover -s tests",
+                        "issue": "kergma-lw/ordo-cli#1",
+                    },
+                }
+            ],
+            "inspect_next": ["workflow.inputs_contract", "playbook.workflows.with", "playbook.defaults.profile"],
+        },
+        "profile.working_directory": {
+            "definition": "Profile field for declaring one reusable execution working-directory context that becomes active when this profile is selected.",
+            "use_when": [
+                "Several runs under one profile should execute from the same repository-relative directory without repeating that directory in every playbook workflow entry.",
+                "One profile should derive its execution directory from activation inputs such as inputs.repo_dir while still remaining reusable across workflows.",
+            ],
+            "do_not_use_for": [
+                "Per-workflow-entry directory overrides; use playbook.workflows.working_directory when one published workflow entry needs a narrower directory choice.",
+                "Arbitrary runtime expressions over step or state data; this activation-time field only allows ${...} expressions rooted in inputs.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.defaults.working_directory", "summary": "Playbook-wide soft default execution directory when no profile-specific directory is needed"},
+                {"handle": "playbook.workflows.working_directory", "summary": "Per-workflow-entry execution directory override that is narrower than one reusable profile context"},
+                {"handle": "profile.inputs", "summary": "Profile-owned input defaults that may feed the working_directory expression through inputs.* values"},
+            ],
+            "effects": [
+                "the resolved directory becomes the activated execution cwd for runs under this profile when no narrower workflow-entry override wins",
+                "working_directory expressions resolve relative to the playbook directory and may read only inputs.* roots",
+            ],
+            "examples": [
+                {
+                    "reference": "profile.working_directory",
+                    "inputs": {"working_directory": "${inputs.repo_dir}"},
+                }
+            ],
+            "inspect_next": ["playbook.defaults.working_directory", "playbook.workflows.working_directory", "profile.inputs"],
+        },
         "profile.overrides": {
             "definition": "Profile field for publishing one or more explicit override records, each with a consumer-owned target plus optional payload and reason text.",
             "use_when": [
@@ -3975,6 +4111,83 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["profile.name", "playbook.defaults.profile", "playbook.workflows.file"],
         },
+        "profile.name": {
+            "definition": "Required profile field that declares the profile document's own stable internal name for selection, diagnostics, and composition.",
+            "use_when": [
+                "Every profile document must publish the stable name that playbook profile entries, defaults, and runtime diagnostics refer to.",
+            ],
+            "do_not_use_for": [
+                "Choosing which profile should win for one run; use playbook.defaults.profile, workflow.profile, or the command-line profile selector for activation decisions.",
+                "Publishing a human-friendly label unrelated to runtime identity; this field is the profile's declared contract name.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "playbook.defaults.profile", "summary": "Playbook field that chooses one declared profile name as the soft default activation choice"},
+                {"handle": "command-line.ordo-playbook.flag.profile", "summary": "Launch-time selector that chooses which declared profile name to activate for one invocation"},
+                {"handle": "workflow.profile", "summary": "Workflow-owned fixed binding to one declared profile name before guards run"},
+            ],
+            "effects": [
+                "the declared name becomes the stable identity that profile selection and diagnostics use",
+                "the profile document must expose exactly one non-empty string name",
+            ],
+            "examples": [
+                {"reference": "profile.name", "inputs": {"name": "read-only-review"}},
+            ],
+            "inspect_next": ["playbook.defaults.profile", "command-line.ordo-playbook.flag.profile", "workflow.profile"],
+        },
+        "profile.checks": {
+            "definition": "Profile field for publishing one or more named review or verification labels that describe the expected checking posture of this profile.",
+            "use_when": [
+                "A profile should publish its intended review or verification posture, such as review, unit, or contract, as reusable launch metadata.",
+                "Several workflows under one profile share the same checking expectations and readers should see that posture without reverse-engineering workflow bodies.",
+            ],
+            "do_not_use_for": [
+                "Workflow applicability logic or engine-enforced guard behavior; use workflow guards, check, and review surfaces for executable validation semantics.",
+                "Pretending the engine will automatically run those named checks merely because the labels are present; this field publishes metadata rather than imperative execution steps.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "profile.overrides", "summary": "Other published profile metadata that later readers may inspect without changing workflow execution semantics directly"},
+                {"handle": "workflow-authoring.paired_authoring_passes", "summary": "Authoring guidance for the real check/review execution loop rather than profile metadata labels"},
+                {"handle": "command-line.ordo-playbook", "summary": "Command surface that actually launches workflows instead of merely publishing profile metadata"},
+            ],
+            "effects": [
+                "named checks are published as profile metadata and remain available to readers, reviewers, or local conventions",
+                "the engine does not treat the labels themselves as an automatic execution plan",
+            ],
+            "examples": [
+                {"reference": "profile.checks", "inputs": {"checks": ["unit", "contract"]}},
+            ],
+            "inspect_next": ["workflow-authoring.paired_authoring_passes", "profile.overrides", "command-line.ordo-playbook"],
+        },
+        "profile.launchers": {
+            "definition": "Deprecated profile field for publishing profile-scoped launcher records that older workflows may still reference through workflow.step.launcher.",
+            "use_when": [
+                "You are maintaining existing launcher-based profile metadata and need to understand or document what one legacy profile publishes today.",
+                "A project still has older launcher references and needs a migration-aware surface that points readers toward the preferred routines alternative.",
+            ],
+            "do_not_use_for": [
+                "New workflow authoring when published routines or explicit profile context can express the execution setup more honestly.",
+                "Assuming launcher records are the preferred long-term execution-context surface; this field is deprecated and retained mainly for compatibility.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.launcher", "summary": "Workflow step field that consumes one named launcher record when older workflows still use launcher-based execution setup"},
+                {"handle": "routines", "summary": "Preferred bounded local-automation alternative for new work instead of growing launcher usage"},
+                {"handle": "workflow-authoring.routine.*", "summary": "Authoring guidance that explains when routines are acceptable as the preferred replacement path"},
+            ],
+            "fields": [
+                {"name": "file", "type": "string", "required": False, "role": "launcher_definition_file"},
+                {"name": "connector", "type": "string", "required": False, "role": "legacy_connector_name"},
+                {"name": "before", "type": "string", "required": False, "role": "pre_step_shell_hook"},
+                {"name": "after", "type": "string", "required": False, "role": "post_step_shell_hook"},
+            ],
+            "effects": [
+                "launcher records are published as profile-scoped compatibility metadata for workflows that still reference them",
+                "launcher composition uses first-writer-wins conflict rules and remains deprecated across profile composition",
+            ],
+            "examples": [
+                {"reference": "profile.launchers", "inputs": {"shell_frontend": {"file": "../launchers/shell-frontend.yaml"}}},
+            ],
+            "inspect_next": ["workflow.step.launcher", "routines", "workflow-authoring.routine.*"],
+        },
         "playbook.states": {
             "definition": "Playbook field for declaring the named state storage locations that workflows and playbook entries may bind explicitly.",
             "use_when": [
@@ -4033,18 +4246,20 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["playbook.workflows", "workflow.version", "routine_contract.version"],
         },
         "profile.connectors": {
-            "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
+            "definition": "Profile-scoped connector bootstrap field for declaring connector context that applies only when this profile is active.",
             "use_when": [
                 "Several runs under one profile need the same connector context, such as Compose directory/file/project settings, without repeating it in every workflow call.",
+                "One profile should narrow or override broader playbook connector defaults for a specific execution mode such as review, backend, or deployment work.",
             ],
             "do_not_use_for": [
+                "Repository-wide connector defaults that should apply before profile selection; use playbook.connectors for that broader launch scope.",
                 "Publishing connector operations themselves; use connector.* handles to learn the public operation surface.",
                 "Workflow business inputs that belong in declared workflow inputs rather than connector bootstrap context.",
             ],
             "nearest_surfaces": [
-                {"handle": "playbook.connectors", "summary": "Playbook-level connector context before profile-specific overrides"},
+                {"handle": "playbook.connectors", "summary": "Playbook-level connector context that provides broader defaults before profile-specific narrowing or overrides"},
                 {"handle": "connector.compose", "summary": "One connector family that reads concrete context fields such as directory, file, and project_name"},
-                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "profile.inputs", "summary": "Profile-owned workflow input defaults, which are different from connector bootstrap context"},
             ],
             "examples": [
                 {
@@ -4056,7 +4271,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                     },
                 }
             ],
-            "inspect_next": ["playbook.connectors", "connector.compose", "operations"],
+            "inspect_next": ["playbook.connectors", "connector.compose", "profile.inputs"],
         },
         "playbook.connectors": {
             "definition": "Playbook top-level field for declaring repository-wide default connector bootstrap context before profile-specific overrides apply.",
@@ -5672,8 +5887,10 @@ def render_model_node_text(payload: JSONObject) -> str:
     namespace = metadata.get("namespace")
     kind = metadata.get("kind")
     maturity = metadata.get("maturity")
+    status = metadata.get("status")
     deprecated = metadata.get("deprecated")
-    if any(isinstance(item, str) for item in (namespace, kind, maturity)):
+    preferred_alternative = metadata.get("preferred_alternative")
+    if any(isinstance(item, str) for item in (namespace, kind, maturity, status, preferred_alternative)) or isinstance(deprecated, bool):
         lines.extend(["", "published contract:"])
         if isinstance(namespace, str):
             lines.append(f"- namespace: {namespace}")
@@ -5681,8 +5898,12 @@ def render_model_node_text(payload: JSONObject) -> str:
             lines.append(f"- kind: {kind}")
         if isinstance(maturity, str):
             lines.append(f"- maturity: {maturity}")
+        if isinstance(status, str):
+            lines.append(f"- status: {status}")
         if isinstance(deprecated, bool):
             lines.append(f"- deprecated: {'yes' if deprecated else 'no'}")
+        if isinstance(preferred_alternative, str):
+            lines.append(f"- preferred_alternative: {preferred_alternative}")
 
     operations = metadata.get("operations", [])
     if isinstance(operations, list) and operations:

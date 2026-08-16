@@ -340,6 +340,166 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "profile.connectors": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_connector_override_block",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Bind one profile-scoped Compose context block that applies only when this profile is selected.",
+                "source_excerpt": {
+                    "path": "profiles/compose-review.yaml",
+                    "start_line": 3,
+                    "end_line": 7
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profiles.compose-review"
+                },
+            }
+        ],
+    },
+    "profile.inputs": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_input_defaults_block",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Publish one profile-scoped input-default block that supplies declared workflow inputs only when they are still missing at activation time.",
+                "source_excerpt": {
+                    "path": "profiles/backend-default.yaml",
+                    "start_line": 3,
+                    "end_line": 5
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profiles.backend-default"
+                },
+            }
+        ],
+    },
+    "profile.working_directory": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_working_directory_expression",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Publish one profile-scoped execution directory that resolves from an activation input relative to the playbook directory.",
+                "source_excerpt": {
+                    "path": "profiles/frontend-workdir.yaml",
+                    "start_line": 3,
+                    "end_line": 6
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profiles.frontend-workdir"
+                },
+            }
+        ],
+    },
+    "profile.name": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_declared_name",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Declare the profile document's stable internal name so selection surfaces can refer to it explicitly.",
+                "source_excerpt": {
+                    "path": "profiles/read-only-review.yaml",
+                    "start_line": 1,
+                    "end_line": 1
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profiles.read-only-review"
+                },
+            }
+        ],
+    },
+    "profile.checks": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_check_labels",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Publish one profile-scoped list of named check labels so the profile advertises its expected verification posture.",
+                "source_excerpt": {
+                    "path": "profiles/backend-default.yaml",
+                    "start_line": 7,
+                    "end_line": 9
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profiles.backend-default"
+                },
+            }
+        ],
+    },
+    "profile.launchers": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "profile_legacy_launcher_block",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Publish one deprecated profile-scoped launcher record so an older workflow can still reference a named launcher during migration.",
+                "source_excerpt": {
+                    "path": "profiles/frontend-launcher.yaml",
+                    "start_line": 5,
+                    "end_line": 7
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "profiles.frontend-launcher"
+                },
+            }
+        ],
+    },
+    "workflow.version": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "workflow_version_marker",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Start one workflow document with the required version marker before the rest of the top-level workflow contract.",
+                "source_excerpt": {
+                    "path": "examples/minimal.yaml",
+                    "start_line": 1,
+                    "end_line": 3
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.minimal"
+                },
+            }
+        ],
+    },
+    "workflow.workflow": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "workflow_declared_name",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Declare the workflow document's stable contract name before the block structure begins.",
+                "source_excerpt": {
+                    "path": "examples/minimal.yaml",
+                    "start_line": 2,
+                    "end_line": 3
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.minimal"
+                },
+            }
+        ],
+    },
     "profile.overrides": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [
