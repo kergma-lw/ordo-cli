@@ -625,6 +625,27 @@
     "workflow.step_forms.value": {
       "describe_readiness": "ready"
     },
+    "embedded_value_expression.step_refs_must_be_backward": {
+      "describe_readiness": "ready"
+    },
+    "format_value.args_must_be_list": {
+      "describe_readiness": "ready"
+    },
+    "guard_expression.boolean_result_required": {
+      "describe_readiness": "ready"
+    },
+    "guard_expression.no_adapter_write_path": {
+      "describe_readiness": "ready"
+    },
+    "guard_expression.no_step_root": {
+      "describe_readiness": "ready"
+    },
+    "workflow_state_role.write_after_last_read": {
+      "describe_readiness": "ready"
+    },
+    "workflow_fragment.no_state_surface": {
+      "describe_readiness": "ready"
+    },
     "workflow_step.exactly_one_form": {
       "describe_readiness": "ready"
     },

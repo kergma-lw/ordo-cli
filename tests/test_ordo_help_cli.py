@@ -1794,6 +1794,23 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("The register field is allowed only together with uses, run, or value", register_requires.stdout)
         self.assertIn("reusable run invocations", register_requires.stdout)
 
+    def test_text_describe_general_negative_rule_group_is_teaching_ready(self) -> None:
+        backward_step_refs = self.run_help("describe", "embedded_value_expression.step_refs_must_be_backward")
+        guard_boolean = self.run_help("describe", "guard_expression.boolean_result_required")
+        fragment_no_state = self.run_help("describe", "workflow_fragment.no_state_surface")
+
+        self.assertEqual(backward_step_refs.returncode, 0)
+        self.assertIn("Registered step references may target only earlier steps", backward_step_refs.stdout)
+        self.assertIn("order-sensitive execution-local data flow", backward_step_refs.stdout)
+
+        self.assertEqual(guard_boolean.returncode, 0)
+        self.assertIn("Guard expressions must evaluate to a boolean result", guard_boolean.stdout)
+        self.assertIn("boolean policy outcomes", guard_boolean.stdout)
+
+        self.assertEqual(fragment_no_state.returncode, 0)
+        self.assertIn("Included fragments must not read, declare, or mutate runtime state", fragment_no_state.stdout)
+        self.assertIn("top-level workflow handoff surface", fragment_no_state.stdout)
+
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
         pre_run_file = self.run_help("describe", "playbook.pre_run.file")
@@ -2006,6 +2023,23 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(register_requires["node_kind"], "negative_rule")
         self.assertIn("uses, run, or value", register_requires["rule"])
         self.assertIn("workflow.step.run", register_requires["related_model_nodes"])
+
+    def test_describe_general_negative_rule_group_publishes_compact_rule_metadata(self) -> None:
+        backward_step_refs = json.loads(self.run_help("describe", "embedded_value_expression.step_refs_must_be_backward", "--json").stdout)
+        guard_write_path = json.loads(self.run_help("describe", "guard_expression.no_adapter_write_path", "--json").stdout)
+        state_write_after_read = json.loads(self.run_help("describe", "workflow_state_role.write_after_last_read", "--json").stdout)
+
+        self.assertEqual(backward_step_refs["node_kind"], "negative_rule")
+        self.assertIn("only earlier steps", backward_step_refs["rule"])
+        self.assertIn("execution-local data flow", backward_step_refs["reason"])
+
+        self.assertEqual(guard_write_path["node_kind"], "negative_rule")
+        self.assertIn("not allowed in guard expressions", guard_write_path["rule"])
+        self.assertIn("read-only local-expression constructs", guard_write_path["reason"])
+
+        self.assertEqual(state_write_after_read["node_kind"], "negative_rule")
+        self.assertIn("after the final read", state_write_after_read["rule"])
+        self.assertIn("cross-run handoff", state_write_after_read["reason"])
 
     def test_search_finds_json_representation_adapter_model_node(self) -> None:
         result = json.loads(self.run_help("search", "json adapter", "--json").stdout)
