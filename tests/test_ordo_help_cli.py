@@ -1106,6 +1106,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(worktrees["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("connector.git.worktree", [item["handle"] for item in worktrees["metadata"]["nearest_surfaces"]])
 
+    def test_describe_connector_shell_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        family = json.loads(self.run_help("describe", "connector.shell", "--json").stdout)
+        command = json.loads(self.run_help("describe", "connector.shell.command", "--json").stdout)
+
+        self.assertEqual(family["snippet_coverage"], "none")
+        self.assertIn("Published shell connector family for one coarse legacy command-execution action", family["metadata"]["definition"])
+        self.assertIn("workflow-authoring.shell.command", [item["handle"] for item in family["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(command["snippet_coverage"], "runner_verified")
+        self.assertIn("Execute one arbitrary shell command string through bash -lc", command["metadata"]["definition"])
+        self.assertEqual(command["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(command["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("workflow-authoring.shell.command", [item["handle"] for item in command["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -1113,7 +1127,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 43)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 44)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1172,6 +1186,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.upstream"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.worktree"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.worktrees"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.shell.command"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1730,6 +1745,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connector.git.worktree", worktrees.stdout)
         self.assertIn("example_for: workflow_fragment", worktrees.stdout)
 
+    def test_text_describe_connector_shell_group_is_teaching_ready(self) -> None:
+        family = self.run_help("describe", "connector.shell")
+        command = self.run_help("describe", "connector.shell.command")
+
+        self.assertEqual(family.returncode, 0)
+        self.assertIn("Published shell connector family for one coarse legacy command-execution action", family.stdout)
+        self.assertIn("workflow-authoring.shell.command", family.stdout)
+        self.assertIn("routines", family.stdout)
+
+        self.assertEqual(command.returncode, 0)
+        self.assertIn("Execute one arbitrary shell command string through bash -lc", command.stdout)
+        self.assertIn("workflow-authoring.shell.command", command.stdout)
+        self.assertIn("example_for: workflow_fragment", command.stdout)
+
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
         pre_run_file = self.run_help("describe", "playbook.pre_run.file")
@@ -1890,6 +1919,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         connector_node = json.loads(self.run_help("describe", "connector.fs", "--json").stdout)
         file_node = json.loads(self.run_help("describe", "connector.fs.file", "--json").stdout)
         gh_pr_node = json.loads(self.run_help("describe", "connector.gh.pr", "--json").stdout)
+        shell_node = json.loads(self.run_help("describe", "connector.shell", "--json").stdout)
+        shell_command = json.loads(self.run_help("describe", "connector.shell.command", "--json").stdout)
 
         self.assertEqual(connector_node["document_kind"], "model_node")
         self.assertEqual(connector_node["node_kind"], "connector_family")
@@ -1900,6 +1931,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(file_node["metadata"]["name"], "file")
         self.assertEqual(file_node["metadata"]["kind"], "probe")
         self.assertIn("content", file_node["metadata"]["outputs"])
+        self.assertEqual(shell_node["node_kind"], "connector_family")
+        self.assertEqual(shell_command["metadata"]["kind"], "action")
         self.assertEqual(gh_pr_node["document_kind"], "model_node")
         self.assertEqual(gh_pr_node["metadata"]["name"], "pr")
         self.assertIn("pull_number", gh_pr_node["metadata"]["inputs"])

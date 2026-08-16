@@ -1,0 +1,16 @@
+version: 0
+workflow: legacy-shell-command-compatibility
+inputs:
+  command_text: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: run-legacy-shell-command
+        uses: shell.command
+        with:
+          command: inputs.command_text
+        register: shell_result
+      - name: publish-summary
+        publish:
+          exit_code: step.shell_result.outputs.exit_code
+          summary: "Legacy shell command workflow prepared"

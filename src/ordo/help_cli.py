@@ -1575,6 +1575,25 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.runtime.profile.use", "workflow.step.profile_switch", "profile"],
         },
+        "shell": {
+            "definition": "Published shell connector family for one coarse legacy command-execution action that runs arbitrary shell text inside the current working directory context.",
+            "use_when": [
+                "You are inspecting, migrating, or containing older workflow logic that still depends on shell.command as a compatibility surface.",
+                "You need to understand the broad fallback namespace that exists when no narrower published connector operation yet expresses the required external behavior.",
+            ],
+            "do_not_use_for": [
+                "New workflow authoring when a narrower published connector surface, a composed public workflow, or a bounded routine can express the intent more honestly.",
+                "Treating arbitrary shell execution as a normal first-choice operation family; this namespace is intentionally coarse and high-risk.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
+                {"handle": "connector.shell.command", "summary": "The one coarse shell action published in this family"},
+                {"handle": "workflow-authoring.shell.command", "summary": "Authoring rule that explains why shell.command is forbidden for new workflow work"},
+                {"handle": "routines", "summary": "Bounded opaque local-automation fallback surface that is preferred over new shell.command authoring when structured public surfaces are exhausted"},
+            ],
+            "inspect_next": ["connector.shell.command", "workflow-authoring.shell.command", "routines", "operations"],
+        },
         "fs": {
             "definition": "Published filesystem connector family for probing one filesystem path as a readable file snapshot.",
             "use_when": [
@@ -1669,6 +1688,27 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"inputs": {"profile": "frontend"}, "reference": "runtime.profile.use"},
             ],
             "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "profile"],
+        },
+        ("shell", "command"): {
+            "definition": "Execute one arbitrary shell command string through bash -lc and return its exit code together with captured stdout and stderr.",
+            "use_when": [
+                "You are reading, debugging, or migrating legacy workflow logic that already depends on shell.command and must understand its coarse runtime contract accurately.",
+                "A compatibility or containment scenario still needs one broad shell escape hatch, and narrower published connector surfaces or bounded routines have already been ruled out explicitly.",
+            ],
+            "do_not_use_for": [
+                "New workflow authoring as a default mechanism; prefer narrower published connector operations, composed public workflows, or routines before falling back here.",
+                "Pretending this surface carries typed domain semantics; shell.command only runs raw shell text and leaves parsing, safety, and intent outside the public contract.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.shell", "summary": "Parent shell connector family for this coarse legacy execution action"},
+                {"handle": "workflow-authoring.shell.command", "summary": "Authoring rule that marks shell.command as forbidden for new workflow authoring"},
+                {"handle": "routines", "summary": "Preferred bounded fallback surface when local automation is still necessary after structured public options are exhausted"},
+                {"handle": "operations", "summary": "Flat connector catalog to check whether a narrower published operation already exists before using shell.command"},
+            ],
+            "examples": [
+                {"reference": "shell.command", "inputs": {"command": "printf 'legacy check'"}},
+            ],
+            "inspect_next": ["workflow-authoring.shell.command", "routines", "operations", "connector.shell"],
         },
         ("fs", "file"): {
             "definition": "Probe one filesystem path as one UTF-8 file snapshot with canonical content and file metadata.",

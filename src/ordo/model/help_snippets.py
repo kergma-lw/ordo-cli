@@ -1479,6 +1479,49 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.shell.command": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "shell_command_legacy_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Run one explicit legacy shell command step when the workflow is documenting or containing compatibility behavior rather than teaching shell.command as a preferred new design.",
+                "source_example": "shell-command-legacy-compatibility",
+                "source_excerpt": {
+                    "path": "examples/shell-command-legacy-compatibility.yaml",
+                    "start_line": 8,
+                    "end_line": 11
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.shell.command",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "shell_command_legacy_workflow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Show shell.command only inside an explicitly legacy compatibility workflow so the published example teaches containment and caution rather than endorsement.",
+                "source_example": "shell-command-legacy-compatibility",
+                "source_excerpt": {
+                    "path": "examples/shell-command-legacy-compatibility.yaml",
+                    "start_line": 1,
+                    "end_line": 16
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.shell.command",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [
