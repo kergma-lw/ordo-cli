@@ -2874,6 +2874,40 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.step.profile_switch", "workflow.profile", "workflow.step.gate"],
         },
+        "workflow.step_forms.result": {
+            "definition": "Workflow step form for one named result-emission checkpoint that appends one resolved value to the workflow's ordered result list.",
+            "use_when": [
+                "A step's primary job is emitting one final workflow-local result value rather than staging an intermediate reusable value or publishing an outward-facing named payload.",
+            ],
+            "do_not_use_for": [
+                "Reusable intermediate payload staging; use workflow.step.value with register when later steps still need to read the computed value.",
+                "Publishing one outward-facing named output bundle for callers; use workflow.step_forms.publish when the intent is published workflow output rather than the workflow result list.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.result", "summary": "Field that carries the value appended to the workflow result list"},
+                {"handle": "workflow.step_forms.publish", "summary": "Sibling outward-output form for publishing named payloads instead of appending to the result list"},
+                {"handle": "workflow.step_forms.value", "summary": "Sibling local-value form for staging ephemeral reusable data before any final emission"},
+                {"handle": "workflow-authoring.value_register_before_result", "summary": "Authoring rule for staging reusable payloads with value + register before emitting them through result or publish"},
+            ],
+            "inspect_next": ["workflow.step.result", "workflow.step_forms.publish", "workflow.step_forms.value", "workflow-authoring.value_register_before_result"],
+        },
+        "workflow.step_forms.publish": {
+            "definition": "Workflow step form for one named publish checkpoint that emits one outward-facing published output payload for the workflow.",
+            "use_when": [
+                "A step's primary job is communicating one caller-facing payload such as summary fields, identifiers, or URLs rather than only appending to the workflow's internal result list.",
+            ],
+            "do_not_use_for": [
+                "Ephemeral payload staging for later steps; use workflow.step_forms.value when the value is still workflow-local and reusable before final emission.",
+                "Appending one value to the workflow result list without treating it as the outward published payload surface; use workflow.step_forms.result for that narrower emission role.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.step.publish", "summary": "Field that carries the outward-facing payload emitted by this publish step form"},
+                {"handle": "workflow.step_forms.result", "summary": "Sibling result-emission form for appending to the workflow result list instead of publishing named outward output"},
+                {"handle": "workflow.step_forms.value", "summary": "Sibling local-value form for staging reusable workflow-local data before any final outward emission"},
+                {"handle": "workflow-authoring.publish_outputs", "summary": "Authoring rule that prefers explicit publish payloads for intentional outward-facing workflow results"},
+            ],
+            "inspect_next": ["workflow.step.publish", "workflow.step_forms.result", "workflow.step_forms.value", "workflow-authoring.publish_outputs"],
+        },
         "workflow.local_expression.filter": {
             "definition": "Overview of pipeline-style local-expression filters that transform, project, or check one value after an expression root has already been selected.",
             "use_when": [

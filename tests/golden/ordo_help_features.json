@@ -90,13 +90,13 @@
           "command": "ordo-help describe examples.playbook-workflows --json",
           "handle": "examples.playbook-workflows",
           "name": "playbook-workflows",
-          "summary": "Verified example at examples/playbook-workflows.yaml"
+          "summary": "Playbook workflow catalog example that shows one published workflow entry with defaults, profiles, and state bindings."
         },
         {
           "command": "ordo-help describe examples.playbook-pre-run --json",
           "handle": "examples.playbook-pre-run",
           "name": "playbook-pre-run",
-          "summary": "Verified example at examples/playbook-pre-run.yaml"
+          "summary": "Playbook pre-run example that inserts one shared preparation workflow before the requested published workflow runs."
         }
       ],
       "related_rules": [
@@ -200,13 +200,13 @@
           "command": "ordo-help describe examples.playbook-pre-run --json",
           "handle": "examples.playbook-pre-run",
           "name": "playbook-pre-run",
-          "summary": "Verified example at examples/playbook-pre-run.yaml"
+          "summary": "Playbook pre-run example that inserts one shared preparation workflow before the requested published workflow runs."
         },
         {
           "command": "ordo-help describe examples.launcher-step --json",
           "handle": "examples.launcher-step",
           "name": "launcher-step",
-          "summary": "Verified example at examples/launcher-step.yaml"
+          "summary": "Launcher selection example that shows one step-level launcher override inside a profile-scoped execution context."
         }
       ],
       "related_rules": [
@@ -351,13 +351,13 @@
           "command": "ordo-help describe examples.minimal --json",
           "handle": "examples.minimal",
           "name": "minimal",
-          "summary": "Verified example at examples/minimal.yaml"
+          "summary": "Minimal workflow example that composes one published operation into one small end-to-end workflow shape."
         },
         {
           "command": "ordo-help describe examples.inspect-issue --json",
           "handle": "examples.inspect-issue",
           "name": "inspect-issue",
-          "summary": "Verified example at examples/inspect-issue.yaml"
+          "summary": "Issue inspection example that uses a guard before loading one published GitHub issue probe."
         }
       ],
       "related_rules": [
@@ -530,14 +530,14 @@
           "command": "ordo-help describe examples.include-plain --json",
           "handle": "examples.include-plain",
           "kind": "example",
-          "summary": "Verified example at examples/include-plain.yaml",
+          "summary": "Workflow include example that reuses one plain fragment without passing include arguments.",
           "topic": "examples"
         },
         {
           "command": "ordo-help describe examples.include-args --json",
           "handle": "examples.include-args",
           "kind": "example",
-          "summary": "Verified example at examples/include-args.yaml",
+          "summary": "Workflow include example that passes explicit arguments into one reusable fragment contract.",
           "topic": "examples"
         }
       ],
@@ -569,13 +569,13 @@
           "command": "ordo-help describe examples.include-plain --json",
           "handle": "examples.include-plain",
           "name": "include-plain",
-          "summary": "Verified example at examples/include-plain.yaml"
+          "summary": "Workflow include example that reuses one plain fragment without passing include arguments."
         },
         {
           "command": "ordo-help describe examples.include-args --json",
           "handle": "examples.include-args",
           "name": "include-args",
-          "summary": "Verified example at examples/include-args.yaml"
+          "summary": "Workflow include example that passes explicit arguments into one reusable fragment contract."
         }
       ],
       "related_rules": [
@@ -824,7 +824,7 @@
           "command": "ordo-help describe examples.inspect-issue --json",
           "handle": "examples.inspect-issue",
           "name": "inspect-issue",
-          "summary": "Verified example at examples/inspect-issue.yaml"
+          "summary": "Issue inspection example that uses a guard before loading one published GitHub issue probe."
         }
       ],
       "related_rules": [
@@ -1182,7 +1182,7 @@
           "command": "ordo-help describe examples.local-expression-filters --json",
           "handle": "examples.local-expression-filters",
           "name": "local-expression-filters",
-          "summary": "Verified example at examples/local-expression-filters.yaml"
+          "summary": "Local-expression filter example that demonstrates type predicates, membership tests, and boolean flow over embedded values."
         }
       ],
       "related_rules": [
@@ -1284,13 +1284,13 @@
           "command": "ordo-help describe examples.minimal --json",
           "handle": "examples.minimal",
           "name": "minimal",
-          "summary": "Verified example at examples/minimal.yaml"
+          "summary": "Minimal workflow example that composes one published operation into one small end-to-end workflow shape."
         },
         {
           "command": "ordo-help describe examples.inspect-pr --json",
           "handle": "examples.inspect-pr",
           "name": "inspect-pr",
-          "summary": "Verified example at examples/inspect-pr.yaml"
+          "summary": "Pull-request inspection example that composes the published PR metadata, diff, comments, reviews, checks, and timeline surfaces into one summary."
         }
       ],
       "related_rules": [
@@ -1595,7 +1595,7 @@
           "command": "ordo-help describe examples.text-adapter --json",
           "handle": "examples.text-adapter",
           "name": "text-adapter",
-          "summary": "Verified example at examples/text-adapter.yaml"
+          "summary": "Text adapter example that projects, searches, and rewrites line-oriented text through the published text adapter surface."
         }
       ],
       "related_rules": [

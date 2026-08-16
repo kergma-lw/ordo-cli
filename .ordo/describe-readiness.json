@@ -625,6 +625,12 @@
     "workflow.step_forms.value": {
       "describe_readiness": "ready"
     },
+    "workflow.step_forms.publish": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.result": {
+      "describe_readiness": "ready"
+    },
     "embedded_value_expression.step_refs_must_be_backward": {
       "describe_readiness": "ready"
     },

@@ -1940,6 +1940,44 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step_forms.result": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "result_form_minimal_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Use the dedicated result step form when one named step appends one final value to the workflow result list.",
+                "yaml": '- name: emit-result\n  result:\n    status: "ok"\n    summary: "Workflow prepared"',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step_forms.result",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "workflow.step_forms.publish": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "publish_form_minimal_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Use the dedicated publish step form when one named step emits an outward-facing published payload for callers.",
+                "yaml": '- name: publish-summary\n  publish:\n    summary: "Workflow prepared"\n    ready: true',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step_forms.publish",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "workflow.step.state_set": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [

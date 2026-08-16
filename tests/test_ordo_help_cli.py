@@ -1127,7 +1127,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 44)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 46)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1187,6 +1187,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.worktree"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.worktrees"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.shell.command"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.step_forms.publish"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.step_forms.result"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1811,6 +1813,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Included fragments must not read, declare, or mutate runtime state", fragment_no_state.stdout)
         self.assertIn("top-level workflow handoff surface", fragment_no_state.stdout)
 
+    def test_text_describe_publish_result_step_form_group_is_teaching_ready(self) -> None:
+        publish = self.run_help("describe", "workflow.step_forms.publish")
+        result = self.run_help("describe", "workflow.step_forms.result")
+
+        self.assertEqual(publish.returncode, 0)
+        self.assertIn("Workflow step form for one named publish checkpoint", publish.stdout)
+        self.assertIn("workflow.step_forms.result", publish.stdout)
+        self.assertIn("example_for: step_fragment", publish.stdout)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Workflow step form for one named result-emission checkpoint", result.stdout)
+        self.assertIn("workflow.step_forms.publish", result.stdout)
+        self.assertIn("example_for: step_fragment", result.stdout)
+
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
         pre_run_file = self.run_help("describe", "playbook.pre_run.file")
@@ -2040,6 +2056,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(state_write_after_read["node_kind"], "negative_rule")
         self.assertIn("after the final read", state_write_after_read["rule"])
         self.assertIn("cross-run handoff", state_write_after_read["reason"])
+
+    def test_describe_publish_result_step_form_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        publish = json.loads(self.run_help("describe", "workflow.step_forms.publish", "--json").stdout)
+        result = json.loads(self.run_help("describe", "workflow.step_forms.result", "--json").stdout)
+
+        self.assertEqual(publish["snippet_coverage"], "runner_verified")
+        self.assertIn("outward-facing published output payload", publish["metadata"]["definition"])
+        self.assertEqual(publish["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("workflow.step_forms.result", [item["handle"] for item in publish["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(result["snippet_coverage"], "runner_verified")
+        self.assertIn("workflow's ordered result list", result["metadata"]["definition"])
+        self.assertEqual(result["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("workflow.step_forms.publish", [item["handle"] for item in result["metadata"]["nearest_surfaces"]])
 
     def test_search_finds_json_representation_adapter_model_node(self) -> None:
         result = json.loads(self.run_help("search", "json adapter", "--json").stdout)

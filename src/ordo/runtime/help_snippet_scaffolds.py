@@ -40,6 +40,8 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "workflow.step.state_delete",
         "workflow.step.value",
         "workflow.step_forms.value",
+        "workflow.step_forms.result",
+        "workflow.step_forms.publish",
         "workflow.step.profile_switch",
         "workflow.step_forms.profile_switch",
         "routine",
@@ -276,6 +278,15 @@ workflow: snippet-step-fragment-value
 inputs:
   status: {{}}
   allowed: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
+    if target in {"workflow.step_forms.result", "workflow.step_forms.publish"}:
+        indented = normalized.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-step-fragment-output
 blocks:
 - guards: []
 - steps:
