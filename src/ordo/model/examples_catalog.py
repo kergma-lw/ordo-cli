@@ -68,6 +68,13 @@ EXAMPLES_CATALOG: JSONObject = {
             "related_topics": ["features", "model", "examples"],
         },
         {
+            "name": "playbook-connectors",
+            "path": "examples/playbook-connectors.yaml",
+            "definition": "Playbook top-level example that shows the required version marker together with repository-wide connector defaults before workflow and profile activation.",
+            "shows": ["playbook_version_marker", "playbook_connector_defaults", "profile_override_boundary"],
+            "related_topics": ["features", "model", "examples"],
+        },
+        {
             "name": "playbook-pre-run",
             "path": "examples/playbook-pre-run.yaml",
             "definition": "Playbook pre-run example that inserts one shared preparation workflow before the requested published workflow runs.",

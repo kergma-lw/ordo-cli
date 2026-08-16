@@ -296,6 +296,50 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "playbook.version": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_version_marker",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Start one playbook document with the required version marker before the rest of the top-level launch catalog.",
+                "yaml": "version: 1\nstates:\n  shared_state:\n    path: .ordo/example-state.json",
+                "source_example": "examples.playbook-connectors",
+                "source_excerpt": {
+                    "path": "examples/playbook-connectors.yaml",
+                    "start_line": 1,
+                    "end_line": 4
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-connectors"
+                },
+            }
+        ],
+    },
+    "playbook.connectors": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "playbook_connector_defaults_block",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Declare one repository-wide Compose bootstrap block that workflows inherit before profile-specific connector overrides are considered.",
+                "yaml": "connectors:\n  compose:\n    directory: ./deploy\n    file: compose.prod.yaml",
+                "source_example": "examples.playbook-connectors",
+                "source_excerpt": {
+                    "path": "examples/playbook-connectors.yaml",
+                    "start_line": 7,
+                    "end_line": 10
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.playbook-connectors"
+                },
+            }
+        ],
+    },
     "profile.overrides": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

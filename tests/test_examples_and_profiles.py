@@ -117,6 +117,21 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(activated.working_directory, Path("examples").resolve())
         self.assertIsNotNone(activated.profile)
 
+    def test_playbook_connectors_example_is_published_and_activates(self) -> None:
+        catalog = describe_examples_catalog()
+
+        self.assertTrue(any(item["name"] == "playbook-connectors" for item in catalog["examples"]))
+
+        activated = activate_playbook(
+            workflow_name="inspect-compose",
+            playbook_path=Path("examples/playbook-connectors.yaml"),
+        )
+
+        self.assertEqual(activated.workflow_name, "inspect-compose")
+        self.assertEqual(activated.connector_contexts["compose"]["directory"], "./deploy")
+        self.assertEqual(activated.connector_contexts["compose"]["file"], "compose.prod.yaml")
+        self.assertIsNotNone(activated.profile)
+
     def test_inspect_pr_example_is_published_and_executes_end_to_end(self) -> None:
         catalog = describe_examples_catalog()
         workflow = load_workflow_file(Path("examples/inspect-pr.yaml"))

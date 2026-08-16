@@ -4013,6 +4013,25 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["workflow.state_bindings", "state.workflow_surface.state_binding_field", "playbook.states"],
         },
+        "playbook.version": {
+            "definition": "Required top-level playbook format marker that declares which published playbook document shape this file is written against.",
+            "use_when": [
+                "Every playbook document must start by declaring the required published playbook format version before launch-catalog fields such as states, workflows, or profiles.",
+            ],
+            "do_not_use_for": [
+                "Publishing your repository, release, or product version; this field is only the playbook document-format marker.",
+                "Declaring workflow or routine document format versions; use workflow.version or routine_contract.version inside those separate documents.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "workflow.version", "summary": "Required version marker for one workflow document rather than for the playbook catalog"},
+                {"handle": "routine_contract.version", "summary": "Required version marker for the routine registry document"},
+                {"handle": "playbook.workflows", "summary": "The main playbook catalog field that the version marker makes safe to interpret"},
+            ],
+            "examples": [
+                {"reference": "playbook.version", "inputs": {"version": 1}},
+            ],
+            "inspect_next": ["playbook.workflows", "workflow.version", "routine_contract.version"],
+        },
         "profile.connectors": {
             "definition": "Profile field for supplying family-keyed connector context objects to runs that activate this profile.",
             "use_when": [
@@ -4040,9 +4059,10 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["playbook.connectors", "connector.compose", "operations"],
         },
         "playbook.connectors": {
-            "definition": "Playbook field for supplying default family-keyed connector context objects across published workflows in this playbook.",
+            "definition": "Playbook top-level field for declaring repository-wide default connector bootstrap context before profile-specific overrides apply.",
             "use_when": [
                 "One repository-wide connector context default should apply before any profile-specific connector overrides are considered.",
+                "Several published workflows should inherit the same connector bootstrap values without repeating them in each workflow entry.",
             ],
             "do_not_use_for": [
                 "Per-profile connector context variation; use profile.connectors for that narrower launch context.",
@@ -4061,7 +4081,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                     },
                 }
             ],
-            "inspect_next": ["profile.connectors", "connector.compose", "operations"],
+            "inspect_next": ["profile.connectors", "connector.compose", "playbook.workflows"],
         },
     }
 

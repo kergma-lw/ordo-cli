@@ -229,6 +229,9 @@
     "examples.playbook-workflows": {
       "describe_readiness": "ready"
     },
+    "examples.playbook-connectors": {
+      "describe_readiness": "ready"
+    },
     "examples.project-items-let": {
       "describe_readiness": "ready"
     },
@@ -272,6 +275,12 @@
       "describe_readiness": "ready"
     },
     "playbook.defaults": {
+      "describe_readiness": "ready"
+    },
+    "playbook.version": {
+      "describe_readiness": "ready"
+    },
+    "playbook.connectors": {
       "describe_readiness": "ready"
     },
     "playbook.defaults.profile": {

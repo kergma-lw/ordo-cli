@@ -1179,8 +1179,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 32)
         self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 55)
+        self.assertEqual(handles["playbook.version"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["playbook.connectors"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1380,6 +1382,26 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("the engine preserves this object verbatim", with_payload.stdout)
         self.assertIn("human-readable explanation", reason.stdout)
         self.assertIn("reason text is optional", reason.stdout)
+
+    def test_text_describe_playbook_top_level_group_is_teaching_ready(self) -> None:
+        version = self.run_help("describe", "playbook.version")
+        connectors = self.run_help("describe", "playbook.connectors")
+
+        self.assertEqual(version.returncode, 0)
+        self.assertIn("Required top-level playbook format marker", version.stdout)
+        self.assertIn("do not use for:", version.stdout)
+        self.assertIn("workflow.version", version.stdout)
+        self.assertIn("routine_contract.version", version.stdout)
+        self.assertIn("example_for: field_fragment", version.stdout)
+        self.assertIn("version: 1", version.stdout)
+
+        self.assertEqual(connectors.returncode, 0)
+        self.assertIn("repository-wide default connector bootstrap context", connectors.stdout)
+        self.assertIn("use when:", connectors.stdout)
+        self.assertIn("profile.connectors", connectors.stdout)
+        self.assertIn("playbook.workflows", connectors.stdout)
+        self.assertIn("example_for: field_fragment", connectors.stdout)
+        self.assertIn("compose:", connectors.stdout)
 
     def test_text_describe_connector_compose_group_is_teaching_ready(self) -> None:
         family = self.run_help("describe", "connector.compose")
