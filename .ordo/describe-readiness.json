@@ -145,6 +145,9 @@
     "connector.git.commits": {
       "describe_readiness": "ready"
     },
+    "connector.git.index.add_all": {
+      "describe_readiness": "ready"
+    },
     "connector.git.range": {
       "describe_readiness": "ready"
     },
@@ -154,6 +157,9 @@
     "connector.git.repo": {
       "describe_readiness": "ready"
     },
+    "connector.git.state": {
+      "describe_readiness": "ready"
+    },
     "connector.git.tag": {
       "describe_readiness": "ready"
     },
@@ -161,6 +167,9 @@
       "describe_readiness": "ready"
     },
     "connector.git.upstream": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.worktree": {
       "describe_readiness": "ready"
     },
     "connector.runtime": {

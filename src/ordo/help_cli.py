@@ -2336,6 +2336,69 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.range", "connector.git.sync.push", "connector.git.branch"],
         },
+        ("git", "index.add_all"): {
+            "definition": "Stage every currently changed, deleted, and untracked path from the current Git worktree into the index as one all-in staging action.",
+            "use_when": [
+                "A workflow has already decided that the whole current worktree batch should be staged before one later commit or review step.",
+                "The authored intent is full-worktree staging itself, not selective per-path staging or read-only inspection.",
+            ],
+            "do_not_use_for": [
+                "Inspecting which paths are dirty or whether the worktree is clean; use connector.git.worktree or connector.git.state for those read-only checks.",
+                "Selecting only some paths for staging; this public surface intentionally stages the whole current worktree batch at once.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.worktree", "summary": "Sibling probe for the path-level dirty-worktree view before or after staging"},
+                {"handle": "connector.git.state", "summary": "Sibling probe for a broader branch-plus-worktree-plus-stash summary after staging decisions"},
+                {"handle": "connector.git.commit.create", "summary": "Typical follow-up action for recording the newly staged index as one ordinary commit"},
+                {"handle": "connector.git.commit.amend", "summary": "Sibling follow-up action when the staged batch should rewrite HEAD instead of creating a new commit"},
+            ],
+            "examples": [
+                {"reference": "git.index.add_all", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.worktree", "connector.git.state", "connector.git.commit.create"],
+        },
+        ("git", "worktree"): {
+            "definition": "Probe the current Git worktree cleanliness and changed-path inventory, separating untracked, staged, and unstaged changes without mixing in branch or stash summary fields.",
+            "use_when": [
+                "A workflow needs the exact dirty-path list or needs to distinguish staged, unstaged, and untracked changes before a later Git action.",
+                "Later logic is about worktree cleanliness itself rather than about the current branch name or stash inventory.",
+            ],
+            "do_not_use_for": [
+                "One coarse repository-status snapshot that also includes current-branch and stash facts; use connector.git.state for that combined summary surface.",
+                "Mutating the index by staging everything; use connector.git.index.add_all for the all-in staging action.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.state", "summary": "Sibling probe for one broader repository-status snapshot that includes branch and stash context"},
+                {"handle": "connector.git.index.add_all", "summary": "Sibling action for staging the current worktree batch after this probe inspects it"},
+                {"handle": "connector.git.branch.switch", "summary": "Sibling action for checkout movement when local cleanliness may decide whether switching is safe"},
+                {"handle": "connector.git.commit.create", "summary": "Sibling action for committing once staged and unstaged worktree state has been reviewed"},
+            ],
+            "examples": [
+                {"reference": "git.worktree", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.index.add_all", "connector.git.state", "connector.git.commit.create"],
+        },
+        ("git", "state"): {
+            "definition": "Probe one combined Git repository-state snapshot by composing current-branch context, worktree cleanliness flags, and stash count into one higher-level summary surface.",
+            "use_when": [
+                "A workflow needs one compact readiness snapshot before deciding whether committing, switching, syncing, or publishing repository state makes sense.",
+                "Later logic needs branch, detached, worktree-cleanliness, and stash-count facts together rather than one path-level worktree inventory alone.",
+            ],
+            "do_not_use_for": [
+                "Inspecting the exact dirty path list or keeping staged-versus-unstaged file paths visible; use connector.git.worktree for that narrower path-level probe.",
+                "Listing stash entries themselves or mutating staging state; use connector.git.stash for stash inventory and connector.git.index.add_all for full-worktree staging.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.worktree", "summary": "Sibling probe for path-level worktree details instead of one combined repository snapshot"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for only the current checkout branch when broader cleanliness and stash context are unnecessary"},
+                {"handle": "connector.git.stash", "summary": "Sibling probe for explicit stash-entry inventory instead of only the stash count summary"},
+                {"handle": "connector.git.index.add_all", "summary": "Sibling action for staging the whole current worktree after this summary confirms the repository is ready"},
+            ],
+            "examples": [
+                {"reference": "git.state", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.worktree", "connector.git.index.add_all", "connector.git.branch"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [

@@ -1120,6 +1120,97 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.index.add_all": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_index_add_all_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Stage the whole current Git worktree once the workflow has already decided that every pending change belongs in the next staging batch.",
+                "source_example": "git-worktree-staging",
+                "source_excerpt": {
+                    "path": "examples/git-worktree-staging.yaml",
+                    "start_line": 9,
+                    "end_line": 11
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.index.add_all",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.worktree": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_worktree_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect the current dirty-path set and worktree cleanliness before staging or other Git mutations depend on those details.",
+                "source_example": "git-worktree-staging",
+                "source_excerpt": {
+                    "path": "examples/git-worktree-staging.yaml",
+                    "start_line": 6,
+                    "end_line": 8
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.worktree",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.state": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_state_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect one combined Git repository-state snapshot after staging decisions need branch, cleanliness, and stash facts together.",
+                "source_example": "git-worktree-staging",
+                "source_excerpt": {
+                    "path": "examples/git-worktree-staging.yaml",
+                    "start_line": 12,
+                    "end_line": 14
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.state",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_worktree_staging_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect the dirty worktree, stage the full batch, then read one combined repository-state snapshot so the workflow keeps path-level and summary-level Git checks distinct.",
+                "source_example": "git-worktree-staging",
+                "source_excerpt": {
+                    "path": "examples/git-worktree-staging.yaml",
+                    "start_line": 1,
+                    "end_line": 21
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.state",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

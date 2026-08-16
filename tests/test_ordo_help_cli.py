@@ -1028,6 +1028,27 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(upstream["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("connector.git.repo", [item["handle"] for item in upstream["metadata"]["nearest_surfaces"]])
 
+    def test_describe_connector_git_worktree_staging_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        index_add_all = json.loads(self.run_help("describe", "connector.git.index.add_all", "--json").stdout)
+        worktree = json.loads(self.run_help("describe", "connector.git.worktree", "--json").stdout)
+        state = json.loads(self.run_help("describe", "connector.git.state", "--json").stdout)
+
+        self.assertEqual(index_add_all["snippet_coverage"], "runner_verified")
+        self.assertIn("Stage every currently changed, deleted, and untracked path", index_add_all["metadata"]["definition"])
+        self.assertEqual(index_add_all["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.git.worktree", [item["handle"] for item in index_add_all["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(worktree["snippet_coverage"], "runner_verified")
+        self.assertIn("current Git worktree cleanliness and changed-path inventory", worktree["metadata"]["definition"])
+        self.assertEqual(worktree["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.git.state", [item["handle"] for item in worktree["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(state["snippet_coverage"], "runner_verified")
+        self.assertIn("combined Git repository-state snapshot", state["metadata"]["definition"])
+        self.assertEqual(state["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(state["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.worktree", [item["handle"] for item in state["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -1035,7 +1056,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 32)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 35)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1077,12 +1098,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.commit.amend"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.commit.revert"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.commits"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.index.add_all"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.tag"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.tags"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.ref"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.range"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.repo"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.state"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.upstream"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.worktree"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1570,6 +1594,24 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Probe the upstream-tracking configuration for the current local branch", upstream.stdout)
         self.assertIn("connector.git.repo", upstream.stdout)
         self.assertIn("example_for: workflow_fragment", upstream.stdout)
+
+    def test_text_describe_connector_git_worktree_staging_group_is_teaching_ready(self) -> None:
+        index_add_all = self.run_help("describe", "connector.git.index.add_all")
+        worktree = self.run_help("describe", "connector.git.worktree")
+        state = self.run_help("describe", "connector.git.state")
+
+        self.assertEqual(index_add_all.returncode, 0)
+        self.assertIn("Stage every currently changed, deleted, and untracked path", index_add_all.stdout)
+        self.assertIn("connector.git.worktree", index_add_all.stdout)
+
+        self.assertEqual(worktree.returncode, 0)
+        self.assertIn("Probe the current Git worktree cleanliness and changed-path inventory", worktree.stdout)
+        self.assertIn("connector.git.state", worktree.stdout)
+
+        self.assertEqual(state.returncode, 0)
+        self.assertIn("Probe one combined Git repository-state snapshot", state.stdout)
+        self.assertIn("connector.git.worktree", state.stdout)
+        self.assertIn("example_for: workflow_fragment", state.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
