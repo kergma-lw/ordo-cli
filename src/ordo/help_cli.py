@@ -2294,6 +2294,48 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.ref", "connector.git.commits", "connector.git.upstream"],
         },
+        ("git", "repo"): {
+            "definition": "Probe the current local Git repository context and return repository-root, git-dir, worktree, HEAD-ref, and default-branch facts for the repository discovered at the current root.",
+            "use_when": [
+                "A workflow first needs to confirm repository-level context such as root path, bare status, or default branch before making narrower branch or sync decisions.",
+                "Later logic needs stable repository facts without yet asking about one specific ref, one branch inventory, or one upstream relationship.",
+            ],
+            "do_not_use_for": [
+                "Reading the current branch's upstream-tracking configuration; use connector.git.upstream for that branch-specific tracking surface.",
+                "Inspecting branch inventory or current checkout branch identity; use connector.git.branches or connector.git.branch when the workflow is really about branch-level context.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.upstream", "summary": "Sibling probe for current-branch upstream tracking after repository context is known"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current checkout branch identity rather than repository-level facts"},
+                {"handle": "connector.git.worktree", "summary": "Sibling probe for broader worktree cleanliness and file-change context"},
+                {"handle": "connector.git.ref", "summary": "Sibling probe for one exact ref lookup instead of repository-wide context"},
+            ],
+            "examples": [
+                {"reference": "git.repo", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.upstream", "connector.git.branch", "connector.git.worktree"],
+        },
+        ("git", "upstream"): {
+            "definition": "Probe the upstream-tracking configuration for the current local branch and report whether one upstream ref is configured, plus the resolved remote and remote branch names when present.",
+            "use_when": [
+                "A workflow needs to know whether the current branch tracks one upstream before comparing ahead/behind state or deciding whether pushing makes sense.",
+                "Later logic needs remote, remote_branch, or upstream_ref facts for the current branch rather than repository-root or branch-inventory facts.",
+            ],
+            "do_not_use_for": [
+                "Reading repository-root, git-dir, or default-branch facts; use connector.git.repo for repository-level context.",
+                "Comparing current branch divergence against its upstream; use connector.git.range when the workflow needs ahead/behind math after choosing base and head endpoints.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.repo", "summary": "Sibling probe for repository-level facts before or alongside upstream-tracking inspection"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current branch identity when the workflow first needs the branch name itself"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for ahead/behind and merge-base comparison after an upstream target is known"},
+                {"handle": "connector.git.sync.push", "summary": "Sibling action surface for actually pushing once upstream-tracking context has been confirmed"},
+            ],
+            "examples": [
+                {"reference": "git.upstream", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.range", "connector.git.sync.push", "connector.git.branch"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [

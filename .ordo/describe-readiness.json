@@ -151,10 +151,16 @@
     "connector.git.ref": {
       "describe_readiness": "ready"
     },
+    "connector.git.repo": {
+      "describe_readiness": "ready"
+    },
     "connector.git.tag": {
       "describe_readiness": "ready"
     },
     "connector.git.tags": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.upstream": {
       "describe_readiness": "ready"
     },
     "connector.runtime": {

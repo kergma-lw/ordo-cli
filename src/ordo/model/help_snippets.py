@@ -1053,6 +1053,73 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.repo": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_repo_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect repository-level Git context before making narrower branch, upstream, or worktree decisions.",
+                "source_example": "git-repo-upstream-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-repo-upstream-inspection.yaml",
+                    "start_line": 6,
+                    "end_line": 8
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.repo",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.upstream": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_upstream_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect the current branch's upstream-tracking configuration after confirming repository context.",
+                "source_example": "git-repo-upstream-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-repo-upstream-inspection.yaml",
+                    "start_line": 9,
+                    "end_line": 11
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.upstream",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_repo_upstream_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect repository context and current-branch upstream tracking together so a workflow can separate repository facts from branch-tracking facts cleanly.",
+                "source_example": "git-repo-upstream-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-repo-upstream-inspection.yaml",
+                    "start_line": 1,
+                    "end_line": 17
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.upstream",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

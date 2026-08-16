@@ -1013,6 +1013,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(range_payload["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("connector.git.ref", [item["handle"] for item in range_payload["metadata"]["nearest_surfaces"]])
 
+    def test_describe_connector_git_repo_upstream_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        repo = json.loads(self.run_help("describe", "connector.git.repo", "--json").stdout)
+        upstream = json.loads(self.run_help("describe", "connector.git.upstream", "--json").stdout)
+
+        self.assertEqual(repo["snippet_coverage"], "runner_verified")
+        self.assertIn("current local Git repository context", repo["metadata"]["definition"])
+        self.assertEqual(repo["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.git.upstream", [item["handle"] for item in repo["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(upstream["snippet_coverage"], "runner_verified")
+        self.assertIn("upstream-tracking configuration", upstream["metadata"]["definition"])
+        self.assertEqual(upstream["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(upstream["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.repo", [item["handle"] for item in upstream["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -1020,7 +1035,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 30)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 32)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1066,6 +1081,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.tags"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.ref"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.range"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.repo"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.upstream"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1540,6 +1557,19 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Probe the relationship between two Git revision endpoints", range_payload.stdout)
         self.assertIn("connector.git.ref", range_payload.stdout)
         self.assertIn("example_for: workflow_fragment", range_payload.stdout)
+
+    def test_text_describe_connector_git_repo_upstream_group_is_teaching_ready(self) -> None:
+        repo = self.run_help("describe", "connector.git.repo")
+        upstream = self.run_help("describe", "connector.git.upstream")
+
+        self.assertEqual(repo.returncode, 0)
+        self.assertIn("Probe the current local Git repository context", repo.stdout)
+        self.assertIn("connector.git.upstream", repo.stdout)
+
+        self.assertEqual(upstream.returncode, 0)
+        self.assertIn("Probe the upstream-tracking configuration for the current local branch", upstream.stdout)
+        self.assertIn("connector.git.repo", upstream.stdout)
+        self.assertIn("example_for: workflow_fragment", upstream.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")

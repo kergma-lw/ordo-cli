@@ -21,6 +21,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/git-branch-management.yaml"),
             Path("examples/git-commit-management.yaml"),
             Path("examples/git-ref-range-inspection.yaml"),
+            Path("examples/git-repo-upstream-inspection.yaml"),
             Path("examples/git-tag-inspection.yaml"),
             Path("examples/project-field-probes.yaml"),
             Path("examples/project-item-collections.yaml"),
@@ -194,6 +195,11 @@ class ExampleSurfaceTest(unittest.TestCase):
         workflow = load_workflow_file(Path("examples/git-ref-range-inspection.yaml"))
 
         self.assertEqual(workflow.workflow, "inspect-git-ref-range")
+
+    def test_git_repo_upstream_inspection_example_loads(self) -> None:
+        workflow = load_workflow_file(Path("examples/git-repo-upstream-inspection.yaml"))
+
+        self.assertEqual(workflow.workflow, "inspect-git-repo-upstream")
 
 
 def _completed(*, returncode: int, stdout: str, stderr: str) -> CompletedProcess[str]:
