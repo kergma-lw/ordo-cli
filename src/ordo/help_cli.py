@@ -4370,6 +4370,98 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "workflow.step.value",
             "workflow-authoring.publish_outputs",
         ]
+    if "workflow.step.run" in lookup:
+        lookup["workflow.step.run"]["summary"] = "Step field that names the reusable runtime target invoked by a run-invocation step"
+        lookup["workflow.step.run"]["metadata"]["role"] = "runtime_target_selection"
+        lookup["workflow.step.run"]["metadata"]["use_when"] = [
+            "the step should invoke one named reusable runtime target instead of expanding a local inline repeated body",
+            "the repeated or reusable behavior already has its own target identity and should stay readable as one run invocation",
+        ]
+        lookup["workflow.step.run"]["metadata"]["do_not_use_for"] = [
+            "source-time include expansion; use workflow.include.include for fragment expansion before validation",
+            "short local repeated step bodies that belong inline under for_each; use workflow.step.steps for that narrower inline fan-out body",
+        ]
+        lookup["workflow.step.run"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.steps", "summary": "Sibling field for inline repeated local step bodies instead of a named run target"},
+            {"handle": "workflow.step.for_each", "summary": "Sibling repeated-item source field often paired with run for named target fan-out"},
+            {"handle": "workflow.step.with", "summary": "Sibling invocation-argument field for binding values into the named run target"},
+            {"handle": "workflow.step_forms.run_invocation", "summary": "Dedicated step form whose primary authored field is run"},
+        ]
+        lookup["workflow.step.run"]["metadata"]["inspect_next"] = [
+            "workflow.step.with",
+            "workflow.step.for_each",
+            "workflow.step_forms.run_invocation",
+            "workflow-authoring.run_target_vs_inline_fan_out",
+        ]
+    if "workflow.step.steps" in lookup:
+        lookup["workflow.step.steps"]["summary"] = "Step field that carries the inline repeated step body executed for each item in an inline fan-out invocation"
+        lookup["workflow.step.steps"]["metadata"]["role"] = "inline_repeated_body"
+        lookup["workflow.step.steps"]["metadata"]["use_when"] = [
+            "the repeated work is short, workflow-local, and better expressed as one inline repeated body than as a named reusable run target",
+            "the step should execute one small list of local steps for each item from for_each",
+        ]
+        lookup["workflow.step.steps"]["metadata"]["do_not_use_for"] = [
+            "large, reusable, or guard-bearing repeated bodies; use workflow.step.run with a named target for those cases",
+            "top-level workflow block authoring; this field only defines the inner repeated body of an inline fan-out step",
+        ]
+        lookup["workflow.step.steps"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.for_each", "summary": "Sibling repeated-item source field that drives this inline repeated body"},
+            {"handle": "workflow.step.run", "summary": "Sibling field for named reusable runtime targets instead of inline repeated local steps"},
+            {"handle": "workflow.step_forms.inline_fan_out_invocation", "summary": "Dedicated step form whose primary authored fields are for_each and steps"},
+            {"handle": "workflow-authoring.run_target_vs_inline_fan_out", "summary": "Authoring rule for choosing named run targets versus inline repeated local steps"},
+        ]
+        lookup["workflow.step.steps"]["metadata"]["inspect_next"] = [
+            "workflow.step.for_each",
+            "workflow.step.run",
+            "workflow.step_forms.inline_fan_out_invocation",
+            "workflow-authoring.run_target_vs_inline_fan_out",
+        ]
+    if "workflow.step.for_each" in lookup:
+        lookup["workflow.step.for_each"]["summary"] = "Step field that provides the array-valued repeated item source for an inline fan-out step body"
+        lookup["workflow.step.for_each"]["metadata"]["role"] = "bounded_repetition_source"
+        lookup["workflow.step.for_each"]["metadata"]["use_when"] = [
+            "one invocation-shaped step should repeat over an explicit array-valued item source",
+            "the workflow needs bounded fan-out through either a named run target or an inline repeated step body",
+        ]
+        lookup["workflow.step.for_each"]["metadata"]["do_not_use_for"] = [
+            "general looping semantics beyond the published bounded fan-out surface",
+            "non-array repeated sources or nested repetition that belong outside the current public workflow model",
+        ]
+        lookup["workflow.step.for_each"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.steps", "summary": "Sibling inline repeated body field for the local steps executed for each item"},
+            {"handle": "workflow.step.run", "summary": "Sibling named target field for fan-out over a reusable runtime target"},
+            {"handle": "workflow.step_forms.inline_fan_out_invocation", "summary": "Dedicated inline repeated-body form that requires for_each and steps together"},
+            {"handle": "workflow-authoring.fan_out_scope_and_conditions", "summary": "Authoring rule for outer and inner fan-out scope boundaries"},
+        ]
+        lookup["workflow.step.for_each"]["metadata"]["inspect_next"] = [
+            "workflow.step.steps",
+            "workflow.step.run",
+            "workflow.step_forms.inline_fan_out_invocation",
+            "workflow-authoring.fan_out_scope_and_conditions",
+        ]
+    if "workflow.step.with" in lookup:
+        lookup["workflow.step.with"]["summary"] = "Step field that binds invocation arguments into an operation call or named run target at runtime"
+        lookup["workflow.step.with"]["metadata"]["role"] = "runtime_argument_binding"
+        lookup["workflow.step.with"]["metadata"]["use_when"] = [
+            "the invocation needs explicit runtime argument values for an operation call or named run target",
+            "workflow-local expressions should be bound into the callee surface instead of being re-read implicitly inside that target",
+        ]
+        lookup["workflow.step.with"]["metadata"]["do_not_use_for"] = [
+            "source-time include argument binding; use workflow.include.with for include expansion",
+            "inline repeated step bodies whose local work should read item or workflow context directly rather than through outer with bindings",
+        ]
+        lookup["workflow.step.with"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.run", "summary": "Sibling field for selecting the named run target that receives these invocation arguments"},
+            {"handle": "workflow.step.uses", "summary": "Sibling field for selecting the operation call that may also consume with-bound invocation arguments"},
+            {"handle": "workflow.include.with", "summary": "Source-time fragment argument binding surface rather than runtime invocation argument binding"},
+            {"handle": "workflow-authoring.native_expression_contexts", "summary": "Authoring rule for bare expressions in with bindings"},
+        ]
+        lookup["workflow.step.with"]["metadata"]["inspect_next"] = [
+            "workflow.step.run",
+            "workflow.step.uses",
+            "workflow.include.with",
+            "workflow-authoring.native_expression_contexts",
+        ]
     for field in model["profile"]["top_level_fields"]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)
     for field in model["profile"]["override_fields"]:

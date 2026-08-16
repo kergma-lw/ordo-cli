@@ -2030,6 +2030,138 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step.run": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_run_named_target_value",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Show a valid `workflow.step.run` value for selecting one named reusable runtime target.",
+                "yaml": '"fragments/review_issue.yaml"',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.run",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "step_run_named_target_fragment",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete run-invocation step that calls a named runtime target with explicit argument binding.",
+                "yaml": '- name: review-each-issue\n  run: "fragments/review_issue.yaml"\n  with:\n    issue_number: item\n  for_each: inputs.issue_numbers',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.run",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "workflow.step.steps": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_steps_inline_body_fragment",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Show a valid `workflow.step.steps` inline repeated body for one short local repeated action.",
+                "yaml": 'steps:\n  - name: publish-item\n    publish:\n      issue_number: item',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.steps",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "step_steps_inline_fan_out_fragment",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete inline fan-out step that repeats one short local body for each issue number.",
+                "yaml": '- name: publish-each-issue\n  for_each: inputs.issue_numbers\n  steps:\n    - name: publish-item\n      publish:\n        issue_number: item',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.steps",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "workflow.step.for_each": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_for_each_array_source_value",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Show a valid `workflow.step.for_each` value for one array-valued repeated item source.",
+                "yaml": "inputs.issue_numbers",
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.for_each",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "step_for_each_inline_fan_out_fragment",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete inline repeated step that binds an array source through for_each before running a short local body.",
+                "yaml": '- name: publish-each-issue\n  for_each: inputs.issue_numbers\n  steps:\n    - name: publish-item\n      publish:\n        issue_number: item',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.for_each",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "workflow.step.with": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_with_argument_mapping_fragment",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Show a valid `workflow.step.with` mapping for binding runtime arguments into a named run target.",
+                "yaml": 'with:\n  issue_number: item\n  review_mode: inputs.review_mode',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.with",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "step_with_run_invocation_fragment",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete run-invocation step that binds explicit runtime arguments through with.",
+                "yaml": '- name: review-each-issue\n  run: "fragments/review_issue.yaml"\n  with:\n    issue_number: item\n    review_mode: inputs.review_mode\n  for_each: inputs.issue_numbers',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.with",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "workflow.step.publish": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
