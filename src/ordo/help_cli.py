@@ -2120,6 +2120,92 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.branch", "connector.git.branch.create", "connector.git.branch.delete"],
         },
+        ("git", "commit.create"): {
+            "definition": "Create one new Git commit from the current index with one non-empty commit message and return the new commit id plus the current branch context.",
+            "use_when": [
+                "A workflow has already staged the intended changes and now needs one normal commit creation step rather than history rewriting.",
+                "The authored intent is to capture the current index as one new commit and publish the resulting commit id for later steps.",
+            ],
+            "do_not_use_for": [
+                "Rewriting the current HEAD commit; use connector.git.commit.amend for amend-style history rewriting.",
+                "Undoing one existing commit with a compensating revert commit; use connector.git.commit.revert for that distinct history-preserving action.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.commit.amend", "summary": "Sibling action for rewriting the current HEAD commit instead of creating a fresh one"},
+                {"handle": "connector.git.commit.revert", "summary": "Sibling action for creating a compensating revert commit instead of recording newly staged changes"},
+                {"handle": "connector.git.commits", "summary": "Sibling probe for reading recent commit texts before or after commit creation"},
+                {"handle": "connector.git.worktree", "summary": "Sibling probe for broader worktree state when commit readiness depends on unstaged or staged changes"},
+            ],
+            "examples": [
+                {"reference": "git.commit.create", "inputs": {"message": "Record release notes update"}},
+            ],
+            "inspect_next": ["connector.git.commits", "connector.git.commit.amend", "connector.git.worktree"],
+        },
+        ("git", "commit.amend"): {
+            "definition": "Rewrite the current HEAD commit, optionally replacing its message, and return both the new commit id and the previous commit id.",
+            "use_when": [
+                "A workflow intentionally needs amend semantics for the current HEAD commit rather than creating another follow-up commit.",
+                "Later logic needs both the rewritten commit id and the previous HEAD id to describe what changed in history.",
+            ],
+            "do_not_use_for": [
+                "Creating an ordinary new commit from staged changes; use connector.git.commit.create when history should advance without rewriting HEAD.",
+                "Undoing an older commit through a new compensating commit; use connector.git.commit.revert for that history-preserving action.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.commit.create", "summary": "Sibling action for ordinary new commit creation instead of rewriting HEAD"},
+                {"handle": "connector.git.commit.revert", "summary": "Sibling action for reverting one target commit instead of rewriting the current one"},
+                {"handle": "connector.git.commits", "summary": "Sibling probe for reading recent commit texts around the commit that was amended"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current branch context before or after the amend"},
+            ],
+            "examples": [
+                {"reference": "git.commit.amend", "inputs": {"message": "Tighten commit message wording"}},
+                {"reference": "git.commit.amend", "inputs": {"message": None}},
+            ],
+            "inspect_next": ["connector.git.commits", "connector.git.commit.create", "connector.git.branch"],
+        },
+        ("git", "commit.revert"): {
+            "definition": "Create one new Git commit that reverts one target commit while preserving history, and return both the reverted commit id and the new revert commit id.",
+            "use_when": [
+                "A workflow needs to undo one existing commit through an explicit compensating commit instead of rewriting shared history.",
+                "Later steps need the new revert commit id and the resolved target commit id for publication or follow-up review.",
+            ],
+            "do_not_use_for": [
+                "Rewriting the current HEAD commit; use connector.git.commit.amend when the real intent is an amend.",
+                "Creating a normal new commit from currently staged work; use connector.git.commit.create for standard commit creation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.commit.create", "summary": "Sibling action for recording staged work instead of undoing an older commit"},
+                {"handle": "connector.git.commit.amend", "summary": "Sibling action for rewriting HEAD instead of preserving history with a revert commit"},
+                {"handle": "connector.git.commits", "summary": "Sibling probe for loading recent commit texts before choosing one to revert or after recording the revert"},
+                {"handle": "connector.git.ref", "summary": "Sibling probe for explicit ref resolution when the workflow needs a narrower commit-ref read path"},
+            ],
+            "examples": [
+                {"reference": "git.commit.revert", "inputs": {"commit": "HEAD~1"}},
+            ],
+            "inspect_next": ["connector.git.commits", "connector.git.commit.create", "connector.git.ref"],
+        },
+        ("git", "commits"): {
+            "definition": "Probe a bounded readable slice of Git commit history from one revision scope and return normalized commit texts with only minimal metadata.",
+            "use_when": [
+                "A workflow needs a short reviewable commit-history slice for prompting, decision-making, or publication without diff text or graph decoration.",
+                "Later logic needs subjects, bodies, authors, and commit times from one bounded revision scope rather than arbitrary git log formatting.",
+            ],
+            "do_not_use_for": [
+                "Loading patch text, changed files, diff stats, or graph decoration; this probe intentionally stays narrower than a full git log surface.",
+                "Mutating history through creation, amend, or revert actions; use connector.git.commit.create, connector.git.commit.amend, or connector.git.commit.revert for those effectful steps.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.commit.create", "summary": "Sibling action for recording a new commit after or before reading commit history"},
+                {"handle": "connector.git.commit.amend", "summary": "Sibling action for rewriting HEAD when the workflow needs mutation instead of history inspection"},
+                {"handle": "connector.git.commit.revert", "summary": "Sibling action for undoing one commit with a new revert commit"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for narrower revision-range facts when one readable commit-text list is broader than needed"},
+            ],
+            "examples": [
+                {"reference": "git.commits", "inputs": {"limit": 5, "rev": "HEAD"}},
+                {"reference": "git.commits", "inputs": {"limit": 3, "rev": "HEAD~10..HEAD"}},
+            ],
+            "inspect_next": ["connector.git.commit.create", "connector.git.commit.revert", "connector.git.range"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [

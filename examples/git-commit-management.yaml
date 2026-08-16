@@ -1,0 +1,31 @@
+version: 0
+workflow: manage-git-commits
+inputs:
+  commit_message: {}
+  target_commit: {}
+blocks:
+  - guards: []
+  - steps:
+      - name: read-recent-commits
+        uses: git.commits
+        with:
+          limit: 5
+          rev: "HEAD"
+        register: recent_commits
+      - name: create-commit
+        uses: git.commit.create
+        with:
+          message: inputs.commit_message
+      - name: amend-head-commit
+        uses: git.commit.amend
+        with:
+          message: "Tighten commit wording"
+      - name: revert-target-commit
+        uses: git.commit.revert
+        with:
+          commit: inputs.target_commit
+      - name: publish-summary
+        publish:
+          recent_count: step.recent_commits.outputs.count
+          sampled_rev: step.recent_commits.outputs.rev
+          summary: "Git commit workflow prepared"

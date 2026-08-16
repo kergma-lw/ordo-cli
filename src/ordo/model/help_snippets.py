@@ -804,6 +804,121 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.commit.create": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_commit_create_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Create one ordinary Git commit from the current index after the workflow has already decided the staged changes are ready.",
+                "source_example": "git-commit-management",
+                "source_excerpt": {
+                    "path": "examples/git-commit-management.yaml",
+                    "start_line": 15,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.commit.create",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.commit.amend": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_commit_amend_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Amend the current HEAD commit when the workflow intentionally wants history rewriting instead of another follow-up commit.",
+                "source_example": "git-commit-management",
+                "source_excerpt": {
+                    "path": "examples/git-commit-management.yaml",
+                    "start_line": 19,
+                    "end_line": 22
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.commit.amend",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.commit.revert": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_commit_revert_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Create a compensating revert commit for one target commit while preserving visible history.",
+                "source_example": "git-commit-management",
+                "source_excerpt": {
+                    "path": "examples/git-commit-management.yaml",
+                    "start_line": 23,
+                    "end_line": 26
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.commit.revert",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.commits": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_commits_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Read a bounded Git commit-history slice when the workflow needs commit texts instead of diffs or arbitrary git log formatting.",
+                "source_example": "git-commit-management",
+                "source_excerpt": {
+                    "path": "examples/git-commit-management.yaml",
+                    "start_line": 9,
+                    "end_line": 14
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.commits",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_commit_management_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect recent commit texts, then demonstrate ordinary commit creation, amend, and revert as distinct Git commit surfaces in one teaching workflow.",
+                "source_example": "git-commit-management",
+                "source_excerpt": {
+                    "path": "examples/git-commit-management.yaml",
+                    "start_line": 1,
+                    "end_line": 31
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.commits",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

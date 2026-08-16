@@ -959,6 +959,30 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Git branch inventory", branches["metadata"]["definition"])
         self.assertEqual(branches["canonical_examples"][0]["form"], "step_fragment")
 
+    def test_describe_connector_git_commit_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        create = json.loads(self.run_help("describe", "connector.git.commit.create", "--json").stdout)
+        amend = json.loads(self.run_help("describe", "connector.git.commit.amend", "--json").stdout)
+        revert = json.loads(self.run_help("describe", "connector.git.commit.revert", "--json").stdout)
+        commits = json.loads(self.run_help("describe", "connector.git.commits", "--json").stdout)
+
+        self.assertEqual(create["snippet_coverage"], "runner_verified")
+        self.assertIn("new Git commit from the current index", create["metadata"]["definition"])
+        self.assertEqual(create["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(amend["snippet_coverage"], "runner_verified")
+        self.assertIn("Rewrite the current HEAD commit", amend["metadata"]["definition"])
+        self.assertEqual(amend["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(revert["snippet_coverage"], "runner_verified")
+        self.assertIn("Create one new Git commit that reverts", revert["metadata"]["definition"])
+        self.assertEqual(revert["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(commits["snippet_coverage"], "runner_verified")
+        self.assertIn("bounded readable slice of Git commit history", commits["metadata"]["definition"])
+        self.assertEqual(commits["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(commits["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.commit.create", [item["handle"] for item in commits["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -966,7 +990,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 22)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 26)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1004,6 +1028,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.branch.delete"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.branch.switch"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.branches"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.commit.create"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.commit.amend"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.commit.revert"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.commits"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1429,6 +1457,29 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(branches.returncode, 0)
         self.assertIn("Probe the Git branch inventory", branches.stdout)
         self.assertIn("connector.git.branch", branches.stdout)
+
+    def test_text_describe_connector_git_commit_group_is_teaching_ready(self) -> None:
+        create = self.run_help("describe", "connector.git.commit.create")
+        amend = self.run_help("describe", "connector.git.commit.amend")
+        revert = self.run_help("describe", "connector.git.commit.revert")
+        commits = self.run_help("describe", "connector.git.commits")
+
+        self.assertEqual(create.returncode, 0)
+        self.assertIn("Create one new Git commit from the current index", create.stdout)
+        self.assertIn("connector.git.commit.amend", create.stdout)
+
+        self.assertEqual(amend.returncode, 0)
+        self.assertIn("Rewrite the current HEAD commit", amend.stdout)
+        self.assertIn("connector.git.commit.create", amend.stdout)
+
+        self.assertEqual(revert.returncode, 0)
+        self.assertIn("Create one new Git commit that reverts", revert.stdout)
+        self.assertIn("connector.git.commits", revert.stdout)
+
+        self.assertEqual(commits.returncode, 0)
+        self.assertIn("Probe a bounded readable slice of Git commit history", commits.stdout)
+        self.assertIn("connector.git.commit.create", commits.stdout)
+        self.assertIn("example_for: workflow_fragment", commits.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
