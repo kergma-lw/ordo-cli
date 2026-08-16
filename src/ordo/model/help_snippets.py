@@ -1326,6 +1326,73 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.sync.fetch": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_sync_fetch_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Refresh one named remote before the workflow compares branch divergence or decides whether publishing is safe.",
+                "source_example": "git-sync-roundtrip",
+                "source_excerpt": {
+                    "path": "examples/git-sync-roundtrip.yaml",
+                    "start_line": 9,
+                    "end_line": 12
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.sync.fetch",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_sync_roundtrip_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Fetch from one remote, inspect divergence and upstream context, then push one local branch so inbound and outbound Git sync surfaces stay clearly separated.",
+                "source_example": "git-sync-roundtrip",
+                "source_excerpt": {
+                    "path": "examples/git-sync-roundtrip.yaml",
+                    "start_line": 1,
+                    "end_line": 31
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.sync.fetch",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.sync.push": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_sync_push_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Publish one local branch to a remote after earlier workflow steps have already refreshed and checked the relevant synchronization context.",
+                "source_example": "git-sync-roundtrip",
+                "source_excerpt": {
+                    "path": "examples/git-sync-roundtrip.yaml",
+                    "start_line": 22,
+                    "end_line": 26
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.sync.push",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

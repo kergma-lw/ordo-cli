@@ -2378,6 +2378,49 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.range", "connector.git.branch", "connector.git.integrate.cherry_pick"],
         },
+        ("git", "sync.fetch"): {
+            "definition": "Fetch refs from one Git remote into the local repository so later probes and decisions can see updated remote-tracking state without publishing any local branch back outward.",
+            "use_when": [
+                "A workflow first needs fresh remote-tracking refs, tags, or branch comparisons before deciding whether merging, rebasing, or pushing is safe.",
+                "The authored intent is inbound synchronization from one named remote, not publishing a local branch to collaborators.",
+            ],
+            "do_not_use_for": [
+                "Publishing local commits to a remote; use connector.git.sync.push when the workflow needs outbound branch publication rather than remote refresh.",
+                "Comparing branch divergence itself; use connector.git.range after fetch when the workflow actually needs ahead/behind facts rather than the refresh action.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.sync.push", "summary": "Sibling action for publishing one local branch outward after remote state has been refreshed or confirmed"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for comparing local and remote revision endpoints after fetch updates remote-tracking refs"},
+                {"handle": "connector.git.tags", "summary": "Sibling probe for reading fetched tag inventory when the workflow cares about release refs after refresh"},
+                {"handle": "connector.git.upstream", "summary": "Sibling probe for current-branch tracking context before deciding which remote should be fetched or pushed"},
+            ],
+            "examples": [
+                {"reference": "git.sync.fetch", "inputs": {"remote": "origin"}},
+            ],
+            "inspect_next": ["connector.git.range", "connector.git.sync.push", "connector.git.tags"],
+        },
+        ("git", "sync.push"): {
+            "definition": "Push one local Git branch to a remote, using either the explicitly supplied remote or the branch's configured upstream remote when available.",
+            "use_when": [
+                "A workflow is ready to publish one local branch outward after local validation, range checks, or remote refresh have already justified the push decision.",
+                "The authored intent is outbound branch publication itself, not merely refreshing remote-tracking refs or inspecting divergence.",
+            ],
+            "do_not_use_for": [
+                "Refreshing local knowledge of remote refs; use connector.git.sync.fetch for inbound synchronization before or instead of publishing.",
+                "Guessing whether a push would be fast-forward-safe without wanting to publish yet; use connector.git.range or connector.git.upstream for that read-only decision context first.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.sync.fetch", "summary": "Sibling action for refreshing remote-tracking refs before a later push decision or rejection recovery"},
+                {"handle": "connector.git.upstream", "summary": "Sibling probe for resolving the current branch's configured upstream remote when remote is omitted"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for ahead/behind facts when the workflow first needs to know whether the push should succeed as fast-forward"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current branch identity when the workflow first needs to confirm which branch should be published"},
+            ],
+            "examples": [
+                {"reference": "git.sync.push", "inputs": {"branch": "feature/demo", "remote": "origin"}},
+                {"reference": "git.sync.push", "inputs": {"branch": "feature/demo", "remote": None}},
+            ],
+            "inspect_next": ["connector.git.sync.fetch", "connector.git.upstream", "connector.git.range"],
+        },
         ("git", "repo"): {
             "definition": "Probe the current local Git repository context and return repository-root, git-dir, worktree, HEAD-ref, and default-branch facts for the repository discovered at the current root.",
             "use_when": [

@@ -1073,6 +1073,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Rewrite one non-default Git branch", rebase_onto["metadata"]["definition"])
         self.assertEqual(rebase_onto["canonical_examples"][0]["form"], "step_fragment")
 
+    def test_describe_connector_git_sync_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        fetch = json.loads(self.run_help("describe", "connector.git.sync.fetch", "--json").stdout)
+        push = json.loads(self.run_help("describe", "connector.git.sync.push", "--json").stdout)
+
+        self.assertEqual(fetch["snippet_coverage"], "runner_verified")
+        self.assertIn("Fetch refs from one Git remote", fetch["metadata"]["definition"])
+        self.assertEqual(fetch["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(fetch["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.sync.push", [item["handle"] for item in fetch["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(push["snippet_coverage"], "runner_verified")
+        self.assertIn("Push one local Git branch", push["metadata"]["definition"])
+        self.assertEqual(push["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.git.sync.fetch", [item["handle"] for item in push["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -1080,7 +1095,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 39)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 41)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1127,6 +1142,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.integrate.merge_ff_only"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.integrate.rebase_onto"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.index.add_all"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.sync.fetch"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.sync.push"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.tag"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.tags"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.ref"]["snippet_coverage"], "runner_verified")
@@ -1663,6 +1680,19 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(rebase_onto.returncode, 0)
         self.assertIn("Rewrite one non-default Git branch", rebase_onto.stdout)
         self.assertIn("connector.git.integrate.cherry_pick", rebase_onto.stdout)
+
+    def test_text_describe_connector_git_sync_group_is_teaching_ready(self) -> None:
+        fetch = self.run_help("describe", "connector.git.sync.fetch")
+        push = self.run_help("describe", "connector.git.sync.push")
+
+        self.assertEqual(fetch.returncode, 0)
+        self.assertIn("Fetch refs from one Git remote", fetch.stdout)
+        self.assertIn("connector.git.sync.push", fetch.stdout)
+        self.assertIn("example_for: workflow_fragment", fetch.stdout)
+
+        self.assertEqual(push.returncode, 0)
+        self.assertIn("Push one local Git branch", push.stdout)
+        self.assertIn("connector.git.sync.fetch", push.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
