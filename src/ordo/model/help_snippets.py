@@ -1211,6 +1211,121 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.integrate.merge": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_integrate_merge_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Merge one target ref into the current checkout when the workflow explicitly wants an integration commit instead of a fast-forward-only update.",
+                "source_example": "git-integration-strategies",
+                "source_excerpt": {
+                    "path": "examples/git-integration-strategies.yaml",
+                    "start_line": 18,
+                    "end_line": 21
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.integrate.merge",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_integration_strategy_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Contrast merge, fast-forward-only merge, cherry-pick, and rebase --onto in one teaching workflow so each Git integration surface keeps its own unit of change and history semantics.",
+                "source_example": "git-integration-strategies",
+                "source_excerpt": {
+                    "path": "examples/git-integration-strategies.yaml",
+                    "start_line": 1,
+                    "end_line": 40
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.integrate.merge",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.integrate.merge_ff_only": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_integrate_merge_ff_only_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Advance the current checkout to one target ref only when the histories already allow a fast-forward update.",
+                "source_example": "git-integration-strategies",
+                "source_excerpt": {
+                    "path": "examples/git-integration-strategies.yaml",
+                    "start_line": 22,
+                    "end_line": 25
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.integrate.merge_ff_only",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.integrate.cherry_pick": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_integrate_cherry_pick_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Cherry-pick one chosen commit when the workflow wants a targeted backport-style transplant instead of integrating the whole source ref.",
+                "source_example": "git-integration-strategies",
+                "source_excerpt": {
+                    "path": "examples/git-integration-strategies.yaml",
+                    "start_line": 26,
+                    "end_line": 29
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.integrate.cherry_pick",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.integrate.rebase_onto": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_integrate_rebase_onto_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Rewrite one topic branch onto a new base when the workflow intentionally wants branch-range replay rather than merge-based integration.",
+                "source_example": "git-integration-strategies",
+                "source_excerpt": {
+                    "path": "examples/git-integration-strategies.yaml",
+                    "start_line": 30,
+                    "end_line": 35
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.integrate.rebase_onto",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

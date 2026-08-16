@@ -1049,6 +1049,30 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(state["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("connector.git.worktree", [item["handle"] for item in state["metadata"]["nearest_surfaces"]])
 
+    def test_describe_connector_git_integrate_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        merge = json.loads(self.run_help("describe", "connector.git.integrate.merge", "--json").stdout)
+        merge_ff_only = json.loads(self.run_help("describe", "connector.git.integrate.merge_ff_only", "--json").stdout)
+        cherry_pick = json.loads(self.run_help("describe", "connector.git.integrate.cherry_pick", "--json").stdout)
+        rebase_onto = json.loads(self.run_help("describe", "connector.git.integrate.rebase_onto", "--json").stdout)
+
+        self.assertEqual(merge["snippet_coverage"], "runner_verified")
+        self.assertIn("Integrate one target Git ref into the current checkout", merge["metadata"]["definition"])
+        self.assertEqual(merge["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(merge["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.integrate.merge_ff_only", [item["handle"] for item in merge["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(merge_ff_only["snippet_coverage"], "runner_verified")
+        self.assertIn("only if the update can fast-forward", merge_ff_only["metadata"]["definition"])
+        self.assertEqual(merge_ff_only["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(cherry_pick["snippet_coverage"], "runner_verified")
+        self.assertIn("Apply one existing non-merge Git commit", cherry_pick["metadata"]["definition"])
+        self.assertEqual(cherry_pick["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(rebase_onto["snippet_coverage"], "runner_verified")
+        self.assertIn("Rewrite one non-default Git branch", rebase_onto["metadata"]["definition"])
+        self.assertEqual(rebase_onto["canonical_examples"][0]["form"], "step_fragment")
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -1056,7 +1080,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 35)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 39)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1098,6 +1122,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.commit.amend"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.commit.revert"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.commits"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.integrate.cherry_pick"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.integrate.merge"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.integrate.merge_ff_only"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.integrate.rebase_onto"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.index.add_all"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.tag"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.tags"]["snippet_coverage"], "runner_verified")
@@ -1612,6 +1640,29 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Probe one combined Git repository-state snapshot", state.stdout)
         self.assertIn("connector.git.worktree", state.stdout)
         self.assertIn("example_for: workflow_fragment", state.stdout)
+
+    def test_text_describe_connector_git_integrate_group_is_teaching_ready(self) -> None:
+        merge = self.run_help("describe", "connector.git.integrate.merge")
+        merge_ff_only = self.run_help("describe", "connector.git.integrate.merge_ff_only")
+        cherry_pick = self.run_help("describe", "connector.git.integrate.cherry_pick")
+        rebase_onto = self.run_help("describe", "connector.git.integrate.rebase_onto")
+
+        self.assertEqual(merge.returncode, 0)
+        self.assertIn("Integrate one target Git ref into the current checkout", merge.stdout)
+        self.assertIn("connector.git.integrate.merge_ff_only", merge.stdout)
+        self.assertIn("example_for: workflow_fragment", merge.stdout)
+
+        self.assertEqual(merge_ff_only.returncode, 0)
+        self.assertIn("only if the update can fast-forward", merge_ff_only.stdout)
+        self.assertIn("connector.git.integrate.merge", merge_ff_only.stdout)
+
+        self.assertEqual(cherry_pick.returncode, 0)
+        self.assertIn("Apply one existing non-merge Git commit", cherry_pick.stdout)
+        self.assertIn("connector.git.integrate.merge", cherry_pick.stdout)
+
+        self.assertEqual(rebase_onto.returncode, 0)
+        self.assertIn("Rewrite one non-default Git branch", rebase_onto.stdout)
+        self.assertIn("connector.git.integrate.cherry_pick", rebase_onto.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")

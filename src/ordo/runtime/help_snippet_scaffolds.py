@@ -59,6 +59,10 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "connector.git.commit.amend",
         "connector.git.commit.revert",
         "connector.git.commits",
+        "connector.git.integrate.merge",
+        "connector.git.integrate.merge_ff_only",
+        "connector.git.integrate.cherry_pick",
+        "connector.git.integrate.rebase_onto",
         "connector.git.index.add_all",
         "connector.git.tag",
         "connector.git.tags",
@@ -76,7 +80,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.state", "connector.git.tags", "connector.git.range", "connector.git.upstream"),
+    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.tags", "connector.git.range", "connector.git.upstream"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -358,6 +362,10 @@ blocks:
         "connector.git.commit.amend",
         "connector.git.commit.revert",
         "connector.git.commits",
+        "connector.git.integrate.merge",
+        "connector.git.integrate.merge_ff_only",
+        "connector.git.integrate.cherry_pick",
+        "connector.git.integrate.rebase_onto",
         "connector.git.index.add_all",
         "connector.git.worktree",
         "connector.git.state",
@@ -368,6 +376,10 @@ workflow: snippet-git-commit
 inputs:
   commit_message: {{}}
   target_commit: {{}}
+  target_ref: {{}}
+  onto_ref: {{}}
+  upstream_ref: {{}}
+  branch_name: {{}}
 blocks:
 - guards: []
 - steps:
@@ -434,6 +446,8 @@ def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     if target == "connector.git.branch":
         return f"{snippet}\n"
     if target == "connector.git.commits":
+        return f"{snippet}\n"
+    if target == "connector.git.integrate.merge":
         return f"{snippet}\n"
     if target == "connector.git.state":
         return f"{snippet}\n"

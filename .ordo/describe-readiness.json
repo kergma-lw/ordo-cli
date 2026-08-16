@@ -145,6 +145,18 @@
     "connector.git.commits": {
       "describe_readiness": "ready"
     },
+    "connector.git.integrate.cherry_pick": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.integrate.merge": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.integrate.merge_ff_only": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.integrate.rebase_onto": {
+      "describe_readiness": "ready"
+    },
     "connector.git.index.add_all": {
       "describe_readiness": "ready"
     },

@@ -2294,6 +2294,90 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.ref", "connector.git.commits", "connector.git.upstream"],
         },
+        ("git", "integrate.merge"): {
+            "definition": "Integrate one target Git ref into the current checkout by creating a merge commit with ordinary merge semantics, even when a fast-forward would have been possible.",
+            "use_when": [
+                "A workflow intentionally wants one merge commit that preserves the integration event instead of silently linearizing history.",
+                "The integration target is one ref such as feature/demo or origin/main, not one standalone commit transplant or one branch-range rewrite.",
+            ],
+            "do_not_use_for": [
+                "Requiring a linear-history-only fast-forward update; use connector.git.integrate.merge_ff_only when creating a merge commit would be the wrong outcome.",
+                "Replaying one commit or rewriting a topic branch onto a new base; use connector.git.integrate.cherry_pick or connector.git.integrate.rebase_onto for those narrower rewrite semantics.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.integrate.merge_ff_only", "summary": "Sibling action for integrating one target ref only when the current checkout can fast-forward without creating a merge commit"},
+                {"handle": "connector.git.integrate.cherry_pick", "summary": "Sibling action for copying one commit onto the current checkout without merging a whole target ref"},
+                {"handle": "connector.git.integrate.rebase_onto", "summary": "Sibling action for rewriting one branch range onto a new base instead of integrating into the current checkout by merge"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for checking ahead/behind or merge-base facts before choosing an integration strategy"},
+            ],
+            "examples": [
+                {"reference": "git.integrate.merge", "inputs": {"ref": "feature/demo"}},
+            ],
+            "inspect_next": ["connector.git.integrate.merge_ff_only", "connector.git.range", "connector.git.integrate.cherry_pick"],
+        },
+        ("git", "integrate.merge_ff_only"): {
+            "definition": "Integrate one target Git ref into the current checkout only if the update can fast-forward, refusing to create a merge commit when histories have diverged.",
+            "use_when": [
+                "A workflow wants linear-history integration and should fail cleanly rather than synthesize a merge commit for the target ref.",
+                "The authored decision is specifically about advancing the current checkout to one descendant ref, not about copying one commit or rewriting a topic branch range.",
+            ],
+            "do_not_use_for": [
+                "Preserving an explicit integration commit even when fast-forward would be possible; use connector.git.integrate.merge for ordinary merge semantics.",
+                "Branch-range rewrites or single-commit transplants; use connector.git.integrate.rebase_onto or connector.git.integrate.cherry_pick for those rewrite-oriented surfaces.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.integrate.merge", "summary": "Sibling action for integrating the same target ref through an explicit merge commit instead of fast-forward-only admission"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for confirming whether two endpoints are already in a fast-forward relationship before this action runs"},
+                {"handle": "connector.git.upstream", "summary": "Sibling probe for current-branch upstream context when the workflow first needs to choose which target ref should fast-forward"},
+                {"handle": "connector.git.integrate.rebase_onto", "summary": "Sibling action for rewriting branch history when linear movement requires replay rather than pure fast-forward integration"},
+            ],
+            "examples": [
+                {"reference": "git.integrate.merge_ff_only", "inputs": {"ref": "origin/main"}},
+            ],
+            "inspect_next": ["connector.git.range", "connector.git.integrate.merge", "connector.git.upstream"],
+        },
+        ("git", "integrate.cherry_pick"): {
+            "definition": "Apply one existing non-merge Git commit onto the current checkout as a new commit, without integrating the whole source ref history.",
+            "use_when": [
+                "A workflow needs one targeted commit transplant such as backporting one fix without merging or rebasing the larger branch that originally contained it.",
+                "The authored decision is about one chosen commit identity, not about integrating a whole ref tip or replaying a branch range onto a new base.",
+            ],
+            "do_not_use_for": [
+                "Integrating a whole branch tip or preserving branch topology; use connector.git.integrate.merge or connector.git.integrate.merge_ff_only when the unit of integration is one ref rather than one commit.",
+                "Cherry-picking merge commits or rewriting one topic branch onto a new base; this surface rejects merge commits and is narrower than connector.git.integrate.rebase_onto.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.integrate.merge", "summary": "Sibling action for integrating a whole target ref instead of transplanting one selected commit"},
+                {"handle": "connector.git.integrate.rebase_onto", "summary": "Sibling action for replaying a branch range onto a new base rather than copying one chosen commit"},
+                {"handle": "connector.git.commits", "summary": "Sibling probe for loading readable commit history before choosing which commit to cherry-pick"},
+                {"handle": "connector.git.ref", "summary": "Sibling probe for exact ref resolution when the workflow still needs to identify the source commit or source branch first"},
+            ],
+            "examples": [
+                {"reference": "git.integrate.cherry_pick", "inputs": {"commit": "abc1234"}},
+            ],
+            "inspect_next": ["connector.git.commits", "connector.git.integrate.merge", "connector.git.integrate.rebase_onto"],
+        },
+        ("git", "integrate.rebase_onto"): {
+            "definition": "Rewrite one non-default Git branch by replaying the commits after one upstream boundary onto a new base with rebase --onto semantics.",
+            "use_when": [
+                "A workflow needs to move a topic branch onto a new base while preserving only the branch-local commit range after one upstream split point.",
+                "The authored decision is branch-range rewriting itself, not whole-ref integration into the current checkout and not a one-commit transplant.",
+            ],
+            "do_not_use_for": [
+                "Integrating a target ref into the current checkout without rewriting branch history; use connector.git.integrate.merge or connector.git.integrate.merge_ff_only for those integration semantics.",
+                "Rebasing the repository default branch or copying only one selected commit; this surface protects the default branch and is broader than connector.git.integrate.cherry_pick.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.integrate.merge", "summary": "Sibling action for integrating by merge instead of rewriting one branch range onto a new base"},
+                {"handle": "connector.git.integrate.cherry_pick", "summary": "Sibling action for replaying one chosen commit instead of rebasing an entire branch-local range"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for inspecting base/head relationships before choosing onto and upstream boundaries"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current checkout branch identity when the workflow first needs to confirm which branch is being rewritten"},
+            ],
+            "examples": [
+                {"reference": "git.integrate.rebase_onto", "inputs": {"onto": "origin/main", "upstream": "main", "branch": "feature/demo"}},
+            ],
+            "inspect_next": ["connector.git.range", "connector.git.branch", "connector.git.integrate.cherry_pick"],
+        },
         ("git", "repo"): {
             "definition": "Probe the current local Git repository context and return repository-root, git-dir, worktree, HEAD-ref, and default-branch facts for the repository discovered at the current root.",
             "use_when": [
