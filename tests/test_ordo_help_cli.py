@@ -930,6 +930,35 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(details["canonical_examples"][0]["form"], "step_fragment")
         self.assertIn("connector.gh.project.items", [item["handle"] for item in details["metadata"]["nearest_surfaces"]])
 
+    def test_describe_connector_git_branch_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        branch = json.loads(self.run_help("describe", "connector.git.branch", "--json").stdout)
+        create = json.loads(self.run_help("describe", "connector.git.branch.create", "--json").stdout)
+        delete = json.loads(self.run_help("describe", "connector.git.branch.delete", "--json").stdout)
+        switch = json.loads(self.run_help("describe", "connector.git.branch.switch", "--json").stdout)
+        branches = json.loads(self.run_help("describe", "connector.git.branches", "--json").stdout)
+
+        self.assertEqual(branch["snippet_coverage"], "runner_verified")
+        self.assertIn("currently checked out local Git branch", branch["metadata"]["definition"])
+        self.assertEqual(branch["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(branch["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.branches", [item["handle"] for item in branch["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(create["snippet_coverage"], "runner_verified")
+        self.assertIn("Create one new local Git branch", create["metadata"]["definition"])
+        self.assertEqual(create["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(delete["snippet_coverage"], "runner_verified")
+        self.assertIn("Delete one local non-default Git branch", delete["metadata"]["definition"])
+        self.assertEqual(delete["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(switch["snippet_coverage"], "runner_verified")
+        self.assertIn("Switch the current Git checkout", switch["metadata"]["definition"])
+        self.assertEqual(switch["canonical_examples"][0]["form"], "step_fragment")
+
+        self.assertEqual(branches["snippet_coverage"], "runner_verified")
+        self.assertIn("Git branch inventory", branches["metadata"]["definition"])
+        self.assertEqual(branches["canonical_examples"][0]["form"], "step_fragment")
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -937,7 +966,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 17)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 22)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -970,6 +999,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.gh.project.issue.field_single_select.set"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.project.items"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.project.items.details"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.branch"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.branch.create"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.branch.delete"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.branch.switch"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.branches"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1367,6 +1401,34 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(details.returncode, 0)
         self.assertIn("Probe one GitHub Project as a normalized item collection with stable content details", details.stdout)
         self.assertIn("connector.gh.project.items", details.stdout)
+
+    def test_text_describe_connector_git_branch_group_is_teaching_ready(self) -> None:
+        branch = self.run_help("describe", "connector.git.branch")
+        create = self.run_help("describe", "connector.git.branch.create")
+        delete = self.run_help("describe", "connector.git.branch.delete")
+        switch = self.run_help("describe", "connector.git.branch.switch")
+        branches = self.run_help("describe", "connector.git.branches")
+
+        self.assertEqual(branch.returncode, 0)
+        self.assertIn("Probe the currently checked out local Git branch", branch.stdout)
+        self.assertIn("connector.git.branches", branch.stdout)
+        self.assertIn("example_for: workflow_fragment", branch.stdout)
+
+        self.assertEqual(create.returncode, 0)
+        self.assertIn("Create one new local Git branch", create.stdout)
+        self.assertIn("connector.git.branch.switch", create.stdout)
+
+        self.assertEqual(delete.returncode, 0)
+        self.assertIn("Delete one local non-default Git branch", delete.stdout)
+        self.assertIn("connector.git.branch.switch", delete.stdout)
+
+        self.assertEqual(switch.returncode, 0)
+        self.assertIn("Switch the current Git checkout", switch.stdout)
+        self.assertIn("connector.git.worktree", switch.stdout)
+
+        self.assertEqual(branches.returncode, 0)
+        self.assertIn("Probe the Git branch inventory", branches.stdout)
+        self.assertIn("connector.git.branch", branches.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")

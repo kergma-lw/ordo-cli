@@ -118,6 +118,21 @@
     "connector.gh.project.items.details": {
       "describe_readiness": "ready"
     },
+    "connector.git.branch": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.branch.create": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.branch.delete": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.branch.switch": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.branches": {
+      "describe_readiness": "ready"
+    },
     "connector.runtime": {
       "describe_readiness": "ready"
     },

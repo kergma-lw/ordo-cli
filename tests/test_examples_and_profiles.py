@@ -18,6 +18,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/minimal.yaml"),
             Path("examples/inspect-issue.yaml"),
             Path("examples/inspect-pr.yaml"),
+            Path("examples/git-branch-management.yaml"),
             Path("examples/project-field-probes.yaml"),
             Path("examples/project-item-collections.yaml"),
             Path("examples/project-issue-membership.yaml"),
@@ -170,6 +171,11 @@ class ExampleSurfaceTest(unittest.TestCase):
         workflow = load_workflow_file(Path("examples/project-item-collections.yaml"))
 
         self.assertEqual(workflow.workflow, "inspect-project-item-collections")
+
+    def test_git_branch_management_example_loads(self) -> None:
+        workflow = load_workflow_file(Path("examples/git-branch-management.yaml"))
+
+        self.assertEqual(workflow.workflow, "manage-git-branches")
 
 
 def _completed(*, returncode: int, stdout: str, stderr: str) -> CompletedProcess[str]:

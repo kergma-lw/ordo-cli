@@ -2015,6 +2015,111 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.gh.project.items", "connector.gh.project.issue", "connector.gh.issue"],
         },
+        ("git", "branch"): {
+            "definition": "Probe the currently checked out local Git branch and report whether the repository is on a named branch or in detached HEAD state.",
+            "use_when": [
+                "A workflow needs one cheap checkout-context probe before deciding whether branch-specific actions or branch guards are appropriate.",
+                "Later logic only needs the current branch name, ref, or detached flag rather than a full branch inventory.",
+            ],
+            "do_not_use_for": [
+                "Listing many local and remote branches; use connector.git.branches for the inventory surface.",
+                "Creating, deleting, or switching branches; use the narrower connector.git.branch.create, connector.git.branch.delete, or connector.git.branch.switch actions for mutation.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.branches", "summary": "Sibling probe for the full branch inventory instead of only the current checkout context"},
+                {"handle": "connector.git.branch.switch", "summary": "Sibling action for changing the current checkout after this probe confirms the current branch context"},
+                {"handle": "connector.git.repo", "summary": "Sibling probe for repository-level facts such as root path and default branch"},
+                {"handle": "connector.git.state", "summary": "Sibling probe for broader worktree state when branch name alone is not enough"},
+            ],
+            "examples": [
+                {"reference": "git.branch", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.branches", "connector.git.branch.switch", "connector.git.state"],
+        },
+        ("git", "branch.create"): {
+            "definition": "Create one new local Git branch, optionally from an explicit start point, without switching the current checkout automatically.",
+            "use_when": [
+                "A workflow needs to create a local working branch before switching to it or using it in later Git operations.",
+                "The authored intent is branch creation itself, not a broader repository clone, fetch, or checkout workflow.",
+            ],
+            "do_not_use_for": [
+                "Switching the current checkout to the new or existing branch; use connector.git.branch.switch for that mutation.",
+                "Inspecting whether a branch already exists; use connector.git.branches or connector.git.ref when the workflow only needs a read path.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.branch", "summary": "Parent current-branch probe for reading checkout context before or after branch creation"},
+                {"handle": "connector.git.branch.switch", "summary": "Typical follow-up action for moving the current checkout onto the created branch"},
+                {"handle": "connector.git.branches", "summary": "Sibling probe for inspecting branch inventory before or after creation"},
+                {"handle": "connector.git.ref", "summary": "Sibling probe for one explicit ref existence check when a full branch inventory is unnecessary"},
+            ],
+            "examples": [
+                {"reference": "git.branch.create", "inputs": {"branch": "feature/demo", "start_point": "HEAD"}},
+            ],
+            "inspect_next": ["connector.git.branch.switch", "connector.git.branches", "connector.git.branch"],
+        },
+        ("git", "branch.delete"): {
+            "definition": "Delete one local non-default Git branch after safety checks confirm it is not the checked-out or protected default branch.",
+            "use_when": [
+                "A workflow is intentionally cleaning up one stale local branch rather than switching branches or resetting repository state broadly.",
+                "The authored intent needs Git's merged-branch and checked-out-branch protections rather than a blunt ref deletion.",
+            ],
+            "do_not_use_for": [
+                "Switching away from the current branch before deletion; use connector.git.branch.switch first when the current checkout must move.",
+                "Deleting tags, remote refs, or arbitrary refs; this surface only covers local branch cleanup.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.branch", "summary": "Parent current-branch probe for checking whether the target branch is currently active"},
+                {"handle": "connector.git.branches", "summary": "Sibling probe for reviewing local and remote branch inventory before deletion"},
+                {"handle": "connector.git.branch.switch", "summary": "Sibling action for moving off the target branch before deletion if needed"},
+                {"handle": "connector.git.repo", "summary": "Sibling probe for repository-level facts such as the protected default branch"},
+            ],
+            "examples": [
+                {"reference": "git.branch.delete", "inputs": {"branch": "stale/demo"}},
+            ],
+            "inspect_next": ["connector.git.branches", "connector.git.branch.switch", "connector.git.branch"],
+        },
+        ("git", "branch.switch"): {
+            "definition": "Switch the current Git checkout to one existing local branch and report whether the checkout actually changed.",
+            "use_when": [
+                "A workflow needs to move the current checkout onto one known local branch before later repository actions run.",
+                "The authored intent is checkout movement itself, with explicit reporting about whether the branch was already current.",
+            ],
+            "do_not_use_for": [
+                "Creating a new branch before switching; use connector.git.branch.create first when the target branch may not exist yet.",
+                "Inspecting current branch state without mutating checkout; use connector.git.branch for the read-only checkout probe.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.branch", "summary": "Parent current-branch probe for reading checkout context before or after switching"},
+                {"handle": "connector.git.branch.create", "summary": "Sibling action for creating a branch before switching to it"},
+                {"handle": "connector.git.worktree", "summary": "Sibling probe for broader worktree cleanliness when switch safety depends on local changes"},
+                {"handle": "connector.git.state", "summary": "Sibling probe for broader repository state when branch switching is only part of the decision"},
+            ],
+            "examples": [
+                {"reference": "git.branch.switch", "inputs": {"branch": "feature/demo"}},
+            ],
+            "inspect_next": ["connector.git.branch", "connector.git.worktree", "connector.git.state"],
+        },
+        ("git", "branches"): {
+            "definition": "Probe the Git branch inventory and return a normalized list of local and remote branches together with the current branch marker.",
+            "use_when": [
+                "A workflow needs one branch inventory scan before choosing, creating, deleting, or publishing branch-related state.",
+                "Later logic needs to compare the current branch against the available local or remote branch set, not just read one current branch name.",
+            ],
+            "do_not_use_for": [
+                "Reading only the current checkout context; use connector.git.branch for the cheaper current-branch probe.",
+                "Mutating branch state; use connector.git.branch.create, connector.git.branch.delete, or connector.git.branch.switch for those actions.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.branch", "summary": "Sibling probe for only the current checkout branch instead of the full inventory"},
+                {"handle": "connector.git.branch.create", "summary": "Sibling action for adding one new local branch after inventory review"},
+                {"handle": "connector.git.branch.delete", "summary": "Sibling action for removing one local branch after inventory review"},
+                {"handle": "connector.git.ref", "summary": "Sibling probe for one explicit ref check when a full inventory is broader than needed"},
+            ],
+            "examples": [
+                {"reference": "git.branches", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.branch", "connector.git.branch.create", "connector.git.branch.delete"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [

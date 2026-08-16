@@ -665,6 +665,145 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.branch": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_branch_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Read the current checkout branch before making a branch-specific decision or publishing branch context.",
+                "source_example": "git-branch-management",
+                "source_excerpt": {
+                    "path": "examples/git-branch-management.yaml",
+                    "start_line": 8,
+                    "end_line": 10
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.branch",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_branch_management_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Read the current branch and branch inventory, create a feature branch, switch to it, then clean up one stale local branch.",
+                "source_example": "git-branch-management",
+                "source_excerpt": {
+                    "path": "examples/git-branch-management.yaml",
+                    "start_line": 1,
+                    "end_line": 31
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.branch",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.branch.create": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_branch_create_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Create one new local feature branch from HEAD without switching the current checkout automatically.",
+                "source_example": "git-branch-management",
+                "source_excerpt": {
+                    "path": "examples/git-branch-management.yaml",
+                    "start_line": 14,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.branch.create",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.branch.delete": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_branch_delete_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Delete one stale local branch after the workflow has already made the intended cleanup decision.",
+                "source_example": "git-branch-management",
+                "source_excerpt": {
+                    "path": "examples/git-branch-management.yaml",
+                    "start_line": 23,
+                    "end_line": 26
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.branch.delete",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.branch.switch": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_branch_switch_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Switch the current checkout onto the created feature branch before later branch-specific work begins.",
+                "source_example": "git-branch-management",
+                "source_excerpt": {
+                    "path": "examples/git-branch-management.yaml",
+                    "start_line": 19,
+                    "end_line": 22
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.branch.switch",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.branches": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_branches_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Load the branch inventory when the workflow needs the available local and remote branch set instead of only the current branch.",
+                "source_example": "git-branch-management",
+                "source_excerpt": {
+                    "path": "examples/git-branch-management.yaml",
+                    "start_line": 11,
+                    "end_line": 13
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.branches",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [
