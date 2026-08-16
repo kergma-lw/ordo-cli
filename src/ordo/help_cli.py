@@ -2421,6 +2421,27 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.sync.fetch", "connector.git.upstream", "connector.git.range"],
         },
+        ("git", "stash"): {
+            "definition": "Probe the current Git stash inventory and return the ordered stash entries, their selectors, and the repository root they belong to.",
+            "use_when": [
+                "A workflow needs to know whether stash entries exist before switching branches, cleaning a worktree, or deciding whether hidden local work might need recovery.",
+                "Later logic needs the explicit stash entry list itself rather than only one coarse repository-state summary flag.",
+            ],
+            "do_not_use_for": [
+                "Reading only one combined repository snapshot with branch and worktree flags; use connector.git.state when stash count is just one part of a broader readiness summary.",
+                "Inspecting unstaged or staged path details; use connector.git.worktree when the workflow is really about dirty files rather than saved stash entries.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.state", "summary": "Sibling probe for one broader branch-plus-worktree-plus-stash-count summary instead of the explicit stash entry list"},
+                {"handle": "connector.git.worktree", "summary": "Sibling probe for current dirty-path details when the workflow needs live worktree changes rather than saved stash entries"},
+                {"handle": "connector.git.branch.switch", "summary": "Sibling action often guarded by stash awareness when the workflow wants to avoid losing hidden local work during checkout changes"},
+                {"handle": "connector.git.repo", "summary": "Sibling probe for repository-level context when the workflow first needs root and default-branch facts rather than stash inventory"},
+            ],
+            "examples": [
+                {"reference": "git.stash", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.state", "connector.git.worktree", "connector.git.branch.switch"],
+        },
         ("git", "repo"): {
             "definition": "Probe the current local Git repository context and return repository-root, git-dir, worktree, HEAD-ref, and default-branch facts for the repository discovered at the current root.",
             "use_when": [

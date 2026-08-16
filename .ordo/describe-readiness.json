@@ -172,6 +172,9 @@
     "connector.git.state": {
       "describe_readiness": "ready"
     },
+    "connector.git.stash": {
+      "describe_readiness": "ready"
+    },
     "connector.git.sync.fetch": {
       "describe_readiness": "ready"
     },

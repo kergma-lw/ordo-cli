@@ -1393,6 +1393,49 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.stash": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_stash_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect the current stash list before later workflow steps decide whether hidden local work needs recovery or acknowledgement.",
+                "source_example": "git-stash-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-stash-inspection.yaml",
+                    "start_line": 6,
+                    "end_line": 8
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.stash",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_stash_inspection_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect stash inventory alongside repository state so workflows can distinguish saved stash entries from current dirty-worktree facts.",
+                "source_example": "git-stash-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-stash-inspection.yaml",
+                    "start_line": 1,
+                    "end_line": 15
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.stash",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

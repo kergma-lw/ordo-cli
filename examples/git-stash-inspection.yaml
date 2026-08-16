@@ -1,0 +1,16 @@
+version: 0
+workflow: inspect-git-stash-context
+blocks:
+  - guards: []
+  - steps:
+      - name: inspect-stash
+        uses: git.stash
+        register: stash_info
+      - name: inspect-repository-state
+        uses: git.state
+        register: repo_state
+      - name: publish-summary
+        publish:
+          stash_count: step.stash_info.outputs.count
+          has_staged_changes: step.repo_state.outputs.has_staged_changes
+          summary: "Git stash inspection workflow prepared"

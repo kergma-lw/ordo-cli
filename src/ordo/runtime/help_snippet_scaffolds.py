@@ -64,6 +64,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "connector.git.integrate.cherry_pick",
         "connector.git.integrate.rebase_onto",
         "connector.git.index.add_all",
+        "connector.git.stash",
         "connector.git.sync.fetch",
         "connector.git.sync.push",
         "connector.git.tag",
@@ -82,7 +83,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream"),
+    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.stash", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -369,6 +370,7 @@ blocks:
         "connector.git.integrate.cherry_pick",
         "connector.git.integrate.rebase_onto",
         "connector.git.index.add_all",
+        "connector.git.stash",
         "connector.git.sync.fetch",
         "connector.git.sync.push",
         "connector.git.worktree",
@@ -455,6 +457,8 @@ def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     if target == "connector.git.integrate.merge":
         return f"{snippet}\n"
     if target == "connector.git.state":
+        return f"{snippet}\n"
+    if target == "connector.git.stash":
         return f"{snippet}\n"
     if target == "connector.git.sync.fetch":
         return f"{snippet}\n"

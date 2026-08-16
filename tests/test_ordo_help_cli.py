@@ -1088,6 +1088,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(push["canonical_examples"][0]["form"], "step_fragment")
         self.assertIn("connector.git.sync.fetch", [item["handle"] for item in push["metadata"]["nearest_surfaces"]])
 
+    def test_describe_connector_git_stash_is_teaching_ready(self) -> None:
+        stash = json.loads(self.run_help("describe", "connector.git.stash", "--json").stdout)
+
+        self.assertEqual(stash["snippet_coverage"], "runner_verified")
+        self.assertIn("Probe the current Git stash inventory", stash["metadata"]["definition"])
+        self.assertEqual(stash["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(stash["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.state", [item["handle"] for item in stash["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -1095,7 +1104,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 41)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 42)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1142,6 +1151,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.integrate.merge_ff_only"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.integrate.rebase_onto"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.index.add_all"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.stash"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.sync.fetch"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.sync.push"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.tag"]["snippet_coverage"], "runner_verified")
@@ -1693,6 +1703,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(push.returncode, 0)
         self.assertIn("Push one local Git branch", push.stdout)
         self.assertIn("connector.git.sync.fetch", push.stdout)
+
+    def test_text_describe_connector_git_stash_is_teaching_ready(self) -> None:
+        stash = self.run_help("describe", "connector.git.stash")
+
+        self.assertEqual(stash.returncode, 0)
+        self.assertIn("Probe the current Git stash inventory", stash.stdout)
+        self.assertIn("connector.git.state", stash.stdout)
+        self.assertIn("example_for: workflow_fragment", stash.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
