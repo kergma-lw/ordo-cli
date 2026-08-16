@@ -31,6 +31,7 @@ class ExampleSurfaceTest(unittest.TestCase):
             Path("examples/let-bindings.yaml"),
             Path("examples/local-expression-filters.yaml"),
             Path("examples/run-step.yaml"),
+            Path("examples/run-fan-out.yaml"),
         ):
             report = validate_workflow_text(path.read_text(encoding="utf-8"), source=str(path))
             self.assertTrue(report.ok, path.as_posix())

@@ -500,6 +500,146 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.run.run": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_named_target_field",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Select one named reusable run target for a runtime invocation step instead of inlining the repeated body locally.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 7,
+                    "end_line": 9
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.run.with": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_argument_bindings_block",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Bind explicit caller-scoped values into one named run target instead of letting the callee read caller context implicitly.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 9,
+                    "end_line": 12
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.run.for_each": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_bounded_fan_out_source",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Repeat one invocation-shaped step over an explicit array-valued item source.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 12,
+                    "end_line": 14
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.run.if": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_outer_if_condition",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Gate the whole invocation step with one outer caller-scoped condition before fan-out or inline body execution begins.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 13,
+                    "end_line": 15
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.run.gate": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_outer_gate_condition",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Declare one outer admission gate for a run invocation when the real question is whether the whole invocation may proceed at all.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 18,
+                    "end_line": 22
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.run.register": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_aggregate_register_name",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Capture the aggregate results of a run invocation or fan-out step under one explicit outer register name.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 13,
+                    "end_line": 16
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.run.steps": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_inline_repeated_body",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Keep one short local repeated body inline under for_each when a named run target would be heavier than necessary.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 25,
+                    "end_line": 31
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
     "profile.overrides": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

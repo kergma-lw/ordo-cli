@@ -4731,6 +4731,160 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "workflow.step.run",
             "workflow.step_forms.operation_call",
         ]
+    if "workflow.run.run" in lookup:
+        lookup["workflow.run.run"]["summary"] = "Run-call field that selects the named reusable runtime target invoked by a run step"
+        lookup["workflow.run.run"]["metadata"]["role"] = "runtime_target_selection"
+        lookup["workflow.run.run"]["metadata"]["use_when"] = [
+            "the invocation should call one named reusable workflow fragment or routine target instead of keeping the repeated body inline",
+            "the callee deserves its own stable identity and isolated run scope rather than one local inline repeated body",
+        ]
+        lookup["workflow.run.run"]["metadata"]["do_not_use_for"] = [
+            "source-time include expansion; use workflow.include.include when the body should be expanded before validation instead of invoked at runtime",
+            "short local repeated work that is clearer as inline steps under workflow.run.steps",
+        ]
+        lookup["workflow.run.run"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.run.steps", "summary": "Sibling inline repeated-body field for short local repeated work instead of a named run target"},
+            {"handle": "workflow.run.with", "summary": "Sibling invocation-argument field for binding caller values into the named run target"},
+            {"handle": "workflow.step_forms.run_invocation", "summary": "Dedicated step form whose primary authored field is run"},
+        ]
+        lookup["workflow.run.run"]["metadata"]["inspect_next"] = [
+            "workflow.run.with",
+            "workflow.run.for_each",
+            "workflow.step_forms.run_invocation",
+            "workflow-authoring.run_target_vs_inline_fan_out",
+        ]
+    if "workflow.run.with" in lookup:
+        lookup["workflow.run.with"]["summary"] = "Run-call field that binds caller-scoped argument values into the named target selected by workflow.run.run"
+        lookup["workflow.run.with"]["metadata"]["role"] = "runtime_argument_binding"
+        lookup["workflow.run.with"]["metadata"]["use_when"] = [
+            "the named run target needs explicit caller-scoped values rather than implicitly reading caller context inside the callee body",
+            "runtime expressions should be bound into args.* for the callee instead of being duplicated there",
+        ]
+        lookup["workflow.run.with"]["metadata"]["do_not_use_for"] = [
+            "source-time fragment argument binding; use workflow.include.with for include expansion",
+            "inline repeated bodies that should read item or workflow context directly instead of receiving outer call bindings",
+        ]
+        lookup["workflow.run.with"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.run.run", "summary": "Sibling field for selecting the named run target that receives these bindings"},
+            {"handle": "workflow.include.with", "summary": "Source-time fragment argument binding surface rather than runtime invocation binding"},
+            {"handle": "workflow-authoring.native_expression_contexts", "summary": "Authoring rule for bare expressions in with bindings"},
+        ]
+        lookup["workflow.run.with"]["metadata"]["inspect_next"] = [
+            "workflow.run.run",
+            "workflow.run.for_each",
+            "workflow.include.with",
+            "workflow-authoring.native_expression_contexts",
+        ]
+    if "workflow.run.for_each" in lookup:
+        lookup["workflow.run.for_each"]["summary"] = "Run-call field that provides the array-valued repeated item source for bounded fan-out over one invocation-shaped step"
+        lookup["workflow.run.for_each"]["metadata"]["role"] = "bounded_repetition_source"
+        lookup["workflow.run.for_each"]["metadata"]["use_when"] = [
+            "one run invocation or inline repeated-body step should repeat over an explicit array-valued item source",
+            "the workflow needs bounded fan-out while keeping one outer invocation step visible and reviewable",
+        ]
+        lookup["workflow.run.for_each"]["metadata"]["do_not_use_for"] = [
+            "general looping semantics beyond the published bounded fan-out surface",
+            "non-array or nested repetition shapes that belong outside the current public workflow model",
+        ]
+        lookup["workflow.run.for_each"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.run.run", "summary": "Sibling named-target field often paired with for_each for reusable repeated bodies"},
+            {"handle": "workflow.run.steps", "summary": "Sibling inline repeated-body field paired with for_each for short local repeated work"},
+            {"handle": "workflow-authoring.fan_out_scope_and_conditions", "summary": "Authoring rule for outer and inner fan-out scope boundaries"},
+        ]
+        lookup["workflow.run.for_each"]["metadata"]["inspect_next"] = [
+            "workflow.run.run",
+            "workflow.run.steps",
+            "workflow.step_forms.inline_fan_out_invocation",
+            "workflow-authoring.fan_out_scope_and_conditions",
+        ]
+    if "workflow.run.if" in lookup:
+        lookup["workflow.run.if"]["summary"] = "Run-call field that gates the whole invocation step with one caller-scoped optionality condition"
+        lookup["workflow.run.if"]["metadata"]["role"] = "caller_scoped_invocation_condition"
+        lookup["workflow.run.if"]["metadata"]["use_when"] = [
+            "the whole invocation step is optional inside an already-valid workflow path",
+            "one outer condition should decide whether fan-out or named-target invocation happens at all before any inner step body runs",
+        ]
+        lookup["workflow.run.if"]["metadata"]["do_not_use_for"] = [
+            "workflow-wide applicability that belongs in guards near the top of the workflow",
+            "admission decisions whose main meaning is whether the path may run at all; use workflow.run.gate for that stronger control surface",
+        ]
+        lookup["workflow.run.if"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.run.gate", "summary": "Sibling field for admission decisions rather than optional local branching"},
+            {"handle": "workflow.step.if", "summary": "Related step-local branching surface outside the run-call contract"},
+            {"handle": "workflow-authoring.separate_control_surfaces", "summary": "Authoring rule for separating guards, gates, and if surfaces"},
+        ]
+        lookup["workflow.run.if"]["metadata"]["inspect_next"] = [
+            "workflow.run.gate",
+            "workflow.step.if",
+            "workflow-authoring.separate_control_surfaces",
+            "workflow-authoring.fan_out_scope_and_conditions",
+        ]
+    if "workflow.run.gate" in lookup:
+        lookup["workflow.run.gate"]["summary"] = "Run-call field that decides whether the whole invocation step may run at all before the protected work begins"
+        lookup["workflow.run.gate"]["metadata"]["role"] = "caller_scoped_step_admission_condition"
+        lookup["workflow.run.gate"]["metadata"]["use_when"] = [
+            "the real question is whether the whole invocation step may execute at all, not just whether it is locally optional",
+            "a blocked invocation should publish structured gate-failure context rather than quietly disappearing behind if logic",
+        ]
+        lookup["workflow.run.gate"]["metadata"]["do_not_use_for"] = [
+            "workflow-wide applicability that belongs in guards near the start of the workflow",
+            "aggregate result publication on the same outer invocation step; split gate and register across separate steps when both are needed",
+        ]
+        lookup["workflow.run.gate"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.run.if", "summary": "Sibling outer-branching field for optional invocation instead of admission control"},
+            {"handle": "workflow.step.gate", "summary": "Related step-admission surface outside the run-call contract"},
+            {"handle": "workflow.step_forms.gate_checkpoint", "summary": "Standalone gate-only checkpoint step when admission should be split from later registered work"},
+        ]
+        lookup["workflow.run.gate"]["metadata"]["inspect_next"] = [
+            "workflow.run.if",
+            "workflow.step.gate",
+            "workflow.step_forms.gate_checkpoint",
+            "workflow-authoring.separate_control_surfaces",
+        ]
+    if "workflow.run.register" in lookup:
+        lookup["workflow.run.register"]["summary"] = "Run-call field that binds the outer aggregate result of one invocation step to a reusable local name"
+        lookup["workflow.run.register"]["metadata"]["role"] = "aggregate_invocation_result"
+        lookup["workflow.run.register"]["metadata"]["use_when"] = [
+            "later workflow steps need the aggregate results of one run invocation or bounded fan-out step under one reusable local name",
+            "the outer invocation result should stay reviewable as one named aggregate rather than as many unnamed ephemeral outputs",
+        ]
+        lookup["workflow.run.register"]["metadata"]["do_not_use_for"] = [
+            "the same step that also declares gate; split admission and aggregate result capture into separate steps",
+            "naming one inner repeated-body register; inner step registers stay iteration-local inside inline fan-out bodies",
+        ]
+        lookup["workflow.run.register"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.run.gate", "summary": "Sibling admission field that must be split away when aggregate results also need registering"},
+            {"handle": "workflow.step.register", "summary": "Related step-level register surface outside the run-call contract"},
+            {"handle": "workflow-authoring.fan_out_scope_and_conditions", "summary": "Authoring rule that explains outer versus inner register scope in fan-out"},
+        ]
+        lookup["workflow.run.register"]["metadata"]["inspect_next"] = [
+            "workflow.step.register",
+            "workflow.run.gate",
+            "workflow-authoring.fan_out_scope_and_conditions",
+            "workflow-authoring.value_register_before_result",
+        ]
+    if "workflow.run.steps" in lookup:
+        lookup["workflow.run.steps"]["summary"] = "Run-call field that carries the short inline repeated body executed for each item in an inline fan-out invocation"
+        lookup["workflow.run.steps"]["metadata"]["role"] = "inline_repeated_body"
+        lookup["workflow.run.steps"]["metadata"]["use_when"] = [
+            "the repeated work is short, workflow-local, and clearer as one inline repeated body than as a named reusable run target",
+            "one invocation-shaped step should execute a small list of local steps for each item from for_each",
+        ]
+        lookup["workflow.run.steps"]["metadata"]["do_not_use_for"] = [
+            "large, reusable, or guard-bearing repeated bodies that deserve workflow.run.run with a named target",
+            "top-level workflow block authoring; this field only defines the inner repeated body of an inline fan-out invocation",
+        ]
+        lookup["workflow.run.steps"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.run.for_each", "summary": "Sibling repeated-item source field that drives this inline repeated body"},
+            {"handle": "workflow.run.run", "summary": "Sibling named-target field for reusable repeated work instead of inline local steps"},
+            {"handle": "workflow.step_forms.inline_fan_out_invocation", "summary": "Dedicated step form whose primary authored fields are for_each and steps"},
+        ]
+        lookup["workflow.run.steps"]["metadata"]["inspect_next"] = [
+            "workflow.run.for_each",
+            "workflow.run.run",
+            "workflow.step_forms.inline_fan_out_invocation",
+            "workflow-authoring.run_target_vs_inline_fan_out",
+        ]
     for field in model["profile"]["top_level_fields"]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)
     for field in model["profile"]["override_fields"]:

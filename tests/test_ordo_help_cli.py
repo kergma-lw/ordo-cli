@@ -1179,7 +1179,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 40)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 47)
         self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 55)
         self.assertEqual(handles["profile.checks"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.launchers"]["snippet_coverage"], "excerpt_verified")
@@ -1187,6 +1187,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["profile.inputs"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.name"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.working_directory"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.run.run"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.run.with"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.run.for_each"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.run.if"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.run.gate"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.run.register"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.run.steps"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["workflow.workflow"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["workflow.version"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.version"]["snippet_coverage"], "excerpt_verified")
@@ -1534,6 +1541,53 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow.version", result.stdout)
         self.assertIn("example_for: field_fragment", result.stdout)
         self.assertIn("workflow: set-active-task", result.stdout)
+
+    def test_text_describe_workflow_run_group_is_teaching_ready(self) -> None:
+        run_target = self.run_help("describe", "workflow.run.run")
+        with_payload = self.run_help("describe", "workflow.run.with")
+        for_each = self.run_help("describe", "workflow.run.for_each")
+        outer_if = self.run_help("describe", "workflow.run.if")
+        outer_gate = self.run_help("describe", "workflow.run.gate")
+        register = self.run_help("describe", "workflow.run.register")
+        steps = self.run_help("describe", "workflow.run.steps")
+
+        self.assertEqual(run_target.returncode, 0)
+        self.assertIn("named reusable runtime target", run_target.stdout)
+        self.assertIn("workflow.run.steps", run_target.stdout)
+        self.assertIn("workflow.step_forms.run_invocation", run_target.stdout)
+        self.assertIn("example_for: field_fragment", run_target.stdout)
+        self.assertIn("run: examples/fragments/check-issue.yaml", run_target.stdout)
+
+        self.assertEqual(with_payload.returncode, 0)
+        self.assertIn("caller-scoped argument values", with_payload.stdout)
+        self.assertIn("workflow.include.with", with_payload.stdout)
+        self.assertIn("repository: \"acme/widgets\"", with_payload.stdout)
+
+        self.assertEqual(for_each.returncode, 0)
+        self.assertIn("array-valued repeated item source", for_each.stdout)
+        self.assertIn("workflow.run.steps", for_each.stdout)
+        self.assertIn("workflow-authoring.fan_out_scope_and_conditions", for_each.stdout)
+        self.assertIn("for_each: inputs.issue_numbers", for_each.stdout)
+
+        self.assertEqual(outer_if.returncode, 0)
+        self.assertIn("whole invocation step", outer_if.stdout)
+        self.assertIn("workflow.run.gate", outer_if.stdout)
+        self.assertIn("if: inputs.enabled", outer_if.stdout)
+
+        self.assertEqual(outer_gate.returncode, 0)
+        self.assertIn("whole invocation step may run at all", outer_gate.stdout)
+        self.assertIn("workflow.step_forms.gate_checkpoint", outer_gate.stdout)
+        self.assertIn("all:", outer_gate.stdout)
+
+        self.assertEqual(register.returncode, 0)
+        self.assertIn("outer aggregate result", register.stdout)
+        self.assertIn("workflow.run.gate", register.stdout)
+        self.assertIn("register: reviewed_issues", register.stdout)
+
+        self.assertEqual(steps.returncode, 0)
+        self.assertIn("short inline repeated body", steps.stdout)
+        self.assertIn("workflow.step_forms.inline_fan_out_invocation", steps.stdout)
+        self.assertIn("publish-item", steps.stdout)
 
     def test_text_describe_connector_compose_group_is_teaching_ready(self) -> None:
         family = self.run_help("describe", "connector.compose")

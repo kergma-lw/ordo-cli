@@ -232,6 +232,9 @@
     "examples.playbook-connectors": {
       "describe_readiness": "ready"
     },
+    "examples.run-fan-out": {
+      "describe_readiness": "ready"
+    },
     "examples.project-items-let": {
       "describe_readiness": "ready"
     },
@@ -311,6 +314,27 @@
       "describe_readiness": "ready"
     },
     "workflow.workflow": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run.run": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run.with": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run.for_each": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run.if": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run.gate": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run.register": {
+      "describe_readiness": "ready"
+    },
+    "workflow.run.steps": {
       "describe_readiness": "ready"
     },
     "playbook.defaults.profile": {
