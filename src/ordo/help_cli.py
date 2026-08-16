@@ -2250,6 +2250,50 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.tag", "connector.git.range", "connector.git.commits"],
         },
+        ("git", "ref"): {
+            "definition": "Probe one named Git ref and report whether it resolves, which object id it names, and whether it is a symbolic ref with a separate target.",
+            "use_when": [
+                "A workflow needs one exact ref existence check such as HEAD, refs/heads/main, or origin/main before making a narrower branch, tag, or sync decision.",
+                "Later logic needs one ref's oid or symbolic-target facts without comparing two revisions or listing an inventory.",
+            ],
+            "do_not_use_for": [
+                "Comparing two revision endpoints for ahead/behind or merge-base facts; use connector.git.range for that relationship probe.",
+                "Reading tag-specific semantics or tag inventories; use connector.git.tag or connector.git.tags when the workflow is really about Git tags rather than generic refs.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.range", "summary": "Sibling probe for comparing two revision endpoints rather than resolving one exact ref"},
+                {"handle": "connector.git.tag", "summary": "Sibling probe for one exact Git tag when tag semantics matter more than generic ref resolution"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current checkout branch context rather than one arbitrary named ref"},
+                {"handle": "connector.git.tags", "summary": "Sibling probe for tag inventory scans instead of one exact ref lookup"},
+            ],
+            "examples": [
+                {"reference": "git.ref", "inputs": {"ref": "HEAD"}},
+                {"reference": "git.ref", "inputs": {"ref": "refs/heads/main"}},
+            ],
+            "inspect_next": ["connector.git.range", "connector.git.tag", "connector.git.branch"],
+        },
+        ("git", "range"): {
+            "definition": "Probe the relationship between two Git revision endpoints and return their resolved object ids, merge base, and ahead/behind counts.",
+            "use_when": [
+                "A workflow needs to compare two endpoints such as main and HEAD before deciding whether a branch is ahead, behind, or diverged.",
+                "Later logic needs one merge-base-aware relationship summary instead of a readable commit list or one exact ref lookup.",
+            ],
+            "do_not_use_for": [
+                "Checking only whether one exact ref resolves; use connector.git.ref for the simpler single-ref probe.",
+                "Reading commit subjects or bodies across a revision slice; use connector.git.commits when the workflow needs readable history rather than ahead/behind math.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.ref", "summary": "Sibling probe for resolving one exact ref instead of comparing two revision endpoints"},
+                {"handle": "connector.git.commits", "summary": "Sibling probe for readable commit-history slices after the workflow chooses a revision scope"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current checkout branch context before choosing base and head endpoints"},
+                {"handle": "connector.git.upstream", "summary": "Sibling probe for upstream-tracking context when the workflow first needs to choose a comparison target"},
+            ],
+            "examples": [
+                {"reference": "git.range", "inputs": {"base": "main", "head": "HEAD"}},
+                {"reference": "git.range", "inputs": {"base": "origin/main", "head": "feature/demo"}},
+            ],
+            "inspect_next": ["connector.git.ref", "connector.git.commits", "connector.git.upstream"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [

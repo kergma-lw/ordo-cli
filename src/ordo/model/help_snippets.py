@@ -986,6 +986,73 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.ref": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_ref_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect one exact Git ref before branching on existence, symbolic-target behavior, or downstream comparison choices.",
+                "source_example": "git-ref-range-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-ref-range-inspection.yaml",
+                    "start_line": 10,
+                    "end_line": 14
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.ref",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.range": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_range_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Compare two Git revision endpoints when the workflow needs merge-base and ahead/behind facts rather than one exact ref lookup.",
+                "source_example": "git-ref-range-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-ref-range-inspection.yaml",
+                    "start_line": 15,
+                    "end_line": 20
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.range",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_ref_range_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect one exact ref and one endpoint comparison together so a workflow can separate single-ref validation from ahead/behind relationship facts.",
+                "source_example": "git-ref-range-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-ref-range-inspection.yaml",
+                    "start_line": 1,
+                    "end_line": 26
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.range",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

@@ -61,6 +61,8 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "connector.git.commits",
         "connector.git.tag",
         "connector.git.tags",
+        "connector.git.ref",
+        "connector.git.range",
     ),
     workflow_surface="steps list inside a standard workflow scaffold",
     summary="Place one authored step fragment into a standard steps block without rewriting the fragment into a smaller value-only shape.",
@@ -69,7 +71,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.tags"),
+    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.tags", "connector.git.range"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -377,6 +379,22 @@ blocks:
 - steps:
   {indented}
 """
+    if target in {
+        "connector.git.ref",
+        "connector.git.range",
+    }:
+        indented = normalized.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-git-ref-range
+inputs:
+  ref_name: {{}}
+  base_ref: {{}}
+  head_ref: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
     raise ValueError(f"Unsupported step-fragment target: {target}")
 
 
@@ -398,5 +416,7 @@ def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     if target == "connector.git.commits":
         return f"{snippet}\n"
     if target == "connector.git.tags":
+        return f"{snippet}\n"
+    if target == "connector.git.range":
         return f"{snippet}\n"
     raise ValueError(f"Unsupported workflow-fragment target: {target}")

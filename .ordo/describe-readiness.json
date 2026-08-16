@@ -145,6 +145,12 @@
     "connector.git.commits": {
       "describe_readiness": "ready"
     },
+    "connector.git.range": {
+      "describe_readiness": "ready"
+    },
+    "connector.git.ref": {
+      "describe_readiness": "ready"
+    },
     "connector.git.tag": {
       "describe_readiness": "ready"
     },
