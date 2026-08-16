@@ -4289,6 +4289,18 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "whether a path or step may run at all",
             "catch-all routing or policy admission",
         ]
+        lookup["workflow.step.if"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.gate", "summary": "Sibling step-control field for admission decisions rather than optional local branching"},
+            {"handle": "workflow.step.condition", "summary": "Shared boolean condition-authoring surface for step-level control fields"},
+            {"handle": "workflow.step_forms.gate_checkpoint", "summary": "Sibling checkpoint form whose primary control surface is gate rather than if"},
+            {"handle": "workflow-authoring.separate_control_surfaces", "summary": "Authoring rule for separating applicability, admission, and local branching roles"},
+        ]
+        lookup["workflow.step.if"]["metadata"]["inspect_next"] = [
+            "workflow.step.gate",
+            "workflow.step.condition",
+            "workflow.step_forms.gate_checkpoint",
+            "workflow-authoring.separate_control_surfaces",
+        ]
     if "workflow.step.gate" in lookup:
         lookup["workflow.step.gate"]["summary"] = "Step-admission field for deciding whether a path or step may run at all"
         lookup["workflow.step.gate"]["metadata"]["role"] = "step_admission"
@@ -4299,6 +4311,18 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         lookup["workflow.step.gate"]["metadata"]["do_not_use_for"] = [
             "whole-workflow applicability; use guards instead",
             "local behavioral variation inside an already-valid path; use if instead",
+        ]
+        lookup["workflow.step.gate"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.if", "summary": "Sibling step-control field for optional local branching rather than admission decisions"},
+            {"handle": "workflow.step_forms.gate_checkpoint", "summary": "Dedicated step form whose primary authored surface is gate"},
+            {"handle": "workflow.step.condition", "summary": "Shared boolean condition-authoring surface for gate and if"},
+            {"handle": "workflow-authoring.separate_control_surfaces", "summary": "Authoring rule for separating workflow guards, step gates, and local if branching"},
+        ]
+        lookup["workflow.step.gate"]["metadata"]["inspect_next"] = [
+            "workflow.step_forms.gate_checkpoint",
+            "workflow.step.if",
+            "workflow.step.condition",
+            "workflow-authoring.separate_control_surfaces",
         ]
     for field in model["profile"]["top_level_fields"]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)

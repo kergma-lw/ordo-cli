@@ -824,6 +824,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_describe_state_step_and_filter_nodes_publish_canonical_snippets(self) -> None:
         state_set = json.loads(self.run_help("describe", "workflow.step.state_set", "--json").stdout)
+        step_gate = json.loads(self.run_help("describe", "workflow.step.gate", "--json").stdout)
         step_if = json.loads(self.run_help("describe", "workflow.step.if", "--json").stdout)
         lookup = json.loads(self.run_help("describe", "workflow.local_expression.filter.lookup", "--json").stdout)
 
@@ -833,6 +834,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("state.task_memory[inputs.task_key].issue_number", state_set["canonical_examples"][2]["yaml"])
         self.assertEqual(state_set["canonical_examples"][3]["form"], "step_fragment")
         self.assertIn('state.shared_state["active_profile"]: review', state_set["canonical_examples"][3]["yaml"])
+        self.assertEqual(step_gate["snippet_coverage"], "runner_verified")
+        self.assertEqual(step_gate["metadata"]["role"], "step_admission")
+        self.assertIn("local behavioral variation inside an already-valid path; use if instead", step_gate["metadata"]["do_not_use_for"])
+        self.assertEqual(step_gate["canonical_examples"][0]["form"], "value")
+        self.assertEqual(step_gate["canonical_examples"][0]["yaml"], "is_present(inputs.issue_number)")
+        self.assertEqual(step_gate["canonical_examples"][1]["form"], "step_fragment")
+        self.assertIn("gate: is_present(inputs.issue_number)", step_gate["canonical_examples"][1]["yaml"])
         self.assertEqual(step_if["snippet_coverage"], "runner_verified")
         self.assertEqual(step_if["metadata"]["role"], "local_behavioral_variation")
         self.assertIn("workflow applicability or early rejection", step_if["metadata"]["do_not_use_for"])
@@ -1127,7 +1135,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 46)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 47)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1187,6 +1195,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.worktree"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.worktrees"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.shell.command"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.step.gate"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step_forms.publish"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step_forms.result"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
@@ -1230,6 +1239,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Show one complete optional step guarded by `workflow.step.if`.", result.stdout)
         self.assertIn("is_present(inputs.close_comment)", result.stdout)
         self.assertIn("uses: gh.issue.comment.add", result.stdout)
+
+    def test_text_describe_workflow_step_gate_is_teaching_ready(self) -> None:
+        result = self.run_help("describe", "workflow.step.gate")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Step-admission field for deciding whether a path or step may run at all", result.stdout)
+        self.assertIn("use when:", result.stdout)
+        self.assertIn("- the real question is whether the protected path or step may execute at all", result.stdout)
+        self.assertIn("do not use for:", result.stdout)
+        self.assertIn("- whole-workflow applicability; use guards instead", result.stdout)
+        self.assertIn("workflow.step.if", result.stdout)
+        self.assertIn("example_for: value", result.stdout)
+        self.assertIn("example_for: step_fragment", result.stdout)
+        self.assertIn("Show one complete gate-checkpoint step", result.stdout)
+        self.assertIn("gate: is_present(inputs.issue_number)", result.stdout)
 
     def test_text_describe_profile_overrides_group_is_teaching_ready(self) -> None:
         parent = self.run_help("describe", "profile.overrides")

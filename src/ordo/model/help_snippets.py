@@ -1978,6 +1978,39 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step.gate": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_gate_value_requires_issue_number",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Show a valid `workflow.step.gate` value for admitting a step only when one required input is present.",
+                "yaml": "is_present(inputs.issue_number)",
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.gate",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "step_gate_checkpoint_fragment",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete gate-checkpoint step that blocks later work unless the required issue number is present.",
+                "yaml": "- name: verify-issue-context\n  gate: is_present(inputs.issue_number)",
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.gate",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "workflow.step.state_set": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
