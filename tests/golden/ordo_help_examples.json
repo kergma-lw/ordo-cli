@@ -2,6 +2,7 @@
   "document_kind": "examples_catalog",
   "examples": [
     {
+      "definition": "Minimal workflow example that composes one published operation into one small end-to-end workflow shape.",
       "name": "minimal",
       "path": "examples/minimal.yaml",
       "related_topics": [
@@ -16,6 +17,7 @@
       "verified": true
     },
     {
+      "definition": "Issue inspection example that uses a guard before loading one published GitHub issue probe.",
       "name": "inspect-issue",
       "path": "examples/inspect-issue.yaml",
       "related_topics": [
@@ -30,6 +32,7 @@
       "verified": true
     },
     {
+      "definition": "Pull-request inspection example that composes the published PR metadata, diff, comments, reviews, checks, and timeline surfaces into one summary.",
       "name": "inspect-pr",
       "path": "examples/inspect-pr.yaml",
       "related_topics": [
@@ -45,6 +48,7 @@
       "verified": true
     },
     {
+      "definition": "Multi-step task-activation example that combines project updates, state writes, and legacy shell fallback steps in one workflow.",
       "name": "set-active-task-from-gitx",
       "path": "examples/set-active-task-from-gitx.yaml",
       "related_topics": [
@@ -60,6 +64,7 @@
       "verified": true
     },
     {
+      "definition": "Launcher selection example that shows one step-level launcher override inside a profile-scoped execution context.",
       "name": "launcher-step",
       "path": "examples/launcher-step.yaml",
       "related_topics": [
@@ -76,6 +81,7 @@
       "verified": true
     },
     {
+      "definition": "Workflow include example that reuses one plain fragment without passing include arguments.",
       "name": "include-plain",
       "path": "examples/include-plain.yaml",
       "related_topics": [
@@ -89,6 +95,7 @@
       "verified": true
     },
     {
+      "definition": "Workflow include example that passes explicit arguments into one reusable fragment contract.",
       "name": "include-args",
       "path": "examples/include-args.yaml",
       "related_topics": [
@@ -104,6 +111,7 @@
       "verified": true
     },
     {
+      "definition": "Playbook workflow catalog example that shows one published workflow entry with defaults, profiles, and state bindings.",
       "name": "playbook-workflows",
       "path": "examples/playbook-workflows.yaml",
       "related_topics": [
@@ -119,6 +127,7 @@
       "verified": true
     },
     {
+      "definition": "Playbook pre-run example that inserts one shared preparation workflow before the requested published workflow runs.",
       "name": "playbook-pre-run",
       "path": "examples/playbook-pre-run.yaml",
       "related_topics": [
@@ -134,6 +143,7 @@
       "verified": true
     },
     {
+      "definition": "Text adapter example that projects, searches, and rewrites line-oriented text through the published text adapter surface.",
       "name": "text-adapter",
       "path": "examples/text-adapter.yaml",
       "related_topics": [
@@ -149,6 +159,7 @@
       "verified": true
     },
     {
+      "definition": "Local-expression filter example that demonstrates type predicates, membership tests, and boolean flow over embedded values.",
       "name": "local-expression-filters",
       "path": "examples/local-expression-filters.yaml",
       "related_topics": [
@@ -163,6 +174,7 @@
       "verified": true
     },
     {
+      "definition": "Project-items example that binds one collection probe through let and then filters it by field values.",
       "name": "project-items-let",
       "path": "examples/project-items-let.yaml",
       "related_topics": [

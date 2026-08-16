@@ -1759,6 +1759,24 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("workflow-authoring.shell.command", command.stdout)
         self.assertIn("example_for: workflow_fragment", command.stdout)
 
+    def test_text_describe_examples_group_is_teaching_ready(self) -> None:
+        include_args = self.run_help("describe", "examples.include-args")
+        inspect_pr = self.run_help("describe", "examples.inspect-pr")
+        playbook_pre_run = self.run_help("describe", "examples.playbook-pre-run")
+
+        self.assertEqual(include_args.returncode, 0)
+        self.assertIn("Workflow include example that passes explicit arguments into one reusable fragment contract.", include_args.stdout)
+        self.assertIn("Verified example at examples/include-args.yaml", include_args.stdout)
+        self.assertIn("shows:", include_args.stdout)
+
+        self.assertEqual(inspect_pr.returncode, 0)
+        self.assertIn("Pull-request inspection example that composes the published PR metadata", inspect_pr.stdout)
+        self.assertIn("related topics:", inspect_pr.stdout)
+
+        self.assertEqual(playbook_pre_run.returncode, 0)
+        self.assertIn("Playbook pre-run example that inserts one shared preparation workflow", playbook_pre_run.stdout)
+        self.assertIn("examples/playbook-pre-run.yaml", playbook_pre_run.stdout)
+
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
         pre_run_file = self.run_help("describe", "playbook.pre_run.file")
@@ -1921,6 +1939,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         gh_pr_node = json.loads(self.run_help("describe", "connector.gh.pr", "--json").stdout)
         shell_node = json.loads(self.run_help("describe", "connector.shell", "--json").stdout)
         shell_command = json.loads(self.run_help("describe", "connector.shell.command", "--json").stdout)
+        example_node = json.loads(self.run_help("describe", "examples.include-args", "--json").stdout)
 
         self.assertEqual(connector_node["document_kind"], "model_node")
         self.assertEqual(connector_node["node_kind"], "connector_family")
@@ -1933,9 +1952,26 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("content", file_node["metadata"]["outputs"])
         self.assertEqual(shell_node["node_kind"], "connector_family")
         self.assertEqual(shell_command["metadata"]["kind"], "action")
+        self.assertEqual(example_node["node_kind"], "example")
+        self.assertIn("Workflow include example", example_node["summary"])
         self.assertEqual(gh_pr_node["document_kind"], "model_node")
         self.assertEqual(gh_pr_node["metadata"]["name"], "pr")
         self.assertIn("pull_number", gh_pr_node["metadata"]["inputs"])
+
+    def test_describe_examples_group_publishes_compact_teaching_metadata(self) -> None:
+        include_args = json.loads(self.run_help("describe", "examples.include-args", "--json").stdout)
+        inspect_issue = json.loads(self.run_help("describe", "examples.inspect-issue", "--json").stdout)
+        playbook_workflows = json.loads(self.run_help("describe", "examples.playbook-workflows", "--json").stdout)
+
+        self.assertEqual(include_args["snippet_coverage"], "none")
+        self.assertIn("passes explicit arguments", include_args["summary"])
+        self.assertIn("definition", include_args["metadata"])
+
+        self.assertIn("uses a guard before loading one published GitHub issue probe", inspect_issue["summary"])
+        self.assertTrue(inspect_issue["metadata"]["verified"])
+
+        self.assertIn("shows one published workflow entry", playbook_workflows["summary"])
+        self.assertIn("playbook_workflow_catalog", playbook_workflows["metadata"]["shows"])
 
     def test_search_finds_json_representation_adapter_model_node(self) -> None:
         result = json.loads(self.run_help("search", "json adapter", "--json").stdout)

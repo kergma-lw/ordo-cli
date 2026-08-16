@@ -202,6 +202,42 @@
     "connector.shell.command": {
       "describe_readiness": "ready"
     },
+    "examples.include-args": {
+      "describe_readiness": "ready"
+    },
+    "examples.include-plain": {
+      "describe_readiness": "ready"
+    },
+    "examples.inspect-issue": {
+      "describe_readiness": "ready"
+    },
+    "examples.inspect-pr": {
+      "describe_readiness": "ready"
+    },
+    "examples.launcher-step": {
+      "describe_readiness": "ready"
+    },
+    "examples.local-expression-filters": {
+      "describe_readiness": "ready"
+    },
+    "examples.minimal": {
+      "describe_readiness": "ready"
+    },
+    "examples.playbook-pre-run": {
+      "describe_readiness": "ready"
+    },
+    "examples.playbook-workflows": {
+      "describe_readiness": "ready"
+    },
+    "examples.project-items-let": {
+      "describe_readiness": "ready"
+    },
+    "examples.set-active-task-from-gitx": {
+      "describe_readiness": "ready"
+    },
+    "examples.text-adapter": {
+      "describe_readiness": "ready"
+    },
     "connector.runtime": {
       "describe_readiness": "ready"
     },

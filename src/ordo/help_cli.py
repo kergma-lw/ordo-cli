@@ -4443,7 +4443,7 @@ def _build_examples_node_lookup() -> dict[str, JSONObject]:
             "document_kind": "example_node",
             "node_kind": "example",
             "name": handle,
-            "summary": f"Verified example at {example['path']}",
+            "summary": str(example.get("definition") or f"Verified example at {example['path']}"),
             "metadata": example,
             "snippet_coverage": "none",
             "canonical_examples": [],
@@ -5937,7 +5937,24 @@ def render_workflow_authoring_node_text(payload: JSONObject) -> str:
 def render_example_node_text(payload: JSONObject) -> str:
     """Return the text example-node surface."""
 
-    return "\n".join([payload["name"], payload["summary"], "", f"node kind: {payload['node_kind']}"])
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    path = metadata.get("path") if isinstance(metadata.get("path"), str) else None
+    shows = metadata.get("shows") if isinstance(metadata.get("shows"), list) else []
+    related_topics = metadata.get("related_topics") if isinstance(metadata.get("related_topics"), list) else []
+
+    lines = [payload["name"], payload["summary"]]
+    if path:
+        lines.append(f"Verified example at {path}")
+    lines.extend(["", f"node kind: {payload['node_kind']}"])
+    if shows:
+        lines.append("")
+        lines.append("shows:")
+        lines.extend(f"- {item}" for item in shows if isinstance(item, str))
+    if related_topics:
+        lines.append("")
+        lines.append("related topics:")
+        lines.extend(f"- {item}" for item in related_topics if isinstance(item, str))
+    return "\n".join(lines)
 
 
 def render_snippet_coverage_text(payload: JSONObject) -> str:
