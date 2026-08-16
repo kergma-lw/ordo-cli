@@ -106,8 +106,8 @@
   "snippet_coverage_summary": {
     "coverage_counts": {
       "excerpt_verified": 30,
-      "none": 189,
-      "runner_verified": 47
+      "none": 187,
+      "runner_verified": 49
     },
     "total_handles": 266
   },

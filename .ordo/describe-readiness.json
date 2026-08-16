@@ -637,6 +637,12 @@
     "workflow.step.if": {
       "describe_readiness": "ready"
     },
+    "workflow.step.publish": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step.result": {
+      "describe_readiness": "ready"
+    },
     "embedded_value_expression.step_refs_must_be_backward": {
       "describe_readiness": "ready"
     },

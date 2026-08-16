@@ -826,6 +826,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         state_set = json.loads(self.run_help("describe", "workflow.step.state_set", "--json").stdout)
         step_gate = json.loads(self.run_help("describe", "workflow.step.gate", "--json").stdout)
         step_if = json.loads(self.run_help("describe", "workflow.step.if", "--json").stdout)
+        step_publish = json.loads(self.run_help("describe", "workflow.step.publish", "--json").stdout)
+        step_result = json.loads(self.run_help("describe", "workflow.step.result", "--json").stdout)
         lookup = json.loads(self.run_help("describe", "workflow.local_expression.filter.lookup", "--json").stdout)
 
         self.assertEqual(state_set["snippet_coverage"], "runner_verified")
@@ -848,6 +850,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(step_if["canonical_examples"][0]["yaml"], "is_present(inputs.close_comment)")
         self.assertEqual(step_if["canonical_examples"][1]["form"], "step_fragment")
         self.assertIn("uses: gh.issue.comment.add", step_if["canonical_examples"][1]["yaml"])
+        self.assertEqual(step_publish["snippet_coverage"], "runner_verified")
+        self.assertEqual(step_publish["metadata"]["role"], "published_output_emission")
+        self.assertEqual(step_publish["canonical_examples"][0]["form"], "field_fragment")
+        self.assertIn('publish:\n  summary: "Workflow prepared"', step_publish["canonical_examples"][0]["yaml"])
+        self.assertEqual(step_result["snippet_coverage"], "runner_verified")
+        self.assertEqual(step_result["metadata"]["role"], "workflow_result_emission")
+        self.assertEqual(step_result["canonical_examples"][0]["form"], "field_fragment")
+        self.assertIn('result:\n  status: "ok"', step_result["canonical_examples"][0]["yaml"])
         self.assertEqual(lookup["snippet_coverage"], "runner_verified")
         self.assertEqual(lookup["canonical_examples"][0]["form"], "value")
         self.assertEqual(lookup["canonical_examples"][0]["yaml"], 'inputs.status_labels | lookup("ready")')
@@ -1135,7 +1145,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 47)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 49)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1196,6 +1206,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.worktrees"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.shell.command"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.gate"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.step.result"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step_forms.publish"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step_forms.result"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
@@ -1206,7 +1218,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.state_bindings"]["snippet_coverage"], "excerpt_verified")
-        self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "none")
+        self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "runner_verified")
 
     def test_text_describe_state_set_shows_snippet_coverage_and_yaml(self) -> None:
         result = self.run_help("describe", "workflow.step.state_set")
@@ -1254,6 +1266,20 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("example_for: step_fragment", result.stdout)
         self.assertIn("Show one complete gate-checkpoint step", result.stdout)
         self.assertIn("gate: is_present(inputs.issue_number)", result.stdout)
+
+    def test_text_describe_workflow_step_publish_result_group_is_teaching_ready(self) -> None:
+        publish = self.run_help("describe", "workflow.step.publish")
+        result = self.run_help("describe", "workflow.step.result")
+
+        self.assertEqual(publish.returncode, 0)
+        self.assertIn("Step field that carries the outward-facing payload emitted by a publish step for callers", publish.stdout)
+        self.assertIn("workflow.step.result", publish.stdout)
+        self.assertIn("example_for: field_fragment", publish.stdout)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("Step field that carries the value appended by a result step to the workflow's ordered result list", result.stdout)
+        self.assertIn("workflow.step.publish", result.stdout)
+        self.assertIn("example_for: field_fragment", result.stdout)
 
     def test_text_describe_profile_overrides_group_is_teaching_ready(self) -> None:
         parent = self.run_help("describe", "profile.overrides")

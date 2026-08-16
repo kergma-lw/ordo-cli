@@ -4324,6 +4324,52 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "workflow.step.condition",
             "workflow-authoring.separate_control_surfaces",
         ]
+    if "workflow.step.result" in lookup:
+        lookup["workflow.step.result"]["summary"] = "Step field that carries the value appended by a result step to the workflow's ordered result list"
+        lookup["workflow.step.result"]["metadata"]["role"] = "workflow_result_emission"
+        lookup["workflow.step.result"]["metadata"]["use_when"] = [
+            "the step's authored payload should append one final value to the workflow result list",
+            "the value is final outward result data rather than one reusable intermediate binding for later steps",
+        ]
+        lookup["workflow.step.result"]["metadata"]["do_not_use_for"] = [
+            "reusable intermediate staging; use workflow.step.value with register when later steps still need to read the payload",
+            "caller-facing named publish payloads; use workflow.step.publish when the intent is outward published output rather than the result list",
+        ]
+        lookup["workflow.step.result"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.publish", "summary": "Sibling emission field for outward-facing publish payloads instead of the workflow result list"},
+            {"handle": "workflow.step_forms.result", "summary": "Dedicated step form whose primary authored field is result"},
+            {"handle": "workflow.step.value", "summary": "Sibling field for staging reusable workflow-local values before any final emission"},
+            {"handle": "workflow-authoring.value_register_before_result", "summary": "Authoring rule for staging reusable payloads before emitting them through result"},
+        ]
+        lookup["workflow.step.result"]["metadata"]["inspect_next"] = [
+            "workflow.step_forms.result",
+            "workflow.step.publish",
+            "workflow.step.value",
+            "workflow-authoring.value_register_before_result",
+        ]
+    if "workflow.step.publish" in lookup:
+        lookup["workflow.step.publish"]["summary"] = "Step field that carries the outward-facing payload emitted by a publish step for callers"
+        lookup["workflow.step.publish"]["metadata"]["role"] = "published_output_emission"
+        lookup["workflow.step.publish"]["metadata"]["use_when"] = [
+            "the step's authored payload should communicate one outward-facing result such as summary fields, identifiers, or URLs",
+            "the output is meant for callers or downstream readers rather than only for the workflow's internal result list",
+        ]
+        lookup["workflow.step.publish"]["metadata"]["do_not_use_for"] = [
+            "reusable intermediate staging; use workflow.step.value when the payload is still workflow-local before final emission",
+            "appending one final value to the workflow result list; use workflow.step.result for that narrower emission role",
+        ]
+        lookup["workflow.step.publish"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.result", "summary": "Sibling emission field for appending to the workflow result list instead of publishing named outward output"},
+            {"handle": "workflow.step_forms.publish", "summary": "Dedicated step form whose primary authored field is publish"},
+            {"handle": "workflow.step.value", "summary": "Sibling field for staging reusable workflow-local values before publishing them outward"},
+            {"handle": "workflow-authoring.publish_outputs", "summary": "Authoring rule that prefers explicit minimal publish payloads for outward-facing results"},
+        ]
+        lookup["workflow.step.publish"]["metadata"]["inspect_next"] = [
+            "workflow.step_forms.publish",
+            "workflow.step.result",
+            "workflow.step.value",
+            "workflow-authoring.publish_outputs",
+        ]
     for field in model["profile"]["top_level_fields"]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)
     for field in model["profile"]["override_fields"]:
