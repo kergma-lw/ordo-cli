@@ -1497,6 +1497,17 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
                 "Outward-facing final result or publication surfaces when the main intent is emitting contract output rather than computing an intermediate value.",
             ],
         },
+        "workflow.step.register": {
+            "definition": "Workflow step capability for binding one step result to a reusable step-local name so later steps may read that result explicitly.",
+            "use_when": [
+                "A later step still needs the current step's result through one stable explicit read path such as step.<register>.outputs.value.",
+                "The workflow is staging reusable local dataflow rather than emitting one final outward-facing result through publish or result.",
+            ],
+            "do_not_use_for": [
+                "Outward-facing final result emission; use workflow.step.publish or workflow.step.result when the main intent is final output rather than reuse.",
+                "Implicit result reuse without a concrete step-local binding name; register exists to make that reuse path explicit and reviewable.",
+            ],
+        },
         "workflow.step.state_set": {
             "definition": "Workflow step capability for writing one explicit value into one bound state target as a deliberate durable state mutation.",
             "use_when": [
@@ -4461,6 +4472,29 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "workflow.step.uses",
             "workflow.include.with",
             "workflow-authoring.native_expression_contexts",
+        ]
+    if "workflow.step.uses" in lookup:
+        lookup["workflow.step.uses"]["summary"] = "Step field that selects the published operation surface invoked by an operation-call step"
+        lookup["workflow.step.uses"]["metadata"]["role"] = "published_operation_selection"
+        lookup["workflow.step.uses"]["metadata"]["use_when"] = [
+            "the step should call one published external operation rather than invoke a named workflow or routine target through run",
+            "the operation surface itself should stay explicit and reviewable as a typed connector call",
+        ]
+        lookup["workflow.step.uses"]["metadata"]["do_not_use_for"] = [
+            "named workflow or routine target invocation; use workflow.step.run for that runtime-target surface",
+            "runtime argument binding or result reuse; those belong to workflow.step.with and workflow.step.register instead of operation selection itself",
+        ]
+        lookup["workflow.step.uses"]["metadata"]["nearest_surfaces"] = [
+            {"handle": "workflow.step.with", "summary": "Sibling field for binding runtime arguments into the selected operation call"},
+            {"handle": "workflow.step.register", "summary": "Sibling field for binding the operation result to a reusable local name"},
+            {"handle": "workflow.step.run", "summary": "Sibling field for named workflow or routine targets instead of published connector operations"},
+            {"handle": "workflow.step_forms.operation_call", "summary": "Dedicated step form whose primary authored field is uses"},
+        ]
+        lookup["workflow.step.uses"]["metadata"]["inspect_next"] = [
+            "workflow.step.with",
+            "workflow.step.register",
+            "workflow.step.run",
+            "workflow.step_forms.operation_call",
         ]
     for field in model["profile"]["top_level_fields"]:
         add_node(f"profile.{field['name']}", contract="profile", node_category="field", summary="Published profile field metadata", metadata=field)

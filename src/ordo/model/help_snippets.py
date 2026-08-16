@@ -2162,6 +2162,72 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step.uses": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_uses_operation_value",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Show a valid `workflow.step.uses` value for selecting one published operation surface.",
+                "yaml": '"git.repo"',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.uses",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "step_uses_operation_fragment",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete operation-call step that selects a published operation and registers its result for later reuse.",
+                "yaml": '- name: inspect-repository\n  uses: "git.repo"\n  register: repo_info',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.uses",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "workflow.step.register": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "step_register_binding_value",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Show a valid `workflow.step.register` value for binding one step result to a reusable local name.",
+                "yaml": "repo_info",
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.register",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "step_register_value_fragment",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Show one complete value step that stages reusable local dataflow through register.",
+                "yaml": '- name: classify-status\n  value: inputs.status | in(inputs.allowed)\n  register: status_allowed',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.register",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "workflow.step.publish": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [

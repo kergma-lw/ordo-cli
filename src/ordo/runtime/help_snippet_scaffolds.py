@@ -26,7 +26,7 @@ EXPRESSION_VALUE_CONTRACT = SnippetInsertionContract(
 
 STEP_FIELD_CONTRACT = SnippetInsertionContract(
     mode="step_field",
-    supported_targets=("workflow.step.if", "workflow.step.gate", "workflow.step.publish", "workflow.step.result", "workflow.step.run", "workflow.step.steps", "workflow.step.for_each", "workflow.step.with", "workflow.step.state_set", "workflow.step.state_delete", "workflow.step.value", "workflow.step.profile_switch", "workflow.step_forms.profile_switch"),
+    supported_targets=("workflow.step.if", "workflow.step.gate", "workflow.step.publish", "workflow.step.result", "workflow.step.run", "workflow.step.steps", "workflow.step.for_each", "workflow.step.with", "workflow.step.uses", "workflow.step.register", "workflow.step.state_set", "workflow.step.state_delete", "workflow.step.value", "workflow.step.profile_switch", "workflow.step_forms.profile_switch"),
     workflow_surface="step-local field host inside a standard workflow scaffold",
     summary="Place one step-field snippet into one explicit step shell without moving placement rules into snippet worlds.",
 )
@@ -41,6 +41,8 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "workflow.step.steps",
         "workflow.step.for_each",
         "workflow.step.with",
+        "workflow.step.uses",
+        "workflow.step.register",
         "workflow.step.state_set",
         "workflow.step.state_delete",
         "workflow.step.value",
@@ -202,6 +204,15 @@ blocks:
   - name: demo
     run: {snippet}
 """
+    if target == "workflow.step.uses":
+        return f"""version: 0
+workflow: snippet-step-uses
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    uses: {snippet}
+"""
     if target == "workflow.step.for_each":
         return f"""version: 0
 workflow: snippet-step-for-each
@@ -240,6 +251,19 @@ blocks:
     run: "fragments/review_issue.yaml"
     for_each: inputs.issue_numbers
     {snippet.replace(chr(10), chr(10) + '    ')}
+"""
+    if target == "workflow.step.register":
+        return f"""version: 0
+workflow: snippet-step-register
+inputs:
+  status: {{}}
+  allowed: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    value: inputs.status | in(inputs.allowed)
+    register: {snippet}
 """
     if target == "workflow.step.state_set":
         return f"""version: 0
@@ -329,6 +353,18 @@ workflow: snippet-step-fragment-run-family
 inputs:
   issue_numbers: {{}}
   review_mode: {{}}
+blocks:
+- guards: []
+- steps:
+  {indented}
+"""
+    if target in {"workflow.step.uses", "workflow.step.register"}:
+        indented = normalized.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-step-fragment-operation-family
+inputs:
+  status: {{}}
+  allowed: {{}}
 blocks:
 - guards: []
 - steps:

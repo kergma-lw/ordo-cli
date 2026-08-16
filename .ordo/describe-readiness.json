@@ -655,6 +655,12 @@
     "workflow.step.with": {
       "describe_readiness": "ready"
     },
+    "workflow.step.uses": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step.register": {
+      "describe_readiness": "ready"
+    },
     "embedded_value_expression.step_refs_must_be_backward": {
       "describe_readiness": "ready"
     },
