@@ -624,6 +624,24 @@
     },
     "workflow.step_forms.value": {
       "describe_readiness": "ready"
+    },
+    "workflow_step.exactly_one_form": {
+      "describe_readiness": "ready"
+    },
+    "workflow_step.gate_conflicts_with_register": {
+      "describe_readiness": "ready"
+    },
+    "workflow_step.if_conflicts_with_register": {
+      "describe_readiness": "ready"
+    },
+    "workflow_step.launcher_requires_uses": {
+      "describe_readiness": "ready"
+    },
+    "workflow_step.register_requires_uses": {
+      "describe_readiness": "ready"
+    },
+    "workflow_step.with_requires_uses": {
+      "describe_readiness": "ready"
     }
   }
 }

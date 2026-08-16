@@ -1777,6 +1777,23 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Playbook pre-run example that inserts one shared preparation workflow", playbook_pre_run.stdout)
         self.assertIn("examples/playbook-pre-run.yaml", playbook_pre_run.stdout)
 
+    def test_text_describe_workflow_step_negative_rule_group_is_teaching_ready(self) -> None:
+        exactly_one = self.run_help("describe", "workflow_step.exactly_one_form")
+        gate_conflict = self.run_help("describe", "workflow_step.gate_conflicts_with_register")
+        register_requires = self.run_help("describe", "workflow_step.register_requires_uses")
+
+        self.assertEqual(exactly_one.returncode, 0)
+        self.assertIn("A workflow step must define exactly one of uses, value, state_set, or state_delete", exactly_one.stdout)
+        self.assertIn("step forms are mutually exclusive", exactly_one.stdout)
+
+        self.assertEqual(gate_conflict.returncode, 0)
+        self.assertIn("The gate and register fields cannot be used together", gate_conflict.stdout)
+        self.assertIn("split the gate into a standalone checkpoint step", gate_conflict.stdout)
+
+        self.assertEqual(register_requires.returncode, 0)
+        self.assertIn("The register field is allowed only together with uses, run, or value", register_requires.stdout)
+        self.assertIn("reusable run invocations", register_requires.stdout)
+
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")
         pre_run_file = self.run_help("describe", "playbook.pre_run.file")
@@ -1972,6 +1989,23 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertIn("shows one published workflow entry", playbook_workflows["summary"])
         self.assertIn("playbook_workflow_catalog", playbook_workflows["metadata"]["shows"])
+
+    def test_describe_workflow_step_negative_rule_group_publishes_compact_rule_metadata(self) -> None:
+        exactly_one = json.loads(self.run_help("describe", "workflow_step.exactly_one_form", "--json").stdout)
+        gate_conflict = json.loads(self.run_help("describe", "workflow_step.gate_conflicts_with_register", "--json").stdout)
+        register_requires = json.loads(self.run_help("describe", "workflow_step.register_requires_uses", "--json").stdout)
+
+        self.assertEqual(exactly_one["node_kind"], "negative_rule")
+        self.assertIn("exactly one of uses, value, state_set, or state_delete", exactly_one["rule"])
+        self.assertIn("workflow contract", exactly_one["reason"])
+
+        self.assertEqual(gate_conflict["node_kind"], "negative_rule")
+        self.assertIn("cannot be used together", gate_conflict["rule"])
+        self.assertIn("workflow.step.gate", gate_conflict["related_model_nodes"])
+
+        self.assertEqual(register_requires["node_kind"], "negative_rule")
+        self.assertIn("uses, run, or value", register_requires["rule"])
+        self.assertIn("workflow.step.run", register_requires["related_model_nodes"])
 
     def test_search_finds_json_representation_adapter_model_node(self) -> None:
         result = json.loads(self.run_help("search", "json adapter", "--json").stdout)
