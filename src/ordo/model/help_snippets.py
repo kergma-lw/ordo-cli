@@ -1436,6 +1436,49 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.worktrees": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_worktrees_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect the repository-wide worktree inventory before later steps reason about current versus sibling checkouts.",
+                "source_example": "git-worktree-inventory",
+                "source_excerpt": {
+                    "path": "examples/git-worktree-inventory.yaml",
+                    "start_line": 6,
+                    "end_line": 8
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.worktrees",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_worktree_inventory_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect repository worktrees together with current-worktree cleanliness so the workflow can distinguish repository-wide topology from local dirty-state details.",
+                "source_example": "git-worktree-inventory",
+                "source_excerpt": {
+                    "path": "examples/git-worktree-inventory.yaml",
+                    "start_line": 1,
+                    "end_line": 15
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.worktrees",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

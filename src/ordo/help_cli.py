@@ -2442,6 +2442,27 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.state", "connector.git.worktree", "connector.git.branch.switch"],
         },
+        ("git", "worktrees"): {
+            "definition": "Probe the repository's Git worktree inventory and return every attached worktree path together with its HEAD, branch or detached status, bare flag, and which path is current.",
+            "use_when": [
+                "A workflow needs to reason about multiple checkouts of the same repository, such as locating the current worktree, finding detached sibling worktrees, or checking whether another branch is already checked out elsewhere.",
+                "Later logic needs the explicit multi-worktree topology itself rather than only the current checkout branch or current worktree cleanliness.",
+            ],
+            "do_not_use_for": [
+                "Inspecting only the current checkout's dirty files or staging state; use connector.git.worktree for live path-level cleanliness details in one worktree.",
+                "Reading only one repository snapshot for the current checkout; use connector.git.state or connector.git.branch when the workflow does not need sibling worktree inventory.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.worktree", "summary": "Sibling probe for current dirty-path details inside one worktree instead of the repository-wide worktree inventory"},
+                {"handle": "connector.git.branch", "summary": "Sibling probe for current checkout branch identity when the workflow does not need multi-worktree topology"},
+                {"handle": "connector.git.repo", "summary": "Sibling probe for repository root and default-branch context before or alongside multi-worktree inspection"},
+                {"handle": "connector.git.state", "summary": "Sibling probe for one broader current-checkout summary instead of listing every attached worktree"},
+            ],
+            "examples": [
+                {"reference": "git.worktrees", "inputs": {}},
+            ],
+            "inspect_next": ["connector.git.worktree", "connector.git.branch", "connector.git.repo"],
+        },
         ("git", "repo"): {
             "definition": "Probe the current local Git repository context and return repository-root, git-dir, worktree, HEAD-ref, and default-branch facts for the repository discovered at the current root.",
             "use_when": [

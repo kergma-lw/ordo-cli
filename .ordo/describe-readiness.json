@@ -193,6 +193,9 @@
     "connector.git.worktree": {
       "describe_readiness": "ready"
     },
+    "connector.git.worktrees": {
+      "describe_readiness": "ready"
+    },
     "connector.runtime": {
       "describe_readiness": "ready"
     },
