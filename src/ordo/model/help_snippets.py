@@ -919,6 +919,73 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.git.tag": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_tag_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect one exact Git tag before branching on its existence or publishing its ref and object identity.",
+                "source_example": "git-tag-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-tag-inspection.yaml",
+                    "start_line": 8,
+                    "end_line": 12
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.tag",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
+    "connector.git.tags": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "git_tags_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect a version-sorted Git tag inventory when the workflow needs more than one exact tag lookup.",
+                "source_example": "git-tag-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-tag-inspection.yaml",
+                    "start_line": 13,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.tags",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_tag_inventory_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect one exact tag and one matching tag inventory together so a workflow can compare single-tag existence with broader release-tag discovery.",
+                "source_example": "git-tag-inspection",
+                "source_excerpt": {
+                    "path": "examples/git-tag-inspection.yaml",
+                    "start_line": 1,
+                    "end_line": 23
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "workflow_fragment",
+                    "target": "connector.git.tags",
+                    "expected_status": "ok"
+                }
+            }
+        ],
+    },
     "connector.gh.issue": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

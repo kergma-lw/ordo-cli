@@ -983,6 +983,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(commits["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("connector.git.commit.create", [item["handle"] for item in commits["metadata"]["nearest_surfaces"]])
 
+    def test_describe_connector_git_tag_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
+        tag = json.loads(self.run_help("describe", "connector.git.tag", "--json").stdout)
+        tags = json.loads(self.run_help("describe", "connector.git.tags", "--json").stdout)
+
+        self.assertEqual(tag["snippet_coverage"], "runner_verified")
+        self.assertIn("one named Git tag", tag["metadata"]["definition"])
+        self.assertEqual(tag["canonical_examples"][0]["form"], "step_fragment")
+        self.assertIn("connector.git.tags", [item["handle"] for item in tag["metadata"]["nearest_surfaces"]])
+
+        self.assertEqual(tags["snippet_coverage"], "runner_verified")
+        self.assertIn("version-sorted collection", tags["metadata"]["definition"])
+        self.assertEqual(tags["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(tags["canonical_examples"][1]["form"], "workflow_fragment")
+        self.assertIn("connector.git.tag", [item["handle"] for item in tags["metadata"]["nearest_surfaces"]])
+
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
 
@@ -990,7 +1005,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 30)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 26)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 28)
         self.assertEqual(handles["playbook.workflows"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.file"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["playbook.workflows.with"]["snippet_coverage"], "excerpt_verified")
@@ -1032,6 +1047,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.git.commit.amend"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.commit.revert"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.git.commits"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.tag"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.git.tags"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["profile.overrides"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.target"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.overrides.with"]["snippet_coverage"], "excerpt_verified")
@@ -1480,6 +1497,19 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Probe a bounded readable slice of Git commit history", commits.stdout)
         self.assertIn("connector.git.commit.create", commits.stdout)
         self.assertIn("example_for: workflow_fragment", commits.stdout)
+
+    def test_text_describe_connector_git_tag_group_is_teaching_ready(self) -> None:
+        tag = self.run_help("describe", "connector.git.tag")
+        tags = self.run_help("describe", "connector.git.tags")
+
+        self.assertEqual(tag.returncode, 0)
+        self.assertIn("Probe one named Git tag", tag.stdout)
+        self.assertIn("connector.git.tags", tag.stdout)
+
+        self.assertEqual(tags.returncode, 0)
+        self.assertIn("Probe the Git tag inventory as a version-sorted collection", tags.stdout)
+        self.assertIn("connector.git.tag", tags.stdout)
+        self.assertIn("example_for: workflow_fragment", tags.stdout)
 
     def test_text_describe_playbook_pre_run_group_is_teaching_ready(self) -> None:
         pre_run = self.run_help("describe", "playbook.pre_run")

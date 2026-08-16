@@ -2206,6 +2206,50 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.commit.create", "connector.git.commit.revert", "connector.git.range"],
         },
+        ("git", "tag"): {
+            "definition": "Probe one named Git tag and report whether it exists, which ref it occupies, and whether the stored object is an annotated tag object or a lightweight commit ref.",
+            "use_when": [
+                "A workflow needs to confirm one specific tag such as v1.2.3 before branching on release presence or publishing tag metadata.",
+                "Later logic needs the single-tag existence result plus the raw tag ref and object identity, not a broader tag inventory.",
+            ],
+            "do_not_use_for": [
+                "Listing or pattern-matching many tags; use connector.git.tags for the inventory surface.",
+                "Inferring the newest tag by version ordering across many candidates; use connector.git.tags and its latest output for that collection-oriented question.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.tags", "summary": "Sibling probe for inventory-wide tag inspection instead of one named tag lookup"},
+                {"handle": "connector.git.ref", "summary": "Sibling probe for narrower ref-oriented checks when the workflow cares about refs broadly rather than Git tag semantics specifically"},
+                {"handle": "connector.git.commits", "summary": "Sibling probe for readable commit history when one tag lookup alone is not enough context"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for revision-scope inspection when the question is broader than one named tag"},
+            ],
+            "examples": [
+                {"reference": "git.tag", "inputs": {"name": "v1.2.3"}},
+                {"reference": "git.tag", "inputs": {"name": "release-2026-07"}},
+            ],
+            "inspect_next": ["connector.git.tags", "connector.git.ref", "connector.git.commits"],
+        },
+        ("git", "tags"): {
+            "definition": "Probe the Git tag inventory as a version-sorted collection, optionally narrowed by glob or regex matching, and return matching tags plus the first match as latest in that sorted order.",
+            "use_when": [
+                "A workflow needs to inspect several tags at once, optionally narrowing them by release naming conventions such as v* or one semantic-version regex.",
+                "Later logic needs both the full matching tag list and the first version-sorted match, not just one named tag existence check.",
+            ],
+            "do_not_use_for": [
+                "Checking only one specific tag by exact name; use connector.git.tag for that simpler single-tag probe.",
+                "Treating latest as newest by creation date; this surface orders by descending version refname, not by tag creation time.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.tag", "summary": "Sibling probe for one exact tag lookup instead of an inventory scan"},
+                {"handle": "connector.git.range", "summary": "Sibling probe for revision-range facts when tag inventory is broader than needed"},
+                {"handle": "connector.git.commits", "summary": "Sibling probe for readable commit history after a tag inventory decision chooses a revision scope"},
+                {"handle": "connector.git.ref", "summary": "Sibling probe for explicit ref-oriented checks when the workflow does not need tag-specific inventory semantics"},
+            ],
+            "examples": [
+                {"reference": "git.tags", "inputs": {"match": "v*", "match_kind": "glob"}},
+                {"reference": "git.tags", "inputs": {"match": "^v?[0-9]+\\.[0-9]+\\.[0-9]+$", "match_kind": "regex"}},
+            ],
+            "inspect_next": ["connector.git.tag", "connector.git.range", "connector.git.commits"],
+        },
         ("gh", "pr"): {
             "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
             "use_when": [
