@@ -23,6 +23,9 @@
 ```json
 {
   "path": "/workspace/app.env",
+  "basename": "app.env",
+  "filename_without_extension": "app",
+  "extension": "env",
   "exists": true,
   "kind": "file",
   "content": "HOST=localhost\nPORT=5432\n",
@@ -37,10 +40,20 @@
 
 ## Modeled semantics
 
+- `basename` is the last path segment from the resolved file path.
+- `filename_without_extension` and `extension` are deterministic projections of `basename` using the last dot only.
+- `extension` does not include the dot.
 - `exists` reports whether the requested path resolved to an existing file snapshot in the success case.
 - `kind` uses connector-owned filesystem-entry vocabulary rather than content-type or MIME vocabulary.
 - `content` is the canonical payload of the snapshot rather than a raw-detail afterthought.
 - `size`, `owner`, `group`, `permissions`, `modified_at`, and `line_count` are file-snapshot facts, not parsing or policy results.
+
+## Basename split examples
+
+- `foo.txt` → `basename=foo.txt`, `filename_without_extension=foo`, `extension=txt`
+- `archive.tar.gz` → `basename=archive.tar.gz`, `filename_without_extension=archive.tar`, `extension=gz`
+- `README` → `basename=README`, `filename_without_extension=README`, `extension=""`
+- `.env` → `basename=.env`, `filename_without_extension=""`, `extension=env`
 
 ## Failure model
 

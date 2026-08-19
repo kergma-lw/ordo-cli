@@ -16,6 +16,9 @@ def info():
         inputs={"path": "string"},
         outputs={
             "path": "string",
+            "basename": "string",
+            "filename_without_extension": "string",
+            "extension": "string",
             "exists": "boolean",
             "kind": "string",
             "content": "string",
@@ -87,10 +90,15 @@ def run(ctx: OperationContext) -> OperationOutcome:
             details={"path": str(path), "reason": str(exc)},
         )
 
+    filename_without_extension, extension = _split_basename(path.name)
+
     return ok(
         summary="Filesystem file snapshot read successfully",
         outputs={
             "path": str(path),
+            "basename": path.name,
+            "filename_without_extension": filename_without_extension,
+            "extension": extension,
             "exists": True,
             "kind": "file",
             "content": content,
@@ -103,6 +111,15 @@ def run(ctx: OperationContext) -> OperationOutcome:
         },
         raw={"path": str(path), "encoding": "utf-8"},
     )
+
+
+def _split_basename(basename: str) -> tuple[str, str]:
+    if not basename:
+        return "", ""
+    dot_index = basename.rfind(".")
+    if dot_index == -1:
+        return basename, ""
+    return basename[:dot_index], basename[dot_index + 1 :]
 
 
 def _kind_from_mode(mode: int) -> str:

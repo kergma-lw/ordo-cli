@@ -21,6 +21,10 @@
   - `exists`
   - `kind`
   - `content`
+- The probe must expose these path-derived file metadata projections:
+  - `basename`
+  - `filename_without_extension`
+  - `extension`
 - The MVP may additionally expose file-snapshot metadata that belongs naturally to the same observed file, for example:
   - `size`
   - `owner`
@@ -34,6 +38,8 @@
 - `content` is part of the probe contract rather than an optional side channel.
 - `kind` must describe filesystem-entry kind rather than content classification.
 - `kind` must not depend on the external `file` utility or on MIME/magic classification heuristics.
+- `basename`, `filename_without_extension`, and `extension` must be derived from the resolved file path rather than from raw user input spelling.
+- `extension` must use the final basename suffix after the last dot and must not include the dot.
 - `line_count`, when exposed, is derived from `content`.
 
 ## Failure contract
@@ -48,6 +54,7 @@
 - The probe must stay focused on one path and one file snapshot.
 - The probe must not absorb tree search, directory listing, config parsing, content classification, or mutation semantics.
 - The probe must not become a generic filesystem API bundle.
+- The probe must not expand into dirname, join, slugify, or traversal helper semantics.
 
 ## Discovery rule
 

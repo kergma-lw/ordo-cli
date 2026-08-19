@@ -26,8 +26,11 @@ Use this when a workflow needs this exact operation surface. In practice: observ
 
 ```json
 {
+  "basename": "string",
   "content": "string",
+  "extension": "string",
   "exists": "boolean",
+  "filename_without_extension": "string",
   "group": "string",
   "kind": "string",
   "line_count": "integer",
@@ -99,8 +102,11 @@ Use this when a workflow needs this exact operation surface. In practice: observ
     "maturity": "stable",
     "name": "file",
     "outputs": {
+      "basename": "string",
       "content": "string",
+      "extension": "string",
       "exists": "boolean",
+      "filename_without_extension": "string",
       "group": "string",
       "kind": "string",
       "line_count": "integer",

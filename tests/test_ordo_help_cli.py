@@ -62,12 +62,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         expected = json.loads((GOLDEN_DIR / "ordo_help_features.json").read_text(encoding="utf-8"))
         self.assertEqual(actual, expected)
 
-    def test_workflow_authoring_json_matches_golden(self) -> None:
-        result = self.run_help("workflow-authoring", "--json")
+    def test_workflow_rules_json_matches_golden(self) -> None:
+        result = self.run_help("workflow-rules", "--json")
 
         self.assertEqual(result.returncode, 0)
         actual = json.loads(result.stdout)
-        expected = json.loads((GOLDEN_DIR / "ordo_help_workflow_authoring.json").read_text(encoding="utf-8"))
+        expected = json.loads((GOLDEN_DIR / "ordo_help_workflow_rules.json").read_text(encoding="utf-8"))
         self.assertEqual(actual, expected)
 
     def test_examples_json_matches_golden(self) -> None:
@@ -91,7 +91,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         overview = json.loads(self.run_help("overview", "--json").stdout)
         model = json.loads(self.run_help("model", "--json").stdout)
         features = json.loads(self.run_help("features", "--json").stdout)
-        workflow_authoring = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+        workflow_rules = json.loads(self.run_help("workflow-rules", "--json").stdout)
         capabilities = json.loads(self.run_help("capabilities", "--json").stdout)
         command_line = json.loads(self.run_help("command-line", "--json").stdout)
         operations = json.loads(self.run_help("operations", "--json").stdout)
@@ -102,7 +102,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(overview["document_kind"], "overview")
         self.assertEqual(model["document_kind"], "model")
         self.assertEqual(features["document_kind"], "features")
-        self.assertEqual(workflow_authoring["document_kind"], "workflow_authoring")
+        self.assertEqual(workflow_rules["document_kind"], "workflow_rules")
         self.assertIn("capabilities", capabilities)
         self.assertEqual(command_line["document_kind"], "command_line")
         self.assertIn("connectors", operations)
@@ -164,10 +164,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "routine_contract.workflow_call_surface" for item in env_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "routine_contract.workflow_call_surface" for item in mapping_result["facts"]))
 
-    def test_workflow_authoring_publishes_routine_env_examples_and_anti_examples(self) -> None:
-        workflow_authoring = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+    def test_workflow_rules_publishes_routine_env_examples_and_anti_examples(self) -> None:
+        workflow_rules = json.loads(self.run_help("workflow-rules", "--json").stdout)
 
-        examples = {item["name"]: item for item in workflow_authoring["routine_env_examples"]}
+        examples = {item["name"]: item for item in workflow_rules["routine_env_examples"]}
         self.assertIn("routine_env_scalar_forwarding", examples)
         self.assertIn("routine_env_non_scalar_rejected", examples)
         self.assertIn("routine_env_custom_name_not_supported", examples)
@@ -264,13 +264,13 @@ class OrdoHelpCliTest(unittest.TestCase):
 
     def test_help_surfaces_workflow_profile_guidance_and_examples(self) -> None:
         features = json.loads(self.run_help("features", "--json").stdout)
-        workflow_authoring = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+        workflow_rules = json.loads(self.run_help("workflow-rules", "--json").stdout)
         describe_profile = json.loads(self.run_help("describe", "workflow.profile", "--json").stdout)
 
         workflow_cluster = next(cluster for cluster in features["clusters"] if cluster["name"] == "workflow")
         self.assertTrue(any("workflow.profile" in item for item in workflow_cluster["appropriate_when"]))
         self.assertTrue(any("workflow.profile" in item for item in workflow_cluster["inappropriate_when"]))
-        self.assertTrue(any(rule["name"] == "workflow_profile_binding_is_project_local" for rule in workflow_authoring["rules"]))
+        self.assertTrue(any(rule["name"] == "workflow_profile_binding_is_project_local" for rule in workflow_rules["rules"]))
         self.assertEqual(describe_profile["snippet_coverage"], "runner_verified")
         self.assertEqual(describe_profile["canonical_examples"][0]["verification"]["target"], "workflow.profile")
 
@@ -530,7 +530,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("- rejects unknown activation inputs: yes", inputs_contract.stdout)
         self.assertIn("declaration fields:", inputs_contract.stdout)
         self.assertIn("- description (type=string, required=no, role=input_meaning)", inputs_contract.stdout)
-        self.assertIn("workflow-authoring.input_validation_default", inputs_contract.stdout)
+        self.assertIn("workflow-rules.input_validation_default", inputs_contract.stdout)
 
     def test_text_describe_routine_workflow_call_group_is_teaching_ready(self) -> None:
         call_surface = self.run_help("describe", "routine_contract.workflow_call_surface")
@@ -552,7 +552,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(call_env.returncode, 0)
         self.assertIn("Routine workflow-call field for forwarding a short explicit list of scalar caller references", call_env.stdout)
-        self.assertIn("workflow-authoring.routine.*", call_env.stdout)
+        self.assertIn("workflow-rules.routine.*", call_env.stdout)
         self.assertIn("related examples:", call_env.stdout)
 
     def test_text_describe_routine_entry_core_group_is_teaching_ready(self) -> None:
@@ -573,12 +573,12 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(implementation_argv.returncode, 0)
         self.assertIn("Routine implementation field for the bounded argv vector", implementation_argv.stdout)
-        self.assertIn("workflow-authoring.routine.*", implementation_argv.stdout)
+        self.assertIn("workflow-rules.routine.*", implementation_argv.stdout)
         self.assertIn("related examples:", implementation_argv.stdout)
 
         self.assertEqual(failure_modes.returncode, 0)
         self.assertIn("Routine registry-entry field for declaring the expected named failure classes", failure_modes.stdout)
-        self.assertIn("workflow-authoring.routine.*", failure_modes.stdout)
+        self.assertIn("workflow-rules.routine.*", failure_modes.stdout)
         self.assertIn("related examples:", failure_modes.stdout)
 
     def test_text_describe_routine_metadata_tail_group_is_teaching_ready(self) -> None:
@@ -591,7 +591,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(entry_kind.returncode, 0)
         self.assertIn("Routine registry-entry field for the narrow classification", entry_kind.stdout)
-        self.assertIn("workflow-authoring.routine.*", entry_kind.stdout)
+        self.assertIn("workflow-rules.routine.*", entry_kind.stdout)
 
         self.assertEqual(entry_summary.returncode, 0)
         self.assertIn("Routine registry-entry field for the short human-facing purpose statement", entry_summary.stdout)
@@ -607,7 +607,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(routines_field.returncode, 0)
         self.assertIn("Routine-registry top-level field that contains the declared set of named routine entries", routines_field.stdout)
-        self.assertIn("workflow-authoring.routine.*", routines_field.stdout)
+        self.assertIn("workflow-rules.routine.*", routines_field.stdout)
 
         self.assertEqual(version_field.returncode, 0)
         self.assertIn("Routine-registry top-level field for the schema version", version_field.stdout)
@@ -784,15 +784,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(json.loads(missing.stdout)["status"], "unknown_topic")
 
-    def test_describe_resolves_workflow_authoring_rule_and_example_nodes(self) -> None:
-        rule_node = json.loads(self.run_help("describe", "workflow-authoring.early_guards", "--json").stdout)
-        example_node = json.loads(self.run_help("describe", "workflow-authoring.example.inline_fan_out_local_steps", "--json").stdout)
+    def test_describe_resolves_workflow_rule_and_example_nodes(self) -> None:
+        rule_node = json.loads(self.run_help("describe", "workflow-rules.early_guards", "--json").stdout)
+        example_node = json.loads(self.run_help("describe", "workflow-rules.example.inline_fan_out_local_steps", "--json").stdout)
         catalog_example_node = json.loads(self.run_help("describe", "examples.text-adapter", "--json").stdout)
 
-        self.assertEqual(rule_node["document_kind"], "workflow_authoring_node")
+        self.assertEqual(rule_node["document_kind"], "workflow_rules_node")
         self.assertEqual(rule_node["node_kind"], "rule")
         self.assertEqual(rule_node["metadata"]["name"], "early_guards")
-        self.assertEqual(example_node["document_kind"], "workflow_authoring_node")
+        self.assertEqual(example_node["document_kind"], "workflow_rules_node")
         self.assertEqual(example_node["node_kind"], "example")
         self.assertEqual(example_node["metadata"]["name"], "inline_fan_out_local_steps")
         self.assertEqual(catalog_example_node["document_kind"], "example_node")
@@ -1165,13 +1165,13 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(family["snippet_coverage"], "none")
         self.assertIn("Published shell connector family for one coarse legacy command-execution action", family["metadata"]["definition"])
-        self.assertIn("workflow-authoring.shell.command", [item["handle"] for item in family["metadata"]["nearest_surfaces"]])
+        self.assertIn("workflow-rules.shell.command", [item["handle"] for item in family["metadata"]["nearest_surfaces"]])
 
         self.assertEqual(command["snippet_coverage"], "runner_verified")
         self.assertIn("Execute one arbitrary shell command string through bash -lc", command["metadata"]["definition"])
         self.assertEqual(command["canonical_examples"][0]["form"], "step_fragment")
         self.assertEqual(command["canonical_examples"][1]["form"], "workflow_fragment")
-        self.assertIn("workflow-authoring.shell.command", [item["handle"] for item in command["metadata"]["nearest_surfaces"]])
+        self.assertIn("workflow-rules.shell.command", [item["handle"] for item in command["metadata"]["nearest_surfaces"]])
 
     def test_snippet_coverage_command_reports_covered_and_uncovered_handles(self) -> None:
         payload = json.loads(self.run_help("snippet-coverage", "--json").stdout)
@@ -1472,7 +1472,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("named review or verification labels", result.stdout)
         self.assertIn("use when:", result.stdout)
-        self.assertIn("workflow-authoring.paired_authoring_passes", result.stdout)
+        self.assertIn("workflow-rules.paired_check_review_passes", result.stdout)
         self.assertIn("profile.overrides", result.stdout)
         self.assertIn("does not treat the labels themselves as an automatic execution plan", result.stdout)
         self.assertIn("example_for: field_fragment", result.stdout)
@@ -1487,7 +1487,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("status: deprecated", result.stdout)
         self.assertIn("preferred_alternative: published_routines", result.stdout)
         self.assertIn("workflow.step.launcher", result.stdout)
-        self.assertIn("workflow-authoring.routine.*", result.stdout)
+        self.assertIn("workflow-rules.routine.*", result.stdout)
         self.assertIn("example_for: field_fragment", result.stdout)
         self.assertIn("shell_frontend:", result.stdout)
         self.assertIn("file: ../launchers/shell-frontend.yaml", result.stdout)
@@ -1566,7 +1566,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(for_each.returncode, 0)
         self.assertIn("array-valued repeated item source", for_each.stdout)
         self.assertIn("workflow.run.steps", for_each.stdout)
-        self.assertIn("workflow-authoring.fan_out_scope_and_conditions", for_each.stdout)
+        self.assertIn("workflow-rules.fan_out_scope_and_conditions", for_each.stdout)
         self.assertIn("for_each: inputs.issue_numbers", for_each.stdout)
 
         self.assertEqual(outer_if.returncode, 0)
@@ -1624,7 +1624,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("compose.remove(service=api)", remove.stdout)
 
         self.assertEqual(profile_connectors.returncode, 0)
-        self.assertIn("Profile field for supplying family-keyed connector context objects", profile_connectors.stdout)
+        self.assertIn("Profile-scoped connector bootstrap field for declaring connector context", profile_connectors.stdout)
         self.assertIn("connector.compose", profile_connectors.stdout)
         self.assertIn("compose.directory=./deploy", profile_connectors.stdout)
 
@@ -1695,7 +1695,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("use when:", result.stdout)
         self.assertIn("do not use for:", result.stdout)
         self.assertIn("workflow.step.profile_switch", result.stdout)
-        self.assertIn("workflow-authoring.workflow_profile_binding_is_project_local", result.stdout)
+        self.assertIn("workflow-rules.workflow_profile_binding_is_project_local", result.stdout)
         self.assertIn("example_for: workflow_fragment", result.stdout)
 
     def test_text_describe_playbook_defaults_group_is_teaching_ready(self) -> None:
@@ -1762,7 +1762,7 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(workflow_when.returncode, 0)
         self.assertIn("Workflow-entry field for the operator-facing selection hint", workflow_when.stdout)
-        self.assertIn("workflow-authoring.early_guards", workflow_when.stdout)
+        self.assertIn("workflow-rules.early_guards", workflow_when.stdout)
 
         self.assertEqual(workflow_workdir.returncode, 0)
         self.assertIn("Workflow-entry field for overriding the execution working directory", workflow_workdir.stdout)
@@ -2092,12 +2092,12 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(family.returncode, 0)
         self.assertIn("Published shell connector family for one coarse legacy command-execution action", family.stdout)
-        self.assertIn("workflow-authoring.shell.command", family.stdout)
+        self.assertIn("workflow-rules.shell.command", family.stdout)
         self.assertIn("routines", family.stdout)
 
         self.assertEqual(command.returncode, 0)
         self.assertIn("Execute one arbitrary shell command string through bash -lc", command.stdout)
-        self.assertIn("workflow-authoring.shell.command", command.stdout)
+        self.assertIn("workflow-rules.shell.command", command.stdout)
         self.assertIn("example_for: workflow_fragment", command.stdout)
 
     def test_text_describe_examples_group_is_teaching_ready(self) -> None:
@@ -2240,11 +2240,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("use when:", result.stdout)
         self.assertIn("do not use for:", result.stdout)
         self.assertIn("nearest surfaces:", result.stdout)
-        self.assertIn("workflow authoring passes:", result.stdout)
+        self.assertIn("workflow check/review passes:", result.stdout)
         self.assertIn("stable flags:", result.stdout)
         self.assertIn("examples:", result.stdout)
         self.assertIn("inspect next:", result.stdout)
-        self.assertIn("workflow-authoring.paired_authoring_passes", result.stdout)
+        self.assertIn("workflow-rules.paired_check_review_passes", result.stdout)
 
     def test_text_describe_command_line_flag_group_is_compact_and_distinct(self) -> None:
         input_result = self.run_help("describe", "command-line.ordo-playbook.flag.input")
@@ -2338,7 +2338,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(file_node["node_kind"], "connector_operation")
         self.assertEqual(file_node["metadata"]["name"], "file")
         self.assertEqual(file_node["metadata"]["kind"], "probe")
+        self.assertIn("basename", file_node["metadata"]["outputs"])
         self.assertIn("content", file_node["metadata"]["outputs"])
+        self.assertIn("filename_without_extension", file_node["metadata"]["outputs"])
+        self.assertIn("extension", file_node["metadata"]["outputs"])
         self.assertEqual(shell_node["node_kind"], "connector_family")
         self.assertEqual(shell_command["metadata"]["kind"], "action")
         self.assertEqual(example_node["node_kind"], "example")
@@ -2470,7 +2473,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "workflow.local_expression.builtin.is_missing" for item in combined_result["facts"]))
         self.assertTrue(any(item["kind"] == "model_field" and item["name"] == "state" for item in state_alias_result["facts"]))
 
-    def test_search_indexes_workflow_authoring_rules(self) -> None:
+    def test_search_indexes_workflow_rules(self) -> None:
         shell_result = json.loads(self.run_help("search", "shell.command", "--json").stdout)
         routine_result = json.loads(self.run_help("search", "routine.*", "--json").stdout)
         guards_result = json.loads(self.run_help("search", "runner", "--json").stdout)
@@ -2487,22 +2490,22 @@ class OrdoHelpCliTest(unittest.TestCase):
         let_result = json.loads(self.run_help("search", "repetition", "--json").stdout)
         bare_result = json.loads(self.run_help("search", "bare expressions", "--json").stdout)
 
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.shell.command" for item in shell_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.routine.*" for item in routine_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_guards" for item in guards_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.input_validation_default" for item in input_validation_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.representation_adapters" for item in adapters_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.publish_outputs" for item in publish_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.lifecycle_state" for item in state_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.explicit_execution_context" for item in context_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.separate_control_surfaces" for item in control_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.bounded_fan_out_is_structured_invocation" for item in fan_out_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.run_target_vs_inline_fan_out" for item in inline_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.fan_out_scope_and_conditions" for item in scope_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.inline_fan_out_invalid_shapes" for item in inline_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.delegated_applicability" for item in delegated_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.early_let" for item in let_result["facts"]))
-        self.assertTrue(any(item["kind"] == "workflow_authoring_rule" and item["name"] == "workflow-authoring.native_expression_contexts" for item in bare_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.shell.command" for item in shell_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.routine.*" for item in routine_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.early_guards" for item in guards_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.input_validation_default" for item in input_validation_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.representation_adapters" for item in adapters_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.publish_outputs" for item in publish_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.lifecycle_state" for item in state_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.explicit_execution_context" for item in context_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.separate_control_surfaces" for item in control_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.bounded_fan_out_is_structured_invocation" for item in fan_out_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.run_target_vs_inline_fan_out" for item in inline_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.fan_out_scope_and_conditions" for item in scope_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.inline_fan_out_invalid_shapes" for item in inline_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.delegated_applicability" for item in delegated_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.early_let" for item in let_result["facts"]))
+        self.assertTrue(any(item["kind"] == "workflow_rule" and item["name"] == "workflow-rules.native_expression_contexts" for item in bare_result["facts"]))
 
     def test_features_publish_local_expression_and_adapter_handles(self) -> None:
         payload = json.loads(self.run_help("features", "--json").stdout)
@@ -2526,23 +2529,23 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("env", routines["published_names"]["workflow_call_fields"])
         self.assertIn("inputs.profile", routines["published_names"]["generated_env_name_examples"])
         self.assertTrue(any(item["handle"] == "routine_contract" for item in routines["inspect_next"]))
-        self.assertTrue(any(item["handle"] == "workflow-authoring.routine.*" for item in routines["inspect_next"]))
+        self.assertTrue(any(item["handle"] == "workflow-rules.routine.*" for item in routines["inspect_next"]))
 
-    def test_workflow_authoring_topic_prioritizes_routine_caution_and_early_guards(self) -> None:
-        payload = json.loads(self.run_help("workflow-authoring", "--json").stdout)
+    def test_workflow_rules_topic_prioritizes_routine_caution_and_early_guards(self) -> None:
+        payload = json.loads(self.run_help("workflow-rules", "--json").stdout)
 
-        self.assertEqual(payload["document_kind"], "workflow_authoring")
+        self.assertEqual(payload["document_kind"], "workflow_rules")
         self.assertEqual(payload["audience"], ["workflow_authors", "agents"])
-        self.assertIn("treat semantic ambiguity as a reason to clarify rather than improvise", payload["authoring_heuristic"])
-        self.assertIn("when adding or changing inputs, validate them before continuing", payload["authoring_heuristic"])
-        self.assertIn("validate both the request shape and the observed target context", payload["authoring_heuristic"])
-        self.assertIn("keep bounded fan-out bodies short, structured, and explicit about scope boundaries", payload["authoring_heuristic"])
-        self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and explicit probe-coverage gaps early", payload["authoring_heuristic"])
-        self.assertIn("for applicability decisions, prefer guard probes first; use read-only probe steps mainly when the observed fact must be reused later", payload["authoring_heuristic"])
-        self.assertIn("treat 'observation' in runtime metadata as the internal term for the result of an explicit probe", payload["authoring_heuristic"])
-        self.assertIn("use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only when one local step or local branch is optional inside an already-valid path", payload["authoring_heuristic"])
-        self.assertIn("distinguish authored probe intent from successful probe materialization: a guard may already express the right probe shape even when the observation could not be completed from the currently available pre-step facts", payload["authoring_heuristic"])
-        self.assertIn("prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text", payload["authoring_heuristic"])
+        self.assertIn("treat semantic ambiguity as a reason to clarify rather than improvise", payload["heuristic"])
+        self.assertIn("when adding or changing inputs, validate them before continuing", payload["heuristic"])
+        self.assertIn("validate both the request shape and the observed target context", payload["heuristic"])
+        self.assertIn("keep bounded fan-out bodies short, structured, and explicit about scope boundaries", payload["heuristic"])
+        self.assertIn("use ordo-playbook check <workflow> during authoring to catch guard and explicit probe-coverage gaps early", payload["heuristic"])
+        self.assertIn("for applicability decisions, prefer guard probes first; use read-only probe steps mainly when the observed fact must be reused later", payload["heuristic"])
+        self.assertIn("treat 'observation' in runtime metadata as the internal term for the result of an explicit probe", payload["heuristic"])
+        self.assertIn("use each conditional surface for its own job: guards for applicability and early rejection, gates for whether a path or step may run at all, and if: only when one local step or local branch is optional inside an already-valid path", payload["heuristic"])
+        self.assertIn("distinguish authored probe intent from successful probe materialization: a guard may already express the right probe shape even when the observation could not be completed from the currently available pre-step facts", payload["heuristic"])
+        self.assertIn("prefer bare expressions in let, with, value, publish, result, and for_each; for step if, use either a bare expression or a structured all/any/not form; when comparing more than three predicates, require structured if; quote literal strings explicitly; do not rely on broken bare expressions silently falling back to literal text", payload["heuristic"])
         self.assertEqual([item["name"] for item in payload["bounded_fan_out_examples"]], ["named_run_target_fan_out", "inline_fan_out_local_steps", "inline_fan_out_inner_if"])
         decision_rule = next(item for item in payload["rules"] if item["name"] == "decision_order")
         structured_rule = next(item for item in payload["rules"] if item["name"] == "structured_surface_bias")
