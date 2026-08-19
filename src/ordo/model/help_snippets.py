@@ -640,6 +640,141 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "workflow.step.name": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "step_declared_identity",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Give one step a stable local identity so later workflow surfaces can refer to it explicitly.",
+                "source_excerpt": {
+                    "path": "examples/inspect-issue.yaml",
+                    "start_line": 10,
+                    "end_line": 10
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-issue"
+                },
+            }
+        ],
+    },
+    "workflow.step.condition": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "step_optional_if_condition",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Use one step-level if condition when the step is locally optional inside an already-valid path.",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 17,
+                    "end_line": 19
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.project-issue-membership"
+                },
+            },
+            {
+                "name": "step_admission_gate_condition",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Use one gate condition when the real question is whether the protected invocation may proceed at all.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 21,
+                    "end_line": 24
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.step.outputs": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "step_outputs_read_path",
+                "kind": "positive",
+                "form": "field_fragment",
+                "summary": "Read one earlier registered step result through the explicit step.<register>.outputs... surface instead of inventing implicit shared context.",
+                "source_excerpt": {
+                    "path": "examples/project-issue-membership.yaml",
+                    "start_line": 17,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.project-issue-membership"
+                },
+            }
+        ],
+    },
+    "workflow.step_forms.operation_call": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "operation_call_form_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Use the dedicated operation-call step form when one named step's primary job is invoking one published operation surface through uses.",
+                "source_excerpt": {
+                    "path": "examples/inspect-issue.yaml",
+                    "start_line": 10,
+                    "end_line": 14
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.inspect-issue"
+                },
+            }
+        ],
+    },
+    "workflow.step_forms.run_invocation": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "run_invocation_form_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Use the dedicated run-invocation step form when one named step invokes a workflow fragment target with optional fan-out and aggregate capture.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 8,
+                    "end_line": 15
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
+    "workflow.step_forms.inline_fan_out_invocation": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "inline_fan_out_form_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Use the dedicated inline fan-out form when a short local repeated body should stay inline under one explicit for_each step.",
+                "source_excerpt": {
+                    "path": "examples/run-fan-out.yaml",
+                    "start_line": 25,
+                    "end_line": 31
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "examples.run-fan-out"
+                },
+            }
+        ],
+    },
     "profile.overrides": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [

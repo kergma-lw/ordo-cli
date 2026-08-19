@@ -217,7 +217,7 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         scope="workflow.step",
         related_capabilities=("workflow.step.register", "workflow.step.value"),
         related_negative_rules=("workflow_step.if_conflicts_with_register", "workflow_step.gate_conflicts_with_register"),
-        related_model_nodes=("workflow.step.if", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
+        related_model_nodes=("workflow.step.if", "workflow.step.gate", "workflow.step.register", "workflow.step_forms.operation_call", "workflow.step_forms.gate_checkpoint", "workflow.step_forms.value"),
         must_not_infer=(
             "one shared boolean condition surface means if and gate do the same semantic job",
             "if is the catch-all control mechanism for applicability, admission, and local branching",
@@ -231,7 +231,16 @@ RUNTIME_CAPABILITIES: tuple[CapabilitySpec, ...] = (
         related_negative_rules=("workflow_step.register_requires_uses", "workflow_step.if_conflicts_with_register", "workflow_step.gate_conflicts_with_register"),
         related_model_nodes=("workflow.step.register", "workflow.step.uses", "workflow.step.value", "workflow.step_forms.operation_call", "workflow.step_forms.value"),
     ),
-    CapabilitySpec(name="workflow.step.outputs", status="supported", scope="workflow.step"),
+    CapabilitySpec(
+        name="workflow.step.outputs",
+        status="supported",
+        scope="workflow.step",
+        related_capabilities=("workflow.step.register", "workflow.step.value"),
+        related_model_nodes=("workflow.step.name", "workflow.step.register", "workflow.step.value", "workflow.step_forms.operation_call", "workflow.step_forms.run_invocation"),
+        must_not_infer=(
+            "step outputs are ambient global context instead of explicit reads from named or registered steps",
+        ),
+    ),
     CapabilitySpec(
         name="workflow.branching",
         status="supported",
