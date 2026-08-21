@@ -68,6 +68,7 @@ from .local_expression_engine.core import (
 from .static_expression_diagnostics import collect_static_expression_diagnostics
 
 LET_RESERVED_NAMES = frozenset({"inputs", "args", "state", "step"})
+WORKFLOW_INPUT_DECLARATION_ALLOWED_FIELDS = frozenset({"required", "default", "description", "hint"})
 
 USES_PATTERN = re.compile(r"^[a-z0-9]+([._-][a-z0-9]+)*$")
 REGISTER_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -166,6 +167,53 @@ def _validate_workflow_input_declarations(value: JSONValue | None, *, source: st
             continue
         if not isinstance(declaration, dict):
             continue
+        for field_name in declaration:
+            if field_name not in WORKFLOW_INPUT_DECLARATION_ALLOWED_FIELDS:
+                diagnostics.append(
+                    _diagnostic(
+                        "validation.workflow.inputs.unknown_field",
+                        f"Workflow input declaration field '{field_name}' is not supported",
+                        ("inputs", input_name, str(field_name)),
+                        source,
+                        input=input_name,
+                        field=field_name,
+                        allowed_fields=sorted(WORKFLOW_INPUT_DECLARATION_ALLOWED_FIELDS),
+                    )
+                )
+        required = declaration.get("required")
+        if required is not None and not isinstance(required, bool):
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.inputs.required.type",
+                    "Workflow input field 'required' must be a boolean when present",
+                    ("inputs", input_name, "required"),
+                    source,
+                    input=input_name,
+                    actual_type=type(required).__name__,
+                )
+            )
+        if declaration.get("required") is True and "default" in declaration:
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.inputs.required_default_conflict",
+                    "Workflow input declaration must not set both 'required: true' and 'default'",
+                    ("inputs", input_name),
+                    source,
+                    input=input_name,
+                )
+            )
+        description = declaration.get("description")
+        if description is not None and not isinstance(description, str):
+            diagnostics.append(
+                _diagnostic(
+                    "validation.workflow.inputs.description.type",
+                    "Workflow input field 'description' must be a string when present",
+                    ("inputs", input_name, "description"),
+                    source,
+                    input=input_name,
+                    actual_type=type(description).__name__,
+                )
+            )
         hint = declaration.get("hint")
         if hint is not None and not isinstance(hint, str):
             diagnostics.append(

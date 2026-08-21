@@ -933,6 +933,29 @@ def _validate_workflow_entry_fields(workflow_entry: dict[str, object], *, workfl
             path=("workflows", workflow_name, "with"),
             details={"playbook": str(playbook_path), "workflow": workflow_name, "actual_type": type(invocation_inputs).__name__},
         )
+    if isinstance(invocation_inputs, dict):
+        for key, value in invocation_inputs.items():
+            if not isinstance(key, str) or not key:
+                raise _playbook_error(
+                    "playbook.workflow.with_key_invalid",
+                    "Workflow entry field 'with' must use non-empty string keys",
+                    path=("workflows", workflow_name, "with", str(key)),
+                    details={"playbook": str(playbook_path), "workflow": workflow_name},
+                )
+            if key == "?" or key.endswith("?") and not key[:-1]:
+                raise _playbook_error(
+                    "playbook.workflow.with_key_invalid",
+                    "Workflow entry field 'with' optional caller-slot keys must name an input before '?'",
+                    path=("workflows", workflow_name, "with", key),
+                    details={"playbook": str(playbook_path), "workflow": workflow_name, "input": key},
+                )
+            if key.endswith("?") and value is not None:
+                raise _playbook_error(
+                    "playbook.workflow.with_optional_slot_value_invalid",
+                    "Workflow entry field 'with' optional caller-slot keys must not bind a concrete value",
+                    path=("workflows", workflow_name, "with", key),
+                    details={"playbook": str(playbook_path), "workflow": workflow_name, "input": key},
+                )
 
 
 def _optional_non_empty_string(payload: dict[str, object], key: str) -> str | None:
