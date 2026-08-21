@@ -2066,7 +2066,8 @@ class ValidationTest(unittest.TestCase):
                 workflow: open-task
                 inputs:
                   payload:
-                    title: ok
+                    default:
+                      title: ok
                 blocks:
                   - guards: []
                   - steps:

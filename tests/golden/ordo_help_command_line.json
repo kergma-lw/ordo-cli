@@ -79,7 +79,7 @@
                 }
             ],
             "input_override_precedence": [
-                "workflow.inputs declares the allowed activation keys; declared keys are required at activation=true",
+                "workflow.inputs declares the allowed activation keys; each declared key may be required, optional, or defaulted by its own declaration",
                 "profile.inputs may supply values for declared workflow inputs",
                 "playbook workflow-entry with supplies static invocation inputs before one run",
                 "playbook pre_run with supplies static invocation inputs to that pre_run workflow only",

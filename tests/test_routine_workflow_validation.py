@@ -24,7 +24,7 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "demo",
-                "inputs": {"review_mode": {"type": "string"}},
+                "inputs": {"review_mode": {}},
                 "blocks": [
                     {"guards": []},
                     {
@@ -60,7 +60,7 @@ class RoutineWorkflowValidationTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "demo",
-                "inputs": {"review_mode": {"type": "string"}},
+                "inputs": {"review_mode": {}},
                 "blocks": [
                     {"guards": []},
                     {

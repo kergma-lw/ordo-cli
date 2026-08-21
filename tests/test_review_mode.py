@@ -494,7 +494,7 @@ blocks:
 
         codes = [item["code"] for item in result.outputs["findings"]]
         self.assertNotIn("review.workflow.input_declared_but_unused", codes)
-        self.assertIn("review.workflow.input_validation_missing", codes)
+        self.assertNotIn("review.workflow.input_validation_missing", codes)
 
     def test_review_reports_missing_recommended_probe_coverage(self) -> None:
         workflow = Workflow(

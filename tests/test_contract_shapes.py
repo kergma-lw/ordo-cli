@@ -32,7 +32,10 @@ class ContractShapeTest(unittest.TestCase):
             {
                 "version": 0,
                 "workflow": "open-task",
-                "inputs": {"repository": {}, "issue_number": {}},
+                "inputs": {
+                    "repository": {"required": False, "default": "repo/name"},
+                    "issue_number": {"required": False, "default": 1},
+                },
                 "let": {},
                 "state_needs": {"task_memory": {}},
                 "blocks": [
