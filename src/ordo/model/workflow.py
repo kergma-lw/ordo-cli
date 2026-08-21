@@ -39,6 +39,23 @@ def normalize_workflow_input_declaration(name: str, declaration: JSONValue) -> t
     normalized["default"] = declaration
     return normalized, True, declaration
 
+
+def workflow_input_has_default(declaration: object) -> bool:
+    """Return whether one normalized workflow input declaration has a default."""
+
+    return isinstance(declaration, dict) and "default" in declaration
+
+
+def workflow_input_required(declaration: object) -> bool:
+    """Return whether one workflow input declaration is activation-required."""
+
+    if not isinstance(declaration, dict):
+        return True
+    required = declaration.get("required")
+    if isinstance(required, bool):
+        return required
+    return not workflow_input_has_default(declaration)
+
 GATE_REGISTER_SPLIT_RECOMMENDATION = (
     "Split this into a standalone gate checkpoint step followed by a separate step that declares 'register'."
 )

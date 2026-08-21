@@ -12,7 +12,7 @@ import yaml
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
-from ordo.model.workflow import Step, StepBlock, Workflow
+from ordo.model.workflow import Step, StepBlock, Workflow, workflow_input_required
 from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_payload, load_yaml_document, validate_workflow_document, validate_workflow_semantics
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
@@ -82,7 +82,10 @@ class ActivationInputAnalysis:
     supplied_profile_inputs: tuple[str, ...]
     consumed_profile_inputs: tuple[str, ...]
     surplus_profile_inputs: tuple[str, ...]
+    required_declared_inputs: tuple[str, ...]
+    optional_declared_inputs: tuple[str, ...]
     caller_required_inputs: tuple[str, ...]
+    caller_optional_inputs: tuple[str, ...]
     explicit_user_inputs: tuple[str, ...]
     explicit_user_unknown_inputs: tuple[str, ...]
 
@@ -109,6 +112,7 @@ class PlaybookWorkflowCatalogEntry:
     working_directory: str | None = None
     with_: dict[str, object] = field(default_factory=dict)
     caller_inputs: tuple[str, ...] = ()
+    optional_caller_inputs: tuple[str, ...] = ()
     inputs: tuple[WorkflowCatalogInput, ...] = ()
 
 
@@ -168,7 +172,7 @@ def list_playbook_workflows(*, playbook_path: str | Path | None = None, cwd: str
         workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
         workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
         workflow_with = _optional_mapping(workflow_entry, "with", playbook_path=path, path=("workflows", workflow_name, "with"))
-        bound_inputs, caller_inputs = _split_workflow_entry_inputs(workflow_with)
+        bound_inputs, caller_inputs, optional_caller_inputs = _split_workflow_entry_inputs(workflow_with)
         entries.append(
             PlaybookWorkflowCatalogEntry(
                 playbook_path=path,
@@ -180,6 +184,7 @@ def list_playbook_workflows(*, playbook_path: str | Path | None = None, cwd: str
                 working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
                 with_=bound_inputs,
                 caller_inputs=caller_inputs,
+                optional_caller_inputs=optional_caller_inputs,
             )
         )
     return tuple(entries)
@@ -228,7 +233,7 @@ def inspect_playbook_workflow(
     if not semantic_report.ok:
         raise PlaybookError(semantic_report.diagnostics)
     workflow_with = _optional_mapping(workflow_entry, "with", playbook_path=path, path=("workflows", workflow_name, "with"))
-    bound_inputs, caller_inputs = _split_workflow_entry_inputs(workflow_with)
+    bound_inputs, caller_inputs, optional_caller_inputs = _split_workflow_entry_inputs(workflow_with)
     return PlaybookWorkflowCatalogEntry(
         playbook_path=path,
         workflow_name=workflow_name,
@@ -239,6 +244,7 @@ def inspect_playbook_workflow(
         working_directory=_optional_non_empty_string(workflow_entry, "working_directory"),
         with_=bound_inputs,
         caller_inputs=caller_inputs,
+        optional_caller_inputs=optional_caller_inputs,
         inputs=tuple(_catalog_input_from_declared_input(name, schema) for name, schema in workflow.declared_inputs.items() if isinstance(name, str)),
     )
 
@@ -329,12 +335,13 @@ def activate_playbook(
     workflow = _with_workflow_connector_contexts(workflow, profile.connectors if profile is not None else playbook_connector_contexts)
 
     workflow_entry_with = _optional_mapping(workflow_entry, "with", playbook_path=path, path=("workflows", workflow_name, "with"))
-    bound_workflow_inputs, caller_workflow_inputs = _split_workflow_entry_inputs(workflow_entry_with)
+    bound_workflow_inputs, caller_workflow_inputs, caller_optional_inputs = _split_workflow_entry_inputs(workflow_entry_with)
     workflow, profile = _apply_input_overrides(
         workflow,
         profile,
         playbook_owned_inputs=bound_workflow_inputs,
         caller_required_inputs=caller_workflow_inputs,
+        caller_optional_inputs=caller_optional_inputs,
         input_overrides=input_overrides,
     )
     workflow = _prepend_pre_run_workflows(
@@ -392,6 +399,7 @@ def activate_playbook(
         profile=profile,
         playbook_owned_inputs=bound_workflow_inputs,
         caller_required_inputs=caller_workflow_inputs,
+        caller_optional_inputs=caller_optional_inputs,
         input_overrides=None,
     )
     activation_diagnostics = _activation_diagnostics(
@@ -427,6 +435,7 @@ def _apply_input_overrides(
     *,
     playbook_owned_inputs: dict[str, object] | None = None,
     caller_required_inputs: tuple[str, ...] = (),
+    caller_optional_inputs: tuple[str, ...] = (),
     input_overrides: dict[str, object] | None,
 ) -> tuple[Workflow, Profile | None]:
     input_analysis = _analyze_activation_inputs(
@@ -434,6 +443,7 @@ def _apply_input_overrides(
         profile=profile,
         playbook_owned_inputs=playbook_owned_inputs,
         caller_required_inputs=caller_required_inputs,
+        caller_optional_inputs=caller_optional_inputs,
         input_overrides=input_overrides,
     )
 
@@ -498,20 +508,41 @@ def _validate_activation_inputs(
     input_analysis: ActivationInputAnalysis | None = None,
 ) -> None:
     declared_keys = set(workflow.declared_inputs)
+    explicit_user_inputs = set(input_analysis.explicit_user_inputs if input_analysis is not None else ())
     caller_required_inputs = set() if input_analysis is None else set(input_analysis.caller_required_inputs)
-    missing = sorted(
-        key
-        for key in declared_keys
-        if key not in inputs or (key in caller_required_inputs and key not in set(input_analysis.explicit_user_inputs if input_analysis is not None else ()))
-    )
+    required_declared_inputs = set(workflow.declared_inputs) if input_analysis is None else set(input_analysis.required_declared_inputs)
+    caller_missing = sorted(key for key in caller_required_inputs if key not in explicit_user_inputs)
+    workflow_missing = sorted(key for key in required_declared_inputs if key not in inputs)
     surplus_profile_inputs = set() if input_analysis is None else set(input_analysis.surplus_profile_inputs)
     unknown = sorted(key for key in inputs if key not in declared_keys and key not in surplus_profile_inputs)
     diagnostics: list[Diagnostic] = []
     declared_inputs = () if input_analysis is None else tuple(input_analysis.declared_inputs)
     relevant_inputs = declared_inputs if input_analysis is None else tuple(input_analysis.relevant_inputs)
-    example_parts = [f"--input {key}=<value>" for key in missing]
+    combined_missing = sorted(dict.fromkeys([*caller_missing, *workflow_missing]))
+    example_parts = [f"--input {key}=<value>" for key in combined_missing]
     example = None if not example_parts else f"ordo-playbook {' '.join(example_parts)} run {workflow.workflow}"
-    for key in missing:
+    for key in caller_missing:
+        diagnostics.append(
+            Diagnostic(
+                code="playbook.workflow.input_missing",
+                level="error",
+                message=f"Workflow input '{key}' must be supplied by the caller for this playbook entry",
+                path=("inputs", key),
+                details={
+                    "workflow": workflow.workflow,
+                    "input": key,
+                    "missing_kind": "caller_required_slot",
+                    "missing_inputs": combined_missing,
+                    "declared_inputs": declared_inputs,
+                    "relevant_inputs": relevant_inputs,
+                    "caller_required_inputs": tuple(sorted(caller_required_inputs)),
+                    "input_transport": "--input NAME=VALUE",
+                    "input_file_transport": "--input-file NAME=PATH",
+                    "example": example,
+                },
+            )
+        )
+    for key in workflow_missing:
         diagnostics.append(
             Diagnostic(
                 code="playbook.workflow.input_missing",
@@ -521,7 +552,8 @@ def _validate_activation_inputs(
                 details={
                     "workflow": workflow.workflow,
                     "input": key,
-                    "missing_inputs": missing,
+                    "missing_kind": "workflow_required_input",
+                    "missing_inputs": combined_missing,
                     "declared_inputs": declared_inputs,
                     "relevant_inputs": relevant_inputs,
                     "input_transport": "--input NAME=VALUE",
@@ -1067,9 +1099,12 @@ def _analyze_activation_inputs(
     profile: Profile | None,
     playbook_owned_inputs: dict[str, object] | None = None,
     caller_required_inputs: tuple[str, ...] = (),
+    caller_optional_inputs: tuple[str, ...] = (),
     input_overrides: dict[str, object] | None,
 ) -> ActivationInputAnalysis:
     declared_inputs = tuple(key for key in workflow.declared_inputs if isinstance(key, str))
+    required_declared_inputs = tuple(sorted(key for key, schema in workflow.declared_inputs.items() if isinstance(key, str) and workflow_input_required(schema)))
+    optional_declared_inputs = tuple(sorted(key for key in declared_inputs if key not in required_declared_inputs))
     consumed_inputs = tuple(sorted(_workflow_consumed_inputs(workflow)))
     relevant_inputs = tuple(sorted(set(declared_inputs) | set(consumed_inputs)))
     supplied_profile_inputs = tuple(sorted(profile.inputs)) if profile is not None else ()
@@ -1084,25 +1119,35 @@ def _analyze_activation_inputs(
         supplied_profile_inputs=supplied_profile_inputs,
         consumed_profile_inputs=consumed_profile_inputs,
         surplus_profile_inputs=surplus_profile_inputs,
+        required_declared_inputs=required_declared_inputs,
+        optional_declared_inputs=optional_declared_inputs,
         caller_required_inputs=tuple(sorted(caller_required_inputs)),
+        caller_optional_inputs=tuple(sorted(caller_optional_inputs)),
         explicit_user_inputs=explicit_user_inputs,
         explicit_user_unknown_inputs=explicit_user_unknown_inputs,
     )
 
 
-def _split_workflow_entry_inputs(values: dict[str, object] | None) -> tuple[dict[str, object], tuple[str, ...]]:
+def _split_workflow_entry_inputs(values: dict[str, object] | None) -> tuple[dict[str, object], tuple[str, ...], tuple[str, ...]]:
     if not values:
-        return {}, ()
+        return {}, (), ()
     bound_inputs: dict[str, object] = {}
     caller_inputs: list[str] = []
+    optional_caller_inputs: list[str] = []
     for key, value in values.items():
         if not isinstance(key, str):
             continue
-        if value is None:
-            caller_inputs.append(key)
+        normalized_key = key[:-1] if key.endswith("?") else key
+        if not normalized_key:
             continue
-        bound_inputs[key] = value
-    return bound_inputs, tuple(sorted(caller_inputs))
+        if value is None:
+            if key.endswith("?"):
+                optional_caller_inputs.append(normalized_key)
+                continue
+            caller_inputs.append(normalized_key)
+            continue
+        bound_inputs[normalized_key] = value
+    return bound_inputs, tuple(sorted(caller_inputs)), tuple(sorted(optional_caller_inputs))
 
 
 def _workflow_consumed_inputs(workflow: Workflow) -> set[str]:
