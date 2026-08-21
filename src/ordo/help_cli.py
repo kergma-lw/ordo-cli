@@ -1382,7 +1382,7 @@ def build_command_line_response() -> JSONObject:
                 },
                 "flags": playbook_flags,
                 "input_override_precedence": [
-                    f"workflow.inputs declares the allowed activation keys; declared keys are required at activation={str(input_contract['declared_keys_required_at_activation']).lower()}",
+                    "workflow.inputs declares the allowed activation keys; each declared key may be required, optional, or defaulted by its own declaration",
                     "profile.inputs may supply values for declared workflow inputs",
                     "playbook workflow-entry with supplies static invocation inputs before one run",
                     "playbook pre_run with supplies static invocation inputs to that pre_run workflow only",
@@ -3596,7 +3596,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["routine_contract.routines", "routine_contract.entry.summary", "workflow-rules.routine.*"],
         },
         "workflow.inputs": {
-            "definition": "Top-level workflow field for declaring the named activation inputs that the caller must provide before the workflow may run.",
+            "definition": "Top-level workflow field for declaring the named activation inputs that the workflow may require, treat as optional, or prefill with defaults before the workflow may run.",
             "use_when": [
                 "The workflow needs a declared external request shape instead of reading undeclared caller values implicitly.",
                 "Guards, steps, or result logic should be able to reference activation inputs through one explicit contract surface.",
@@ -3615,7 +3615,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         "workflow.inputs_contract": {
             "definition": "Workflow activation-input contract for how inputs are declared, accessed, validated, and rejected at runtime.",
             "use_when": [
-                "You need to understand what declaring workflow inputs means at activation time, including required-key and unknown-input rules.",
+                "You need to understand what declaring workflow inputs means at activation time, including per-input required/default rules and unknown-input rejection.",
             ],
             "do_not_use_for": [
                 "Assuming undeclared caller keys are tolerated; unknown activation inputs are rejected by contract.",
@@ -3937,9 +3937,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["playbook.workflows.with", "playbook.pre_run.file", "playbook.profiles.file"],
         },
         "playbook.workflows.with": {
-            "definition": "Workflow-entry field for playbook-owned launch inputs that feed one published workflow entry before any one-run caller overrides are applied.",
+            "definition": "Workflow-entry field for playbook-owned launch inputs that feed one published workflow entry before any one-run caller overrides are applied, including required and optional caller-slot placeholders.",
             "use_when": [
-                "One published workflow should always receive fixed entry-owned input values, or should explicitly mark some keys as caller-required through null placeholders.",
+                "One published workflow should always receive fixed entry-owned input values, should require some caller-provided keys through `key:`, or should allow optional caller-provided keys through `key?:`.",
                 "The values belong to the launch catalog entry rather than to the reusable workflow contract or to one operator invocation only.",
             ],
             "do_not_use_for": [
@@ -3952,7 +3952,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "command-line.ordo-playbook.flag.input", "summary": "One-run caller override that can replace entry-owned input values"},
             ],
             "related_examples": [
-                {"reference": "playbook.workflows.with", "inputs": {"active_profile_key": "active_profile", "repo_dir": "."}},
+                {"reference": "playbook.workflows.with", "inputs": {"active_profile_key": "active_profile", "repo_dir": ".", "issue_number": "caller_required", "close_comment": "caller_optional"}},
             ],
             "inspect_next": ["workflow.inputs", "playbook.pre_run.with", "command-line.ordo-playbook.flag.input"],
         },

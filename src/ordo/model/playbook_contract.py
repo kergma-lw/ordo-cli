@@ -25,9 +25,12 @@ PLAYBOOK_CONTRACT: JSONObject = {
             "name": "with",
             "required": False,
             "type": "object",
-            "runtime_effect": "supplies_playbook_owned_workflow_entry_inputs_or_declares_caller_required_inputs",
-            "value_surface": "static_yaml_values_or_null_caller_placeholders",
-            "null_value_semantics": "caller_must_supply_input_via_cli_or_activation_override",
+            "runtime_effect": "supplies_playbook_owned_workflow_entry_inputs_or_declares_required_or_optional_caller_slots",
+            "value_surface": "static_yaml_values_or_blank_required_slots_or_blank_optional_question_suffix_slots",
+            "caller_slot_forms": [
+                {"shape": "key:", "meaning": "caller_must_supply_input_via_cli_or_activation_override"},
+                {"shape": "key?:", "meaning": "caller_may_supply_input_via_cli_or_activation_override"},
+            ],
         },
         {
             "name": "description",
