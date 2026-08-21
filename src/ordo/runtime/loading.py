@@ -13,7 +13,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import AuthoredString, JSONArray, JSONObject, JSONScalar, JSONValue, authored_string_style
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Override, Profile
-from ordo.model.workflow import GATE_REGISTER_CONFLICT_MESSAGE, GATE_REGISTER_SPLIT_RECOMMENDATION, Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock
+from ordo.model.workflow import GATE_REGISTER_CONFLICT_MESSAGE, GATE_REGISTER_SPLIT_RECOMMENDATION, Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow, WorkflowBlock, normalize_workflow_input_declaration
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, parse_embedded_local_expression, parse_value_local_expression
 from ordo.runtime.local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, FilterApplicationNode, ListNode, LocalExpressionNode, ParsedLocalExpressionTree, PipelineNode, ReferenceNode, StateReferenceNode, StepReferenceNode, UnaryNode, parse_local_expression_tree
@@ -1202,11 +1202,10 @@ def _load_workflow_inputs(payload: JSONObject, *, source: str) -> tuple[JSONObje
     runtime_inputs: JSONObject = {}
     normalized_declarations: JSONObject = {}
     for key, value in declared_inputs.items():
-        if isinstance(value, dict):
-            normalized_declarations[key] = dict(value)
-            continue
-        normalized_declarations[key] = {}
-        runtime_inputs[key] = str(value) if authored_string_style(value) is not None else value
+        normalized, has_default, default_value = normalize_workflow_input_declaration(key, value)
+        normalized_declarations[key] = normalized
+        if has_default:
+            runtime_inputs[key] = str(default_value) if authored_string_style(default_value) is not None else default_value
     return runtime_inputs, normalized_declarations
 
 

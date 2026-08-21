@@ -6,6 +6,39 @@ from dataclasses import dataclass, field
 
 from .json import JSONObject, JSONValue
 
+
+def normalize_workflow_input_declaration(name: str, declaration: JSONValue) -> tuple[JSONObject, bool, JSONValue | None]:
+    """Normalize one authored workflow input declaration.
+
+    Returns the normalized declaration metadata, whether a default exists, and the
+    default value when present.
+    """
+
+    normalized: JSONObject = {}
+
+    if isinstance(declaration, dict):
+        description = declaration.get("description")
+        if isinstance(description, str):
+            normalized["description"] = description
+        hint = declaration.get("hint")
+        if isinstance(hint, str):
+            normalized["hint"] = hint
+
+        has_default = "default" in declaration
+        if has_default:
+            normalized["default"] = declaration.get("default")
+
+        required_raw = declaration.get("required")
+        required = False if has_default else True
+        if isinstance(required_raw, bool):
+            required = required_raw
+        normalized["required"] = required
+        return normalized, has_default, declaration.get("default")
+
+    normalized["required"] = False
+    normalized["default"] = declaration
+    return normalized, True, declaration
+
 GATE_REGISTER_SPLIT_RECOMMENDATION = (
     "Split this into a standalone gate checkpoint step followed by a separate step that declares 'register'."
 )
@@ -257,7 +290,15 @@ class Workflow:
         object.__setattr__(self, "workflow", workflow)
         object.__setattr__(self, "profile", profile)
         runtime_inputs = {} if inputs is None else dict(inputs)
-        declared = {key: {} for key in runtime_inputs} if declared_inputs is None else dict(declared_inputs)
+        if declared_inputs is None:
+            declared = {}
+            for key, value in runtime_inputs.items():
+                if not isinstance(key, str):
+                    continue
+                normalized, _, _ = normalize_workflow_input_declaration(key, value)
+                declared[key] = normalized
+        else:
+            declared = dict(declared_inputs)
         object.__setattr__(self, "inputs", runtime_inputs)
         object.__setattr__(self, "declared_inputs", declared)
         object.__setattr__(self, "explicit_input_keys", tuple(explicit_input_keys))

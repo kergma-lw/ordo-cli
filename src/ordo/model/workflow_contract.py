@@ -30,7 +30,7 @@ WORKFLOW_CONTRACT: JSONObject = {
             "required": False,
             "type": "object",
             "authoring_role": "declares_global_activation_inputs",
-            "activation_requirement": "all_declared_keys_required",
+            "activation_requirement": "per_input_required_or_default_semantics",
             "unknown_input_policy": "reject_unknown_inputs",
         },
         {
@@ -47,10 +47,18 @@ WORKFLOW_CONTRACT: JSONObject = {
         "access_surface": "inputs.name",
         "declaration_shape": "mapping",
         "declaration_fields": [
+            {"name": "required", "required": False, "type": "boolean", "authoring_role": "input_requiredness", "default_when_omitted": True},
+            {"name": "default", "required": False, "type": "json", "authoring_role": "input_default_value", "runtime_effect": "applies_when_input_is_missing"},
             {"name": "description", "required": False, "type": "string", "authoring_role": "input_meaning"},
             {"name": "hint", "required": False, "type": "string", "authoring_role": "input_guidance", "validation_effect": "none"},
         ],
-        "declared_keys_required_at_activation": True,
+        "declared_keys_required_at_activation": False,
+        "requiredness_surface": "per_input_required_field",
+        "default_semantics": {
+            "default_makes_input_optional": True,
+            "legacy_scalar_shorthand_supported": True,
+            "legacy_empty_object_shorthand_required": True,
+        },
         "rejects_unknown_activation_inputs": True,
         "empty_string_is_distinct_value": True,
         "null_is_distinct_from_missing": True,

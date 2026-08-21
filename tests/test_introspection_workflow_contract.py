@@ -35,8 +35,10 @@ class IntrospectionWorkflowContractTest(unittest.TestCase):
         self.assertEqual(guard_surface["representation_adapter_policy"]["forbidden_write_surface"], "->...")
         self.assertEqual(guard_surface["result_contract"]["required_output_type"], "boolean")
         self.assertEqual(guard_surface["result_contract"]["non_boolean_result"], "error")
-        self.assertTrue(payload["inputs_contract"]["declared_keys_required_at_activation"])
+        self.assertFalse(payload["inputs_contract"]["declared_keys_required_at_activation"])
         input_fields = {item["name"]: item for item in payload["inputs_contract"]["declaration_fields"]}
+        self.assertEqual(input_fields["required"]["default_when_omitted"], True)
+        self.assertEqual(input_fields["default"]["runtime_effect"], "applies_when_input_is_missing")
         self.assertEqual(input_fields["hint"]["validation_effect"], "none")
         self.assertEqual(payload["include_contract"]["search_order"][0], "including_file_dir")
         self.assertEqual(payload["include_contract"]["fragment_argument_declaration_forms"][0]["name"], "required_short_form")

@@ -343,8 +343,61 @@ class LoadingTest(unittest.TestCase):
         )
 
         self.assertEqual(workflow.inputs, {})
-        self.assertEqual(workflow.declared_inputs["repository"], {"description": "GitHub repository"})
-        self.assertEqual(workflow.to_contract()["inputs"]["issue_number"], {"description": "Numeric issue id"})
+        self.assertEqual(workflow.declared_inputs["repository"], {"description": "GitHub repository", "required": True})
+        self.assertEqual(workflow.to_contract()["inputs"]["issue_number"], {"description": "Numeric issue id", "required": True})
+
+    def test_loads_explicit_optional_workflow_input_declarations_into_normalized_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  repository:
+                    required: true
+                    description: GitHub repository
+                  close_comment:
+                    required: false
+                  ship:
+                    required: false
+                    default: false
+                    hint: Enable shipping path
+                blocks:
+                  - guards: []
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(workflow.inputs, {"ship": False})
+        self.assertEqual(
+            workflow.declared_inputs,
+            {
+                "repository": {"description": "GitHub repository", "required": True},
+                "close_comment": {"required": False},
+                "ship": {"hint": "Enable shipping path", "default": False, "required": False},
+            },
+        )
+
+    def test_loads_legacy_workflow_input_shorthand_into_normalized_model(self) -> None:
+        workflow = load_workflow_text(
+            textwrap.dedent(
+                """
+                version: 0
+                workflow: open-task
+                inputs:
+                  repository: {}
+                  close_comment: ""
+                blocks:
+                  - guards: []
+                  - steps: []
+                """
+            )
+        )
+
+        self.assertEqual(workflow.inputs, {"close_comment": ""})
+        self.assertEqual(workflow.declared_inputs["repository"], {"required": True})
+        self.assertEqual(workflow.declared_inputs["close_comment"], {"required": False, "default": ""})
 
     def test_loads_top_level_let_bindings_into_typed_model(self) -> None:
         workflow = load_workflow_text(
