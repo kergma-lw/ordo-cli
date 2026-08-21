@@ -857,6 +857,8 @@ def _find_missing_input_validation(
         input_name = usage.get("input")
         if not isinstance(input_name, str):
             continue
+        is_required = bool(usage.get("required"))
+        has_default = bool(usage.get("has_default"))
         classification = _review_input_classification(usage, workflow=workflow, profile=profile)
         if classification in {"ambient_profile_context", "trusted_profile_input"}:
             continue
@@ -864,6 +866,29 @@ def _find_missing_input_validation(
             continue
         needle = f"inputs.{input_name}"
         if any(needle in expression for expression in early_guard_expressions):
+            continue
+        if not is_required:
+            if has_default:
+                continue
+            findings.append(
+                {
+                    "code": "review.workflow.optional_input_presence_guard_missing",
+                    "level": "warning",
+                    "category": "input_validation",
+                    "message": f"Optional input '{input_name}' is consumed without an early presence guard or default",
+                    "path": ["inputs", input_name],
+                    "evidence": {
+                        "input": input_name,
+                        "classification": classification,
+                        "required": is_required,
+                        "has_default": has_default,
+                        "usage_sites": [dict(site) for site in usage.get("evidence", []) if isinstance(site, dict)],
+                        "suggested_fix": "add_optional_input_presence_guard",
+                        "suggested_rewrite": {"guards": [f"is_present(inputs.{input_name})"]},
+                        "reason": "optional inputs without defaults should usually be guarded for presence before effect or contract usage",
+                    },
+                }
+            )
             continue
         findings.append(
             {
@@ -875,6 +900,8 @@ def _find_missing_input_validation(
                 "evidence": {
                     "input": input_name,
                     "classification": classification,
+                    "required": is_required,
+                    "has_default": has_default,
                     "usage_sites": [dict(site) for site in usage.get("evidence", []) if isinstance(site, dict)],
                     "suggested_fix": "add_early_guard_validation",
                     "suggested_rewrite": {"guards": [f"inputs.{input_name}"]},
@@ -925,6 +952,8 @@ def _find_unused_declared_inputs(workflow: Workflow, check_result: RuntimeResult
                 "evidence": {
                     "input": input_name,
                     "classification": classification,
+                    "required": bool(usage.get("required")),
+                    "has_default": bool(usage.get("has_default")),
                     "usage_sites": [dict(site) for site in usage.get("evidence", []) if isinstance(site, dict)],
                     "reason": "no control, effect-target, or contract-shaping usage was found in the analyzed workflow",
                 },

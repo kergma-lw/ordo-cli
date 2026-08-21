@@ -13,7 +13,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBlockNode, PreflightDecisionModel, PreflightGuardNode, RuntimeResult, RuntimeStatus
-from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
+from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow, workflow_input_has_default, workflow_input_required
 
 from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
@@ -879,6 +879,8 @@ def _classify_declared_input_usage(
             "input": input_name,
             "classification": classification_by_input[input_name],
             "evidence": evidence_by_input[input_name],
+            "required": workflow_input_required(workflow.declared_inputs.get(input_name)),
+            "has_default": workflow_input_has_default(workflow.declared_inputs.get(input_name)),
         }
         for input_name in declared_inputs
     )
