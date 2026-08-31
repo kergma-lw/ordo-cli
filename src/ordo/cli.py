@@ -1269,7 +1269,7 @@ def _next_candidate_reason_stub(candidate: dict[str, object]) -> str | None:
 
     if candidate_class == "inspection_only":
         tags.append("inspect-only")
-    elif missing_input_kind == "execution_only":
+    elif missing_input_kind == "execution_only" or candidate_class == "ready_with_execution_input":
         tags.append("input-only")
     elif isinstance(world_blocker_count, int) and world_blocker_count > 0:
         tags.append("world-blocked")

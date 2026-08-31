@@ -931,6 +931,7 @@ def _candidate_from_runtime_result(
     missing_inputs = _missing_inputs_from_diagnostics(result.diagnostics)
     missing_input_kind = _classify_missing_input_kind(missing_inputs, topology=topology)
     input_blocker_count, world_blocker_count = _split_blockers(blockers, missing_inputs=missing_inputs)
+    input_blocker_kind = _classify_input_blocker_kind(blockers, topology=topology)
     analysis_complete = bool(result.outputs.get("analysis_complete", True))
     full_evaluability = analysis_complete and evaluated_guard_count >= relevant_guard_count and not missing_inputs
     effectful_step_count = _static_effectful_step_count(
@@ -945,6 +946,9 @@ def _candidate_from_runtime_result(
         matched_guard_count=matched_guard_count,
         relevant_guard_count=relevant_guard_count,
         missing_inputs=missing_inputs,
+        input_blocker_count=input_blocker_count,
+        world_blocker_count=world_blocker_count,
+        input_blocker_kind=input_blocker_kind,
     )
     score, ranking_factors = _score_candidate(
         candidate_class=candidate_class,
@@ -956,6 +960,7 @@ def _candidate_from_runtime_result(
         missing_input_kind=missing_input_kind,
         input_blocker_count=input_blocker_count,
         world_blocker_count=world_blocker_count,
+        input_blocker_kind=input_blocker_kind,
         reason_category=reason_category,
     )
     return NextCandidate(
@@ -1020,6 +1025,7 @@ def _candidate_from_diagnostics(
         missing_input_kind=missing_input_kind,
         input_blocker_count=input_blocker_count,
         world_blocker_count=world_blocker_count,
+        input_blocker_kind=None,
         reason_category=reason_category,
     )
     return NextCandidate(
@@ -1093,6 +1099,27 @@ def _classify_missing_input_kind(missing_inputs: tuple[str, ...], *, topology: W
     return "unknown"
 
 
+def _classify_input_blocker_kind(blockers: tuple[str, ...], *, topology: WorkflowTopology | None) -> str | None:
+    if not blockers:
+        return None
+    input_names: set[str] = set()
+    for blocker in blockers:
+        if not isinstance(blocker, str) or "inputs." not in blocker:
+            continue
+        for part in blocker.split("inputs.")[1:]:
+            name = []
+            for char in part:
+                if char.isalnum() or char == "_":
+                    name.append(char)
+                else:
+                    break
+            if name:
+                input_names.add("".join(name))
+    if not input_names:
+        return None
+    return _classify_missing_input_kind(tuple(sorted(input_names)), topology=topology)
+
+
 def _split_blockers(blockers: tuple[str, ...], *, missing_inputs: tuple[str, ...]) -> tuple[int, int]:
     if not blockers:
         return 0, 0
@@ -1123,9 +1150,14 @@ def _classify_runtime_candidate(
     matched_guard_count: int,
     relevant_guard_count: int,
     missing_inputs: tuple[str, ...],
+    input_blocker_count: int,
+    world_blocker_count: int,
+    input_blocker_kind: str | None,
 ) -> str:
     if missing_inputs:
         return "awaiting_input"
+    if input_blocker_count > 0 and world_blocker_count == 0 and input_blocker_kind == "execution_only":
+        return "ready_with_execution_input"
     if allowed and result.status is RuntimeStatus.OK:
         return "ready_now"
     if result.status in {RuntimeStatus.VALIDATION_ERROR, RuntimeStatus.RESOLUTION_ERROR}:
@@ -1151,6 +1183,7 @@ def _score_candidate(
     missing_input_kind: str | None,
     input_blocker_count: int,
     world_blocker_count: int,
+    input_blocker_kind: str | None,
     reason_category: str | None,
 ) -> tuple[int, list[dict[str, object]]]:
     base_scores = {
@@ -1217,7 +1250,8 @@ def _score_candidate(
             }
         )
     if blockers:
-        input_penalty_per = 10 if missing_input_kind == "execution_only" else 25
+        blocker_input_kind = missing_input_kind if missing_input_kind is not None else input_blocker_kind
+        input_penalty_per = 10 if blocker_input_kind == "execution_only" else 25
         input_penalty = input_blocker_count * input_penalty_per
         world_penalty = world_blocker_count * 90
         if input_penalty:
