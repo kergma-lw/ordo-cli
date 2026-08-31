@@ -39,7 +39,7 @@ def info():
         examples=(
             {
                 "reference": "gh.pr",
-                "inputs": {"repository": "owner/repo", "pull_number": 42},
+                "inputs": {"pull_number": 42},
             },
         ),
     )

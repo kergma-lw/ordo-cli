@@ -121,6 +121,12 @@ class OperationTest(unittest.TestCase):
         self.assertIsNotNone(connector)
         self.assertEqual(connector.bootstrap.context_fields, ("repository_root",))
 
+    def test_gh_bootstrap_contract_exposes_repository_context(self) -> None:
+        connector = get_public_connector_registry().get_connector("gh")
+
+        self.assertIsNotNone(connector)
+        self.assertEqual(connector.bootstrap.context_fields, ("host", "viewer", "scopes", "repository"))
+
     def test_git_bootstrap_uses_connector_directory_context_for_commands(self) -> None:
         import tempfile
         from pathlib import Path
@@ -155,6 +161,18 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "unknown_context_field")
         self.assertEqual(result.diagnostics[0].code, "bootstrap.git_unknown_context_field")
         self.assertEqual(result.raw["unknown_fields"], ["banana"])
+        run.assert_not_called()
+
+    def test_gh_bootstrap_rejects_unknown_connector_context_fields(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", connector_contexts={"gh": {"banana": 123}})
+        operation = get_public_connector_registry().get_operation("gh.repo")
+        resolved = ResolvedOperation("gh.repo", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "unknown_context_field")
+        self.assertEqual(result.diagnostics[0].code, "bootstrap.gh_unknown_context_field")
         run.assert_not_called()
 
     def test_git_operation_contracts_no_longer_primary_own_shared_bootstrap_failures(self) -> None:
@@ -266,6 +284,10 @@ class OperationTest(unittest.TestCase):
         gh_pr_reviews = registry.get_operation("gh.pr.reviews")
         gh_pr_review_comments = registry.get_operation("gh.pr.review_comments")
         gh_pr_timeline = registry.get_operation("gh.pr.timeline")
+        gh_repo = registry.get_operation("gh.repo")
+        gh_repo_sync = registry.get_operation("gh.repo.sync")
+        gh_repo_actions_permissions = registry.get_operation("gh.repo.actions.permissions")
+        gh_repo_actions_permissions_set = registry.get_operation("gh.repo.actions.permissions.set")
         gh_project_items = registry.get_operation("gh.project.items")
         gh_close = registry.get_operation("gh.issue.close")
         shell_command = registry.get_operation("shell.command")
@@ -279,12 +301,106 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(gh_pr_reviews.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_review_comments.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
         self.assertEqual(gh_pr_timeline.failure_modes, ("pull_not_found", "limit_invalid", "probe_failed"))
+        self.assertEqual(gh_repo.failure_modes, ("repository_not_found", "probe_failed"))
+        self.assertEqual(
+            gh_repo_sync.failure_modes,
+            ("repository_not_found", "not_a_fork", "archived_repository", "default_branch_unavailable", "sync_blocked"),
+        )
+        self.assertEqual(gh_repo_actions_permissions.failure_modes, ("repository_not_found", "probe_failed"))
+        self.assertEqual(gh_repo_actions_permissions_set.failure_modes, ("repository_not_found", "set_blocked"))
         self.assertEqual(
             gh_project_items.failure_modes,
             ("project_not_found", "unknown_field", "ambiguous_field", "unsupported_field_type", "invalid_filter_value", "invalid_content_ref", "probe_failed"),
         )
         self.assertEqual(gh_close.failure_modes, ("issue_not_found", "close_blocked"))
         self.assertEqual(shell_command.failure_modes, ("command_failed", "action_failed"))
+
+    def test_gh_repo_probe_contract_publishes_repository_shape(self) -> None:
+        registry = get_public_connector_registry()
+
+        operation = registry.get_operation("gh.repo")
+
+        self.assertIsNotNone(operation)
+        self.assertEqual(operation.kind, "probe")
+        self.assertEqual(operation.inputs["repository"], "string")
+        self.assertEqual(operation.outputs["default_branch"], "string | null")
+        self.assertEqual(operation.outputs["parent_repository"], "string | null")
+
+    def test_gh_repo_probe_returns_normalized_repository_facts(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", connector_contexts={"gh": {"repository": "owner/repo"}}, guards=(Guard(OperationRef("gh.repo")),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.repo")
+        resolved = ResolvedOperation("gh.repo", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo","isFork":true,"isArchived":false,"defaultBranchRef":{"name":"main"},"parent":{"nameWithOwner":"upstream/repo"}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["id"], "R_1")
+        self.assertEqual(result.outputs["repository"], "owner/repo")
+        self.assertEqual(result.outputs["default_branch"], "main")
+        self.assertTrue(result.outputs["is_fork"])
+        self.assertEqual(result.outputs["parent_repository"], "upstream/repo")
+        self.assertFalse(result.outputs["archived"])
+
+    def test_gh_repo_probe_reports_repository_not_found(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", connector_contexts={"gh": {"repository": "owner/missing"}}, guards=(Guard(OperationRef("gh.repo")),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.repo")
+        resolved = ResolvedOperation("gh.repo", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="repository not found"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "repository_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_repo.repository_not_found")
+
+    def test_gh_repo_actions_permissions_probe_returns_enabled_state(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", connector_contexts={"gh": {"repository": "owner/repo"}}, guards=(Guard(OperationRef("gh.repo.actions.permissions")),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.repo.actions.permissions")
+        resolved = ResolvedOperation("gh.repo.actions.permissions", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"enabled":true,"allowed_actions":"all","sha_pinning_required":false}', stderr=""),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["repository"], "owner/repo")
+        self.assertTrue(result.outputs["enabled"])
+        self.assertEqual(result.outputs["allowed_actions"], "all")
+        self.assertFalse(result.outputs["sha_pinning_required"])
+
+    def test_gh_repo_actions_permissions_probe_reports_repository_not_found(self) -> None:
+        workflow = Workflow(version=0, workflow="demo", connector_contexts={"gh": {"repository": "owner/missing"}}, guards=(Guard(OperationRef("gh.repo.actions.permissions")),), steps=())
+        operation = get_public_connector_registry().get_operation("gh.repo.actions.permissions")
+        resolved = ResolvedOperation("gh.repo.actions.permissions", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=1, stdout="", stderr="repository not found"),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "repository_not_found")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_repo_actions_permissions.repository_not_found")
 
     def test_gh_pr_probe_contract_publishes_metadata_shape(self) -> None:
         registry = get_public_connector_registry()
@@ -3263,6 +3379,30 @@ class OperationTest(unittest.TestCase):
         self.assertTrue(result.outputs["closed"])
         self.assertEqual(run.call_count, 3)
 
+    def test_gh_issue_close_allows_explicit_repository_override_over_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "fork/repo"}},
+            guards=(),
+            steps=(Step(name="close", operation=OperationRef("gh.issue.close", with_={"repository": "owner/repo", "issue_number": 7})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue.close")
+        resolved = ResolvedOperation("gh.issue.close", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"state":"OPEN","url":"https://github.com/owner/repo/issues/7"}', stderr=""),
+                self._completed(returncode=0, stdout="✓ Closed issue owner/repo#7\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["issue_ref"], "owner/repo#7")
+        self.assertFalse(any(diagnostic.code.endswith("repository_conflict") for diagnostic in result.diagnostics))
+
     def test_gh_issue_close_accepts_repository_and_issue_number_inputs(self) -> None:
         workflow = Workflow(
             version=0,
@@ -3468,6 +3608,160 @@ class OperationTest(unittest.TestCase):
 
         self.assertEqual(result.status, "create_blocked")
         self.assertEqual(result.diagnostics[0].code, "action.gh_issue_create.missing_fields")
+
+    def test_gh_repo_sync_syncs_default_branch(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "owner/repo"}},
+            guards=(),
+            steps=(Step(name="sync", operation=OperationRef("gh.repo.sync")),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.repo.sync")
+        resolved = ResolvedOperation("gh.repo.sync", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo","isFork":true,"isArchived":false,"defaultBranchRef":{"name":"main"},"parent":{"nameWithOwner":"upstream/repo"}}}}',
+                    stderr="",
+                ),
+                self._completed(returncode=0, stdout="synced\n", stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["repository"], "owner/repo")
+        self.assertEqual(result.outputs["branch"], "main")
+        self.assertEqual(result.outputs["upstream_repository"], "upstream/repo")
+        self.assertTrue(result.outputs["synced"])
+
+    def test_gh_repo_sync_reports_not_a_fork(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "owner/repo"}},
+            guards=(),
+            steps=(Step(name="sync", operation=OperationRef("gh.repo.sync")),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.repo.sync")
+        resolved = ResolvedOperation("gh.repo.sync", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo","isFork":false,"isArchived":false,"defaultBranchRef":{"name":"main"},"parent":null}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "not_a_fork")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_repo_sync.not_a_fork")
+
+    def test_gh_repo_sync_reports_default_branch_unavailable(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "owner/repo"}},
+            guards=(),
+            steps=(Step(name="sync", operation=OperationRef("gh.repo.sync")),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.repo.sync")
+        resolved = ResolvedOperation("gh.repo.sync", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"id":"R_1","nameWithOwner":"owner/repo","isFork":true,"isArchived":false,"defaultBranchRef":null,"parent":{"nameWithOwner":"upstream/repo"}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "default_branch_unavailable")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_repo_sync.default_branch_unavailable")
+
+    def test_gh_repo_actions_permissions_set_updates_enabled_state(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "owner/repo"}},
+            guards=(),
+            steps=(Step(name="set", operation=OperationRef("gh.repo.actions.permissions.set", with_={"enabled": False})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.repo.actions.permissions.set")
+        resolved = ResolvedOperation("gh.repo.actions.permissions.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"enabled":true,"allowed_actions":"all","sha_pinning_required":false}', stderr=""),
+                self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout='{"enabled":false,"allowed_actions":"all","sha_pinning_required":false}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["repository"], "owner/repo")
+        self.assertFalse(result.outputs["enabled"])
+        self.assertTrue(result.outputs["changed"])
+
+    def test_gh_repo_actions_permissions_set_is_noop_when_already_matching(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "owner/repo"}},
+            guards=(),
+            steps=(Step(name="set", operation=OperationRef("gh.repo.actions.permissions.set", with_={"enabled": True})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.repo.actions.permissions.set")
+        resolved = ResolvedOperation("gh.repo.actions.permissions.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"enabled":true,"allowed_actions":"all","sha_pinning_required":false}', stderr=""),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertFalse(result.outputs["changed"])
+        self.assertTrue(result.outputs["enabled"])
+
+    def test_gh_repo_actions_permissions_set_reports_set_blocked(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "owner/repo"}},
+            guards=(),
+            steps=(Step(name="set", operation=OperationRef("gh.repo.actions.permissions.set", with_={"enabled": False})),),
+        )
+        operation = get_public_connector_registry().get_operation("gh.repo.actions.permissions.set")
+        resolved = ResolvedOperation("gh.repo.actions.permissions.set", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(returncode=0, stdout='{"enabled":true,"allowed_actions":"all","sha_pinning_required":false}', stderr=""),
+                self._completed(returncode=1, stdout="", stderr="permission denied"),
+            ]
+
+            result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "set_blocked")
+        self.assertEqual(result.diagnostics[0].code, "action.gh_repo_actions_permissions_set.command_failed")
 
     def test_gh_issue_comment_add_creates_comment(self) -> None:
         workflow = Workflow(
@@ -5003,6 +5297,33 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["state"], "OPEN")
         self.assertEqual(result.outputs["repository"]["nameWithOwner"], "owner/repo")
+
+    def test_gh_issue_probe_allows_explicit_repository_override_over_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="demo",
+            connector_contexts={"gh": {"repository": "fork/repo"}},
+            guards=(Guard(OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 1})),),
+            steps=(),
+        )
+        operation = get_public_connector_registry().get_operation("gh.issue")
+        resolved = ResolvedOperation("gh.issue", "gh", operation, "public")  # type: ignore[arg-type]
+
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout="authenticated\n", stderr=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"nameWithOwner":"owner/repo","issue":{"id":"I_1","number":1,"title":"Demo","state":"OPEN","closed":false,"url":"https://example.test","body":"x","author":{"login":"octo"},"labels":{"nodes":[]},"assignees":{"nodes":[]},"milestone":null,"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":null,"comments":{"totalCount":0},"reactionGroups":[],"stateReason":null,"projectItems":{"nodes":[]}}}}}',
+                    stderr="",
+                ),
+            ]
+
+            result = evaluate_probe(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["repository"]["nameWithOwner"], "owner/repo")
+        self.assertFalse(any(diagnostic.code.endswith("repository_conflict") for diagnostic in result.diagnostics))
 
     def test_gh_issue_probe_maps_not_found_to_local_failure_mode(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 999})),), steps=())

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import os
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Callable
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
@@ -12,7 +14,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import GuardBlock, Step, StepBlock, Workflow
 
-from .checking import GuardProbe, _build_guard_detail, _build_preflight_observation_session, _default_guard_probe, _evaluate_guard_expression, check_workflow
+from .checking import GuardProbe, _build_guard_detail, _build_preflight_observation_session, _default_guard_probe, _evaluate_guard_expression, _guard_dependency_summary, check_workflow
 from .conditions import ConditionEvaluationReport, summarize_failed_condition_causes, summarize_unknown_condition_causes
 from .conditions import ConditionShapeError, iter_condition_expression_leaves, normalize_condition_authoring
 from .fragment_runs import evaluate_run_condition, materialize_run_workflow
@@ -22,12 +24,25 @@ from .launchers import apply_launcher_to_step
 from .local_expression_contexts import LocalExpressionContext
 from .local_expressions import evaluate_condition_report
 from .preflight_interpreter import evaluate_preflight_step_condition, evaluate_preflight_value_step
-from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch
+from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch, should_ignore_runtime_profile_switch
 from .providers import ConnectorProvider, StepExecutor, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStepBlock, resolve_workflow_references
 from .routines import execute_routine_step
 from .state import RuntimeStateError, delete_state_value, read_state_document, resolve_state_target, write_state_document, write_state_value
 from .value_resolution import ValueResolutionError, resolve_runtime_value
+
+
+@dataclass(frozen=True, slots=True)
+class StepExecutionReporterEvent:
+    step_name: str
+    workflow_name: str
+    step_reference: str | None
+    working_directory: str | None
+    invoked_by_run: bool
+    invoked_run_reference: str | None
+
+
+StepExecutionReporter = Callable[[StepExecutionReporterEvent], None]
 
 
 def execute_workflow(
@@ -42,6 +57,7 @@ def execute_workflow(
     execution_tree: dict[str, object] | None = None,
     invoked_by_run: bool = False,
     invoked_run_reference: str | None = None,
+    step_reporter: StepExecutionReporter | None = None,
 ) -> RuntimeResult:
     """Execute steps only after validation, resolution, and guards succeed."""
 
@@ -145,21 +161,48 @@ def execute_workflow(
             block_blockers: list[str] = []
             block_guard_details: list[dict[str, object]] = []
             for resolved_guard in resolved_block.guards:
+                runtime_guard = resolved_guard
+                if isinstance(resolved_guard, ResolvedOperation):
+                    materialized_guard = _materialize_resolved_operation_inputs(
+                        resolved_guard,
+                        effective_workflow,
+                        observation_session=observation_session,
+                    )
+                    if isinstance(materialized_guard, OperationResult):
+                        result = materialized_guard
+                        operation_results.append(result)
+                        diagnostics.extend(result.diagnostics)
+                        detail = _build_guard_detail(
+                            resolved_guard.reference,
+                            result,
+                            dependency_summary=_guard_dependency_summary(resolved_guard, workflow),
+                        )
+                        guard_details.append(detail)
+                        block_guard_details.append(detail)
+                        checked_guards.append(resolved_guard.reference)
+                        _mark_execution_tree_guard_runtime(execution_tree_output, resolved_guard.reference, result)
+                        block_blockers.append(resolved_guard.reference)
+                        continue
+                    runtime_guard = materialized_guard
                 if isinstance(resolved_guard, ResolvedConditionExpression):
                     with _execution_working_directory(current_working_directory):
                         result = _evaluate_guard_expression(resolved_guard, effective_workflow, resolved_guard_probe)
                 else:
                     with _execution_working_directory(current_working_directory):
-                        result = resolved_guard_probe(resolved_guard, effective_workflow)
+                        result = resolved_guard_probe(runtime_guard, effective_workflow)
                 operation_results.append(result)
                 diagnostics.extend(result.diagnostics)
-                detail = _build_guard_detail(resolved_guard.reference, result)
+                detail = _build_guard_detail(
+                    runtime_guard.reference,
+                    result,
+                    dependency_summary=_guard_dependency_summary(runtime_guard, workflow),
+                )
                 guard_details.append(detail)
                 block_guard_details.append(detail)
-                checked_guards.append(resolved_guard.reference)
-                _mark_execution_tree_guard_runtime(execution_tree_output, resolved_guard.reference, result)
+                checked_guards.append(runtime_guard.reference)
+                _mark_execution_tree_guard_runtime(execution_tree_output, runtime_guard.reference, result)
                 if result.status != "ok":
-                    block_blockers.append(resolved_guard.reference)
+                    block_blockers.append(runtime_guard.reference)
             block_items.append(
                 {
                     "block_index": block_index,
@@ -346,9 +389,71 @@ def execute_workflow(
                 block_executed.append(step.name)
                 _mark_execution_tree_step_reused(execution_tree_output, step.name)
                 continue
-            if _is_execute_probe_step(execution_tree_output, resolved_step):
+            runtime_resolved_step = resolved_step
+            if isinstance(resolved_step, ResolvedOperation):
+                materialized_step = _materialize_resolved_operation_inputs(
+                    resolved_step,
+                    effective_workflow,
+                    observation_session=observation_session,
+                )
+                if isinstance(materialized_step, OperationResult):
+                    result = _decorate_step_result(materialized_step, step=step, resolved_step=resolved_step)
+                    _record_step_runtime_result(
+                        workflow=effective_workflow,
+                        step=step,
+                        result=result,
+                        operation_results=operation_results,
+                        diagnostics=diagnostics,
+                    )
+                    _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="failed", result=result)
+                    skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
+                    _append_execution_error_block_item(
+                        block_items,
+                        block_index=block_index,
+                        declared_block=declared_block,
+                        executed_steps=block_executed,
+                        skipped_steps=block_skipped,
+                        failed_step=step.name,
+                    )
+                    return RuntimeResult(
+                        mode=Mode.EXECUTE,
+                        status=RuntimeStatus.EXECUTION_ERROR,
+                        diagnostics=tuple(diagnostics),
+                        plan=check_result.plan,
+                        outputs=_build_execute_outputs(
+                            can_execute=False,
+                            active_profile=active_profile,
+                            active_overrides=active_overrides,
+                            current_working_directory=current_working_directory,
+                            execution_tree=execution_tree_output,
+                            execution_tree_mode=execution_tree_mode,
+                            execution_tree_fallback_reason=execution_tree_fallback_reason,
+                            executed_steps=executed_steps,
+                            reused_steps=reused_steps,
+                            skipped_steps=skipped_steps,
+                            step_condition_details=step_condition_details,
+                            step_gate_details=step_gate_details,
+                            launcher_details=launcher_details,
+                            checked_guards=checked_guards,
+                            guard_details=guard_details,
+                            block_items=block_items + _pending_execution_block_items(effective_workflow, start_block_index=block_index + 1, blocked=True),
+                        ),
+                        operation_results=tuple(operation_results),
+                        failed_step=step.name,
+                    )
+                runtime_resolved_step = materialized_step
+            if _is_execute_probe_step(execution_tree_output, runtime_resolved_step):
+                _report_step_execution_start(
+                    step,
+                    effective_workflow,
+                    runtime_resolved_step,
+                    current_working_directory=current_working_directory,
+                    invoked_by_run=invoked_by_run,
+                    invoked_run_reference=invoked_run_reference,
+                    step_reporter=step_reporter,
+                )
                 with _execution_working_directory(current_working_directory):
-                    result = resolved_guard_probe(resolved_step, effective_workflow)
+                    result = resolved_guard_probe(runtime_resolved_step, effective_workflow)
                 if step.register is not None:
                     pass
                 _record_step_runtime_result(
@@ -398,7 +503,7 @@ def execute_workflow(
                 executed_steps.append(step.name)
                 block_executed.append(step.name)
                 continue
-            if _is_execute_run_step(resolved_step):
+            if _is_execute_run_step(runtime_resolved_step):
                 if step.for_each is None:
                     run_workflow = materialize_run_workflow(step, effective_workflow, block_index=block_index, step_index=step_index)
                 else:
@@ -492,6 +597,15 @@ def execute_workflow(
 
                 run_results = []
                 failed_item_index = None
+                _report_step_execution_start(
+                    step,
+                    effective_workflow,
+                    runtime_resolved_step,
+                    current_working_directory=current_working_directory,
+                    invoked_by_run=invoked_by_run,
+                    invoked_run_reference=invoked_run_reference,
+                    step_reporter=step_reporter,
+                )
                 for item_index, item in enumerate(fan_out_items):
                     materialized = materialize_run_workflow(
                         step,
@@ -518,6 +632,7 @@ def execute_workflow(
                             connector_provider=connector_provider,
                             invoked_by_run=True,
                             invoked_run_reference=step.run,
+                            step_reporter=step_reporter,
                         )
                     contextualized_run_diagnostics = (
                         _contextualize_fan_out_diagnostics(
@@ -628,8 +743,17 @@ def execute_workflow(
                     )
                 _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done")
                 continue
-            if isinstance(resolved_step, ResolvedBuiltinStep):
-                if _is_execute_profile_switch_builtin(resolved_step):
+            if isinstance(runtime_resolved_step, ResolvedBuiltinStep):
+                if _is_execute_profile_switch_builtin(runtime_resolved_step):
+                    _report_step_execution_start(
+                        step,
+                        effective_workflow,
+                        runtime_resolved_step,
+                        current_working_directory=current_working_directory,
+                        invoked_by_run=invoked_by_run,
+                        invoked_run_reference=invoked_run_reference,
+                        step_reporter=step_reporter,
+                    )
                     result, current_profile, current_profile_name, active_profile, active_overrides, current_working_directory, effective_workflow = _execute_profile_switch_step(
                         step,
                         effective_workflow,
@@ -637,6 +761,7 @@ def execute_workflow(
                         available_profiles=available_profiles,
                         profile_working_directories=profile_working_directories,
                     )
+                    result = _decorate_step_result(result, step=step, resolved_step=runtime_resolved_step)
                     operation_results.append(result)
                     diagnostics.extend(result.diagnostics)
                     if result.status != "ok":
@@ -680,10 +805,32 @@ def execute_workflow(
                     block_executed.append(step.name)
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done", result=result)
                     continue
+                _report_step_execution_start(
+                    step,
+                    effective_workflow,
+                    runtime_resolved_step,
+                    current_working_directory=current_working_directory,
+                    invoked_by_run=invoked_by_run,
+                    invoked_run_reference=invoked_run_reference,
+                    step_reporter=step_reporter,
+                )
                 with _execution_working_directory(current_working_directory):
-                    result = _execute_builtin_step(step, effective_workflow, observation_session=observation_session)
+                    result = _decorate_step_result(
+                        _execute_builtin_step(step, effective_workflow, observation_session=observation_session),
+                        step=step,
+                        resolved_step=runtime_resolved_step,
+                    )
             else:
-                if _is_execute_profile_switch_operation(resolved_step):
+                if _is_execute_profile_switch_operation(runtime_resolved_step):
+                    _report_step_execution_start(
+                        step,
+                        effective_workflow,
+                        runtime_resolved_step,
+                        current_working_directory=current_working_directory,
+                        invoked_by_run=invoked_by_run,
+                        invoked_run_reference=invoked_run_reference,
+                        step_reporter=step_reporter,
+                    )
                     result, current_profile, current_profile_name, active_profile, active_overrides, current_working_directory, effective_workflow = _execute_profile_switch_step(
                         step,
                         effective_workflow,
@@ -691,6 +838,7 @@ def execute_workflow(
                         available_profiles=available_profiles,
                         profile_working_directories=profile_working_directories,
                     )
+                    result = _decorate_step_result(result, step=step, resolved_step=runtime_resolved_step)
                     operation_results.append(result)
                     diagnostics.extend(result.diagnostics)
                     if result.status != "ok":
@@ -734,18 +882,36 @@ def execute_workflow(
                     block_executed.append(step.name)
                     _mark_execution_tree_step_runtime(execution_tree_output, step.name, runtime_status="done", result=result)
                     continue
-                executed_step = resolved_step
+                executed_step = runtime_resolved_step
                 applied_launcher = None
                 if current_profile is not None:
-                    executed_step, applied_launcher, launcher_error = apply_launcher_to_step(step, resolved_step, effective_workflow, current_profile.launchers)
+                    executed_step, applied_launcher, launcher_error = apply_launcher_to_step(step, runtime_resolved_step, effective_workflow, current_profile.launchers)
                     if launcher_error is not None:
-                        result = launcher_error
+                        result = _decorate_step_result(launcher_error, step=step, resolved_step=executed_step)
                     else:
+                        _report_step_execution_start(
+                            step,
+                            effective_workflow,
+                            executed_step,
+                            current_working_directory=current_working_directory,
+                            invoked_by_run=invoked_by_run,
+                            invoked_run_reference=invoked_run_reference,
+                            step_reporter=step_reporter,
+                        )
                         with _execution_working_directory(current_working_directory):
-                            result = executor(executed_step, effective_workflow)
+                            result = _decorate_step_result(executor(executed_step, effective_workflow), step=step, resolved_step=executed_step)
                 else:
+                    _report_step_execution_start(
+                        step,
+                        effective_workflow,
+                        executed_step,
+                        current_working_directory=current_working_directory,
+                        invoked_by_run=invoked_by_run,
+                        invoked_run_reference=invoked_run_reference,
+                        step_reporter=step_reporter,
+                    )
                     with _execution_working_directory(current_working_directory):
-                        result = executor(executed_step, effective_workflow)
+                        result = _decorate_step_result(executor(executed_step, effective_workflow), step=step, resolved_step=executed_step)
                 if applied_launcher is not None:
                     launcher_details.append(
                         {
@@ -847,6 +1013,31 @@ def execute_workflow(
         results=results,
         published=tuple(published_results),
         operation_results=tuple(operation_results),
+    )
+
+
+def _report_step_execution_start(
+    step: Step,
+    workflow: Workflow,
+    resolved_step: object,
+    *,
+    current_working_directory: Path | None,
+    invoked_by_run: bool,
+    invoked_run_reference: str | None,
+    step_reporter: StepExecutionReporter | None,
+) -> None:
+    if step_reporter is None:
+        return
+    reference = getattr(resolved_step, "reference", None)
+    step_reporter(
+        StepExecutionReporterEvent(
+            step_name=step.name,
+            workflow_name=workflow.workflow,
+            step_reference=reference if isinstance(reference, str) else None,
+            working_directory=None if current_working_directory is None else str(current_working_directory),
+            invoked_by_run=invoked_by_run,
+            invoked_run_reference=invoked_run_reference,
+        )
     )
 
 
@@ -1026,6 +1217,80 @@ def _default_step_executor(*, provider: ConnectorProvider | None):
     return execute
 
 
+def _materialize_resolved_operation_inputs(
+    resolved: ResolvedOperation,
+    workflow: Workflow,
+    *,
+    observation_session=None,
+) -> ResolvedOperation | OperationResult:
+    declared_with = resolved.declared_with
+    if not isinstance(declared_with, dict):
+        return resolved
+    try:
+        resolved_inputs = resolve_runtime_value(
+            declared_with,
+            workflow,
+            observation_session=observation_session,
+        )
+    except ValueResolutionError as exc:
+        return OperationResult(
+            status="input_error",
+            summary=exc.message,
+            diagnostics=exc.to_diagnostics(),
+        )
+    if not isinstance(resolved_inputs, dict):
+        return OperationResult(
+            status="input_error",
+            summary="Operation inputs must resolve to an object",
+            diagnostics=(
+                Diagnostic(
+                    code="runtime.step.inputs.invalid_shape",
+                    level="error",
+                    message="Operation inputs must resolve to an object",
+                    details={"reference": resolved.reference, "actual_type": type(resolved_inputs).__name__},
+                ),
+            ),
+        )
+    return replace(resolved, resolved_inputs=resolved_inputs)
+
+
+def _decorate_step_result(
+    result: OperationResult,
+    *,
+    step: Step,
+    resolved_step: ResolvedStep | None,
+) -> OperationResult:
+    step_detail = _build_step_detail(step=step, resolved_step=resolved_step)
+    if not step_detail:
+        return result
+    raw = dict(result.raw)
+    raw["step_detail"] = step_detail
+    return replace(result, raw=raw)
+
+
+def _build_step_detail(
+    *,
+    step: Step,
+    resolved_step: ResolvedStep | None,
+) -> dict[str, object]:
+    detail: dict[str, object] = {"step": step.name}
+    if step.operation is not None:
+        detail["operation"] = step.operation.uses
+    elif step.run is not None:
+        detail["run"] = step.run
+    if isinstance(resolved_step, ResolvedOperation):
+        detail["reference"] = resolved_step.reference
+        if isinstance(resolved_step.declared_with, dict):
+            detail["declared_inputs"] = dict(resolved_step.declared_with)
+        if isinstance(resolved_step.resolved_inputs, dict):
+            detail["resolved_inputs"] = dict(resolved_step.resolved_inputs)
+    elif isinstance(resolved_step, ResolvedBuiltinStep):
+        detail["reference"] = resolved_step.reference
+    elif isinstance(resolved_step, ResolvedRunStep):
+        detail["reference"] = resolved_step.reference
+    return detail
+
+
 def _initialize_execute_context(
     workflow: Workflow,
     *,
@@ -1186,6 +1451,35 @@ def _execute_profile_switch_step(
             workflow,
         )
     target_profile = available_profiles[profile_name]
+    if should_ignore_runtime_profile_switch(workflow, target_profile_name=profile_name):
+        preserved_profile_name = None if current_profile is None else current_profile.name
+        preserved_working_directory = (
+            None
+            if preserved_profile_name is None or profile_working_directories is None
+            else profile_working_directories.get(preserved_profile_name)
+        )
+        preserved_overrides = () if current_profile is None else current_profile.overrides
+        return (
+            OperationResult(
+                status="ok",
+                summary="Runtime profile switch ignored",
+                outputs={
+                    "profile": preserved_profile_name,
+                    "requested_profile": profile_name,
+                    "previous_profile": preserved_profile_name,
+                    "changed": False,
+                    "ignored": True,
+                    "reason": "explicit_cli_profile_preserved_during_playbook_pre_run",
+                    "applied_inputs": dict(workflow.inputs),
+                },
+            ),
+            current_profile,
+            preserved_profile_name,
+            preserved_profile_name,
+            preserved_overrides,
+            preserved_working_directory,
+            workflow,
+        )
     target_working_directory = None if profile_working_directories is None else profile_working_directories.get(profile_name)
     previous = None if current_profile is None else current_profile.name
     applied = apply_runtime_profile_switch(workflow, target_profile)

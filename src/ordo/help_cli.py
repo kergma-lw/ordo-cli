@@ -1306,6 +1306,7 @@ def build_command_line_response() -> JSONObject:
         {"name": "--profile", "value_shape": "NAME", "required": False, "effect": "select_active_profile", "summary": "Select one named profile for this run"},
         {"name": "--input", "value_shape": "KEY=VALUE", "required": False, "repeatable": True, "effect": "override_input_inline", "summary": "Add or override one top-level workflow input from inline text, with simple number and true/false coercion"},
         {"name": "--input-file", "value_shape": "KEY=PATH", "required": False, "repeatable": True, "effect": "override_input_from_file", "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"},
+        {"name": "--progress-steps", "required": False, "effect": "emit_run_step_progress_to_stderr", "summary": "During run, emit each step name to stderr right before execution"},
         {"name": "--json", "required": False, "effect": "emit_json", "summary": "Emit the full JSON payload, including detailed diagnostics"},
     ]
     return {
@@ -1339,10 +1340,10 @@ def build_command_line_response() -> JSONObject:
                         "summary": "Why check and review are complementary authoring passes rather than substitutes",
                     },
                 ],
-                "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>",
+                "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
                 "discovery_commands": [
                     {"name": "workflows list", "summary": "list declared playbook workflows with project-local descriptions"},
-                    {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata, playbook-owned invocation inputs, and root-declared inputs"},
+                    {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata and playbook invocation inputs; --json also includes declared workflow inputs"},
                 ],
                 "modes": [
                     {"name": "review <workflow>", "summary": "review workflow-quality findings without making changes"},
@@ -1398,11 +1399,13 @@ def build_command_line_response() -> JSONObject:
                     "ordo-playbook --profile review plan inspect-issue",
                     "ordo-playbook --input enabled=true plan inspect-issue",
                     "ordo-playbook --input-file body=./prompt.md plan inspect-issue",
+                    "ordo-playbook --progress-steps run inspect-issue",
                 ],
                 "inspect_next": [
                     "command-line.ordo-playbook.flag.profile",
                     "command-line.ordo-playbook.flag.input",
                     "command-line.ordo-playbook.flag.input_file",
+                    "command-line.ordo-playbook.flag.progress_steps",
                     "playbook.workflows.file",
                     "workflow-rules.paired_check_review_passes",
                 ],
@@ -1717,10 +1720,11 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
         },
         "gh": {
-            "definition": "Published GitHub connector family for typed issue, pull-request, and project operations backed by GitHub CLI authentication rather than ad hoc shell calls.",
+            "definition": "Published GitHub connector family for typed repository, issue, pull-request, and project operations backed by GitHub CLI authentication rather than ad hoc shell calls.",
             "use_when": [
                 "The workflow needs one published GitHub probe or action whose outputs and failure modes stay stable across repositories.",
-                "You want separate public surfaces for issue snapshots, pull-request review surfaces, and GitHub Project membership instead of one coarse GitHub command wrapper.",
+                "Repository-targeted GitHub probes and actions should normally inherit connector_contexts.gh.repository instead of repeating the same repository argument on every step, and review warns when an explicit repository overrides that default.",
+                "You want separate public surfaces for repository sync, issue snapshots, pull-request review surfaces, and GitHub Project membership instead of one coarse GitHub command wrapper.",
             ],
             "do_not_use_for": [
                 "Repository-local helper scripts or opaque gh invocations when an existing published GitHub operation already expresses the intent more directly.",
@@ -1729,17 +1733,21 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "nearest_surfaces": [
                 {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
+                {"handle": "connector.gh.repo", "summary": "Repository identity and fork probe for repo-level GitHub workflows"},
+                {"handle": "connector.gh.repo.actions.permissions", "summary": "Repository Actions permissions probe for workflows that need to inspect or guard hosted Actions policy"},
                 {"handle": "connector.gh.pr", "summary": "Pull-request metadata probe that anchors the PR inspection subgroup"},
                 {"handle": "connector.gh.issue", "summary": "Issue snapshot probe for issue maintenance and routing workflows"},
                 {"handle": "connector.gh.project", "summary": "Project identity probe that anchors the GitHub Project field and membership subgroup"},
                 {"handle": "connector.gh.project.items", "summary": "Project membership probe when the workflow needs GitHub Project item collections"},
             ],
             "examples": [
-                {"reference": "gh.pr", "inputs": {"repository": "owner/repo", "pull_number": 42}},
-                {"reference": "gh.issue", "inputs": {"repository": "owner/repo", "issue_number": 17}},
+                {"reference": "gh.repo", "inputs": {}},
+                {"reference": "gh.repo.actions.permissions", "inputs": {}},
+                {"reference": "gh.pr", "inputs": {"pull_number": 42}},
+                {"reference": "gh.issue", "inputs": {"issue_number": 17}},
                 {"reference": "gh.project", "inputs": {"project_id": "PVT_kwDOExample"}},
             ],
-            "inspect_next": ["connector.gh.pr", "connector.gh.issue", "connector.gh.project", "connector.gh.project.items", "operations"],
+            "inspect_next": ["connector.gh.repo", "connector.gh.repo.actions.permissions", "connector.gh.pr", "connector.gh.issue", "connector.gh.project", "connector.gh.project.items", "operations"],
         }
     }
 
@@ -1804,8 +1812,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["workflow.local_expression.adapter.key_value", "connector.shell.command", "operations"],
         },
         ("gh", "issue"): {
-            "definition": "Probe one GitHub issue as a typed snapshot of its current metadata, body, labels, assignees, and project-item context.",
+            "definition": "Probe one GitHub issue as a typed snapshot of its current metadata, body, labels, assignees, and project-item context. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and workflow logic now needs one issue snapshot from that repository by issue number.",
                 "Workflow logic needs to inspect one issue before deciding whether to comment, edit the body, close it, or publish a summary.",
                 "A guard or later step needs typed issue facts such as state, title, labels, or body rather than a coarse shell response.",
             ],
@@ -1822,8 +1831,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.issue.comments", "connector.gh.issue.comment.add", "connector.gh.issue.body.replace", "connector.gh.issue.close"],
         },
         ("gh", "issue.create"): {
-            "definition": "Create one new GitHub issue in one repository and return its canonical reference, number, title, and URL for later workflow steps.",
+            "definition": "Create one new GitHub issue in one repository and return its canonical reference, number, title, and URL for later workflow steps. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow must open a new issue there.",
                 "The workflow must open a new issue and then reuse the returned issue number or URL in later steps.",
             ],
             "do_not_use_for": [
@@ -1838,8 +1848,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.issue", "connector.gh.issue.comment.add", "connector.gh.issue.body.append"],
         },
         ("gh", "issue.close"): {
-            "definition": "Close one existing GitHub issue by repository and issue number.",
+            "definition": "Close one existing GitHub issue by repository and issue number. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow now needs to close one issue there by issue number.",
                 "A workflow has already decided that the issue should be closed and needs one typed action result instead of a shell-level command.",
             ],
             "do_not_use_for": [
@@ -1854,8 +1865,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.issue", "connector.gh.issue.comment.add", "connector.gh.issue.body.append"],
         },
         ("gh", "issue.comments"): {
-            "definition": "Probe the comment thread of one GitHub issue as a typed list of recent comments plus total count metadata.",
+            "definition": "Probe the comment thread of one GitHub issue as a typed list of recent comments plus total count metadata. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and workflow logic now needs prior discussion for one issue there.",
                 "Workflow logic needs to inspect prior discussion, count comments, or publish a compact conversation summary before taking another step.",
             ],
             "do_not_use_for": [
@@ -1870,8 +1882,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.issue", "connector.gh.issue.comment.add", "connector.gh.issue.body.append"],
         },
         ("gh", "issue.comment.add"): {
-            "definition": "Add one new comment to an existing GitHub issue and return the created comment id, URL, and body.",
+            "definition": "Add one new comment to an existing GitHub issue and return the created comment id, URL, and body. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow should leave one comment on one issue there.",
                 "The workflow should leave a human-facing note in the issue conversation without rewriting the issue body.",
             ],
             "do_not_use_for": [
@@ -1886,8 +1899,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.issue.comments", "connector.gh.issue.body.append", "connector.gh.issue.close"],
         },
         ("gh", "issue.body.append"): {
-            "definition": "Append one text fragment to the end of an existing GitHub issue body, optionally separated from the prior body by one explicit separator.",
+            "definition": "Append one text fragment to the end of an existing GitHub issue body, optionally separated from the prior body by one explicit separator. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow should append one note to one issue body there.",
                 "The workflow should preserve the current issue body and add one extra section, note, or footer to it.",
             ],
             "do_not_use_for": [
@@ -1902,8 +1916,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.issue.body.replace", "connector.gh.issue.comment.add", "connector.gh.issue"],
         },
         ("gh", "issue.body.replace"): {
-            "definition": "Replace the entire GitHub issue body with one new body string and report whether the resulting body changed.",
+            "definition": "Replace the entire GitHub issue body with one new body string and report whether the resulting body changed. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow should rewrite one issue body there by issue number.",
                 "The workflow owns the canonical issue description and should rewrite the full body deterministically.",
             ],
             "do_not_use_for": [
@@ -1916,6 +1931,90 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.issue", "summary": "Probe the current issue body before deciding whether a full rewrite is appropriate"},
             ],
             "inspect_next": ["connector.gh.issue.body.append", "connector.gh.issue.comment.add", "connector.gh.issue"],
+        },
+        ("gh", "repo"): {
+            "definition": "Probe one GitHub repository as a normalized identity and fork snapshot, including its default branch, fork status, parent repository, and archived flag. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.",
+            "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs one repository-level fact probe before deciding whether repo.sync can apply cleanly.",
+                "Later logic needs the repository's canonical name, default branch, or parent fork relationship rather than issue-, PR-, or project-level facts.",
+            ],
+            "do_not_use_for": [
+                "Syncing the repository's default branch; use connector.gh.repo.sync for that effectful fork-sync operation.",
+                "Inspecting pull requests, issues, or GitHub Project membership; those remain separate narrower GitHub surfaces.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh", "summary": "Parent GitHub connector family for repository, issue, pull-request, and project operations"},
+                {"handle": "connector.gh.repo.sync", "summary": "Sibling action for syncing one fork repository default branch after this probe confirms fork facts"},
+                {"handle": "connector.git.repo", "summary": "Sibling local Git repository probe for checkout-root and worktree facts rather than remote GitHub repository identity"},
+                {"handle": "connector.gh.pr", "summary": "Sibling GitHub probe for pull-request facts once the workflow moves from repository-level to PR-level logic"},
+            ],
+            "examples": [
+                {"reference": "gh.repo", "inputs": {}},
+            ],
+            "inspect_next": ["connector.gh.repo.sync", "connector.git.repo", "connector.gh.pr"],
+        },
+        ("gh", "repo.sync"): {
+            "definition": "Sync one GitHub fork repository's default branch from its parent repository and return the synced branch together with the resolved upstream repository name. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.",
+            "use_when": [
+                "connector_contexts.gh.repository already names the normal fork target and the workflow needs to keep its canonical default branch current with the parent repository.",
+                "The authored intent is the GitHub-native fork sync operation itself, not a local git fetch/merge sequence or a repository-settings mutation helper.",
+            ],
+            "do_not_use_for": [
+                "Inspecting whether the repository is a fork or what its default branch is; use connector.gh.repo for that read-only fact surface first or separately.",
+                "Local checkout synchronization or worktree mutation; use connector.git.* when the real target is the local repository rather than GitHub-hosted fork state.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.repo", "summary": "Parent repository probe for fork identity and default-branch facts before or after sync"},
+                {"handle": "connector.git.sync.fetch", "summary": "Sibling local Git action for fetching refs into a local clone rather than syncing a hosted GitHub fork"},
+                {"handle": "connector.git.repo", "summary": "Sibling local Git probe when later workflow logic needs local repository state after remote fork sync"},
+                {"handle": "connector.gh.pr", "summary": "Sibling GitHub probe for PR-level follow-up work once repository sync is complete"},
+            ],
+            "examples": [
+                {"reference": "gh.repo.sync", "inputs": {}},
+            ],
+            "inspect_next": ["connector.gh.repo", "connector.git.sync.fetch", "connector.git.repo"],
+        },
+        ("gh", "repo.actions.permissions"): {
+            "definition": "Probe GitHub Actions permissions for one repository, including whether Actions are enabled and the current hosted Actions policy shape. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
+            "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs to decide whether GitHub Actions are currently enabled before repo.sync or another hosted mutation proceeds.",
+                "Later logic needs one typed snapshot of repository Actions policy instead of an opaque gh api response.",
+            ],
+            "do_not_use_for": [
+                "Changing the repository Actions enabled state; use connector.gh.repo.actions.permissions.set for that effectful update.",
+                "Inspecting local checkout automation state or workflow-run history; this surface is only the repository Actions permissions snapshot.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh", "summary": "Parent GitHub connector family for repository, issue, pull-request, project, and repository-Actions operations"},
+                {"handle": "connector.gh.repo", "summary": "Sibling repository identity probe for fork and default-branch facts"},
+                {"handle": "connector.gh.repo.actions.permissions.set", "summary": "Sibling action for setting the repository Actions enabled state after reading the current policy"},
+                {"handle": "connector.gh.repo.sync", "summary": "Sibling repository sync action that workflows may guard with the current Actions policy"},
+            ],
+            "examples": [
+                {"reference": "gh.repo.actions.permissions", "inputs": {}},
+            ],
+            "inspect_next": ["connector.gh.repo.actions.permissions.set", "connector.gh.repo", "connector.gh.repo.sync"],
+        },
+        ("gh", "repo.actions.permissions.set"): {
+            "definition": "Set the GitHub Actions enabled state for one repository and report the resulting enabled flag together with whether the repository policy changed. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
+            "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs to disable or re-enable hosted GitHub Actions there as an explicit step before later repo-level work.",
+                "The authored intent is one narrow repository Actions policy mutation, not a hidden multi-step sync helper.",
+            ],
+            "do_not_use_for": [
+                "Reading the current repository Actions policy without changing it; use connector.gh.repo.actions.permissions for that probe.",
+                "Composing a temporary disable-sync-restore sequence inside one action; keep those steps explicit in the workflow instead of hiding orchestration inside this leaf action.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.repo.actions.permissions", "summary": "Sibling probe for the current repository Actions policy before or after mutation"},
+                {"handle": "connector.gh.repo.sync", "summary": "Sibling repository sync action that can appear between explicit disable and restore steps"},
+                {"handle": "connector.gh.repo", "summary": "Sibling repository identity probe for repo-level targeting facts"},
+                {"handle": "connector.git.sync.fetch", "summary": "Local Git sync action when the real target is a local clone rather than hosted Actions policy"},
+            ],
+            "examples": [
+                {"reference": "gh.repo.actions.permissions.set", "inputs": {"enabled": False}},
+            ],
+            "inspect_next": ["connector.gh.repo.actions.permissions", "connector.gh.repo.sync", "connector.gh.repo"],
         },
         ("gh", "project"): {
             "definition": "Probe one GitHub Project by its stable project id and return a typed existence snapshot with the canonical id and title.",
@@ -1980,8 +2079,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.project.field", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.issue.field_iteration.set"],
         },
         ("gh", "project.issue"): {
-            "definition": "Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized membership item id plus the common project field values that Ordo reads from that membership.",
+            "definition": "Probe whether one GitHub issue is already attached to one GitHub Project and return the normalized membership item id plus the common project field values that Ordo reads from that membership. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs project membership for one issue there.",
                 "A workflow needs to know whether one issue is already in the target project before deciding to add it or update its project fields.",
                 "Later logic needs one compact project-membership snapshot such as Status, Type, Priority, Iteration, Size, or Estimate for one issue in one project.",
             ],
@@ -1996,13 +2096,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Sibling action for mutating one project field after membership inspection confirms the target issue context"},
             ],
             "examples": [
-                {"reference": "gh.project.issue", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample"}},
+                {"reference": "gh.project.issue", "inputs": {"issue_number": 42, "project_id": "PVT_kwDOExample"}},
             ],
             "inspect_next": ["connector.gh.project.issue.add", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.items"],
         },
         ("gh", "project.issue.add"): {
-            "definition": "Add one GitHub issue to one GitHub Project and return the project item id, while staying idempotent when the issue is already attached.",
+            "definition": "Add one GitHub issue to one GitHub Project and return the project item id, while staying idempotent when the issue is already attached. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs to ensure one issue there becomes a project item.",
                 "A workflow has one concrete issue and one target project and needs to ensure that the issue becomes a project item before later project-field updates.",
                 "The workflow wants one typed membership-creation result instead of shelling out to ad hoc gh project mutations.",
             ],
@@ -2017,13 +2118,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.project.items", "summary": "Project-wide collection probe when the workflow needs many project items rather than attaching one issue"},
             ],
             "examples": [
-                {"reference": "gh.project.issue.add", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample"}},
+                {"reference": "gh.project.issue.add", "inputs": {"issue_number": 42, "project_id": "PVT_kwDOExample"}},
             ],
             "inspect_next": ["connector.gh.project.issue", "connector.gh.project.issue.field_single_select.set", "connector.gh.project.issue.field_number.set"],
         },
         ("gh", "project.issue.field_iteration.set"): {
-            "definition": "Set one iteration-valued GitHub Project field on one issue's project item by field name and human iteration title.",
+            "definition": "Set one iteration-valued GitHub Project field on one issue's project item by field name and human iteration title. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs to move one project-backed issue there into a named iteration.",
                 "A workflow needs to move one project-backed issue into a named iteration such as Sprint 12 after membership already exists or can be resolved.",
                 "The caller knows the field by its project-visible name and wants Ordo to resolve the underlying iteration id and item id automatically.",
             ],
@@ -2038,13 +2140,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.project.issue.field_single_select.set", "summary": "Sibling setter for selectable fields rather than iteration-backed fields"},
             ],
             "examples": [
-                {"reference": "gh.project.issue.field_iteration.set", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Iteration", "iteration": "Sprint 12"}},
+                {"reference": "gh.project.issue.field_iteration.set", "inputs": {"issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Iteration", "iteration": "Sprint 12"}},
             ],
             "inspect_next": ["connector.gh.project.issue", "connector.gh.project.field", "connector.gh.project.issue.add"],
         },
         ("gh", "project.issue.field_number.set"): {
-            "definition": "Set one number-valued GitHub Project field on one issue's project item by field name and numeric value.",
+            "definition": "Set one number-valued GitHub Project field on one issue's project item by field name and numeric value. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs to write one numeric project field for one issue there.",
                 "A workflow needs to write one numeric project field such as Estimate to a project-backed issue item after membership and field resolution succeed.",
                 "The caller wants Ordo to reject non-numeric values early instead of discovering that mismatch only inside a raw project mutation.",
             ],
@@ -2059,13 +2162,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.project.issue.field_iteration.set", "summary": "Sibling setter for iteration-backed fields rather than numeric fields"},
             ],
             "examples": [
-                {"reference": "gh.project.issue.field_number.set", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Estimate", "value": 3}},
+                {"reference": "gh.project.issue.field_number.set", "inputs": {"issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Estimate", "value": 3}},
             ],
             "inspect_next": ["connector.gh.project.issue", "connector.gh.project.field", "connector.gh.project.issue.field_single_select.set"],
         },
         ("gh", "project.issue.field_single_select.set"): {
-            "definition": "Set one single-select GitHub Project field on one issue's project item by field name and visible option name.",
+            "definition": "Set one single-select GitHub Project field on one issue's project item by field name and visible option name. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs to assign one selectable project value for one issue there.",
                 "A workflow needs to assign one selectable project value such as Status or Priority after membership and field-option validation succeed.",
                 "The caller knows the human-facing option label and wants Ordo to resolve the underlying option id automatically.",
             ],
@@ -2080,7 +2184,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.project.issue.field_number.set", "summary": "Sibling setter for numeric fields rather than selectable fields"},
             ],
             "examples": [
-                {"reference": "gh.project.issue.field_single_select.set", "inputs": {"repository": "owner/repo", "issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Status", "option": "In review"}},
+                {"reference": "gh.project.issue.field_single_select.set", "inputs": {"issue_number": 42, "project_id": "PVT_kwDOExample", "field": "Status", "option": "In review"}},
             ],
             "inspect_next": ["connector.gh.project.field.option", "connector.gh.project.issue", "connector.gh.project.issue.add"],
         },
@@ -2683,8 +2787,9 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.git.worktree", "connector.git.index.add_all", "connector.git.branch"],
         },
         ("gh", "pr"): {
-            "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content.",
+            "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and workflow logic now needs one PR snapshot there by pull number.",
                 "Workflow logic needs the pull request's current headline facts before deciding which narrower PR surfaces to inspect next.",
                 "A later step needs branch refs, draft/state flags, review decision, or change totals from one normalized PR snapshot.",
             ],
@@ -2699,13 +2804,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.pr.checks", "summary": "Sibling probe for CI and status surfaces on the PR head SHA"},
             ],
             "examples": [
-                {"reference": "gh.pr", "inputs": {"repository": "owner/repo", "pull_number": 42}},
+                {"reference": "gh.pr", "inputs": {"pull_number": 42}},
             ],
             "inspect_next": ["connector.gh.pr.diff", "connector.gh.pr.comments", "connector.gh.pr.reviews", "connector.gh.pr.checks"],
         },
         ("gh", "pr.comments"): {
-            "definition": "Probe the regular conversation thread on one GitHub pull request as top-level discussion comments plus total count metadata.",
+            "definition": "Probe the regular conversation thread on one GitHub pull request as top-level discussion comments plus total count metadata. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs top-level PR discussion there by pull number.",
                 "The workflow needs human conversation on the PR itself before summarizing discussion or deciding whether follow-up is needed.",
             ],
             "do_not_use_for": [
@@ -2718,13 +2824,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for submitted review decisions rather than free-form conversation comments"},
             ],
             "examples": [
-                {"reference": "gh.pr.comments", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+                {"reference": "gh.pr.comments", "inputs": {"pull_number": 42, "limit": 20}},
             ],
             "inspect_next": ["connector.gh.pr.review_comments", "connector.gh.pr.reviews", "connector.gh.pr.timeline"],
         },
         ("gh", "pr.diff"): {
-            "definition": "Probe one GitHub pull request diff as normalized changed-file summaries with patch excerpts, rename metadata, and binary/truncation signals.",
+            "definition": "Probe one GitHub pull request diff as normalized changed-file summaries with patch excerpts, rename metadata, and binary/truncation signals. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs changed-file detail there for one PR number.",
                 "The workflow needs to reason about which files changed or inspect bounded patch content without parsing raw git output itself.",
             ],
             "do_not_use_for": [
@@ -2737,13 +2844,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.git.range", "summary": "Repository-local git diff surface when the workflow needs local git ranges instead of remote PR normalization"},
             ],
             "examples": [
-                {"reference": "gh.pr.diff", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+                {"reference": "gh.pr.diff", "inputs": {"pull_number": 42, "limit": 20}},
             ],
             "inspect_next": ["connector.gh.pr.review_comments", "connector.git.range", "connector.gh.pr"],
         },
         ("gh", "pr.review_comments"): {
-            "definition": "Probe line-level review comments on one GitHub pull request as typed code-anchored discussion records with path and line metadata.",
+            "definition": "Probe line-level review comments on one GitHub pull request as typed code-anchored discussion records with path and line metadata. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs file-anchored PR review comments there by pull number.",
                 "The workflow needs reviewer feedback tied to concrete files or lines rather than only top-level PR conversation.",
             ],
             "do_not_use_for": [
@@ -2756,13 +2864,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for submitted review verdicts rather than individual line comments"},
             ],
             "examples": [
-                {"reference": "gh.pr.review_comments", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+                {"reference": "gh.pr.review_comments", "inputs": {"pull_number": 42, "limit": 20}},
             ],
             "inspect_next": ["connector.gh.pr.diff", "connector.gh.pr.reviews", "connector.gh.pr.comments"],
         },
         ("gh", "pr.reviews"): {
-            "definition": "Probe submitted GitHub pull-request reviews as typed review records with verdict, author, timestamp, and optional reviewed commit id.",
+            "definition": "Probe submitted GitHub pull-request reviews as typed review records with verdict, author, timestamp, and optional reviewed commit id. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs submitted review records there by pull number.",
                 "The workflow needs reviewer decisions such as APPROVED or CHANGES_REQUESTED without reconstructing them from comments or timeline events.",
             ],
             "do_not_use_for": [
@@ -2775,13 +2884,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.pr.timeline", "summary": "Sibling probe for lifecycle events that may surround review activity"},
             ],
             "examples": [
-                {"reference": "gh.pr.reviews", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+                {"reference": "gh.pr.reviews", "inputs": {"pull_number": 42, "limit": 20}},
             ],
             "inspect_next": ["connector.gh.pr.review_comments", "connector.gh.pr.timeline", "connector.gh.pr"],
         },
         ("gh", "pr.checks"): {
-            "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, including aggregate pass/pending/fail counts for that head SHA.",
+            "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, including aggregate pass/pending/fail counts for that head SHA. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs CI readiness for one PR there by pull number.",
                 "The workflow needs CI readiness or status context outcomes before recommending merge, rerun, or escalation steps.",
             ],
             "do_not_use_for": [
@@ -2794,13 +2904,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.pr.timeline", "summary": "Sibling probe for lifecycle events that can explain why checks changed over time"},
             ],
             "examples": [
-                {"reference": "gh.pr.checks", "inputs": {"repository": "owner/repo", "pull_number": 42}},
+                {"reference": "gh.pr.checks", "inputs": {"pull_number": 42}},
             ],
             "inspect_next": ["connector.gh.pr.reviews", "connector.gh.pr.timeline", "connector.gh.pr"],
         },
         ("gh", "pr.timeline"): {
-            "definition": "Probe one GitHub pull request timeline as normalized lifecycle events such as ready-for-review, review requests, and base-ref changes.",
+            "definition": "Probe one GitHub pull request timeline as normalized lifecycle events such as ready-for-review, review requests, and base-ref changes. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
             "use_when": [
+                "connector_contexts.gh.repository already names the normal repository target and the workflow needs lifecycle history there for one PR number.",
                 "The workflow needs temporal PR lifecycle facts that are not equivalent to comments, checks, or the current PR snapshot alone.",
             ],
             "do_not_use_for": [
@@ -2813,7 +2924,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"handle": "connector.gh.pr.comments", "summary": "Sibling probe for conversation comments rather than lifecycle history"},
             ],
             "examples": [
-                {"reference": "gh.pr.timeline", "inputs": {"repository": "owner/repo", "pull_number": 42, "limit": 20}},
+                {"reference": "gh.pr.timeline", "inputs": {"pull_number": 42, "limit": 20}},
             ],
             "inspect_next": ["connector.gh.pr.reviews", "connector.gh.pr.comments", "connector.gh.pr"],
         },
@@ -2854,7 +2965,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.compose.remove", "connector.compose.start", "connector.compose.stop"],
         },
         ("compose", "start"): {
-            "definition": "Start one Compose project or one declared Compose service.",
+            "definition": "Start one Compose project or one declared Compose service, reconciling one transient nonzero compose start with a short post-start runtime observation window before declaring failure.",
             "use_when": [
                 "You need the requested Compose target running before later workflow steps continue.",
             ],
@@ -4056,6 +4167,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "definition": "Playbook field for declaring one or more playbook-owned workflows that run before the requested published workflow in the same runtime session.",
             "use_when": [
                 "The project needs shared launch-time preparation, validation, or state setup before whichever published workflow the caller selected.",
+                "The setup may consult remembered state or other soft launch context, while the caller's explicit --profile choice still remains authoritative for that run.",
             ],
             "do_not_use_for": [
                 "Workflow-internal sequencing that belongs inside one workflow body rather than in the playbook wrapper.",
@@ -4483,6 +4595,44 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     for filter_spec in model["local_expressions"]["pipeline_filters"]:
         filter_metadata = dict(filter_spec)
         filter_name = filter_spec["name"]
+        if filter_name == "catch":
+            filter_metadata.update(
+                {
+                    "definition": "Pipeline-style local-expression filter `catch(...)` for replacing one explicit set of upstream failure codes with one authored fallback value while preserving unmatched failures.",
+                    "use_when": [
+                        "One strict probe or adapter lookup should stay strict by default, but one specific failure code or wildcarded set of failure codes should map to one explicit fallback value.",
+                    ],
+                    "do_not_use_for": [
+                        "Catching broad operational breakdown such as generic probe_failed unless the workflow truly intends to normalize that non-success into an authored value.",
+                        "Simple boolean absence checks when workflow.local_expression.filter.not_found already states the intent more directly.",
+                    ],
+                    "nearest_surfaces": [
+                        {"handle": "workflow.local_expression.filter.not_found", "summary": "Boolean shorthand for the common not-found conditional case"},
+                        {"handle": "workflow.local_expression.filter", "summary": "Overview of the pipeline filter family"},
+                        {"handle": "workflow.local_expressions", "summary": "Top-level workflow capability for local expressions"},
+                    ],
+                    "inspect_next": ["workflow.local_expression.filter.not_found", "workflow.local_expression.filter", "workflow.local_expressions"],
+                }
+            )
+        elif filter_name == "not_found":
+            filter_metadata.update(
+                {
+                    "definition": "Pipeline-style local-expression filter `not_found` for turning one successful strict lookup into `true` and any upstream `*_not_found` failure into `false` while preserving other failures.",
+                    "use_when": [
+                        "A conditional path should branch on ordinary target absence without widening the underlying strict probe contract.",
+                    ],
+                    "do_not_use_for": [
+                        "Recovering arbitrary non-success beyond not-found cases; use workflow.local_expression.filter.catch for explicit broader recovery.",
+                        "Preserving the original success value; `not_found` always returns a boolean verdict rather than the original payload.",
+                    ],
+                    "nearest_surfaces": [
+                        {"handle": "workflow.local_expression.filter.catch", "summary": "General explicit recovery filter with authored fallback values"},
+                        {"handle": "workflow.step.if", "summary": "Step-level optional routing surface where a boolean absence verdict is often useful"},
+                        {"handle": "workflow.local_expression.filter", "summary": "Overview of the pipeline filter family"},
+                    ],
+                    "inspect_next": ["workflow.local_expression.filter.catch", "workflow.step.if", "workflow.local_expression.filter"],
+                }
+            )
         filter_metadata.setdefault(
             "definition",
             f"Pipeline-style local-expression filter `{filter_name}` for transforming, projecting, or checking one value after an expression root has already been selected.",
@@ -5193,6 +5343,7 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
             "definition": "Select one named execution profile for this run.",
             "use_when": [
                 "You need one project-local profile override for this invocation.",
+                "This explicit launch choice should win over playbook defaults and remembered-profile switching attempted inside playbook-owned pre_run setup.",
             ],
             "do_not_use_for": [
                 "Passing workflow business inputs; use --input or --input-file for those.",
@@ -5254,6 +5405,24 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
             "nearest_surfaces": [
                 {"handle": "command-line.ordo-playbook", "summary": "Parent command surface for ordo-playbook"},
                 {"handle": "overview", "summary": "Public discovery overview that teaches the main JSON-capable help surfaces"},
+            ],
+        },
+        (
+            "ordo-playbook",
+            "--progress-steps",
+        ): {
+            "definition": "During run, emit each step name to stderr right before execution.",
+            "use_when": [
+                "You need immediate human-visible progress while run mode is executing real workflow steps.",
+                "You want progress lines without corrupting JSON or summary payloads written to stdout.",
+            ],
+            "do_not_use_for": [
+                "Non-run modes; this flag is only supported with run.",
+                "Machine-readable progress parsing from stdout; progress is emitted on stderr instead.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "command-line.ordo-playbook", "summary": "Parent command surface for ordo-playbook"},
+                {"handle": "command-line.ordo-playbook.flag.json", "summary": "Companion output-format flag that can still keep stdout machine-readable while progress goes to stderr"},
             ],
         },
     }

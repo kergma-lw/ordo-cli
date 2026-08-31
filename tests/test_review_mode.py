@@ -28,6 +28,37 @@ class ReviewModeTest(unittest.TestCase):
         self.assertEqual(validation["evidence"]["suggested_fix"], "add_early_guard_validation")
         self.assertEqual(validation["evidence"]["suggested_rewrite"], {"guards": ["inputs.repository"]})
 
+    def test_review_warns_when_gh_step_explicit_repository_overrides_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            connector_contexts={"gh": {"repository": "fork/repo"}},
+            steps=(Step(name="inspect", operation=OperationRef("gh.issue", with_={"repository": "owner/repo", "issue_number": 7})),),
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.gh_repository_override")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "with", "repository"])
+        self.assertEqual(finding["evidence"]["repository"], "owner/repo")
+        self.assertEqual(finding["evidence"]["context_repository"], "fork/repo")
+
+    def test_review_warns_when_gh_expression_repository_overrides_profile_context(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            steps=(Step(name="verify", operation=OperationRef("shell.command", with_={"command": "printf go"}), gate='gh.issue(repository="owner/repo", issue_number=7).state == "OPEN"'),),
+        )
+        profile = Profile(name="fork", connectors={"gh": {"repository": "fork/repo"}})
+
+        result = review_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        finding = next(item for item in result.outputs["findings"] if item["code"] == "review.workflow.gh_repository_override")
+        self.assertEqual(finding["path"], ["blocks", "0", "steps", "0", "gate"])
+        self.assertEqual(finding["evidence"]["reference"], "gh.issue")
+
     def test_review_reports_hint_for_likely_unquoted_literal_string(self) -> None:
         workflow = load_workflow_text(
             '''
@@ -568,6 +599,28 @@ blocks:
                 ),
             ),
             inputs={"repository": "acme/repo", "issue_number": 7, "project_id": "PVT_demo"},
+        )
+
+        result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertFalse(any(item["code"] == "review.workflow.missing_recommended_probe_coverage" for item in result.outputs["findings"]))
+
+    def test_review_recognizes_direct_guard_probe_for_field_specific_preflight_observation(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="sync-fork",
+            blocks=(
+                GuardBlock(guards=(Guard(OperationRef("gh.repo.actions.permissions")),)),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="disable-actions",
+                            operation=OperationRef("gh.repo.actions.permissions.set", with_={"enabled": False}),
+                        ),
+                    )
+                ),
+            ),
         )
 
         result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)

@@ -161,7 +161,9 @@ ordo-playbook --input-file body=./prompt.md plan inspect-issue
 
 `--input-file` reads the file contents as a raw UTF-8 string for that one run. When both `--input` and `--input-file` set the same key, `--input-file` wins.
 
-Workflow input declarations may also carry one optional `hint` string for invocation guidance. Discovery output such as `ordo-playbook workflows show <workflow>` should surface that hint alongside the input name and description.
+`ordo-playbook workflows show <workflow>` should primarily surface the playbook entry's invocation shape from `with`, including caller-provided `null` slots and any bound values.
+
+When full workflow-contract detail is needed, `ordo-playbook workflows show <workflow> --json` should also surface the workflow's declared input metadata, including any available `hint` strings alongside the input name and description.
 
 `hint` is guidance only. It is not itself a validation rule.
 

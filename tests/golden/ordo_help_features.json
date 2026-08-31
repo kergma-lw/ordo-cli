@@ -101,10 +101,10 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.paired_authoring_passes --json",
-          "handle": "workflow-authoring.paired_authoring_passes",
-          "name": "paired_authoring_passes",
-          "summary": "After adding or changing a workflow, run both ordo-playbook check <workflow> and ordo-playbook review <workflow>. Treat them as complementary authoring passes, not substitutes."
+          "command": "ordo-help describe workflow-rules.paired_check_review_passes --json",
+          "handle": "workflow-rules.paired_check_review_passes",
+          "name": "paired_check_review_passes",
+          "summary": "After adding or changing a workflow, run both ordo-playbook check <workflow> and ordo-playbook review <workflow>. Treat them as complementary check/review passes, not substitutes."
         }
       ],
       "summary": "Project-local launch catalog for named workflows, profile selection, pre_run orchestration, and static activation inputs."
@@ -211,14 +211,14 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
-          "handle": "workflow-authoring.explicit_execution_context",
+          "command": "ordo-help describe workflow-rules.explicit_execution_context --json",
+          "handle": "workflow-rules.explicit_execution_context",
           "name": "explicit_execution_context",
           "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic."
         },
         {
-          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-          "handle": "workflow-authoring.local_artifacts_are_context",
+          "command": "ordo-help describe workflow-rules.local_artifacts_are_context --json",
+          "handle": "workflow-rules.local_artifacts_are_context",
           "name": "local_artifacts_are_context",
           "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
         }
@@ -276,7 +276,7 @@
           "command": "ordo-help describe workflow.step.publish --json",
           "handle": "workflow.step.publish",
           "kind": "step_field",
-          "summary": "Published workflow step field metadata",
+          "summary": "Step field that carries the outward-facing payload emitted by a publish step for callers",
           "topic": "model"
         },
         {
@@ -362,31 +362,31 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.early_let --json",
-          "handle": "workflow-authoring.early_let",
+          "command": "ordo-help describe workflow-rules.early_let --json",
+          "handle": "workflow-rules.early_let",
           "name": "early_let",
           "summary": "Prefer an early let block when the workflow uses long, repeated, or semantically important expressions."
         },
         {
-          "command": "ordo-help describe workflow-authoring.value_register_before_result --json",
-          "handle": "workflow-authoring.value_register_before_result",
+          "command": "ordo-help describe workflow-rules.value_register_before_result --json",
+          "handle": "workflow-rules.value_register_before_result",
           "name": "value_register_before_result",
           "summary": "Use value + register when a built payload must be reused by later steps. Use result only to append one workflow-local result value, not to create a reusable named binding."
         },
         {
-          "command": "ordo-help describe workflow-authoring.publish_outputs --json",
-          "handle": "workflow-authoring.publish_outputs",
+          "command": "ordo-help describe workflow-rules.publish_outputs --json",
+          "handle": "workflow-rules.publish_outputs",
           "name": "publish_outputs",
           "summary": "Prefer publish: for intentional outward-facing workflow results."
         },
         {
-          "command": "ordo-help describe workflow-authoring.workflow_profile_binding_is_project_local --json",
-          "handle": "workflow-authoring.workflow_profile_binding_is_project_local",
+          "command": "ordo-help describe workflow-rules.workflow_profile_binding_is_project_local --json",
+          "handle": "workflow-rules.workflow_profile_binding_is_project_local",
           "name": "workflow_profile_binding_is_project_local",
           "summary": "Use top-level workflow.profile only when one workflow is intentionally bound to one project-local execution profile. Treat it as a restrictive local binding, not as the default reusable pattern."
         }
       ],
-      "summary": "One executable authoring unit with declared inputs, let bindings, state needs, blocks, and typed step forms."
+      "summary": "One executable workflow unit with declared inputs, let bindings, state needs, blocks, and typed step forms."
     },
     {
       "appropriate_when": [
@@ -474,14 +474,14 @@
       "related_examples": [],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-          "handle": "workflow-authoring.local_artifacts_are_context",
+          "command": "ordo-help describe workflow-rules.local_artifacts_are_context --json",
+          "handle": "workflow-rules.local_artifacts_are_context",
           "name": "local_artifacts_are_context",
           "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
         },
         {
-          "command": "ordo-help describe workflow-authoring.publish_outputs --json",
-          "handle": "workflow-authoring.publish_outputs",
+          "command": "ordo-help describe workflow-rules.publish_outputs --json",
+          "handle": "workflow-rules.publish_outputs",
           "name": "publish_outputs",
           "summary": "Prefer publish: for intentional outward-facing workflow results."
         }
@@ -580,8 +580,8 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.bounded_fan_out_is_structured_invocation --json",
-          "handle": "workflow-authoring.bounded_fan_out_is_structured_invocation",
+          "command": "ordo-help describe workflow-rules.bounded_fan_out_is_structured_invocation --json",
+          "handle": "workflow-rules.bounded_fan_out_is_structured_invocation",
           "name": "bounded_fan_out_is_structured_invocation",
           "summary": "Treat bounded fan-out as a structured invocation surface, not as a general control-flow language."
         }
@@ -609,14 +609,14 @@
           "command": "ordo-help describe workflow.run.run --json",
           "handle": "workflow.run.run",
           "kind": "run_field",
-          "summary": "Published workflow fragment-run call field metadata",
+          "summary": "Run-call field that selects the named reusable runtime target invoked by a run step",
           "topic": "model"
         },
         {
           "command": "ordo-help describe workflow.run.for_each --json",
           "handle": "workflow.run.for_each",
           "kind": "run_field",
-          "summary": "Published workflow fragment-run call field metadata",
+          "summary": "Run-call field that provides the array-valued repeated item source for bounded fan-out over one invocation-shaped step",
           "topic": "model"
         },
         {
@@ -634,11 +634,11 @@
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow-authoring.run_target_vs_inline_fan_out --json",
-          "handle": "workflow-authoring.run_target_vs_inline_fan_out",
+          "command": "ordo-help describe workflow-rules.run_target_vs_inline_fan_out --json",
+          "handle": "workflow-rules.run_target_vs_inline_fan_out",
           "kind": "rule",
           "summary": "Use a named run target for reusable, guard-bearing, or non-trivially sized repeated bodies. Use inline repeated steps only for short local repeated bodies.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         }
       ],
       "keywords": [
@@ -678,46 +678,46 @@
       },
       "related_examples": [
         {
-          "command": "ordo-help describe workflow-authoring.example.named_run_target_fan_out --json",
-          "handle": "workflow-authoring.example.named_run_target_fan_out",
+          "command": "ordo-help describe workflow-rules.example.named_run_target_fan_out --json",
+          "handle": "workflow-rules.example.named_run_target_fan_out",
           "name": "named_run_target_fan_out",
           "summary": "Use run + for_each when one reusable fragment should be invoked for each item."
         },
         {
-          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_local_steps --json",
-          "handle": "workflow-authoring.example.inline_fan_out_local_steps",
+          "command": "ordo-help describe workflow-rules.example.inline_fan_out_local_steps --json",
+          "handle": "workflow-rules.example.inline_fan_out_local_steps",
           "name": "inline_fan_out_local_steps",
           "summary": "Use inline steps + for_each only for short local repeated bodies."
         },
         {
-          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
-          "handle": "workflow-authoring.example.inline_fan_out_inner_if",
+          "command": "ordo-help describe workflow-rules.example.inline_fan_out_inner_if --json",
+          "handle": "workflow-rules.example.inline_fan_out_inner_if",
           "name": "inline_fan_out_inner_if",
           "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
         }
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.bounded_fan_out_is_structured_invocation --json",
-          "handle": "workflow-authoring.bounded_fan_out_is_structured_invocation",
+          "command": "ordo-help describe workflow-rules.bounded_fan_out_is_structured_invocation --json",
+          "handle": "workflow-rules.bounded_fan_out_is_structured_invocation",
           "name": "bounded_fan_out_is_structured_invocation",
           "summary": "Treat bounded fan-out as a structured invocation surface, not as a general control-flow language."
         },
         {
-          "command": "ordo-help describe workflow-authoring.run_target_vs_inline_fan_out --json",
-          "handle": "workflow-authoring.run_target_vs_inline_fan_out",
+          "command": "ordo-help describe workflow-rules.run_target_vs_inline_fan_out --json",
+          "handle": "workflow-rules.run_target_vs_inline_fan_out",
           "name": "run_target_vs_inline_fan_out",
           "summary": "Use a named run target for reusable, guard-bearing, or non-trivially sized repeated bodies. Use inline repeated steps only for short local repeated bodies."
         },
         {
-          "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
-          "handle": "workflow-authoring.fan_out_scope_and_conditions",
+          "command": "ordo-help describe workflow-rules.fan_out_scope_and_conditions --json",
+          "handle": "workflow-rules.fan_out_scope_and_conditions",
           "name": "fan_out_scope_and_conditions",
           "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only."
         },
         {
-          "command": "ordo-help describe workflow-authoring.inline_fan_out_invalid_shapes --json",
-          "handle": "workflow-authoring.inline_fan_out_invalid_shapes",
+          "command": "ordo-help describe workflow-rules.inline_fan_out_invalid_shapes --json",
+          "handle": "workflow-rules.inline_fan_out_invalid_shapes",
           "name": "inline_fan_out_invalid_shapes",
           "summary": "Keep inline bounded fan-out inside the published shape: for_each must be array-valued, nested for_each is invalid, nested guards are invalid, and outer with belongs only to named run targets."
         }
@@ -736,25 +736,25 @@
       ],
       "inspect_next": [
         {
-          "command": "ordo-help describe workflow-authoring.early_guards --json",
-          "handle": "workflow-authoring.early_guards",
+          "command": "ordo-help describe workflow-rules.early_guards --json",
+          "handle": "workflow-rules.early_guards",
           "kind": "rule",
           "summary": "Express workflow applicability near the start of the workflow, not as a late discovery during action execution.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
-          "command": "ordo-help describe workflow-authoring.input_validation_default --json",
-          "handle": "workflow-authoring.input_validation_default",
+          "command": "ordo-help describe workflow-rules.input_validation_default --json",
+          "handle": "workflow-rules.input_validation_default",
           "kind": "rule",
           "summary": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
-          "command": "ordo-help describe workflow-authoring.delegated_applicability --json",
-          "handle": "workflow-authoring.delegated_applicability",
+          "command": "ordo-help describe workflow-rules.delegated_applicability --json",
+          "handle": "workflow-rules.delegated_applicability",
           "kind": "rule",
           "summary": "Do not delegate workflow applicability to downstream action validation when the public surface can express the relevant precondition earlier.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
           "command": "ordo-help describe workflow.local_expression.filter --json",
@@ -804,7 +804,9 @@
           "first",
           "last",
           "length",
-          "unique"
+          "unique",
+          "catch",
+          "not_found"
         ],
         "allowed_roots": [
           "inputs",
@@ -829,26 +831,26 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.early_guards --json",
-          "handle": "workflow-authoring.early_guards",
+          "command": "ordo-help describe workflow-rules.early_guards --json",
+          "handle": "workflow-rules.early_guards",
           "name": "early_guards",
           "summary": "Express workflow applicability near the start of the workflow, not as a late discovery during action execution."
         },
         {
-          "command": "ordo-help describe workflow-authoring.input_validation_default --json",
-          "handle": "workflow-authoring.input_validation_default",
+          "command": "ordo-help describe workflow-rules.input_validation_default --json",
+          "handle": "workflow-rules.input_validation_default",
           "name": "input_validation_default",
           "summary": "Treat input validation as a default authoring step whenever you introduce or modify workflow inputs."
         },
         {
-          "command": "ordo-help describe workflow-authoring.delegated_applicability --json",
-          "handle": "workflow-authoring.delegated_applicability",
+          "command": "ordo-help describe workflow-rules.delegated_applicability --json",
+          "handle": "workflow-rules.delegated_applicability",
           "name": "delegated_applicability",
           "summary": "Do not delegate workflow applicability to downstream action validation when the public surface can express the relevant precondition earlier."
         },
         {
-          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-          "handle": "workflow-authoring.guard_result_contract",
+          "command": "ordo-help describe workflow-rules.guard_result_contract --json",
+          "handle": "workflow-rules.guard_result_contract",
           "name": "guard_result_contract",
           "summary": "A guard expression must evaluate to a boolean result."
         }
@@ -885,22 +887,22 @@
           "command": "ordo-help describe workflow.run.gate --json",
           "handle": "workflow.run.gate",
           "kind": "run_field",
-          "summary": "Published workflow fragment-run call field metadata",
+          "summary": "Run-call field that decides whether the whole invocation step may run at all before the protected work begins",
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
-          "handle": "workflow-authoring.separate_control_surfaces",
+          "command": "ordo-help describe workflow-rules.separate_control_surfaces --json",
+          "handle": "workflow-rules.separate_control_surfaces",
           "kind": "rule",
           "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: when one local step or local branch is optional inside an already-valid path.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
-          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-          "handle": "workflow-authoring.guard_result_contract",
+          "command": "ordo-help describe workflow-rules.guard_result_contract --json",
+          "handle": "workflow-rules.guard_result_contract",
           "kind": "rule",
           "summary": "A guard expression must evaluate to a boolean result.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         }
       ],
       "keywords": [
@@ -938,22 +940,22 @@
       },
       "related_examples": [
         {
-          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
-          "handle": "workflow-authoring.example.inline_fan_out_inner_if",
+          "command": "ordo-help describe workflow-rules.example.inline_fan_out_inner_if --json",
+          "handle": "workflow-rules.example.inline_fan_out_inner_if",
           "name": "inline_fan_out_inner_if",
           "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
         }
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.separate_control_surfaces --json",
-          "handle": "workflow-authoring.separate_control_surfaces",
+          "command": "ordo-help describe workflow-rules.separate_control_surfaces --json",
+          "handle": "workflow-rules.separate_control_surfaces",
           "name": "separate_control_surfaces",
           "summary": "Use each conditional surface for its own job: guards for workflow applicability and early rejection, gates for whether a path or step may run at all, configuration for stable context variation, and if: when one local step or local branch is optional inside an already-valid path."
         },
         {
-          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-          "handle": "workflow-authoring.guard_result_contract",
+          "command": "ordo-help describe workflow-rules.guard_result_contract --json",
+          "handle": "workflow-rules.guard_result_contract",
           "name": "guard_result_contract",
           "summary": "A guard expression must evaluate to a boolean result."
         }
@@ -986,18 +988,18 @@
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-          "handle": "workflow-authoring.native_expression_contexts",
+          "command": "ordo-help describe workflow-rules.native_expression_contexts --json",
+          "handle": "workflow-rules.native_expression_contexts",
           "kind": "rule",
           "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
-          "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
-          "handle": "workflow-authoring.fan_out_scope_and_conditions",
+          "command": "ordo-help describe workflow-rules.fan_out_scope_and_conditions --json",
+          "handle": "workflow-rules.fan_out_scope_and_conditions",
           "kind": "rule",
           "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         }
       ],
       "keywords": [
@@ -1034,33 +1036,33 @@
       },
       "related_examples": [
         {
-          "command": "ordo-help describe workflow-authoring.example.inline_fan_out_inner_if --json",
-          "handle": "workflow-authoring.example.inline_fan_out_inner_if",
+          "command": "ordo-help describe workflow-rules.example.inline_fan_out_inner_if --json",
+          "handle": "workflow-rules.example.inline_fan_out_inner_if",
           "name": "inline_fan_out_inner_if",
           "summary": "Use outer if for whole-step gating and inner if for per-item branching inside inline repeated steps."
         }
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-          "handle": "workflow-authoring.guard_result_contract",
+          "command": "ordo-help describe workflow-rules.guard_result_contract --json",
+          "handle": "workflow-rules.guard_result_contract",
           "name": "guard_result_contract",
           "summary": "A guard expression must evaluate to a boolean result."
         },
         {
-          "command": "ordo-help describe workflow-authoring.fan_out_scope_and_conditions --json",
-          "handle": "workflow-authoring.fan_out_scope_and_conditions",
+          "command": "ordo-help describe workflow-rules.fan_out_scope_and_conditions --json",
+          "handle": "workflow-rules.fan_out_scope_and_conditions",
           "name": "fan_out_scope_and_conditions",
           "summary": "Author bounded fan-out with explicit scope boundaries: outer if gates the whole repeated step, inner if applies per iteration, and inline repeated bodies keep iteration-local scope only."
         },
         {
-          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-          "handle": "workflow-authoring.native_expression_contexts",
+          "command": "ordo-help describe workflow-rules.native_expression_contexts --json",
+          "handle": "workflow-rules.native_expression_contexts",
           "name": "native_expression_contexts",
           "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
         }
       ],
-      "summary": "Boolean condition-authoring surface shared by step if and gate, with if for optional local branching and gate for admission decisions."
+      "summary": "Boolean condition surface shared by step if and gate, with if for optional local branching and gate for admission decisions."
     },
     {
       "appropriate_when": [
@@ -1108,11 +1110,11 @@
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-          "handle": "workflow-authoring.native_expression_contexts",
+          "command": "ordo-help describe workflow-rules.native_expression_contexts --json",
+          "handle": "workflow-rules.native_expression_contexts",
           "kind": "rule",
           "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
           "command": "ordo-help describe workflow.local_expression.adapter_seam --json",
@@ -1162,7 +1164,9 @@
           "first",
           "last",
           "length",
-          "unique"
+          "unique",
+          "catch",
+          "not_found"
         ],
         "roots": [
           "args",
@@ -1187,20 +1191,20 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-          "handle": "workflow-authoring.native_expression_contexts",
+          "command": "ordo-help describe workflow-rules.native_expression_contexts --json",
+          "handle": "workflow-rules.native_expression_contexts",
           "name": "native_expression_contexts",
           "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
         },
         {
-          "command": "ordo-help describe workflow-authoring.guard_result_contract --json",
-          "handle": "workflow-authoring.guard_result_contract",
+          "command": "ordo-help describe workflow-rules.guard_result_contract --json",
+          "handle": "workflow-rules.guard_result_contract",
           "name": "guard_result_contract",
           "summary": "A guard expression must evaluate to a boolean result."
         },
         {
-          "command": "ordo-help describe workflow-authoring.representation_adapters --json",
-          "handle": "workflow-authoring.representation_adapters",
+          "command": "ordo-help describe workflow-rules.representation_adapters --json",
+          "handle": "workflow-rules.representation_adapters",
           "name": "representation_adapters",
           "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results."
         }
@@ -1246,18 +1250,18 @@
           "topic": "command-line"
         },
         {
-          "command": "ordo-help describe workflow-authoring.decision_order --json",
-          "handle": "workflow-authoring.decision_order",
+          "command": "ordo-help describe workflow-rules.decision_order --json",
+          "handle": "workflow-rules.decision_order",
           "kind": "rule",
           "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
-          "command": "ordo-help describe workflow-authoring.structured_surface_bias --json",
-          "handle": "workflow-authoring.structured_surface_bias",
+          "command": "ordo-help describe workflow-rules.structured_surface_bias --json",
+          "handle": "workflow-rules.structured_surface_bias",
           "kind": "rule",
           "summary": "Prefer implementations that express product intent through typed public workflow surfaces.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         }
       ],
       "keywords": [
@@ -1295,26 +1299,26 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.decision_order --json",
-          "handle": "workflow-authoring.decision_order",
+          "command": "ordo-help describe workflow-rules.decision_order --json",
+          "handle": "workflow-rules.decision_order",
           "name": "decision_order",
           "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations."
         },
         {
-          "command": "ordo-help describe workflow-authoring.structured_surface_bias --json",
-          "handle": "workflow-authoring.structured_surface_bias",
+          "command": "ordo-help describe workflow-rules.structured_surface_bias --json",
+          "handle": "workflow-rules.structured_surface_bias",
           "name": "structured_surface_bias",
           "summary": "Prefer implementations that express product intent through typed public workflow surfaces."
         },
         {
-          "command": "ordo-help describe workflow-authoring.routine.* --json",
-          "handle": "workflow-authoring.routine.*",
+          "command": "ordo-help describe workflow-rules.routine.* --json",
+          "handle": "workflow-rules.routine.*",
           "name": "routine.*",
           "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
         },
         {
-          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-          "handle": "workflow-authoring.local_artifacts_are_context",
+          "command": "ordo-help describe workflow-rules.local_artifacts_are_context --json",
+          "handle": "workflow-rules.local_artifacts_are_context",
           "name": "local_artifacts_are_context",
           "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
         }
@@ -1353,25 +1357,25 @@
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow-authoring.routine.* --json",
-          "handle": "workflow-authoring.routine.*",
+          "command": "ordo-help describe workflow-rules.routine.* --json",
+          "handle": "workflow-rules.routine.*",
           "kind": "rule",
           "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
-          "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
-          "handle": "workflow-authoring.explicit_execution_context",
+          "command": "ordo-help describe workflow-rules.explicit_execution_context --json",
+          "handle": "workflow-rules.explicit_execution_context",
           "kind": "rule",
           "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         },
         {
-          "command": "ordo-help describe workflow-authoring.decision_order --json",
-          "handle": "workflow-authoring.decision_order",
+          "command": "ordo-help describe workflow-rules.decision_order --json",
+          "handle": "workflow-rules.decision_order",
           "kind": "rule",
           "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         }
       ],
       "keywords": [
@@ -1412,32 +1416,32 @@
       "related_examples": [],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.routine.* --json",
-          "handle": "workflow-authoring.routine.*",
+          "command": "ordo-help describe workflow-rules.routine.* --json",
+          "handle": "workflow-rules.routine.*",
           "name": "routine.*",
           "summary": "routine.* is a bounded opaque local-automation exception surface, not a normal extension path. Use it only after explicitly proving that no published structured workflow surface can express the required behavior more honestly."
         },
         {
-          "command": "ordo-help describe workflow-authoring.decision_order --json",
-          "handle": "workflow-authoring.decision_order",
+          "command": "ordo-help describe workflow-rules.decision_order --json",
+          "handle": "workflow-rules.decision_order",
           "name": "decision_order",
           "summary": "Choose the most structured public surface that can express the intent, and move to coarser fallbacks only after exhausting direct and composed public operations."
         },
         {
-          "command": "ordo-help describe workflow-authoring.explicit_execution_context --json",
-          "handle": "workflow-authoring.explicit_execution_context",
+          "command": "ordo-help describe workflow-rules.explicit_execution_context --json",
+          "handle": "workflow-rules.explicit_execution_context",
           "name": "explicit_execution_context",
           "summary": "Prefer workflows whose execution context is explicit. Do not rely on hidden ambient environment requirements inside workflow logic."
         },
         {
-          "command": "ordo-help describe workflow-authoring.local_artifacts_are_context --json",
-          "handle": "workflow-authoring.local_artifacts_are_context",
+          "command": "ordo-help describe workflow-rules.local_artifacts_are_context --json",
+          "handle": "workflow-rules.local_artifacts_are_context",
           "name": "local_artifacts_are_context",
           "summary": "Treat repository-local scripts, helpers, and conventions as context, not as the default source of truth."
         },
         {
-          "command": "ordo-help describe workflow-authoring.semantic_ambiguity --json",
-          "handle": "workflow-authoring.semantic_ambiguity",
+          "command": "ordo-help describe workflow-rules.semantic_ambiguity --json",
+          "handle": "workflow-rules.semantic_ambiguity",
           "name": "semantic_ambiguity",
           "summary": "Treat semantic ambiguity as a stop signal for clarification, not as permission to invent or preserve semantics silently."
         }
@@ -1490,11 +1494,11 @@
           "topic": "model"
         },
         {
-          "command": "ordo-help describe workflow-authoring.representation_adapters --json",
-          "handle": "workflow-authoring.representation_adapters",
+          "command": "ordo-help describe workflow-rules.representation_adapters --json",
+          "handle": "workflow-rules.representation_adapters",
           "kind": "rule",
           "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results.",
-          "topic": "workflow-authoring"
+          "topic": "workflow-rules"
         }
       ],
       "keywords": [
@@ -1600,14 +1604,14 @@
       ],
       "related_rules": [
         {
-          "command": "ordo-help describe workflow-authoring.representation_adapters --json",
-          "handle": "workflow-authoring.representation_adapters",
+          "command": "ordo-help describe workflow-rules.representation_adapters --json",
+          "handle": "workflow-rules.representation_adapters",
           "name": "representation_adapters",
           "summary": "Prefer representation adapters for transformations that feed guards, conditions, and published results."
         },
         {
-          "command": "ordo-help describe workflow-authoring.native_expression_contexts --json",
-          "handle": "workflow-authoring.native_expression_contexts",
+          "command": "ordo-help describe workflow-rules.native_expression_contexts --json",
+          "handle": "workflow-rules.native_expression_contexts",
           "name": "native_expression_contexts",
           "summary": "Prefer bare expressions in native and expression-first value contexts such as let:, with:, value:, publish:, result:, and for_each. For bare step if:, use either a compact expression or an equal-authority structured all/any/not form. When a step condition compares more than three predicates, require structured condition form instead of one long boolean string. Quote literal strings explicitly. Do not rely on expression-looking bare values silently falling back to literal text when evaluation fails."
         }
@@ -1616,5 +1620,5 @@
     }
   ],
   "document_kind": "features",
-  "purpose": "Compact workflow authoring feature map for authors and agents, with named handles for deeper discovery."
+  "purpose": "Compact workflow feature map for authors and agents, with named handles for deeper discovery."
 }

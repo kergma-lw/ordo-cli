@@ -95,7 +95,7 @@ When a caller is adding or changing a workflow, `ordo-help` should make the auth
 - `ordo-playbook review <workflow>` answers whether the workflow has authoring-quality findings.
 - `check` and `review` are complementary authoring passes; neither replaces the other.
 
-The public help surface should present this pairing in at least the `overview`, `workflow-authoring`, and `command-line` topics so a zero-knowledge caller does not infer that `check` alone is sufficient workflow sign-off.
+The public help surface should present this pairing in at least the `overview`, `workflow-rules`, and `command-line` topics so a zero-knowledge caller does not infer that `check` alone is sufficient workflow sign-off.
 
 ## External failure diagnostics
 
@@ -107,7 +107,7 @@ When runtime has normalized external command or remote-system context, public he
 
 ## Publish payload discipline
 
-`ordo-help workflow-authoring` should also warn against overstuffed `publish` payloads.
+`ordo-help workflow-rules` should also warn against overstuffed `publish` payloads.
 
 - Treat extra published fields as an authoring smell, not as harmless bonus detail.
 - Publish only the minimum outward-facing payload needed by the caller or by one downstream workflow that must make a decision from it.
@@ -117,7 +117,7 @@ When runtime has normalized external command or remote-system context, public he
 - If one field is not needed by a downstream workflow or by the user to make a decision, do not publish it.
 - Respect stricter local agent or project rules when they ask for an even smaller success surface.
 
-`ordo-help workflow-authoring` should show one short contrastive example:
+`ordo-help workflow-rules` should show one short contrastive example:
 
 - bad: `summary + repository + issue_number + changed + closed + url`
 - good: `summary + url`
@@ -126,7 +126,7 @@ The goal is to keep authored success output compact, legible, and intentional ra
 
 ## Local payload staging and result emission
 
-`ordo-help workflow-authoring` should also make the workflow-local staging boundary explicit.
+`ordo-help workflow-rules` should also make the workflow-local staging boundary explicit.
 
 - Use `value + register` when one assembled payload must be reused by later steps through `step.<register>...` reads.
 - Use `result` only to append one authored value to the workflow-local `results` list.
@@ -155,7 +155,7 @@ This sequence should let a zero-knowledge caller discover:
 - the purpose and scope of Ordo;
 - the main supported and unsupported capability boundaries;
 - the main authoring surfaces and contracts;
-- the paired workflow-authoring passes for applicability (`check`) and authoring quality (`review`);
+- the paired workflow rule passes for applicability (`check`) and authoring quality (`review`);
 - the public launch-command surface for common entrypoints such as `ordo-playbook`;
 - the public executable operation inventory.
 

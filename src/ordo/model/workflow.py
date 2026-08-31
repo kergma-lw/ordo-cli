@@ -131,6 +131,7 @@ class Step:
     register: str | None = None
     launcher: str | None = None
     resolved_run_path: str | None = field(default=None, kw_only=True)
+    run_origin: str | None = field(default=None, kw_only=True)
 
     def __post_init__(self) -> None:
         forms = (
@@ -268,6 +269,9 @@ class Workflow:
     blocks: tuple[WorkflowBlock, ...] = ()
     source_path: str | None = None
     launch_dir: str | None = None
+    launch_profile_name: str | None = None
+    launch_profile_source: str | None = None
+    playbook_owned_pre_run: bool = False
 
     def __init__(
         self,
@@ -288,6 +292,9 @@ class Workflow:
         blocks: tuple[WorkflowBlock, ...] = (),
         source_path: str | None = None,
         launch_dir: str | None = None,
+        launch_profile_name: str | None = None,
+        launch_profile_source: str | None = None,
+        playbook_owned_pre_run: bool = False,
         guards: tuple[Guard, ...] | None = None,
         steps: tuple[Step, ...] | None = None,
     ) -> None:
@@ -329,6 +336,9 @@ class Workflow:
         object.__setattr__(self, "blocks", normalized_blocks)
         object.__setattr__(self, "source_path", source_path)
         object.__setattr__(self, "launch_dir", launch_dir)
+        object.__setattr__(self, "launch_profile_name", launch_profile_name)
+        object.__setattr__(self, "launch_profile_source", launch_profile_source)
+        object.__setattr__(self, "playbook_owned_pre_run", playbook_owned_pre_run)
 
     @property
     def guards(self) -> tuple[Guard, ...]:

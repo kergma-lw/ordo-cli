@@ -27,6 +27,8 @@ class LocalExpressionEngineRegistryTest(unittest.TestCase):
                 "last",
                 "length",
                 "unique",
+                "catch",
+                "not_found",
             ),
         )
         self.assertEqual(VALUE_EXPRESSION_FILTERS["lower"].to_contract()["input_type"], "string")
@@ -35,6 +37,7 @@ class LocalExpressionEngineRegistryTest(unittest.TestCase):
         self.assertEqual(VALUE_EXPRESSION_FILTERS["lookup"].to_contract()["argument_count"], 1)
         self.assertEqual(VALUE_EXPRESSION_FILTERS["length"].to_contract()["output_type"], "number")
         self.assertEqual(VALUE_EXPRESSION_FILTERS["only"].to_contract()["authored_form"], "only(field=value) / only(field!=value)")
+        self.assertEqual(VALUE_EXPRESSION_FILTERS["catch"].to_contract()["argument_count"], 2)
 
     def test_supported_builtins_are_published_in_canonical_registry(self) -> None:
         self.assertEqual(tuple(VALUE_EXPRESSION_BUILTINS), ("format", "is_missing", "is_present"))

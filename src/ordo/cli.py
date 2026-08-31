@@ -85,15 +85,32 @@ Examples:
   ordo-playbook review close-task --json
 """
 
+RUN_MODE_HELP = """usage: ordo-playbook [options] run WORKFLOW
+
+Run the selected workflow and perform real changes.
+
+Default output is intended to be concise:
+  - overall run status
+  - results or published outputs on success
+  - failed guard or failed step details on failure
+
+Examples:
+  ordo-playbook run set-active-task
+  ordo-playbook --progress-steps run set-active-task
+  ordo-playbook --profile backend --input issue_number=42 run set-active-task --json
+"""
+
 
 def main() -> int:
-    if len(sys.argv) >= 3 and sys.argv[1] in {"review", "check", "plan", "explain"} and sys.argv[2] in {"-h", "--help"}:
+    if len(sys.argv) >= 3 and sys.argv[1] in {"review", "check", "plan", "explain", "run"} and sys.argv[2] in {"-h", "--help"}:
         if sys.argv[1] == "review":
             print(REVIEW_MODE_HELP)
         elif sys.argv[1] == "check":
             print(CHECK_MODE_HELP)
         elif sys.argv[1] == "plan":
             print(PLAN_MODE_HELP)
+        elif sys.argv[1] == "run":
+            print(RUN_MODE_HELP)
         else:
             print(EXPLAIN_MODE_HELP)
         return 0
@@ -108,6 +125,9 @@ def main() -> int:
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "review":
         print(REVIEW_MODE_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "run":
+        print(RUN_MODE_HELP)
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "workflows" and sys.argv[2] in {"-h", "--help"}:
         print(WORKFLOWS_HELP)
@@ -154,7 +174,12 @@ def main() -> int:
         metavar="KEY=PATH",
         help="load one workflow input value from a file as a raw string; repeatable",
     )
-    parser.add_argument("--json", action="store_true", help="emit JSON without extra decoration")
+    parser.add_argument(
+        "--progress-steps",
+        action="store_true",
+        help="during run, emit each step name to stderr right before execution",
+    )
+    parser.add_argument("--json", action="store_true", help="emit full JSON payload including diagnostics")
     parser.add_argument("command", nargs="*", help=argparse.SUPPRESS)
     args = parser.parse_args()
     command = list(args.command)
@@ -165,6 +190,8 @@ def main() -> int:
     if command[0] not in {"review", "check", "plan", "explain", "run", "next"}:
         parser.error(f"unknown command: {command[0]}")
     args.mode = command[0]
+    if args.progress_steps and args.mode != "run":
+        parser.error("--progress-steps is only supported with run")
     args.workflow = _resolve_execution_workflow_name(args, parser=parser)
     input_overrides = _parse_input_overrides(args.input_overrides, parser=parser)
     input_overrides.update(_parse_input_file_overrides(args.input_files, parser=parser))
@@ -195,6 +222,7 @@ def main() -> int:
                 activated.profile,
                 getattr(activated, "available_profiles", None),
                 getattr(activated, "profile_working_directories", None),
+                progress_steps=args.progress_steps,
             )
         if args.mode == "next":
             payload = {
@@ -256,7 +284,7 @@ def main() -> int:
             clear_default_connector_provider()
 
 
-def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_working_directories=None) -> RuntimeResult:
+def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_working_directories=None, *, progress_steps: bool = False) -> RuntimeResult:
     if mode == "review":
         return review_workflow(
             workflow,
@@ -284,6 +312,7 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
             profile=profile,
             available_profiles=available_profiles,
             profile_working_directories=profile_working_directories,
+            step_reporter=_stderr_step_progress_reporter() if progress_steps else None,
         )
     explained = explain_workflow(
         workflow,
@@ -292,6 +321,14 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
         profile_working_directories=profile_working_directories,
     )
     return explained
+
+
+def _stderr_step_progress_reporter():
+    def report(event) -> None:
+        sys.stderr.write(f"Running step: {event.step_name}\n")
+        sys.stderr.flush()
+
+    return report
 
 
 def _summarize_review_payload(payload: dict[str, object]) -> dict[str, object]:
@@ -349,8 +386,13 @@ def _summarize_run_payload(payload: dict[str, object]) -> dict[str, object]:
         return summary
     if payload.get("failed_guard") is not None:
         summary["failed_guard"] = payload.get("failed_guard")
+    guard_detail = payload.get("guard_detail")
+    if isinstance(guard_detail, dict):
+        summary["guard_detail"] = guard_detail
     if payload.get("failed_step") is not None:
         summary["failed_step"] = payload.get("failed_step")
+    if isinstance(payload.get("step_detail"), dict):
+        summary["step_detail"] = payload.get("step_detail")
     if isinstance(payload.get("message"), str):
         summary["message"] = payload.get("message")
     diagnostics = [item for item in payload.get("diagnostics", []) if isinstance(item, dict)]
@@ -365,8 +407,16 @@ def _summarize_run_payload(payload: dict[str, object]) -> dict[str, object]:
                 summary["item"] = details.get("fan_out_item")
             if isinstance(details.get("on_fail_context"), dict):
                 summary["on_fail_context"] = details.get("on_fail_context")
-    if "message" not in summary and isinstance(payload.get("failed_guard"), str):
-        summary["message"] = render_guard_failure_message(guard_reference=payload["failed_guard"])
+    if isinstance(payload.get("failed_guard"), str):
+        failed_subcondition = None
+        if isinstance(guard_detail, dict):
+            value = guard_detail.get("failed_subcondition")
+            failed_subcondition = value if isinstance(value, str) else None
+        if "message" not in summary or isinstance(guard_detail, dict):
+            summary["message"] = render_guard_failure_message(
+                guard_reference=payload["failed_guard"],
+                failed_subcondition=failed_subcondition,
+            )
     if isinstance(payload.get("failure"), dict):
         summary["failure"] = payload.get("failure")
     return summary
@@ -399,6 +449,8 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
             "failed_guard": result.failed_guard,
             "failed_step": result.failed_step,
             "diagnostics": [diagnostic.to_contract() for diagnostic in result.diagnostics],
+            **({"guard_detail": guard_detail} if (guard_detail := _failed_guard_detail_from_guard_details(result.outputs.get("guard_details"), result.failed_guard)) is not None else {}),
+            **({"step_detail": step_detail} if (step_detail := _failed_step_detail_from_operation_results(result.operation_results, result.failed_step)) is not None else {}),
             **({"failure": failure} if (failure := _build_run_failure_payload(result)) is not None else {}),
         }
         payload.update(
@@ -415,13 +467,13 @@ def _public_runtime_payload(command_mode: str, result: RuntimeResult) -> dict[st
 
 
 def _build_run_failure_message(result: RuntimeResult) -> str | None:
-    if result.diagnostics:
-        return _build_run_summary_message_from_diagnostic(result.diagnostics[0].to_contract(), failed_step=result.failed_step)
     if isinstance(result.failed_guard, str):
         return render_guard_failure_message(
             guard_reference=result.failed_guard,
             failed_subcondition=_failed_subcondition_from_guard_details(result.outputs.get("guard_details"), result.failed_guard),
         )
+    if result.diagnostics:
+        return _build_run_summary_message_from_diagnostic(result.diagnostics[0].to_contract(), failed_step=result.failed_step)
     return None
 
 
@@ -444,13 +496,38 @@ def _build_run_summary_message_from_diagnostic(diagnostic: dict[str, object], *,
 
 
 def _failed_subcondition_from_guard_details(guard_details: object, failed_guard: str) -> str | None:
+    detail = _failed_guard_detail_from_guard_details(guard_details, failed_guard)
+    if not isinstance(detail, dict):
+        return None
+    failed_subcondition = detail.get("failed_subcondition")
+    return failed_subcondition if isinstance(failed_subcondition, str) else None
+
+
+def _failed_guard_detail_from_guard_details(guard_details: object, failed_guard: object) -> dict[str, object] | None:
     if not isinstance(guard_details, list):
         return None
     for item in guard_details:
         if not isinstance(item, dict) or item.get("reference") != failed_guard:
             continue
-        failed_subcondition = item.get("failed_subcondition")
-        return failed_subcondition if isinstance(failed_subcondition, str) else None
+        return item
+    return None
+
+
+def _failed_step_detail_from_operation_results(operation_results: object, failed_step: object) -> dict[str, object] | None:
+    if not isinstance(operation_results, tuple | list) or not isinstance(failed_step, str):
+        return None
+    for item in reversed(operation_results):
+        if not hasattr(item, "raw"):
+            continue
+        raw = getattr(item, "raw")
+        if not isinstance(raw, dict):
+            continue
+        detail = raw.get("step_detail")
+        if not isinstance(detail, dict):
+            continue
+        if detail.get("step") != failed_step:
+            continue
+        return detail
     return None
 
 
@@ -580,17 +657,19 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                 when=entry.workflow_when,
                 file=str(entry.workflow_path),
                 working_directory=entry.working_directory,
-                with_inputs=entry.with_,
+                inputs=_workflow_entry_inputs_shape(entry),
                 caller_inputs=list(entry.caller_inputs),
-                inputs=[
+                optional_caller_inputs=list(entry.optional_caller_inputs) if entry.optional_caller_inputs else None,
+            )
+            if args.json:
+                payload["declared_inputs"] = [
                     _compact_mapping(
                         name=item.name,
                         description=item.description,
                         hint=item.hint,
                     )
                     for item in entry.inputs
-                ],
-            )
+                ]
     except PlaybookError as exc:
         return _emit_error(exc, as_json=args.json)
 
@@ -600,6 +679,15 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
     else:
         print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
+
+
+def _workflow_entry_inputs_shape(entry) -> dict[str, object]:
+    inputs = dict(entry.with_)
+    for name in entry.caller_inputs:
+        inputs[name] = None
+    for name in entry.optional_caller_inputs:
+        inputs[name] = None
+    return inputs
 
 
 def _parse_input_overrides(raw_items: list[str], *, parser: argparse.ArgumentParser) -> dict[str, object]:
@@ -659,8 +747,55 @@ def _emit_error(exc: PlaybookError, *, as_json: bool, requested_mode: str | None
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
     else:
-        print(json.dumps(payload, indent=2, sort_keys=True), file=sys.stderr)
+        print(json.dumps(_summarize_activation_error_payload(payload), indent=2, sort_keys=True), file=sys.stderr)
     return 1
+
+
+def _summarize_activation_error_payload(payload: dict[str, object]) -> dict[str, object]:
+    diagnostics = [item for item in payload.get("diagnostics", []) if isinstance(item, dict)]
+    summary: dict[str, object] = {
+        "mode": payload.get("mode"),
+        "status": payload.get("status"),
+    }
+    if payload.get("workflow") is not None:
+        summary["workflow"] = payload.get("workflow")
+
+    missing_inputs = [item for item in payload.get("missing_inputs", []) if isinstance(item, str)]
+    if missing_inputs:
+        summary["missing_inputs"] = missing_inputs
+
+    unknown_inputs = _collect_activation_input_names(diagnostics, code="playbook.workflow.input_unknown")
+    if unknown_inputs:
+        summary["unknown_inputs"] = unknown_inputs
+
+    message = payload.get("message")
+    if not isinstance(message, str) or not message:
+        first_diagnostic = diagnostics[0] if diagnostics else None
+        if isinstance(first_diagnostic, dict):
+            diagnostic_message = first_diagnostic.get("message")
+            if isinstance(diagnostic_message, str) and diagnostic_message:
+                message = diagnostic_message
+    if isinstance(message, str) and message:
+        summary["message"] = message
+
+    example = payload.get("example")
+    if isinstance(example, str) and example:
+        summary["example"] = example
+    return summary
+
+
+def _collect_activation_input_names(diagnostics: list[dict[str, object]], *, code: str) -> list[str]:
+    names: list[str] = []
+    for item in diagnostics:
+        if item.get("code") != code:
+            continue
+        details = item.get("details")
+        if not isinstance(details, dict):
+            continue
+        value = details.get("input")
+        if isinstance(value, str) and value not in names:
+            names.append(value)
+    return names
 
 
 def _summarize_explain_payload(payload: dict[str, object]) -> dict[str, object]:

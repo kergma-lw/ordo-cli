@@ -280,12 +280,14 @@ def activate_playbook(
     workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
 
     active_profile_name = profile_name
+    launch_profile_source = "explicit_cli" if profile_name is not None else None
     if active_profile_name is None:
         defaults = payload.get("defaults", {})
         if isinstance(defaults, dict):
             default_profile = defaults.get("profile")
             if isinstance(default_profile, str) and default_profile:
                 active_profile_name = default_profile
+                launch_profile_source = "default"
 
     profile = None
     resolved_profile_path: Path | None = None
@@ -391,6 +393,27 @@ def activate_playbook(
         input_overrides=None,
     )
     workflow = _resolve_workflow_state_paths(workflow, base_dir=working_directory or playbook_dir)
+    workflow = Workflow(
+        version=workflow.version,
+        workflow=workflow.workflow,
+        profile=workflow.profile,
+        inputs=workflow.inputs,
+        declared_inputs=workflow.declared_inputs,
+        explicit_input_keys=workflow.explicit_input_keys,
+        protected_input_keys=workflow.protected_input_keys,
+        let_bindings=workflow.let_bindings,
+        state_needs=workflow.state_needs,
+        state_bindings=workflow.state_bindings,
+        states=workflow.states,
+        step_results=workflow.step_results,
+        connector_contexts=workflow.connector_contexts,
+        blocks=workflow.blocks,
+        source_path=workflow.source_path,
+        launch_dir=workflow.launch_dir,
+        launch_profile_name=active_profile_name,
+        launch_profile_source=launch_profile_source,
+        playbook_owned_pre_run=workflow.playbook_owned_pre_run,
+    )
     semantic_report = validate_workflow_semantics(workflow, source=str(workflow_path))
     if not semantic_report.ok:
         raise PlaybookError(semantic_report.diagnostics)
@@ -479,6 +502,9 @@ def _apply_input_overrides(
         blocks=workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
+        launch_profile_name=workflow.launch_profile_name,
+        launch_profile_source=workflow.launch_profile_source,
+        playbook_owned_pre_run=workflow.playbook_owned_pre_run,
     )
 
     if profile is None:
@@ -733,6 +759,7 @@ def _prepend_pre_run_workflows(
                         run_inputs=entry.with_,
                         run_state_bindings=entry.state_bindings,
                         run_states=entry.states,
+                        run_origin="playbook_pre_run",
                     ),
                 )
             )
@@ -755,6 +782,9 @@ def _prepend_pre_run_workflows(
         blocks=tuple(pre_run_blocks) + workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
+        launch_profile_name=workflow.launch_profile_name,
+        launch_profile_source=workflow.launch_profile_source,
+        playbook_owned_pre_run=workflow.playbook_owned_pre_run,
     )
 
 
@@ -1083,6 +1113,9 @@ def _resolve_workflow_state_paths(workflow: Workflow, *, base_dir: Path) -> Work
         blocks=workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
+        launch_profile_name=workflow.launch_profile_name,
+        launch_profile_source=workflow.launch_profile_source,
+        playbook_owned_pre_run=workflow.playbook_owned_pre_run,
     )
 
 
@@ -1498,6 +1531,9 @@ def _with_workflow_connector_contexts(workflow: Workflow, connector_contexts: di
         blocks=workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
+        launch_profile_name=workflow.launch_profile_name,
+        launch_profile_source=workflow.launch_profile_source,
+        playbook_owned_pre_run=workflow.playbook_owned_pre_run,
     )
 
 
@@ -1528,6 +1564,9 @@ def _resolve_profile_working_directory(
         blocks=workflow.blocks,
         source_path=workflow.source_path,
         launch_dir=workflow.launch_dir,
+        launch_profile_name=workflow.launch_profile_name,
+        launch_profile_source=workflow.launch_profile_source,
+        playbook_owned_pre_run=workflow.playbook_owned_pre_run,
     )
     resolved_value = raw_value
     expression = _extract_value_expression(raw_value)

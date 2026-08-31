@@ -4,7 +4,7 @@
 
 A launcher is a named execution wrapper that may be selected explicitly for a step.
 
-This model is deprecated as a primary workflow-authoring surface.
+This model is deprecated as a primary workflow-rules surface.
 
 Launchers exist to support rare execution environments for shell-like steps without turning workflow authoring into a language-specific connector matrix.
 

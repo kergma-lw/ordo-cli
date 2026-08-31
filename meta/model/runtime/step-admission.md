@@ -14,6 +14,7 @@ It exists to model readiness and late admission checks that should fail honestly
 - `guards` answer whether workflow execution may cross an earlier workflow barrier.
 - `if` answers whether a particular step is applicable and should be skipped when false.
 - `gate` answers whether a reached step is admitted to execution and should fail when false.
+- Across all three condition surfaces, failed read-only observation is evaluation failure rather than boolean `false`.
 
 This distinction is semantic, not only diagnostic.
 

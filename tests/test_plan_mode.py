@@ -245,6 +245,36 @@ class PlanModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_items"][0]["kind"], "expression")
         self.assertEqual(result.outputs["guard_items"][0]["failed_subcondition"], 'git.branch.value != "main"')
 
+    def test_plan_guard_items_include_affected_inputs_and_lets(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: story-tasks-show
+inputs:
+  repository: owner/repo
+  issue_number: 103
+  project_id: demo-project
+let:
+  story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+blocks:
+  - guards:
+      - story_project_issue.exists
+  - steps: []
+"""
+        )
+
+        def probe(_resolved_guard, _workflow):
+            return OperationResult(status="ok", outputs={"exists": False})
+
+        result = plan_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.outputs["guard_items"][0]["affected_lets"], ["story_project_issue"])
+        self.assertEqual(
+            result.outputs["guard_items"][0]["affected_inputs"],
+            ["inputs.repository", "inputs.issue_number", "inputs.project_id"],
+        )
+
     def test_plan_preserves_bootstrap_details_in_outputs(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.worktree")),), steps=())
 

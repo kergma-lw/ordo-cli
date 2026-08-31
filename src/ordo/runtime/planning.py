@@ -368,6 +368,8 @@ def _build_guard_items(
                         "operation_status": None if operation_result is None else operation_result.status,
                         "failed_subcondition": detail.get("failed_subcondition") if isinstance(detail, dict) else None,
                         "failure_kind": detail.get("failure_kind") if isinstance(detail, dict) else None,
+                        "affected_inputs": [item for item in detail.get("affected_inputs", []) if isinstance(item, str)] if isinstance(detail, dict) else [],
+                        "affected_lets": [item for item in detail.get("affected_lets", []) if isinstance(item, str)] if isinstance(detail, dict) else [],
                         "supporting_step_names": _supporting_step_names_for_guard(resolved_guard.reference, supporting_steps_by_scope),
                         "supporting_value_paths": _supporting_value_paths_for_guard(resolved_guard.reference, supporting_value_paths_by_scope),
                         "freshness_state": "fresh"

@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
-import json
 import re
 
 from connectors.gh.actions._shared import ISSUE_INVENTORY_INVALIDATION
-from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
+from connectors.gh._external import command_text, fail_github_command
+from connectors.gh._repository import REPOSITORY_INPUTS, fetch_repository_payload, resolve_repository_identity
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail, ok
 
-_REPOSITORY_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)$")
 _ISSUE_URL_RE = re.compile(r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/issues/(?P<number>\d+)$")
 
 
 def info():
     return action(
         name="issue.create",
-        inputs={"repository": "string", "title": "string", "body": "string | null"},
+        inputs={**REPOSITORY_INPUTS, "title": "string", "body": "string | null"},
         effects=("create GitHub issue",),
         outputs={"issue_ref": "string", "repository": "string", "number": "integer", "url": "string", "title": "string"},
         failure_modes=("repository_not_found", "title_invalid", "create_blocked"),
@@ -26,26 +25,14 @@ def info():
 
 
 def run(ctx: OperationContext) -> OperationOutcome:
-    repository = str(ctx.input("repository"))
+    identity = resolve_repository_identity(ctx, failure_code="repository_not_found", diagnostic_prefix="action.gh_issue_create")
+    if isinstance(identity, OperationOutcome):
+        return identity
+    repository = identity.repository
     title = str(ctx.input("title"))
     body = _optional_body(ctx)
     if isinstance(body, OperationOutcome):
         return body
-
-    parsed = _parse_repository(repository)
-    if parsed is None:
-        return fail(
-            code="repository_not_found",
-            summary="GitHub repository reference must use OWNER/REPO format",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.invalid_repository",
-                    level="error",
-                    message="GitHub repository reference must use OWNER/REPO format",
-                    details={"reference": ctx.reference, "repository": repository},
-                ),
-            ),
-        )
 
     if not title.strip():
         return fail(
@@ -61,8 +48,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
             ),
         )
 
-    owner, repo = parsed
-    repository_lookup = _lookup_repository(ctx, repository=repository, owner=owner, repo=repo)
+    repository_lookup = _lookup_repository(ctx, identity=identity)
     if isinstance(repository_lookup, OperationOutcome):
         return repository_lookup
 
@@ -128,103 +114,20 @@ def _optional_body(ctx: OperationContext) -> str | None | OperationOutcome:
     return str(value)
 
 
-def _parse_repository(value: str) -> tuple[str, str] | None:
-    match = _REPOSITORY_RE.match(value)
-    if match is None:
-        return None
-    return match.group("owner"), match.group("repo")
-
-
-def _lookup_repository(ctx: OperationContext, *, repository: str, owner: str, repo: str) -> dict[str, object] | OperationOutcome:
-    try:
-        command = ctx.command(
-            [
-                "gh",
-                "api",
-                "graphql",
-                "-f",
-                "query=query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){id nameWithOwner}}",
-                "-f",
-                f"owner={owner}",
-                "-f",
-                f"repo={repo}",
-            ],
-            failures={"os_error": "create_blocked", "nonzero": "create_blocked"},
-        )
-    except MappedOutcomeError as exc:
-        outcome = exc.outcome
-        text = command_text(outcome.raw)
-        if outcome.status == "create_blocked" and text_mentions_not_found(text, "could not resolve to a repository", "repository not found"):
-            return fail(
-                code="repository_not_found",
-                summary="GitHub repository was not found",
-                diagnostics=(
-                    Diagnostic(
-                        code="action.gh_issue_create.repository_not_found",
-                        level="error",
-                        message="GitHub repository was not found",
-                        details={"reference": ctx.reference, "repository": repository},
-                    ),
-                ),
-                raw=outcome.raw,
-            )
-        return fail_github_command(
-            ctx,
-            code="create_blocked",
-            summary="Inspecting GitHub repository failed",
-            raw=outcome.raw,
-            diagnostic_code="action.gh_issue_create.repository_lookup_failed",
-            details={"repository": repository},
-            message="Inspecting GitHub repository failed",
-        )
-
-    try:
-        payload = json.loads(command.stdout) if command.stdout else {}
-    except json.JSONDecodeError as exc:
-        return fail(
-            code="create_blocked",
-            summary="GitHub repository output was not valid JSON",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.repository_invalid_json",
-                    level="error",
-                    message="GitHub repository output was not valid JSON",
-                    details={"reference": ctx.reference, "repository": repository, "error": str(exc)},
-                ),
-            ),
-            raw=command.raw,
-        )
-
-    repository_data = ((payload.get("data") or {}).get("repository"))
-    if repository_data is None:
-        return fail(
-            code="repository_not_found",
-            summary="GitHub repository was not found",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.repository_not_found",
-                    level="error",
-                    message="GitHub repository was not found",
-                    details={"reference": ctx.reference, "repository": repository},
-                ),
-            ),
-            raw=command.raw,
-        )
-    if not isinstance(repository_data, dict):
-        return fail(
-            code="create_blocked",
-            summary="GitHub repository output was not an object",
-            diagnostics=(
-                Diagnostic(
-                    code="action.gh_issue_create.repository_invalid_shape",
-                    level="error",
-                    message="GitHub repository output was not an object",
-                    details={"reference": ctx.reference, "repository": repository},
-                ),
-            ),
-            raw=command.raw,
-        )
-    return {"raw": command.raw, "repository": repository_data}
+def _lookup_repository(ctx: OperationContext, *, identity) -> dict[str, object] | OperationOutcome:
+    fetched = fetch_repository_payload(
+        ctx,
+        identity=identity,
+        diagnostic_prefix="action.gh_issue_create",
+        not_found_code="repository_not_found",
+        not_found_summary="GitHub repository was not found",
+        failed_code="create_blocked",
+        failed_summary="Inspecting GitHub repository failed",
+    )
+    if isinstance(fetched, OperationOutcome):
+        return fetched
+    payload, raw = fetched
+    return {"raw": raw, "repository": payload}
 
 
 def _parse_issue_output(

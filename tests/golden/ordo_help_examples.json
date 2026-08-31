@@ -127,6 +127,22 @@
       "verified": true
     },
     {
+      "definition": "Playbook top-level example that shows the required version marker together with repository-wide connector defaults before workflow and profile activation.",
+      "name": "playbook-connectors",
+      "path": "examples/playbook-connectors.yaml",
+      "related_topics": [
+        "features",
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "playbook_version_marker",
+        "playbook_connector_defaults",
+        "profile_override_boundary"
+      ],
+      "verified": true
+    },
+    {
       "definition": "Playbook pre-run example that inserts one shared preparation workflow before the requested published workflow runs.",
       "name": "playbook-pre-run",
       "path": "examples/playbook-pre-run.yaml",
@@ -139,6 +155,22 @@
         "playbook_pre_run",
         "runtime_profile_switch",
         "shared_preparation_stage"
+      ],
+      "verified": true
+    },
+    {
+      "definition": "Run-invocation example that contrasts named run-target fan-out with inline repeated steps, including outer if, gate, with, and register fields.",
+      "name": "run-fan-out",
+      "path": "examples/run-fan-out.yaml",
+      "related_topics": [
+        "model",
+        "examples",
+        "workflow-rules"
+      ],
+      "shows": [
+        "run_target_invocation",
+        "bounded_fan_out",
+        "inline_repeated_steps"
       ],
       "verified": true
     },

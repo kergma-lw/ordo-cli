@@ -896,6 +896,122 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
             }
         ],
     },
+    "connector.gh.repo": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_repo_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Inspect one GitHub repository's normalized identity and fork relationship before deciding whether hosted fork sync applies.",
+                "source_example": "gh-repo-sync",
+                "source_excerpt": {
+                    "path": "examples/gh-repo-sync.yaml",
+                    "start_line": 6,
+                    "end_line": 10
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "gh-repo-sync"
+                }
+            },
+            {
+                "name": "gh_repo_sync_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Inspect one hosted fork repository, sync its default branch from the parent repository, then publish the synced branch summary.",
+                "source_example": "gh-repo-sync",
+                "source_excerpt": {
+                    "path": "examples/gh-repo-sync.yaml",
+                    "start_line": 1,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "gh-repo-sync"
+                }
+            }
+        ],
+    },
+    "connector.gh.repo.sync": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_repo_sync_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Sync one hosted GitHub fork repository's default branch from its parent repository through the published repo.sync action.",
+                "source_example": "gh-repo-sync",
+                "source_excerpt": {
+                    "path": "examples/gh-repo-sync.yaml",
+                    "start_line": 11,
+                    "end_line": 15
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "gh-repo-sync"
+                }
+            }
+        ],
+    },
+    "connector.gh.repo.actions.permissions": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_repo_actions_permissions_probe_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Read one repository's GitHub Actions permissions before toggling or restoring the hosted Actions enabled state.",
+                "source_example": "gh-repo-actions-permissions",
+                "source_excerpt": {
+                    "path": "examples/gh-repo-actions-permissions.yaml",
+                    "start_line": 6,
+                    "end_line": 10
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "gh-repo-actions-permissions"
+                }
+            },
+            {
+                "name": "gh_repo_actions_permissions_flow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Read repository Actions permissions, disable Actions explicitly, then restore the prior enabled state through separate leaf actions.",
+                "source_example": "gh-repo-actions-permissions",
+                "source_excerpt": {
+                    "path": "examples/gh-repo-actions-permissions.yaml",
+                    "start_line": 1,
+                    "end_line": 18
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "gh-repo-actions-permissions"
+                }
+            }
+        ],
+    },
+    "connector.gh.repo.actions.permissions.set": {
+        "snippet_coverage": "excerpt_verified",
+        "canonical_examples": [
+            {
+                "name": "gh_repo_actions_permissions_set_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Set one repository's GitHub Actions enabled flag as an explicit leaf mutation step.",
+                "source_example": "gh-repo-actions-permissions",
+                "source_excerpt": {
+                    "path": "examples/gh-repo-actions-permissions.yaml",
+                    "start_line": 11,
+                    "end_line": 15
+                },
+                "verification": {
+                    "kind": "excerpt_verified",
+                    "example": "gh-repo-actions-permissions"
+                }
+            }
+        ],
+    },
     "connector.gh.project.field": {
         "snippet_coverage": "excerpt_verified",
         "canonical_examples": [
@@ -2879,6 +2995,44 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                     "world": "default",
                     "insertion_mode": "expression_value",
                     "target": "workflow.local_expression.filter.lookup",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
+    "workflow.local_expression.filter.catch": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "catch_issue_not_found_with_false_fallback",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Catch one known not-found contract code and substitute one explicit fallback value.",
+                "yaml": 'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["issue_not_found"], false)',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "expression_value",
+                    "target": "workflow.local_expression.filter.catch",
+                    "expected_status": "ok",
+                },
+            }
+        ],
+    },
+    "workflow.local_expression.filter.not_found": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "not_found_boolean_probe_verdict",
+                "kind": "positive",
+                "form": "value",
+                "summary": "Turn one strict probe lookup into a boolean absence check for conditional routing.",
+                "yaml": 'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | not_found',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "expression_value",
+                    "target": "workflow.local_expression.filter.not_found",
                     "expected_status": "ok",
                 },
             }

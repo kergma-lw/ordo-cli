@@ -118,6 +118,65 @@ class OptionalInputModesTest(unittest.TestCase):
         self.assertEqual(payload["mode"], "plan")
         self.assertEqual(stderr, "")
 
+    def test_cli_run_progress_steps_writes_progress_to_stderr_without_corrupting_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        with:
+                          repository:
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 0
+                    workflow: inspect-issue
+                    inputs:
+                      repository: {}
+                    blocks:
+                      - guards: []
+                      - steps:
+                          - name: publish
+                            publish:
+                              repository: ${inputs.repository}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code, payload, stderr = self._run_cli(root, "--input", "repository=owner/repo", "--progress-steps", "--json", "run", "inspect-issue")
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["published"], [{"repository": "owner/repo"}])
+        self.assertEqual(stderr, "Running step: publish\n")
+
+    def test_cli_rejects_progress_steps_outside_run_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "--progress-steps", "plan", "inspect-issue"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stderr(stderr):
+                        with self.assertRaises(SystemExit) as ctx:
+                            cli_main()
+
+        self.assertNotEqual(ctx.exception.code, 0)
+        self.assertIn("--progress-steps is only supported with run", stderr.getvalue())
+
     def test_cli_review_surfaces_optional_input_presence_guard_finding(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

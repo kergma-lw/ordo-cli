@@ -375,6 +375,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("unique", filters)
         self.assertIn("is_integer", filters)
         self.assertIn("in", filters)
+        self.assertIn("catch", filters)
+        self.assertIn("not_found", filters)
         self.assertEqual(filters["lower"]["argument_count"], 0)
         self.assertEqual(filters["field"]["argument_count"], 1)
         self.assertEqual(filters["lookup"]["argument_count"], 1)
@@ -386,6 +388,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(filters["length"]["output_type"], "number")
         self.assertEqual(filters["is_boolean"]["output_type"], "boolean")
         self.assertEqual(filters["in"]["input_type"], "json")
+        self.assertEqual(filters["catch"]["argument_count"], 2)
+        self.assertEqual(filters["not_found"]["argument_count"], 0)
 
     def test_model_filter_surface_follows_runtime_registry(self) -> None:
         model = json.loads(self.run_help("model", "--json").stdout)
@@ -411,6 +415,8 @@ class OrdoHelpCliTest(unittest.TestCase):
     def test_text_describe_local_expression_leaf_nodes_are_teaching_ready(self) -> None:
         lookup_filter = self.run_help("describe", "workflow.local_expression.filter.lookup")
         only_filter = self.run_help("describe", "workflow.local_expression.filter.only")
+        catch_filter = self.run_help("describe", "workflow.local_expression.filter.catch")
+        not_found_filter = self.run_help("describe", "workflow.local_expression.filter.not_found")
         is_present_builtin = self.run_help("describe", "workflow.local_expression.builtin.is_present")
 
         self.assertEqual(lookup_filter.returncode, 0)
@@ -424,6 +430,14 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Pipeline-style local-expression filter `only`", only_filter.stdout)
         self.assertIn("- authored form: only(field=value) / only(field!=value)", only_filter.stdout)
         self.assertIn("workflow.local_expression.filter", only_filter.stdout)
+
+        self.assertEqual(catch_filter.returncode, 0)
+        self.assertIn("Pipeline-style local-expression filter `catch(...)`", catch_filter.stdout)
+        self.assertIn("workflow.local_expression.filter.not_found", catch_filter.stdout)
+
+        self.assertEqual(not_found_filter.returncode, 0)
+        self.assertIn("Pipeline-style local-expression filter `not_found`", not_found_filter.stdout)
+        self.assertIn("workflow.step.if", not_found_filter.stdout)
 
         self.assertEqual(is_present_builtin.returncode, 0)
         self.assertIn("Function-style local-expression builtin `is_present(...)`", is_present_builtin.stdout)
@@ -836,6 +850,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         step_uses = json.loads(self.run_help("describe", "workflow.step.uses", "--json").stdout)
         step_register = json.loads(self.run_help("describe", "workflow.step.register", "--json").stdout)
         lookup = json.loads(self.run_help("describe", "workflow.local_expression.filter.lookup", "--json").stdout)
+        catch_filter = json.loads(self.run_help("describe", "workflow.local_expression.filter.catch", "--json").stdout)
+        not_found_filter = json.loads(self.run_help("describe", "workflow.local_expression.filter.not_found", "--json").stdout)
 
         self.assertEqual(state_set["snippet_coverage"], "runner_verified")
         self.assertEqual(state_set["canonical_examples"][0]["yaml"], 'state_set:\n  state.shared_state["active_profile"]: review')
@@ -897,6 +913,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(lookup["snippet_coverage"], "runner_verified")
         self.assertEqual(lookup["canonical_examples"][0]["form"], "value")
         self.assertEqual(lookup["canonical_examples"][0]["yaml"], 'inputs.status_labels | lookup("ready")')
+        self.assertEqual(catch_filter["snippet_coverage"], "runner_verified")
+        self.assertEqual(catch_filter["canonical_examples"][0]["form"], "value")
+        self.assertIn('| catch(["issue_not_found"], false)', catch_filter["canonical_examples"][0]["yaml"])
+        self.assertEqual(not_found_filter["snippet_coverage"], "runner_verified")
+        self.assertEqual(not_found_filter["canonical_examples"][0]["form"], "value")
+        self.assertIn("| not_found", not_found_filter["canonical_examples"][0]["yaml"])
 
     def test_describe_profile_overrides_family_publishes_teaching_ready_metadata_and_snippets(self) -> None:
         overrides = json.loads(self.run_help("describe", "profile.overrides", "--json").stdout)
@@ -1180,8 +1202,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 53)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 55)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 57)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 57)
         self.assertEqual(handles["profile.checks"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.launchers"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.connectors"]["snippet_coverage"], "excerpt_verified")
@@ -1227,6 +1249,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["connector.gh.pr.review_comments"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.pr.checks"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.pr.timeline"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.repo"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.repo.sync"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.repo.actions.permissions"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["connector.gh.repo.actions.permissions.set"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.project"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.project.field"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["connector.gh.project.field.option"]["snippet_coverage"], "excerpt_verified")
@@ -1672,7 +1698,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("compose.service(service=api)", service.stdout)
 
         self.assertEqual(start.returncode, 0)
-        self.assertIn("Start one Compose project or one declared Compose service.", start.stdout)
+        self.assertIn("Start one Compose project or one declared Compose service, reconciling one transient nonzero compose start", start.stdout)
         self.assertIn("preflight observations:", start.stdout)
         self.assertIn("invalidates observations:", start.stdout)
         self.assertIn("compose.start(service=api)", start.stdout)
@@ -1888,9 +1914,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         pr_timeline = self.run_help("describe", "connector.gh.pr.timeline")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("Published GitHub connector family for typed issue, pull-request, and project operations", gh_family.stdout)
+        self.assertIn("Published GitHub connector family for typed repository, issue, pull-request, and project operations", gh_family.stdout)
         self.assertIn("connector.gh.pr", gh_family.stdout)
-        self.assertIn("gh.pr(repository=owner/repo, pull_number=42)", gh_family.stdout)
+        self.assertIn("gh.pr(pull_number=42)", gh_family.stdout)
 
         self.assertEqual(pr.returncode, 0)
         self.assertIn("Probe one GitHub pull request as a typed metadata snapshot", pr.stdout)
@@ -1944,6 +1970,44 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(option.returncode, 0)
         self.assertIn("Probe whether one named selectable value exists", option.stdout)
         self.assertIn("connector.gh.project.issue.field_single_select.set", option.stdout)
+
+    def test_text_describe_connector_gh_repo_group_is_teaching_ready(self) -> None:
+        gh_family = self.run_help("describe", "connector.gh")
+        repo = self.run_help("describe", "connector.gh.repo")
+        sync = self.run_help("describe", "connector.gh.repo.sync")
+
+        self.assertEqual(gh_family.returncode, 0)
+        self.assertIn("typed repository, issue, pull-request, and project operations", gh_family.stdout)
+        self.assertIn("connector.gh.repo", gh_family.stdout)
+        self.assertIn("connector_contexts.gh.repository", gh_family.stdout)
+        self.assertIn("review warns when an explicit repository overrides that default", gh_family.stdout)
+        self.assertIn("- gh.repo", gh_family.stdout)
+
+        self.assertEqual(repo.returncode, 0)
+        self.assertIn("Probe one GitHub repository as a normalized identity and fork snapshot", repo.stdout)
+        self.assertIn("Prefer connector_contexts.gh.repository", repo.stdout)
+        self.assertIn("review warns when it differs from the current gh context repository", repo.stdout)
+        self.assertIn("connector.gh.repo.sync", repo.stdout)
+        self.assertIn("example_for: workflow_fragment", repo.stdout)
+
+        self.assertEqual(sync.returncode, 0)
+        self.assertIn("Sync one GitHub fork repository's default branch from its parent repository", sync.stdout)
+        self.assertIn("connector.git.sync.fetch", sync.stdout)
+
+    def test_text_describe_connector_gh_repo_actions_permissions_group_is_teaching_ready(self) -> None:
+        permissions = self.run_help("describe", "connector.gh.repo.actions.permissions")
+        set_permissions = self.run_help("describe", "connector.gh.repo.actions.permissions.set")
+
+        self.assertEqual(permissions.returncode, 0)
+        self.assertIn("Probe GitHub Actions permissions for one repository", permissions.stdout)
+        self.assertIn("Prefer connector_contexts.gh.repository", permissions.stdout)
+        self.assertIn("connector.gh.repo.actions.permissions.set", permissions.stdout)
+        self.assertIn("example_for: workflow_fragment", permissions.stdout)
+
+        self.assertEqual(set_permissions.returncode, 0)
+        self.assertIn("Set the GitHub Actions enabled state for one repository", set_permissions.stdout)
+        self.assertIn("Prefer connector_contexts.gh.repository", set_permissions.stdout)
+        self.assertIn("connector.gh.repo.sync", set_permissions.stdout)
 
     def test_text_describe_connector_gh_project_issue_group_is_teaching_ready(self) -> None:
         issue = self.run_help("describe", "connector.gh.project.issue")
@@ -2237,6 +2301,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Playbook field for declaring one or more playbook-owned workflows that run before the requested published workflow", pre_run.stdout)
         self.assertIn("playbook.pre_run_contract", pre_run.stdout)
         self.assertIn("playbook.pre_run(file=.ordo/workflows/bootstrap.yaml", pre_run.stdout)
+        self.assertIn("explicit --profile choice still remains authoritative", pre_run.stdout)
 
         self.assertEqual(pre_run_file.returncode, 0)
         self.assertIn("Pre-run entry field that selects which workflow file executes before the requested workflow.", pre_run_file.stdout)
@@ -2310,6 +2375,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         input_result = self.run_help("describe", "command-line.ordo-playbook.flag.input")
         input_file_result = self.run_help("describe", "command-line.ordo-playbook.flag.input_file")
         profile_result = self.run_help("describe", "command-line.ordo-playbook.flag.profile")
+        progress_result = self.run_help("describe", "command-line.ordo-playbook.flag.progress_steps")
         json_result = self.run_help("describe", "command-line.ordo-playbook.flag.json")
 
         self.assertEqual(input_result.returncode, 0)
@@ -2328,6 +2394,12 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Select one named execution profile for this run.", profile_result.stdout)
         self.assertIn("workflow.profile", profile_result.stdout)
         self.assertIn("profile.inputs", profile_result.stdout)
+        self.assertIn("should win over playbook defaults", profile_result.stdout)
+
+        self.assertEqual(progress_result.returncode, 0)
+        self.assertIn("During run, emit each step name to stderr right before execution.", progress_result.stdout)
+        self.assertIn("only supported with run", progress_result.stdout)
+        self.assertIn("progress is emitted on stderr instead", progress_result.stdout)
 
         self.assertEqual(json_result.returncode, 0)
         self.assertIn("Emit machine-readable JSON for this invocation instead of the default text rendering.", json_result.stdout)
@@ -2745,16 +2817,18 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["document_kind"], "command_line")
         playbook = next(item for item in payload["commands"] if item["name"] == "ordo-playbook")
         flags = {item["name"]: item for item in playbook["flags"]}
-        self.assertEqual(playbook["usage"], "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>")
+        self.assertEqual(playbook["usage"], "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>")
         self.assertEqual(playbook["discovery_commands"][0]["name"], "workflows list")
         self.assertEqual(playbook["modes"][0]["name"], "review <workflow>")
         self.assertEqual(playbook["modes"][1]["name"], "check <workflow>")
         self.assertEqual(playbook["run_success_surface"], "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced")
         self.assertIn("ordo-playbook workflows list", playbook["examples"])
         self.assertIn("ordo-playbook plan inspect-issue", playbook["examples"])
+        self.assertIn("ordo-playbook --progress-steps run inspect-issue", playbook["examples"])
         self.assertNotIn("--workflow", flags)
         self.assertEqual(flags["--input-file"]["effect"], "override_input_from_file")
         self.assertEqual(flags["--input-file"]["value_shape"], "KEY=PATH")
+        self.assertEqual(flags["--progress-steps"]["effect"], "emit_run_step_progress_to_stderr")
         self.assertIn("workflow.inputs declares the allowed activation keys", playbook["input_override_precedence"][0])
         self.assertIn("unknown activation inputs are rejected=true", playbook["input_override_precedence"])
         self.assertIn("when both --input and --input-file set the same key, --input-file wins", playbook["input_override_precedence"])

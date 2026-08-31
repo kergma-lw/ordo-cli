@@ -72,6 +72,13 @@
 - A write-path representation-adapter invocation must not be accepted as a presence-check argument.
 - Presence checks must preserve the distinction between an explicit `null` value and a missing lookup when the surrounding contract distinguishes them.
 
+## Explicit failure-recovery filters
+
+- A pipeline-stage recovery filter may normalize only explicitly named failure codes or explicit wildcard patterns rather than silently catching all non-success.
+- A recovery filter must preserve the default rule that unmatched read-only probe failures remain real evaluation failures.
+- A shorthand boolean absence filter such as `not_found` may normalize upstream `*_not_found` failures into `false` only as an explicit authored stage rather than as an implicit property of ordinary probe success.
+- Recovery filters should prefer narrow, reviewable failure-code scopes over broad catch-all patterns when the intended absence semantics are known more precisely.
+
 ## Include-binding context
 
 - Include-binding context evaluates caller-scoped bindings for included fragment arguments.

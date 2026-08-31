@@ -19,7 +19,7 @@ from .conditions import ConditionShapeError, iter_condition_expression_leaves, n
 from .fragment_runs import CheckRunExpansionDecision, classify_run_for_check
 from .gate_failure_context import evaluate_gate_failure_context
 from .local_expression_contexts import LocalExpressionContext
-from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, ConditionObservationRequest, ConditionObservationResult, FilterApplicationNode, ListNode, LiteralNode, LocalExpressionParseError, ObjectEntryNode, ObjectNode, OnlyPredicateNode, PipelineNode, ReadOnlyObservationSession, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, evaluate_condition_expression, parse_local_expression_tree, render_expression_text
+from .local_expression_engine.core import AdapterBindingNode, AdapterInvocationNode, BinaryNode, BuiltinCallNode, CallArgumentNode, CallNode, ConditionObservationRequest, ConditionObservationResult, FilterApplicationNode, ListNode, LiteralNode, LocalExpressionParseError, ObjectEntryNode, ObjectNode, OnlyPredicateNode, PipelineNode, ReadOnlyObservationSession, ReferenceNode, StateReferenceNode, UnaryNode, ValueExpressionNode, collect_workflow_expression_dependencies, evaluate_condition_expression, parse_local_expression_tree, render_expression_text
 from .local_expressions import extract_embedded_local_expression, resolve_workflow_let_reference_node
 from .launchers import validate_step_launchers
 from .preflight_interpreter import (
@@ -32,7 +32,7 @@ from .preflight_interpreter import (
     store_preflight_register_output,
 )
 from .preflight_steps import classify_preflight_step
-from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch
+from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch, should_ignore_runtime_profile_switch
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
 from .value_resolution import ValueResolutionError, resolve_runtime_value
@@ -579,6 +579,7 @@ def _build_check_analysis_tree(
                     result,
                     observation_scopes=_guard_observation_scopes(resolved_guard),
                     observations=_guard_observations(resolved_guard),
+                    dependency_summary=_guard_dependency_summary(resolved_guard, effective_workflow),
                 )
                 guard_details.append(detail)
                 block_guard_details.append(detail)
@@ -1993,6 +1994,11 @@ def _apply_static_profile_switch_block(
             return None
         current_profile = available_profiles[profile_name]
         current_profile_name = profile_name
+        if should_ignore_runtime_profile_switch(current_workflow, target_profile_name=profile_name):
+            current_profile = available_profiles[cast(str, current_workflow.launch_profile_name)]
+            current_profile_name = current_profile.name
+            current_overrides = current_profile.overrides
+            continue
         applied = apply_runtime_profile_switch(current_workflow, current_profile)
         current_workflow = current_workflow if applied.workflow is None else applied.workflow
         current_overrides = current_profile.overrides
@@ -2377,6 +2383,37 @@ def _canonical_observation_key(observation: dict[str, object], *, workflow: Work
     return json.dumps(_canonicalize_probe_descriptor(observation, workflow=workflow), sort_keys=True, separators=(",", ":"))
 
 
+def _canonical_observation_shape(observation: dict[str, object], *, workflow: Workflow | None = None) -> tuple[str, tuple[str, ...]]:
+    canonical = _canonicalize_probe_descriptor(observation, workflow=workflow)
+    if not isinstance(canonical, dict):
+        return ("", ())
+    payload = {key: value for key, value in canonical.items() if key != "fields"}
+    import json
+
+    base = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    raw_fields = canonical.get("fields", [])
+    fields = tuple(str(item) for item in raw_fields) if isinstance(raw_fields, list) else ()
+    return base, fields
+
+
+def _observation_covers(
+    available: dict[str, object],
+    required: dict[str, object],
+    *,
+    available_workflow: Workflow | None = None,
+    required_workflow: Workflow | None = None,
+) -> bool:
+    available_base, available_fields = _canonical_observation_shape(available, workflow=available_workflow)
+    required_base, required_fields = _canonical_observation_shape(required, workflow=required_workflow)
+    if not available_base or available_base != required_base:
+        return False
+    if not required_fields:
+        return not available_fields
+    if not available_fields:
+        return True
+    return set(required_fields).issubset(set(available_fields))
+
+
 def _canonicalize_probe_descriptor(value: JSONValue | dict[str, object], *, workflow: Workflow | None = None) -> JSONValue:
     if isinstance(value, str):
         canonical_expression = _canonicalize_authored_reference_string(value, workflow=workflow)
@@ -2462,22 +2499,23 @@ def _build_preflight_support(
             "missing_probes": [],
         }
     recommended = [_render_preflight_observation(template, action_call=action_call) for template in templates]
-    known_keys = {_canonical_observation_key(item, workflow=None) for item in known_observations}
-    intent_keys = {
-        _canonical_observation_key(item, workflow=workflow)
-        for item in ([] if authored_probe_intents is None else authored_probe_intents)
-        if isinstance(item, dict)
-    }
-    matched = [item for item in recommended if _canonical_observation_key(item, workflow=workflow) in known_keys]
+    intent_items = [item for item in ([] if authored_probe_intents is None else authored_probe_intents) if isinstance(item, dict)]
+    matched = [
+        item
+        for item in recommended
+        if any(_observation_covers(known, item, available_workflow=None, required_workflow=workflow) for known in known_observations if isinstance(known, dict))
+    ]
     unmaterialized = [
         item
         for item in recommended
-        if _canonical_observation_key(item, workflow=workflow) not in known_keys and _canonical_observation_key(item, workflow=workflow) in intent_keys
+        if not any(_observation_covers(known, item, available_workflow=None, required_workflow=workflow) for known in known_observations if isinstance(known, dict))
+        and any(_observation_covers(intent, item, available_workflow=workflow, required_workflow=workflow) for intent in intent_items)
     ]
     missing = [
         item
         for item in recommended
-        if _canonical_observation_key(item, workflow=workflow) not in known_keys and _canonical_observation_key(item, workflow=workflow) not in intent_keys
+        if not any(_observation_covers(known, item, available_workflow=None, required_workflow=workflow) for known in known_observations if isinstance(known, dict))
+        and not any(_observation_covers(intent, item, available_workflow=workflow, required_workflow=workflow) for intent in intent_items)
     ]
     if len(matched) == len(recommended):
         strength = "strong"
@@ -2783,6 +2821,23 @@ def _guard_observations(resolved_guard: ResolvedOperation | ResolvedConditionExp
     return []
 
 
+def _guard_dependency_summary(
+    resolved_guard: ResolvedOperation | ResolvedConditionExpression,
+    workflow: Workflow,
+) -> dict[str, object]:
+    if not isinstance(resolved_guard, ResolvedConditionExpression):
+        return {
+            "affected_inputs": [],
+            "affected_lets": [],
+        }
+    summary = collect_workflow_expression_dependencies(
+        resolved_guard.parsed,
+        workflow,
+        context=LocalExpressionContext.GUARD,
+    )
+    return summary.to_contract()
+
+
 def _collect_authored_probe_intents(guard_details: list[dict[str, object]]) -> list[dict[str, object]]:
     intents: list[dict[str, object]] = []
     for detail in guard_details:
@@ -2801,13 +2856,14 @@ def _build_guard_detail(
     *,
     observation_scopes: list[str] | None = None,
     observations: list[dict[str, object]] | None = None,
+    dependency_summary: dict[str, object] | None = None,
 ) -> dict[str, object]:
     actual_observations = result.raw.get("observations")
     authored_probes = [] if observations is None else [dict(item) for item in observations]
     successful_probes = [dict(item) for item in actual_observations if isinstance(item, dict)] if isinstance(actual_observations, list) else []
     if not successful_probes and result.status == "ok":
         successful_probes = [dict(item) for item in authored_probes]
-    return {
+    detail = {
         "reference": reference,
         "status": result.status,
         "summary": result.summary,
@@ -2818,3 +2874,10 @@ def _build_guard_detail(
         "authored_probes": authored_probes,
         "probes": successful_probes,
     }
+    if isinstance(dependency_summary, dict):
+        detail["affected_inputs"] = [item for item in dependency_summary.get("affected_inputs", []) if isinstance(item, str)]
+        detail["affected_lets"] = [item for item in dependency_summary.get("affected_lets", []) if isinstance(item, str)]
+    else:
+        detail["affected_inputs"] = []
+        detail["affected_lets"] = []
+    return detail

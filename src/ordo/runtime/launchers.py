@@ -105,14 +105,18 @@ def apply_launcher_to_step(step: Step, resolved_step: ResolvedOperation, workflo
             ),
         )
 
-    try:
-        original_command = resolve_runtime_value(step.operation.with_.get("command"), workflow)
-    except ValueResolutionError as exc:
-        return None, None, OperationResult(
-            status="execution_error",
-            summary=exc.message,
-            diagnostics=(exc.to_diagnostic(),),
-        )
+    resolved_inputs = resolved_step.resolved_inputs if isinstance(resolved_step.resolved_inputs, dict) else None
+    if resolved_inputs is not None and "command" in resolved_inputs:
+        original_command = resolved_inputs.get("command")
+    else:
+        try:
+            original_command = resolve_runtime_value(step.operation.with_.get("command"), workflow)
+        except ValueResolutionError as exc:
+            return None, None, OperationResult(
+                status="execution_error",
+                summary=exc.message,
+                diagnostics=(exc.to_diagnostic(),),
+            )
     if not isinstance(original_command, str):
         return None, None, OperationResult(
             status="execution_error",
@@ -138,6 +142,11 @@ def apply_launcher_to_step(step: Step, resolved_step: ResolvedOperation, workflo
             operation=resolved_step.operation,
             source=resolved_step.source,
             declared_with=declared_with,
+            resolved_inputs=(
+                {**resolved_inputs, "command": wrapped}
+                if isinstance(resolved_inputs, dict)
+                else None
+            ),
         ),
         AppliedLauncher(name=step.launcher, definition=launcher),
         None,

@@ -86,7 +86,7 @@ EXAMPLES_CATALOG: JSONObject = {
             "path": "examples/run-fan-out.yaml",
             "definition": "Run-invocation example that contrasts named run-target fan-out with inline repeated steps, including outer if, gate, with, and register fields.",
             "shows": ["run_target_invocation", "bounded_fan_out", "inline_repeated_steps"],
-            "related_topics": ["model", "examples", "workflow-authoring"],
+            "related_topics": ["model", "examples", "workflow-rules"],
         },
         {
             "name": "text-adapter",

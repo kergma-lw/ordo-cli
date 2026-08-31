@@ -120,6 +120,10 @@
   - `exists`
   - `kind`
   - `content`
+- The probe must expose these path-derived file metadata projections:
+  - `basename`
+  - `filename_without_extension`
+  - `extension`
 - The MVP may additionally expose file-snapshot metadata that belongs naturally to the same observed file, for example:
   - `size`
   - `owner`
@@ -133,6 +137,8 @@
 - `content` is part of the probe contract rather than an optional side channel.
 - `kind` must describe filesystem-entry kind rather than content classification.
 - `kind` must not depend on the external `file` utility or on MIME/magic classification heuristics.
+- `basename`, `filename_without_extension`, and `extension` must be derived from the resolved file path rather than from raw user input spelling.
+- `extension` must use the final basename suffix after the last dot and must not include the dot.
 - `line_count`, when exposed, is derived from `content`.
 
 ## Failure contract
@@ -147,6 +153,7 @@
 - The probe must stay focused on one path and one file snapshot.
 - The probe must not absorb tree search, directory listing, config parsing, content classification, or mutation semantics.
 - The probe must not become a generic filesystem API bundle.
+- The probe must not expand into dirname, join, slugify, or traversal helper semantics.
 
 ## Discovery rule
 
@@ -739,6 +746,13 @@
 - Other adapter failures such as `ambiguous`, `invalid_path`, `invalid_root_value`, or `invalid_action` must remain ordinary failures rather than being collapsed into boolean absence.
 - A write-path representation-adapter invocation must not be accepted as a presence-check argument.
 - Presence checks must preserve the distinction between an explicit `null` value and a missing lookup when the surrounding contract distinguishes them.
+
+## Explicit failure-recovery filters
+
+- A pipeline-stage recovery filter may normalize only explicitly named failure codes or explicit wildcard patterns rather than silently catching all non-success.
+- A recovery filter must preserve the default rule that unmatched read-only probe failures remain real evaluation failures.
+- A shorthand boolean absence filter such as `not_found` may normalize upstream `*_not_found` failures into `false` only as an explicit authored stage rather than as an implicit property of ordinary probe success.
+- Recovery filters should prefer narrow, reviewable failure-code scopes over broad catch-all patterns when the intended absence semantics are known more precisely.
 
 ## Include-binding context
 
@@ -2755,6 +2769,18 @@ For read-only adapter invocation arguments, the modeled interpretation is:
 - adapter `not_found` means missing;
 - any other adapter failure remains a real evaluation failure.
 
+### Explicit failure recovery filter
+
+An explicit failure-recovery filter is one product-defined pipeline stage that may replace one selected set of upstream evaluation failures with one authored fallback value without changing the default rule that ordinary probe failure aborts expression evaluation.
+
+The modeled recovery shape is:
+
+- default local-expression evaluation remains strict and fails on read-only probe failure;
+- one recovery filter may catch only the explicitly named failure codes or wildcarded failure-code patterns it declares;
+- unmatched failures must remain ordinary failures;
+- recovery is workflow-owned authoring and must not silently change the public connector contract of the upstream probe;
+- one shorthand such as `not_found` may exist for the common boolean case where upstream `*_not_found` becomes `false` and upstream success becomes `true`.
+
 ### Representation adapter
 
 A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
@@ -2909,6 +2935,8 @@ The intended execution contract is:
 The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
 When that happens, the surfaced runtime diagnostic should preserve the underlying probe-failure diagnostics rather than exposing only one wrapper error at the outer expression site.
 If the underlying probe failure already knows that the cause is external, the surfaced runtime diagnostic should preserve that distinction so the caller does not mistake an external command or remote-system failure for local workflow logic failure.
+
+If one explicit failure-recovery filter is authored downstream in the same pipeline, canonical evaluation may allow that filter to normalize only the selected upstream failure codes into its authored fallback value while preserving the underlying unmatched-failure diagnostics for any still-failing outcome.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 
@@ -4954,6 +4982,7 @@ It exists to model readiness and late admission checks that should fail honestly
 - `guards` answer whether workflow execution may cross an earlier workflow barrier.
 - `if` answers whether a particular step is applicable and should be skipped when false.
 - `gate` answers whether a reached step is admitted to execution and should fail when false.
+- Across all three condition surfaces, failed read-only observation is evaluation failure rather than boolean `false`.
 
 This distinction is semantic, not only diagnostic.
 
@@ -5263,10 +5292,26 @@ Guard evaluation is part of the runtime decision surface, not only a hidden impl
 See also `meta/model/runtime/check-semantics.md` for the normative `check`-mode rules that constrain guard-coverage claims and incomplete preflight verdicts.
 Step-derived read-only knowledge used by guard evaluation must follow the contract in `meta/model/runtime/preflight-step-interpreter.md`.
 
+## Condition-surface summary
+
+- `guards` answer whether workflow execution may cross an earlier workflow barrier.
+- `if` answers whether one reached step should execute or be intentionally skipped.
+- `gate` answers whether one reached step is admitted to execution and should fail when false.
+- Across all three condition surfaces, failed read-only observation is evaluation failure rather than boolean `false`.
+
+Compact summary:
+
+| Surface | `false` means | evaluation failure means |
+| --- | --- | --- |
+| `guards` | workflow may not continue past the barrier | workflow applicability could not be established honestly |
+| `gate` | the reached step is not admitted to execution | admission could not be established honestly |
+| `if` | the reached step is intentionally skipped | step eligibility could not be established honestly |
+
 ## Minimum runtime structure
 
 - A failed guard result must identify the blocking guard item.
 - A failed guard result must identify the failing subcondition when available.
+- A failed guard result must identify the affected workflow inputs and referenced workflow `let` bindings when that dependency path is statically knowable.
 - Runtime outputs should preserve observed values when they materially explain the outcome.
 - Runtime outputs should preserve a machine-usable evaluation trace rather than collapsing everything into a single boolean.
 
@@ -5284,6 +5329,7 @@ Runtime guard evaluation must preserve the distinction between:
 - The trace should preserve boolean structure closely enough for explanation.
 - Probe-level observations should remain attributable to the probe reference that produced them.
 - A repeated identical probe reference within one expression should be reusable without requiring duplicate probe execution.
+- Successful workflow-`let` expansion used by guard evaluation should remain visible enough for downstream diagnostics to attribute the blocking condition to the authored binding name.
 
 <!-- source: model/runtime/package-layout.md -->
 
@@ -5514,6 +5560,9 @@ Shared prerequisites should not be duplicated in every operation contract if the
 ```json
 {
   "path": "/workspace/app.env",
+  "basename": "app.env",
+  "filename_without_extension": "app",
+  "extension": "env",
   "exists": true,
   "kind": "file",
   "content": "HOST=localhost\nPORT=5432\n",
@@ -5528,10 +5577,20 @@ Shared prerequisites should not be duplicated in every operation contract if the
 
 ## Modeled semantics
 
+- `basename` is the last path segment from the resolved file path.
+- `filename_without_extension` and `extension` are deterministic projections of `basename` using the last dot only.
+- `extension` does not include the dot.
 - `exists` reports whether the requested path resolved to an existing file snapshot in the success case.
 - `kind` uses connector-owned filesystem-entry vocabulary rather than content-type or MIME vocabulary.
 - `content` is the canonical payload of the snapshot rather than a raw-detail afterthought.
 - `size`, `owner`, `group`, `permissions`, `modified_at`, and `line_count` are file-snapshot facts, not parsing or policy results.
+
+## Basename split examples
+
+- `foo.txt` → `basename=foo.txt`, `filename_without_extension=foo`, `extension=txt`
+- `archive.tar.gz` → `basename=archive.tar.gz`, `filename_without_extension=archive.tar`, `extension=gz`
+- `README` → `basename=README`, `filename_without_extension=README`, `extension=""`
+- `.env` → `basename=.env`, `filename_without_extension=""`, `extension=env`
 
 ## Failure model
 
@@ -7556,6 +7615,7 @@ Guard evaluation results must remain explainable as a machine-usable runtime sur
 
 - A blocked result identifies the blocking guard item.
 - A blocked result identifies the failing subcondition when available.
+- A blocked result identifies affected workflow inputs and workflow `let` bindings when available from guard dependency analysis.
 - Runtime output distinguishes boolean guard failure from probe evaluation failure.
 - Guard-evaluation traces remain structured enough for `check`, `plan`, and `explain` to report consistent blocker identity.
 - Reuse of repeated identical probe references inside one expression does not weaken explainability.

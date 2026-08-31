@@ -30,7 +30,7 @@ Browse playbook workflows or launch one named workflow into one runtime mode
 ### Discovery commands
 
 - `workflows list` — list declared playbook workflows with project-local descriptions
-- `workflows show <workflow>` — show one workflow entry with file metadata and root-declared inputs
+- `workflows show <workflow>` — show one workflow entry with file metadata and playbook invocation inputs; `--json` also includes declared workflow inputs
 
 ### Input override precedence
 
@@ -85,7 +85,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
         },
         {
           "name": "workflows show <workflow>",
-          "summary": "show one workflow entry with file metadata and root-declared inputs"
+          "summary": "show one workflow entry with file metadata and playbook invocation inputs; --json also includes declared workflow inputs"
         }
       ],
       "examples": [

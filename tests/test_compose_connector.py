@@ -152,12 +152,14 @@ class ComposeConnectorTest(unittest.TestCase):
                 declared_with={"service": "api"},
             )
 
-            with patch("subprocess.run") as run:
+            with patch("subprocess.run") as run, patch("connectors.compose.actions.start.time.sleep") as sleep:
                 run.side_effect = [
                     self._completed(stdout="Docker Compose version v2.29.0\n"),
                     self._completed(stdout="api\n"),
                     self._completed(stdout="[]"),
                     self._completed(returncode=1, stderr="pull access denied for missing-image"),
+                    self._completed(stdout="api\n"),
+                    self._completed(stdout="[]"),
                 ]
                 result = execute_action(resolved, workflow)
 
@@ -165,6 +167,77 @@ class ComposeConnectorTest(unittest.TestCase):
         self.assertEqual(result.diagnostics[0].code, "action.compose_start.image_unavailable")
         self.assertEqual(result.diagnostics[0].details["external_tool"], "docker")
         self.assertEqual(result.diagnostics[0].details["external_system"], "compose")
+        sleep.assert_called_once_with(5)
+
+    def test_compose_start_recovers_when_service_is_running_after_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workflow = Workflow(version=0, workflow="demo", connector_contexts={"compose": {"directory": temp_dir}})
+            operation = get_public_connector_registry().get_operation("compose.start")
+            resolved = ResolvedOperation(
+                "compose.start",
+                "compose",
+                operation,
+                "public",
+                declared_with={"service": "api"},
+            )
+
+            before_payload = json.dumps([])
+            after_payload = json.dumps(
+                [{"Project": "demo", "Service": "api", "State": "running", "Health": "healthy", "Publishers": []}]
+            )
+
+            with patch("subprocess.run") as run, patch("connectors.compose.actions.start.time.sleep") as sleep:
+                run.side_effect = [
+                    self._completed(stdout="Docker Compose version v2.29.0\n"),
+                    self._completed(stdout="api\n"),
+                    self._completed(stdout=before_payload),
+                    self._completed(returncode=1, stderr="transient compose failure"),
+                    self._completed(stdout="api\n"),
+                    self._completed(stdout=after_payload),
+                ]
+                result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["target_kind"], "service")
+        self.assertEqual(result.outputs["target"], "api")
+        self.assertEqual(result.outputs["state"], "running")
+        self.assertTrue(result.outputs["changed"])
+        self.assertEqual(result.diagnostics[0].code, "action.compose_start.recovered_after_nonzero")
+        self.assertEqual(result.diagnostics[0].level, "warning")
+        sleep.assert_called_once_with(5)
+
+    def test_compose_start_recovers_when_service_is_degraded_after_nonzero(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workflow = Workflow(version=0, workflow="demo", connector_contexts={"compose": {"directory": temp_dir}})
+            operation = get_public_connector_registry().get_operation("compose.start")
+            resolved = ResolvedOperation(
+                "compose.start",
+                "compose",
+                operation,
+                "public",
+                declared_with={"service": "api"},
+            )
+
+            before_payload = json.dumps([])
+            after_payload = json.dumps(
+                [{"Project": "demo", "Service": "api", "State": "running", "Health": "unhealthy", "Publishers": []}]
+            )
+
+            with patch("subprocess.run") as run, patch("connectors.compose.actions.start.time.sleep") as sleep:
+                run.side_effect = [
+                    self._completed(stdout="Docker Compose version v2.29.0\n"),
+                    self._completed(stdout="api\n"),
+                    self._completed(stdout=before_payload),
+                    self._completed(returncode=1, stderr="transient compose failure"),
+                    self._completed(stdout="api\n"),
+                    self._completed(stdout=after_payload),
+                ]
+                result = execute_action(resolved, workflow)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.outputs["state"], "degraded")
+        self.assertEqual(result.diagnostics[0].code, "action.compose_start.recovered_after_nonzero")
+        sleep.assert_called_once_with(5)
 
     def test_compose_stop_reports_stopped_after_shutdown(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

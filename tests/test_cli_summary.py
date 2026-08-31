@@ -383,6 +383,48 @@ class CliSummaryTest(unittest.TestCase):
 
         self.assertEqual(summary["message"], "Guard blocked execution for 'git.worktree.clean'")
 
+    def test_run_summary_surfaces_failed_guard_detail(self) -> None:
+        payload = {
+            "mode": "run",
+            "status": "guard_failed",
+            "workflow": "story-tasks-show",
+            "profile": "meta",
+            "active_profile": "meta",
+            "working_directory": "/tmp/meta",
+            "failed_guard": 'story_project_issue.exists',
+            "guard_detail": {
+                "reference": "story_project_issue.exists",
+                "failed_subcondition": "story_project_issue.exists",
+                "failure_kind": "guard_failed",
+                "affected_inputs": ["inputs.repository", "inputs.issue_number", "inputs.project_id"],
+                "affected_lets": ["story_project_issue"],
+                "trace": [
+                    {
+                        "expr": "story_project_issue",
+                        "kind": "let",
+                        "status": "ok",
+                        "binding_name": "story_project_issue",
+                        "expanded_expr": "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists",
+                        "value": None,
+                    }
+                ],
+            },
+            "diagnostics": [
+                {
+                    "message": "GitHub issue was not found",
+                }
+            ],
+        }
+
+        summary = _summarize_run_payload(payload)
+
+        self.assertEqual(summary["message"], "Guard blocked execution for 'story_project_issue.exists'")
+        self.assertEqual(summary["guard_detail"]["affected_lets"], ["story_project_issue"])
+        self.assertEqual(
+            summary["guard_detail"]["affected_inputs"],
+            ["inputs.repository", "inputs.issue_number", "inputs.project_id"],
+        )
+
     def test_check_summary_surfaces_guard_failure_message(self) -> None:
         payload = {
             "mode": "check",
@@ -426,6 +468,32 @@ class CliSummaryTest(unittest.TestCase):
 
         self.assertEqual(summary["active_profile"], "mobile")
         self.assertEqual(summary["working_directory"], "/tmp/mobile")
+
+    def test_run_summary_surfaces_failed_step_detail(self) -> None:
+        payload = {
+            "mode": "run",
+            "status": "execution_error",
+            "workflow": "story-tasks-show",
+            "active_profile": "meta",
+            "working_directory": "/tmp/meta",
+            "failed_step": "Load story task item details in batch",
+            "step_detail": {
+                "step": "Load story task item details in batch",
+                "reference": "gh.project.items",
+                "resolved_inputs": {"content_refs": ["owner/repo#1"]},
+            },
+            "diagnostics": [
+                {
+                    "message": "GitHub project item content_refs must be a list of OWNER/REPO#NUMBER strings",
+                }
+            ],
+        }
+
+        summary = _summarize_run_payload(payload)
+
+        self.assertEqual(summary["failed_step"], "Load story task item details in batch")
+        self.assertEqual(summary["step_detail"]["reference"], "gh.project.items")
+        self.assertEqual(summary["step_detail"]["resolved_inputs"], {"content_refs": ["owner/repo#1"]})
 
     def test_run_summary_omits_null_mode_profile_workflow(self) -> None:
         payload = {

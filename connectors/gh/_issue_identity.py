@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
+from connectors.gh._repository import resolve_repository_target, split_repository
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail
 
 ISSUE_IDENTITY_INPUTS = {"repository": "string", "issue_number": "integer"}
 
 _MISSING = object()
-_REPOSITORY_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +19,7 @@ class IssueIdentity:
     issue_ref: str
     owner: str
     repo: str
+    diagnostics: tuple[Diagnostic, ...] = ()
 
 
 def resolve_issue_identity(
@@ -28,20 +28,19 @@ def resolve_issue_identity(
     failure_code: str,
     diagnostic_prefix: str,
 ) -> IssueIdentity | OperationOutcome:
-    repository_value = _optional_input(ctx, "repository")
-    if isinstance(repository_value, OperationOutcome):
-        return repository_value
+    repository_target = resolve_repository_target(ctx, failure_code=failure_code, diagnostic_prefix=diagnostic_prefix)
+    if isinstance(repository_target, OperationOutcome):
+        return repository_target
     issue_number_value = _optional_input(ctx, "issue_number")
     if isinstance(issue_number_value, OperationOutcome):
         return issue_number_value
 
-    if repository_value is _MISSING:
-        return _required_input_outcome(ctx, "repository")
     if issue_number_value is _MISSING:
         return _required_input_outcome(ctx, "issue_number")
     return _from_structured_inputs(
         ctx,
-        repository_value=repository_value,
+        repository_value=repository_target.repository,
+        repository_diagnostics=repository_target.diagnostics,
         issue_number_value=issue_number_value,
         failure_code=failure_code,
         diagnostic_prefix=diagnostic_prefix,
@@ -52,13 +51,14 @@ def _from_structured_inputs(
     ctx: OperationContext,
     *,
     repository_value: object,
+    repository_diagnostics: tuple[Diagnostic, ...],
     issue_number_value: object,
     failure_code: str,
     diagnostic_prefix: str,
 ) -> IssueIdentity | OperationOutcome:
     repository = str(repository_value)
-    repository_match = _REPOSITORY_RE.match(repository)
-    if repository_match is None:
+    parsed_repository = split_repository(repository)
+    if parsed_repository is None:
         return fail(
             code=failure_code,
             summary="GitHub repository reference must use OWNER/REPO format",
@@ -87,15 +87,17 @@ def _from_structured_inputs(
             ),
         )
 
-    owner = repository_match.group("owner")
-    repo = repository_match.group("repo")
+    owner, repo = parsed_repository
     return IssueIdentity(
         repository=repository,
         issue_number=issue_number,
         issue_ref=f"{repository}#{issue_number}",
         owner=owner,
         repo=repo,
+        diagnostics=repository_diagnostics,
     )
+
+
 def _optional_input(ctx: OperationContext, name: str) -> object | OperationOutcome:
     try:
         return ctx.input(name)

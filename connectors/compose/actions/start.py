@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import time
+
 from connectors.compose._shared import compose_command, map_start_failure, observe_project, observe_service
-from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
+from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
+
+
+_START_FAILURE_GRACE_SECONDS = 5
 
 
 def info():
@@ -54,6 +59,9 @@ def run(ctx: OperationContext) -> OperationOutcome:
     try:
         command = ctx.command(argv, failures={"os_error": "start_failed", "nonzero": "start_failed"})
     except MappedOutcomeError as exc:
+        recovered = _recover_from_start_failure(ctx, exc, service=service)
+        if recovered is not None:
+            return recovered
         return map_start_failure(ctx, exc, service=service)
 
     after = observe_service(ctx, service) if service is not None else observe_project(ctx)
@@ -81,6 +89,50 @@ def run(ctx: OperationContext) -> OperationOutcome:
         reference=ctx.reference,
         outputs=outputs,
         raw=command.raw,
+    )
+
+
+def _recover_from_start_failure(
+    ctx: OperationContext,
+    exc: MappedOutcomeError,
+    *,
+    service: str | None,
+) -> OperationOutcome | None:
+    time.sleep(_START_FAILURE_GRACE_SECONDS)
+    after = observe_service(ctx, service) if service is not None else observe_project(ctx)
+    if isinstance(after, OperationOutcome):
+        return None
+
+    state = after.state
+    if state not in {"running", "starting", "degraded"}:
+        return None
+
+    summary = "Compose project started" if service is None else f"Compose service '{service}' started"
+    if state in {"starting", "degraded"}:
+        summary = (
+            "Compose project is only partially operational after start"
+            if service is None
+            else f"Compose service '{service}' is only partially operational after start"
+        )
+    outputs = {"target_kind": "project", "state": state, "changed": True} if service is None else {"target_kind": "service", "target": service, "state": state, "changed": True}
+    return OperationOutcome(
+        status="ok",
+        summary=summary,
+        outputs=outputs,
+        diagnostics=(
+            Diagnostic(
+                code="action.compose_start.recovered_after_nonzero",
+                level="warning",
+                message="Compose start command returned nonzero but the target became operational during the recovery window",
+                details={
+                    "reference": ctx.reference,
+                    "service": service,
+                    "state": state,
+                    "grace_seconds": _START_FAILURE_GRACE_SECONDS,
+                },
+            ),
+        ),
+        raw=dict(exc.outcome.raw),
     )
 
 

@@ -3,7 +3,7 @@
     "ordo-help features",
     "ordo-help overview",
     "ordo-help model",
-    "ordo-help workflow-authoring",
+    "ordo-help workflow-rules",
     "ordo-help capabilities",
     "ordo-help command-line",
     "ordo-help operations",
@@ -34,7 +34,7 @@
   "recommended_first_calls": [
     {
       "command": "ordo-help features",
-      "purpose": "Scan workflow authoring features, named surfaces, and when to use them"
+      "purpose": "Scan workflow features, named surfaces, and when to use them"
     },
     {
       "command": "ordo-help overview",
@@ -45,8 +45,8 @@
       "purpose": "Learn the main DSL surfaces"
     },
     {
-      "command": "ordo-help workflow-authoring",
-      "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
+      "command": "ordo-help workflow-rules",
+      "purpose": "Learn preferred workflow rules, including paired check/review passes"
     },
     {
       "command": "ordo-help capabilities",
@@ -73,7 +73,7 @@
   "topics": [
     {
       "name": "features",
-      "summary": "Inspect workflow authoring features, named surfaces, and when to use them"
+      "summary": "Inspect workflow features, named surfaces, and when to use them"
     },
     {
       "name": "overview",
@@ -81,11 +81,11 @@
     },
     {
       "name": "model",
-      "summary": "Inspect the main authoring contracts"
+      "summary": "Inspect the main workflow contracts"
     },
     {
-      "name": "workflow-authoring",
-      "summary": "Inspect preferred workflow authoring patterns, paired check/review passes, routine cautions, early guards, and let usage"
+      "name": "workflow-rules",
+      "summary": "Inspect preferred workflow rules, paired check/review passes, routine cautions, early guards, and let usage"
     },
     {
       "name": "capabilities",

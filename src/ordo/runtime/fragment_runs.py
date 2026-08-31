@@ -71,6 +71,9 @@ def materialize_run_workflow(
             blocks=caller_workflow.blocks,
             source_path=caller_workflow.source_path,
             launch_dir=caller_workflow.launch_dir,
+            launch_profile_name=caller_workflow.launch_profile_name,
+            launch_profile_source=caller_workflow.launch_profile_source,
+            playbook_owned_pre_run=caller_workflow.playbook_owned_pre_run,
         )
     try:
         include_bindings = _evaluate_run_bindings(step.run_with, binding_workflow, block_index=block_index, step_index=step_index)
@@ -132,6 +135,9 @@ def _materialize_inline_run_workflow(
         blocks=(StepBlock(steps=tuple(step.steps or ())),),
         source_path=caller_workflow.source_path,
         launch_dir=caller_workflow.launch_dir,
+        launch_profile_name=caller_workflow.launch_profile_name,
+        launch_profile_source=caller_workflow.launch_profile_source,
+        playbook_owned_pre_run=caller_workflow.playbook_owned_pre_run,
     )
 
 
@@ -169,6 +175,9 @@ def classify_run_for_check(
                 blocks=caller_workflow.blocks,
                 source_path=caller_workflow.source_path,
                 launch_dir=caller_workflow.launch_dir,
+                launch_profile_name=caller_workflow.launch_profile_name,
+                launch_profile_source=caller_workflow.launch_profile_source,
+                playbook_owned_pre_run=caller_workflow.playbook_owned_pre_run,
             )
         _evaluate_run_bindings(step.run_with, binding_workflow, block_index=block_index, step_index=step_index)
     except ValueResolutionError:
@@ -311,6 +320,9 @@ def build_run_target_workflow(
             blocks=nested_workflow.blocks,
             source_path=nested_workflow.source_path,
             launch_dir=nested_workflow.launch_dir,
+            launch_profile_name=caller_workflow.launch_profile_name,
+            launch_profile_source=caller_workflow.launch_profile_source,
+            playbook_owned_pre_run=caller_workflow.playbook_owned_pre_run or step.run_origin == "playbook_pre_run",
         )
 
     blocks_payload: JSONValue | None
@@ -352,6 +364,9 @@ def build_run_target_workflow(
         blocks=blocks,
         source_path=str(run_path),
         launch_dir=str(launch_dir),
+        launch_profile_name=caller_workflow.launch_profile_name,
+        launch_profile_source=caller_workflow.launch_profile_source,
+        playbook_owned_pre_run=caller_workflow.playbook_owned_pre_run or step.run_origin == "playbook_pre_run",
     )
 
 

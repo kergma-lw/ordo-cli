@@ -5,7 +5,7 @@
 This note records a real product gap, not a settled design.
 
 The gap is clear enough to document now, but the runtime contract,
-ranking model, and workflow-authoring surface for solving it remain open.
+ranking model, and workflow-rules surface for solving it remain open.
 
 ## Problem
 

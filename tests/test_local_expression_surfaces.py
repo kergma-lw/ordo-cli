@@ -150,6 +150,25 @@ class LocalExpressionSurfacesTest(unittest.TestCase):
             {"validation.workflow.value_expr.presence_check_argument"},
         )
 
+    def test_embedded_value_surface_accepts_catch_filter_with_literal_code_list(self) -> None:
+        parsed = parse_local_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["issue_not_found", "*_not_found"], false)',
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+        )
+
+        self.assertEqual(validate_parsed_local_expression(parsed), ())
+
+    def test_embedded_value_surface_rejects_catch_filter_with_non_literal_code_pattern(self) -> None:
+        parsed = parse_local_expression(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(inputs.patterns, false)',
+            context=LocalExpressionContext.EMBEDDED_VALUE,
+        )
+
+        self.assertEqual(
+            {issue.code for issue in validate_parsed_local_expression(parsed)},
+            {"validation.workflow.value_expr.catch_codes_argument"},
+        )
+
     def test_embedded_value_surface_accepts_presence_check_on_workflow_let_lookup_alias(self) -> None:
         workflow = Workflow(
             version=0,

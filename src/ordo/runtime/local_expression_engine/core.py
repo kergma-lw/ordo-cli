@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 import json
 import re
 from typing import TYPE_CHECKING, Literal
@@ -266,6 +267,20 @@ class LocalExpressionDependency:
     end: int
 
 
+@dataclass(frozen=True, slots=True)
+class WorkflowExpressionDependencySummary:
+    """Workflow-aware dependency summary for one local expression."""
+
+    affected_inputs: tuple[str, ...] = ()
+    affected_lets: tuple[str, ...] = ()
+
+    def to_contract(self) -> JSONObject:
+        return {
+            "affected_inputs": list(self.affected_inputs),
+            "affected_lets": list(self.affected_lets),
+        }
+
+
 # Transitional aliases retained while runtime callers move to canonical terminology.
 LocalExpressionNode = ValueExpressionNode
 ParsedValueExpression = ParsedLocalExpressionTree
@@ -317,6 +332,8 @@ class ConditionTraceEntry:
     left: JSONValue | None = None
     right: JSONValue | None = None
     reference: str | None = None
+    binding_name: str | None = None
+    expanded_expr: str | None = None
 
     def to_contract(self) -> JSONObject:
         payload: JSONObject = {"expr": self.expr, "kind": self.kind, "status": self.status, "value": self.value}
@@ -328,6 +345,10 @@ class ConditionTraceEntry:
             payload["right"] = self.right
         if self.reference is not None:
             payload["reference"] = self.reference
+        if self.binding_name is not None:
+            payload["binding_name"] = self.binding_name
+        if self.expanded_expr is not None:
+            payload["expanded_expr"] = self.expanded_expr
         return payload
 
 
@@ -541,6 +562,105 @@ def collect_local_expression_dependencies(node: ValueExpressionNode) -> tuple[Lo
 
     visit(node)
     return tuple(found)
+
+
+def collect_workflow_expression_dependencies(
+    parsed: ParsedLocalExpressionTree,
+    workflow: Workflow,
+    *,
+    context,
+) -> WorkflowExpressionDependencySummary:
+    """Collect workflow-aware dependencies, including successful let expansion."""
+
+    from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, resolve_workflow_let_reference_node
+
+    seen_inputs: set[str] = set()
+    seen_lets: set[str] = set()
+    affected_inputs: list[str] = []
+    affected_lets: list[str] = []
+
+    def remember_input(value: str) -> None:
+        if value in seen_inputs:
+            return
+        seen_inputs.add(value)
+        affected_inputs.append(value)
+
+    def remember_let(value: str) -> None:
+        if value in seen_lets:
+            return
+        seen_lets.add(value)
+        affected_lets.append(value)
+
+    def visit(node: ValueExpressionNode) -> None:
+        if isinstance(node, ReferenceNode):
+            try:
+                expanded = resolve_workflow_let_reference_node(node, workflow, context=context)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                expanded = None
+            if expanded is not None and node.parts:
+                remember_let(node.parts[0])
+                visit(expanded)
+                return
+            if node.parts and node.parts[0] == "inputs":
+                remember_input(render_expression_text(node, source=parsed.source))
+                return
+            return
+        if isinstance(node, StateReferenceNode):
+            visit(node.key_expression)
+            return
+        if isinstance(node, StepReferenceNode):
+            return
+        if isinstance(node, ListNode):
+            for item in node.items:
+                visit(item)
+            return
+        if isinstance(node, ObjectEntryNode):
+            visit(node.value)
+            return
+        if isinstance(node, ObjectNode):
+            for entry in node.entries:
+                visit(entry)
+            return
+        if isinstance(node, CallArgumentNode):
+            visit(node.value)
+            return
+        if isinstance(node, CallNode):
+            for argument in node.arguments:
+                visit(argument)
+            return
+        if isinstance(node, PipelineNode):
+            visit(node.source)
+            for item in node.filters:
+                visit(item)
+            return
+        if isinstance(node, FilterApplicationNode):
+            for argument in node.arguments:
+                visit(argument)
+            return
+        if isinstance(node, BuiltinCallNode):
+            for argument in node.arguments:
+                visit(argument)
+            return
+        if isinstance(node, UnaryNode):
+            visit(node.operand)
+            return
+        if isinstance(node, BinaryNode):
+            visit(node.left)
+            visit(node.right)
+            return
+        if isinstance(node, AdapterBindingNode):
+            visit(node.value)
+            return
+        if isinstance(node, AdapterInvocationNode):
+            for binding in node.bindings:
+                visit(binding)
+            return
+
+    visit(parsed.root)
+    return WorkflowExpressionDependencySummary(
+        affected_inputs=tuple(affected_inputs),
+        affected_lets=tuple(affected_lets),
+    )
 
 
 def _try_parse_adapter_invocation(expression: str, *, allow_boolean_composition: bool) -> AdapterInvocationNode | None:
@@ -1337,6 +1457,9 @@ class _SemanticValidator:
                 node,
             )
             return
+        if node.name == "catch":
+            for code, message, current in _validate_catch_patterns_argument(node.arguments[0]):
+                self._error(code, message, current)
         if node.name != "field":
             return
         argument = node.arguments[0]
@@ -1440,6 +1563,16 @@ class _ConditionEvaluator:
                 self._trace.append(ConditionTraceEntry(expr=self._expr(node), kind="let", status="probe_failed", value=None))
                 return "probe_failed", None
             if expanded is not None:
+                self._trace.append(
+                    ConditionTraceEntry(
+                        expr=self._expr(node),
+                        kind="let",
+                        status="ok",
+                        value=None,
+                        binding_name=node.parts[0],
+                        expanded_expr=render_expression_text(expanded, source=self._parsed.source),
+                    )
+                )
                 return self._evaluate(expanded)
             if node.parts[0] == "inputs":
                 try:
@@ -1996,42 +2129,69 @@ def _evaluate_node(
             observation_session=observation_session,
         )
     if isinstance(node, PipelineNode):
-        value = _evaluate_node(
-            node.source,
-            parsed=parsed,
-            workflow=workflow,
-            context=context,
-            step_results=step_results,
-            observation_session=observation_session,
-        )
+        pending_error: ValueExpressionEvaluationError | None = None
+        try:
+            value = _evaluate_node(
+                node.source,
+                parsed=parsed,
+                workflow=workflow,
+                context=context,
+                step_results=step_results,
+                observation_session=observation_session,
+            )
+        except ValueExpressionEvaluationError as exc:
+            pending_error = exc
+            value = None
         for filter_node in node.filters:
+            if pending_error is not None:
+                if isinstance(filter_node, FilterApplicationNode) and _is_recovery_filter_name(filter_node.name):
+                    value = _recover_pipeline_failure(
+                        filter_node,
+                        pending_error,
+                        parsed=parsed,
+                        workflow=workflow,
+                        context=context,
+                        step_results=step_results,
+                        observation_session=observation_session,
+                    )
+                    pending_error = None
+                    continue
+                raise pending_error
             if isinstance(filter_node, FilterApplicationNode):
-                value = _apply_filter(
-                    filter_node,
-                    value,
-                    parsed=parsed,
-                    workflow=workflow,
-                    context=context,
-                    step_results=step_results,
-                    observation_session=observation_session,
-                )
+                try:
+                    value = _apply_filter(
+                        filter_node,
+                        value,
+                        parsed=parsed,
+                        workflow=workflow,
+                        context=context,
+                        step_results=step_results,
+                        observation_session=observation_session,
+                    )
+                except ValueExpressionEvaluationError as exc:
+                    pending_error = exc
                 continue
             if isinstance(filter_node, AdapterInvocationNode):
-                value = _evaluate_adapter_invocation_result(
-                    filter_node,
-                    parsed=parsed,
-                    workflow=workflow,
-                    context=context,
-                    step_results=step_results,
-                    observation_session=observation_session,
-                    inherited_root=value,
-                ).value
+                try:
+                    value = _evaluate_adapter_invocation_result(
+                        filter_node,
+                        parsed=parsed,
+                        workflow=workflow,
+                        context=context,
+                        step_results=step_results,
+                        observation_session=observation_session,
+                        inherited_root=value,
+                    ).value
+                except ValueExpressionEvaluationError as exc:
+                    pending_error = exc
                 continue
             raise ValueExpressionEvaluationError(
                 code="runtime.value.pipeline_stage_invalid",
                 message="Pipeline contains an unsupported stage",
                 details={"expression": parsed.source, "stage_type": type(filter_node).__name__},
             )
+        if pending_error is not None:
+            raise pending_error
         return value
     if isinstance(node, BuiltinCallNode):
         return _evaluate_builtin_call(
@@ -2288,6 +2448,10 @@ def _apply_filter(
         message=f"Unknown local-expression filter '{filter_node.name}'",
         details={"expression": parsed.source, "filter": filter_node.name},
     )
+
+
+def _is_recovery_filter_name(name: str) -> bool:
+    return name in {"catch", "not_found"}
 
 
 def _evaluate_builtin_call(
@@ -3202,6 +3366,28 @@ def _apply_unique_filter(
     return unique_items
 
 
+def _apply_catch_filter(
+    value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=2)
+    return value
+
+
+def _apply_not_found_filter(
+    _value: JSONValue,
+    filter_node: FilterApplicationNode,
+    parsed: ParsedValueExpression,
+    _workflow: Workflow,
+    _evaluation_context: dict[str, object],
+) -> JSONValue:
+    _require_no_extra_filter_arguments(filter_node, parsed=parsed, expected=0)
+    return True
+
+
 def _apply_only_filter(
     value: JSONValue,
     filter_node: FilterApplicationNode,
@@ -3255,6 +3441,121 @@ def _apply_not_filter(
         message="Filter 'not' requires a boolean input",
         details={"expression": parsed.source, "filter": "not", "actual_type": type(value).__name__},
     )
+
+
+def _recover_pipeline_failure(
+    filter_node: FilterApplicationNode,
+    error: ValueExpressionEvaluationError,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    context,
+    step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
+) -> JSONValue:
+    if filter_node.name == "not_found":
+        if _matches_failure_patterns(error, ("*_not_found",)):
+            return False
+        raise error
+    if filter_node.name != "catch":
+        raise error
+    patterns = _evaluate_catch_patterns(
+        filter_node,
+        parsed=parsed,
+        workflow=workflow,
+        context=context,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
+    if not _matches_failure_patterns(error, patterns):
+        raise error
+    return _evaluate_node(
+        filter_node.arguments[1],
+        parsed=parsed,
+        workflow=workflow,
+        context=context,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
+
+
+def _evaluate_catch_patterns(
+    filter_node: FilterApplicationNode,
+    *,
+    parsed: ParsedValueExpression,
+    workflow: Workflow,
+    context,
+    step_results: dict[str, OperationResult],
+    observation_session: ReadOnlyObservationSession | None,
+) -> tuple[str, ...]:
+    patterns_value = _evaluate_node(
+        filter_node.arguments[0],
+        parsed=parsed,
+        workflow=workflow,
+        context=context,
+        step_results=step_results,
+        observation_session=observation_session,
+    )
+    if isinstance(patterns_value, str):
+        if patterns_value:
+            return (patterns_value,)
+    elif isinstance(patterns_value, list) and patterns_value:
+        patterns: list[str] = []
+        for item in patterns_value:
+            if not isinstance(item, str) or not item:
+                break
+            patterns.append(item)
+        else:
+            return tuple(patterns)
+    raise ValueExpressionEvaluationError(
+        code="runtime.value.catch_codes_invalid",
+        message="Filter 'catch' requires a non-empty string or a non-empty list of non-empty string failure code patterns as its first argument",
+        details={"expression": parsed.source, "filter": filter_node.name},
+    )
+
+
+def _matches_failure_patterns(error: ValueExpressionEvaluationError, patterns: tuple[str, ...]) -> bool:
+    candidate_codes = [error.code]
+    cause_code = error.details.get("cause_code")
+    if isinstance(cause_code, str):
+        candidate_codes.append(cause_code)
+    for pattern in patterns:
+        for code in candidate_codes:
+            if fnmatchcase(code, pattern):
+                return True
+    return False
+
+
+def _validate_catch_patterns_argument(node: ValueExpressionNode) -> list[tuple[str, str, ValueExpressionNode]]:
+    if isinstance(node, LiteralNode):
+        if isinstance(node.value, str) and node.value:
+            return []
+        return [
+            (
+                "validation.workflow.value_expr.catch_codes_argument",
+                "Filter 'catch' requires a non-empty string or a non-empty list of non-empty string failure code patterns as its first argument",
+                node,
+            )
+        ]
+    if isinstance(node, ListNode) and node.items:
+        issues: list[tuple[str, str, ValueExpressionNode]] = []
+        for item in node.items:
+            if not isinstance(item, LiteralNode) or not isinstance(item.value, str) or not item.value:
+                issues.append(
+                    (
+                        "validation.workflow.value_expr.catch_codes_argument",
+                        "Filter 'catch' requires a non-empty string or a non-empty list of non-empty string failure code patterns as its first argument",
+                        item,
+                    )
+                )
+        return issues
+    return [
+        (
+            "validation.workflow.value_expr.catch_codes_argument",
+            "Filter 'catch' requires a non-empty string or a non-empty list of non-empty string failure code patterns as its first argument",
+            node,
+        )
+    ]
 
 
 def _is_presence_check_argument(node: ValueExpressionNode) -> bool:
@@ -3469,6 +3770,8 @@ VALUE_EXPRESSION_FILTERS: dict[str, ValueExpressionFilterSpec] = build_filter_re
     ValueExpressionFilterSpec(name="last", input_type="json", output_type="json", argument_count=0, handler=_apply_last_filter),
     ValueExpressionFilterSpec(name="length", input_type="json", output_type="number", argument_count=0, handler=_apply_length_filter),
     ValueExpressionFilterSpec(name="unique", input_type="json", output_type="json", argument_count=0, handler=_apply_unique_filter),
+    ValueExpressionFilterSpec(name="catch", input_type="json", output_type="json", argument_count=2, handler=_apply_catch_filter, authored_form='catch(["issue_not_found", "*_not_found"], false)'),
+    ValueExpressionFilterSpec(name="not_found", input_type="json", output_type="boolean", argument_count=0, handler=_apply_not_found_filter),
 )
 
 VALUE_EXPRESSION_BUILTINS: dict[str, ValueExpressionBuiltinSpec] = build_builtin_registry(

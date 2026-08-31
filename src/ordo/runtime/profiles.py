@@ -235,6 +235,9 @@ def apply_profile_to_workflow(workflow: Workflow, profile: Profile) -> WorkflowP
             blocks=workflow.blocks,
             source_path=workflow.source_path,
             launch_dir=workflow.launch_dir,
+            launch_profile_name=workflow.launch_profile_name,
+            launch_profile_source=workflow.launch_profile_source,
+            playbook_owned_pre_run=workflow.playbook_owned_pre_run,
         ),
         active_profile=profile.name,
         active_overrides=profile.overrides,
@@ -276,9 +279,22 @@ def apply_runtime_profile_switch(workflow: Workflow, profile: Profile) -> Workfl
             blocks=workflow.blocks,
             source_path=workflow.source_path,
             launch_dir=workflow.launch_dir,
+            launch_profile_name=workflow.launch_profile_name,
+            launch_profile_source=workflow.launch_profile_source,
+            playbook_owned_pre_run=workflow.playbook_owned_pre_run,
         ),
         active_profile=profile.name,
         active_overrides=profile.overrides,
+    )
+
+
+def should_ignore_runtime_profile_switch(workflow: Workflow, *, target_profile_name: str) -> bool:
+    return (
+        workflow.playbook_owned_pre_run
+        and workflow.launch_profile_source == "explicit_cli"
+        and isinstance(workflow.launch_profile_name, str)
+        and bool(workflow.launch_profile_name)
+        and workflow.launch_profile_name != target_profile_name
     )
 
 

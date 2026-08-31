@@ -337,6 +337,24 @@
     "workflow.run.steps": {
       "describe_readiness": "ready"
     },
+    "workflow.step.condition": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step.name": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step.outputs": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.inline_fan_out_invocation": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.operation_call": {
+      "describe_readiness": "ready"
+    },
+    "workflow.step_forms.run_invocation": {
+      "describe_readiness": "ready"
+    },
     "playbook.defaults.profile": {
       "describe_readiness": "ready"
     },
@@ -403,97 +421,97 @@
     "workflow.local_expression.adapter": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.bounded_fan_out_is_structured_invocation": {
+    "workflow-rules.bounded_fan_out_is_structured_invocation": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.decision_order": {
+    "workflow-rules.decision_order": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.delegated_applicability": {
+    "workflow-rules.delegated_applicability": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.early_guards": {
+    "workflow-rules.early_guards": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.early_let": {
+    "workflow-rules.early_let": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.example.inline_fan_out_inner_if": {
+    "workflow-rules.example.inline_fan_out_inner_if": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.example.inline_fan_out_local_steps": {
+    "workflow-rules.example.inline_fan_out_local_steps": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.example.named_run_target_fan_out": {
+    "workflow-rules.example.named_run_target_fan_out": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.example.routine_env_custom_name_not_supported": {
+    "workflow-rules.example.routine_env_custom_name_not_supported": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.example.routine_env_non_scalar_rejected": {
+    "workflow-rules.example.routine_env_non_scalar_rejected": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.example.routine_env_scalar_forwarding": {
+    "workflow-rules.example.routine_env_scalar_forwarding": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.explicit_execution_context": {
+    "workflow-rules.explicit_execution_context": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.fan_out_scope_and_conditions": {
+    "workflow-rules.fan_out_scope_and_conditions": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.guard_result_contract": {
+    "workflow-rules.guard_result_contract": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.inline_fan_out_invalid_shapes": {
+    "workflow-rules.inline_fan_out_invalid_shapes": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.input_validation_default": {
+    "workflow-rules.input_validation_default": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.lifecycle_state": {
+    "workflow-rules.lifecycle_state": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.local_artifacts_are_context": {
+    "workflow-rules.local_artifacts_are_context": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.minimal_publish_payload": {
+    "workflow-rules.minimal_publish_payload": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.native_expression_contexts": {
+    "workflow-rules.native_expression_contexts": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.paired_authoring_passes": {
+    "workflow-rules.paired_check_review_passes": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.publish_outputs": {
+    "workflow-rules.publish_outputs": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.representation_adapters": {
+    "workflow-rules.representation_adapters": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.routine.*": {
+    "workflow-rules.routine.*": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.run_target_vs_inline_fan_out": {
+    "workflow-rules.run_target_vs_inline_fan_out": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.semantic_ambiguity": {
+    "workflow-rules.semantic_ambiguity": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.separate_control_surfaces": {
+    "workflow-rules.separate_control_surfaces": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.shell.command": {
+    "workflow-rules.shell.command": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.structured_surface_bias": {
+    "workflow-rules.structured_surface_bias": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.value_register_before_result": {
+    "workflow-rules.value_register_before_result": {
       "describe_readiness": "ready"
     },
-    "workflow-authoring.workflow_profile_binding_is_project_local": {
+    "workflow-rules.workflow_profile_binding_is_project_local": {
       "describe_readiness": "ready"
     },
     "workflow.local_expression.builtin.format": {

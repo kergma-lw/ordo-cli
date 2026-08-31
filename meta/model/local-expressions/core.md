@@ -111,6 +111,18 @@ For read-only adapter invocation arguments, the modeled interpretation is:
 - adapter `not_found` means missing;
 - any other adapter failure remains a real evaluation failure.
 
+### Explicit failure recovery filter
+
+An explicit failure-recovery filter is one product-defined pipeline stage that may replace one selected set of upstream evaluation failures with one authored fallback value without changing the default rule that ordinary probe failure aborts expression evaluation.
+
+The modeled recovery shape is:
+
+- default local-expression evaluation remains strict and fails on read-only probe failure;
+- one recovery filter may catch only the explicitly named failure codes or wildcarded failure-code patterns it declares;
+- unmatched failures must remain ordinary failures;
+- recovery is workflow-owned authoring and must not silently change the public connector contract of the upstream probe;
+- one shorthand such as `not_found` may exist for the common boolean case where upstream `*_not_found` becomes `false` and upstream success becomes `true`.
+
 ### Representation adapter
 
 A representation adapter is a product-defined operation family for interpreting one already available value through a stable representation model.
@@ -265,6 +277,8 @@ The intended execution contract is:
 The modeled execution expectation is that one evaluation session may cache repeated equivalent read-only observation requests and that a failed read-only observation fails the surrounding expression evaluation.
 When that happens, the surfaced runtime diagnostic should preserve the underlying probe-failure diagnostics rather than exposing only one wrapper error at the outer expression site.
 If the underlying probe failure already knows that the cause is external, the surfaced runtime diagnostic should preserve that distinction so the caller does not mistake an external command or remote-system failure for local workflow logic failure.
+
+If one explicit failure-recovery filter is authored downstream in the same pipeline, canonical evaluation may allow that filter to normalize only the selected upstream failure codes into its authored fallback value while preserving the underlying unmatched-failure diagnostics for any still-failing outcome.
 
 This keeps probe calls inside one local-expression engine while avoiding any claim that the engine itself performs effectful connector actions.
 

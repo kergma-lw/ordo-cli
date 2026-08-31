@@ -468,6 +468,71 @@ class PlaybookActivationTest(unittest.TestCase):
 
         self.assertEqual(activated.profile.name if activated.profile else None, "review")
         self.assertEqual(activated.profile.inputs["source"], "explicit")
+        self.assertEqual(activated.workflow.launch_profile_name, "review")
+        self.assertEqual(activated.workflow.launch_profile_source, "explicit_cli")
+
+    def test_check_after_activation_explicit_cli_profile_wins_over_pre_run_profile_switch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "meta"}\n', encoding="utf-8")
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    pre_run:
+                      - file: workflows/switch-active-profile.yml
+                        state_bindings:
+                          shared_state: shared_state
+                    defaults:
+                      profile: backend
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                    profiles:
+                      backend:
+                        file: backend.yml
+                      meta:
+                        file: meta.yml
+                    states:
+                      shared_state:
+                        path: repo.json
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: active_profile\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == \"kergma-lw/checklist-backend\"\n  - steps:\n      - name: main\n        value: \"ok\"\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                "name: backend\ninputs:\n  repository: kergma-lw/checklist-backend\n  repo_dir: /tmp/backend\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "meta.yml").write_text(
+                "name: meta\ninputs:\n  repository: kergma-lw/checklist-meta\n  repo_dir: /tmp/meta\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", profile_name="backend", cwd=root)
+            result = check_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                profile_working_directories=activated.profile_working_directories,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "backend")
+        self.assertIsNone(result.failed_guard)
+        self.assertNotIn('kergma-lw/checklist-meta', json.dumps(result.outputs, ensure_ascii=False, sort_keys=True))
 
     def test_activate_playbook_merges_playbook_and_profile_connector_contexts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2955,6 +3020,18 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertIn("usage: ordo-playbook [options] plan WORKFLOW", help_text)
         self.assertIn("ordo-playbook plan set-active-task", help_text)
 
+    def test_cli_run_help_mentions_progress_steps_flag(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "run", "--help"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("usage: ordo-playbook [options] run WORKFLOW", help_text)
+        self.assertIn("ordo-playbook --progress-steps run set-active-task", help_text)
+
     def test_cli_workflows_list_returns_catalog_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -3064,8 +3141,10 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["category"], "inspect")
             self.assertEqual(payload["when"], "Use when you need issue details without changing state")
             self.assertEqual(payload["working_directory"], "../repo")
-            self.assertEqual(payload["inputs"][0], {"name": "repository", "description": "GitHub repository slug", "hint": "Use owner/name format"})
-            self.assertEqual(payload["inputs"][1], {"name": "issue_number", "description": "Numeric issue id"})
+            self.assertEqual(payload["inputs"], {})
+            self.assertEqual(payload["caller_inputs"], [])
+            self.assertNotIn("optional_caller_inputs", payload)
+            self.assertNotIn("declared_inputs", payload)
 
     def test_cli_workflows_show_json_retains_declared_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3114,8 +3193,9 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["inputs"][0], {"name": "repository", "description": "GitHub repository slug", "hint": "Use owner/name format"})
-            self.assertEqual(payload["inputs"][1], {"name": "issue_number", "description": "Numeric issue id"})
+            self.assertEqual(payload["inputs"], {})
+            self.assertEqual(payload["declared_inputs"][0], {"name": "repository", "description": "GitHub repository slug", "hint": "Use owner/name format"})
+            self.assertEqual(payload["declared_inputs"][1], {"name": "issue_number", "description": "Numeric issue id"})
 
     def test_cli_workflows_show_separates_bound_and_caller_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3152,8 +3232,49 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["with_inputs"], {"repository": "owner/repo"})
+            self.assertEqual(payload["inputs"], {"repository": "owner/repo", "issue_number": None})
             self.assertEqual(payload["caller_inputs"], ["issue_number"])
+            self.assertNotIn("declared_inputs", payload)
+
+    def test_cli_workflows_show_reports_optional_caller_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      inspect-issue:
+                        file: inspect-issue.yml
+                        with:
+                          repository: owner/repo
+                          issue_number:
+                          close_comment?:
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  repository: {}\n  issue_number: {}\n  close_comment:\n    required: false\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "workflows", "show", "inspect-issue"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["inputs"], {"repository": "owner/repo", "issue_number": None, "close_comment": None})
+            self.assertEqual(payload["caller_inputs"], ["issue_number"])
+            self.assertEqual(payload["optional_caller_inputs"], ["close_comment"])
 
     def test_cli_workflows_show_omits_empty_values_when_not_declared(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3181,7 +3302,8 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertNotIn("category", payload)
             self.assertNotIn("when", payload)
             self.assertNotIn("working_directory", payload)
-            self.assertEqual(payload["inputs"], [{"name": "repository", "description": "GitHub repository slug"}])
+            self.assertEqual(payload["inputs"], {})
+            self.assertNotIn("declared_inputs", payload)
 
     def test_cli_workflows_show_reports_unknown_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3222,7 +3344,7 @@ class PlaybookActivationTest(unittest.TestCase):
         observed: dict[str, str] = {}
         original = Path.cwd()
 
-        def fake_run_mode(_mode, _workflow, _profile, *_args):
+        def fake_run_mode(_mode, _workflow, _profile, *_args, **_kwargs):
             observed["cwd"] = os.getcwd()
             return runtime_result
 
@@ -3294,6 +3416,47 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["input_transport"], "--input NAME=VALUE")
             self.assertIn("--input issue_number=<value>", payload["example"])
             self.assertIn("run story-get-task-for-work", payload["example"])
+
+    def test_cli_activation_error_plain_output_is_compact(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "ordo.yaml").write_text(
+                textwrap.dedent(
+                    """
+                    version: 1
+                    workflows:
+                      story-get-task-for-work:
+                        file: story-get-task-for-work.yml
+                    profiles: {}
+                    states: {}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "story-get-task-for-work.yml").write_text(
+                "version: 0\nworkflow: story-get-task-for-work\ninputs:\n  issue_number: {}\n  profile: {}\nblocks:\n  - guards: []\n  - steps: []\n",
+                encoding="utf-8",
+            )
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch("sys.argv", ["ordo-playbook", "run", "story-get-task-for-work"]):
+                with patch("os.getcwd", return_value=str(root)):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
+
+            self.assertEqual(exit_code, 1)
+            payload = json.loads(stderr.getvalue())
+            self.assertEqual(payload["mode"], "activation")
+            self.assertEqual(payload["workflow"], "story-get-task-for-work")
+            self.assertEqual(payload["missing_inputs"], ["issue_number", "profile"])
+            self.assertIn("Missing required workflow inputs", payload["message"])
+            self.assertIn("run story-get-task-for-work", payload["example"])
+            self.assertNotIn("diagnostics", payload)
+            self.assertNotIn("declared_inputs", payload)
+            self.assertEqual(stdout.getvalue(), "")
 
     def test_cli_activation_error_example_uses_requested_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

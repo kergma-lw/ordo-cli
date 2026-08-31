@@ -140,6 +140,18 @@ blocks:
   - name: demo
     value: {snippet}
 """
+    if target in {"workflow.local_expression.filter.catch", "workflow.local_expression.filter.not_found"}:
+        return f"""version: 0
+workflow: snippet-catch
+inputs:
+  repository: {{}}
+  issue_number: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    value: {snippet}
+"""
     if target == "local-expressions":
         return f"""version: 0
 workflow: snippet-local-expressions
@@ -237,8 +249,20 @@ blocks:
   - name: demo
     {snippet.replace(chr(10), chr(10) + '    ')}
 """
-    if target in {"workflow.step.steps", "workflow.step.with"}:
-        suffix = "steps" if target == "workflow.step.steps" else "with"
+    if target == "workflow.step.steps":
+        return f"""version: 0
+workflow: snippet-step-steps
+inputs:
+  issue_numbers: {{}}
+blocks:
+- guards: []
+- steps:
+  - name: demo
+    for_each: inputs.issue_numbers
+    {snippet.replace(chr(10), chr(10) + '    ')}
+"""
+    if target == "workflow.step.with":
+        suffix = "with"
         return f"""version: 0
 workflow: snippet-step-{suffix}
 inputs:

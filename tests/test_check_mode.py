@@ -404,6 +404,37 @@ class CheckModeTest(unittest.TestCase):
         self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "result_type")
         self.assertEqual(result.failed_guard, "inputs.title")
 
+    def test_check_guard_details_include_affected_inputs_and_lets(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: story-tasks-show
+inputs:
+  repository: owner/repo
+  issue_number: 103
+  project_id: demo-project
+let:
+  story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+blocks:
+  - guards:
+      - story_project_issue.exists
+  - steps: []
+"""
+        )
+
+        def probe(_resolved_guard, _workflow):
+            return OperationResult(status="ok", outputs={"exists": False})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.outputs["guard_details"][0]["affected_lets"], ["story_project_issue"])
+        self.assertEqual(
+            result.outputs["guard_details"][0]["affected_inputs"],
+            ["inputs.repository", "inputs.issue_number", "inputs.project_id"],
+        )
+        self.assertEqual(result.outputs["guard_details"][0]["trace"][0]["kind"], "let")
+
     def test_check_surfaces_bootstrap_details_from_operation_results(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", guards=(Guard(OperationRef("git.worktree")),), steps=())
 
@@ -1426,6 +1457,34 @@ blocks:
         self.assertEqual(support["strength"], "strong")
         self.assertEqual(support["unmaterialized_probes"], [])
         self.assertEqual(support["missing_probes"], [])
+
+    def test_check_treats_direct_guard_probe_as_covering_field_specific_preflight_observation(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="sync-fork",
+            blocks=(
+                GuardBlock(guards=(Guard(OperationRef("gh.repo.actions.permissions")),)),
+                StepBlock(
+                    steps=(
+                        Step(
+                            name="disable-actions",
+                            operation=OperationRef("gh.repo.actions.permissions.set", with_={"enabled": False}),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+        def probe(resolved_guard, _workflow):
+            self.assertEqual(resolved_guard.reference, "gh.repo.actions.permissions")
+            return OperationResult(status="ok", outputs={"enabled": True})
+
+        result = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        support = result.outputs["preflight_step_items"][0]["preflight_support"]
+        self.assertEqual(support["strength"], "strong")
+        self.assertEqual(support["missing_probes"], [])
+        self.assertEqual(support["unmaterialized_probes"], [])
 
     def test_check_marks_authored_probe_intent_as_unmaterialized_when_not_successfully_observed(self) -> None:
         workflow = Workflow(

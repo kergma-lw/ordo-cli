@@ -20,6 +20,7 @@ from .local_expression_engine.core import (
     CallArgumentNode,
     CallNode,
     FilterApplicationNode,
+    LiteralNode,
     ListNode,
     ObjectEntryNode,
     ObjectNode,
@@ -130,6 +131,7 @@ def _build_review_findings(
     findings.extend(_find_missing_input_validation(workflow, check_result, profile=profile))
     findings.extend(_find_unused_declared_inputs(workflow, check_result, profile=profile))
     findings.extend(_find_missing_recommended_probe_coverage(workflow, check_result))
+    findings.extend(_find_cross_repository_override_hints(workflow, profile=profile))
     findings.extend(_find_string_condition_structured_form_hints(workflow))
     findings.extend(_find_gate_recommendation_hints(workflow))
     findings.extend(_find_first_step_applicability_guard_hints(workflow))
@@ -142,6 +144,33 @@ def _build_review_findings(
             connector_provider=connector_provider,
         )
     )
+    return findings
+
+
+def _find_cross_repository_override_hints(workflow: Workflow, *, profile: Profile | None) -> list[dict[str, object]]:
+    context_repository = _review_gh_context_repository(workflow, profile=profile)
+    if context_repository is None:
+        return []
+
+    findings: list[dict[str, object]] = []
+    for path, repository, reference in _iter_cross_repository_override_sites(workflow):
+        if repository == context_repository:
+            continue
+        findings.append(
+            {
+                "code": "review.workflow.gh_repository_override",
+                "level": "warning",
+                "category": "connector_context_authoring",
+                "message": "Explicit GitHub repository overrides the current gh connector context repository",
+                "path": list(path),
+                "evidence": {
+                    "reference": reference,
+                    "repository": repository,
+                    "context_repository": context_repository,
+                    "reason": "connector_contexts.gh.repository is the default target; cross-repository access should stay explicit and reviewable",
+                },
+            }
+        )
     return findings
 
 
@@ -571,6 +600,189 @@ def _iter_string_condition_surfaces_from_step(step: Step, *, path: tuple[str, ..
         for inner_index, inner in enumerate(step.steps):
             surfaces.extend(_iter_string_condition_surfaces_from_step(inner, path=path + ("steps", str(inner_index))))
     return surfaces
+
+
+def _review_gh_context_repository(workflow: Workflow, *, profile: Profile | None) -> str | None:
+    raw_contexts = profile.connectors if profile is not None else workflow.connector_contexts
+    if not isinstance(raw_contexts, dict):
+        return None
+    gh_context = raw_contexts.get("gh")
+    if not isinstance(gh_context, dict):
+        return None
+    repository = gh_context.get("repository")
+    return _normalize_github_repository_value(repository)
+
+
+def _normalize_github_repository_value(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    repository = value.strip()
+    if repository.count("/") != 1:
+        return None
+    owner, repo = repository.split("/", 1)
+    if not owner or not repo:
+        return None
+    return repository
+
+
+def _iter_cross_repository_override_sites(workflow: Workflow) -> list[tuple[tuple[str, ...], str, str]]:
+    findings: list[tuple[tuple[str, ...], str, str]] = []
+
+    for block_index, block in enumerate(workflow.blocks):
+        if isinstance(block, GuardBlock):
+            for guard_index, guard in enumerate(block.guards):
+                if guard.operation is not None:
+                    findings.extend(
+                        _operation_repository_override_sites(
+                            guard.operation.uses,
+                            guard.operation.with_,
+                            path=("blocks", str(block_index), "guards", str(guard_index), "with", "repository"),
+                        )
+                    )
+                if isinstance(guard.expr, str):
+                    findings.extend(
+                        _expression_repository_override_sites(
+                            guard.expr,
+                            path=("blocks", str(block_index), "guards", str(guard_index)),
+                            context=LocalExpressionContext.GUARD,
+                        )
+                    )
+            continue
+
+        if isinstance(block, StepBlock):
+            for step_index, step in enumerate(block.steps):
+                findings.extend(_step_repository_override_sites(step, path=("blocks", str(block_index), "steps", str(step_index))))
+            continue
+
+        if isinstance(block, RunBlock):
+            if block.if_ is not None:
+                for relative_path, expression, _ in _collect_condition_surface_expressions(block.if_, path=("blocks", str(block_index), "if")):
+                    findings.extend(_expression_repository_override_sites(expression, path=relative_path, context=LocalExpressionContext.STEP_CONDITION))
+            for relative_path, expression, context in _collect_value_surface_expressions(block.with_, path=("blocks", str(block_index), "with")):
+                findings.extend(_expression_repository_override_sites(expression, path=relative_path, context=context))
+
+    return findings
+
+
+def _step_repository_override_sites(step: Step, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], str, str]]:
+    findings: list[tuple[tuple[str, ...], str, str]] = []
+    if step.operation is not None:
+        findings.extend(_operation_repository_override_sites(step.operation.uses, step.operation.with_, path=path + ("with", "repository")))
+    if step.if_ is not None:
+        for relative_path, expression, _ in _collect_condition_surface_expressions(step.if_, path=path + ("if",)):
+            findings.extend(_expression_repository_override_sites(expression, path=relative_path, context=LocalExpressionContext.STEP_CONDITION))
+    if step.gate is not None:
+        for relative_path, expression, _ in _collect_condition_surface_expressions(step.gate, path=path + ("gate",)):
+            findings.extend(_expression_repository_override_sites(expression, path=relative_path, context=LocalExpressionContext.STEP_CONDITION))
+    if step.gate_on_fail is not None:
+        for relative_path, expression, context in _collect_value_surface_expressions(step.gate_on_fail, path=path + ("gate", "on_fail")):
+            findings.extend(_expression_repository_override_sites(expression, path=relative_path, context=context))
+    for surface_path, expression, context in _collect_native_value_surface_expressions(step.for_each, path=path + ("for_each",)):
+        findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    if step.run is not None:
+        for surface_path, expression, context in _collect_value_surface_expressions(step.run_with, path=path + ("with",)):
+            findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+        for surface_path, expression, context in _collect_value_surface_expressions(step.run_state_bindings, path=path + ("state_bindings",)):
+            findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+        for surface_path, expression, context in _collect_value_surface_expressions(step.run_states, path=path + ("states",)):
+            findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    if step.steps is not None:
+        for inner_index, inner in enumerate(step.steps):
+            findings.extend(_step_repository_override_sites(inner, path=path + ("steps", str(inner_index))))
+    for surface_path, expression, context in _collect_native_value_surface_expressions(step.profile_switch, path=path + ("profile_switch",)):
+        findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    for surface_path, expression, context in _collect_native_value_surface_expressions(step.value, path=path + ("value",)):
+        findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    for surface_path, expression, context in _collect_native_value_surface_expressions(step.result, path=path + ("result",)):
+        findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    for surface_path, expression, context in _collect_native_value_surface_expressions(step.publish, path=path + ("publish",)):
+        findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    for surface_path, expression, context in _collect_value_surface_expressions(step.state_set, path=path + ("state_set",)):
+        findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    for surface_path, expression, context in _collect_value_surface_expressions(step.state_delete, path=path + ("state_delete",)):
+        findings.extend(_expression_repository_override_sites(expression, path=surface_path, context=context))
+    return findings
+
+
+def _operation_repository_override_sites(reference: str, with_: object, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], str, str]]:
+    if not reference.startswith("gh.") or not isinstance(with_, dict):
+        return []
+    repository = _normalize_github_repository_value(with_.get("repository"))
+    if repository is None:
+        return []
+    return [(path, repository, reference)]
+
+
+def _expression_repository_override_sites(expression: str, *, path: tuple[str, ...], context: LocalExpressionContext) -> list[tuple[tuple[str, ...], str, str]]:
+    try:
+        parsed = (
+            parse_condition_local_expression(expression, context=context)
+            if context in {LocalExpressionContext.GUARD, LocalExpressionContext.STEP_CONDITION}
+            else parse_value_local_expression(expression, context=context, allow_boolean_composition=True)
+        )
+    except LocalExpressionParseError:
+        return []
+    return list(_iter_expression_repository_override_sites(parsed.value.root, path=path))
+
+
+def _iter_expression_repository_override_sites(node: ValueExpressionNode, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], str, str]]:
+    findings: list[tuple[tuple[str, ...], str, str]] = []
+    if isinstance(node, CallNode):
+        reference = ".".join(node.target.parts)
+        if reference.startswith("gh."):
+            for argument in node.arguments:
+                if argument.name != "repository":
+                    continue
+                repository = _literal_repository_argument(argument.value)
+                if repository is not None:
+                    findings.append((path, repository, reference))
+        for argument in node.arguments:
+            findings.extend(_iter_expression_repository_override_sites(argument.value, path=path))
+        return findings
+    if isinstance(node, PipelineNode):
+        findings.extend(_iter_expression_repository_override_sites(node.source, path=path))
+        for item in node.filters:
+            findings.extend(_iter_expression_repository_override_sites(item, path=path))
+        return findings
+    if isinstance(node, FilterApplicationNode):
+        for argument in node.arguments:
+            findings.extend(_iter_expression_repository_override_sites(argument, path=path))
+        return findings
+    if isinstance(node, BuiltinCallNode):
+        for argument in node.arguments:
+            findings.extend(_iter_expression_repository_override_sites(argument, path=path))
+        return findings
+    if isinstance(node, UnaryNode):
+        return _iter_expression_repository_override_sites(node.operand, path=path)
+    if isinstance(node, BinaryNode):
+        findings.extend(_iter_expression_repository_override_sites(node.left, path=path))
+        findings.extend(_iter_expression_repository_override_sites(node.right, path=path))
+        return findings
+    if isinstance(node, ListNode):
+        for item in node.items:
+            findings.extend(_iter_expression_repository_override_sites(item, path=path))
+        return findings
+    if isinstance(node, ObjectNode):
+        for entry in node.entries:
+            findings.extend(_iter_expression_repository_override_sites(entry, path=path))
+        return findings
+    if isinstance(node, ObjectEntryNode):
+        return _iter_expression_repository_override_sites(node.value, path=path)
+    if isinstance(node, AdapterInvocationNode):
+        for binding in node.bindings:
+            findings.extend(_iter_expression_repository_override_sites(binding, path=path))
+        return findings
+    if isinstance(node, AdapterBindingNode):
+        return _iter_expression_repository_override_sites(node.value, path=path)
+    if isinstance(node, CallArgumentNode):
+        return _iter_expression_repository_override_sites(node.value, path=path)
+    return findings
+
+
+def _literal_repository_argument(node: ValueExpressionNode) -> str | None:
+    if isinstance(node, LiteralNode):
+        return _normalize_github_repository_value(node.value)
+    return None
 
 
 def _collect_native_value_surface_expressions(value: object, *, path: tuple[str, ...]) -> list[tuple[tuple[str, ...], str, LocalExpressionContext]]:

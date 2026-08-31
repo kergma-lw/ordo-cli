@@ -5,6 +5,7 @@ import subprocess
 from unittest.mock import patch
 
 from ordo.model.diagnostic import Diagnostic
+from ordo.model.connector import Connector, ConnectorRegistry
 from ordo.model.launcher import Launcher
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeStatus
@@ -23,6 +24,7 @@ from ordo.runtime.executing import (
     _prepare_tree_driven_step_context,
     _record_step_runtime_result,
 )
+from ordo.runtime.providers import ConnectorProvider
 from ordo.runtime.resolution import ResolvedBuiltinStep, ResolvedOperation, ResolvedRunStep
 from ordo.model.connector import OperationContract
 
@@ -106,6 +108,69 @@ class ExecuteModeTest(unittest.TestCase):
         self.assertEqual(result.operation_results[0].diagnostics[-1].code, "runtime.guard.result_type")
         self.assertEqual(result.outputs["guard_details"][0]["failure_kind"], "result_type")
         self.assertEqual(result.failed_guard, "inputs.title")
+
+    def test_execute_guard_details_include_affected_inputs_and_lets(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: story-tasks-show
+inputs:
+  repository: owner/repo
+  issue_number: 103
+  project_id: demo-project
+let:
+  story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+blocks:
+  - guards:
+      - story_project_issue.exists
+  - steps: []
+"""
+        )
+
+        def probe(_resolved_guard, _workflow):
+            return OperationResult(status="ok", outputs={"exists": False})
+
+        result = execute_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.outputs["guard_details"][0]["affected_lets"], ["story_project_issue"])
+        self.assertEqual(
+            result.outputs["guard_details"][0]["affected_inputs"],
+            ["inputs.repository", "inputs.issue_number", "inputs.project_id"],
+        )
+
+    def test_execute_failure_result_keeps_step_detail_with_resolved_inputs(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: story-tasks-show
+inputs:
+  content_refs:
+    - owner/repo#1
+blocks:
+  - guards: []
+  - steps:
+      - name: Load story task item details in batch
+        uses: gh.project.items
+        with:
+          content_refs: ${inputs.content_refs}
+"""
+        )
+
+        def step_executor(resolved_step, _workflow):
+            self.assertEqual(resolved_step.resolved_inputs, {"content_refs": ["owner/repo#1"]})
+            return OperationResult(
+                status="execution_error",
+                summary="GitHub project item content_refs must be a list of OWNER/REPO#NUMBER strings",
+            )
+
+        result = execute_workflow(workflow, step_executor=step_executor, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
+        self.assertEqual(result.failed_step, "Load story task item details in batch")
+        self.assertEqual(result.operation_results[0].raw["step_detail"]["step"], "Load story task item details in batch")
+        self.assertEqual(result.operation_results[0].raw["step_detail"]["reference"], "gh.project.items")
+        self.assertEqual(result.operation_results[0].raw["step_detail"]["resolved_inputs"], {"content_refs": ["owner/repo#1"]})
 
     def test_record_step_runtime_result_updates_registers_and_diagnostics(self) -> None:
         workflow = Workflow(version=0, workflow="open-task", steps=(Step(name="flag", value=True, register="flag"),))
@@ -1288,6 +1353,187 @@ blocks:
         self.assertEqual(result.outputs["skipped_steps"], [])
         self.assertEqual(result.outputs["execution_tree"], None)
 
+    def test_execute_reports_step_start_before_execution(self) -> None:
+        workflow = Workflow(
+            version=0,
+            workflow="open-task",
+            guards=(),
+            steps=(Step(name="effectful-step", operation=OperationRef("shell.command")),),
+        )
+        reported_steps: list[tuple[str, str, str | None, str | None]] = []
+
+        def reporter(event) -> None:
+            reported_steps.append((event.step_name, event.workflow_name, event.step_reference, event.working_directory))
+
+        def executor(resolved_step, _workflow):
+            self.assertEqual(reported_steps, [("effectful-step", "open-task", "shell.command", None)])
+            self.assertEqual(resolved_step.reference, "shell.command")
+            return OperationResult(status="ok", summary="Executed")
+
+        result = execute_workflow(
+            workflow,
+            step_executor=executor,
+            connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            step_reporter=reporter,
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(reported_steps, [("effectful-step", "open-task", "shell.command", None)])
+
+    def test_execute_propagates_step_reporting_into_nested_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "nested.yml"
+            fragment.write_text(
+                "version: 0\nworkflow: nested\nblocks:\n  - steps:\n      - name: nested-command\n        uses: shell.command\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="parent",
+                guards=(),
+                steps=(Step(name="expand", run="nested.yml", resolved_run_path=str(fragment)),),
+            )
+            reported_steps: list[tuple[str, str, bool, str | None]] = []
+
+            def reporter(event) -> None:
+                reported_steps.append((event.step_name, event.workflow_name, event.invoked_by_run, event.invoked_run_reference))
+
+            result = execute_workflow(
+                workflow,
+                step_executor=lambda resolved_step, _workflow: OperationResult(status="ok", summary=resolved_step.reference),
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+                step_reporter=reporter,
+            )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(
+            reported_steps,
+            [
+                ("expand", "parent", False, None),
+                ("nested-command", "parent::nested", True, "nested.yml"),
+            ],
+        )
+
+    def test_execute_materializes_probe_derived_let_inputs_before_action_execution(self) -> None:
+        captured_inputs: list[dict[str, object] | None] = []
+        provider = ConnectorProvider(
+            registry=ConnectorRegistry(
+                connectors=(
+                    Connector(
+                        namespace="gh",
+                        operations=(
+                            OperationContract(
+                                name="issue",
+                                kind="probe",
+                                inputs={"repository": "string", "issue_number": "integer"},
+                                outputs={"body": "string"},
+                            ),
+                        ),
+                    ),
+                    Connector(
+                        namespace="demo",
+                        operations=(
+                            OperationContract(name="write", kind="action", inputs={"body": "string"}),
+                        ),
+                    ),
+                ),
+            ),
+            guard_probe=lambda resolved, _workflow: OperationResult(
+                status="ok",
+                summary="loaded issue",
+                outputs={"body": "Story body from probe"},
+            )
+            if resolved.reference == "gh.issue"
+            else OperationResult(status="ok", summary="ok"),
+            step_executor=lambda resolved, _workflow: captured_inputs.append(resolved.resolved_inputs) or OperationResult(status="ok", summary="written"),
+        )
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: story-task-add
+inputs:
+  repository: owner/repo
+  issue_number: 17
+let:
+  story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
+blocks:
+  - steps:
+      - name: replace-story-body
+        uses: demo.write
+        with:
+          body: story_body
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=provider)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(captured_inputs, [{"body": "Story body from probe"}])
+
+    def test_execute_preserves_materialized_inputs_when_profile_is_active(self) -> None:
+        captured_inputs: list[dict[str, object] | None] = []
+        provider = ConnectorProvider(
+            registry=ConnectorRegistry(
+                connectors=(
+                    Connector(
+                        namespace="gh",
+                        operations=(
+                            OperationContract(
+                                name="issue",
+                                kind="probe",
+                                inputs={"repository": "string", "issue_number": "integer"},
+                                outputs={"body": "string"},
+                            ),
+                        ),
+                    ),
+                    Connector(
+                        namespace="demo",
+                        operations=(
+                            OperationContract(name="write", kind="action", inputs={"body": "string"}),
+                        ),
+                    ),
+                ),
+            ),
+            guard_probe=lambda resolved, _workflow: OperationResult(
+                status="ok",
+                summary="loaded issue",
+                outputs={"body": "Story body from probe"},
+            )
+            if resolved.reference == "gh.issue"
+            else OperationResult(status="ok", summary="ok"),
+            step_executor=lambda resolved, _workflow: captured_inputs.append(resolved.resolved_inputs) or OperationResult(status="ok", summary="written"),
+        )
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: story-task-add
+profile: meta
+inputs:
+  repository: owner/repo
+  issue_number: 17
+let:
+  story_body: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body
+blocks:
+  - steps:
+      - name: replace-story-body
+        uses: demo.write
+        with:
+          body: story_body
+"""
+        )
+        profile = Profile(name="meta")
+
+        result = execute_workflow(
+            workflow,
+            profile=profile,
+            available_profiles={"meta": profile},
+            connector_provider=provider,
+        )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(captured_inputs, [{"body": "Story body from probe"}])
+
     def test_execute_runs_probe_step_without_execution_tree(self) -> None:
         workflow = Workflow(
             version=0,
@@ -2109,6 +2355,51 @@ blocks:
             self.assertEqual(result.status, RuntimeStatus.OK)
             self.assertEqual(result.outputs["active_profile"], "meta")
             self.assertIn("main", result.outputs["executed_steps"])
+
+    def test_execute_explicit_cli_profile_wins_over_pre_run_profile_switch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            backend_dir = root / "backend"
+            meta_dir = root / "meta"
+            backend_dir.mkdir()
+            meta_dir.mkdir()
+            (root / ".ordo" / "workflows").mkdir(parents=True)
+            (root / ".ordo" / "profiles").mkdir(parents=True)
+            (root / ".ordo" / "repo.json").write_text('{"active_profile": "meta"}\n', encoding="utf-8")
+            (root / ".ordo" / "ordo.yaml").write_text(
+                "version: 1\npre_run:\n  - file: workflows/switch-active-profile.yml\n    state_bindings:\n      shared_state: shared_state\ndefaults:\n  profile: backend\nworkflows:\n  inspect-issue:\n    file: inspect-issue.yml\n    state_bindings:\n      shared_state: shared_state\nprofiles:\n  backend:\n    file: backend.yml\n  meta:\n    file: meta.yml\nstates:\n  shared_state:\n    path: repo.json\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "switch-active-profile.yml").write_text(
+                "version: 0\nworkflow: switch-active-profile\ninputs:\n  active_profile_key: active_profile\nstate_needs:\n  shared_state: {}\nlet:\n  active_profile: state.shared_state[inputs.active_profile_key]\nblocks:\n  - steps:\n      - name: switch\n        profile_switch: active_profile\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "workflows" / "inspect-issue.yml").write_text(
+                "version: 0\nworkflow: inspect-issue\ninputs:\n  active_profile_key: active_profile\n  repository: {}\nblocks:\n  - guards:\n      - inputs.repository == \"kergma-lw/checklist-backend\"\n  - steps:\n      - name: main\n        value: \"ok\"\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "backend.yml").write_text(
+                f"name: backend\ninputs:\n  repository: kergma-lw/checklist-backend\n  repo_dir: {backend_dir}\nworking_directory: ${{inputs.repo_dir}}\n",
+                encoding="utf-8",
+            )
+            (root / ".ordo" / "profiles" / "meta.yml").write_text(
+                f"name: meta\ninputs:\n  repository: kergma-lw/checklist-meta\n  repo_dir: {meta_dir}\nworking_directory: ${{inputs.repo_dir}}\n",
+                encoding="utf-8",
+            )
+
+            activated = activate_playbook(workflow_name="inspect-issue", profile_name="backend", cwd=root)
+            result = execute_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=activated.available_profiles,
+                profile_working_directories=activated.profile_working_directories,
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["active_profile"], "backend")
+        self.assertEqual(result.outputs["current_working_directory"], str(backend_dir))
+        self.assertIn("main", result.outputs["executed_steps"])
 
     def test_runtime_profile_use_applies_profile_inputs_to_subsequent_steps(self) -> None:
         workflow = Workflow(

@@ -18,7 +18,7 @@ DEFAULT_OUTPUT = ROOT / "site-docs"
 STATIC_TOPICS = (
     "overview",
     "model",
-    "workflow-authoring",
+    "workflow-rules",
     "capabilities",
     "command-line",
     "operations",
@@ -27,8 +27,8 @@ STATIC_TOPICS = (
 
 TOPIC_TITLES = {
     "overview": "Overview",
-    "model": "Authoring model",
-    "workflow-authoring": "Workflow authoring",
+    "model": "Workflow model",
+    "workflow-rules": "Workflow rules",
     "capabilities": "Capabilities",
     "command-line": "Command-line reference",
     "operations": "Operation catalog",
@@ -37,8 +37,8 @@ TOPIC_TITLES = {
 
 TOPIC_INTROS = {
     "overview": "Start here for a map of the main Ordo surfaces.",
-    "model": "This page outlines the main authoring contracts used in workflows, playbooks, profiles, and runtime state.",
-    "workflow-authoring": "Use this page when adding, changing, or reviewing workflows.",
+    "model": "This page outlines the main workflow contracts used in workflows, playbooks, profiles, and runtime state.",
+    "workflow-rules": "Use this page when adding, changing, or reviewing workflows.",
     "capabilities": "This page shows what Ordo supports, restricts, or deprecates.",
     "command-line": "This page summarizes the public CLI surface and the main execution modes.",
     "operations": "This page lists public operations by connector namespace.",
@@ -47,8 +47,8 @@ TOPIC_INTROS = {
 
 TOPIC_SUMMARY_REWRITES = {
     "Start with the Ordo world map": "Start with a map of the main Ordo surfaces.",
-    "Inspect the main authoring contracts": "Browse the main authoring contracts.",
-    "Inspect preferred workflow authoring patterns, paired check/review passes, routine cautions, early guards, and let usage": "Browse workflow authoring guidance, from the default check/review loop to fallback cautions.",
+    "Inspect the main workflow contracts": "Browse the main workflow contracts.",
+    "Inspect preferred workflow rules, paired check/review passes, routine cautions, early guards, and let usage": "Browse workflow rules, from the default check/review loop to fallback cautions.",
     "Inspect supported and unsupported surfaces": "See which surfaces are supported, restricted, or deprecated.",
     "Inspect the public command-line launch surface, including distinct check and review roles": "See the public CLI surface and how check, review, plan, and run differ.",
     "Inspect the public connector catalog": "Browse the public connector operations.",
@@ -57,8 +57,8 @@ TOPIC_SUMMARY_REWRITES = {
 
 TOPIC_USE_WHEN = {
     "overview": "Use this page first when you need to understand where to look next.",
-    "model": "Use this page when you need field-level contract details for authoring work.",
-    "workflow-authoring": "Use this page when you are deciding how to structure or review a workflow.",
+    "model": "Use this page when you need field-level workflow contract details.",
+    "workflow-rules": "Use this page when you are deciding how to structure or review a workflow.",
     "capabilities": "Use this page when you need to know whether a surface is supported, restricted, or deprecated.",
     "command-line": "Use this page when you need the public CLI entrypoints, flags, and execution modes.",
     "operations": "Use this page when you need to find a concrete operation that a workflow can call.",
@@ -353,12 +353,12 @@ def render_overview(page: Path, doc: dict[str, Any]) -> str:
     lines.extend(bullet_list([f"`{name}`" for name in doc.get("execution_concepts", {}).get("statuses", [])]))
     lines += [
         "",
-        "## Workflow authoring loop",
+        "## Workflow check/review loop",
         "",
-        doc.get("workflow_authoring_passes", {}).get("rule", ""),
+        doc.get("workflow_check_review_passes", {}).get("rule", ""),
         "",
     ]
-    for item in doc.get("workflow_authoring_passes", {}).get("passes", []):
+    for item in doc.get("workflow_check_review_passes", {}).get("passes", []):
         lines.append(f"- `{item['command']}` — {item['purpose']}")
     lines += [
         "",
@@ -405,9 +405,9 @@ def render_command_line(doc: dict[str, Any]) -> str:
             lines.append(f"- `{item['name']}` — {item['summary']}")
         lines += ["", "### Input override precedence", ""]
         lines.extend(bullet_list(command.get("input_override_precedence", [])))
-        authoring = command.get("authoring_passes", {})
+        authoring = command.get("check_review_passes", {})
         if authoring:
-            lines += ["", "### Workflow authoring loop", "", authoring.get("rule", ""), ""]
+            lines += ["", "### Workflow check/review loop", "", authoring.get("rule", ""), ""]
             for item in authoring.get("passes", []):
                 lines.append(f"- `{item['mode']}` — {item['purpose']} _Question: {item['question']}_")
         lines += ["", "### Example commands", ""]
@@ -536,14 +536,14 @@ def render_capabilities(doc: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_workflow_authoring(doc: dict[str, Any]) -> str:
-    lines = render_topic_header("workflow-authoring", doc)
-    heuristic = doc.get("authoring_heuristic", [])
+def render_workflow_rules(doc: dict[str, Any]) -> str:
+    lines = render_topic_header("workflow-rules", doc)
+    heuristic = doc.get("heuristic", [])
     if heuristic:
-        lines += ["## Default authoring loop", ""]
+        lines += ["## Workflow heuristic", ""]
         lines.extend(bullet_list(heuristic))
         lines.append("")
-    for rule in doc.get("rules", doc.get("workflow_authoring_rules", [])):
+    for rule in doc.get("rules", doc.get("workflow_rules", [])):
         lines += [
             f"## {rule['name']}",
             "",
@@ -589,8 +589,8 @@ def render_topic(page: Path, topic: str, doc: dict[str, Any]) -> str:
         return render_operations_topic(page, doc)
     if topic == "capabilities":
         return render_capabilities(doc)
-    if topic == "workflow-authoring":
-        return render_workflow_authoring(doc)
+    if topic == "workflow-rules":
+        return render_workflow_rules(doc)
     return render_generic_topic(topic, doc)
 
 

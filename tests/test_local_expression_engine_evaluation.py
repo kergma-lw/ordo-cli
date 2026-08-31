@@ -10,10 +10,12 @@ from ordo.runtime.local_expression_engine.core import (
     ConditionObservationResult,
     LocalExpressionEvaluationError,
     ReadOnlyObservationSession,
+    collect_workflow_expression_dependencies,
     evaluate_condition_expression,
     evaluate_local_expression_tree,
     parse_local_expression_tree,
 )
+from ordo.runtime.local_expression_contexts import LocalExpressionContext
 
 
 class LocalExpressionEngineEvaluationTest(unittest.TestCase):
@@ -113,6 +115,75 @@ blocks:
 
         self.assertEqual(ctx.exception.code, "runtime.value.filter_type_invalid")
 
+    def test_collect_workflow_expression_dependencies_tracks_let_expansion(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 103
+  project_id: demo-project
+let:
+  story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("story_project_issue.exists", allow_boolean_composition=True)
+
+        summary = collect_workflow_expression_dependencies(
+            parsed,
+            workflow,
+            context=LocalExpressionContext.GUARD,
+        )
+
+        self.assertEqual(summary.affected_lets, ("story_project_issue",))
+        self.assertEqual(
+            summary.affected_inputs,
+            ("inputs.repository", "inputs.issue_number", "inputs.project_id"),
+        )
+
+    def test_condition_trace_preserves_successful_let_expansion(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 103
+  project_id: demo-project
+let:
+  story_project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id)
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+
+        parsed = parse_local_expression_tree("story_project_issue.exists", allow_boolean_composition=True)
+        session = ReadOnlyObservationSession(
+            lambda _request: ConditionObservationResult(status="ok", value=True, reference="gh.project.issue")
+        )
+
+        evaluation = evaluate_condition_expression(
+            parsed,
+            workflow,
+            context=LocalExpressionContext.GUARD,
+            session=session,
+        )
+
+        self.assertEqual(evaluation.status, "ok")
+        let_entry = next(item for item in evaluation.trace if item.kind == "let")
+        self.assertEqual(let_entry.status, "ok")
+        self.assertEqual(let_entry.binding_name, "story_project_issue")
+        self.assertEqual(
+            let_entry.expanded_expr,
+            "gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number, project_id=inputs.project_id).exists",
+        )
+
     def test_evaluate_inline_format_call(self) -> None:
         workflow = load_workflow_text(
             """
@@ -189,6 +260,151 @@ blocks:
         parsed = parse_local_expression_tree('inputs.status | eq("ok")')
 
         self.assertIs(evaluate_local_expression_tree(parsed, workflow), True)
+
+    def test_evaluate_catch_filter_returns_fallback_for_caught_probe_not_found(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["issue_not_found"], false)'
+        )
+        session = ReadOnlyObservationSession(
+            lambda request: ConditionObservationResult(
+                status="failure",
+                value=None,
+                reference="gh.issue",
+                diagnostics=(
+                    Diagnostic(code="issue_not_found", level="error", message="GitHub issue was not found"),
+                ),
+            )
+        )
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow, observation_session=session), False)
+
+    def test_evaluate_catch_filter_supports_wildcard_code_match(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["*_not_found"], false)'
+        )
+        session = ReadOnlyObservationSession(
+            lambda request: ConditionObservationResult(
+                status="failure",
+                value=None,
+                reference="gh.issue",
+                diagnostics=(
+                    Diagnostic(code="issue_not_found", level="error", message="GitHub issue was not found"),
+                ),
+            )
+        )
+
+        self.assertIs(evaluate_local_expression_tree(parsed, workflow, observation_session=session), False)
+
+    def test_evaluate_catch_filter_preserves_success_value(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["issue_not_found"], false)'
+        )
+        session = ReadOnlyObservationSession(
+            lambda request: ConditionObservationResult(status="ok", value="Hello", reference="gh.issue")
+        )
+
+        self.assertEqual(evaluate_local_expression_tree(parsed, workflow, observation_session=session), "Hello")
+
+    def test_evaluate_not_found_filter_returns_boolean_verdict(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        success = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | not_found'
+        )
+        success_session = ReadOnlyObservationSession(
+            lambda request: ConditionObservationResult(status="ok", value="Hello", reference="gh.issue")
+        )
+        failure_session = ReadOnlyObservationSession(
+            lambda request: ConditionObservationResult(
+                status="failure",
+                value=None,
+                reference="gh.issue",
+                diagnostics=(
+                    Diagnostic(code="issue_not_found", level="error", message="GitHub issue was not found"),
+                ),
+            )
+        )
+
+        self.assertIs(evaluate_local_expression_tree(success, workflow, observation_session=success_session), True)
+        self.assertIs(evaluate_local_expression_tree(success, workflow, observation_session=failure_session), False)
+
+    def test_evaluate_catch_filter_does_not_catch_unmatched_failure(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: demo
+inputs:
+  repository: owner/repo
+  issue_number: 7
+blocks:
+  - guards: []
+  - steps: []
+"""
+        )
+        parsed = parse_local_expression_tree(
+            'gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["issue_not_found"], false)'
+        )
+        session = ReadOnlyObservationSession(
+            lambda request: ConditionObservationResult(
+                status="failure",
+                value=None,
+                reference="gh.issue",
+                diagnostics=(
+                    Diagnostic(code="probe_failed", level="error", message="GitHub issue probe failed"),
+                ),
+            )
+        )
+
+        with self.assertRaises(LocalExpressionEvaluationError) as ctx:
+            evaluate_local_expression_tree(parsed, workflow, observation_session=session)
+
+        self.assertEqual(ctx.exception.code, "runtime.value.call_probe_failed")
 
     def test_evaluate_ne_filter_can_compare_boolean_literal(self) -> None:
         workflow = load_workflow_text(

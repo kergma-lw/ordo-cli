@@ -145,6 +145,14 @@ class OperationContext:
             raise MappedOutcomeError(_outcome_from_runtime_result(value))
         return value
 
+    def optional_input(self, name: str) -> JSONValue | None:
+        try:
+            return self.input(name)
+        except MappedOutcomeError as exc:
+            if exc.outcome.status == "input_error":
+                return None
+            raise
+
     def bootstrap(self) -> BootstrapOutcome:
         return self._bootstrap
 

@@ -61,6 +61,18 @@ class LocalExpressionEngineParsingTest(unittest.TestCase):
             ),
         ))
 
+    def test_parse_catch_filter_with_code_list_and_fallback(self) -> None:
+        parsed = parse_local_expression_tree('gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | catch(["issue_not_found", "*_not_found"], false)')
+
+        self.assertIsInstance(parsed.root, PipelineNode)
+        self.assertEqual(parsed.root.filters[-1].name, "catch")
+
+    def test_parse_not_found_filter(self) -> None:
+        parsed = parse_local_expression_tree('gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).body | not_found')
+
+        self.assertIsInstance(parsed.root, PipelineNode)
+        self.assertEqual(parsed.root.filters[-1].name, "not_found")
+
     def test_parse_only_filter_with_predicate_argument(self) -> None:
         parsed = parse_local_expression_tree('inputs.items | only(conclusion!="success")')
 

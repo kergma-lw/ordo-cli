@@ -7,6 +7,8 @@
 - Step conditions should allow one declared workflow step to execute or be skipped without introducing first-class branch blocks, loops, or join semantics.
 - Step admission conditions should allow one declared workflow step to be blocked with meaningful failure after prerequisite read-only observations have been established.
 - Step conditions should reuse the common local-expression system rather than introducing a third workflow expression language.
+- Across condition-oriented workflow surfaces, boolean `false` and condition-evaluation failure must remain distinct outcomes.
+- Failed read-only probe observation inside `if` or `gate` must fail condition evaluation rather than being normalized into boolean `false`.
 
 ## Authoring shape
 
@@ -82,6 +84,8 @@
 - If a step condition evaluates to `false`, the step is intentionally skipped.
 - If a step-level admission condition evaluates to `true`, the step remains eligible to execute.
 - If a step-level admission condition evaluates to `false`, the step must not execute and the workflow must fail on that step.
+- `if` exists for optional routing, not for silently downgrading condition-evaluation failure into skip.
+- `gate` exists for step admission, not for silently downgrading condition-evaluation failure into a normal blocked verdict.
 - A skipped step must remain distinguishable from guard blocking, validation failure, resolution failure, and execution failure.
 - A gate-blocked step must remain distinguishable from guard blocking, skip, validation failure, resolution failure, and execution failure.
 - The runtime should preserve machine-usable information that a step was skipped because its condition evaluated to `false`.
