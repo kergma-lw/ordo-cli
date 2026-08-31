@@ -15,7 +15,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
 from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow
-from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, discover_playbook_path, inspect_playbook_workflow
+from ordo.playbook import PlaybookError, WorkflowCatalogInput, activate_playbook, activated_working_directory, discover_playbook_path, inspect_playbook_workflow
 from ordo.runtime.profiles import apply_profile_defaults_to_subsequent_steps
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -2934,7 +2934,7 @@ class PlaybookActivationTest(unittest.TestCase):
             outputs={},
         )
 
-        for mode in ("review", "check", "plan", "explain", "next"):
+        for mode in ("review", "check", "plan", "explain"):
             with self.subTest(mode=mode):
                 with patch("sys.argv", ["ordo-playbook", mode, "inspect-issue"]):
                     with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
@@ -2947,6 +2947,74 @@ class PlaybookActivationTest(unittest.TestCase):
                 self.assertEqual(exit_code, 0)
                 self.assertEqual(activate_mock.call_args.kwargs["workflow_name"], "inspect-issue")
                 self.assertEqual(run_mode_mock.call_args.args[0], mode)
+
+    def test_cli_next_accepts_no_workflow_name(self) -> None:
+        entry = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow_description="Inspect issue context",
+            workflow_category="inspect",
+            workflow_when="Use when context is missing",
+            working_directory=None,
+        )
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            available_profiles=None,
+            profile_working_directories=None,
+            diagnostics=(),
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXPLAIN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={
+                "can_execute": True,
+                "allowed_state": "allowed",
+                "analysis_complete": True,
+                "explanation": {"allowed": True, "category": "ok", "blockers": []},
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+            },
+        )
+
+        with patch("sys.argv", ["ordo-playbook", "next", "--json"]):
+            with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)) as list_mock:
+                with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
+                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                        stdout = io.StringIO()
+                        stderr = io.StringIO()
+                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                            exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["mode"], "next")
+        self.assertEqual(payload["scope"], "playbook")
+        self.assertEqual(payload["best_candidate"]["workflow"], "inspect-issue")
+        list_mock.assert_called_once()
+        activate_mock.assert_called_once_with(
+            workflow_name="inspect-issue",
+            profile_name=None,
+            input_overrides={},
+            playbook_path=None,
+        )
+
+    def test_cli_next_rejects_workflow_argument(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "next", "close-task"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as ctx:
+                    cli_main()
+
+        self.assertNotEqual(ctx.exception.code, 0)
+        self.assertIn("next does not accept a workflow name", stderr.getvalue())
 
     def test_cli_run_mode_accepts_positional_workflow_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2984,6 +3052,178 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertNotEqual(ctx.exception.code, 0)
         self.assertIn("plan requires a workflow name", stderr.getvalue())
 
+    def test_cli_next_does_not_require_workflow_name(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        entry = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow_description=None,
+            workflow_category=None,
+            workflow_when=None,
+            working_directory=None,
+        )
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            available_profiles=None,
+            profile_working_directories=None,
+            diagnostics=(),
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXPLAIN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={
+                "can_execute": True,
+                "allowed_state": "allowed",
+                "analysis_complete": True,
+                "explanation": {"allowed": True, "category": "ok", "blockers": []},
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+            },
+        )
+        with patch("sys.argv", ["ordo-playbook", "next"]):
+            with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
+                with patch("ordo.cli.activate_playbook", return_value=activated):
+                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                            exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("requires a workflow name", stderr.getvalue())
+
+    def test_cli_next_text_output_is_compact_and_shows_scores(self) -> None:
+        entry = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow_description="Inspect issue context",
+            workflow_category="inspect",
+            workflow_when=None,
+            working_directory=None,
+        )
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            available_profiles=None,
+            profile_working_directories=None,
+            diagnostics=(),
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXPLAIN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={
+                "can_execute": True,
+                "allowed_state": "allowed",
+                "analysis_complete": True,
+                "explanation": {"allowed": True, "category": "ok", "blockers": []},
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+            },
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "next"]):
+            with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
+                with patch("ordo.cli.activate_playbook", return_value=activated):
+                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                            exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        output = stdout.getvalue()
+        self.assertIn("Next workflow: inspect-issue (1040, +0/-0)", output)
+        self.assertIn("Status: ready now", output)
+        self.assertNotIn('"best_candidate"', output)
+
+    def test_cli_next_global_filters_input_overrides_per_candidate_workflow(self) -> None:
+        list_entry_mobile = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="mobile-run-android-dev-usb",
+            workflow_description="Run mobile dev build",
+            workflow_category="mobile",
+            workflow_when=None,
+            working_directory=None,
+        )
+        list_entry_story = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="story-get-next-task-for-work",
+            workflow_description="Choose next task",
+            workflow_category="story",
+            workflow_when=None,
+            working_directory=None,
+        )
+        detailed_mobile = SimpleNamespace(**list_entry_mobile.__dict__, inputs=(WorkflowCatalogInput(name="device_id"),))
+        detailed_story = SimpleNamespace(**list_entry_story.__dict__, inputs=(WorkflowCatalogInput(name="issue_number"),))
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            available_profiles=None,
+            profile_working_directories=None,
+            diagnostics=(),
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXPLAIN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={
+                "can_execute": True,
+                "allowed_state": "allowed",
+                "analysis_complete": True,
+                "explanation": {"allowed": True, "category": "ok", "blockers": []},
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+            },
+        )
+
+        activate_calls: list[dict[str, object]] = []
+
+        def activate_side_effect(*, workflow_name, profile_name, input_overrides, playbook_path):
+            activate_calls.append({
+                "workflow_name": workflow_name,
+                "input_overrides": dict(input_overrides),
+            })
+            return SimpleNamespace(**activated.__dict__, workflow_name=workflow_name)
+
+        def inspect_side_effect(workflow_name, *, playbook_path=None):
+            if workflow_name == "mobile-run-android-dev-usb":
+                return detailed_mobile
+            return detailed_story
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "next", "--input", "device_id=demo-device", "--json"]):
+            with patch("ordo.cli.list_playbook_workflows", return_value=(list_entry_mobile, list_entry_story)):
+                with patch("ordo.cli.inspect_playbook_workflow", side_effect=inspect_side_effect):
+                    with patch("ordo.cli.activate_playbook", side_effect=activate_side_effect):
+                        with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                                exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            activate_calls,
+            [
+                {"workflow_name": "mobile-run-android-dev-usb", "input_overrides": {"device_id": "demo-device"}},
+                {"workflow_name": "story-get-next-task-for-work", "input_overrides": {}},
+            ],
+        )
+
     def test_cli_top_level_help_mentions_workflows_and_positional_execution(self) -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -3019,6 +3259,18 @@ class PlaybookActivationTest(unittest.TestCase):
         help_text = stdout.getvalue()
         self.assertIn("usage: ordo-playbook [options] plan WORKFLOW", help_text)
         self.assertIn("ordo-playbook plan set-active-task", help_text)
+
+    def test_cli_next_help_mentions_no_argument_mode(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "next", "--help"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("usage: ordo-playbook [options] next", help_text)
+        self.assertIn("ordo-playbook next", help_text)
 
     def test_cli_run_help_mentions_progress_steps_flag(self) -> None:
         stdout = io.StringIO()

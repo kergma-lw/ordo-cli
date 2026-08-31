@@ -12,6 +12,7 @@ from ordo.external_failures import describe_external_failure_context
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
 from ordo.runtime.human_messages import render_gate_failure_message, render_guard_failure_message
+from ordo.runtime.nexting import build_next_candidate, rank_next_candidates
 
 
 WORKFLOWS_HELP = """usage: ordo-playbook workflows <list|show>
@@ -100,9 +101,24 @@ Examples:
   ordo-playbook --profile backend --input issue_number=42 run set-active-task --json
 """
 
+NEXT_MODE_HELP = """usage: ordo-playbook [options] next
+
+Suggest which workflow should run next from the current playbook context.
+
+Default output is intended to be concise:
+  - best candidate workflow
+  - whether any workflow is runnable now
+  - nearby alternatives when they are materially competitive
+
+Examples:
+  ordo-playbook next
+  ordo-playbook --profile backend next
+  ordo-playbook --input issue_number=42 next --json
+"""
+
 
 def main() -> int:
-    if len(sys.argv) >= 3 and sys.argv[1] in {"review", "check", "plan", "explain", "run"} and sys.argv[2] in {"-h", "--help"}:
+    if len(sys.argv) >= 3 and sys.argv[1] in {"review", "check", "plan", "explain", "run", "next"} and sys.argv[2] in {"-h", "--help"}:
         if sys.argv[1] == "review":
             print(REVIEW_MODE_HELP)
         elif sys.argv[1] == "check":
@@ -111,6 +127,8 @@ def main() -> int:
             print(PLAN_MODE_HELP)
         elif sys.argv[1] == "run":
             print(RUN_MODE_HELP)
+        elif sys.argv[1] == "next":
+            print(NEXT_MODE_HELP)
         else:
             print(EXPLAIN_MODE_HELP)
         return 0
@@ -128,6 +146,9 @@ def main() -> int:
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "run":
         print(RUN_MODE_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "next":
+        print(NEXT_MODE_HELP)
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "workflows" and sys.argv[2] in {"-h", "--help"}:
         print(WORKFLOWS_HELP)
@@ -153,7 +174,7 @@ def main() -> int:
             "  plan     show what the workflow would do, without making changes\n"
             "  explain  explain why the workflow can or cannot be run right now\n"
             "  run      run the workflow and do the real work\n"
-            "  next     suggest the next workflow step to run now"
+            "  next     suggest which workflow should run next"
         ),
     )
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
@@ -192,9 +213,13 @@ def main() -> int:
     args.mode = command[0]
     if args.progress_steps and args.mode != "run":
         parser.error("--progress-steps is only supported with run")
-    args.workflow = _resolve_execution_workflow_name(args, parser=parser)
     input_overrides = _parse_input_overrides(args.input_overrides, parser=parser)
     input_overrides.update(_parse_input_file_overrides(args.input_files, parser=parser))
+
+    if args.mode == "next":
+        _reject_next_workflow_argument(args, parser=parser)
+    else:
+        args.workflow = _resolve_execution_workflow_name(args, parser=parser)
 
     had_previous_provider = True
     try:
@@ -205,6 +230,8 @@ def main() -> int:
 
     configure_standard_runtime()
     try:
+        if args.mode == "next":
+            return _run_next_mode(args, input_overrides=input_overrides)
         try:
             activated = activate_playbook(
                 workflow_name=args.workflow,
@@ -224,41 +251,28 @@ def main() -> int:
                 getattr(activated, "profile_working_directories", None),
                 progress_steps=args.progress_steps,
             )
-        if args.mode == "next":
-            payload = {
-                "mode": "next",
-                "status": result.status.value,
-                "diagnostics": [diagnostic.to_contract() for diagnostic in result.diagnostics],
-                "workflow": activated.workflow_name,
-                "playbook": str(activated.playbook_path),
-                "profile": None if activated.profile is None else activated.profile.name,
-                "next_actions": result.outputs.get("next_actions", []),
-                "reason_category": result.outputs.get("reason_category"),
-                "explanation": result.outputs.get("explanation"),
-            }
-        else:
-            payload = _public_runtime_payload(args.mode, result)
-            activation_diagnostics = getattr(activated, "diagnostics", ())
-            if activation_diagnostics and args.mode != "run":
-                payload["diagnostics"] = [
-                    *payload.get("diagnostics", []),
-                    *[diagnostic.to_contract() for diagnostic in activation_diagnostics],
-                ]
-            if args.mode != "run":
-                payload.update(
-                    {
-                        "workflow": activated.workflow_name,
-                        "playbook": str(activated.playbook_path),
-                        "profile": None if activated.profile is None else activated.profile.name,
-                    }
-                )
+        payload = _public_runtime_payload(args.mode, result)
+        activation_diagnostics = getattr(activated, "diagnostics", ())
+        if activation_diagnostics and args.mode != "run":
+            payload["diagnostics"] = [
+                *payload.get("diagnostics", []),
+                *[diagnostic.to_contract() for diagnostic in activation_diagnostics],
+            ]
+        if args.mode != "run":
             payload.update(
-                _runtime_context_fields(
-                    payload,
-                    fallback_profile=None if activated.profile is None else activated.profile.name,
-                    fallback_working_directory=None if activated.working_directory is None else str(activated.working_directory),
-                )
+                {
+                    "workflow": activated.workflow_name,
+                    "playbook": str(activated.playbook_path),
+                    "profile": None if activated.profile is None else activated.profile.name,
+                }
             )
+        payload.update(
+            _runtime_context_fields(
+                payload,
+                fallback_profile=None if activated.profile is None else activated.profile.name,
+                fallback_working_directory=None if activated.working_directory is None else str(activated.working_directory),
+            )
+        )
 
         if args.mode == "explain" and not args.json:
             payload = _summarize_explain_payload(payload)
@@ -321,6 +335,85 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
         profile_working_directories=profile_working_directories,
     )
     return explained
+
+
+def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
+    try:
+        entries = list_playbook_workflows(playbook_path=args.playbook_file)
+    except PlaybookError as exc:
+        return _emit_error(exc, as_json=args.json, requested_mode="next", requested_workflow=None)
+
+    candidates = []
+    playbook_path = str(entries[0].playbook_path) if entries else str(args.playbook_file) if args.playbook_file else None
+    for entry in entries:
+        candidate_input_overrides = (
+            _filter_global_next_input_overrides(entry, input_overrides=input_overrides, playbook_path=args.playbook_file)
+        )
+        try:
+            activated = activate_playbook(
+                workflow_name=entry.workflow_name,
+                profile_name=args.profile,
+                input_overrides=candidate_input_overrides,
+                playbook_path=args.playbook_file,
+            )
+        except PlaybookError as exc:
+            candidates.append(
+                build_next_candidate(
+                    workflow=entry.workflow_name,
+                    description=entry.workflow_description,
+                    workflow_category=entry.workflow_category,
+                    when=entry.workflow_when,
+                    working_directory=entry.working_directory,
+                    diagnostics=exc.diagnostics,
+                )
+            )
+            continue
+        with activated_working_directory(activated):
+            result = explain_workflow(
+                activated.workflow,
+                profile=activated.profile,
+                available_profiles=getattr(activated, "available_profiles", None),
+                profile_working_directories=getattr(activated, "profile_working_directories", None),
+            )
+        diagnostics = tuple(result.diagnostics) + tuple(getattr(activated, "diagnostics", ()))
+        if diagnostics != result.diagnostics:
+            result = RuntimeResult(
+                mode=result.mode,
+                status=result.status,
+                diagnostics=diagnostics,
+                plan=result.plan,
+                outputs=result.outputs,
+                results=result.results,
+                published=result.published,
+                operation_results=result.operation_results,
+                failed_guard=result.failed_guard,
+                failed_step=result.failed_step,
+                preflight_decision=result.preflight_decision,
+                analysis_tree=result.analysis_tree,
+            )
+        candidates.append(
+            build_next_candidate(
+                workflow=entry.workflow_name,
+                description=entry.workflow_description,
+                workflow_category=entry.workflow_category,
+                when=entry.workflow_when,
+                working_directory=None if activated.working_directory is None else str(activated.working_directory),
+                runtime_result=result,
+            )
+        )
+
+    payload = rank_next_candidates(
+        candidates,
+        requested_profile=args.profile,
+        input_override_keys=sorted(input_overrides),
+        playbook_path=playbook_path or "",
+    )
+    if args.json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        print(_render_next_text(payload))
+    return 0
 
 
 def _stderr_step_progress_reporter():
@@ -606,6 +699,25 @@ def _resolve_execution_workflow_name(args, *, parser: argparse.ArgumentParser) -
     return command[1]
 
 
+def _reject_next_workflow_argument(args, *, parser: argparse.ArgumentParser) -> None:
+    command = list(args.command)
+    if len(command) != 1:
+        parser.error("next does not accept a workflow name; use check/plan/explain/run for a specific workflow")
+
+
+def _filter_global_next_input_overrides(entry, *, input_overrides: dict[str, object], playbook_path: str | None) -> dict[str, object]:
+    if not input_overrides:
+        return {}
+    try:
+        detailed_entry = inspect_playbook_workflow(entry.workflow_name, playbook_path=playbook_path)
+    except PlaybookError:
+        return {}
+    declared_inputs = {item.name for item in getattr(detailed_entry, "inputs", ()) if hasattr(item, "name") and isinstance(item.name, str)}
+    if not declared_inputs:
+        return {}
+    return {key: value for key, value in input_overrides.items() if key in declared_inputs}
+
+
 def _compact_mapping(**items: object) -> dict[str, object]:
     return {key: value for key, value in items.items() if value is not None}
 
@@ -843,6 +955,103 @@ def _summarize_explain_payload(payload: dict[str, object]) -> dict[str, object]:
                     if failed_conditions:
                         summary["failed_conditions"] = failed_conditions
     return summary
+
+
+def _summarize_next_payload(payload: dict[str, object]) -> dict[str, object]:
+    summary = {
+        "mode": payload.get("mode"),
+        "status": payload.get("status"),
+        "playbook": payload.get("playbook"),
+        "profile": payload.get("profile"),
+        "scope": payload.get("scope"),
+        "ready_now_available": payload.get("ready_now_available"),
+        "recommendation_strength": payload.get("recommendation_strength"),
+        "current_context": payload.get("current_context"),
+        "uncertainty": payload.get("uncertainty"),
+    }
+    best_candidate = payload.get("best_candidate")
+    if isinstance(best_candidate, dict):
+        summary["best_candidate"] = {
+            "workflow": best_candidate.get("workflow"),
+            "candidate_class": best_candidate.get("candidate_class"),
+            "score": best_candidate.get("score"),
+            "allowed": best_candidate.get("allowed"),
+            "reason_category": best_candidate.get("reason_category"),
+            "blockers": best_candidate.get("blockers", []),
+            "missing_inputs": best_candidate.get("missing_inputs", []),
+        }
+    alternatives = payload.get("alternatives")
+    if isinstance(alternatives, list) and alternatives:
+        summary["alternatives"] = [
+            {
+                "workflow": item.get("workflow"),
+                "candidate_class": item.get("candidate_class"),
+                "score": item.get("score"),
+            }
+            for item in alternatives
+            if isinstance(item, dict)
+        ]
+    return summary
+
+
+def _render_next_text(payload: dict[str, object]) -> str:
+    lines: list[str] = []
+    best_candidate = payload.get("best_candidate")
+    if isinstance(best_candidate, dict):
+        workflow = best_candidate.get("workflow")
+        if isinstance(workflow, str) and workflow:
+            lines.append(f"Next workflow: {_format_next_candidate_label(best_candidate)}")
+        candidate_class = best_candidate.get("candidate_class")
+        if isinstance(candidate_class, str) and candidate_class:
+            status_text = candidate_class.replace("_", " ")
+            lines.append(f"Status: {status_text}")
+        reason_category = best_candidate.get("reason_category")
+        if isinstance(reason_category, str) and reason_category and reason_category != "ok":
+            lines.append(f"Reason: {reason_category.replace('_', ' ')}")
+        blockers = [item for item in best_candidate.get("blockers", []) if isinstance(item, str)]
+        if blockers:
+            lines.append(f"Blockers: {', '.join(blockers[:3])}")
+        missing_inputs = [item for item in best_candidate.get("missing_inputs", []) if isinstance(item, str)]
+        if missing_inputs:
+            lines.append(f"Missing inputs: {', '.join(missing_inputs[:3])}")
+    else:
+        lines.append("Next workflow: unavailable")
+
+    alternatives = payload.get("alternatives")
+    if isinstance(alternatives, list):
+        formatted = [
+            _format_next_candidate_label(item)
+            for item in alternatives
+            if isinstance(item, dict) and isinstance(item.get("workflow"), str)
+        ]
+        if formatted:
+            lines.append(f"Alternatives: {', '.join(formatted[:3])}")
+
+    uncertainty = payload.get("uncertainty")
+    if isinstance(uncertainty, dict):
+        message = uncertainty.get("message")
+        if isinstance(message, str) and message:
+            lines.append(f"Note: {message}")
+
+    return "\n".join(lines)
+
+
+def _format_next_candidate_label(candidate: dict[str, object]) -> str:
+    workflow = candidate.get("workflow")
+    score = candidate.get("score")
+    matched = candidate.get("matched_guard_count")
+    blockers = candidate.get("blockers")
+    blocker_count = len(blockers) if isinstance(blockers, list) else None
+    details: list[str] = []
+    if isinstance(score, int):
+        details.append(str(score))
+    if isinstance(matched, int) and isinstance(blocker_count, int):
+        details.append(f"+{matched}/-{blocker_count}")
+    if isinstance(workflow, str) and details:
+        return f"{workflow} ({', '.join(details)})"
+    if isinstance(workflow, str):
+        return workflow
+    return "unknown"
 
 
 def _summarize_plan_payload(payload: dict[str, object]) -> dict[str, object]:

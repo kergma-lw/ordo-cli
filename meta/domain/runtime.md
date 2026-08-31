@@ -80,6 +80,22 @@ It returns an explanation of the current runtime decision state, not only of com
 
 `explain` is a reasoning surface, not merely a verbose restatement of `check` or `plan`.
 
+### `next`
+
+Answers what workflow is the best next safe move in the current playbook context.
+
+Its baseline no-argument meaning is intentionally broad:
+- which workflow is runnable now;
+- which workflow is the strongest near-ready candidate when nothing is runnable now;
+- which missing input or blocker most directly prevents better candidates from becoming runnable;
+- why the suggested workflow ranked above nearby alternatives.
+
+`next` is therefore a continuation and recommendation surface, not merely a request to compute the next internal step of one already-selected workflow.
+
+For v1 without explicit predecessor or recovery declarations, runtime should derive `next` from the same shared analysis evidence used by `check` and `explain`, applied across visible playbook workflows.
+
+Its primary value is agent-safe continuation after uncertainty, blockage, or failure rather than effectful execution.
+
 ## Why this matters
 
 For agent-authored workflows, `execute` alone is not enough.

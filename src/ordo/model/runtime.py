@@ -52,6 +52,7 @@ class Mode(StrEnum):
     PLAN = "plan"
     EXECUTE = "execute"
     EXPLAIN = "explain"
+    NEXT = "next"
 
 
 class RuntimeStatus(StrEnum):

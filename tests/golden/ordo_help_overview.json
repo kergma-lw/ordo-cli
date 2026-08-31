@@ -32,7 +32,8 @@
       "check",
       "plan",
       "execute",
-      "explain"
+      "explain",
+      "next"
     ],
     "statuses": [
       "ok",
@@ -106,10 +107,10 @@
   "snippet_coverage_summary": {
     "coverage_counts": {
       "excerpt_verified": 57,
-      "none": 160,
+      "none": 161,
       "runner_verified": 57
     },
-    "total_handles": 274
+    "total_handles": 275
   },
   "workflow_check_review_passes": {
     "passes": [

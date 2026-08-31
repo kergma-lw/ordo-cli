@@ -6,7 +6,7 @@ Use this page when you need the public CLI entrypoints, flags, and execution mod
 
 ## ordo-playbook
 
-Browse playbook workflows or launch one named workflow into one runtime mode
+Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode
 
 **Usage:** `ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>`
 
@@ -17,7 +17,7 @@ Browse playbook workflows or launch one named workflow into one runtime mode
 - `plan <workflow>` — show what the workflow would do, without making changes
 - `explain <workflow>` — explain why the workflow can or cannot be run right now
 - `run <workflow>` — run the workflow and do the real work
-- `next <workflow>` — suggest the next workflow step to run now
+- `next` — suggest which workflow should run next from the current playbook context
 
 ### Flags
 
@@ -52,6 +52,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
 
 - `ordo-playbook workflows list`
 - `ordo-playbook workflows show inspect-issue`
+- `ordo-playbook next`
 - `ordo-playbook plan inspect-issue`
 - `ordo-playbook --profile review plan inspect-issue`
 - `ordo-playbook --input enabled=true plan inspect-issue`
@@ -91,6 +92,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
       "examples": [
         "ordo-playbook workflows list",
         "ordo-playbook workflows show inspect-issue",
+        "ordo-playbook next",
         "ordo-playbook plan inspect-issue",
         "ordo-playbook --profile review plan inspect-issue",
         "ordo-playbook --input enabled=true plan inspect-issue",
@@ -164,12 +166,12 @@ When authoring or modifying workflows, run both check and review. Neither replac
           "summary": "run the workflow and do the real work"
         },
         {
-          "name": "next <workflow>",
-          "summary": "suggest the next workflow step to run now"
+          "name": "next",
+          "summary": "suggest which workflow should run next from the current playbook context"
         }
       ],
       "name": "ordo-playbook",
-      "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
+      "purpose": "Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode",
       "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
       "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
     }

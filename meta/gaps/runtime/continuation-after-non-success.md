@@ -2,10 +2,14 @@
 
 ## Status
 
-This note records a real product gap, not a settled design.
+This note records a real product gap together with preserved design discussion.
 
-The gap is clear enough to document now, but the runtime contract,
-ranking model, and workflow-rules surface for solving it remain open.
+The broader continuation space remains open, but the project may still adopt a small v1 baseline.
+That baseline can treat no-argument `next` as the question "which workflow next?"
+and answer it with an explainable weighted recommendation over visible workflows,
+without requiring explicit predecessor or recovery declarations.
+
+Even with that baseline, the larger questions in this note remain intentionally unsettled.
 
 ## Problem
 
@@ -331,8 +335,8 @@ including remediation-first, outcome-driven, explicit recovery edges, or hybrid 
 No stable conclusion is recorded yet about:
 
 - whether continuation should live under `next action`, `recommendation`, or another runtime term;
-- whether ranking should be ratio-based, weighted, explicit, outcome-driven, or hybrid;
-- whether the first implementation should stay local to the current workflow or search a broader workflow set.
+- whether the long-term ranking model should remain weighted, become more explicitly outcome-driven, or evolve toward a hybrid with declared relations;
+- how local per-workflow continuation should relate to the broader no-argument "which workflow next?" question.
 
 The only strong conclusion recorded here is that the gap is real,
 important for agent-safe operation,

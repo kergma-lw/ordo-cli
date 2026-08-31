@@ -2,7 +2,7 @@
 
 ## Runtime behavior
 
-- The runtime must support at least `review`, `check`, `plan`, `execute`, and `explain`.
+- The runtime must support at least `review`, `check`, `plan`, `execute`, `explain`, and a non-effectful `next` decision surface.
 - The runtime must return structured results, not only raw stdout/stderr.
 - `plan` must describe what would be checked and executed, including known blockers.
 - `explain` must return runtime reasoning in a structured form, not merely debug logs or traceback text.

@@ -1314,11 +1314,11 @@ def build_command_line_response() -> JSONObject:
         "commands": [
             {
                 "name": "ordo-playbook",
-                "definition": "Public launch command for discovering playbook workflows and running one named workflow in a selected runtime mode.",
-                "purpose": "Browse playbook workflows or launch one named workflow into one runtime mode",
+                "definition": "Public launch command for discovering playbook workflows, asking which workflow fits next, and running one named workflow in a selected runtime mode.",
+                "purpose": "Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode",
                 "use_when": [
                     "You need to discover which named workflows the current playbook publishes before choosing one.",
-                    "You need to run one workflow through check, review, plan, explain, run, or next.",
+                        "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
                     "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
                 ],
                 "do_not_use_for": [
@@ -1351,7 +1351,7 @@ def build_command_line_response() -> JSONObject:
                     {"name": "plan <workflow>", "summary": "show what the workflow would do, without making changes"},
                     {"name": "explain <workflow>", "summary": "explain why the workflow can or cannot be run right now"},
                     {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
-                    {"name": "next <workflow>", "summary": "suggest the next workflow step to run now"},
+                    {"name": "next", "summary": "suggest which workflow should run next from the current playbook context"},
                 ],
                 "check_review_passes": {
                     "rule": "When adding or changing workflows, run both check and review. Neither replaces the other.",
@@ -1395,6 +1395,7 @@ def build_command_line_response() -> JSONObject:
                 "examples": [
                     "ordo-playbook workflows list",
                     "ordo-playbook workflows show inspect-issue",
+                    "ordo-playbook next",
                     "ordo-playbook plan inspect-issue",
                     "ordo-playbook --profile review plan inspect-issue",
                     "ordo-playbook --input enabled=true plan inspect-issue",
