@@ -8,7 +8,7 @@ Use this page when you need the public CLI entrypoints, flags, and execution mod
 
 Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode
 
-**Usage:** `ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>`
+**Usage:** `ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--graph] [--json] <command>`
 
 ### Modes
 
@@ -17,7 +17,13 @@ Browse playbook workflows, ask which workflow should run next, or launch one nam
 - `plan <workflow>` — show what the workflow would do, without making changes
 - `explain <workflow>` — explain why the workflow can or cannot be run right now
 - `run <workflow>` — run the workflow and do the real work
-- `next` — suggest which workflow should run next from the current playbook context
+- `next` — suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options
+
+### Next priority
+
+- prefer workflows tied to the active state-backed work context over unrelated utility workflows
+- prefer workflows blocked only by execution-only operator input over workflows blocked by world-state mismatch
+- keep inspection-only workflows below continuation-capable workflows when both are otherwise credible
 
 ### Flags
 
@@ -25,6 +31,7 @@ Browse playbook workflows, ask which workflow should run next, or launch one nam
 - `--profile` (`NAME`) — Select one named profile for this run
 - `--input` (`KEY=VALUE`) — Add or override one top-level workflow input from an inline YAML value
 - `--input-file` (`KEY=PATH`) — Add or override one top-level workflow input from a raw UTF-8 file string
+- `--graph` — With `next`, show the inferred state-topology graph behind the recommendation
 - `--json` — Emit JSON without extra decoration
 
 ### Discovery commands
@@ -53,6 +60,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
 - `ordo-playbook workflows list`
 - `ordo-playbook workflows show inspect-issue`
 - `ordo-playbook next`
+- `ordo-playbook next --graph`
 - `ordo-playbook plan inspect-issue`
 - `ordo-playbook --profile review plan inspect-issue`
 - `ordo-playbook --input enabled=true plan inspect-issue`
@@ -93,6 +101,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
         "ordo-playbook workflows list",
         "ordo-playbook workflows show inspect-issue",
         "ordo-playbook next",
+        "ordo-playbook next --graph",
         "ordo-playbook plan inspect-issue",
         "ordo-playbook --profile review plan inspect-issue",
         "ordo-playbook --input enabled=true plan inspect-issue",
@@ -130,6 +139,12 @@ When authoring or modifying workflows, run both check and review. Neither replac
           "value_shape": "KEY=PATH"
         },
         {
+          "effect": "emit_next_state_graph",
+          "name": "--graph",
+          "required": false,
+          "summary": "With next, show the inferred state-topology graph behind the recommendation"
+        },
+        {
           "effect": "emit_json",
           "name": "--json",
           "required": false,
@@ -143,6 +158,11 @@ When authoring or modifying workflows, run both check and review. Neither replac
         "--input-file overrides workflow and profile-provided values for one run",
         "unknown activation inputs are rejected=true",
         "when both --input and --input-file set the same key, --input-file wins"
+      ],
+      "next_priority": [
+        "prefer workflows tied to the active state-backed work context over unrelated utility workflows",
+        "prefer workflows blocked only by execution-only operator input over workflows blocked by world-state mismatch",
+        "keep inspection-only workflows below continuation-capable workflows when both are otherwise credible"
       ],
       "modes": [
         {
@@ -167,13 +187,13 @@ When authoring or modifying workflows, run both check and review. Neither replac
         },
         {
           "name": "next",
-          "summary": "suggest which workflow should run next from the current playbook context"
+          "summary": "suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options"
         }
       ],
       "name": "ordo-playbook",
       "purpose": "Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode",
       "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
-      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
+      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--graph] [--json] <command>"
     }
   ],
   "document_kind": "command_line"

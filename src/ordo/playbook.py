@@ -114,6 +114,7 @@ class PlaybookWorkflowCatalogEntry:
     caller_inputs: tuple[str, ...] = ()
     optional_caller_inputs: tuple[str, ...] = ()
     inputs: tuple[WorkflowCatalogInput, ...] = ()
+    workflow_contract: Workflow | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +247,7 @@ def inspect_playbook_workflow(
         caller_inputs=caller_inputs,
         optional_caller_inputs=optional_caller_inputs,
         inputs=tuple(_catalog_input_from_declared_input(name, schema) for name, schema in workflow.declared_inputs.items() if isinstance(name, str)),
+        workflow_contract=workflow,
     )
 
 

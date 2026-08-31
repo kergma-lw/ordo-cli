@@ -3143,9 +3143,121 @@ class PlaybookActivationTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         output = stdout.getvalue()
-        self.assertIn("Next workflow: inspect-issue (1040, +0/-0)", output)
+        self.assertIn("Next workflow: inspect-issue (1040, +0/-0, unrelated, ready)", output)
         self.assertIn("Status: ready now", output)
         self.assertNotIn('"best_candidate"', output)
+
+    def test_cli_next_graph_text_output_shows_graph_sections(self) -> None:
+        entry = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow_description="Inspect issue context",
+            workflow_category="inspect",
+            workflow_when=None,
+            working_directory=None,
+        )
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            available_profiles=None,
+            profile_working_directories=None,
+            diagnostics=(),
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXPLAIN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={
+                "can_execute": True,
+                "allowed_state": "allowed",
+                "analysis_complete": True,
+                "explanation": {"allowed": True, "category": "ok", "blockers": []},
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+            },
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "next", "--graph"]):
+            with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
+                with patch("ordo.cli.activate_playbook", return_value=activated):
+                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                            exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        output = stdout.getvalue()
+        self.assertIn("Graph:", output)
+        self.assertIn("active state paths:", output)
+        self.assertIn("workflows:", output)
+        self.assertIn("scores:", output)
+        self.assertIn("guard factors:", output)
+        self.assertIn("state factors:", output)
+
+    def test_cli_next_graph_json_includes_graph_payload(self) -> None:
+        entry = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow_description="Inspect issue context",
+            workflow_category="inspect",
+            workflow_when=None,
+            working_directory=None,
+        )
+        activated = SimpleNamespace(
+            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
+            workflow_name="inspect-issue",
+            workflow=object(),
+            profile=None,
+            working_directory=None,
+            available_profiles=None,
+            profile_working_directories=None,
+            diagnostics=(),
+        )
+        runtime_result = RuntimeResult(
+            mode=Mode.EXPLAIN,
+            status=RuntimeStatus.OK,
+            diagnostics=(),
+            plan=ExecutionPlan(),
+            outputs={
+                "can_execute": True,
+                "allowed_state": "allowed",
+                "analysis_complete": True,
+                "explanation": {"allowed": True, "category": "ok", "blockers": []},
+                "guard_coverage": [],
+                "relevant_guard_count": 0,
+                "evaluated_relevant_guard_count": 0,
+            },
+        )
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "next", "--graph", "--json"]):
+            with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
+                with patch("ordo.cli.activate_playbook", return_value=activated):
+                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                            exit_code = cli_main()
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout.getvalue())
+        self.assertIn("graph", payload)
+        self.assertIn("workflows", payload["graph"])
+        self.assertIn("score_breakdown", payload["graph"]["workflows"][0])
+
+    def test_cli_graph_flag_is_only_supported_with_next(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.argv", ["ordo-playbook", "--graph", "plan", "inspect-issue"]):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as ctx:
+                    cli_main()
+
+        self.assertNotEqual(ctx.exception.code, 0)
+        self.assertIn("--graph is only supported with next", stderr.getvalue())
 
     def test_cli_next_global_filters_input_overrides_per_candidate_workflow(self) -> None:
         list_entry_mobile = SimpleNamespace(
@@ -3271,6 +3383,7 @@ class PlaybookActivationTest(unittest.TestCase):
         help_text = stdout.getvalue()
         self.assertIn("usage: ordo-playbook [options] next", help_text)
         self.assertIn("ordo-playbook next", help_text)
+        self.assertIn("ordo-playbook next --graph", help_text)
 
     def test_cli_run_help_mentions_progress_steps_flag(self) -> None:
         stdout = io.StringIO()
