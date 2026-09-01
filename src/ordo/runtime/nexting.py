@@ -59,6 +59,7 @@ class WorkflowTopology:
     contextual_inputs: tuple[str, ...] = ()
     execution_only_inputs: tuple[str, ...] = ()
     effectful_step_count: int = 0
+    mutating_step_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,7 +396,9 @@ def analyze_workflow_topology(workflow: Workflow | None) -> WorkflowTopology | N
                     effectful_counter=effectful_counter,
                 )
 
+    mutating_step_count = _static_mutating_step_count(workflow)
     role = _infer_state_role(workflow, reads=reads, writes=writes, deletes=deletes)
+    role = _normalize_state_role(role, reads=reads, writes=writes, deletes=deletes, mutating_step_count=mutating_step_count)
     return WorkflowTopology(
         reads=tuple(reads),
         writes=tuple(writes),
@@ -404,6 +407,7 @@ def analyze_workflow_topology(workflow: Workflow | None) -> WorkflowTopology | N
         contextual_inputs=tuple(sorted(contextual_inputs)),
         execution_only_inputs=tuple(sorted(item for item in execution_only_inputs if item not in contextual_inputs)),
         effectful_step_count=effectful_counter[0],
+        mutating_step_count=mutating_step_count,
     )
 
 
@@ -681,6 +685,19 @@ def _infer_state_role(
     if reads:
         return "inspect"
     return "utility"
+
+
+def _normalize_state_role(
+    role: str,
+    *,
+    reads: list[StatePathReference],
+    writes: list[StatePathReference],
+    deletes: list[StatePathReference],
+    mutating_step_count: int,
+) -> str:
+    if role == "inspect" and reads and not writes and not deletes and mutating_step_count > 0:
+        return "transition"
+    return role
 
 
 def _resolve_existing_state_reads(workflow: Workflow | None, topology: WorkflowTopology | None) -> tuple[str, ...]:
@@ -1080,6 +1097,15 @@ def _static_effectful_step_count(*, topology: WorkflowTopology | None, workflow_
     return sum(_count_effectful_resolved_steps(block.steps) for block in resolution.blocks if isinstance(block, ResolvedStepBlock))
 
 
+def _static_mutating_step_count(workflow_contract: Workflow | None) -> int:
+    if workflow_contract is None or not hasattr(workflow_contract, "blocks"):
+        return 0
+    resolution = resolve_workflow_references(workflow_contract)
+    if not resolution.blocks:
+        return 0
+    return sum(_count_mutating_resolved_steps(block.steps) for block in resolution.blocks if isinstance(block, ResolvedStepBlock))
+
+
 
 
 def _count_effectful_resolved_steps(steps: tuple[object, ...]) -> int:
@@ -1095,6 +1121,24 @@ def _count_effectful_resolved_steps(steps: tuple[object, ...]) -> int:
             continue
         if isinstance(step, ResolvedRunStep):
             count += _count_effectful_resolved_steps(step.steps)
+            if step.run is not None and not step.steps:
+                count += 1
+    return count
+
+
+def _count_mutating_resolved_steps(steps: tuple[object, ...]) -> int:
+    count = 0
+    for step in steps:
+        if isinstance(step, ResolvedOperation):
+            if step.operation.kind != "probe":
+                count += 1
+            continue
+        if isinstance(step, ResolvedBuiltinStep):
+            if step.builtin in {"state_set", "state_delete"}:
+                count += 1
+            continue
+        if isinstance(step, ResolvedRunStep):
+            count += _count_mutating_resolved_steps(step.steps)
             if step.run is not None and not step.steps:
                 count += 1
     return count
