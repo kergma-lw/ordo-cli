@@ -16,7 +16,7 @@
         ],
         "rule": "When adding or changing workflows, run both check and review. Neither replaces the other."
       },
-      "definition": "Public launch command for discovering playbook workflows, asking which workflow fits next, and running one named workflow in a selected runtime mode.",
+      "definition": "Public launch command for discovering playbook workflows, asking which workflow fits next, inspecting inferred workflow topology, and running one named workflow in a selected runtime mode.",
       "discovery_commands": [
         {
           "name": "workflows list",
@@ -36,7 +36,7 @@
         "ordo-playbook workflows list",
         "ordo-playbook workflows show inspect-issue",
         "ordo-playbook next",
-        "ordo-playbook next --graph",
+        "ordo-playbook graph",
         "ordo-playbook plan inspect-issue",
         "ordo-playbook --profile review plan inspect-issue",
         "ordo-playbook --input enabled=true plan inspect-issue",
@@ -79,12 +79,6 @@
           "name": "--progress-steps",
           "required": false,
           "summary": "During run, emit each step name to stderr right before execution"
-        },
-        {
-          "effect": "emit_next_state_graph",
-          "name": "--graph",
-          "required": false,
-          "summary": "With next, show the inferred state-topology graph behind the recommendation"
         },
         {
           "effect": "emit_json",
@@ -140,6 +134,10 @@
         {
           "name": "next",
           "summary": "suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options"
+        },
+        {
+          "name": "graph",
+          "summary": "show the inferred workflow topology for the current playbook context"
         }
       ],
       "name": "ordo-playbook",
@@ -157,7 +155,7 @@
           "summary": "Why check and review are complementary authoring passes rather than substitutes"
         }
       ],
-      "purpose": "Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode",
+      "purpose": "Browse playbook workflows, ask which workflow should run next, inspect inferred workflow topology, or launch one named workflow into one runtime mode",
       "run_failure_surface": {
         "external_payload_fields": [
           "kind",
@@ -171,7 +169,7 @@
         "rule": "When a run failure has normalized external context, the public failure payload should identify that external cause instead of surfacing only a generic wrapper message."
       },
       "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
-      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--graph] [--json] <command>",
+      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
       "use_when": [
         "You need to discover which named workflows the current playbook publishes before choosing one.",
         "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",

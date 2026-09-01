@@ -6,9 +6,9 @@ Use this page when you need the public CLI entrypoints, flags, and execution mod
 
 ## ordo-playbook
 
-Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode
+Browse playbook workflows, ask which workflow should run next, inspect inferred workflow topology, or launch one named workflow into one runtime mode
 
-**Usage:** `ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--graph] [--json] <command>`
+**Usage:** `ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>`
 
 ### Modes
 
@@ -18,6 +18,7 @@ Browse playbook workflows, ask which workflow should run next, or launch one nam
 - `explain <workflow>` — explain why the workflow can or cannot be run right now
 - `run <workflow>` — run the workflow and do the real work
 - `next` — suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options
+- `graph` — show the inferred workflow topology for the current playbook context
 
 ### Next priority
 
@@ -31,7 +32,6 @@ Browse playbook workflows, ask which workflow should run next, or launch one nam
 - `--profile` (`NAME`) — Select one named profile for this run
 - `--input` (`KEY=VALUE`) — Add or override one top-level workflow input from an inline YAML value
 - `--input-file` (`KEY=PATH`) — Add or override one top-level workflow input from a raw UTF-8 file string
-- `--graph` — With `next`, show the inferred state-topology graph behind the recommendation
 - `--json` — Emit JSON without extra decoration
 
 ### Discovery commands
@@ -60,7 +60,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
 - `ordo-playbook workflows list`
 - `ordo-playbook workflows show inspect-issue`
 - `ordo-playbook next`
-- `ordo-playbook next --graph`
+- `ordo-playbook graph`
 - `ordo-playbook plan inspect-issue`
 - `ordo-playbook --profile review plan inspect-issue`
 - `ordo-playbook --input enabled=true plan inspect-issue`
@@ -101,7 +101,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
         "ordo-playbook workflows list",
         "ordo-playbook workflows show inspect-issue",
         "ordo-playbook next",
-        "ordo-playbook next --graph",
+        "ordo-playbook graph",
         "ordo-playbook plan inspect-issue",
         "ordo-playbook --profile review plan inspect-issue",
         "ordo-playbook --input enabled=true plan inspect-issue",
@@ -137,12 +137,6 @@ When authoring or modifying workflows, run both check and review. Neither replac
           "required": false,
           "summary": "Add or override one top-level workflow input from a raw UTF-8 file string",
           "value_shape": "KEY=PATH"
-        },
-        {
-          "effect": "emit_next_state_graph",
-          "name": "--graph",
-          "required": false,
-          "summary": "With next, show the inferred state-topology graph behind the recommendation"
         },
         {
           "effect": "emit_json",
@@ -193,7 +187,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
       "name": "ordo-playbook",
       "purpose": "Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode",
       "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
-      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--graph] [--json] <command>"
+      "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--json] <command>"
     }
   ],
   "document_kind": "command_line"

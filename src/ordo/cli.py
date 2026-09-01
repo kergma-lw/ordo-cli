@@ -101,6 +101,21 @@ Examples:
   ordo-playbook --profile backend --input issue_number=42 run set-active-task --json
 """
 
+GRAPH_MODE_HELP = """usage: ordo-playbook [options] graph
+
+Show the inferred workflow topology for the current playbook context.
+
+Default output is intended to be concise:
+  - active state paths
+  - structural state clusters
+  - workflows grouped by shared topology
+
+Examples:
+  ordo-playbook graph
+  ordo-playbook graph --json
+  ordo-playbook --profile backend graph
+"""
+
 NEXT_MODE_HELP = """usage: ordo-playbook [options] next
 
 Suggest which workflow should run next from the current playbook context.
@@ -115,18 +130,15 @@ Default output is intended to be concise:
   - whether any workflow is runnable now
   - nearby alternatives when they are materially competitive
 
-Use --graph to inspect the inferred state-topology cluster behind the recommendation.
-
 Examples:
   ordo-playbook next
-  ordo-playbook next --graph
   ordo-playbook --profile backend next
   ordo-playbook --input issue_number=42 next --json
 """
 
 
 def main() -> int:
-    if len(sys.argv) >= 3 and sys.argv[1] in {"review", "check", "plan", "explain", "run", "next"} and sys.argv[2] in {"-h", "--help"}:
+    if len(sys.argv) >= 3 and sys.argv[1] in {"review", "check", "plan", "explain", "run", "next", "graph"} and sys.argv[2] in {"-h", "--help"}:
         if sys.argv[1] == "review":
             print(REVIEW_MODE_HELP)
         elif sys.argv[1] == "check":
@@ -137,6 +149,8 @@ def main() -> int:
             print(RUN_MODE_HELP)
         elif sys.argv[1] == "next":
             print(NEXT_MODE_HELP)
+        elif sys.argv[1] == "graph":
+            print(GRAPH_MODE_HELP)
         else:
             print(EXPLAIN_MODE_HELP)
         return 0
@@ -157,6 +171,9 @@ def main() -> int:
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "next":
         print(NEXT_MODE_HELP)
+        return 0
+    if len(sys.argv) >= 3 and sys.argv[1] in {"-h", "--help"} and sys.argv[2] == "graph":
+        print(GRAPH_MODE_HELP)
         return 0
     if len(sys.argv) >= 3 and sys.argv[1] == "workflows" and sys.argv[2] in {"-h", "--help"}:
         print(WORKFLOWS_HELP)
@@ -182,7 +199,8 @@ def main() -> int:
             "  plan     show what the workflow would do, without making changes\n"
             "  explain  explain why the workflow can or cannot be run right now\n"
             "  run      run the workflow and do the real work\n"
-            "  next     suggest which workflow should run next"
+            "  next     suggest which workflow should run next\n"
+            "  graph    show inferred workflow topology"
         ),
     )
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
@@ -208,7 +226,6 @@ def main() -> int:
         action="store_true",
         help="during run, emit each step name to stderr right before execution",
     )
-    parser.add_argument("--graph", action="store_true", help="with next, show the inferred state-topology graph behind the recommendation")
     parser.add_argument("--json", action="store_true", help="emit full JSON payload including diagnostics")
     parser.add_argument("command", nargs="*", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -217,18 +234,16 @@ def main() -> int:
         parser.error("missing command")
     if command[0] == "workflows":
         return _run_workflow_discovery_args(args, command[1:], parser=parser)
-    if command[0] not in {"review", "check", "plan", "explain", "run", "next"}:
+    if command[0] not in {"review", "check", "plan", "explain", "run", "next", "graph"}:
         parser.error(f"unknown command: {command[0]}")
     args.mode = command[0]
     if args.progress_steps and args.mode != "run":
         parser.error("--progress-steps is only supported with run")
-    if args.graph and args.mode != "next":
-        parser.error("--graph is only supported with next")
     input_overrides = _parse_input_overrides(args.input_overrides, parser=parser)
     input_overrides.update(_parse_input_file_overrides(args.input_files, parser=parser))
 
-    if args.mode == "next":
-        _reject_next_workflow_argument(args, parser=parser)
+    if args.mode in {"next", "graph"}:
+        _reject_global_command_workflow_argument(args, parser=parser)
     else:
         args.workflow = _resolve_execution_workflow_name(args, parser=parser)
 
@@ -243,6 +258,8 @@ def main() -> int:
     try:
         if args.mode == "next":
             return _run_next_mode(args, input_overrides=input_overrides)
+        if args.mode == "graph":
+            return _run_graph_mode(args, input_overrides=input_overrides)
         try:
             activated = activate_playbook(
                 workflow_name=args.workflow,
@@ -349,10 +366,36 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
 
 
 def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
+    payload = _build_next_payload(args, input_overrides=input_overrides, include_graph=False)
+    if isinstance(payload, int):
+        return payload
+    if args.json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        print(_render_next_text(payload))
+    return 0
+
+
+def _run_graph_mode(args, *, input_overrides: dict[str, object]) -> int:
+    payload = _build_next_payload(args, input_overrides=input_overrides, include_graph=True)
+    if isinstance(payload, int):
+        return payload
+    payload = dict(payload)
+    payload["mode"] = "graph"
+    if args.json:
+        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
+    else:
+        print(_render_graph_text(payload))
+    return 0
+
+
+def _build_next_payload(args, *, input_overrides: dict[str, object], include_graph: bool) -> dict[str, object] | int:
     try:
         listed_entries = list_playbook_workflows(playbook_path=args.playbook_file)
     except PlaybookError as exc:
-        return _emit_error(exc, as_json=args.json, requested_mode="next", requested_workflow=None)
+        return _emit_error(exc, as_json=args.json, requested_mode=args.mode, requested_workflow=None)
 
     entries = []
     for listed_entry in listed_entries:
@@ -363,7 +406,7 @@ def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
 
     candidates = []
     playbook_path = str(entries[0].playbook_path) if entries else str(args.playbook_file) if args.playbook_file else None
-    for entry in entries:
+    for index, entry in enumerate(entries):
         candidate_input_overrides = _filter_global_next_input_overrides(entry, input_overrides=input_overrides)
         try:
             activated = activate_playbook(
@@ -375,6 +418,7 @@ def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
         except PlaybookError as exc:
             relaxed = _build_relaxed_next_candidate(
                 entry,
+                order_index=index,
                 args=args,
                 candidate_input_overrides=candidate_input_overrides,
                 activation_error=exc,
@@ -385,6 +429,7 @@ def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
             candidates.append(
                 build_next_candidate(
                     workflow=entry.workflow_name,
+                    order_index=index,
                     description=entry.workflow_description,
                     workflow_category=entry.workflow_category,
                     when=entry.workflow_when,
@@ -422,6 +467,7 @@ def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
         candidates.append(
             build_next_candidate(
                 workflow=entry.workflow_name,
+                order_index=index,
                 description=entry.workflow_description,
                 workflow_category=entry.workflow_category,
                 when=entry.workflow_when,
@@ -439,17 +485,12 @@ def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
         requested_profile=args.profile,
         input_override_keys=sorted(input_overrides),
         playbook_path=playbook_path or "",
-        include_graph=args.graph,
+        include_graph=include_graph,
     )
-    if args.json:
-        json.dump(payload, sys.stdout, indent=2, sort_keys=True)
-        sys.stdout.write("\n")
-    else:
-        print(_render_next_graph_text(payload) if args.graph else _render_next_text(payload))
-    return 0
+    return payload
 
 
-def _build_relaxed_next_candidate(entry, *, args, candidate_input_overrides: dict[str, object], activation_error: PlaybookError):
+def _build_relaxed_next_candidate(entry, *, order_index: int, args, candidate_input_overrides: dict[str, object], activation_error: PlaybookError):
     missing_inputs = _missing_input_names_from_diagnostics(tuple(getattr(activation_error, "diagnostics", ())))
     workflow_contract = getattr(entry, "workflow_contract", None)
     if not missing_inputs or classify_missing_input_kind_for_workflow(workflow_contract, missing_inputs) != "execution_only":
@@ -491,6 +532,7 @@ def _build_relaxed_next_candidate(entry, *, args, candidate_input_overrides: dic
         )
     return build_next_candidate(
         workflow=entry.workflow_name,
+        order_index=order_index,
         description=entry.workflow_description,
         workflow_category=entry.workflow_category,
         when=entry.workflow_when,
@@ -786,10 +828,10 @@ def _resolve_execution_workflow_name(args, *, parser: argparse.ArgumentParser) -
     return command[1]
 
 
-def _reject_next_workflow_argument(args, *, parser: argparse.ArgumentParser) -> None:
+def _reject_global_command_workflow_argument(args, *, parser: argparse.ArgumentParser) -> None:
     command = list(args.command)
     if len(command) != 1:
-        parser.error("next does not accept a workflow name; use check/plan/explain/run for a specific workflow")
+        parser.error(f"{command[0]} does not accept a workflow name; use check/plan/explain/run for a specific workflow")
 
 
 def _filter_global_next_input_overrides(entry, *, input_overrides: dict[str, object]) -> dict[str, object]:
@@ -1095,11 +1137,14 @@ def _summarize_next_payload(payload: dict[str, object]) -> dict[str, object]:
 
 def _render_next_text(payload: dict[str, object]) -> str:
     lines: list[str] = []
+    current_context = payload.get("current_context")
+    has_active_state = isinstance(current_context, dict) and bool(current_context.get("active_state_paths"))
     best_candidate = payload.get("best_candidate")
     if isinstance(best_candidate, dict):
         workflow = best_candidate.get("workflow")
         if isinstance(workflow, str) and workflow:
-            lines.append(f"Next workflow: {_format_next_candidate_label(best_candidate)}")
+            prefix = "Next workflow" if has_active_state else "Generic candidate"
+            lines.append(f"{prefix}: {_format_next_candidate_label(best_candidate)}")
         candidate_class = best_candidate.get("candidate_class")
         if isinstance(candidate_class, str) and candidate_class:
             status_text = candidate_class.replace("_", " ")
@@ -1131,103 +1176,202 @@ def _render_next_text(payload: dict[str, object]) -> str:
         message = uncertainty.get("message")
         if isinstance(message, str) and message:
             lines.append(f"Note: {message}")
+    if not has_active_state:
+        lines.append("Context: no active state-backed workflow context detected")
+
+    related_lines = _render_next_related_workflows(payload, has_active_state=has_active_state)
+    if related_lines:
+        lines.append("")
+        lines.extend(related_lines)
 
     return "\n".join(lines)
 
 
-def _render_next_graph_text(payload: dict[str, object]) -> str:
-    lines = [_render_next_text(payload)]
+def _render_next_related_workflows(payload: dict[str, object], *, has_active_state: bool) -> list[str]:
+    candidates = [item for item in payload.get("candidates", []) if isinstance(item, dict)]
+    if not candidates:
+        return []
+    best_candidate = payload.get("best_candidate")
+    best_workflow = best_candidate.get("workflow") if isinstance(best_candidate, dict) and isinstance(best_candidate.get("workflow"), str) else None
+    grouped: dict[str, list[dict[str, object]]] = {}
+    category_order: list[str] = []
+    for candidate in sorted(candidates, key=_next_related_candidate_order):
+        if not _include_related_candidate(candidate, best_workflow=best_workflow, has_active_state=has_active_state):
+            continue
+        category = candidate.get("category") if isinstance(candidate.get("category"), str) and candidate.get("category") else "uncategorized"
+        if category not in grouped:
+            grouped[category] = []
+            category_order.append(category)
+        grouped[category].append(candidate)
+    if not grouped:
+        return []
+    lines = ["Related workflows:" if has_active_state else "Generic workflows:"]
+    for category in category_order:
+        lines.append(f"  {category}:")
+        for candidate in grouped[category]:
+            workflow_name = candidate.get("workflow") if isinstance(candidate.get("workflow"), str) else None
+            marker = "* " if workflow_name is not None and workflow_name == best_workflow else ""
+            lines.append(f"  - {marker}{_format_next_candidate_label(candidate)}")
+    return lines
+
+
+def _include_related_candidate(candidate: dict[str, object], *, best_workflow: str | None, has_active_state: bool) -> bool:
+    workflow_name = candidate.get("workflow") if isinstance(candidate.get("workflow"), str) else None
+    if workflow_name is not None and workflow_name == best_workflow:
+        return True
+    if not has_active_state:
+        return True
+    state_cluster = candidate.get("state_cluster")
+    if isinstance(state_cluster, list) and state_cluster:
+        return True
+    candidate_class = candidate.get("candidate_class")
+    if candidate_class in {"ready_with_execution_input", "near_ready_contextual"}:
+        return True
+    return False
+
+
+def _next_related_candidate_order(candidate: dict[str, object]) -> tuple[int, int, str]:
+    order_index = candidate.get("order_index") if isinstance(candidate.get("order_index"), int) else 10**9
+    workflow_name = candidate.get("workflow") if isinstance(candidate.get("workflow"), str) else ""
+    return (order_index, 0, workflow_name)
+
+
+def _render_graph_text(payload: dict[str, object]) -> str:
+    lines: list[str] = []
     graph = payload.get("graph")
     if not isinstance(graph, dict):
-        return "\n".join(lines)
+        return "Graph: unavailable"
     active_state_paths = [item for item in graph.get("active_state_paths", []) if isinstance(item, str)]
-    active_cluster = [item for item in graph.get("active_state_cluster", []) if isinstance(item, str)]
     workflows = [item for item in graph.get("workflows", []) if isinstance(item, dict)]
-    lines.append("")
     lines.append("Graph:")
-    lines.append("  active state paths:")
+    lines.append("  active state:")
     if active_state_paths:
         for path in active_state_paths:
             lines.append(f"  - {path}")
     else:
         lines.append("  - none")
-    lines.append("  active state cluster:")
-    if active_cluster:
-        for item in active_cluster:
-            lines.append(f"  - {item}")
-    else:
-        lines.append("  - none")
-    lines.append("  workflows:")
-    for workflow in workflows:
-        label = _format_next_candidate_label(workflow)
-        candidate_class = workflow.get("candidate_class")
-        state_role = workflow.get("state_role")
-        header = f"  - {label}"
-        meta_parts = [part for part in [candidate_class, state_role] if isinstance(part, str) and part]
-        if meta_parts:
-            header += f" [{', '.join(meta_parts)}]"
-        lines.append(header)
-        _append_graph_reference_lines(lines, workflow, key="reads", label="reads")
-        _append_graph_reference_lines(lines, workflow, key="writes", label="writes")
-        _append_graph_reference_lines(lines, workflow, key="deletes", label="deletes")
-        _append_graph_score_lines(lines, workflow)
-        state_cluster = [item for item in workflow.get("state_cluster", []) if isinstance(item, str)]
-        if state_cluster:
-            lines.append(f"    cluster: {', '.join(state_cluster)}")
-        active_paths = [item for item in workflow.get("active_state_paths", []) if isinstance(item, str)]
-        if active_paths:
-            lines.append(f"    active: {', '.join(active_paths)}")
-        missing_inputs = [item for item in workflow.get("missing_inputs", []) if isinstance(item, str)]
-        if missing_inputs:
-            lines.append(f"    needs: {', '.join(missing_inputs)}")
+    best_workflow_name = None
+    best_candidate = payload.get("best_candidate")
+    if isinstance(best_candidate, dict) and isinstance(best_candidate.get("workflow"), str):
+        best_workflow_name = best_candidate.get("workflow")
+    for cluster_name, cluster_workflows in _group_next_graph_workflows(workflows).items():
+        lines.append(f"  {cluster_name}:")
+        for workflow in cluster_workflows[:4]:
+            workflow_name = workflow.get("workflow") if isinstance(workflow.get("workflow"), str) else None
+            marker = "* " if workflow_name is not None and workflow_name == best_workflow_name else ""
+            lines.append(f"  - {marker}{_format_next_candidate_graph_label(workflow)}")
+    related_count = sum(1 for workflow in workflows if isinstance(workflow.get("state_cluster"), list) and workflow.get("state_cluster"))
+    unrelated = [workflow for workflow in workflows if not (isinstance(workflow.get("state_cluster"), list) and workflow.get("state_cluster"))]
+    if unrelated:
+        lines.append("  outside active clusters:")
+        for workflow in unrelated[:3]:
+            workflow_name = workflow.get("workflow") if isinstance(workflow.get("workflow"), str) else None
+            marker = "* " if workflow_name is not None and workflow_name == best_workflow_name else ""
+            lines.append(f"  - {marker}{_format_next_candidate_graph_label(workflow)}")
+    if related_count > 0 and len(workflows) > related_count + len(unrelated[:3]):
+        lines.append("  note: full graph details remain available with --json")
     return "\n".join(lines)
 
 
-def _append_graph_reference_lines(lines: list[str], workflow: dict[str, object], *, key: str, label: str) -> None:
+def _group_next_graph_workflows(workflows: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+    groups: dict[str, list[dict[str, object]]] = {}
+    for workflow in workflows:
+        cluster = [item for item in workflow.get("state_cluster", []) if isinstance(item, str)]
+        if not cluster:
+            continue
+        key = _next_graph_cluster_label(cluster)
+        groups.setdefault(key, []).append(workflow)
+    for key, items in groups.items():
+        groups[key] = sorted(items, key=_next_graph_workflow_order)
+    return groups
+
+
+def _next_graph_cluster_label(cluster: list[str]) -> str:
+    ordered: list[str] = []
+    for item in cluster:
+        if item not in ordered:
+            ordered.append(item)
+    if not ordered:
+        return "cluster"
+    roots: list[str] = []
+    for item in ordered:
+        root = item.split(".", 1)[0]
+        if root not in roots:
+            roots.append(root)
+    if len(roots) == 1:
+        first = ordered[0]
+        if "." not in first:
+            return first
+        root, field = first.split(".", 1)
+        field_name = field.split(".", 1)[0]
+        return f"{root}+{field_name}"
+    return "+".join(roots[:2])
+
+
+def _next_graph_workflow_order(workflow: dict[str, object]) -> tuple[int, int, int, str]:
+    state_role = workflow.get("state_role")
+    candidate_class = workflow.get("candidate_class")
+    score = workflow.get("score")
+    role_order = {
+        "producer": 0,
+        "transition": 1,
+        "inspect": 2,
+        "close": 3,
+        "utility": 4,
+    }
+    class_order = {
+        "ready_now": 0,
+        "ready_with_execution_input": 1,
+        "near_ready_contextual": 2,
+        "near_ready": 3,
+        "awaiting_context_input": 4,
+        "awaiting_input": 5,
+        "inspection_only": 6,
+        "weak_match": 7,
+        "not_evaluable_now": 8,
+    }
+    return (
+        role_order.get(state_role, 99) if isinstance(state_role, str) else 99,
+        class_order.get(candidate_class, 99) if isinstance(candidate_class, str) else 99,
+        -(score if isinstance(score, int) else 0),
+        workflow.get("workflow") if isinstance(workflow.get("workflow"), str) else "",
+    )
+
+
+def _format_next_candidate_graph_label(workflow: dict[str, object]) -> str:
+    label = _format_next_candidate_label(workflow)
+    parts: list[str] = []
+    reads = _graph_reference_short_signatures(workflow, "reads")
+    writes = _graph_reference_short_signatures(workflow, "writes")
+    deletes = _graph_reference_short_signatures(workflow, "deletes")
+    if reads:
+        parts.append(f"reads {', '.join(reads[:2])}")
+    if writes:
+        parts.append(f"writes {', '.join(writes[:2])}")
+    if deletes:
+        parts.append(f"deletes {', '.join(deletes[:2])}")
+    if not parts:
+        return label
+    return f"{label} [{'; '.join(parts[:3])}]"
+
+
+def _graph_reference_signatures(workflow: dict[str, object], key: str) -> list[str]:
     refs = [item for item in workflow.get(key, []) if isinstance(item, dict)]
-    if not refs:
-        return
-    rendered = []
+    rendered: list[str] = []
     for item in refs:
         signature = item.get("logical_signature")
-        if isinstance(signature, str) and signature:
+        if isinstance(signature, str) and signature and signature not in rendered:
             rendered.append(signature)
-    if rendered:
-        lines.append(f"    {label}: {', '.join(rendered)}")
+    return rendered
 
 
-def _append_graph_score_lines(lines: list[str], workflow: dict[str, object]) -> None:
-    breakdown = workflow.get("score_breakdown")
-    if not isinstance(breakdown, dict):
-        return
-    guard_score = breakdown.get("guard_score")
-    state_score = breakdown.get("state_score")
-    if isinstance(guard_score, int) or isinstance(state_score, int):
-        parts = []
-        if isinstance(guard_score, int):
-            parts.append(f"guards {guard_score:+d}")
-        if isinstance(state_score, int):
-            parts.append(f"state {state_score:+d}")
-        lines.append(f"    scores: {', '.join(parts)}")
-    guard_factors = [item for item in breakdown.get("guard_factors", []) if isinstance(item, dict)]
-    if guard_factors:
-        rendered = []
-        for item in guard_factors:
-            factor = item.get("factor")
-            signed_value = item.get("signed_value")
-            if isinstance(factor, str) and isinstance(signed_value, int):
-                rendered.append(f"{factor} {signed_value:+d}")
-        if rendered:
-            lines.append(f"    guard factors: {', '.join(rendered)}")
-    state_factors = [item for item in breakdown.get("state_factors", []) if isinstance(item, dict)]
+def _graph_reference_short_signatures(workflow: dict[str, object], key: str) -> list[str]:
     rendered = []
-    if state_factors:
-        for item in state_factors:
-            factor = item.get("factor")
-            signed_value = item.get("signed_value")
-            if isinstance(factor, str) and isinstance(signed_value, int):
-                rendered.append(f"{factor} {signed_value:+d}")
-    lines.append(f"    state factors: {', '.join(rendered) if rendered else 'none'}")
+    for signature in _graph_reference_signatures(workflow, key):
+        short = signature.split(".", 1)[1] if "." in signature else signature
+        if short not in rendered:
+            rendered.append(short)
+    return rendered
 
 
 def _format_next_candidate_label(candidate: dict[str, object]) -> str:

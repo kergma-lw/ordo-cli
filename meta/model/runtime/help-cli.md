@@ -53,7 +53,7 @@ These actions are navigation surfaces over the public topic model rather than ad
 - `overview` should also explain that runtime diagnostics distinguish internal workflow/engine failures from external command or remote-system failures when that context is available.
 - `capabilities` exposes supported, unsupported, and planned surface states.
 - `model` aggregates the main authoring contracts over workflows, profiles, playbooks, and runtime state.
-- `command-line` exposes the public launch-command surface, stable flag semantics, the distinct roles of `ordo-playbook check` and `ordo-playbook review`, the broad no-argument `ordo-playbook next` continuation question, and the normalized external-failure payload fields surfaced by `run --json` when runtime has that context.
+- `command-line` exposes the public launch-command surface, stable flag semantics, the distinct roles of `ordo-playbook check` and `ordo-playbook review`, the broad no-argument `ordo-playbook next` continuation question, the top-level `ordo-playbook graph` topology surface, and the normalized external-failure payload fields surfaced by `run --json` when runtime has that context.
 - `operations` exposes the public connector operation catalog.
 - `examples` exposes verified repository examples intended as public authoring references.
 - `snippet-coverage` exposes which describable handles do and do not publish canonical verified snippets.

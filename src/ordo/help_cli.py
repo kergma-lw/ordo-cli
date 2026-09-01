@@ -1307,7 +1307,6 @@ def build_command_line_response() -> JSONObject:
         {"name": "--input", "value_shape": "KEY=VALUE", "required": False, "repeatable": True, "effect": "override_input_inline", "summary": "Add or override one top-level workflow input from inline text, with simple number and true/false coercion"},
         {"name": "--input-file", "value_shape": "KEY=PATH", "required": False, "repeatable": True, "effect": "override_input_from_file", "summary": "Add or override one top-level workflow input from a raw UTF-8 file string"},
         {"name": "--progress-steps", "required": False, "effect": "emit_run_step_progress_to_stderr", "summary": "During run, emit each step name to stderr right before execution"},
-        {"name": "--graph", "required": False, "effect": "emit_next_state_graph", "summary": "With next, show the inferred state-topology graph behind the recommendation"},
         {"name": "--json", "required": False, "effect": "emit_json", "summary": "Emit the full JSON payload, including detailed diagnostics"},
     ]
     return {
@@ -1315,8 +1314,8 @@ def build_command_line_response() -> JSONObject:
         "commands": [
             {
                 "name": "ordo-playbook",
-                "definition": "Public launch command for discovering playbook workflows, asking which workflow fits next, and running one named workflow in a selected runtime mode.",
-                "purpose": "Browse playbook workflows, ask which workflow should run next, or launch one named workflow into one runtime mode",
+                "definition": "Public launch command for discovering playbook workflows, asking which workflow fits next, inspecting inferred workflow topology, and running one named workflow in a selected runtime mode.",
+                "purpose": "Browse playbook workflows, ask which workflow should run next, inspect inferred workflow topology, or launch one named workflow into one runtime mode",
                 "use_when": [
                     "You need to discover which named workflows the current playbook publishes before choosing one.",
                     "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
@@ -1341,7 +1340,7 @@ def build_command_line_response() -> JSONObject:
                         "summary": "Why check and review are complementary authoring passes rather than substitutes",
                     },
                 ],
-                "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--graph] [--json] <command>",
+                "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
                 "discovery_commands": [
                     {"name": "workflows list", "summary": "list declared playbook workflows with project-local descriptions"},
                     {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata and playbook invocation inputs; --json also includes declared workflow inputs"},
@@ -1353,6 +1352,7 @@ def build_command_line_response() -> JSONObject:
                     {"name": "explain <workflow>", "summary": "explain why the workflow can or cannot be run right now"},
                     {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
                     {"name": "next", "summary": "suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options"},
+                    {"name": "graph", "summary": "show the inferred workflow topology for the current playbook context"},
                 ],
                 "next_priority": [
                     "prefer workflows tied to the active state-backed work context over unrelated utility workflows",
@@ -1402,7 +1402,7 @@ def build_command_line_response() -> JSONObject:
                     "ordo-playbook workflows list",
                     "ordo-playbook workflows show inspect-issue",
                     "ordo-playbook next",
-                    "ordo-playbook next --graph",
+                    "ordo-playbook graph",
                     "ordo-playbook plan inspect-issue",
                     "ordo-playbook --profile review plan inspect-issue",
                     "ordo-playbook --input enabled=true plan inspect-issue",

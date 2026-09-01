@@ -66,6 +66,7 @@ class NextCandidate:
     """Rankable next-workflow candidate built from activation and runtime evidence."""
 
     workflow: str
+    order_index: int = 0
     description: str | None = None
     workflow_category: str | None = None
     when: str | None = None
@@ -97,6 +98,7 @@ class NextCandidate:
     def to_contract(self) -> dict[str, object]:
         return {
             "workflow": self.workflow,
+            "order_index": self.order_index,
             "description": self.description,
             "category": self.workflow_category,
             "when": self.when,
@@ -135,6 +137,7 @@ class _BuiltCandidate:
 def build_next_candidate(
     *,
     workflow: str,
+    order_index: int = 0,
     description: str | None,
     workflow_category: str | None,
     when: str | None,
@@ -152,6 +155,7 @@ def build_next_candidate(
     if runtime_result is None:
         candidate = _candidate_from_diagnostics(
             workflow=workflow,
+            order_index=order_index,
             description=description,
             workflow_category=workflow_category,
             when=when,
@@ -165,6 +169,7 @@ def build_next_candidate(
     else:
         candidate = _candidate_from_runtime_result(
             workflow=workflow,
+            order_index=order_index,
             description=description,
             workflow_category=workflow_category,
             when=when,
@@ -913,6 +918,7 @@ def _enrich_with_state_affinity(
 def _candidate_from_runtime_result(
     *,
     workflow: str,
+    order_index: int,
     description: str | None,
     workflow_category: str | None,
     when: str | None,
@@ -930,8 +936,13 @@ def _candidate_from_runtime_result(
     matched_guard_count, relevant_guard_count, evaluated_guard_count = _guard_counts(result)
     missing_inputs = _missing_inputs_from_diagnostics(result.diagnostics)
     missing_input_kind = _classify_missing_input_kind(missing_inputs, topology=topology)
-    input_blocker_count, world_blocker_count = _split_blockers(blockers, missing_inputs=missing_inputs)
-    input_blocker_kind = _classify_input_blocker_kind(blockers, topology=topology)
+    guard_details = tuple(item for item in result.outputs.get("guard_details", []) if isinstance(item, dict))
+    input_blocker_count, world_blocker_count, input_blocker_kind = _classify_runtime_blockers(
+        blockers=blockers,
+        guard_details=guard_details,
+        missing_inputs=missing_inputs,
+        topology=topology,
+    )
     analysis_complete = bool(result.outputs.get("analysis_complete", True))
     full_evaluability = analysis_complete and evaluated_guard_count >= relevant_guard_count and not missing_inputs
     effectful_step_count = _static_effectful_step_count(
@@ -965,6 +976,7 @@ def _candidate_from_runtime_result(
     )
     return NextCandidate(
         workflow=workflow,
+        order_index=order_index,
         description=description,
         workflow_category=workflow_category,
         when=when,
@@ -995,6 +1007,7 @@ def _candidate_from_runtime_result(
 def _candidate_from_diagnostics(
     *,
     workflow: str,
+    order_index: int,
     description: str | None,
     workflow_category: str | None,
     when: str | None,
@@ -1030,6 +1043,7 @@ def _candidate_from_diagnostics(
     )
     return NextCandidate(
         workflow=workflow,
+        order_index=order_index,
         description=description,
         workflow_category=workflow_category,
         when=when,
@@ -1099,25 +1113,33 @@ def _classify_missing_input_kind(missing_inputs: tuple[str, ...], *, topology: W
     return "unknown"
 
 
-def _classify_input_blocker_kind(blockers: tuple[str, ...], *, topology: WorkflowTopology | None) -> str | None:
-    if not blockers:
-        return None
-    input_names: set[str] = set()
-    for blocker in blockers:
-        if not isinstance(blocker, str) or "inputs." not in blocker:
-            continue
-        for part in blocker.split("inputs.")[1:]:
-            name = []
-            for char in part:
-                if char.isalnum() or char == "_":
-                    name.append(char)
-                else:
-                    break
-            if name:
-                input_names.add("".join(name))
-    if not input_names:
-        return None
-    return _classify_missing_input_kind(tuple(sorted(input_names)), topology=topology)
+def _classify_runtime_blockers(
+    *,
+    blockers: tuple[str, ...],
+    guard_details: tuple[dict[str, object], ...],
+    missing_inputs: tuple[str, ...],
+    topology: WorkflowTopology | None,
+) -> tuple[int, int, str | None]:
+    if guard_details:
+        input_blockers = 0
+        world_blockers = 0
+        affected_input_names: set[str] = set()
+        failed_references = set(blockers)
+        for detail in guard_details:
+            reference = detail.get("reference")
+            status = detail.get("status")
+            if not isinstance(reference, str) or reference not in failed_references or status == "ok":
+                continue
+            affected_inputs = tuple(item for item in detail.get("affected_inputs", []) if isinstance(item, str))
+            if affected_inputs:
+                input_blockers += 1
+                affected_input_names.update(name.removeprefix("inputs.") for name in affected_inputs)
+            else:
+                world_blockers += 1
+        input_kind = _classify_missing_input_kind(tuple(sorted(affected_input_names)), topology=topology) if affected_input_names else None
+        return input_blockers, world_blockers, input_kind
+    input_blocker_count, world_blocker_count = _split_blockers(blockers, missing_inputs=missing_inputs)
+    return input_blocker_count, world_blocker_count, None
 
 
 def _split_blockers(blockers: tuple[str, ...], *, missing_inputs: tuple[str, ...]) -> tuple[int, int]:
