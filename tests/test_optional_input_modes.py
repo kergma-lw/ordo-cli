@@ -63,12 +63,20 @@ class OptionalInputModesTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            for mode in ("check", "review", "plan", "explain", "next", "run"):
+            for mode in ("check", "review", "plan", "explain", "run"):
                 with self.subTest(mode=mode):
                     exit_code, payload, stderr = self._run_cli(root, "--input", "repository=owner/repo", "--json", mode, "inspect-issue")
                     self.assertEqual(exit_code, 0)
                     self.assertEqual(payload.get("mode", "run"), mode)
                     self.assertEqual(stderr, "")
+
+            with self.subTest(mode="next"):
+                exit_code, payload, stderr = self._run_cli(root, "--input", "repository=owner/repo", "--json", "next")
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(payload["mode"], "next")
+                self.assertEqual(payload["scope"], "playbook")
+                self.assertEqual(payload["best_candidate"]["workflow"], "inspect-issue")
+                self.assertEqual(stderr, "")
 
     def test_cli_plan_allows_omitted_optional_caller_slot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -42,6 +42,11 @@ STATE_CONTRACT: JSONObject = {
     },
     "runtime_rules": [
         {
+            "name": "write_after_last_read",
+            "message": "State is cross-run memory: write or delete a logical state role only after its final read, regardless of key or field. Use step registers for per-run dataflow.",
+            "error_code": "validation.workflow.state_role.write_before_last_read",
+        },
+        {
             "name": "bound_role_required",
             "message": "state role must be bound before runtime access",
             "error_code": "runtime.state.binding_missing",

@@ -107,10 +107,10 @@
   "snippet_coverage_summary": {
     "coverage_counts": {
       "excerpt_verified": 57,
-      "none": 162,
+      "none": 161,
       "runner_verified": 57
     },
-    "total_handles": 276
+    "total_handles": 275
   },
   "workflow_check_review_passes": {
     "passes": [

@@ -390,8 +390,9 @@
     },
     {
       "appropriate_when": [
-        "Workflow data must survive across step boundaries or across runs through declared state locations rather than through implicit files or ambient context.",
-        "State reads, writes, and deletions should be explicit in the workflow contract and step surface."
+        "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
+        "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
+        "Write or delete a logical state role only after its final read; use value + register for data passed between steps in one run."
       ],
       "inappropriate_when": [
         "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
@@ -459,6 +460,7 @@
           "state.<role>[<expression>][.<field>...]"
         ],
         "runtime_rules": [
+          "write_after_last_read",
           "bound_role_required",
           "non_null_scalar_key_required",
           "declared_location_required"

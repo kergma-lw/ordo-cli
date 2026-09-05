@@ -80,6 +80,7 @@ sources = [
   "verification/runtime/guard-evaluation.md",
   "verification/runtime/check-mode.md",
   "verification/runtime/introspection-drift.md",
+  "verification/runtime/state.md",
   "verification/runtime/invariants.md",
   "verification/meta/packs.md"
 ]

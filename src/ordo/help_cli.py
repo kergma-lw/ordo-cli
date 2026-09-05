@@ -722,8 +722,9 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "summary": "Declared runtime state surface for bound locations, state-keyed storage, and explicit state mutation steps.",
         "keywords": ["state", "state_needs", "state_bindings", "states", "state_set", "state_delete", "bound locations"],
         "appropriate_when": [
-            "Workflow data must survive across step boundaries or across runs through declared state locations rather than through implicit files or ambient context.",
+            "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
             "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
+            "Write or delete a logical state role only after its final read; use value + register for data passed between steps in one run.",
         ],
         "inappropriate_when": [
             "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
@@ -1470,7 +1471,7 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
         "workflow.state_bindings": {
             "definition": "Workflow capability for binding declared playbook state locations into workflow roles so steps may read, write, or delete durable state explicitly.",
             "use_when": [
-                "A workflow needs durable named storage that persists across steps or runs instead of relying on implicit files or transient outputs.",
+                "A workflow needs durable named storage that persists across runs instead of relying on implicit files or transient outputs.",
                 "The workflow has already declared state_needs and now must connect those workflow roles to concrete named playbook state locations.",
             ],
             "do_not_use_for": [
@@ -1491,10 +1492,11 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
         "workflow.step.state_delete": {
             "definition": "Workflow step capability for deleting one explicit bound state target as a deliberate durable state mutation.",
             "use_when": [
-                "The workflow must remove a previously bound durable state value so later steps or later runs no longer see it.",
+                "The workflow must remove a bound durable state value for future runs, after the final read of that logical state role.",
             ],
             "do_not_use_for": [
                 "Local ephemeral data cleanup that should stay in step-local values instead of altering durable state.",
+                "Deleting before a later read of the same logical state role, even if that read addresses a different key or field.",
                 "Writing or reshaping durable state; use workflow.step.state_set when the intent is persistence rather than deletion.",
             ],
         },
@@ -1544,10 +1546,11 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
         "workflow.step.state_set": {
             "definition": "Workflow step capability for writing one explicit value into one bound state target as a deliberate durable state mutation.",
             "use_when": [
-                "The workflow must persist one value into a declared state location so later steps or later runs can read it.",
+                "The workflow must persist one value for future runs, after the final read of that logical state role.",
             ],
             "do_not_use_for": [
                 "Ordinary local dataflow that should stay in step outputs or workflow values instead of becoming durable state.",
+                "Writing before a later read of the same logical state role, even if that read addresses a different key or field; use value + register for per-run reuse.",
                 "Writing several unrelated state targets in one step; each state_set step writes exactly one resolved target entry.",
             ],
         },
@@ -3034,6 +3037,22 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     }
 
     model_node_overrides: dict[str, JSONObject] = {
+        "state": {
+            "definition": "Declared persistent storage for passing named values between workflow runs through bound logical roles.",
+            "use_when": [
+                "A later run needs a remembered value. Declare state_needs and bind each role to a named playbook state location before access.",
+                "Read through state.<role>[<key>], then use state_set or state_delete only after the final read of that role, regardless of key or field.",
+            ],
+            "do_not_use_for": [
+                "Passing newly computed values between steps in one run; use value + register and step.<register>.outputs.value instead.",
+                "Assuming authored-order validation proves safety across loop iterations; cross-iteration state analysis remains a known verification gap.",
+            ],
+            "related_surfaces": [
+                {"handle": "workflow.state_bindings", "summary": "Connect logical roles to declared storage locations"},
+                {"handle": "workflow.step.state_set", "summary": "Read-before-write example with registered per-run reuse"},
+                {"handle": "workflow.step.state_delete", "summary": "Read-before-delete example with registered per-run reuse"},
+            ],
+        },
         "workflow.step.profile_switch": {
             "definition": "Workflow step field for switching later execution in the current workflow subtree to another declared profile.",
             "use_when": [

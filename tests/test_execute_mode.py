@@ -1028,8 +1028,13 @@ blocks:
             ),
         )
 
-        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        def probe(resolved, _workflow):
+            self.assertEqual(resolved.reference, "git.worktree")
+            return OperationResult(status="ok", outputs={"clean": False})
 
+        result = execute_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
         self.assertEqual(diagnostic.message, "Step gate blocked execution for 'publish': git.worktree.clean")
 
@@ -1049,11 +1054,18 @@ blocks:
             ),
         )
 
-        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        def probe(resolved, _workflow):
+            if resolved.reference == "git.worktree":
+                return OperationResult(status="ok", outputs={"clean": False})
+            self.assertEqual(resolved.reference, "git.branch")
+            return OperationResult(status="ok", outputs={"value": "feature/test"})
 
+        result = execute_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.EXECUTION_ERROR)
         diagnostic = next(item for item in result.diagnostics if item.code == "runtime.step.gate.failed")
         self.assertIn("git.worktree.clean", diagnostic.message)
-        self.assertNotEqual(diagnostic.message, "Step gate blocked execution for 'publish'")
+        self.assertIn('git.branch.value | eq("main")', diagnostic.message)
 
     def test_execute_gate_failure_diagnostic_includes_on_fail_context(self) -> None:
         workflow = Workflow(

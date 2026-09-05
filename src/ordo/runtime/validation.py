@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -55,6 +56,7 @@ from .local_expression_engine.core import (
     LiteralNode,
     ObjectEntryNode,
     ObjectNode,
+    OnlyPredicateNode,
     PipelineNode,
     ReferenceNode,
     StateReferenceNode as ValueStateReferenceNode,
@@ -597,30 +599,56 @@ def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> lis
     if not isinstance(blocks, list):
         return []
 
+    let_bindings = payload.get("let")
+    let_roles: dict[str, set[str]] = {}
+    expanding: set[str] = set()
+
+    def expand_let(name: str) -> set[str]:
+        if not isinstance(let_bindings, dict) or name not in let_bindings or name in expanding:
+            return set()
+        if name not in let_roles:
+            expression = let_bindings[name]
+            if not isinstance(expression, str):
+                return set()
+            expanding.add(name)
+            try:
+                parsed = parse_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION, allow_boolean_composition=True)
+                let_roles[name] = _collect_value_state_references(parsed.value.root, expand_let=expand_let)
+            except LOCAL_EXPRESSION_PARSE_ERRORS:
+                let_roles[name] = set()
+            finally:
+                expanding.remove(name)
+        return let_roles[name]
+
     events: list[tuple[int, str, str, tuple[str, ...]]] = []
     position = 0
+
+    def collect_steps(steps: list[JSONValue], path: tuple[str, ...]) -> None:
+        nonlocal position
+        for step_index, step in enumerate(steps):
+            step_path = path + (str(step_index),)
+            if isinstance(step, dict):
+                for role in sorted(_collect_state_roles_from_step_item(step, expand_let=expand_let)):
+                    events.append((position, role, "read", step_path))
+                target_role = _state_target_role_from_step_item(step)
+                if target_role is not None:
+                    events.append((position, target_role, "write", step_path))
+            position += 1
+            if isinstance(step, dict) and isinstance(step.get("steps"), list):
+                collect_steps(step["steps"], step_path + ("steps",))
+
     for block_index, block in enumerate(blocks):
         if not isinstance(block, dict):
             continue
         if isinstance(block.get("guards"), list):
             for guard_index, guard in enumerate(block["guards"]):
-                for role in _collect_state_roles_from_guard_item(guard):
+                for role in sorted(_collect_state_roles_from_guard_item(guard, expand_let=expand_let)):
                     events.append((position, role, "read", ("blocks", str(block_index), "guards", str(guard_index))))
                 position += 1
             continue
         if not isinstance(block.get("steps"), list):
             continue
-        for step_index, step in enumerate(block["steps"]):
-            if not isinstance(step, dict):
-                position += 1
-                continue
-            step_path = ("blocks", str(block_index), "steps", str(step_index))
-            for role in _collect_state_roles_from_step_item(step):
-                events.append((position, role, "read", step_path))
-            target_role = _state_target_role_from_step_item(step)
-            if target_role is not None:
-                events.append((position, target_role, "write", step_path))
-            position += 1
+        collect_steps(block["steps"], ("blocks", str(block_index), "steps"))
 
     last_reads: dict[str, int] = {}
     for event_index, role, kind, _ in events:
@@ -2921,19 +2949,19 @@ def _validate_format_value_object(
     return diagnostics
 
 
-def _collect_state_roles_from_guard_item(item: JSONValue) -> set[str]:
+def _collect_state_roles_from_guard_item(item: JSONValue, *, expand_let: Callable[[str], set[str]]) -> set[str]:
     if isinstance(item, str):
         try:
             parsed = parse_local_expression(item, context=LocalExpressionContext.GUARD)
         except LOCAL_EXPRESSION_PARSE_ERRORS:
             return set()
-        return _collect_value_state_references(parsed.value.root)
+        return _collect_value_state_references(parsed.value.root, expand_let=expand_let)
     if isinstance(item, dict):
-        return _collect_state_roles_from_runtime_value_surface(item.get("with"))
+        return _collect_state_roles_from_runtime_value_surface(item.get("with"), expand_let=expand_let)
     return set()
 
 
-def _collect_state_roles_from_step_item(step: JSONObject) -> set[str]:
+def _collect_state_roles_from_step_item(step: JSONObject, *, expand_let: Callable[[str], set[str]]) -> set[str]:
     roles: set[str] = set()
     condition = step.get("if")
     if isinstance(condition, (str, list, dict)):
@@ -2943,8 +2971,8 @@ def _collect_state_roles_from_step_item(step: JSONObject) -> set[str]:
             except LOCAL_EXPRESSION_PARSE_ERRORS:
                 parsed = None
             if parsed is not None and parsed.value is not None:
-                roles.update(_collect_value_state_references(parsed.value.root))
-    gate = step.get("gate")
+                roles.update(_collect_value_state_references(parsed.value.root, expand_let=expand_let))
+    gate = _strip_gate_on_fail(step).get("gate")
     if isinstance(gate, (str, list, dict)):
         for _, expression in _iter_condition_leaf_expressions(gate):
             try:
@@ -2952,15 +2980,27 @@ def _collect_state_roles_from_step_item(step: JSONObject) -> set[str]:
             except LOCAL_EXPRESSION_PARSE_ERRORS:
                 parsed = None
             if parsed is not None and parsed.value is not None:
-                roles.update(_collect_value_state_references(parsed.value.root))
-    if "uses" in step or "run" in step:
-        roles.update(_collect_state_roles_from_runtime_value_surface(step.get("with")))
-    if "value" in step:
-        roles.update(_collect_state_roles_from_runtime_value_surface(step.get("value")))
-    if "state_set" in step and isinstance(step.get("state_set"), dict):
-        target_expr, raw_value = next(iter(step["state_set"].items()))
-        if isinstance(raw_value, (dict, list, str)):
-            roles.update(_collect_state_roles_from_runtime_value_surface(raw_value))
+                roles.update(_collect_value_state_references(parsed.value.root, expand_let=expand_let))
+    if isinstance(step.get("gate"), dict):
+        roles.update(_collect_state_roles_from_runtime_value_surface(step["gate"].get("on_fail"), expand_let=expand_let, allow_boolean_composition=True))
+    for field in ("with", "value", "publish", "result", "for_each", "profile_switch"):
+        roles.update(_collect_state_roles_from_runtime_value_surface(step.get(field), expand_let=expand_let, allow_bare_strings=field != "profile_switch"))
+    targets = []
+    if isinstance(step.get("state_set"), dict):
+        for target_expr, raw_value in step["state_set"].items():
+            targets.append(target_expr)
+            roles.update(_collect_state_roles_from_runtime_value_surface(raw_value, expand_let=expand_let))
+    if isinstance(step.get("state_delete"), str):
+        targets.append(step["state_delete"])
+    for target in targets:
+        if not isinstance(target, str):
+            continue
+        try:
+            state_path = parse_state_path(target)
+            parsed = parse_value_local_expression(state_path.key_expression, allow_boolean_composition=True)
+        except (StatePathParseError, *LOCAL_EXPRESSION_PARSE_ERRORS):
+            continue
+        roles.update(_collect_value_state_references(parsed.value.root, expand_let=expand_let))
     return roles
 
 
@@ -2981,38 +3021,45 @@ def _state_target_role_from_step_item(step: JSONObject) -> str | None:
     return None
 
 
-def _collect_state_roles_from_runtime_value_surface(value: JSONValue | None) -> set[str]:
+def _collect_state_roles_from_runtime_value_surface(
+    value: JSONValue | None, *, expand_let: Callable[[str], set[str]], allow_bare_strings: bool = True, allow_boolean_composition: bool = False
+) -> set[str]:
     roles: set[str] = set()
     if _is_format_value_object(value):
-        for arg in value.get("args", []):
-            roles.update(_collect_state_roles_from_runtime_value_surface(arg))
+        args = value.get("args", [])
+        for arg in args if isinstance(args, list) else []:
+            roles.update(_collect_state_roles_from_runtime_value_surface(arg, expand_let=expand_let))
         return roles
     if isinstance(value, list):
         for item in value:
-            roles.update(_collect_state_roles_from_runtime_value_surface(item))
+            roles.update(_collect_state_roles_from_runtime_value_surface(item, expand_let=expand_let, allow_bare_strings=allow_bare_strings, allow_boolean_composition=allow_boolean_composition))
         return roles
     if isinstance(value, dict):
         for item in value.values():
-            roles.update(_collect_state_roles_from_runtime_value_surface(item))
+            roles.update(_collect_state_roles_from_runtime_value_surface(item, expand_let=expand_let, allow_bare_strings=allow_bare_strings, allow_boolean_composition=allow_boolean_composition))
         return roles
     if not isinstance(value, str):
         return roles
-    expression = _extract_runtime_value_expression(value)
-    if expression is None:
+    mode = _runtime_value_expression_mode(value, allow_bare_strings=allow_bare_strings)
+    if mode is None:
         return roles
     try:
-        parsed = parse_embedded_value_local_expression(value)
+        parsed = parse_value_local_expression(value, allow_boolean_composition=allow_boolean_composition) if mode == "plain" else parse_embedded_value_local_expression(value, allow_boolean_composition=allow_boolean_composition)
     except LOCAL_EXPRESSION_PARSE_ERRORS:
         return roles
     if parsed is None or parsed.value is None:
         return roles
-    return _collect_value_state_references(parsed.value.root)
+    return _collect_value_state_references(parsed.value.root, expand_let=expand_let)
 
 
-def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
+def _collect_value_state_references(node: ValueExpressionNode, *, expand_let: Callable[[str], set[str]]) -> set[str]:
     roles: set[str] = set()
 
     def visit(current: ValueExpressionNode) -> None:
+        if isinstance(current, ReferenceNode):
+            if current.parts:
+                roles.update(expand_let(current.parts[0]))
+            return
         if isinstance(current, ValueStateReferenceNode):
             roles.add(current.state_role)
             visit(current.key_expression)
@@ -3043,9 +3090,12 @@ def _collect_value_state_references(node: ValueExpressionNode) -> set[str]:
             for filter_node in current.filters:
                 visit(filter_node)
             return
-        if isinstance(current, BuiltinCallNode):
+        if isinstance(current, (BuiltinCallNode, FilterApplicationNode)):
             for argument in current.arguments:
                 visit(argument)
+            return
+        if isinstance(current, OnlyPredicateNode):
+            visit(current.expected)
             return
         if isinstance(current, ListNode):
             for item in current.items:

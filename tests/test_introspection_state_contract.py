@@ -15,6 +15,7 @@ class IntrospectionStateContractTest(unittest.TestCase):
         self.assertEqual(payload["storage_document"]["root_type"], "object")
         runtime_rules = {rule["name"]: rule for rule in payload["runtime_rules"]}
         self.assertEqual(runtime_rules["bound_role_required"]["error_code"], "runtime.state.binding_missing")
+        self.assertEqual(runtime_rules["write_after_last_read"]["error_code"], "validation.workflow.state_role.write_before_last_read")
         self.assertEqual(payload["invalid_path_rules"][0]["name"], "root_must_be_state")
 
     def test_state_contract_stays_aligned_with_runtime_shape(self) -> None:

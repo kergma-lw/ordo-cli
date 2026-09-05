@@ -66,6 +66,20 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                     "expected_status": "ok",
                 },
             },
+            {
+                "name": "state_read_before_write",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "With shared_state declared and bound, read the old profile before storing a profile for future runs; reuse the registered old value afterward.",
+                "yaml": '- name: read-profile\n  value: state.shared_state["active_profile"]\n  register: previous_profile\n- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review\n- name: report-previous-profile\n  publish:\n    previous_profile: step.previous_profile.outputs.value',
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "workflow.step.state_set",
+                    "expected_status": "ok",
+                },
+            },
         ],
     },
     "workflow.step.if": {
@@ -2474,7 +2488,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/state-bindings.yaml",
                     "start_line": 1,
-                    "end_line": 13
+                    "end_line": 15
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -2889,8 +2903,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_set_step_fragment_remembers_profile",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Show one complete step fragment that stores a shared-state profile value.",
-                "yaml": '- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review',
+                "summary": "Read the previous profile before the role's final mutation, then store a profile for future runs. Reuse the registered value, not state, later in this run.",
+                "yaml": '- name: read-profile\n  value: state.shared_state["active_profile"]\n  register: previous_profile\n- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review\n- name: report-previous-profile\n  publish:\n    previous_profile: step.previous_profile.outputs.value',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
@@ -2936,8 +2950,8 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_delete_step_fragment_forgets_branch",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Show one complete step fragment that deletes a remembered task-memory branch value.",
-                "yaml": '- name: forget-branch\n  state_delete: state.task_memory[inputs.issue_ref].branch',
+                "summary": "Read the remembered branch before deleting it for future runs, then publish the registered value without rereading the mutated state role.",
+                "yaml": '- name: read-branch\n  value: state.task_memory[inputs.issue_ref].branch\n  register: previous_branch\n- name: forget-branch\n  state_delete: state.task_memory[inputs.issue_ref].branch\n- name: report-previous-branch\n  publish:\n    previous_branch: step.previous_branch.outputs.value',
                 "verification": {
                     "kind": "runner_verified",
                     "world": "default",
