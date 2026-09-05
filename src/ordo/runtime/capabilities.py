@@ -397,9 +397,23 @@ NEGATIVE_RULES: tuple[NegativeRuleSpec, ...] = (
     NegativeRuleSpec(
         name="workflow_state_role.write_after_last_read",
         surface="workflow.state_needs",
-        rule="Logical state role writes and deletes are allowed only after the final read of that same role",
+        rule="Before binding, logical state role writes and deletes are allowed only after the final read of that same role; bound validation instead compares actual storage in each access context",
         reason="persistent runtime state should capture final cross-run handoff rather than per-run scratch flow",
         related_codes=("validation.workflow.state_role.write_before_last_read",),
+    ),
+    NegativeRuleSpec(
+        name="workflow_state_storage.write_after_last_read",
+        surface="workflow.state_bindings",
+        rule="After binding, write or delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field",
+        reason="relative paths resolve in each access context; normalized paths, symlinks, and existing hardlinks can alias, while the same role may resolve to different files and be valid",
+        related_codes=("validation.workflow.state_storage.write_before_last_read",),
+    ),
+    NegativeRuleSpec(
+        name="workflow_state_storage.relevant_identity_required",
+        surface="workflow.state_bindings",
+        rule="Conservatively reject early only relevant write/later-read pairs whose storage identity cannot be established; this is not a proven ordering violation",
+        reason="validation must precede observations and effects; uncertain context alone does not reject read-only, read-before-write, or known-disjoint access; individual child validation is not a cross-invocation or cross-iteration guarantee, and no new loop mutation ban is added",
+        related_codes=("validation.workflow.state_storage.identity_unresolved",),
     ),
     NegativeRuleSpec(
         name="format_value.args_must_be_list",

@@ -263,7 +263,7 @@ def plan_workflow(
         if applied.ok and applied.workflow is not None:
             effective_workflow = applied.workflow
 
-    validation_report = validate_workflow_document(effective_workflow.to_contract())
+    validation_report = validate_workflow_document(effective_workflow.to_contract(), state_role_order=not bool(effective_workflow.state_bindings))
     resolution: WorkflowResolution | None = None
     if validation_report.ok:
         resolution = resolve_workflow_references(
@@ -687,10 +687,10 @@ def _build_execution_tree(
                     "runtime_status": "not_started",
                     "revalidated": False,
                     "planned_probe_result": None
-                    if step.name not in preflight_by_name
+                    if step.name not in preflight_by_name or preflight_by_name[step.name].get("status") == "deferred"
                     else dict(preflight_by_name[step.name].get("outputs", {})),
                     "runtime_probe_result": None,
-                    "divergence_status": "not_checked" if step.name in preflight_by_name else "not_applicable",
+                    "divergence_status": "not_checked" if step.name in preflight_by_name and preflight_by_name[step.name].get("status") != "deferred" else "not_applicable",
                     "divergence_reason": None,
                     **dict(step_by_name.get(step.name, {"name": step.name})),
                     "preflight": dict(preflight_by_name[step.name]) if step.name in preflight_by_name else None,

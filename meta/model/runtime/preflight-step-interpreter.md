@@ -32,7 +32,7 @@ This creates an avoidable gap between:
 - The interpreter is part of `check`, not a hidden `execute` variant.
 - The interpreter may evaluate only `read_only` and `analysis_safe` steps.
 - The interpreter may derive step-local knowledge and feed that knowledge back into guard coverage.
-- The interpreter must stop before any effectful business step.
+- The interpreter must not execute effectful business steps. Top-level state mutations may be deferred as specified below; other effectful steps retain their conservative analysis boundary.
 - The interpreter must preserve the same honesty rules as `check` for `allowed`, `blocked`, and `unknown` verdicts.
 
 ## Scope boundary
@@ -51,8 +51,7 @@ Allowed step kinds and capabilities:
 Disallowed step kinds and capabilities:
 
 - effectful connector actions;
-- `state_set`;
-- `state_delete`;
+- execution or simulation of `state_set` and `state_delete` (top-level deferral is allowed without interpreting their mutation payloads);
 - any step whose inputs depend on unknown values;
 - any branch whose condition truth value is not yet known;
 - any nested run that requires effectful execution or unknown step-local data.
@@ -165,14 +164,15 @@ Builtin payload-shaping steps such as `value`, `result`, and `publish` should cl
 - Materialize `register` outputs for successful read-only steps.
 - Evaluate `if` only from currently available knowledge.
 - Skip branches whose `if` evaluates to `false`.
-- Halt the current analyzable path when the next required step is effectful, unknown, or not yet computable.
+- Defer eligible top-level state mutations after evaluating conditions and gates; keep them effectful, without outputs, registers, observations, or reusable results.
+- Halt the current analyzable path when the next required step is otherwise effectful, unknown, or not yet computable.
 - Preserve all knowledge collected before the halt.
 
 ## Stop model
 
 The interpreter must stop a path when it encounters:
 
-- an effectful step;
+- an effectful step other than an eligible deferred top-level state mutation;
 - an unknown step classification;
 - an unresolved step argument;
 - an `if` condition that depends on unknown data;
@@ -180,6 +180,13 @@ The interpreter must stop a path when it encounters:
 - a nested run that is not preflight-analyzable.
 
 Each stop must emit a machine-readable reason and the exact blocked step or branch.
+
+After top-level state deferral, later independent guards and read-only steps may
+still be analyzed. A reached named invocation or loop instead halts with
+`state_deferral_invocation_barrier`, and subsequent profile switches must not
+resume that halted path. Nested analysis never defers state mutation. This
+bounded continuation neither simulates state nor proves caller/child or
+cross-iteration storage order; those guarantees remain deferred.
 
 ## Integration with `check`
 

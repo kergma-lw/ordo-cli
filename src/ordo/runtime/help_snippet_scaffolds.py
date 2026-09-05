@@ -108,7 +108,16 @@ ROUTINE_BUNDLE_CONTRACT = SnippetInsertionContract(
 )
 
 
+STATE_BUNDLE_CONTRACT = SnippetInsertionContract(
+    mode="state_bundle",
+    supported_targets=("state", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete"),
+    workflow_surface="workflow text with explicit role bindings to temporary world state files",
+    summary="Validate bound storage ordering without executing or simulating mutations; multiple roles may name one world state file.",
+)
+
+
 INSERTION_CONTRACTS: dict[str, SnippetInsertionContract] = {
+    STATE_BUNDLE_CONTRACT.mode: STATE_BUNDLE_CONTRACT,
     EXPRESSION_VALUE_CONTRACT.mode: EXPRESSION_VALUE_CONTRACT,
     STEP_FIELD_CONTRACT.mode: STEP_FIELD_CONTRACT,
     STEP_FRAGMENT_CONTRACT.mode: STEP_FRAGMENT_CONTRACT,

@@ -1202,8 +1202,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 57)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 57)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 56)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 58)
         self.assertEqual(handles["profile.checks"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.launchers"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.connectors"]["snippet_coverage"], "excerpt_verified")
@@ -1308,7 +1308,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(handles["state"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.state_set"]["snippet_coverage"], "runner_verified")
-        self.assertEqual(handles["workflow.state_bindings"]["snippet_coverage"], "excerpt_verified")
+        self.assertEqual(handles["workflow.state_bindings"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.step.publish"]["snippet_coverage"], "runner_verified")
 
     def test_text_describe_state_set_shows_snippet_coverage_and_yaml(self) -> None:

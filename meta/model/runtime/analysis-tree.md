@@ -23,6 +23,7 @@ The same analysis tree may retain:
 - statically knowable expression diagnostics for builtin misuse that can be proven before execution;
 - advisory preflight-observation recommendations together with matched and missing coverage;
 - incomplete, weakened, or halted analysis reasons.
+- deferred top-level state mutation nodes, without mutation results or reusable observations, and subsequent invocation barriers.
 
 ## Projection rule
 

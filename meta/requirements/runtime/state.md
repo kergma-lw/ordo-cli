@@ -35,5 +35,11 @@
 - Runtime state should not introduce a broad query language, lock model, reconciliation model, or multi-scope memory model in the MVP.
 - The MVP should prefer a narrow explicit surface over premature generalization.
 - Runtime state should remain a cross-run memory surface rather than a substitute for per-run step registers.
-- A workflow should not write or delete a logical state role before its final read of that same logical role.
+- A workflow must not write or delete an actual state storage file before a later read of that same file, regardless of logical role, declared state name, profile, key, or field.
+- Before binding, authoring validation must retain the logical-role final-read rule. After binding, validation must compare actual storage identities in each access context instead: the same role may resolve to different files and be valid.
+- Relative storage paths must retain their runtime resolution in each access context; validation must not freeze them to one global base merely to compare identities.
+- A proven same-file ordering violation must be distinguished from conservative early rejection when identity cannot be established for a relevant write/later-read pair. Uncertain context alone must not reject unrelated or read-only state access.
 - State mutation should remain a top-level workflow concern and should not appear inside included fragments or runtime-invoked fragments.
+- Top-level check may defer validated state mutations, without execution, simulation, mutation outputs, registers, or reuse, to analyze later independent guards after evaluating conditions and gates.
+- Deferral must not extend into nested analysis or pass a reached invocation/loop barrier; profile switches must not resume such a halt. Planning must retain deferred mutations for once-only ordered execution when admitted.
+- Cross-invocation and cross-iteration state guarantees remain deferred. Individual child validation must not be presented as a full composed-run or cross-run proof; the known runtime-fragment contract drift remains unresolved rather than silently changing the fragment restriction.

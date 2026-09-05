@@ -891,6 +891,9 @@ blocks:
         workflow = Workflow(
             version=0,
             workflow="set-active-profile",
+            state_needs={"shared": {}},
+            state_bindings={"shared": "shared"},
+            states={"shared": "/tmp/ordo-review-active-profile.json"},
             declared_inputs={
                 "active_profile_key": {},
                 "profile": {},

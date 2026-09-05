@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import json
 from pathlib import Path
 import os
 import re
@@ -16,7 +17,7 @@ from ordo.model.help_snippet_worlds import describe_help_snippet_worlds
 from ordo.model.runtime import RuntimeStatus
 from ordo.routines import load_routine_registry
 
-from . import load_workflow_file, validate_workflow_semantics, validate_workflow_text
+from . import load_workflow_file, load_workflow_text, validate_workflow_semantics, validate_workflow_text
 from .loading import load_yaml_document
 from .help_snippet_scaffolds import build_expression_value_scaffold, build_step_field_scaffold, build_step_fragment_scaffold, build_workflow_fragment_scaffold
 
@@ -52,6 +53,35 @@ def verify_help_snippet(
 
     if insertion_mode == "routine_bundle":
         return _verify_routine_bundle_snippet(snippet=snippet, world=world, target=target, effective_world=effective_world)
+
+    if insertion_mode == "state_bundle":
+        if target not in {"state", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete"}:
+            raise ValueError(f"Unsupported state bundle target: {target}")
+        payload = load_yaml_document(snippet, source=f"snippet-bundle:{target}:{world}")
+        if not isinstance(payload, dict) or set(payload) != {"workflow_text", "state_bindings", "expected_diagnostic_codes"}:
+            raise ValueError("State bundle must declare workflow_text, state_bindings, and expected_diagnostic_codes")
+        workflow_text = payload["workflow_text"]
+        bindings = payload["state_bindings"]
+        if not isinstance(workflow_text, str) or not isinstance(bindings, dict):
+            raise ValueError("State bundle requires workflow text and a role-to-world-state mapping")
+        if any(not isinstance(role, str) or not isinstance(name, str) or name not in effective_world["state"] for role, name in bindings.items()):
+            raise ValueError("State bundle bindings must reference named world state")
+        workflow = load_workflow_text(workflow_text)
+        with tempfile.TemporaryDirectory(prefix="ordo-help-state-") as directory:
+            states = {}
+            for index, (name, document) in enumerate(effective_world["state"].items()):
+                path = Path(directory) / f"state-{index}.json"
+                path.write_text(json.dumps(document), encoding="utf-8")
+                states[name] = str(path)
+            workflow = replace(workflow, state_bindings=bindings, states=states)
+            report = validate_workflow_semantics(workflow, state_base_dir=directory)
+        codes = [diagnostic.code for diagnostic in report.diagnostics]
+        if codes != payload["expected_diagnostic_codes"]:
+            raise ValueError(f"State bundle diagnostic mismatch: {codes!r}")
+        return HelpSnippetRunnerResult(
+            world_name=world, insertion_mode=insertion_mode, target=target,
+            workflow_text=workflow_text, effective_world=effective_world, status=report.status.value,
+        )
 
     if insertion_mode == "expression_value":
         workflow_text = build_expression_value_scaffold(target=target, snippet=snippet)

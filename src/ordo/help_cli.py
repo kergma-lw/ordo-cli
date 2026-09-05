@@ -724,11 +724,15 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "appropriate_when": [
             "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
             "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
-            "Write or delete a logical state role only after its final read; use value + register for data passed between steps in one run.",
+            "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
+            "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context: aliases count as one file, while the same role may access different files and be valid.",
+            "Bound validation reports state_storage.write_before_last_read for proven violations, or state_storage.identity_unresolved for conservative early rejection of relevant uncertain write/later-read pairs, not a proven violation. Both codes have the validation.workflow. prefix.",
+            "Top-level check defers effectful state mutations after conditions and gates, then continues to independent guards without mutation, simulation, outputs, registers, or reuse. Plan retains the nodes; run executes admitted mutations once in order.",
         ],
         "inappropriate_when": [
             "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
             "State is being used as a vague catch-all context channel instead of a declared bound storage surface.",
+            "Nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, which profiles cannot resume. Cross-invocation and cross-iteration guarantees remain deferred.",
         ],
         "inspect_next": ["state.workflow_surface.state_needs_field", "state.workflow_surface.state_binding_field", "state.workflow_surface.step_state_set_field", "state.workflow_surface.step_state_delete_field", "workflow.step.state_set", "workflow.step.state_delete"],
         "related_rules": ["local_artifacts_are_context", "publish_outputs"],
@@ -952,6 +956,9 @@ def build_overview_response() -> JSONObject:
         "execution_concepts": {
             "modes": [mode.value for mode in Mode],
             "statuses": [status.value for status in RuntimeStatus],
+            "state_deferral": "Top-level check defers effectful state writes/deletes after conditions and gates and continues to independent guards, without mutation, simulation, outputs, registers, or reuse. Plan retains ordered non-reusable nodes; run executes admitted mutations once.",
+            "state_boundary": "Nested analysis does not defer state. A reached run/loop after deferral halts with state_deferral_invocation_barrier; profiles cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred.",
+            "check_unknown": "Inspect allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards. allowed false can mean unknown, not blocked; missing_facts is not inferred from unevaluated expressions.",
         },
         "workflow_check_review_passes": {
             "rule": "Use both check and review after adding or changing a workflow; neither replaces the other.",
@@ -1321,11 +1328,14 @@ def build_command_line_response() -> JSONObject:
                     "You need to discover which named workflows the current playbook publishes before choosing one.",
                     "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
                     "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
+                    "Inspect check's allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards: allowed false may mean unknown rather than blocked, and missing_facts is not inferred from unevaluated expressions.",
+                    "Check may defer top-level state mutations after conditions and gates to inspect later independent guards without simulating writes. Plan keeps non-reusable nodes; run executes admitted mutations once in order.",
                 ],
                 "do_not_use_for": [
                     "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-rules surfaces.",
                     "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
                     "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure.",
+                    "Assuming nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, and profile switches cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred.",
                 ],
                 "nearest_surfaces": [
                     {
@@ -1473,10 +1483,14 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
             "use_when": [
                 "A workflow needs durable named storage that persists across runs instead of relying on implicit files or transient outputs.",
                 "The workflow has already declared state_needs and now must connect those workflow roles to concrete named playbook state locations.",
+                "After binding, final-read ordering compares actual files in each access context, including normalized paths, symlinks, and existing hardlinks, regardless of roles or profiles. Relative paths retain runtime resolution; the same role may access distinct files and be valid.",
+                "Inspect the state_bundle examples for explicit bindings to real temporary world files, including a rejected alias read. Bundle verification checks bound validity, not execution or profile-switch contexts.",
             ],
             "do_not_use_for": [
                 "Short-lived local values that belong in step outputs, workflow values, or direct inputs rather than declared state storage.",
                 "Writing state directly without first binding a declared location into the workflow's explicit state contract.",
+                "Assuming different roles or profiles isolate aliases. Proven violations report validation.workflow.state_storage.write_before_last_read; relevant unresolved write/later-read pairs are conservatively rejected early with validation.workflow.state_storage.identity_unresolved, not a proven violation.",
+                "Treating separate child validation as flattened caller-child analysis: cross-invocation and cross-iteration guarantees remain deferred.",
             ],
         },
         "workflow.state_needs": {
@@ -1492,12 +1506,16 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
         "workflow.step.state_delete": {
             "definition": "Workflow step capability for deleting one explicit bound state target as a deliberate durable state mutation.",
             "use_when": [
-                "The workflow must remove a bound durable state value for future runs, after the final read of that logical state role.",
+                "The workflow must remove a bound durable state value for future runs, after the final read of the same actual file, regardless of role or profile.",
+                "Top-level check evaluates conditions and gates first, then records deferred without mutation, simulation, outputs, registers, or reuse, and continues to independent guards. Plan retains a not_reusable node with planned_probe_result null; run executes admitted deletion once in order.",
+                "Before binding, authoring validation retains the same-role rule. Bound validation resolves relative paths in each access context, recognizes normalized paths, symlinks, and existing hardlinks, and permits the same role to access different files.",
             ],
             "do_not_use_for": [
                 "Local ephemeral data cleanup that should stay in step-local values instead of altering durable state.",
-                "Deleting before a later read of the same logical state role, even if that read addresses a different key or field.",
+                "Deleting before a later read of the same actual file, even through another role, profile, key, or field: validation.workflow.state_storage.write_before_last_read reports proven violations.",
+                "Treating validation.workflow.state_storage.identity_unresolved as a proven violation: it conservatively rejects only relevant uncertain write/later-read pairs before observations or effects, not all uncertain contexts.",
                 "Writing or reshaping durable state; use workflow.step.state_set when the intent is persistence rather than deletion.",
+                "Nested deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, which profile switches cannot resume. Cross-invocation and cross-iteration guarantees remain deferred.",
             ],
         },
         "workflow.step.value": {
@@ -1546,12 +1564,16 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
         "workflow.step.state_set": {
             "definition": "Workflow step capability for writing one explicit value into one bound state target as a deliberate durable state mutation.",
             "use_when": [
-                "The workflow must persist one value for future runs, after the final read of that logical state role.",
+                "The workflow must persist one value for future runs, after the final read of the same actual file, regardless of role or profile.",
+                "Top-level check evaluates conditions and gates first, then records deferred without mutation, simulation, outputs, registers, or reuse, and continues to independent guards. Plan retains a not_reusable node with planned_probe_result null; run executes admitted writing once in order.",
+                "Before binding, authoring validation retains the same-role rule. Bound validation resolves relative paths in each access context, recognizes normalized paths, symlinks, and existing hardlinks, and permits the same role to access different files.",
             ],
             "do_not_use_for": [
                 "Ordinary local dataflow that should stay in step outputs or workflow values instead of becoming durable state.",
-                "Writing before a later read of the same logical state role, even if that read addresses a different key or field; use value + register for per-run reuse.",
+                "Writing before a later read of the same actual file, even through another role, profile, key, or field: validation.workflow.state_storage.write_before_last_read reports proven violations. Use value + register for per-run reuse.",
+                "Treating validation.workflow.state_storage.identity_unresolved as a proven violation: it conservatively rejects only relevant uncertain write/later-read pairs before observations or effects, not all uncertain contexts.",
                 "Writing several unrelated state targets in one step; each state_set step writes exactly one resolved target entry.",
+                "Nested deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, which profile switches cannot resume. Cross-invocation and cross-iteration guarantees remain deferred.",
             ],
         },
         "workflow.include_fragments": {
@@ -3041,11 +3063,16 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "definition": "Declared persistent storage for passing named values between workflow runs through bound logical roles.",
             "use_when": [
                 "A later run needs a remembered value. Declare state_needs and bind each role to a named playbook state location before access.",
-                "Read through state.<role>[<key>], then use state_set or state_delete only after the final read of that role, regardless of key or field.",
+                "Read through state.<role>[<key>], then use state_set or state_delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field.",
+                "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context; normalized paths, symlinks, and existing hardlinks can alias. The same role may access distinct files and be valid.",
+                "validation.workflow.state_storage.write_before_last_read reports proven same-file violations. validation.workflow.state_storage.identity_unresolved conservatively rejects early only relevant uncertain write/later-read pairs, before observations or effects; it is not a proven violation.",
+                "Top-level check checks conditions and gates first, then defers effectful mutations and continues to independent guards without mutation, simulation, outputs, registers, or reuse. Plan retains not_reusable nodes with planned_probe_result null; run executes admitted mutations once in order.",
             ],
             "do_not_use_for": [
                 "Passing newly computed values between steps in one run; use value + register and step.<register>.outputs.value instead.",
                 "Assuming authored-order validation proves safety across loop iterations; cross-iteration state analysis remains a known verification gap.",
+                "Treating uncertain context as a blanket ban: read-only, read-before-write, and known-disjoint access are not rejected for uncertainty alone. No new loop mutation ban is added.",
+                "Nested deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier; profiles cannot resume it. Children validate individually, not as a flattened caller-child access stream. Cross-invocation and cross-iteration guarantees remain deferred.",
             ],
             "related_surfaces": [
                 {"handle": "workflow.state_bindings", "summary": "Connect logical roles to declared storage locations"},
@@ -6014,6 +6041,9 @@ def render_overview_text(payload: JSONObject) -> str:
             "Execution concepts:",
             f"- modes: {', '.join(payload['execution_concepts']['modes'])}",
             f"- statuses: {', '.join(payload['execution_concepts']['statuses'])}",
+            f"- state deferral: {payload['execution_concepts']['state_deferral']}",
+            f"- state boundary: {payload['execution_concepts']['state_boundary']}",
+            f"- check unknown: {payload['execution_concepts']['check_unknown']}",
             "",
             "Workflow check/review passes:",
             f"- rule: {payload['workflow_check_review_passes']['rule']}",

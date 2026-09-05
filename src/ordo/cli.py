@@ -1473,6 +1473,10 @@ def _summarize_check_payload(payload: dict[str, object]) -> dict[str, object]:
         "working_directory": payload.get("working_directory"),
         "active_profile_source": outputs.get("active_profile_source"),
         "allowed": allowed,
+        "allowed_state": outputs.get("allowed_state"),
+        "analysis_complete": outputs.get("analysis_complete"),
+        "incomplete_reasons": outputs.get("incomplete_reasons", []),
+        "unevaluated_relevant_guards": outputs.get("unevaluated_relevant_guards", []),
         "diagnostics": payload.get("diagnostics", []),
         "observed_facts": _collect_observed_facts(outputs),
         "missing_facts": _collect_missing_facts(outputs),
@@ -1723,18 +1727,6 @@ def _collect_missing_facts(outputs: dict[str, object]) -> list[str]:
             for scope in weakened_scopes:
                 if isinstance(scope, str) and scope:
                     _append_unique(facts, seen, f"fresh facts unavailable for {scope}")
-
-    unevaluated_guards = outputs.get("unevaluated_relevant_guards")
-    if isinstance(unevaluated_guards, list):
-        for guard in unevaluated_guards:
-            if not isinstance(guard, str) or not guard:
-                continue
-            references = _extract_fact_references(guard)
-            if references:
-                for reference in references:
-                    _append_unique(facts, seen, reference)
-            else:
-                _append_unique(facts, seen, guard)
 
     return _limit_items(facts)
 

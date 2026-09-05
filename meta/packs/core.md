@@ -1422,8 +1422,14 @@ The runtime must be able to answer, in machine-readable form:
 - Runtime state should not introduce a broad query language, lock model, reconciliation model, or multi-scope memory model in the MVP.
 - The MVP should prefer a narrow explicit surface over premature generalization.
 - Runtime state should remain a cross-run memory surface rather than a substitute for per-run step registers.
-- A workflow should not write or delete a logical state role before its final read of that same logical role.
+- A workflow must not write or delete an actual state storage file before a later read of that same file, regardless of logical role, declared state name, profile, key, or field.
+- Before binding, authoring validation must retain the logical-role final-read rule. After binding, validation must compare actual storage identities in each access context instead: the same role may resolve to different files and be valid.
+- Relative storage paths must retain their runtime resolution in each access context; validation must not freeze them to one global base merely to compare identities.
+- A proven same-file ordering violation must be distinguished from conservative early rejection when identity cannot be established for a relevant write/later-read pair. Uncertain context alone must not reject unrelated or read-only state access.
 - State mutation should remain a top-level workflow concern and should not appear inside included fragments or runtime-invoked fragments.
+- Top-level check may defer validated state mutations, without execution, simulation, mutation outputs, registers, or reuse, to analyze later independent guards after evaluating conditions and gates.
+- Deferral must not extend into nested analysis or pass a reached invocation/loop barrier; profile switches must not resume such a halt. Planning must retain deferred mutations for once-only ordered execution when admitted.
+- Cross-invocation and cross-iteration state guarantees remain deferred. Individual child validation must not be presented as a full composed-run or cross-run proof; the known runtime-fragment contract drift remains unresolved rather than silently changing the fragment restriction.
 
 <!-- source: requirements/policy/core.md -->
 
@@ -4066,6 +4072,24 @@ Plan-time structural fields such as node identity, topology, and declared semant
 
 When execute mode cannot use the shared tree safely, it must expose an explicit compatibility mode and fallback reason rather than silently pretending tree-driven execution happened.
 
+## Deferred state nodes
+
+Planning retains every top-level deferred `state_set`/`state_delete` node in
+authored order. Its preflight status is `deferred`, its `reuse_policy` is
+`not_reusable`, and its `planned_probe_result` is null. Preflight must not attach
+mutation outputs or registers. Deferral does not reclassify the operation as
+read-only or remove it from the execution plan.
+
+When execution reaches an admitted mutation, it executes once in authored order,
+with or without tree assistance. It must not reuse a simulated preflight result.
+For deferred nodes, observation divergence is `not_applicable`, not a mismatch
+against an invented planned mutation result. Ordinary runtime failures and
+condition/gate semantics still apply; deferral is not a promise of success.
+
+`plan`, `review`, `explain`, and `next` retain the check verdict's completeness
+and unknown boundaries. An independent later false guard may block execution;
+an invocation barrier after deferred state may leave relevant guards unevaluated.
+
 ## Planned fan-out node contract
 
 If the product later adds bounded `for_each` on `run`, the shared tree should preserve that declared fan-out as one step-level structural node rather than flattening it into invisible repeated execution.
@@ -4125,6 +4149,35 @@ Why this matters:
 - the workflow contract answers what to check and in what order;
 - guard barriers must remain attributable to the later step sequences they protect;
 - `plan` and `explain` depend on a decision model that still reflects block boundaries rather than only a flat verdict list.
+
+## Top-level state deferral
+
+After state-order validation, `check` may continue past top-level `state_set`
+and `state_delete` steps to later independent read-only steps and guards. These
+mutations remain `effectful`; preflight records `status: deferred`, not success
+or a simulated write. It must not mutate storage, evaluate mutation outcomes,
+produce mutation outputs/registers, or create reusable mutation observations.
+Step conditions and gates are evaluated first: false conditions skip the step,
+failed gates block it, and unknown admission stops analysis conservatively.
+
+Deferral is not available inside nested invocation analysis (`_nested_analysis`
+internally). After a deferred state mutation, a reached `run` or `for_each`
+is an analysis barrier with reason `state_deferral_invocation_barrier`.
+Later profile switches cannot resume analysis beyond that barrier. This is not
+a new authoring ban on invocations or loops; relevant unevaluated guards keep
+the verdict unknown rather than receiving guessed truth values.
+
+Caller/child access streams are not flattened for storage-order validation.
+Individual child validation remains, but cross-invocation state guarantees and
+cross-iteration loop ordering are explicitly deferred. Neither validation nor
+successful preflight is a proof of state safety across an entire composed run
+or across future runs. The existing normative fragment restriction is unchanged;
+its known implementation drift is not resolved by this rule.
+
+CLI summaries preserve `allowed_state`, `analysis_complete`, `incomplete_reasons`,
+and `unevaluated_relevant_guards`. The convenience boolean `allowed: false`
+does not distinguish blocked from unknown; callers must inspect `allowed_state`.
+`missing_facts` must not be inferred merely from unevaluated expression text.
 
 ## CHECK-MODE-004 — Relevant guard coverage is part of the contract
 
@@ -4760,7 +4813,7 @@ This creates an avoidable gap between:
 - The interpreter is part of `check`, not a hidden `execute` variant.
 - The interpreter may evaluate only `read_only` and `analysis_safe` steps.
 - The interpreter may derive step-local knowledge and feed that knowledge back into guard coverage.
-- The interpreter must stop before any effectful business step.
+- The interpreter must not execute effectful business steps. Top-level state mutations may be deferred as specified below; other effectful steps retain their conservative analysis boundary.
 - The interpreter must preserve the same honesty rules as `check` for `allowed`, `blocked`, and `unknown` verdicts.
 
 ## Scope boundary
@@ -4779,8 +4832,7 @@ Allowed step kinds and capabilities:
 Disallowed step kinds and capabilities:
 
 - effectful connector actions;
-- `state_set`;
-- `state_delete`;
+- execution or simulation of `state_set` and `state_delete` (top-level deferral is allowed without interpreting their mutation payloads);
 - any step whose inputs depend on unknown values;
 - any branch whose condition truth value is not yet known;
 - any nested run that requires effectful execution or unknown step-local data.
@@ -4893,14 +4945,15 @@ Builtin payload-shaping steps such as `value`, `result`, and `publish` should cl
 - Materialize `register` outputs for successful read-only steps.
 - Evaluate `if` only from currently available knowledge.
 - Skip branches whose `if` evaluates to `false`.
-- Halt the current analyzable path when the next required step is effectful, unknown, or not yet computable.
+- Defer eligible top-level state mutations after evaluating conditions and gates; keep them effectful, without outputs, registers, observations, or reusable results.
+- Halt the current analyzable path when the next required step is otherwise effectful, unknown, or not yet computable.
 - Preserve all knowledge collected before the halt.
 
 ## Stop model
 
 The interpreter must stop a path when it encounters:
 
-- an effectful step;
+- an effectful step other than an eligible deferred top-level state mutation;
 - an unknown step classification;
 - an unresolved step argument;
 - an `if` condition that depends on unknown data;
@@ -4908,6 +4961,13 @@ The interpreter must stop a path when it encounters:
 - a nested run that is not preflight-analyzable.
 
 Each stop must emit a machine-readable reason and the exact blocked step or branch.
+
+After top-level state deferral, later independent guards and read-only steps may
+still be analyzed. A reached named invocation or loop instead halts with
+`state_deferral_invocation_barrier`, and subsequent profile switches must not
+resume that halted path. Nested analysis never defers state mutation. This
+bounded continuation neither simulates state nor proves caller/child or
+cross-iteration storage order; those guarantees remain deferred.
 
 ## Integration with `check`
 
@@ -5296,7 +5356,43 @@ state_delete: state.task_memory[inputs.task_key].branch
 - The initial model should not rename this capability into a larger semantic system before the runtime actually owns those broader concerns.
 - The initial model should treat runtime state as persistent handoff memory across runs, not as a second per-run scratch surface beside step registers.
 - State writes and deletes belong to the top-level workflow authoring surface rather than to include fragments or run-invoked fragments.
-- Within one workflow, a logical state role should be written or deleted only after the final read of that same role.
+- Within one workflow, an actual state storage file must be written or deleted only after its final read, regardless of logical role, declared state name, profile, key, or field.
+
+## Validation stages and storage identity
+
+Unbound authoring validation retains the role-wide final-read rule and reports
+`validation.workflow.state_role.write_before_last_read`. Once bindings are
+available, comparison uses actual storage identity in each access context, not
+role equality. The same role can therefore write one file and later read a
+different file after a context switch without violating this rule.
+
+Relative paths retain their runtime access-context resolution. Already absolute
+locations, including locations resolved by playbook activation, remain absolute;
+validation does not introduce a new global path base. Normalized paths, symlink
+aliases, and existing hardlinks to the same file count as the same storage.
+Profile names or different declaration names do not separate aliases.
+
+`validation.workflow.state_storage.write_before_last_read` reports a proven
+write/delete before a later read of the same actual file.
+`validation.workflow.state_storage.identity_unresolved` is conservative early
+rejection of a relevant write/later-read pair whose storage identity cannot be
+established without execution or observations, including differing access
+contexts across modes. It is not a proven ordering violation. Known-disjoint
+storage, read-only access, and read-before-write order are not rejected merely
+because some context is uncertain.
+
+Reads within a mutating step precede its mutation. Validation examines authored
+order within each validated workflow before observations or effects. Named
+children are validated individually, not flattened into the caller's access
+stream. Cross-invocation guarantees and cross-iteration analysis are explicitly
+deferred, with no new ban on loop mutation and no claim of full composed-run or
+cross-run safety proof.
+
+Top-level preflight may defer validated state mutations and continue to later
+independent guards without mutating or simulating storage. Nested analysis does
+not defer them; a reached invocation or loop after deferral is an analysis barrier.
+See `check-semantics.md` and `preflight-step-interpreter.md` for that boundary and
+`lifecycle.md` for retention and non-reuse of deferred nodes during planning and execution.
 
 <!-- source: model/runtime/guard-evaluation.md -->
 
@@ -7650,6 +7746,41 @@ Exploratory internal-model discussion lives in `meta/model/runtime/check-analysi
 
 The purpose of this document is to preserve concrete checks that future implementation and test work should validate.
 
+## State Deferral Coverage
+
+`tests/test_check_state_deferral.py` verifies top-level set/delete deferral without
+file changes, continued independent guards, and conditions/gates evaluated before
+deferral. A false later guard blocks, while unknown admission or unavailable
+read-only data preserves an incomplete verdict.
+
+It verifies retained plan nodes (`preflight.status: deferred`, `not_reusable`,
+null `planned_probe_result`, no mutation outputs), once-only ordered execution
+with and without a tree, and `divergence_status: not_applicable` for deferred nodes.
+Nested analysis does not defer. Named calls and loops after deferred state halt
+with `state_deferral_invocation_barrier`, across block boundaries; profile switches
+cannot resume the halt. CLI summaries preserve the unknown/completeness fields
+without treating unevaluated expressions as `missing_facts`.
+
+The analysis-mode matrix covers `check`, `plan`, `review`, and `explain`, including
+`next` eligibility from the retained result. Bound validation snippets separately
+verify alias ordering and the validity of a workflow containing independent guards
+after mutations. They do not execute check or prove its output. Cross-invocation
+and cross-iteration guarantees remain open verification gaps, as recorded in `state.md`.
+
+## Discovery Verification Scope
+
+Readiness verification covers `ordo-help features`, `ordo-help overview`,
+`ordo-help describe command-line.ordo-playbook`, and the four state describe
+surfaces listed in `state.md`. Use the checklist in
+`meta/requirements/runtime/help-discovery.md` to check definitions, neighboring
+mechanisms, unknown versus blocked boundaries, readable text, and matching JSON
+contracts.
+
+State bundles provide an independent-guard example and a negative alias example
+with explicit verification scope. They do not verify CLI invocation or summary
+behavior. `tests/test_check_state_deferral.py` covers CLI summary behavior;
+validation-only snippet coverage must not be presented as that runtime evidence.
+
 ## HYP-CHECK-001 — Incomplete relevant guard coverage must block optimistic approval
 
 Related normative rules:
@@ -7920,14 +8051,16 @@ A change that widens, narrows, renames, removes, or reclassifies a covered runti
 
 The requirements in `meta/requirements/runtime/state.md` and model in
 `meta/model/runtime/state.md` remain authoritative: state is cross-run memory,
-not per-run scratch storage, and writes or deletes of a logical state role belong
-after its final read. This verification note does not narrow that contract.
+not per-run scratch storage, and writes or deletes of an actual state storage
+file belong after its final read, regardless of roles or profiles. Unbound
+authoring retains the logical-role rule; bound validation uses actual storage
+identity in each access context. This verification note does not narrow that contract.
 
 ## Authored-Order Coverage
 
 `tests/test_state_role_write_order.py` verifies detection of later reads across
 expression-bearing step and guard surfaces, referenced `let` bindings, mutation
-key expressions, and nested inline steps. Ordering is role-wide, not key-wide;
+key expressions, and nested inline steps. Unbound ordering is role-wide, not key-wide;
 reads within the mutating step precede its mutation. Unused bindings and literal
 text are not reads.
 
@@ -7935,21 +8068,87 @@ The tests cover early validation rejection in `check`, `review`, `plan`, `run`,
 and `explain`, and the resulting ineligible `next` candidate. Invalid authored
 order is rejected before observations, step execution, or state mutation.
 
-The published `workflow.step.state_set` and `workflow.step.state_delete` snippets
-illustrate reading before mutation and using a registered value afterward. Their
-snippet runner verifies authored validity, not executed state persistence.
+## Bound Storage Coverage
+
+`tests/test_state_storage_write_order.py` covers cross-role aliases, normalized
+paths, symlinks, existing hardlinks, distinct files, read-first and same-step
+access, missing bindings/declarations, and structured location failures.
+`tests/test_state_storage_context.py` covers relative paths in static profile
+contexts, same-role access to distinct files, input/let-resolved switches,
+ignored switches, ambient control evaluation, and individual child validation.
+The mode matrix covers `check`, `review`, `plan`, `run`, and `explain`; rejected
+`next` candidates retain diagnostics and are ineligible without repeating checks.
+Rejection precedes probes, state-content reads, operations, and mutations.
+
+Proven violations use `validation.workflow.state_storage.write_before_last_read`.
+Relevant unresolved write/later-read pairs use
+`validation.workflow.state_storage.identity_unresolved`, explicitly not a proven
+violation. Tests distinguish that conservative early rejection from read-only,
+read-before-write, and known-disjoint access under uncertain contexts.
+
+## Help Verification
+
+The published `state`, `workflow.state_bindings`, `workflow.step.state_set`, and
+`workflow.step.state_delete` examples include `state_bundle` verification.
+The runner materializes existing world fixtures into temporary files, applies
+explicit role bindings, and runs bound semantic validation. The positive bundle
+reads through an alias before mutation, reuses the registered value afterward,
+and includes a later independent input guard. The negative bundle verifies the
+exact proven same-file diagnostic for a later read through another role/key.
+These bundles cover fixed-file bound aliases without simulating execution.
+
+Ordinary snippets still verify unbound authored validity; excerpts verify source
+fidelity. Bundles do not verify check output, persistence effects, profile-relative
+contexts, or symlink/hardlink fixtures. Those supported runtime behaviors remain
+covered by runtime tests, not falsely attributed to the snippet runner. No such
+unsupported fixture example is published as bundle-verified.
+
+Readiness verification covers `ordo-help describe state`,
+`ordo-help describe workflow.state_bindings`,
+`ordo-help describe workflow.step.state_set`, and
+`ordo-help describe workflow.step.state_delete`, using the checklist in
+`meta/requirements/runtime/help-discovery.md`. Check the distinction between
+durable state and registers, binding and mutation, staged diagnostics, and
+larger intended-use fragments versus small syntax examples. Text, JSON, and
+`ordo-help features` must communicate consistent ordering and top-level deferral
+boundaries. Bundle syntax separates teaching-world bindings from authored text.
+`tests/test_check_state_deferral.py` covers deferral execution behavior; the
+validation-only bundle label does not establish it.
+
+## Fragment Contract Drift
+
+The normative restriction on mutation inside included or runtime-invoked
+fragments applies. Include restrictions are published and enforced.
+The bound `run` target tests allow state mutation in loaded child workflows with
+individual child validation. This is a code/meta drift signal where
+such children are runtime-invoked fragments, not approval to relax the fragment
+contract. Reconciliation remains open; this verification note does not relax
+fragment semantics or include restrictions.
+
+## Cross-Invocation Verification Gap
+
+Caller and child state-access streams are not flattened. Individual child
+validation does not prove that a caller mutation precedes no child read, or that
+a child mutation precedes no later caller/sibling read of the same storage.
+These cross-invocation guarantees are not established by individual validation.
+The top-level preflight invocation barrier after deferred state is conservative
+analysis behavior, not a complete cross-invocation validator or execution ban.
+Successful validation/check must not be described as full composed-run or
+cross-run state-safety proof.
 
 ## Cross-Iteration Verification Gap
 
-Cross-iteration state-order validation remains unresolved. The
-authored-order validator visits an inline loop body once; it does not model a
-write at the end of one iteration preceding a read in the next iteration. A body
+Cross-iteration state-order validation remains unresolved. The authored-order
+validator visits an inline loop body once; it does not model a write at the end
+of one iteration preceding a read in the next iteration. A body
 that reads a role and then mutates it can therefore pass authored-order validation
 even when repeated execution raises a cross-iteration ordering concern.
 
 This is a known verification gap, not permission to use state as loop-local
-scratch storage or a redefinition of the final-read contract. This gap does not establish a
-ban on writes in loops or change preflight or runtime traversal.
+scratch storage or a redefinition of the final-read contract. It does not establish
+a general ban on writes in loops. Top-level preflight continuation is bounded by the
+invocation barrier described in `check-semantics.md`; it does not analyze later
+iterations or solve this gap.
 Cross-iteration validation and the relationship between preflight observations
 and state changed by earlier iterations require a separate semantic decision and
 cross-mode verification before this gap can be considered resolved.

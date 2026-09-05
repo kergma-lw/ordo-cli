@@ -10,6 +10,41 @@ Exploratory internal-model discussion lives in `meta/model/runtime/check-analysi
 
 The purpose of this document is to preserve concrete checks that future implementation and test work should validate.
 
+## State Deferral Coverage
+
+`tests/test_check_state_deferral.py` verifies top-level set/delete deferral without
+file changes, continued independent guards, and conditions/gates evaluated before
+deferral. A false later guard blocks, while unknown admission or unavailable
+read-only data preserves an incomplete verdict.
+
+It verifies retained plan nodes (`preflight.status: deferred`, `not_reusable`,
+null `planned_probe_result`, no mutation outputs), once-only ordered execution
+with and without a tree, and `divergence_status: not_applicable` for deferred nodes.
+Nested analysis does not defer. Named calls and loops after deferred state halt
+with `state_deferral_invocation_barrier`, across block boundaries; profile switches
+cannot resume the halt. CLI summaries preserve the unknown/completeness fields
+without treating unevaluated expressions as `missing_facts`.
+
+The analysis-mode matrix covers `check`, `plan`, `review`, and `explain`, including
+`next` eligibility from the retained result. Bound validation snippets separately
+verify alias ordering and the validity of a workflow containing independent guards
+after mutations. They do not execute check or prove its output. Cross-invocation
+and cross-iteration guarantees remain open verification gaps, as recorded in `state.md`.
+
+## Discovery Verification Scope
+
+Readiness verification covers `ordo-help features`, `ordo-help overview`,
+`ordo-help describe command-line.ordo-playbook`, and the four state describe
+surfaces listed in `state.md`. Use the checklist in
+`meta/requirements/runtime/help-discovery.md` to check definitions, neighboring
+mechanisms, unknown versus blocked boundaries, readable text, and matching JSON
+contracts.
+
+State bundles provide an independent-guard example and a negative alias example
+with explicit verification scope. They do not verify CLI invocation or summary
+behavior. `tests/test_check_state_deferral.py` covers CLI summary behavior;
+validation-only snippet coverage must not be presented as that runtime evidence.
+
 ## HYP-CHECK-001 — Incomplete relevant guard coverage must block optimistic approval
 
 Related normative rules:

@@ -392,11 +392,15 @@
       "appropriate_when": [
         "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
         "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
-        "Write or delete a logical state role only after its final read; use value + register for data passed between steps in one run."
+        "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
+        "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context: aliases count as one file, while the same role may access different files and be valid.",
+        "Bound validation reports state_storage.write_before_last_read for proven violations, or state_storage.identity_unresolved for conservative early rejection of relevant uncertain write/later-read pairs, not a proven violation. Both codes have the validation.workflow. prefix.",
+        "Top-level check defers effectful state mutations after conditions and gates, then continues to independent guards without mutation, simulation, outputs, registers, or reuse. Plan retains the nodes; run executes admitted mutations once in order."
       ],
       "inappropriate_when": [
         "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",
-        "State is being used as a vague catch-all context channel instead of a declared bound storage surface."
+        "State is being used as a vague catch-all context channel instead of a declared bound storage surface.",
+        "Nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, which profiles cannot resume. Cross-invocation and cross-iteration guarantees remain deferred."
       ],
       "inspect_next": [
         {
@@ -461,6 +465,8 @@
         ],
         "runtime_rules": [
           "write_after_last_read",
+          "bound_storage_write_after_last_read",
+          "relevant_storage_identity_required",
           "bound_role_required",
           "non_null_scalar_key_required",
           "declared_location_required"

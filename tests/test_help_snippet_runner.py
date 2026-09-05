@@ -1,9 +1,44 @@
 import unittest
+from unittest.mock import patch
 
 from ordo.runtime.help_snippet_runner import verify_help_snippet
 
 
 class HelpSnippetRunnerTest(unittest.TestCase):
+    def test_state_bundle_checks_real_bound_identity_without_execution(self) -> None:
+        from ordo.model.help_snippets import STATE_BUNDLE_EXAMPLES
+
+        for example in STATE_BUNDLE_EXAMPLES:
+            with self.subTest(example=example["name"]), patch(
+                "subprocess.run", side_effect=AssertionError("unexpected external execution")
+            ), patch(
+                "ordo.runtime.local_expression_engine.core.read_state_document",
+                side_effect=AssertionError("unexpected state-content observation"),
+            ):
+                result = verify_help_snippet(
+                    snippet=example["yaml"], world="default", insertion_mode="state_bundle", target="state",
+                )
+            self.assertEqual(result.status, example["verification"]["expected_status"])
+
+    def test_state_bundle_distinct_files_do_not_alias(self) -> None:
+        from ordo.model.help_snippets import STATE_BUNDLE_EXAMPLES
+
+        snippet = STATE_BUNDLE_EXAMPLES[1]["yaml"].replace("alias: shared_state", "alias: common_state").replace(
+            "expected_diagnostic_codes:\n  - validation.workflow.state_storage.write_before_last_read",
+            "expected_diagnostic_codes: []",
+        )
+        result = verify_help_snippet(snippet=snippet, world="default", insertion_mode="state_bundle", target="state")
+        self.assertEqual(result.status, "ok")
+
+    def test_state_bundle_rejects_wrong_diagnostic_expectation(self) -> None:
+        from ordo.model.help_snippets import STATE_BUNDLE_EXAMPLES
+
+        with self.assertRaisesRegex(ValueError, "diagnostic mismatch"):
+            verify_help_snippet(
+                snippet=STATE_BUNDLE_EXAMPLES[1]["yaml"].replace("state_storage.write_before_last_read", "state_storage.identity_unresolved"),
+                world="default", insertion_mode="state_bundle", target="state",
+            )
+
     def test_runner_verifies_expression_value_snippet_in_named_world(self) -> None:
         result = verify_help_snippet(
             snippet='state.shared_state["active_profile"]',

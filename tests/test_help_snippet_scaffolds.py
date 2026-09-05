@@ -13,7 +13,7 @@ from ordo.runtime.help_snippet_scaffolds import (
 
 class HelpSnippetScaffoldTest(unittest.TestCase):
     def test_insertion_contracts_publish_supported_targets(self) -> None:
-        self.assertEqual(set(INSERTION_CONTRACTS.keys()), {"expression_value", "step_field", "step_fragment", "workflow_fragment", "routine_bundle"})
+        self.assertEqual(set(INSERTION_CONTRACTS.keys()), {"expression_value", "step_field", "step_fragment", "workflow_fragment", "routine_bundle", "state_bundle"})
         self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_field"].supported_targets)
         self.assertIn("state", INSERTION_CONTRACTS["expression_value"].supported_targets)
         self.assertIn("workflow.step.if", INSERTION_CONTRACTS["step_fragment"].supported_targets)

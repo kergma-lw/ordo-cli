@@ -30,7 +30,8 @@
       "do_not_use_for": [
         "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-rules surfaces.",
         "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
-        "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure."
+        "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure.",
+        "Assuming nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, and profile switches cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred."
       ],
       "examples": [
         "ordo-playbook workflows list",
@@ -173,7 +174,9 @@
       "use_when": [
         "You need to discover which named workflows the current playbook publishes before choosing one.",
         "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
-        "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook."
+        "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
+        "Inspect check's allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards: allowed false may mean unknown rather than blocked, and missing_facts is not inferred from unevaluated expressions.",
+        "Check may defer top-level state mutations after conditions and gates to inspect later independent guards without simulating writes. Plan keeps non-reusable nodes; run executes admitted mutations once in order."
       ]
     }
   ],

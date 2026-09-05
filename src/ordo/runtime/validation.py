@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONObject, JSONValue, authored_string_style
 from ordo.model.profile_contract import PROFILE_CONTRACT
+from ordo.model.profile import Profile
 from ordo.model.runtime import RuntimeStatus
-from ordo.model.workflow import GATE_REGISTER_SPLIT_RECOMMENDATION, StepBlock, Workflow
+from ordo.model.workflow import GATE_REGISTER_SPLIT_RECOMMENDATION, Step, StepBlock, Workflow
 from ordo.routines import (
     ROUTINE_ENV_REFERENCE_PATTERN,
     ROUTINE_REFERENCE_PREFIX,
@@ -38,10 +39,15 @@ from .local_expressions import (
     parse_value_local_expression,
     validate_parsed_local_expression,
     validate_parsed_local_expression_for_workflow,
+    resolve_workflow_let_reference_node,
+    resolve_condition_value,
 )
 from .fragment_runs import build_run_target_workflow, load_run_target_payload
 from .loading import LoadError, load_yaml_document
 from .state_paths import StatePathParseError, parse_state_path
+from .state import RuntimeStateError, RuntimeStateRegistry
+from .profiles import apply_runtime_profile_switch, should_ignore_runtime_profile_switch
+from .value_resolution import ValueResolutionError, resolve_runtime_value
 from .local_expression_engine.core import (
     AdapterBindingNode,
     AdapterInvocationNode,
@@ -131,7 +137,7 @@ def validate_profile_text(text: str, *, source: str = "<memory>") -> ValidationR
     return validate_profile_document(payload, source=source)
 
 
-def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") -> ValidationReport:
+def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>", state_role_order: bool = True) -> ValidationReport:
     """Validate canonical JSON-shaped workflow data."""
 
     diagnostics: list[Diagnostic] = []
@@ -151,7 +157,8 @@ def validate_workflow_document(payload: JSONValue, *, source: str = "<memory>") 
     diagnostics.extend(_require_object_field(payload, "state_needs", source=source, required=False))
     diagnostics.extend(_validate_workflow_blocks(payload, source=source, let_bindings=payload.get("let") if isinstance(payload.get("let"), dict) else {}))
     diagnostics.extend(_validate_declared_workflow_input_references(payload, source=source))
-    diagnostics.extend(_validate_state_role_write_order(payload, source=source))
+    if state_role_order:
+        diagnostics.extend(_validate_state_role_write_order(payload, source=source))
 
     return _report("workflow", diagnostics)
 
@@ -594,7 +601,7 @@ def _collect_input_references_from_state_path_text(value: str) -> set[tuple[str,
     return _collect_value_input_references(key_expression.value.root)
 
 
-def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> list[Diagnostic]:
+def _collect_state_access_events(payload: JSONObject, *, split_read_surfaces: bool = False) -> list[tuple[int, str, str, tuple[str, ...]]]:
     blocks = payload.get("blocks")
     if not isinstance(blocks, list):
         return []
@@ -628,8 +635,10 @@ def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> lis
         for step_index, step in enumerate(steps):
             step_path = path + (str(step_index),)
             if isinstance(step, dict):
-                for role in sorted(_collect_state_roles_from_step_item(step, expand_let=expand_let)):
-                    events.append((position, role, "read", step_path))
+                surfaces = [(step_path + (field,), {field: value}) for field, value in step.items()] if split_read_surfaces else [(step_path, step)]
+                for read_path, surface in surfaces:
+                    for role in sorted(_collect_state_roles_from_step_item(surface, expand_let=expand_let)):
+                        events.append((position, role, "read", read_path))
                 target_role = _state_target_role_from_step_item(step)
                 if target_role is not None:
                     events.append((position, target_role, "write", step_path))
@@ -643,13 +652,19 @@ def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> lis
         if isinstance(block.get("guards"), list):
             for guard_index, guard in enumerate(block["guards"]):
                 for role in sorted(_collect_state_roles_from_guard_item(guard, expand_let=expand_let)):
-                    events.append((position, role, "read", ("blocks", str(block_index), "guards", str(guard_index))))
+                    guard_path = ("blocks", str(block_index), "guards", str(guard_index))
+                    events.append((position, role, "read", guard_path + ("with",) if split_read_surfaces and isinstance(guard, dict) else guard_path))
                 position += 1
             continue
         if not isinstance(block.get("steps"), list):
             continue
         collect_steps(block["steps"], ("blocks", str(block_index), "steps"))
 
+    return events
+
+
+def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> list[Diagnostic]:
+    events = _collect_state_access_events(payload)
     last_reads: dict[str, int] = {}
     for event_index, role, kind, _ in events:
         if kind == "read":
@@ -672,6 +687,267 @@ def _validate_state_role_write_order(payload: JSONObject, *, source: str) -> lis
             )
         )
     return diagnostics
+
+
+@dataclass(slots=True)
+class _StateStorageAccess:
+    """One access in the current workflow's authored order."""
+
+    position: int
+    role: str
+    kind: str
+    path: tuple[str, ...]
+    identities: set[Path] | None
+    context_reason: JSONObject
+
+
+def _validate_state_storage_write_order(
+    workflow: Workflow, *, source: str, base_dir: str | Path | None = None,
+    available_profiles: dict[str, Profile] | None = None,
+    profile_working_directories: dict[str, Path | None] | None = None,
+    initial_context_unknown: bool = False,
+    initial_inputs_known: bool = True,
+) -> list[Diagnostic]:
+    payload = workflow.to_contract()
+    events = _collect_state_access_events(payload, split_read_surfaces=True)
+    if not events:
+        return []
+    try:
+        registry = RuntimeStateRegistry.from_workflow(workflow, base_dir=base_dir)
+    except RuntimeStateError as exc:
+        return [exc.to_diagnostic()]
+
+    ambient = Path.cwd()
+    initial_base = ambient if base_dir is None else Path(base_dir)
+    contexts: dict[tuple[str, ...], tuple[Path | None, JSONObject]] = {}
+    accesses: list[_StateStorageAccess] = []
+    diagnostics: list[Diagnostic] = []
+
+    def collect_contexts(
+        steps: list[JSONValue], path: tuple[str, ...], current: Workflow,
+        current_base: Path | None, reason: JSONObject, inputs_known: bool,
+    ) -> tuple[Workflow, Path | None, JSONObject, bool]:
+        for index, step in enumerate(steps):
+            step_path = path + (str(index),)
+            contexts[step_path] = (current_base, reason)
+            raw_profile = step.get("profile_switch")
+            if step.get("uses") == "runtime.profile.use":
+                raw_profile = step.get("with", {}).get("profile")
+            if raw_profile is not None:
+                resolved_profile = _static_state_context_value(raw_profile, current, inputs_known=inputs_known)
+                profile_name = resolved_profile if isinstance(resolved_profile, str) else None
+                target = None if available_profiles is None else available_profiles.get(profile_name)
+                if target is not None and should_ignore_runtime_profile_switch(current, target_profile_name=profile_name):
+                    continue
+                condition = _static_state_context_value(step["if"], current, inputs_known=inputs_known, condition=True) if "if" in step else True
+                if condition is False:
+                    continue
+                gate = _static_state_context_value(_strip_gate_on_fail(step)["gate"], current, inputs_known=inputs_known, condition=True) if "gate" in step else True
+                if target is None or condition is not True or gate is not True:
+                    fixed_ambient = current_base == ambient and all(directory is None for directory in (profile_working_directories or {}).values())
+                    current_base = ambient if fixed_ambient else None
+                    inputs_known = False
+                    reason = {
+                        "reason": "profile_switch_context_unresolved", "context_path": list(step_path),
+                        "profile_switch": raw_profile, "condition": step.get("if"), "gate": step.get("gate"),
+                    }
+                else:
+                    applied = apply_runtime_profile_switch(current, target)
+                    current = applied.workflow or current
+                    directory = None if profile_working_directories is None else profile_working_directories.get(profile_name)
+                    current_base = ambient if directory is None else directory
+                    reason = {}
+            elif isinstance(step.get("steps"), list):
+                # Walk the authored body once, never simulate fan-out iterations.
+                child, child_base, child_reason, child_known = collect_contexts(
+                    step["steps"], step_path + ("steps",), replace(current, profile=None, let_bindings={}), current_base, reason, False,
+                )
+                if current.profile is None:
+                    if any(field in step for field in ("if", "gate", "for_each")) and (child_base != current_base or child_reason != reason):
+                        current_base = None
+                        inputs_known = False
+                        reason = {"reason": "invocation_context_unresolved", "context_path": list(step_path)}
+                    else:
+                        current, current_base, reason, inputs_known = child, child_base, child_reason, child_known
+            elif "run" in step and current.profile is None:
+                # Named invocation bodies are checked separately, not expanded into this scope.
+                current_base = None
+                inputs_known = False
+                reason = {"reason": "invocation_context_unresolved", "context_path": list(step_path)}
+        return current, current_base, reason, inputs_known
+
+    current, current_base, reason, inputs_known = workflow, initial_base, {}, initial_inputs_known
+    if initial_context_unknown:
+        current_base = None
+        reason = {"reason": "invocation_entry_context_unresolved", "context_path": []}
+        inputs_known = False
+    for block_index, block in enumerate(payload.get("blocks", [])):
+        block_path = ("blocks", str(block_index))
+        if "guards" in block:
+            for index, _ in enumerate(block["guards"]):
+                contexts[block_path + ("guards", str(index))] = (current_base, reason)
+        elif "steps" in block:
+            current, current_base, reason, inputs_known = collect_contexts(
+                block["steps"], block_path + ("steps",), current, current_base, reason, inputs_known,
+            )
+
+    checked_roles: set[str] = set()
+    for _, role, _, path in events:
+        if role in checked_roles:
+            continue
+        checked_roles.add(role)
+        state_name = workflow.state_bindings.get(role)
+        if not isinstance(state_name, str) or not state_name:
+            diagnostics.append(_diagnostic(
+                "runtime.state.binding_missing", f"Workflow logical state role '{role}' is not bound",
+                path, source, role=role,
+            ))
+            continue
+        try:
+            registry.require(state_name)
+        except RuntimeStateError as exc:
+            diagnostics.append(exc.to_diagnostic(path=path))
+    if diagnostics:
+        return diagnostics
+
+    for position, role, kind, path in events:
+        surface = path[-1] if path not in contexts else ""
+        access_path = path[:-1] if surface else path
+        access_base, context_reason = contexts[access_path]
+        if surface in {"gate", "for_each", "profile_switch"}:
+            # Both modes resolve these controls outside their payload-CWD wrappers.
+            bases = {ambient}
+        elif surface in {"if", "with"}:
+            # Conditions and operation inputs have different evaluation sites across modes.
+            bases = {access_base, ambient}
+        else:
+            bases = {access_base}
+        raw_location = workflow.states[workflow.state_bindings[role]]
+        if Path(raw_location).is_absolute():
+            bases = {ambient}
+        if None in bases:
+            accesses.append(_StateStorageAccess(position, role, kind, access_path, None, context_reason))
+            continue
+        identities: set[Path] = set()
+        try:
+            for root in sorted(bases, key=str):
+                location = RuntimeStateRegistry.from_workflow(workflow, base_dir=root).require(workflow.state_bindings[role])
+                identities.add(location.path.resolve())
+        except (OSError, RuntimeError, ValueError) as exc:
+            diagnostics.append(_diagnostic(
+                "runtime.state.location_invalid", "Runtime state storage path could not be resolved",
+                access_path, source, role=role, state=workflow.state_bindings[role], error=str(exc),
+            ))
+        if len(identities) > 1:
+            context_reason = {"reason": "access_context_differs_between_check_and_run", "context_path": list(path)}
+        accesses.append(_StateStorageAccess(position, role, kind, access_path, identities, context_reason))
+    if diagnostics:
+        return diagnostics
+    storage_by_inode: dict[tuple[int, int], Path] = {}
+    storage_by_path: dict[Path, Path] = {}
+    for access in accesses:
+        if access.identities is None:
+            continue
+        try:
+            for storage in sorted(access.identities, key=str):
+                if storage not in storage_by_path:
+                    try:
+                        metadata = storage.stat()
+                    except FileNotFoundError:
+                        representative = storage
+                    else:
+                        representative = storage_by_inode.setdefault((metadata.st_dev, metadata.st_ino), storage)
+                    storage_by_path[storage] = representative
+            access.identities = {storage_by_path[storage] for storage in access.identities}
+        except (OSError, RuntimeError, ValueError) as exc:
+            diagnostics.append(_diagnostic(
+                "runtime.state.location_invalid", "Runtime state storage path could not be resolved",
+                access.path, source, role=access.role, state=workflow.state_bindings[access.role], error=str(exc),
+            ))
+    if diagnostics:
+        return diagnostics
+
+    for write in accesses:
+        if write.kind != "write":
+            continue
+        finding = None
+        for read in reversed(accesses):
+            if read.kind != "read" or read.position <= write.position:
+                continue
+            identities, read_identities = write.identities, read.identities
+            if identities is not None and read_identities is not None and identities.isdisjoint(read_identities):
+                continue
+            proven = identities is not None and read_identities is not None and len(identities) == len(read_identities) == 1
+            details = {
+                "state_role": write.role, "read_state_role": read.role,
+                "state": workflow.state_bindings[write.role], "read_state": workflow.state_bindings[read.role],
+                "read_path": list(read.path),
+            }
+            if proven:
+                details["storage_path"] = str(next(iter(identities)))
+            else:
+                details.update(write.context_reason or read.context_reason)
+                details["write_storage_candidates"] = None if identities is None else sorted(map(str, identities))
+                details["read_storage_candidates"] = None if read_identities is None else sorted(map(str, read_identities))
+            candidate = _diagnostic(
+                "validation.workflow.state_storage.write_before_last_read" if proven else "validation.workflow.state_storage.identity_unresolved",
+                "State writes and deletes are allowed only after the final read of the same resolved storage, regardless of logical role" if proven else
+                "Storage identity cannot be established before execution for a write and later read; this is not a proven ordering violation",
+                write.path, source, **details,
+            )
+            if proven:
+                finding = candidate
+                break
+            if finding is None:
+                finding = candidate
+        if finding is not None:
+            diagnostics.append(finding)
+    return diagnostics
+
+
+def _static_state_context_value(value: JSONValue, workflow: Workflow, *, inputs_known: bool, condition: bool = False) -> JSONValue:
+    """Resolve only observation-free literal/input expressions, using the runtime value resolver."""
+    expanding: set[str] = set()
+
+    def safe(node: ValueExpressionNode) -> bool:
+        if isinstance(node, LiteralNode):
+            return True
+        if isinstance(node, ReferenceNode):
+            if node.parts and node.parts[0] == "inputs":
+                return inputs_known
+            if not node.parts or node.parts[0] in expanding:
+                return False
+            expanding.add(node.parts[0])
+            try:
+                expanded = resolve_workflow_let_reference_node(node, workflow, context=LocalExpressionContext.STEP_CONDITION if condition else LocalExpressionContext.EMBEDDED_VALUE)
+                return expanded is not None and safe(expanded)
+            finally:
+                expanding.remove(node.parts[0])
+        if isinstance(node, BuiltinCallNode) and node.name == "format":
+            return all(safe(argument) for argument in node.arguments)
+        if isinstance(node, BinaryNode):
+            return safe(node.left) and safe(node.right)
+        if isinstance(node, UnaryNode):
+            return safe(node.operand)
+        return False
+
+    try:
+        if condition:
+            for _, expression in _iter_condition_leaf_expressions(value):
+                parsed = parse_condition_local_expression(expression, context=LocalExpressionContext.STEP_CONDITION)
+                if not safe(parsed.value.root):
+                    return None
+            return resolve_condition_value(value, workflow, context=LocalExpressionContext.STEP_CONDITION)
+        if not isinstance(value, str):
+            return None
+        mode = _runtime_value_expression_mode(value, allow_bare_strings=True)
+        if mode is not None:
+            parsed = parse_value_local_expression(value, allow_boolean_composition=True) if mode == "plain" else parse_embedded_value_local_expression(value, allow_boolean_composition=True)
+            if parsed is None or not safe(parsed.value.root):
+                return None
+        return resolve_runtime_value(value, workflow, allow_boolean_composition=True)
+    except (ValueResolutionError, ConditionShapeError, *LOCAL_EXPRESSION_PARSE_ERRORS):
+        return None
 
 
 def _validate_block_list(value: JSONValue | None, *, source: str, let_bindings: JSONObject) -> list[Diagnostic]:
@@ -857,14 +1133,23 @@ def validate_workflow_semantics(
     *,
     source: str | None = None,
     routine_registry: RoutineRegistry | None = None,
+    state_base_dir: str | Path | None = None,
+    available_profiles: dict[str, Profile] | None = None,
+    profile_working_directories: dict[str, Path | None] | None = None,
 ) -> ValidationReport:
     """Validate shared post-assembly workflow semantics for all runtime entrypoints."""
 
     effective_source = source or workflow.source_path or "<memory>"
-    document_report = validate_workflow_document(workflow.to_contract(), source=effective_source)
+    document_report = validate_workflow_document(workflow.to_contract(), source=effective_source, state_role_order=not bool(workflow.state_bindings))
     diagnostics = list(document_report.diagnostics)
     if document_report.ok:
-        diagnostics.extend(validate_workflow_run_target_inputs(workflow))
+        diagnostics.extend(_validate_state_storage_write_order(
+            workflow, source=effective_source, base_dir=state_base_dir,
+            available_profiles=available_profiles, profile_working_directories=profile_working_directories,
+        ))
+        diagnostics.extend(validate_workflow_run_target_inputs(
+            workflow, available_profiles=available_profiles, profile_working_directories=profile_working_directories,
+        ))
         effective_registry = routine_registry
         if effective_registry is None and workflow_uses_routine(workflow):
             try:
@@ -877,11 +1162,33 @@ def validate_workflow_semantics(
     return _report("workflow", diagnostics)
 
 
-def validate_workflow_run_target_inputs(workflow: Workflow) -> tuple[Diagnostic, ...]:
-    """Validate undeclared root-input references across reusable run targets."""
+def _iter_workflow_steps(workflow: Workflow) -> Iterator[tuple[tuple[str, ...], Step]]:
+    """Visit inline bodies once; named targets are traversed separately with their bindings."""
+
+    def visit(steps: tuple[Step, ...], path: tuple[str, ...]):
+        for index, step in enumerate(steps):
+            step_path = path + (str(index),)
+            yield step_path, step
+            if step.steps is not None:
+                yield from visit(step.steps, step_path + ("steps",))
+
+    for block_index, block in enumerate(workflow.blocks):
+        if isinstance(block, StepBlock):
+            yield from visit(block.steps, ("blocks", str(block_index), "steps"))
+
+
+def validate_workflow_run_target_inputs(
+    workflow: Workflow, *, available_profiles: dict[str, Profile] | None = None,
+    profile_working_directories: dict[str, Path | None] | None = None,
+) -> tuple[Diagnostic, ...]:
+    """Validate reusable targets independently, including their local bound storage ordering."""
 
     diagnostics: list[Diagnostic] = []
-    _validate_workflow_run_target_inputs_recursive(workflow, diagnostics=diagnostics, visited_paths=set())
+    _validate_workflow_run_target_inputs_recursive(
+        workflow, diagnostics=diagnostics,
+        active_paths=frozenset() if workflow.source_path is None else frozenset({str(Path(workflow.source_path).resolve())}),
+        available_profiles=available_profiles, profile_working_directories=profile_working_directories,
+    )
     return tuple(diagnostics)
 
 
@@ -889,24 +1196,41 @@ def _validate_workflow_run_target_inputs_recursive(
     workflow: Workflow,
     *,
     diagnostics: list[Diagnostic],
-    visited_paths: set[str],
+    active_paths: frozenset[str],
+    available_profiles: dict[str, Profile] | None,
+    profile_working_directories: dict[str, Path | None] | None,
 ) -> None:
-    for block_index, block in enumerate(workflow.blocks):
-        if not isinstance(block, StepBlock):
+    for step_path, step in _iter_workflow_steps(workflow):
+        if step.run is None or step.resolved_run_path is None:
             continue
-        for step_index, step in enumerate(block.steps):
-            if step.run is None or step.resolved_run_path is None:
-                continue
-            run_path = str(Path(step.resolved_run_path).resolve())
-            if run_path in visited_paths:
-                continue
-            visited_paths.add(run_path)
-            nested = _load_run_target_workflow_for_validation(step=step, workflow=workflow, block_index=block_index, step_index=step_index)
-            if isinstance(nested, Diagnostic):
-                diagnostics.append(nested)
-                continue
-            diagnostics.extend(validate_workflow_document(nested.to_contract(), source=nested.source_path or run_path).diagnostics)
-            _validate_workflow_run_target_inputs_recursive(nested, diagnostics=diagnostics, visited_paths=visited_paths)
+        run_path = str(Path(step.resolved_run_path).resolve())
+        if run_path in active_paths:
+            continue
+        nested = _load_run_target_workflow_for_validation(
+            step=step, workflow=workflow, block_index=int(step_path[1]), step_index=int(step_path[-1]),
+            node_path=step_path + ("run",),
+        )
+        if isinstance(nested, Diagnostic):
+            diagnostics.append(nested)
+            continue
+        report = validate_workflow_document(nested.to_contract(), source=nested.source_path or run_path, state_role_order=not bool(nested.state_bindings))
+        diagnostics.extend(report.diagnostics)
+        if report.ok and nested.state_bindings:
+            # Invocation inputs and inherited context are not specialized in this authoring pass.
+            nested_base = None
+            target_profile = None if available_profiles is None else available_profiles.get(nested.profile)
+            if target_profile is not None:
+                nested = apply_runtime_profile_switch(nested, target_profile).workflow or nested
+                nested_base = None if profile_working_directories is None else profile_working_directories.get(target_profile.name)
+            diagnostics.extend(_validate_state_storage_write_order(
+                nested, source=nested.source_path or run_path, base_dir=nested_base,
+                available_profiles=available_profiles, profile_working_directories=profile_working_directories,
+                initial_context_unknown=target_profile is None, initial_inputs_known=False,
+            ))
+        _validate_workflow_run_target_inputs_recursive(
+            nested, diagnostics=diagnostics, active_paths=active_paths | {run_path},
+            available_profiles=available_profiles, profile_working_directories=profile_working_directories,
+        )
 
 
 def _load_run_target_workflow_for_validation(
@@ -915,12 +1239,13 @@ def _load_run_target_workflow_for_validation(
     workflow: Workflow,
     block_index: int,
     step_index: int,
+    node_path: tuple[str, ...] | None = None,
 ) -> Workflow | Diagnostic:
     assert step.run is not None
     assert step.resolved_run_path is not None
     run_path = Path(step.resolved_run_path)
     launch_dir = Path(workflow.launch_dir) if workflow.launch_dir is not None else run_path.parent
-    node_path = ("blocks", str(block_index), "steps", str(step_index), "run")
+    node_path = node_path or ("blocks", str(block_index), "steps", str(step_index), "run")
     payload = load_run_target_payload(
         run_path=run_path,
         launch_dir=launch_dir,

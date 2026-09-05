@@ -171,7 +171,7 @@ class StateRoleWriteOrderTest(unittest.TestCase):
                     with patch("subprocess.run", side_effect=AssertionError("unexpected external call")) as subprocess_run:
                         result = mode(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER, **kwargs)
                     self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
-                    self.assertIn(CODE, [item.code for item in result.diagnostics])
+                    self.assertIn("validation.workflow.state_storage.write_before_last_read", [item.code for item in result.diagnostics])
                     self.assertFalse(result.operation_results)
                     probe.assert_not_called()
                     executor.assert_not_called()
@@ -181,4 +181,4 @@ class StateRoleWriteOrderTest(unittest.TestCase):
                         with patch("ordo.runtime.resolution.get_default_connector_provider", return_value=STANDARD_CONNECTOR_PROVIDER), patch("subprocess.run", side_effect=AssertionError("unexpected external call")):
                             candidate = build_next_candidate(workflow="ordering", description=None, workflow_category=None, when=None, working_directory=None, runtime_result=result, runtime_workflow=workflow)
                         self.assertFalse(candidate.allowed)
-                        self.assertIn(CODE, [item.code for item in candidate.diagnostics])
+                        self.assertIn("validation.workflow.state_storage.write_before_last_read", [item.code for item in candidate.diagnostics])

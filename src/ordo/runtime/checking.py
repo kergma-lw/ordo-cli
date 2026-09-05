@@ -208,10 +208,11 @@ def check_workflow(
     profile_working_directories: dict[str, Path | None] | None = None,
     guard_probe: GuardProbe | None = None,
     connector_provider: ConnectorProvider | None = None,
+    _nested_analysis: bool = False,
 ) -> RuntimeResult:
     """Run check mode without executing effectful business steps."""
 
-    validation_report = validate_workflow_document(workflow.to_contract())
+    validation_report = validate_workflow_document(workflow.to_contract(), state_role_order=not bool(workflow.state_bindings))
     if not validation_report.ok:
         return RuntimeResult(
             mode=Mode.CHECK,
@@ -274,7 +275,12 @@ def check_workflow(
         return workflow_profile_activation
     effective_workflow, current_profile, current_profile_name, active_profile, active_overrides, workflow_profile_declared = workflow_profile_activation
 
-    semantic_report = validate_workflow_semantics(effective_workflow)
+    semantic_report = validate_workflow_semantics(
+        effective_workflow,
+        state_base_dir=None if profile_working_directories is None else profile_working_directories.get(current_profile_name),
+        available_profiles=available_profiles,
+        profile_working_directories=profile_working_directories,
+    )
     if not semantic_report.ok:
         return RuntimeResult(
             mode=Mode.CHECK,
@@ -315,6 +321,7 @@ def check_workflow(
         )
 
     analysis = _build_check_analysis_tree(
+        defer_state_writes=not _nested_analysis,
         workflow=effective_workflow,
         active_profile=active_profile,
         workflow_profile_declared=workflow_profile_declared,
@@ -495,6 +502,7 @@ def _build_check_analysis_tree(
     active_overrides,
     connector_provider: ConnectorProvider | None,
     guard_probe: GuardProbe | None,
+    defer_state_writes: bool = True,
 ) -> _CheckAnalysisTree | RuntimeResult:
     probe = guard_probe or _default_guard_probe(provider=connector_provider)
     diagnostics: list[Diagnostic] = []
@@ -520,6 +528,7 @@ def _build_check_analysis_tree(
         else profile_working_directories.get(current_profile_name)
     )
     halted = False
+    state_writes_deferred = False
     initial_resolution = resolve_workflow_references(
         effective_workflow,
         connector_provider=connector_provider,
@@ -606,6 +615,10 @@ def _build_check_analysis_tree(
                 halted = True
             continue
 
+        if halted and state_writes_deferred:
+            block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=bool(blockers), active_profile=current_profile_name))
+            continue
+
         if _is_static_profile_switch_block(declared_block):
             if halted and blockers:
                 block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
@@ -641,7 +654,7 @@ def _build_check_analysis_tree(
             )
             continue
 
-        run_expansions = _classify_run_step_block_for_check(declared_block, effective_workflow, block_index=block_index)
+        run_expansions = None if state_writes_deferred else _classify_run_step_block_for_check(declared_block, effective_workflow, block_index=block_index)
         if run_expansions is not None:
             if halted:
                 block_items.append(_pending_step_block_item_from_declared(block_index, declared_block, blocked=True, active_profile=current_profile_name))
@@ -692,10 +705,17 @@ def _build_check_analysis_tree(
                 halted = True
             continue
 
-        if _has_later_guard_block(effective_workflow, block_index=block_index) or any(step.gate is not None for step in declared_block.steps):
+        if (
+            _has_later_guard_block(effective_workflow, block_index=block_index)
+            or any(step.gate is not None for step in declared_block.steps)
+            or state_writes_deferred
+            or (defer_state_writes and not halted and any(step.state_set is not None or step.state_delete is not None for step in declared_block.steps))
+        ):
             interpreted_step_block = _interpret_step_block_for_check(
                 declared_block,
                 effective_workflow,
+                defer_state_writes=defer_state_writes and not halted,
+                state_writes_deferred=state_writes_deferred,
                 block_index=block_index,
                 current_profile_name=current_profile_name,
                 current_profile=current_profile,
@@ -709,6 +729,7 @@ def _build_check_analysis_tree(
                 authored_probe_intents=_collect_authored_probe_intents(guard_details),
             )
             if interpreted_step_block is not None:
+                state_writes_deferred = bool(interpreted_step_block.get("state_writes_deferred", state_writes_deferred))
                 if interpreted_step_block.get("resolution_error") is not None:
                     return cast(RuntimeResult, interpreted_step_block["resolution_error"])
                 diagnostics.extend(interpreted_step_block["diagnostics"])
@@ -1181,6 +1202,8 @@ def _interpret_step_block_for_check(
     current_working_directory: Path | None,
     observed_probe_calls: list[dict[str, object]],
     authored_probe_intents: list[dict[str, object]],
+    defer_state_writes: bool = False,
+    state_writes_deferred: bool = False,
 ) -> dict[str, object] | None:
     resolved_block = _resolve_step_block(
         workflow,
@@ -1380,7 +1403,19 @@ def _interpret_step_block_for_check(
             break
 
         classification = classify_preflight_step(step, resolved_step)
-        if isinstance(resolved_step, ResolvedRunStep):
+        if defer_state_writes and step.for_each is None and (step.state_set is not None or step.state_delete is not None):
+            # Validated top-level ordering permits continuation, not simulated state or outputs.
+            state_writes_deferred = True
+            item = _structural_step_item(
+                block_index=block_index, step_index=step_index, step=step,
+                resolved_step=resolved_step, status="deferred",
+                condition_status="true" if step.if_ is not None else None,
+            )
+            item["gate_status"] = "passed" if step.gate is not None else None
+            step_items.append(item)
+            continue
+        invocation_barrier = state_writes_deferred and (isinstance(resolved_step, ResolvedRunStep) or step.for_each is not None)
+        if isinstance(resolved_step, ResolvedRunStep) and not invocation_barrier:
             run_expansions = _classify_run_step_block_for_check(StepBlock(steps=(step,)), effective_workflow, block_index=block_index)
             if run_expansions is not None:
                 expansion_outcome = _expand_run_step_block_for_check(
@@ -1657,7 +1692,7 @@ def _interpret_step_block_for_check(
             authored_probe_intents=authored_probe_intents,
         )
         halt = build_preflight_halt(
-            "effectful_step_encountered" if classification == "effectful" else "preflight_step_not_analyzable",
+            "state_deferral_invocation_barrier" if invocation_barrier else ("effectful_step_encountered" if classification == "effectful" else "preflight_step_not_analyzable"),
             step=step,
             details={
                 "block_index": block_index,
@@ -1689,7 +1724,7 @@ def _interpret_step_block_for_check(
             }
         )
         trailing_profile_switches = tuple(block.steps[step_index + 1 :])
-        if trailing_profile_switches and all(candidate.profile_switch is not None and candidate.if_ is None for candidate in trailing_profile_switches):
+        if not state_writes_deferred and trailing_profile_switches and all(candidate.profile_switch is not None and candidate.if_ is None for candidate in trailing_profile_switches):
             trailing_transition = _apply_static_profile_switch_block(
                 StepBlock(steps=trailing_profile_switches),
                 workflow=effective_workflow,
@@ -1724,10 +1759,11 @@ def _interpret_step_block_for_check(
                     )
         break
 
-    if not interpreted_steps and not skipped_steps and halt_item is None:
+    if not step_items and not interpreted_steps and not skipped_steps and halt_item is None:
         return None
 
     return {
+        "state_writes_deferred": state_writes_deferred,
         "diagnostics": diagnostics,
         "operation_results": operation_results,
         "incomplete_reasons": incomplete_reasons,
@@ -1831,6 +1867,7 @@ def _expand_run_step_block_for_check(
             break
         result = check_workflow(
             decision.workflow,
+            _nested_analysis=True,
             profile=effective_profile,
             available_profiles=available_profiles,
             profile_working_directories=profile_working_directories,

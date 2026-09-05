@@ -132,4 +132,40 @@ state_delete: state.task_memory[inputs.task_key].branch
 - The initial model should not rename this capability into a larger semantic system before the runtime actually owns those broader concerns.
 - The initial model should treat runtime state as persistent handoff memory across runs, not as a second per-run scratch surface beside step registers.
 - State writes and deletes belong to the top-level workflow authoring surface rather than to include fragments or run-invoked fragments.
-- Within one workflow, a logical state role should be written or deleted only after the final read of that same role.
+- Within one workflow, an actual state storage file must be written or deleted only after its final read, regardless of logical role, declared state name, profile, key, or field.
+
+## Validation stages and storage identity
+
+Unbound authoring validation retains the role-wide final-read rule and reports
+`validation.workflow.state_role.write_before_last_read`. Once bindings are
+available, comparison uses actual storage identity in each access context, not
+role equality. The same role can therefore write one file and later read a
+different file after a context switch without violating this rule.
+
+Relative paths retain their runtime access-context resolution. Already absolute
+locations, including locations resolved by playbook activation, remain absolute;
+validation does not introduce a new global path base. Normalized paths, symlink
+aliases, and existing hardlinks to the same file count as the same storage.
+Profile names or different declaration names do not separate aliases.
+
+`validation.workflow.state_storage.write_before_last_read` reports a proven
+write/delete before a later read of the same actual file.
+`validation.workflow.state_storage.identity_unresolved` is conservative early
+rejection of a relevant write/later-read pair whose storage identity cannot be
+established without execution or observations, including differing access
+contexts across modes. It is not a proven ordering violation. Known-disjoint
+storage, read-only access, and read-before-write order are not rejected merely
+because some context is uncertain.
+
+Reads within a mutating step precede its mutation. Validation examines authored
+order within each validated workflow before observations or effects. Named
+children are validated individually, not flattened into the caller's access
+stream. Cross-invocation guarantees and cross-iteration analysis are explicitly
+deferred, with no new ban on loop mutation and no claim of full composed-run or
+cross-run safety proof.
+
+Top-level preflight may defer validated state mutations and continue to later
+independent guards without mutating or simulating storage. Nested analysis does
+not defer them; a reached invocation or loop after deferral is an analysis barrier.
+See `check-semantics.md` and `preflight-step-interpreter.md` for that boundary and
+`lifecycle.md` for retention and non-reuse of deferred nodes during planning and execution.

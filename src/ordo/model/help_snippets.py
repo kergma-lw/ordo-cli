@@ -14,6 +14,7 @@ SUPPORTED_SNIPPET_FORMS = {
     "step_fragment",
     "workflow_fragment",
     "routine_bundle",
+    "state_bundle",
 }
 
 SUPPORTED_SNIPPET_VERIFICATION_KINDS = {
@@ -28,6 +29,7 @@ SUPPORTED_SNIPPET_INSERTION_MODES = {
     "step_fragment",
     "workflow_fragment",
     "routine_bundle",
+    "state_bundle",
 }
 
 
@@ -70,7 +72,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_read_before_write",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "With shared_state declared and bound, read the old profile before storing a profile for future runs; reuse the registered old value afterward.",
+                "summary": "Read the old profile before storing a profile for future runs; reuse the registered old value afterward, not another state alias. Verification checks unbound authored order only, not bound file identity or persistence.",
                 "yaml": '- name: read-profile\n  value: state.shared_state["active_profile"]\n  register: previous_profile\n- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review\n- name: report-previous-profile\n  publish:\n    previous_profile: step.previous_profile.outputs.value',
                 "verification": {
                     "kind": "runner_verified",
@@ -2483,7 +2485,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "workflow_state_bindings_shared_state_role",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "Bind one workflow state role to one declared playbook state location before reading and mutating durable state.",
+                "summary": "Show the existing binding example with a read in the mutation payload. Excerpt verification checks source fidelity only, not bound file identity, profile contexts, or persistence; distinct roles do not guarantee distinct files.",
                 "source_example": "examples.state-bindings",
                 "source_excerpt": {
                     "path": "examples/state-bindings.yaml",
@@ -2903,7 +2905,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_set_step_fragment_remembers_profile",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Read the previous profile before the role's final mutation, then store a profile for future runs. Reuse the registered value, not state, later in this run.",
+                "summary": "Read before writing the file for future runs, then reuse the registered value, not state through this or another alias. Verification checks unbound authored order only, not bound file identity, profile contexts, or persistence.",
                 "yaml": '- name: read-profile\n  value: state.shared_state["active_profile"]\n  register: previous_profile\n- name: remember-profile\n  state_set:\n    state.shared_state["active_profile"]: review\n- name: report-previous-profile\n  publish:\n    previous_profile: step.previous_profile.outputs.value',
                 "verification": {
                     "kind": "runner_verified",
@@ -2950,7 +2952,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_delete_step_fragment_forgets_branch",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Read the remembered branch before deleting it for future runs, then publish the registered value without rereading the mutated state role.",
+                "summary": "Read the remembered branch before deleting it for future runs, then publish the registered value without rereading the file through any role. Verification checks unbound authored order only, not bound file identity, profile contexts, or persistence.",
                 "yaml": '- name: read-branch\n  value: state.task_memory[inputs.issue_ref].branch\n  register: previous_branch\n- name: forget-branch\n  state_delete: state.task_memory[inputs.issue_ref].branch\n- name: report-previous-branch\n  publish:\n    previous_branch: step.previous_branch.outputs.value',
                 "verification": {
                     "kind": "runner_verified",
@@ -3152,6 +3154,78 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
         ],
     },
 }
+
+
+STATE_BUNDLE_EXAMPLES = [
+    {
+        "name": "bound_state_independent_guard_after_mutations",
+        "kind": "positive",
+        "form": "state_bundle",
+        "summary": "Bind two roles to one world file, read before mutations, then check an independent input guard. Top-level preflight defers the writes without simulating them; execution retains their order. This bundle verifies bound validity only, not check output or execution.",
+        "yaml": '''state_bindings:
+  shared_state: shared_state
+  alias: shared_state
+expected_diagnostic_codes: []
+workflow_text: |
+  version: 0
+  workflow: remember-profile
+  inputs:
+    ship: {default: true}
+  state_needs:
+    shared_state: {}
+    alias: {}
+  blocks:
+    - steps:
+        - name: read-profile
+          value: state.alias["active_profile"]
+          register: previous_profile
+        - name: remember-profile
+          state_set:
+            state.shared_state["active_profile"]: review
+        - name: forget-publish-flag
+          state_delete: state.shared_state["should_publish_summary"]
+        - name: report-previous-profile
+          publish:
+            previous_profile: step.previous_profile.outputs.value
+    - guards:
+        - inputs.ship == true''',
+        "verification": {
+            "kind": "runner_verified", "world": "default", "insertion_mode": "state_bundle",
+            "target": "state", "expected_status": "ok",
+        },
+    },
+    {
+        "name": "bound_state_alias_read_after_write_rejected",
+        "kind": "negative",
+        "form": "state_bundle",
+        "summary": "Rejected: a different role and key still read the same actual file after mutation. The bundle verifies the exact bound-storage diagnostic, without executing a write or reading state contents.",
+        "yaml": '''state_bindings:
+  shared_state: shared_state
+  alias: shared_state
+expected_diagnostic_codes:
+  - validation.workflow.state_storage.write_before_last_read
+workflow_text: |
+  version: 0
+  workflow: invalid-alias-order
+  state_needs:
+    shared_state: {}
+    alias: {}
+  blocks:
+    - steps:
+        - name: forget-profile
+          state_delete: state.shared_state["active_profile"]
+        - name: read-alias
+          value: state.alias["should_publish_summary"]''',
+        "verification": {
+            "kind": "runner_verified", "world": "default", "insertion_mode": "state_bundle",
+            "target": "state", "expected_status": "validation_error",
+        },
+    },
+]
+
+for _state_handle in ("state", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete"):
+    HELP_SNIPPET_REGISTRY[_state_handle]["snippet_coverage"] = "runner_verified"
+    HELP_SNIPPET_REGISTRY[_state_handle]["canonical_examples"].extend(deepcopy(STATE_BUNDLE_EXAMPLES))
 
 
 def _load_excerpt_text(*, path: str, start_line: int, end_line: int) -> str:

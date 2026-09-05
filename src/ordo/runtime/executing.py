@@ -63,6 +63,7 @@ def execute_workflow(
 
     check_result = check_workflow(
         workflow,
+        _nested_analysis=invoked_by_run,
         profile=profile,
         available_profiles=available_profiles,
         profile_working_directories=profile_working_directories,
@@ -1678,7 +1679,9 @@ def _mark_execution_tree_step_runtime(
                 child["runtime_probe_result"] = runtime
                 planned = child.get("planned_probe_result")
                 matches = planned in (None, {}, runtime)
-                child["divergence_status"] = "matched" if matches else "diverged"
+                preflight = child.get("preflight")
+                deferred = isinstance(preflight, dict) and preflight.get("status") == "deferred"
+                child["divergence_status"] = "not_applicable" if deferred else ("matched" if matches else "diverged")
                 child["divergence_reason"] = None if matches else "runtime_probe_result_mismatch"
             child["runtime_status"] = runtime_status
             _refresh_execution_tree_block_runtime(block)

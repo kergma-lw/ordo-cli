@@ -40,11 +40,29 @@ STATE_CONTRACT: JSONObject = {
         "root_type": "object",
         "top_level_keys": "user-defined",
     },
+    "preflight": {
+        "classification": "effectful",
+        "top_level_status": "deferred",
+        "rule": "Check conditions and gates first, then defer eligible top-level mutations without mutation, simulation, outputs, registers, or reusable observations; continue to independent guards.",
+        "planning": "Retain ordered nodes with reuse_policy not_reusable and planned_probe_result null; execute admitted mutations once in order, with divergence_status not_applicable for deferred nodes.",
+        "boundary": "Nested analysis does not defer mutations. A reached run or loop after deferral halts with state_deferral_invocation_barrier; profile switches cannot resume that barrier.",
+        "verification_scope": "Validate individual workflows and children, not flattened caller-child access streams. Cross-invocation and cross-iteration guarantees remain deferred; this is not a full composed-run or cross-run proof.",
+    },
     "runtime_rules": [
         {
             "name": "write_after_last_read",
-            "message": "State is cross-run memory: write or delete a logical state role only after its final read, regardless of key or field. Use step registers for per-run dataflow.",
+            "message": "Before binding, authoring validation requires writes or deletes of a logical state role only after its final read, regardless of key or field. Bound validation instead compares actual storage in each access context. Use step registers for per-run dataflow.",
             "error_code": "validation.workflow.state_role.write_before_last_read",
+        },
+        {
+            "name": "bound_storage_write_after_last_read",
+            "message": "After binding, write or delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field. Resolve relative paths in each access context; normalized paths, symlinks, and existing hardlinks can alias. The same role may access different files and be valid.",
+            "error_code": "validation.workflow.state_storage.write_before_last_read",
+        },
+        {
+            "name": "relevant_storage_identity_required",
+            "message": "Conservatively reject early only relevant write/later-read pairs whose storage identity cannot be established without execution or observations. This is not a proven ordering violation; uncertain context alone does not reject read-only, read-before-write, or known-disjoint access. Cross-invocation and cross-iteration guarantees remain deferred, without a new loop mutation ban.",
+            "error_code": "validation.workflow.state_storage.identity_unresolved",
         },
         {
             "name": "bound_role_required",

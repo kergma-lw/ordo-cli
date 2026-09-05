@@ -34,6 +34,35 @@ Why this matters:
 - guard barriers must remain attributable to the later step sequences they protect;
 - `plan` and `explain` depend on a decision model that still reflects block boundaries rather than only a flat verdict list.
 
+## Top-level state deferral
+
+After state-order validation, `check` may continue past top-level `state_set`
+and `state_delete` steps to later independent read-only steps and guards. These
+mutations remain `effectful`; preflight records `status: deferred`, not success
+or a simulated write. It must not mutate storage, evaluate mutation outcomes,
+produce mutation outputs/registers, or create reusable mutation observations.
+Step conditions and gates are evaluated first: false conditions skip the step,
+failed gates block it, and unknown admission stops analysis conservatively.
+
+Deferral is not available inside nested invocation analysis (`_nested_analysis`
+internally). After a deferred state mutation, a reached `run` or `for_each`
+is an analysis barrier with reason `state_deferral_invocation_barrier`.
+Later profile switches cannot resume analysis beyond that barrier. This is not
+a new authoring ban on invocations or loops; relevant unevaluated guards keep
+the verdict unknown rather than receiving guessed truth values.
+
+Caller/child access streams are not flattened for storage-order validation.
+Individual child validation remains, but cross-invocation state guarantees and
+cross-iteration loop ordering are explicitly deferred. Neither validation nor
+successful preflight is a proof of state safety across an entire composed run
+or across future runs. The existing normative fragment restriction is unchanged;
+its known implementation drift is not resolved by this rule.
+
+CLI summaries preserve `allowed_state`, `analysis_complete`, `incomplete_reasons`,
+and `unevaluated_relevant_guards`. The convenience boolean `allowed: false`
+does not distinguish blocked from unknown; callers must inspect `allowed_state`.
+`missing_facts` must not be inferred merely from unevaluated expression text.
+
 ## CHECK-MODE-004 — Relevant guard coverage is part of the contract
 
 `check` must distinguish between guards that were relevant and actually evaluated, guards that were relevant but not yet evaluable, and guards that were outside the currently supported pre-execution decision surface.

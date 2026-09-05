@@ -141,3 +141,22 @@ It must not answer placement or rendering questions by itself.
 - A new world-backed snippet should fail visibly when its verified shape drifts.
 - A new world-backed snippet should participate in ordinary repository verification.
 - If the supported snippet-world path cannot yet express the required example shape honestly, treat that as a support gap and call it out explicitly instead of inventing an unverifiable workaround.
+
+## Bound state bundles
+
+The `state_bundle` form and insertion mode publish an explicit bundle, not a
+disguised workflow document. Its `workflow_text` is the exact authored workflow;
+`state_bindings` maps logical roles to names in the world's existing `state`
+fixtures. The runner materializes each fixture as one temporary absolute file,
+so two roles bound to one fixture genuinely share storage. It applies those
+bindings and calls bound semantic validation, comparing exact
+`expected_diagnostic_codes` as well as the example's expected status.
+
+This path verifies same-file aliases and distinct fixture files without executing
+mutations, reading state contents, or simulating check outcomes. Ordinary snippet
+insertion modes still verify unbound authored shape. The state-bundle path does
+not claim profile-switch context, symlink/hardlink fixture, cross-invocation,
+cross-iteration, preflight-continuation, or execution verification. Runtime tests
+remain the evidence for those implemented behaviors. A future example requiring
+one of those unsupported fixture shapes must extend the runner explicitly rather
+than presenting prose as a verified demonstration.
