@@ -2528,7 +2528,9 @@ def _normalize_safe_probe_equivalence_node(
             return node
         return None
     if isinstance(node, StateReferenceNode):
-        normalized_key = _normalize_safe_probe_equivalence_node(node.key_expression, workflow=workflow, seen_let_bindings=seen_let_bindings)
+        normalized_key = node.key_expression
+        if not isinstance(normalized_key, LiteralNode):
+            normalized_key = _normalize_safe_probe_equivalence_node(normalized_key, workflow=workflow, seen_let_bindings=seen_let_bindings)
         if normalized_key is None:
             return None
         return StateReferenceNode(

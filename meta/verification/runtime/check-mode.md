@@ -31,6 +31,45 @@ verify alias ordering and the validity of a workflow containing independent guar
 after mutations. They do not execute check or prove its output. Cross-invocation
 and cross-iteration guarantees remain open verification gaps, as recorded in `state.md`.
 
+## Literal-Key State References in Advisory Probe Matching
+
+`tests/test_probe_state_equivalence.py` covers safe structural normalization of
+literal-key state references, including expandable `let` aliases and embedded
+expression wrappers. Normalization retains the `expression` descriptor
+shape and accepts literals only within a state-reference key. It does not read
+state for matching, equate ordinary literals with references, resolve physical
+storage aliases, or change traversal, caching, and evaluation semantics.
+
+The analysis matrix covers `check`, `review`, `plan`, and `explain`. Missing state
+preserves blocked executability while recognizing authored probe intent; review
+reports result unavailability rather than recommending a duplicate probe. Run
+tests check admission and a mocked action, not end-to-end connector argument
+resolution. Next coverage checks candidate construction from explanation results,
+not a complete playbook-level selection invocation.
+
+When authored probe coverage exists but its result is unavailable, review should
+report `review.workflow.recommended_probe_result_not_available`, not recommend
+a duplicate probe through `review.workflow.missing_recommended_probe_coverage`.
+The underlying missing-state diagnostics remain relevant; recognizing intent
+does not establish a successful observation or authorize mutation of that state.
+
+Verification of discovery guidance covers structural matching, advisory
+recommendations, and authored intent versus successful facts in the features map,
+workflow rules, and connector `preflight_observations`. State-read and project-probe
+snippets validate authored shapes, not runtime coverage classification. They do
+not prove the matcher correct.
+
+Open verification obligations, not normative behavior:
+
+- Successful observations retaining a bare `let` argument lack workflow context
+  during matching and may still be classified as unmaterialized. Coverage of
+  direct-state successful descriptors does not establish correct provenance for
+  those aliases.
+- Profile-carried ambient-input classification requires independent verification
+  through `tests/test_review_mode.py` and
+  `test_review_ignores_profile_carried_ambient_context_inputs`. Its unresolved
+  verification status must not be treated as established by the matcher tests.
+
 ## Discovery Verification Scope
 
 Readiness verification covers `ordo-help features`, `ordo-help overview`,
