@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
-from ordo.model.diagnostic import Diagnostic
+from ordo.model.diagnostic import Diagnostic, attribute_state_missing_diagnostics, group_state_missing_diagnostics
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
@@ -161,7 +161,7 @@ def execute_workflow(
             assert isinstance(resolved_block, ResolvedGuardBlock)
             block_blockers: list[str] = []
             block_guard_details: list[dict[str, object]] = []
-            for resolved_guard in resolved_block.guards:
+            for guard_index, resolved_guard in enumerate(resolved_block.guards):
                 runtime_guard = resolved_guard
                 if isinstance(resolved_guard, ResolvedOperation):
                     materialized_guard = _materialize_resolved_operation_inputs(
@@ -172,7 +172,7 @@ def execute_workflow(
                     if isinstance(materialized_guard, OperationResult):
                         result = materialized_guard
                         operation_results.append(result)
-                        diagnostics.extend(result.diagnostics)
+                        diagnostics.extend(attribute_state_missing_diagnostics(result.diagnostics, ("blocks", str(block_index), "guards", str(guard_index))))
                         detail = _build_guard_detail(
                             resolved_guard.reference,
                             result,
@@ -192,7 +192,7 @@ def execute_workflow(
                     with _execution_working_directory(current_working_directory):
                         result = resolved_guard_probe(runtime_guard, effective_workflow)
                 operation_results.append(result)
-                diagnostics.extend(result.diagnostics)
+                diagnostics.extend(attribute_state_missing_diagnostics(result.diagnostics, ("blocks", str(block_index), "guards", str(guard_index))))
                 detail = _build_guard_detail(
                     runtime_guard.reference,
                     result,
@@ -277,7 +277,7 @@ def execute_workflow(
                         }
                     )
                     skipped_steps.extend(_remaining_step_names(effective_workflow, start_block_index=block_index, current_step_index=step_index + 1))
-                    diagnostics.append(condition_result)
+                    diagnostics.extend(attribute_state_missing_diagnostics((condition_result,), ("blocks", str(block_index), "steps", str(step_index), "if")))
                     _append_execution_error_block_item(
                         block_items,
                         block_index=block_index,
@@ -401,6 +401,7 @@ def execute_workflow(
                     result = _decorate_step_result(materialized_step, step=step, resolved_step=resolved_step)
                     _record_step_runtime_result(
                         workflow=effective_workflow,
+                        path=("blocks", str(block_index), "steps", str(step_index)),
                         step=step,
                         result=result,
                         operation_results=operation_results,
@@ -459,6 +460,7 @@ def execute_workflow(
                     pass
                 _record_step_runtime_result(
                     workflow=effective_workflow,
+                    path=("blocks", str(block_index), "steps", str(step_index)),
                     step=step,
                     result=result,
                     operation_results=operation_results,
@@ -616,7 +618,8 @@ def execute_workflow(
                         extra_bindings={"item": item} if step.for_each is not None else None,
                     )
                     if isinstance(materialized, Diagnostic):
-                        diagnostics.append(materialized)
+                        if materialized.code != "runtime.value.state_missing":
+                            diagnostics.append(materialized)
                         run_result = RuntimeResult(
                             mode=Mode.EXECUTE,
                             status=RuntimeStatus.EXECUTION_ERROR,
@@ -662,10 +665,16 @@ def execute_workflow(
                             analysis_tree=run_result.analysis_tree,
                         )
                     run_results.append(run_result)
-                    diagnostics.extend(run_result.diagnostics)
+                    call_path = ("blocks", str(block_index), "steps", str(step_index))
+                    if step.for_each is not None:
+                        call_path += ("for_each", str(item_index))
+                    if isinstance(materialized, Diagnostic):
+                        diagnostics.extend(attribute_state_missing_diagnostics(run_result.diagnostics, call_path + ("with",)))
+                    else:
+                        diagnostics.extend(attribute_state_missing_diagnostics(run_result.diagnostics, call_path, prefix=True))
                     operation_results.extend(run_result.operation_results)
                     propagated_profile = run_result.outputs.get("active_profile")
-                    if effective_workflow.profile is None and materialized.profile is None and isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
+                    if not isinstance(materialized, Diagnostic) and effective_workflow.profile is None and materialized.profile is None and isinstance(propagated_profile, str) and available_profiles is not None and propagated_profile in available_profiles:
                         current_profile = available_profiles[propagated_profile]
                         current_profile_name = propagated_profile
                         current_working_directory = None if profile_working_directories is None else profile_working_directories.get(propagated_profile)
@@ -924,6 +933,7 @@ def execute_workflow(
                     )
             _record_step_runtime_result(
                 workflow=effective_workflow,
+                path=("blocks", str(block_index), "steps", str(step_index)),
                 step=step,
                 result=result,
                 operation_results=operation_results,
@@ -1146,6 +1156,11 @@ def _contextualize_fan_out_diagnostics(
 ) -> tuple[Diagnostic, ...]:
     contextualized: list[Diagnostic] = []
     for diagnostic in diagnostics:
+        if diagnostic._state_missing_events:
+            contextualized.extend(group_state_missing_diagnostics(_contextualize_fan_out_diagnostics(
+                diagnostic._state_missing_events, step=step, item_index=item_index, item=item, item_count=item_count,
+            )))
+            continue
         details = dict(diagnostic.details)
         details.setdefault("fan_out_step", step.name)
         details.setdefault("fan_out_item_index", item_index)
@@ -1165,11 +1180,9 @@ def _contextualize_fan_out_diagnostics(
             details.setdefault("human_summary", human_summary)
             message = human_summary
         contextualized.append(
-            Diagnostic(
-                code=diagnostic.code,
-                level=diagnostic.level,
+            replace(
+                diagnostic,
                 message=message,
-                path=diagnostic.path,
                 details=details,
             )
         )
@@ -1338,6 +1351,7 @@ def _initialize_execute_context(
 def _record_step_runtime_result(
     *,
     workflow: Workflow,
+    path: tuple[str, ...],
     step: Step,
     result: OperationResult,
     operation_results: list[OperationResult],
@@ -1350,7 +1364,7 @@ def _record_step_runtime_result(
             "outputs": dict(result.outputs),
         }
     operation_results.append(result)
-    diagnostics.extend(result.diagnostics)
+    diagnostics.extend(attribute_state_missing_diagnostics(result.diagnostics, path))
 
 
 def _append_execution_error_block_item(

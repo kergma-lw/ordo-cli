@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ordo.model.diagnostic import Diagnostic
@@ -20,6 +20,7 @@ class RuntimeStateError(Exception):
     code: str
     message: str
     details: JSONObject
+    _state_missing_target: tuple[str, str, tuple[str, ...]] | None = field(default=None, repr=False, compare=False)
 
     def to_diagnostic(self, *, path: tuple[str, ...] = ()) -> Diagnostic:
         return Diagnostic(
@@ -28,6 +29,7 @@ class RuntimeStateError(Exception):
             message=self.message,
             path=path,
             details=dict(self.details),
+            _state_missing_target=self._state_missing_target,
         )
 
 
@@ -180,6 +182,7 @@ def _resolve_state_key_expression(
             code=mapped_code,
             message=exc.message,
             details={**exc.details, "key_expression": expression},
+            _state_missing_target=exc._state_missing_target,
         ) from exc
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from .diagnostic import Diagnostic
+from .diagnostic import Diagnostic, group_state_missing_diagnostics
 from .json import JSONObject, JSONValue
 
 
@@ -121,6 +121,9 @@ class RuntimeResult:
     failed_step: str | None = None
     preflight_decision: PreflightDecisionModel | None = None
     analysis_tree: object | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "diagnostics", group_state_missing_diagnostics(self.diagnostics))
 
     def to_contract(self) -> JSONObject:
         """Return the stable JSON-shaped runtime result contract."""

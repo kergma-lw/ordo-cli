@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, field
 from typing import cast
 
-from ordo.model.diagnostic import Diagnostic
+from ordo.model.diagnostic import Diagnostic, attribute_state_missing_diagnostics, group_state_missing_diagnostics
 from ordo.model.json import JSONValue
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, PreflightBlockNode, PreflightDecisionModel, PreflightGuardNode, RuntimeResult, RuntimeStatus
@@ -575,7 +575,7 @@ def _build_check_analysis_tree(
                 return resolved_block
             block_blockers: list[str] = []
             block_guard_details: list[dict[str, object]] = []
-            for resolved_guard in resolved_block.guards:
+            for guard_index, resolved_guard in enumerate(resolved_block.guards):
                 if isinstance(resolved_guard, ResolvedConditionExpression):
                     with _checking_working_directory(current_working_directory):
                         result = _evaluate_guard_expression(resolved_guard, effective_workflow, probe)
@@ -583,7 +583,7 @@ def _build_check_analysis_tree(
                     with _checking_working_directory(current_working_directory):
                         result = probe(resolved_guard, effective_workflow)
                 operation_results.append(result)
-                diagnostics.extend(result.diagnostics)
+                diagnostics.extend(attribute_state_missing_diagnostics(result.diagnostics, ("blocks", str(block_index), "guards", str(guard_index))))
                 detail = _build_guard_detail(
                     resolved_guard.reference,
                     result,
@@ -782,7 +782,7 @@ def _build_check_analysis_tree(
         active_profile=active_profile,
         workflow_profile_declared=workflow_profile_declared,
         active_overrides=tuple(resolved_overrides),
-        diagnostics=tuple(diagnostics),
+        diagnostics=group_state_missing_diagnostics(tuple(diagnostics)),
         operation_results=tuple(operation_results),
         blockers=tuple(blockers),
         checked_guards=tuple(checked_guards),
@@ -1634,7 +1634,7 @@ def _interpret_step_block_for_check(
                     probe=probe,
                     observation_session=observation_session,
                 )
-            diagnostics.extend(result.diagnostics)
+            diagnostics.extend(attribute_state_missing_diagnostics(result.diagnostics, ("blocks", str(block_index), "steps", str(step_index))))
             if result.status != "ok":
                 halt = build_preflight_halt(
                     "read_only_step_failed",
@@ -1893,7 +1893,13 @@ def _expand_run_step_block_for_check(
             connector_provider=connector_provider,
             guard_probe=guard_probe,
         )
-        diagnostics.extend(result.diagnostics)
+        call_block = current_workflow.blocks[outer_block_index]
+        assert isinstance(call_block, StepBlock)
+        call_step_index = next(index for index, candidate in enumerate(call_block.steps) if candidate.name == step.name)
+        call_path = ("blocks", str(outer_block_index), "steps", str(call_step_index))
+        if decision.item_index is not None:
+            call_path += ("for_each", str(decision.item_index))
+        diagnostics.extend(attribute_state_missing_diagnostics(result.diagnostics, call_path, prefix=True))
         operation_results.extend(result.operation_results)
         checked_guards.extend(cast(list[str], result.outputs.get("checked_guards", [])))
         guard_details.extend(cast(list[dict[str, object]], result.outputs.get("guard_details", [])))

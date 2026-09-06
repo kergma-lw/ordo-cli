@@ -5307,6 +5307,37 @@ ${state.task_memory[inputs.task_key].branch}
 
 The read surface should stay aligned with the mutation target surface so that authors do not learn two unrelated addressing models.
 
+## Missing-value diagnostic reporting
+
+Aggregate runtime diagnostics group only emitted `runtime.value.state_missing`
+events with the same private resolved target: the runtime-resolved absolute
+location path, scalar key converted to text, and field path. Logical roles and
+state declaration names do not separate an otherwise identical target. This is
+conservative path identity, not inode or symlink identity, and is distinct from
+the bound write-order validation identity below. The private target is not
+serialized. Other errors and missing-state diagnostics without that identity
+remain ungrouped.
+
+A singleton keeps its existing diagnostic path and details. A repeated target
+retains the first event's details and adds `occurrence_count` and `reported_at`.
+The count measures emitted failure events, not inferred reads or unique sites.
+`reported_at` lists only the unique locations where diagnostic events were
+actually emitted during this evaluation, not all dependent uses of the value.
+Each site has a unique effective structural `path` and a `references` list of
+distinct `{expression, state}` pairs from those events. Paths describe the
+effective assembled structure, including caller prefixes for child sites, not
+source line numbers; sites do not carry a separate workflow field. Repeated
+events at one site increase the count without duplicating the site or reference.
+The diagnostic retains that path for one site and uses an empty path for multiple
+sites. Groups, sites, and references retain first-seen order.
+
+This is aggregate reporting only: `check`, `review`, `plan`, `run`, and `explain`
+retain their evaluation order, short-circuiting, cache behavior, statuses, and
+barriers. Grouping does not evaluate skipped expressions or read state again.
+Operation-result diagnostics remain unchanged. `next` retains each candidate's
+grouped check diagnostics locally, without merging across candidates or changing
+eligibility or selection.
+
 ## Stable path grammar
 
 The initial stable state path grammar is:
@@ -8299,6 +8330,58 @@ larger intended-use fragments versus small syntax examples. Text, JSON, and
 boundaries. Bundle syntax separates teaching-world bindings from authored text.
 `tests/test_check_state_deferral.py` covers deferral execution behavior; the
 validation-only bundle label does not establish it.
+
+## Missing-Value Reporting Parity
+
+The grouping contract in `meta/model/runtime/state.md` is narrow:
+only emitted `runtime.value.state_missing` events with a private resolved target
+are grouped in aggregate diagnostics. `src/ordo/model/diagnostic.py` implements
+event counts, unique effective structural site paths in `reported_at` with
+distinct expression/state references, first-seen ordering, singleton preservation,
+and an empty aggregate path only for multiple sites.
+No separate workflow field is published in a site. Private target identity uses
+the resolved absolute location path, text key, and field path, not inode/symlink
+equivalence or the bound write-order validator's broader alias identity.
+
+The field is named `reported_at`, not `affected_sites`: these are the locations
+of emitted diagnostic events, not a complete dependency or impact analysis.
+`tests/test_state_missing_diagnostics.py` covers these distinctions and rejects
+`affected_sites` as an alternative field name.
+
+Reporting scope across the six public modes:
+
+- `check` groups collected aggregate diagnostics without changing which expressions are evaluated.
+- `review` retains the check diagnostics; grouping does not change review status or analysis.
+- `plan` retains the check diagnostics without changing observations, cache reuse, or planned nodes.
+- `run` groups aggregate diagnostics with structural attribution; operation-result diagnostics remain unchanged.
+- `explain` carries the underlying result diagnostics without changing status or execution policy.
+- `next` carries each candidate's check diagnostics locally; no cross-candidate grouping or eligibility/selection change is intended.
+
+Grouping must not add evaluations or reads, change short-circuiting, or relax
+existing barriers. This is a reporting contract, not a new evaluation/cache
+policy. `tests/test_state_missing_diagnostics.py` exercises these reporting boundaries;
+the next-candidate test checks candidate-local forwarding, not a full selection run.
+
+The `state` feature entry and `ordo-help describe state` explain reporting scope;
+grouping does not introduce another state operation, authoring form, or evaluation
+rule. Help verification checks event counts, effective structural paths, private
+diagnostic identity versus storage-alias identity, singleton behavior, and the
+absence of source-line or separate workflow attribution. Read-before-write and
+registered-reuse examples illustrate state use, not grouped runtime output.
+
+The verified-snippet path validates authored workflows and bound ordering, not
+runtime missing-value grouping. Runtime-output snippet coverage remains a gap.
+The focused reporting test in `tests/test_ordo_help_cli.py` checks published
+wording, not runtime behavior; neither its text/JSON assertions nor ordinary
+authoring snippets prove grouping correctness.
+
+## Named-Run Error-Path Coverage
+
+Failed named-run binding materialization must be handled as a diagnostic, without
+accessing workflow profile attributes on it. `tests/test_state_missing_diagnostics.py`
+covers missing bindings in direct and nested calls, with and without fan-out,
+while preserving normal profile propagation. Existing authoring snippets do not
+exercise this error-return path.
 
 ## Dynamic-Key Input Usage
 

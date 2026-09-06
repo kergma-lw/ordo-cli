@@ -397,7 +397,8 @@
         "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
         "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context: aliases count as one file, while the same role may access different files and be valid.",
         "Bound validation reports state_storage.write_before_last_read for proven violations, or state_storage.identity_unresolved for conservative early rejection of relevant uncertain write/later-read pairs, not a proven violation. Both codes have the validation.workflow. prefix.",
-        "Top-level check defers effectful state mutations after conditions and gates, then continues to independent guards without mutation, simulation, outputs, registers, or reuse. Plan retains the nodes; run executes admitted mutations once in order."
+        "Top-level check defers effectful state mutations after conditions and gates, then continues to independent guards without mutation, simulation, outputs, registers, or reuse. Plan retains the nodes; run executes admitted mutations once in order.",
+        "Aggregate runtime.value.state_missing diagnostics group emitted failures for the same resolved target, reporting occurrence_count (emitted events) and reported_at (unique effective structural locations of emitted diagnostic events, not all dependent uses) with references. This changes reporting only; operation results stay unchanged and next keeps groups candidate-local. Inspect state for identity and counting boundaries."
       ],
       "inappropriate_when": [
         "The data is purely step-local, transient, or better expressed as direct step outputs or ordinary workflow values.",

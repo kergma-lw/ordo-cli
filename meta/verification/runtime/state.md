@@ -68,6 +68,58 @@ boundaries. Bundle syntax separates teaching-world bindings from authored text.
 `tests/test_check_state_deferral.py` covers deferral execution behavior; the
 validation-only bundle label does not establish it.
 
+## Missing-Value Reporting Parity
+
+The grouping contract in `meta/model/runtime/state.md` is narrow:
+only emitted `runtime.value.state_missing` events with a private resolved target
+are grouped in aggregate diagnostics. `src/ordo/model/diagnostic.py` implements
+event counts, unique effective structural site paths in `reported_at` with
+distinct expression/state references, first-seen ordering, singleton preservation,
+and an empty aggregate path only for multiple sites.
+No separate workflow field is published in a site. Private target identity uses
+the resolved absolute location path, text key, and field path, not inode/symlink
+equivalence or the bound write-order validator's broader alias identity.
+
+The field is named `reported_at`, not `affected_sites`: these are the locations
+of emitted diagnostic events, not a complete dependency or impact analysis.
+`tests/test_state_missing_diagnostics.py` covers these distinctions and rejects
+`affected_sites` as an alternative field name.
+
+Reporting scope across the six public modes:
+
+- `check` groups collected aggregate diagnostics without changing which expressions are evaluated.
+- `review` retains the check diagnostics; grouping does not change review status or analysis.
+- `plan` retains the check diagnostics without changing observations, cache reuse, or planned nodes.
+- `run` groups aggregate diagnostics with structural attribution; operation-result diagnostics remain unchanged.
+- `explain` carries the underlying result diagnostics without changing status or execution policy.
+- `next` carries each candidate's check diagnostics locally; no cross-candidate grouping or eligibility/selection change is intended.
+
+Grouping must not add evaluations or reads, change short-circuiting, or relax
+existing barriers. This is a reporting contract, not a new evaluation/cache
+policy. `tests/test_state_missing_diagnostics.py` exercises these reporting boundaries;
+the next-candidate test checks candidate-local forwarding, not a full selection run.
+
+The `state` feature entry and `ordo-help describe state` explain reporting scope;
+grouping does not introduce another state operation, authoring form, or evaluation
+rule. Help verification checks event counts, effective structural paths, private
+diagnostic identity versus storage-alias identity, singleton behavior, and the
+absence of source-line or separate workflow attribution. Read-before-write and
+registered-reuse examples illustrate state use, not grouped runtime output.
+
+The verified-snippet path validates authored workflows and bound ordering, not
+runtime missing-value grouping. Runtime-output snippet coverage remains a gap.
+The focused reporting test in `tests/test_ordo_help_cli.py` checks published
+wording, not runtime behavior; neither its text/JSON assertions nor ordinary
+authoring snippets prove grouping correctness.
+
+## Named-Run Error-Path Coverage
+
+Failed named-run binding materialization must be handled as a diagnostic, without
+accessing workflow profile attributes on it. `tests/test_state_missing_diagnostics.py`
+covers missing bindings in direct and nested calls, with and without fan-out,
+while preserving normal profile propagation. Existing authoring snippets do not
+exercise this error-return path.
+
 ## Dynamic-Key Input Usage
 
 Input-usage analysis is distinct from state execution semantics. `check` records

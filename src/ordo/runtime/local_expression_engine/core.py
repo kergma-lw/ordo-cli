@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 import json
 import re
@@ -222,6 +222,8 @@ class LocalExpressionEvaluationError(Exception):
     message: str
     details: JSONObject
 
+    _state_missing_target: tuple[str, str, tuple[str, ...]] | None = field(default=None, repr=False, compare=False)
+
     def to_diagnostic(self, *, path: tuple[str, ...] = ()) -> Diagnostic:
         return Diagnostic(
             code=self.code,
@@ -229,6 +231,7 @@ class LocalExpressionEvaluationError(Exception):
             message=self.message,
             path=path,
             details=dict(self.details),
+            _state_missing_target=self._state_missing_target,
         )
 
 
@@ -2375,6 +2378,7 @@ def _resolve_state_reference(
             step_results=step_results,
             observation_session=observation_session,
         )
+        missing_target = (str(target.location.path), target.key, target.fields)
     except RuntimeStateError as exc:
         raise ValueExpressionEvaluationError(
             code=(
@@ -2388,6 +2392,7 @@ def _resolve_state_reference(
             ),
             message=exc.message,
             details=exc.details,
+            _state_missing_target=exc._state_missing_target,
         ) from exc
     try:
         document = read_state_document(target.location)
@@ -2403,6 +2408,7 @@ def _resolve_state_reference(
             code="runtime.value.state_missing",
             message="Runtime state value is missing",
             details={"expression": expression, "state": target.location.name, "key": target.key, "fields": list(target.fields)},
+            _state_missing_target=missing_target,
         )
     return value
 

@@ -416,7 +416,7 @@ def resolve_embedded_local_expression(
             observation_session=observation_session,
         )
     except LocalExpressionEvaluationError as exc:
-        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
+        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details, _state_missing_target=exc._state_missing_target) from exc
 
 
 def resolve_embedded_value_local_expression(
@@ -478,7 +478,7 @@ def resolve_value_local_expression(
             observation_session=observation_session,
         )
     except LocalExpressionEvaluationError as exc:
-        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
+        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details, _state_missing_target=exc._state_missing_target) from exc
 
 
 def resolve_condition_local_expression(
@@ -539,7 +539,7 @@ def resolve_condition_local_expression(
     try:
         return evaluate_parsed_local_expression(parsed, workflow, step_results=step_results)
     except LocalExpressionEvaluationError as exc:
-        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details) from exc
+        raise ValueResolutionError(code=exc.code, message=exc.message, details=exc.details, _state_missing_target=exc._state_missing_target) from exc
 
 
 def resolve_condition_value(

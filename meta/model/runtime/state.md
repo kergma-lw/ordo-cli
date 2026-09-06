@@ -82,6 +82,37 @@ ${state.task_memory[inputs.task_key].branch}
 
 The read surface should stay aligned with the mutation target surface so that authors do not learn two unrelated addressing models.
 
+## Missing-value diagnostic reporting
+
+Aggregate runtime diagnostics group only emitted `runtime.value.state_missing`
+events with the same private resolved target: the runtime-resolved absolute
+location path, scalar key converted to text, and field path. Logical roles and
+state declaration names do not separate an otherwise identical target. This is
+conservative path identity, not inode or symlink identity, and is distinct from
+the bound write-order validation identity below. The private target is not
+serialized. Other errors and missing-state diagnostics without that identity
+remain ungrouped.
+
+A singleton keeps its existing diagnostic path and details. A repeated target
+retains the first event's details and adds `occurrence_count` and `reported_at`.
+The count measures emitted failure events, not inferred reads or unique sites.
+`reported_at` lists only the unique locations where diagnostic events were
+actually emitted during this evaluation, not all dependent uses of the value.
+Each site has a unique effective structural `path` and a `references` list of
+distinct `{expression, state}` pairs from those events. Paths describe the
+effective assembled structure, including caller prefixes for child sites, not
+source line numbers; sites do not carry a separate workflow field. Repeated
+events at one site increase the count without duplicating the site or reference.
+The diagnostic retains that path for one site and uses an empty path for multiple
+sites. Groups, sites, and references retain first-seen order.
+
+This is aggregate reporting only: `check`, `review`, `plan`, `run`, and `explain`
+retain their evaluation order, short-circuiting, cache behavior, statuses, and
+barriers. Grouping does not evaluate skipped expressions or read state again.
+Operation-result diagnostics remain unchanged. `next` retains each candidate's
+grouped check diagnostics locally, without merging across candidates or changing
+eligibility or selection.
+
 ## Stable path grammar
 
 The initial stable state path grammar is:

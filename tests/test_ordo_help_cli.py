@@ -870,6 +870,28 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["canonical_examples"][0]["yaml"], 'state.shared_state["active_profile"]')
         self.assertEqual(payload["canonical_examples"][0]["form"], "value")
 
+    def test_describe_state_publishes_missing_value_reporting_boundaries(self) -> None:
+        payload = json.loads(self.run_help("describe", "state", "--json").stdout)
+        text = self.run_help("describe", "state")
+        self.assertEqual(text.returncode, 0)
+        guidance = "\n".join(payload["metadata"]["use_when"])
+        for phrase in (
+            "runtime.value.state_missing",
+            "private resolved absolute location path, text key, and field path",
+            "does not merge inode or symlink aliases",
+            "occurrence_count (emitted events, not inferred reads)",
+            "reported_at (unique effective structural locations of emitted diagnostic events, not all dependent uses)",
+            "distinct expression/state pairs, with no separate workflow field",
+            "A singleton keeps existing details",
+            "no evaluation, short-circuit, cache, status, or barrier changes",
+            "Operation-result diagnostics remain unchanged",
+            "next keeps groups candidate-local",
+            "not runtime grouping output",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guidance)
+                self.assertIn(phrase, text.stdout)
+
     def test_describe_state_step_and_filter_nodes_publish_canonical_snippets(self) -> None:
         state_set = json.loads(self.run_help("describe", "workflow.step.state_set", "--json").stdout)
         step_gate = json.loads(self.run_help("describe", "workflow.step.gate", "--json").stdout)

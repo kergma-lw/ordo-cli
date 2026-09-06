@@ -20,6 +20,7 @@ class ValueResolutionError(Exception):
     code: str
     message: str
     details: JSONObject = field(default_factory=dict)
+    _state_missing_target: tuple[str, str, tuple[str, ...]] | None = field(default=None, repr=False, compare=False)
 
     def to_diagnostic(self, *, path: tuple[str, ...] = ()) -> Diagnostic:
         return Diagnostic(
@@ -28,6 +29,7 @@ class ValueResolutionError(Exception):
             message=self.message,
             path=path,
             details=dict(self.details),
+            _state_missing_target=self._state_missing_target,
         )
 
     def to_diagnostics(self, *, path: tuple[str, ...] = ()) -> tuple[Diagnostic, ...]:

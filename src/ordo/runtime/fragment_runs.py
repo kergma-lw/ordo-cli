@@ -263,6 +263,7 @@ def _resolve_run_binding_value(value: JSONValue, workflow: Workflow, *, block_in
             code=exc.code,
             message=exc.message,
             details={**dict(exc.details), "run_block_index": block_index, "run_step_index": step_index, "binding": key},
+            _state_missing_target=exc._state_missing_target,
         ) from exc
 
 

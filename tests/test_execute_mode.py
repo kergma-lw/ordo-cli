@@ -182,6 +182,7 @@ blocks:
 
         _record_step_runtime_result(
             workflow=workflow,
+            path=("blocks", "0", "steps", "0"),
             step=step,
             result=result,
             operation_results=operation_results,
