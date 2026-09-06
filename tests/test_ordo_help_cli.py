@@ -27,6 +27,39 @@ class OrdoHelpCliTest(unittest.TestCase):
             check=False,
         )
 
+    def test_workflow_show_complete_input_contract_discovery_parity(self) -> None:
+        for args in (("command-line",), ("describe", "command-line.ordo-playbook")):
+            for json_args in ((), ("--json",)):
+                with self.subTest(args=args, json_args=json_args):
+                    result = self.run_help(*args, *json_args)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    for term in (
+                        "complete", "inputs mapping", "normalized required",
+                        "caller_slot", "workflow_default", "launch_profile", "entry_binding",
+                        "explicit_cli", "both null", "default appears only when declared",
+                        "Selected profile values are never exposed", "source-presence rule",
+                        "required caller slots still require explicit caller input",
+                        "--input-file", "runtime profile switches", "top_findings", "all available findings",
+                    ):
+                        self.assertIn(term, result.stdout)
+                    self.assertNotIn("--json also includes declared workflow inputs", result.stdout)
+
+        features = self.run_help("features")
+        self.assertEqual(features.returncode, 0, features.stderr)
+        self.assertIn("workflows show <workflow>", features.stdout)
+        self.assertIn("source presence, not execution readiness", features.stdout)
+
+        command = self.run_help("describe", "command-line.ordo-playbook", "--json")
+        self.assertIn("cannot validate CLI activation examples", command.stdout)
+        for handle in ("workflow.inputs", "workflow.inputs_contract", "playbook.workflows", "playbook.workflows.with"):
+            with self.subTest(handle=handle):
+                result = self.run_help("describe", handle)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("workflows show", result.stdout)
+                self.assertIn("snippet coverage: excerpt_verified", result.stdout)
+                self.assertIn("source parity", result.stdout)
+                self.assertIn("canonical examples:", result.stdout)
+
     def test_root_text_bootstrap_screen(self) -> None:
         result = self.run_help()
 

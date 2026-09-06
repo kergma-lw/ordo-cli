@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ProfileDrivenSetActiveTaskTest(unittest.TestCase):
-    def test_set_active_task_reviews_clean_from_profile_plus_issue_number_entry(self) -> None:
+    def test_set_active_task_has_only_input_documentation_findings_from_profile_plus_issue_number_entry(self) -> None:
         activated = activate_playbook(
             workflow_name="set-active-task",
             profile_name="ordo",
@@ -28,7 +28,10 @@ class ProfileDrivenSetActiveTaskTest(unittest.TestCase):
 
         self.assertEqual(result.status.value, "ok")
         self.assertEqual(result.outputs["active_profile"], "ordo")
-        self.assertEqual(result.outputs["review_status"], "clean")
+        self.assertFalse([
+            item for item in result.outputs["findings"]
+            if item["code"] != "review.workflow.input_description_missing"
+        ])
 
 
 if __name__ == "__main__":

@@ -12,9 +12,10 @@ import yaml
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.playbook_contract import PLAYBOOK_CONTRACT
 from ordo.model.profile import Profile
-from ordo.model.workflow import Step, StepBlock, Workflow, workflow_input_required
+from ordo.model.workflow import Step, StepBlock, Workflow, normalize_workflow_input_declaration, workflow_input_has_default, workflow_input_required
 from ordo.runtime import LoadError, load_profile_file, load_workflow_document_file, load_workflow_payload, load_yaml_document, validate_workflow_document, validate_workflow_semantics
 from ordo.runtime.local_expression_contexts import LocalExpressionContext
+from ordo.runtime.reviewing import find_input_description_findings
 from ordo.runtime.local_expressions import LOCAL_EXPRESSION_PARSE_ERRORS, evaluate_parsed_local_expression, parse_local_expression
 from ordo.runtime.local_expression_engine.core import (
     BuiltinCallNode,
@@ -48,6 +49,7 @@ class PlaybookError(Exception):
     """Structured playbook activation error."""
 
     diagnostics: tuple[Diagnostic, ...]
+    review_findings: tuple[dict[str, object], ...] = ()
 
     def __str__(self) -> str:
         return "; ".join(diagnostic.message for diagnostic in self.diagnostics)
@@ -70,6 +72,7 @@ class ActivatedPlaybook:
     working_directory: Path | None = None
     diagnostics: tuple[Diagnostic, ...] = ()
     input_analysis: "ActivationInputAnalysis | None" = None
+    review_findings: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +100,7 @@ class WorkflowCatalogInput:
     name: str
     description: str | None = None
     hint: str | None = None
+    contract: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +119,8 @@ class PlaybookWorkflowCatalogEntry:
     optional_caller_inputs: tuple[str, ...] = ()
     inputs: tuple[WorkflowCatalogInput, ...] = ()
     workflow_contract: Workflow | None = None
+    launch_profile_name: str | None = None
+    launch_profile_source: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,8 +202,14 @@ def inspect_playbook_workflow(
     *,
     playbook_path: str | Path | None = None,
     cwd: str | Path | None = None,
+    profile_name: str | None = None,
+    include_launch_sources: bool = True,
 ) -> PlaybookWorkflowCatalogEntry:
-    """Return detailed discovery metadata for one playbook workflow entry."""
+    """Return detailed discovery metadata for one playbook workflow entry.
+
+    Next-step candidate discovery can omit launch sources because candidate
+    activation owns profile selection and errors. Show always includes them.
+    """
 
     path = Path(playbook_path) if playbook_path is not None else discover_playbook_path(cwd=cwd)
     payload = _load_playbook_document(path)
@@ -235,6 +247,20 @@ def inspect_playbook_workflow(
         raise PlaybookError(semantic_report.diagnostics)
     workflow_with = _optional_mapping(workflow_entry, "with", playbook_path=path, path=("workflows", workflow_name, "with"))
     bound_inputs, caller_inputs, optional_caller_inputs = _split_workflow_entry_inputs(workflow_with)
+    active_profile_name, launch_profile_source, profile = None, None, None
+    if include_launch_sources:
+        active_profile_name, launch_profile_source, profile, _ = _load_launch_profile(payload, path=path, profile_name=profile_name)
+    inputs = []
+    for name, schema in workflow.declared_inputs.items():
+        if not isinstance(name, str):
+            continue
+        contract = _input_authoring_contract(name, schema, bound_inputs, caller_inputs, optional_caller_inputs, profile)
+        inputs.append(WorkflowCatalogInput(
+            name=name,
+            description=_optional_non_empty_string(contract, "description"),
+            hint=_optional_non_empty_string(contract, "hint"),
+            contract=contract,
+        ))
     return PlaybookWorkflowCatalogEntry(
         playbook_path=path,
         workflow_name=workflow_name,
@@ -246,9 +272,89 @@ def inspect_playbook_workflow(
         with_=bound_inputs,
         caller_inputs=caller_inputs,
         optional_caller_inputs=optional_caller_inputs,
-        inputs=tuple(_catalog_input_from_declared_input(name, schema) for name, schema in workflow.declared_inputs.items() if isinstance(name, str)),
+        inputs=tuple(inputs),
         workflow_contract=workflow,
+        launch_profile_name=active_profile_name,
+        launch_profile_source=launch_profile_source,
     )
+
+
+def _input_authoring_contract(
+    name: str,
+    declaration: object,
+    bound_inputs: dict[str, object],
+    caller_inputs: tuple[str, ...],
+    optional_inputs: tuple[str, ...],
+    profile: Profile | None,
+) -> dict[str, object]:
+    """Describe authored launch coverage, not resolved values or execution readiness.
+
+    Source presence includes null values and ignores CLI overrides and runtime
+    profile switches. Required caller slots still require explicit caller input,
+    even when another source is present. Review shares the missing-source rule.
+    """
+
+    normalized, _, _ = normalize_workflow_input_declaration(name, declaration)
+    sources = []
+    if workflow_input_has_default(normalized):
+        sources.append("workflow_default")
+    if profile is not None and name in profile.inputs:
+        sources.append("launch_profile")
+    if name in bound_inputs:
+        sources.append("entry_binding")
+    caller_slot = "required" if name in caller_inputs else "optional" if name in optional_inputs else "none"
+    contract = {
+        **normalized,
+        "caller_slot": caller_slot,
+        "sources": sources,
+        "coverage": "provided" if sources else "caller_slot" if caller_slot != "none" else "missing",
+    }
+    if name in bound_inputs:
+        contract["binding"] = bound_inputs[name]
+    return contract
+
+
+def _load_launch_profile(
+    payload: dict[str, object], *, path: Path, profile_name: str | None,
+) -> tuple[str | None, str | None, Profile | None, Path | None]:
+    """Select and load only the launch profile using activation conventions."""
+
+    active_profile_name = profile_name
+    launch_profile_source = "explicit_cli" if profile_name is not None else None
+    if active_profile_name is None:
+        defaults = payload.get("defaults", {})
+        if isinstance(defaults, dict):
+            default_profile = defaults.get("profile")
+            if isinstance(default_profile, str) and default_profile:
+                active_profile_name = default_profile
+                launch_profile_source = "default"
+
+    profile = None
+    resolved_profile_path: Path | None = None
+    if active_profile_name is not None:
+        profiles = _require_mapping(payload, "profiles", playbook_path=path, required=False)
+        profile_entry = profiles.get(active_profile_name)
+        if not isinstance(profile_entry, dict):
+            raise _playbook_error(
+                "playbook.profile.missing",
+                f"Profile '{active_profile_name}' is not declared in the playbook",
+                path=("profiles", active_profile_name),
+                details={"playbook": str(path), "profile": active_profile_name},
+            )
+        profile_file = _require_string(profile_entry, "file", playbook_path=path, path=("profiles", active_profile_name, "file"))
+        resolved_profile_path = _resolve_catalog_file(playbook_dir=path.parent, default_subdir="profiles", raw=profile_file)
+        try:
+            profile = load_profile_file(resolved_profile_path)
+        except FileNotFoundError as exc:
+            raise _playbook_error(
+                "playbook.profile.file_missing",
+                "Profile file referenced by the playbook does not exist",
+                path=("profiles", active_profile_name, "file"),
+                details={"playbook": str(path), "profile": active_profile_name, "profile_file": str(resolved_profile_path)},
+            ) from exc
+        except LoadError as exc:
+            raise PlaybookError(exc.diagnostics) from exc
+    return active_profile_name, launch_profile_source, profile, resolved_profile_path
 
 
 def activate_playbook(
@@ -261,6 +367,29 @@ def activate_playbook(
 ) -> ActivatedPlaybook:
     """Load and activate one workflow from a playbook run."""
 
+    review_findings: list[dict[str, object]] = []
+    try:
+        return _activate_playbook(
+            workflow_name=workflow_name,
+            profile_name=profile_name,
+            input_overrides=input_overrides,
+            playbook_path=playbook_path,
+            cwd=cwd,
+            review_findings=review_findings,
+        )
+    except PlaybookError as exc:
+        raise PlaybookError(exc.diagnostics, tuple(review_findings)) from exc
+
+
+def _activate_playbook(
+    *,
+    workflow_name: str,
+    profile_name: str | None,
+    input_overrides: dict[str, object] | None,
+    playbook_path: str | Path | None,
+    cwd: str | Path | None,
+    review_findings: list[dict[str, object]],
+) -> ActivatedPlaybook:
     path = Path(playbook_path) if playbook_path is not None else discover_playbook_path(cwd=cwd)
     payload = _load_playbook_document(path)
     playbook_dir = path.parent
@@ -281,46 +410,38 @@ def activate_playbook(
     workflow_file = _require_string(workflow_entry, "file", playbook_path=path, path=("workflows", workflow_name, "file"))
     workflow_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="workflows", raw=workflow_file)
 
-    active_profile_name = profile_name
-    launch_profile_source = "explicit_cli" if profile_name is not None else None
-    if active_profile_name is None:
-        defaults = payload.get("defaults", {})
-        if isinstance(defaults, dict):
-            default_profile = defaults.get("profile")
-            if isinstance(default_profile, str) and default_profile:
-                active_profile_name = default_profile
-                launch_profile_source = "default"
-
-    profile = None
-    resolved_profile_path: Path | None = None
+    active_profile_name, launch_profile_source, profile, resolved_profile_path = _load_launch_profile(payload, path=path, profile_name=profile_name)
     available_profiles: dict[str, Profile] | None = None
     profile_working_directories: dict[str, Path | None] | None = None
-    if active_profile_name is not None:
-        profiles = _require_mapping(payload, "profiles", playbook_path=path, required=False)
-        profile_entry = profiles.get(active_profile_name)
-        if not isinstance(profile_entry, dict):
-            raise _playbook_error(
-                "playbook.profile.missing",
-                f"Profile '{active_profile_name}' is not declared in the playbook",
-                path=("profiles", active_profile_name),
-                details={"playbook": str(path), "profile": active_profile_name},
-            )
-        profile_file = _require_string(profile_entry, "file", playbook_path=path, path=("profiles", active_profile_name, "file"))
-        resolved_profile_path = _resolve_catalog_file(playbook_dir=playbook_dir, default_subdir="profiles", raw=profile_file)
-        try:
-            profile = load_profile_file(resolved_profile_path)
-        except FileNotFoundError as exc:
-            raise _playbook_error(
-                "playbook.profile.file_missing",
-                "Profile file referenced by the playbook does not exist",
-                path=("profiles", active_profile_name, "file"),
-                details={"playbook": str(path), "profile": active_profile_name, "profile_file": str(resolved_profile_path)},
-            ) from exc
-        except LoadError as exc:
-            raise PlaybookError(exc.diagnostics) from exc
+    if profile is not None:
         profile = _merge_profile_connector_contexts(profile, playbook_connector_contexts)
 
     raw_workflow = _load_workflow_payload(workflow_path, launch_dir=Path.cwd() if cwd is None else Path(cwd))
+    raw_inputs = raw_workflow.get("inputs")
+    if isinstance(raw_inputs, dict):
+        review_findings.extend(find_input_description_findings(raw_inputs))
+        bound_inputs, caller_inputs, optional_inputs = _split_workflow_entry_inputs(workflow_entry.get("with"))
+        for name, declaration in raw_inputs.items():
+            if not isinstance(name, str):
+                continue
+            contract = _input_authoring_contract(name, declaration, bound_inputs, caller_inputs, optional_inputs, profile)
+            if contract["coverage"] != "missing":
+                continue
+            required = contract["required"]
+            slot = f"{name}:" if required else f"{name}?:"
+            review_findings.append({
+                "code": "review.playbook.input_caller_slot_missing",
+                "level": "warning",
+                "category": "input_authoring",
+                "message": f"Workflow input '{name}' has no non-user source or caller slot; expose it with '{slot}' in the playbook entry's with mapping",
+                "path": ["workflows", workflow_name, "with", name],
+                "evidence": {
+                    "input": name,
+                    "required": required,
+                    "suggested_fix": "expose_caller_input",
+                    "suggested_rewrite": slot,
+                },
+            })
     validation_report = validate_workflow_document(raw_workflow, source=str(workflow_path))
     if not validation_report.ok:
         raise PlaybookError(validation_report.diagnostics)
@@ -451,6 +572,7 @@ def activate_playbook(
         working_directory=working_directory,
         diagnostics=activation_diagnostics,
         input_analysis=input_analysis,
+        review_findings=tuple(review_findings),
     )
 
 
@@ -995,19 +1117,6 @@ def _optional_non_empty_string(payload: dict[str, object], key: str) -> str | No
     if isinstance(value, str) and value:
         return value
     return None
-
-
-def _catalog_input_from_declared_input(name: str, schema: object) -> WorkflowCatalogInput:
-    description: str | None = None
-    hint: str | None = None
-    if isinstance(schema, dict):
-        raw_description = schema.get("description")
-        if isinstance(raw_description, str) and raw_description:
-            description = raw_description
-        raw_hint = schema.get("hint")
-        if isinstance(raw_hint, str) and raw_hint:
-            hint = raw_hint
-    return WorkflowCatalogInput(name=name, description=description, hint=hint)
 
 
 def _resolve_working_directory(

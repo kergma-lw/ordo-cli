@@ -55,6 +55,15 @@ Input-classification advice follows the same boundary:
 - a declared input that is merely carried in from profile defaults as stable repository or project context is not automatically missing-validation debt;
 - a declared input that is not meaningfully used at all should surface as unused declaration debt rather than as missing validation.
 
+Input-authoring advice is separate from missing-validation classification:
+- `review.workflow.input_description_missing` warns for every root workflow input whose description is absent, null, empty, or whitespace-only, including optional, defaulted, profile-supplied, and unused inputs. Its suggested fix is `add_input_description`.
+- `review.playbook.input_caller_slot_missing` warns for every declared input with neither a non-user source (a declared default, selected launch-profile input, or concrete workflow-entry binding) nor a caller slot in the playbook entry's `with` mapping. Unselected profiles and one-run CLI overrides do not count as non-user sources.
+- The caller-slot finding suggests `expose_caller_input`, with `x:` for a required workflow input or `x?:` for an optional one. Either existing caller-slot form suppresses this advisory, but does not change the workflow's required-input contract.
+- Both codes have level `warning` and category `input_authoring`. Presence of a default or supplied key counts even when its value is null, false, or zero.
+- Available static findings remain published when review is `unavailable`, including activation failures after the root declarations can be inspected. Existing validation and resolution diagnostics, statuses, and exit behavior remain authoritative; these warnings do not make activation succeed or fail.
+- Compact CLI review output includes every available finding, in order, under the compatibility field `top_findings`; only individual finding details are summarized. This also applies to unavailable review after activation failure. JSON output retains full finding details.
+- `check`, `plan`, `run`, `explain`, and `next` do not publish these authoring advisories and retain their existing semantics. Required caller slots still require explicit caller input even when a default exists; optional caller slots do not relax required workflow inputs.
+
 Activation-context advice follows a related boundary:
 - profiles may provide more ambient context than one workflow uses;
 - profile-supplied surplus context should remain non-blocking unless the workflow actually depends on it;

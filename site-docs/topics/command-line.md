@@ -37,7 +37,17 @@ Browse playbook workflows, ask which workflow should run next, inspect inferred 
 ### Discovery commands
 
 - `workflows list` — list declared playbook workflows with project-local descriptions
-- `workflows show <workflow>` — show one workflow entry with file metadata and playbook invocation inputs; `--json` also includes declared workflow inputs
+- `workflows show <workflow>` - show one workflow entry with file metadata, `launch_profile`, and the complete `inputs` contract with authored source coverage, identical in plain and `--json` output
+
+Both show formats expose every declared input in one `inputs` mapping, without separate `declared_inputs`, `caller_inputs`, or `optional_caller_inputs` fields. Inspection does not activate the workflow.
+
+- Each input includes `description` and `hint` when provided, normalized boolean `required`, and `caller_slot` (`required`, `optional`, or `none`).
+- `sources` lists all present `workflow_default`, `launch_profile`, and `entry_binding` sources in that order. `default` appears only when declared, including null; `binding` appears only for concrete static entry values. Profile values are never exposed.
+- `coverage` is `provided` if any source exists, otherwise `caller_slot` if either slot exists, otherwise `missing`. Review uses the same missing-source rule for `review.playbook.input_caller_slot_missing`.
+- `launch_profile` contains `name` and `source` (`default` for `defaults.profile`, `explicit_cli` for `--profile`, or both null without selection). Only the selected profile is loaded.
+- Coverage means source presence, not value validity or execution readiness: null, false, and zero count. Required caller slots still require caller input even with provided coverage; optional slots do not relax required declarations. CLI input overrides and runtime profile switches are not authored launch sources.
+
+The existing excerpt harness verifies source parity for declaration and binding examples, not CLI activation or show output. CLI activation examples are not supported by the current snippet harness and must not be represented as executable verified snippets.
 
 ### Input override precedence
 
@@ -54,6 +64,8 @@ When authoring or modifying workflows, run both check and review. Neither replac
 
 - `check <workflow>` — Validate applicability, observations, and execution readiness _Question: Can this workflow run now?_
 - `review <workflow>` — Surface workflow authoring-quality findings _Question: Is this workflow well-authored?_
+
+Plain review includes all available findings in order under `top_findings`, with compact details, including when `review_status` is unavailable. JSON retains full finding details.
 
 ### Example commands
 
@@ -94,7 +106,7 @@ When authoring or modifying workflows, run both check and review. Neither replac
         },
         {
           "name": "workflows show <workflow>",
-          "summary": "show one workflow entry with file metadata and playbook invocation inputs; --json also includes declared workflow inputs"
+          "summary": "show one workflow entry with file metadata, launch_profile, and the complete inputs contract with authored source coverage, identical in plain and --json output"
         }
       ],
       "examples": [

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from ordo.model.json import JSONValue, authored_string_style
@@ -39,6 +40,27 @@ from .preflight_steps import classify_preflight_step
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 
 
+def find_input_description_findings(declared_inputs: Mapping[str, object]) -> list[dict[str, object]]:
+    """Review root input documentation independently of runtime availability."""
+
+    findings: list[dict[str, object]] = []
+    for name, declaration in declared_inputs.items():
+        if not isinstance(name, str):
+            continue
+        description = declaration.get("description") if isinstance(declaration, dict) else None
+        if isinstance(description, str) and description.strip():
+            continue
+        findings.append({
+            "code": "review.workflow.input_description_missing",
+            "level": "warning",
+            "category": "input_authoring",
+            "message": f"Workflow input '{name}' should declare a non-blank description",
+            "path": ["inputs", name, "description"],
+            "evidence": {"input": name, "suggested_fix": "add_input_description"},
+        })
+    return findings
+
+
 def review_workflow(
     workflow: Workflow,
     *,
@@ -61,6 +83,7 @@ def review_workflow(
     if check_result.status in {RuntimeStatus.VALIDATION_ERROR, RuntimeStatus.RESOLUTION_ERROR}:
         validation_findings = _find_diagnostic_review_hints(check_result)
         validation_findings.extend(_find_first_step_applicability_guard_hints(workflow))
+        validation_findings.extend(find_input_description_findings(workflow.declared_inputs))
         return RuntimeResult(
             mode=Mode.REVIEW,
             status=check_result.status,
@@ -137,6 +160,7 @@ def _build_review_findings(
     findings.extend(_find_first_step_applicability_guard_hints(workflow))
     findings.extend(_find_unnecessary_with_root_adapter_bindings(workflow))
     findings.extend(_find_workflow_profile_binding_hints(workflow))
+    findings.extend(find_input_description_findings(workflow.declared_inputs))
     findings.extend(
         _find_bounded_fan_out_authoring_findings(
             workflow,

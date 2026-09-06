@@ -161,11 +161,27 @@ ordo-playbook --input-file body=./prompt.md plan inspect-issue
 
 `--input-file` reads the file contents as a raw UTF-8 string for that one run. When both `--input` and `--input-file` set the same key, `--input-file` wins.
 
-`ordo-playbook workflows show <workflow>` should primarily surface the playbook entry's invocation shape from `with`, including caller-provided `null` slots and any bound values.
+### Complete input discovery
 
-When full workflow-contract detail is needed, `ordo-playbook workflows show <workflow> --json` should also surface the workflow's declared input metadata, including any available `hint` strings alongside the input name and description.
+`ordo-playbook workflows show <workflow>` and its `--json` form publish the same complete `inputs` mapping, keyed by every declared workflow input. They do not publish separate `declared_inputs`, `caller_inputs`, or `optional_caller_inputs` fields. Inspection does not activate the workflow.
+
+Each input reports:
+
+- `description` and `hint` when provided, plus normalized boolean `required` from the workflow declaration.
+- `caller_slot`: `required` for `key:`, `optional` for `key?:`, or `none`.
+- `sources`: all present sources in order, `workflow_default`, `launch_profile`, `entry_binding`.
+- `coverage`: `provided` if any source exists, otherwise `caller_slot` if either slot exists, otherwise `missing`.
+- `default` only when declared, including an explicit `null` default; `binding` only when the entry supplies a concrete static value. Profile values are never exposed.
+
+`launch_profile` contains `name` and `source`: `default` for selection through `defaults.profile`, `explicit_cli` for `--profile`, or both fields `null` if no profile is selected. Only the selected launch profile is loaded; an invalid selected profile produces the same profile diagnostics as activation. Merely having profiles in the catalog does not select one.
+
+Coverage is authored source presence, not value validity or execution readiness. A source counts even when its value is `null`, `false`, or zero. A required caller slot still requires explicit caller input even when coverage is `provided`; an optional caller slot does not make a required workflow declaration optional. `--input`, `--input-file`, and later runtime profile switches do not contribute authored coverage. The `missing` rule is shared with `review.playbook.input_caller_slot_missing`, including unused and optional declarations.
+
+The source excerpts in `examples/playbook-workflow-target.yaml` and `examples/playbook-workflows.yaml` demonstrate declarations, concrete bindings, and caller slots through the supported excerpt harness. Excerpt verification checks source parity, not CLI activation or discovery output. The current snippet harness cannot validate CLI activation examples; command examples here are usage guidance, not executable verified snippets.
 
 `hint` is guidance only. It is not itself a validation rule.
+
+Plain review emits all available findings in order under `top_findings`, with compact per-finding details, including when `review_status` is unavailable. `--json` retains full details; the field name does not imply a truncated finding list.
 
 ## Successful run results
 

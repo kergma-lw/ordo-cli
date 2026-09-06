@@ -1,6 +1,7 @@
 import unittest
 
 from ordo.cli import (
+    _summarize_activation_error_payload,
     _compact_value,
     _limit_items,
     _summarize_check_payload,
@@ -11,6 +12,38 @@ from ordo.cli import (
 
 
 class CliSummaryTest(unittest.TestCase):
+    def test_review_summaries_preserve_all_findings(self) -> None:
+        findings = [
+            {
+                "code": "review.workflow.input_description_missing",
+                "category": "input_authoring",
+                "message": f"Input input_{index} needs a description",
+                "suggested_fix": "add_input_description",
+            }
+            for index in range(13)
+        ]
+        for review_status, summarize in (
+            ("needs_attention", _summarize_review_payload),
+            ("unavailable", _summarize_activation_error_payload),
+        ):
+            with self.subTest(review_status=review_status):
+                summary = summarize({
+                    "mode": "review",
+                    "status": "ok" if review_status == "needs_attention" else "validation_error",
+                    "diagnostics": [],
+                    "outputs": {
+                        "review_status": review_status,
+                        "finding_count": len(findings),
+                        "findings": findings,
+                    },
+                })
+                self.assertEqual(summary["finding_count"], 13)
+                self.assertEqual(len(summary["top_findings"]), 13)
+                self.assertEqual(
+                    [item["message"] for item in summary["top_findings"]],
+                    [item["message"] for item in findings],
+                )
+
     def test_limit_items_uses_ascii_ellipsis_marker(self) -> None:
         self.assertEqual(_limit_items([str(index) for index in range(10)], limit=3), ["0", "1", "2", "... and 7 more"])
 

@@ -16,6 +16,14 @@ workflows:
     working_directory: ${inputs.repo_dir}
     state_bindings:
       shared_state: shared_state
+  caller-inputs:
+    file: ./playbook-workflow-target.yaml
+    description: Read a caller-selected remembered profile
+    with:
+      active_profile_key:
+      repo_dir?:
+    state_bindings:
+      shared_state: shared_state
 profiles:
   review:
     file: ../profiles/read-only-review.yaml

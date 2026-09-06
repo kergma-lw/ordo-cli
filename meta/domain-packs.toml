@@ -53,6 +53,7 @@ sources = [
   "model/runtime/state.md",
   "model/runtime/guard-evaluation.md",
   "model/runtime/package-layout.md",
+  "model/runtime/help-cli.md",
   "model/connector/contract.md",
   "model/connector/fs-file.md",
   "model/connector/gh-pr.md",
@@ -82,5 +83,6 @@ sources = [
   "verification/runtime/introspection-drift.md",
   "verification/runtime/state.md",
   "verification/runtime/invariants.md",
+  "verification/runtime/workflow-show-inputs.md",
   "verification/meta/packs.md"
 ]

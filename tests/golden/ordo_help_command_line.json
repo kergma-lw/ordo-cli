@@ -10,7 +10,7 @@
           },
           {
             "mode": "review <workflow>",
-            "purpose": "Surface workflow-quality findings",
+            "purpose": "Surface workflow-quality findings, including input_authoring warnings for missing root input descriptions and missing playbook caller slots. CLI overrides do not suppress these advisories; available static findings remain visible when review_status is unavailable, without changing activation errors or other modes.",
             "question": "Is this workflow well-authored?"
           }
         ],
@@ -24,11 +24,12 @@
         },
         {
           "name": "workflows show <workflow>",
-          "summary": "show one workflow entry with file metadata and playbook invocation inputs; --json also includes declared workflow inputs"
+          "summary": "show one workflow entry with file metadata, launch_profile, and the complete inputs contract with authored source coverage, identical in plain and --json output"
         }
       ],
       "do_not_use_for": [
         "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-rules surfaces.",
+        "Treating CLI command examples as executable verified snippets: the current snippet harness cannot validate CLI activation examples. Authored YAML excerpts verify source parity only, not CLI discovery or activation output.",
         "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
         "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure.",
         "Assuming nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, and profile switches cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred."
@@ -170,9 +171,13 @@
         "rule": "When a run failure has normalized external context, the public failure payload should identify that external cause instead of surfacing only a generic wrapper message."
       },
       "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
+      "review_findings_surface": "Plain review includes all available findings in order under top_findings, with compact details, including when review_status is unavailable; --json retains full finding details.",
       "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
       "use_when": [
         "You need to discover which named workflows the current playbook publishes before choosing one.",
+        "Use workflows show <workflow> for the complete declared inputs mapping in both plain and --json output, without activating the workflow. Each input includes description and hint when provided, normalized required, caller_slot (required/optional/none), sources, and coverage. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields.",
+        "Input sources list every present workflow_default, launch_profile, and entry_binding in that order. default appears only when declared, including null; binding appears only for a concrete static entry binding. Selected profile values are never exposed. coverage is provided when any source exists, caller_slot when only a slot exists, or missing when neither exists, using the same source-presence rule as review.playbook.input_caller_slot_missing.",
+        "launch_profile reports name and source: default for defaults.profile, explicit_cli for --profile, or both null when no launch profile is selected. Only the selected profile is loaded. Coverage is not value validity or execution readiness: null, false, and zero count as present sources; required caller slots still require explicit caller input even with provided coverage. --input, --input-file, and runtime profile switches do not contribute authored source coverage.",
         "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
         "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
         "Inspect check's allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards: allowed false may mean unknown rather than blocked, and missing_facts is not inferred from unevaluated expressions.",

@@ -3313,7 +3313,8 @@ class PlaybookActivationTest(unittest.TestCase):
             })
             return SimpleNamespace(**activated.__dict__, workflow_name=workflow_name)
 
-        def inspect_side_effect(workflow_name, *, playbook_path=None):
+        def inspect_side_effect(workflow_name, *, playbook_path=None, include_launch_sources=True):
+            self.assertFalse(include_launch_sources)
             if workflow_name == "mobile-run-android-dev-usb":
                 return detailed_mobile
             return detailed_story
@@ -3460,7 +3461,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["categories"][1]["workflows"][0]["when"], "Use when you need issue details without changing state")
             self.assertEqual(payload["categories"][0]["workflows"][0]["when"], "Use after finishing implementation work")
 
-    def test_cli_workflows_show_omits_declared_inputs_in_plain_output(self) -> None:
+    def test_cli_workflows_show_includes_input_contract_in_plain_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
@@ -3518,12 +3519,15 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertEqual(payload["category"], "inspect")
             self.assertEqual(payload["when"], "Use when you need issue details without changing state")
             self.assertEqual(payload["working_directory"], "../repo")
-            self.assertEqual(payload["inputs"], {})
-            self.assertEqual(payload["caller_inputs"], [])
+            self.assertEqual(payload["inputs"]["repository"], {
+                "description": "GitHub repository slug", "hint": "Use owner/name format",
+                "required": True, "caller_slot": "none", "sources": [], "coverage": "missing",
+            })
+            self.assertNotIn("caller_inputs", payload)
             self.assertNotIn("optional_caller_inputs", payload)
             self.assertNotIn("declared_inputs", payload)
 
-    def test_cli_workflows_show_json_retains_declared_inputs(self) -> None:
+    def test_cli_workflows_show_json_includes_input_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             (root / ".ordo" / "workflows").mkdir(parents=True)
@@ -3570,9 +3574,12 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["inputs"], {})
-            self.assertEqual(payload["declared_inputs"][0], {"name": "repository", "description": "GitHub repository slug", "hint": "Use owner/name format"})
-            self.assertEqual(payload["declared_inputs"][1], {"name": "issue_number", "description": "Numeric issue id"})
+            self.assertEqual(payload["inputs"]["repository"], {
+                "description": "GitHub repository slug", "hint": "Use owner/name format",
+                "required": True, "caller_slot": "none", "sources": [], "coverage": "missing",
+            })
+            self.assertEqual(payload["inputs"]["issue_number"]["description"], "Numeric issue id")
+            self.assertNotIn("declared_inputs", payload)
 
     def test_cli_workflows_show_separates_bound_and_caller_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3609,8 +3616,9 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["inputs"], {"repository": "owner/repo", "issue_number": None})
-            self.assertEqual(payload["caller_inputs"], ["issue_number"])
+            self.assertEqual(payload["inputs"]["repository"]["binding"], "owner/repo")
+            self.assertEqual(payload["inputs"]["issue_number"]["caller_slot"], "required")
+            self.assertNotIn("caller_inputs", payload)
             self.assertNotIn("declared_inputs", payload)
 
     def test_cli_workflows_show_reports_optional_caller_inputs(self) -> None:
@@ -3649,9 +3657,11 @@ class PlaybookActivationTest(unittest.TestCase):
 
             self.assertEqual(exit_code, 0)
             payload = json.loads(stdout.getvalue())
-            self.assertEqual(payload["inputs"], {"repository": "owner/repo", "issue_number": None, "close_comment": None})
-            self.assertEqual(payload["caller_inputs"], ["issue_number"])
-            self.assertEqual(payload["optional_caller_inputs"], ["close_comment"])
+            self.assertEqual(payload["inputs"]["repository"]["binding"], "owner/repo")
+            self.assertEqual(payload["inputs"]["issue_number"]["caller_slot"], "required")
+            self.assertEqual(payload["inputs"]["close_comment"]["caller_slot"], "optional")
+            self.assertNotIn("caller_inputs", payload)
+            self.assertNotIn("optional_caller_inputs", payload)
 
     def test_cli_workflows_show_omits_empty_values_when_not_declared(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -3679,7 +3689,7 @@ class PlaybookActivationTest(unittest.TestCase):
             self.assertNotIn("category", payload)
             self.assertNotIn("when", payload)
             self.assertNotIn("working_directory", payload)
-            self.assertEqual(payload["inputs"], {})
+            self.assertEqual(payload["inputs"]["repository"]["description"], "GitHub repository slug")
             self.assertNotIn("declared_inputs", payload)
 
     def test_cli_workflows_show_reports_unknown_workflow(self) -> None:

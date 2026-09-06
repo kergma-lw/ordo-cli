@@ -32,6 +32,7 @@
 - `review`, `check`, `plan`, and `explain` must remain baseline decision-support modes rather than optional UX sugar around `execute`.
 - `review` must not treat every declared workflow input as automatic missing-validation debt; it should distinguish meaningful control/effect inputs, profile-carried ambient context, and unused declarations.
 - `review` must treat trusted profile-provided consumed context separately from user-driven validation candidates and must not require early re-validation of that context by default.
+- Independently of missing-validation advice, `review` must warn about undocumented root input declarations and declared inputs without either a non-user source or a playbook caller slot. These `input_authoring` advisories must not alter activation or other runtime-mode semantics, and available static findings must survive an unavailable review.
 - Profile-supplied surplus context must not force workflows to declare unused values merely to activate successfully.
 - The runtime must distinguish profile-supplied surplus context from explicit user-supplied unknown inputs.
 - Default `review` and `check` outputs must not surface ordinary expected profile-surplus context as user-facing diagnostics.

@@ -63,6 +63,23 @@ These actions are navigation surfaces over the public topic model rather than ad
 
 ## Canonical snippet coverage
 
+### Workflow input discovery
+
+`ordo-playbook workflows show <workflow>` inspects without activation and publishes the same complete `inputs` mapping in plain and JSON output, keyed by every declared workflow input. It has no separate `declared_inputs`, `caller_inputs`, or `optional_caller_inputs` fields.
+
+- Each input retains `description` and `hint` when provided and publishes normalized boolean `required`.
+- `caller_slot` is `required`, `optional`, or `none`, independently of declaration requiredness.
+- `sources` lists all present `workflow_default`, `launch_profile`, and `entry_binding` sources in that order.
+- `coverage` is `provided` when any source exists, otherwise `caller_slot` when either slot exists, otherwise `missing`. This source-presence rule is shared with the review missing-caller-slot advisory.
+- `default` appears only when declared, including explicit null; `binding` appears only for a concrete static entry binding. Profile values are never exposed.
+- `launch_profile` publishes `name` and `source`: `default` for playbook defaults, `explicit_cli` for explicit `--profile`, or both null without selection. Only the selected profile is loaded, using activation profile diagnostics.
+- Source presence includes null, false, and zero, and is not value validity or execution readiness. Required caller slots still demand explicit caller input even with provided coverage; optional caller slots do not relax required workflow declarations.
+- CLI input overrides and runtime profile switches are not authored launch sources.
+
+Publish these semantics through `features`, `command-line`, and relevant workflow input and playbook entry describe surfaces. Existing excerpt-backed examples teach declarations and bindings; excerpt parity is not verification of CLI activation or discovery output. The current snippet harness cannot validate CLI activation examples, so CLI command guidance must not be labeled executable snippet coverage.
+
+### Coverage publication
+
 `ordo-help describe` should publish explicit canonical-snippet coverage state for describable handles rather than forcing a caller to infer support from silence.
 
 - Every describable handle should publish `snippet_coverage`, even when the value is `none`.

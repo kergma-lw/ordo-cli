@@ -778,7 +778,7 @@ blocks:
         workflow = Workflow(
             version=0,
             workflow="open-task",
-            declared_inputs={"repository": "string"},
+            declared_inputs={"repository": {"description": "Target repository"}},
             blocks=(
                 GuardBlock(guards=(Guard(expr="inputs.repository | is_string"),)),
                 StepBlock(

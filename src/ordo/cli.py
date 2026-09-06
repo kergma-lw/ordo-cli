@@ -78,7 +78,7 @@ Review authoring-quality findings for the selected workflow without making chang
 Default output is intended to be concise:
   - overall review status
   - finding count
-  - top findings
+  - all findings with compact details (top_findings)
 
 Examples:
   ordo-playbook review set-active-task
@@ -280,6 +280,21 @@ def main() -> int:
                 progress_steps=args.progress_steps,
             )
         payload = _public_runtime_payload(args.mode, result)
+        if args.mode == "review":
+            outputs = payload["outputs"]
+            findings = list(getattr(activated, "review_findings", ()))
+            keys = {(item["code"], tuple(item["path"])) for item in findings}
+            findings.extend(
+                item for item in outputs.get("findings", [])
+                if (item["code"], tuple(item["path"])) not in keys
+            )
+            outputs.update({
+                "findings": findings,
+                "finding_count": len(findings),
+                "categories": sorted({item["category"] for item in findings}),
+            })
+            if outputs.get("review_status") != "unavailable":
+                outputs["review_status"] = "needs_attention" if findings else "clean"
         activation_diagnostics = getattr(activated, "diagnostics", ())
         if activation_diagnostics and args.mode != "run":
             payload["diagnostics"] = [
@@ -400,7 +415,8 @@ def _build_next_payload(args, *, input_overrides: dict[str, object], include_gra
     entries = []
     for listed_entry in listed_entries:
         try:
-            entries.append(inspect_playbook_workflow(listed_entry.workflow_name, playbook_path=args.playbook_file))
+            # Candidate activation owns profile loading and its failure diagnostics.
+            entries.append(inspect_playbook_workflow(listed_entry.workflow_name, playbook_path=args.playbook_file, include_launch_sources=False))
         except PlaybookError:
             entries.append(listed_entry)
 
@@ -555,7 +571,7 @@ def _stderr_step_progress_reporter():
 
 def _summarize_review_payload(payload: dict[str, object]) -> dict[str, object]:
     findings = [item for item in payload.get("outputs", {}).get("findings", []) if isinstance(item, dict)]
-    top_findings = [_summarize_review_finding(item) for item in findings[:5]]
+    top_findings = [_summarize_review_finding(item) for item in findings]
     return {
         "mode": payload.get("mode"),
         "status": payload.get("status"),
@@ -899,7 +915,7 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                 "categories": categories,
             }
         else:
-            entry = inspect_playbook_workflow(argv[1], playbook_path=args.playbook_file)
+            entry = inspect_playbook_workflow(argv[1], playbook_path=args.playbook_file, profile_name=args.profile)
             payload = _compact_mapping(
                 mode="workflows.show",
                 status="ok",
@@ -910,19 +926,9 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                 when=entry.workflow_when,
                 file=str(entry.workflow_path),
                 working_directory=entry.working_directory,
-                inputs=_workflow_entry_inputs_shape(entry),
-                caller_inputs=list(entry.caller_inputs),
-                optional_caller_inputs=list(entry.optional_caller_inputs) if entry.optional_caller_inputs else None,
+                inputs={item.name: item.contract for item in entry.inputs},
+                launch_profile={"name": entry.launch_profile_name, "source": entry.launch_profile_source},
             )
-            if args.json:
-                payload["declared_inputs"] = [
-                    _compact_mapping(
-                        name=item.name,
-                        description=item.description,
-                        hint=item.hint,
-                    )
-                    for item in entry.inputs
-                ]
     except PlaybookError as exc:
         return _emit_error(exc, as_json=args.json)
 
@@ -932,15 +938,6 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
     else:
         print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
-
-
-def _workflow_entry_inputs_shape(entry) -> dict[str, object]:
-    inputs = dict(entry.with_)
-    for name in entry.caller_inputs:
-        inputs[name] = None
-    for name in entry.optional_caller_inputs:
-        inputs[name] = None
-    return inputs
 
 
 def _parse_input_overrides(raw_items: list[str], *, parser: argparse.ArgumentParser) -> dict[str, object]:
@@ -996,6 +993,13 @@ def _emit_error(exc: PlaybookError, *, as_json: bool, requested_mode: str | None
         "diagnostics": [diagnostic.to_contract() for diagnostic in exc.diagnostics],
     }
     payload.update(_activation_error_guidance(exc.diagnostics, requested_mode=requested_mode, requested_workflow=requested_workflow))
+    if requested_mode == "review":
+        payload["outputs"] = {
+            "review_status": "unavailable",
+            "finding_count": len(exc.review_findings),
+            "findings": list(exc.review_findings),
+            "categories": sorted({item["category"] for item in exc.review_findings}),
+        }
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
@@ -1034,6 +1038,13 @@ def _summarize_activation_error_payload(payload: dict[str, object]) -> dict[str,
     example = payload.get("example")
     if isinstance(example, str) and example:
         summary["example"] = example
+    outputs = payload.get("outputs")
+    if isinstance(outputs, dict) and outputs.get("review_status") == "unavailable":
+        summary.update({
+            "review_status": "unavailable",
+            "finding_count": outputs["finding_count"],
+            "top_findings": [_summarize_review_finding(item) for item in outputs["findings"]],
+        })
     return summary
 
 

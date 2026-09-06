@@ -706,6 +706,8 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "The task needs one explicit executable contract with declared activation inputs and reviewable runtime structure.",
             "The logic belongs to one workflow body rather than to playbook launch policy or reusable fragment definition only.",
             "One intentionally project-local workflow subtree must bind itself to one fixed execution profile through workflow.profile.",
+            "Document every root input with a non-blank description and expose inputs without a default, selected launch-profile value, or entry binding through playbook with caller slots: x: for required inputs, x?: for optional inputs. Review reports input_authoring warnings; CLI overrides do not suppress them or change activation errors.",
+            "Inspect authored input coverage with ordo-playbook workflows show <workflow>: plain and --json expose the same complete inputs mapping with normalized required, caller_slot, sources, and coverage. Coverage reports source presence, not execution readiness; required caller slots still require caller input. Launch-profile values are not exposed, and CLI input overrides or runtime profile switches do not count as authored sources.",
         ],
         "inappropriate_when": [
             "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
@@ -1326,6 +1328,9 @@ def build_command_line_response() -> JSONObject:
                 "purpose": "Browse playbook workflows, ask which workflow should run next, inspect inferred workflow topology, or launch one named workflow into one runtime mode",
                 "use_when": [
                     "You need to discover which named workflows the current playbook publishes before choosing one.",
+                    "Use workflows show <workflow> for the complete declared inputs mapping in both plain and --json output, without activating the workflow. Each input includes description and hint when provided, normalized required, caller_slot (required/optional/none), sources, and coverage. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields.",
+                    "Input sources list every present workflow_default, launch_profile, and entry_binding in that order. default appears only when declared, including null; binding appears only for a concrete static entry binding. Selected profile values are never exposed. coverage is provided when any source exists, caller_slot when only a slot exists, or missing when neither exists, using the same source-presence rule as review.playbook.input_caller_slot_missing.",
+                    "launch_profile reports name and source: default for defaults.profile, explicit_cli for --profile, or both null when no launch profile is selected. Only the selected profile is loaded. Coverage is not value validity or execution readiness: null, false, and zero count as present sources; required caller slots still require explicit caller input even with provided coverage. --input, --input-file, and runtime profile switches do not contribute authored source coverage.",
                     "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
                     "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
                     "Inspect check's allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards: allowed false may mean unknown rather than blocked, and missing_facts is not inferred from unevaluated expressions.",
@@ -1333,6 +1338,7 @@ def build_command_line_response() -> JSONObject:
                 ],
                 "do_not_use_for": [
                     "Teaching workflow-body semantics that belong to workflow, playbook, or workflow-rules surfaces.",
+                    "Treating CLI command examples as executable verified snippets: the current snippet harness cannot validate CLI activation examples. Authored YAML excerpts verify source parity only, not CLI discovery or activation output.",
                     "Treating check as complete workflow sign-off; review is still required for authoring-quality findings.",
                     "Encoding durable project logic in launch flags instead of declared workflow inputs, playbook metadata, or workflow structure.",
                     "Assuming nested state deferral or full composed-run proof: a reached run/loop after deferral halts with state_deferral_invocation_barrier, and profile switches cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred.",
@@ -1354,7 +1360,7 @@ def build_command_line_response() -> JSONObject:
                 "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
                 "discovery_commands": [
                     {"name": "workflows list", "summary": "list declared playbook workflows with project-local descriptions"},
-                    {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata and playbook invocation inputs; --json also includes declared workflow inputs"},
+                    {"name": "workflows show <workflow>", "summary": "show one workflow entry with file metadata, launch_profile, and the complete inputs contract with authored source coverage, identical in plain and --json output"},
                 ],
                 "modes": [
                     {"name": "review <workflow>", "summary": "review workflow-quality findings without making changes"},
@@ -1381,11 +1387,12 @@ def build_command_line_response() -> JSONObject:
                         {
                             "mode": "review <workflow>",
                             "question": "Is this workflow well-authored?",
-                            "purpose": "Surface workflow-quality findings",
+                            "purpose": "Surface workflow-quality findings, including input_authoring warnings for missing root input descriptions and missing playbook caller slots. CLI overrides do not suppress these advisories; available static findings remain visible when review_status is unavailable, without changing activation errors or other modes.",
                         },
                     ],
                 },
                 "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
+                "review_findings_surface": "Plain review includes all available findings in order under top_findings, with compact details, including when review_status is unavailable; --json retains full finding details.",
                 "run_failure_surface": {
                     "rule": "When a run failure has normalized external context, the public failure payload should identify that external cause instead of surfacing only a generic wrapper message.",
                     "external_payload_fields": [
@@ -3765,10 +3772,13 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "use_when": [
                 "The workflow needs a declared external request shape instead of reading undeclared caller values implicitly.",
                 "Guards, steps, or result logic should be able to reference activation inputs through one explicit contract surface.",
+                "Give every root input a non-blank description, including optional, defaulted, profile-supplied, and unused inputs. Review reports review.workflow.input_description_missing (warning, input_authoring; suggested_fix: add_input_description) for absent, null, empty, or whitespace-only descriptions.",
+                "Inspect every declaration through ordo-playbook workflows show <workflow>: plain and --json share one inputs mapping with description/hint when provided, normalized required, caller_slot, sources, coverage, and default only when declared (including null). Static entry values appear as binding; selected profile values are not exposed. This is authored source coverage, not execution readiness.",
             ],
             "do_not_use_for": [
                 "Fragment-local include args; use workflow.fragment.args when the values belong only to source-time fragment reuse.",
                 "Playbook entry-owned static launch inputs; use playbook.workflows.with when the values belong to one named launch entry rather than to the workflow contract itself.",
+                "Treating documentation warnings as activation errors or as missing-validation advice. These advisories leave check, plan, run, explain, and next unchanged; available static findings remain visible even when review_status is unavailable.",
             ],
             "nearest_surfaces": [
                 {"handle": "workflow.inputs_contract", "summary": "Contract surface for declaration shape, access path, and activation rules"},
@@ -3781,10 +3791,13 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "definition": "Workflow activation-input contract for how inputs are declared, accessed, validated, and rejected at runtime.",
             "use_when": [
                 "You need to understand what declaring workflow inputs means at activation time, including per-input required/default rules and unknown-input rejection.",
+                "Document every root declaration with a non-blank description. Review warns with review.workflow.input_description_missing (input_authoring; add_input_description) for absent, null, empty, or whitespace-only descriptions, independently of required/default rules or whether the input is used.",
+                "workflows show <workflow> exposes all declarations in a single inputs mapping in plain and --json alike: description/hint when provided, normalized required, caller_slot (required/optional/none), sources (workflow_default/launch_profile/entry_binding), coverage (provided/caller_slot/missing), default only when declared including null, and binding only for a static entry value. Profile values stay private. Source presence is not readiness; required caller slots still require caller input, and CLI overrides or runtime profile switches do not count as authored sources.",
             ],
             "do_not_use_for": [
                 "Assuming undeclared caller keys are tolerated; unknown activation inputs are rejected by contract.",
                 "Treating input declaration as sufficient validation guidance; authoring still needs explicit input validation guards when semantics require them.",
+                "Treating input_authoring warnings as new activation requirements: existing errors and check, plan, run, explain, and next semantics are unchanged. Available static findings survive review_status unavailable.",
             ],
             "nearest_surfaces": [
                 {"handle": "workflow.inputs", "summary": "Top-level field that declares the workflow activation-input catalog"},
@@ -4064,6 +4077,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "use_when": [
                 "The project needs one stable launch catalog that maps public workflow names to workflow files plus entry-owned launch metadata.",
                 "Each published workflow should carry operator-facing discovery hints such as description, category, when, working_directory, with, or state_bindings at the playbook layer.",
+                "workflows show <workflow> combines every declared input with its authored launch coverage in one inputs mapping, identically in plain and --json output. launch_profile names the selected profile and its default or explicit_cli source (both null when absent), without exposing profile values. Use command-line.ordo-playbook for the complete output contract; show does not activate the workflow or prove readiness.",
             ],
             "do_not_use_for": [
                 "Workflow-internal guards, steps, branching, or dataflow; those belong inside the workflow file selected by the entry.",
@@ -4106,10 +4120,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "use_when": [
                 "One published workflow should always receive fixed entry-owned input values, should require some caller-provided keys through `key:`, or should allow optional caller-provided keys through `key?:`.",
                 "The values belong to the launch catalog entry rather than to the reusable workflow contract or to one operator invocation only.",
+                "Expose every declared input with no default, selected launch-profile input, or concrete entry binding through a caller slot. Review reports review.playbook.input_caller_slot_missing (warning, input_authoring; suggested_fix: expose_caller_input), suggesting x: for required inputs and x?: for optional inputs, including unused declarations.",
+                "A default or supplied key counts even when null, false, or zero; only the selected launch profile counts. Either caller-slot form suppresses the advisory. CLI --input and --input-file overrides do not suppress it. Available static findings survive review_status unavailable without replacing activation errors.",
+                "workflows show <workflow> uses the same source-presence rule as review: each declared input reports caller_slot (required/optional/none), sources (workflow_default/launch_profile/entry_binding), and coverage (provided if any source exists, otherwise caller_slot if exposed, otherwise missing), in both plain and --json output. binding shows only a concrete static entry value; profile values remain private. Runtime profile switches do not count as launch sources, and provided coverage never waives a required caller slot.",
             ],
             "do_not_use_for": [
                 "Declaring which inputs exist at all; use workflow.inputs for the workflow's activation contract.",
                 "Per-run operator overrides; use command-line.ordo-playbook.flag.input or command-line.ordo-playbook.flag.input_file when the caller should supply the value at launch time.",
+                "Relaxing activation requirements: x: still requires explicit caller input even with a default, and x?: does not make a required workflow input optional. These warnings do not change check, plan, run, explain, or next.",
             ],
             "nearest_surfaces": [
                 {"handle": "workflow.inputs", "summary": "Workflow-owned declaration of which activation inputs are valid"},
@@ -6197,6 +6215,11 @@ def render_command_line_text(payload: JSONObject) -> str:
             ]
         )
         check_review_passes = command.get("check_review_passes")
+        lines.extend(["", "discovery commands:"])
+        lines.extend(f"- {item['name']}: {item['summary']}" for item in command["discovery_commands"])
+        lines.extend(["", "use when:"])
+        lines.extend(f"- {item}" for item in command["use_when"])
+        lines.extend(["", "review findings surface:", f"- {command['review_findings_surface']}"])
         if isinstance(check_review_passes, dict):
             lines.extend(["", "workflow check/review passes:", f"- rule: {check_review_passes['rule']}"])
             for item in check_review_passes.get("passes", []):
@@ -6787,6 +6810,9 @@ def render_command_line_node_text(payload: JSONObject) -> str:
             lines.append(f"- {item}")
 
     run_success_surface = metadata.get("run_success_surface")
+    review_findings_surface = metadata.get("review_findings_surface")
+    if isinstance(review_findings_surface, str) and review_findings_surface:
+        lines.extend(["", "review findings surface:", f"- {review_findings_surface}"])
     if isinstance(run_success_surface, str) and run_success_surface:
         lines.extend(["", "run success surface:", f"- {run_success_surface}"])
 

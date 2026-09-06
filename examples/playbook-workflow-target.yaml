@@ -1,8 +1,11 @@
 version: 0
 workflow: remember-profile
 inputs:
-  active_profile_key: {}
-  repo_dir: {}
+  active_profile_key:
+    description: Shared-state key containing the remembered profile
+  repo_dir:
+    description: Optional working directory for this launch entry
+    required: false
 state_needs:
   shared_state: {}
 let:
