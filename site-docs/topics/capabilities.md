@@ -10,13 +10,49 @@ Use this page when you need to know whether a surface is supported, restricted, 
 
 - Scope: `workflow`
 - Status: `supported`
+- Related model nodes: `workflow.local_expression.filter`, `workflow.local_expression.builtin`, `workflow.local_expression.adapter`
 
-### workflow.local_expression.adapters
+### workflow.local_expression.adapter
 
 - Scope: `workflow`
 - Status: `supported`
 - Related capabilities: `workflow.local_expressions`
-- Related model nodes: `workflow.local_expression.adapter_seam`, `workflow.local_expression.adapter_binding`, `workflow.local_expression.adapter.key_value`, `workflow.local_expression.adapter.markdown`, `workflow.local_expression.adapter.text`
+- Related model nodes: `workflow.local_expression.adapter_seam`, `workflow.local_expression.adapter_binding`, `workflow.local_expression.adapter.json`, `workflow.local_expression.adapter.key_value`, `workflow.local_expression.adapter.markdown`, `workflow.local_expression.adapter.text`, `workflow.local_expression.adapter.yaml`
+
+### workflow.state_bindings
+
+- Scope: `workflow`
+- Status: `supported`
+- Related model nodes: `playbook.states`, `state.workflow_surface.state_binding_field`, `state.workflow_surface.storage_targets_field`, `workflow.step.state_set`, `workflow.step.state_delete`
+
+### workflow.state_needs
+
+- Scope: `workflow`
+- Status: `supported`
+- Related capabilities: `workflow.state_bindings`
+- Related model nodes: `state.workflow_surface.state_needs_field`, `playbook.states`, `state.workflow_surface.state_binding_field`
+
+### workflow.step.state_set
+
+- Scope: `workflow.step`
+- Status: `supported`
+- Related capabilities: `workflow.state_bindings`
+- Related model nodes: `state.workflow_surface.step_state_set_field`, `workflow.step_forms.state_set`
+- Related negative rules: `state_set.single_target_entry`
+
+### workflow.step.state_delete
+
+- Scope: `workflow.step`
+- Status: `supported`
+- Related capabilities: `workflow.state_bindings`
+- Related model nodes: `state.workflow_surface.step_state_delete_field`, `workflow.step_forms.state_delete`
+
+### workflow.step.value
+
+- Scope: `workflow.step`
+- Status: `supported`
+- Related capabilities: `workflow.local_expressions`
+- Related model nodes: `workflow.step_forms.value`, `workflow.step.result`, `workflow.step.publish`
 
 ### workflow.include_fragments
 
@@ -24,26 +60,6 @@ Use this page when you need to know whether a surface is supported, restricted, 
 - Status: `supported`
 - Related capabilities: `workflow.local_expressions`, `workflow.step.register`
 - Related model nodes: `workflow.include_contract`, `workflow.include`, `workflow.include.with`, `workflow.fragment.description`, `workflow.fragment.args`, `workflow.local_expression_root.args`
-
-### workflow.state_needs
-
-- Scope: `workflow`
-- Status: `supported`
-
-### workflow.state_bindings
-
-- Scope: `workflow`
-- Status: `supported`
-
-### workflow.step.state_set
-
-- Scope: `workflow.step`
-- Status: `supported`
-
-### workflow.step.state_delete
-
-- Scope: `workflow.step`
-- Status: `supported`
 
 ### workflow.step.value
 
@@ -77,8 +93,11 @@ Use this page when you need to know whether a surface is supported, restricted, 
 - Scope: `workflow.step`
 - Status: `supported`
 - Related capabilities: `workflow.step.register`, `workflow.step.value`
-- Related model nodes: `workflow.step.if`, `workflow.step.register`, `workflow.step_forms.operation_call`, `workflow.step_forms.value`
-- Related negative rules: `workflow_step.if_conflicts_with_register`
+- Related model nodes: `workflow.step.if`, `workflow.step.gate`, `workflow.step.register`, `workflow.step_forms.operation_call`, `workflow.step_forms.gate_checkpoint`, `workflow.step_forms.value`
+- Related negative rules: `workflow_step.if_conflicts_with_register`, `workflow_step.gate_conflicts_with_register`
+- Do not infer:
+  - one shared boolean condition surface means if and gate do the same semantic job
+  - if is the catch-all control mechanism for applicability, admission, and local branching
 
 ### workflow.step.register
 
@@ -86,12 +105,16 @@ Use this page when you need to know whether a surface is supported, restricted, 
 - Status: `supported`
 - Related capabilities: `workflow.step.condition`, `workflow.step.outputs`, `workflow.step.value`
 - Related model nodes: `workflow.step.register`, `workflow.step.uses`, `workflow.step.value`, `workflow.step_forms.operation_call`, `workflow.step_forms.value`
-- Related negative rules: `workflow_step.register_requires_uses`, `workflow_step.if_conflicts_with_register`
+- Related negative rules: `workflow_step.register_requires_uses`, `workflow_step.if_conflicts_with_register`, `workflow_step.gate_conflicts_with_register`
 
 ### workflow.step.outputs
 
 - Scope: `workflow.step`
 - Status: `supported`
+- Related capabilities: `workflow.step.register`, `workflow.step.value`
+- Related model nodes: `workflow.step.name`, `workflow.step.register`, `workflow.step.value`, `workflow.step_forms.operation_call`, `workflow.step_forms.run_invocation`
+- Do not infer:
+  - step outputs are ambient global context instead of explicit reads from named or registered steps
 
 ### workflow.branching
 
@@ -100,6 +123,9 @@ Use this page when you need to know whether a surface is supported, restricted, 
 - Related capabilities: `workflow.step.condition`, `workflow.step.register`, `workflow.step.value`
 - Related model nodes: `workflow.step.if`, `workflow.step.register`, `workflow.step_forms.operation_call`, `workflow.step_forms.value`
 - Related negative rules: `workflow_step.if_conflicts_with_register`
+- Do not infer:
+  - branching support means if should carry workflow applicability or admission decisions
+  - workflow branching is best modeled by stretching if across every conditional concern
 
 ## Negative rules
 
@@ -157,6 +183,13 @@ Use this page when you need to know whether a surface is supported, restricted, 
 - Reason: the MVP avoids publishing synthetic registered step results for skipped conditional steps
 - Related codes: `validation.workflow.step.if_with_register`
 
+### workflow_step.gate_conflicts_with_register
+
+- Surface: `workflow_step`
+- Rule: The gate and register fields cannot be used together; split the gate into a standalone checkpoint step before the registered step
+- Reason: gate admission should stay separate from step-result publication so blocked steps never need to imply a registered output surface
+- Related codes: `validation.workflow.step.gate_register_conflict`, `load.step.gate_register_conflict`
+
 ### embedded_value_expression.step_refs_must_be_backward
 
 - Surface: `embedded_value_expression`
@@ -181,9 +214,23 @@ Use this page when you need to know whether a surface is supported, restricted, 
 ### workflow_state_role.write_after_last_read
 
 - Surface: `workflow.state_needs`
-- Rule: Logical state role writes and deletes are allowed only after the final read of that same role
+- Rule: Before binding, logical state role writes and deletes are allowed only after the final read of that same role; bound validation instead compares actual storage in each access context
 - Reason: persistent runtime state should capture final cross-run handoff rather than per-run scratch flow
 - Related codes: `validation.workflow.state_role.write_before_last_read`
+
+### workflow_state_storage.write_after_last_read
+
+- Surface: `workflow.state_bindings`
+- Rule: After binding, write or delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field
+- Reason: relative paths resolve in each access context; normalized paths, symlinks, and existing hardlinks can alias, while the same role may resolve to different files and be valid
+- Related codes: `validation.workflow.state_storage.write_before_last_read`
+
+### workflow_state_storage.relevant_identity_required
+
+- Surface: `workflow.state_bindings`
+- Rule: Conservatively reject early only relevant write/later-read pairs whose storage identity cannot be established; this is not a proven ordering violation
+- Reason: validation must precede observations and effects; uncertain context alone does not reject read-only, read-before-write, or known-disjoint access; individual child validation is not a cross-invocation or cross-iteration guarantee, and no new loop mutation ban is added
+- Related codes: `validation.workflow.state_storage.identity_unresolved`
 
 ### format_value.args_must_be_list
 
@@ -221,12 +268,15 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "is_boolean",
       "in",
       "field",
+      "lookup",
       "only",
       "flatten",
       "first",
       "last",
       "length",
-      "unique"
+      "unique",
+      "catch",
+      "not_found"
     ],
     "name": "guard_expression",
     "roots": [
@@ -260,17 +310,21 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "is_boolean",
       "in",
       "field",
+      "lookup",
       "only",
       "flatten",
       "first",
       "last",
       "length",
-      "unique"
+      "unique",
+      "catch",
+      "not_found"
     ],
     "name": "step_condition",
     "roots": [
       "inputs",
       "args",
+      "item",
       "state",
       "step",
       "probe"
@@ -301,29 +355,112 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "is_boolean",
       "in",
       "field",
+      "lookup",
       "only",
       "flatten",
       "first",
       "last",
       "length",
-      "unique"
+      "unique",
+      "catch",
+      "not_found"
     ],
     "name": "embedded_value_expression",
     "roots": [
       "inputs",
       "args",
+      "item",
       "state",
       "step",
       "probe"
     ]
   },
   {
-    "boolean_operators": [],
-    "builtins": [],
-    "filters": [],
-    "name": "state_key_reference",
+    "boolean_operators": [
+      "and",
+      "or",
+      "not",
+      "parentheses"
+    ],
+    "builtins": [
+      "format",
+      "is_missing",
+      "is_present"
+    ],
+    "filters": [
+      "lower",
+      "trim",
+      "slug",
+      "eq",
+      "ne",
+      "not",
+      "is_string",
+      "is_number",
+      "is_integer",
+      "is_boolean",
+      "in",
+      "field",
+      "lookup",
+      "only",
+      "flatten",
+      "first",
+      "last",
+      "length",
+      "unique",
+      "catch",
+      "not_found"
+    ],
+    "name": "include_binding_expression",
     "roots": [
-      "inputs"
+      "inputs",
+      "item",
+      "state",
+      "step",
+      "probe"
+    ]
+  },
+  {
+    "boolean_operators": [
+      "and",
+      "or",
+      "not",
+      "parentheses"
+    ],
+    "builtins": [
+      "format",
+      "is_missing",
+      "is_present"
+    ],
+    "filters": [
+      "lower",
+      "trim",
+      "slug",
+      "eq",
+      "ne",
+      "not",
+      "is_string",
+      "is_number",
+      "is_integer",
+      "is_boolean",
+      "in",
+      "field",
+      "lookup",
+      "only",
+      "flatten",
+      "first",
+      "last",
+      "length",
+      "unique",
+      "catch",
+      "not_found"
+    ],
+    "name": "state_key_expression",
+    "roots": [
+      "inputs",
+      "args",
+      "item",
+      "state",
+      "step"
     ]
   }
 ]
@@ -338,26 +475,107 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "must_not_infer": [],
       "name": "workflow.local_expressions",
       "related_capabilities": [],
-      "related_model_nodes": [],
+      "related_model_nodes": [
+        "workflow.local_expression.filter",
+        "workflow.local_expression.builtin",
+        "workflow.local_expression.adapter"
+      ],
       "related_negative_rules": [],
       "scope": "workflow",
       "status": "supported"
     },
     {
       "must_not_infer": [],
-      "name": "workflow.local_expression.adapters",
+      "name": "workflow.local_expression.adapter",
       "related_capabilities": [
         "workflow.local_expressions"
       ],
       "related_model_nodes": [
         "workflow.local_expression.adapter_seam",
         "workflow.local_expression.adapter_binding",
+        "workflow.local_expression.adapter.json",
         "workflow.local_expression.adapter.key_value",
         "workflow.local_expression.adapter.markdown",
-        "workflow.local_expression.adapter.text"
+        "workflow.local_expression.adapter.text",
+        "workflow.local_expression.adapter.yaml"
       ],
       "related_negative_rules": [],
       "scope": "workflow",
+      "status": "supported"
+    },
+    {
+      "must_not_infer": [],
+      "name": "workflow.state_bindings",
+      "related_capabilities": [],
+      "related_model_nodes": [
+        "playbook.states",
+        "state.workflow_surface.state_binding_field",
+        "state.workflow_surface.storage_targets_field",
+        "workflow.step.state_set",
+        "workflow.step.state_delete"
+      ],
+      "related_negative_rules": [],
+      "scope": "workflow",
+      "status": "supported"
+    },
+    {
+      "must_not_infer": [],
+      "name": "workflow.state_needs",
+      "related_capabilities": [
+        "workflow.state_bindings"
+      ],
+      "related_model_nodes": [
+        "state.workflow_surface.state_needs_field",
+        "playbook.states",
+        "state.workflow_surface.state_binding_field"
+      ],
+      "related_negative_rules": [],
+      "scope": "workflow",
+      "status": "supported"
+    },
+    {
+      "must_not_infer": [],
+      "name": "workflow.step.state_set",
+      "related_capabilities": [
+        "workflow.state_bindings"
+      ],
+      "related_model_nodes": [
+        "state.workflow_surface.step_state_set_field",
+        "workflow.step_forms.state_set"
+      ],
+      "related_negative_rules": [
+        "state_set.single_target_entry"
+      ],
+      "scope": "workflow.step",
+      "status": "supported"
+    },
+    {
+      "must_not_infer": [],
+      "name": "workflow.step.state_delete",
+      "related_capabilities": [
+        "workflow.state_bindings"
+      ],
+      "related_model_nodes": [
+        "state.workflow_surface.step_state_delete_field",
+        "workflow.step_forms.state_delete"
+      ],
+      "related_negative_rules": [],
+      "scope": "workflow.step",
+      "status": "supported"
+    },
+    {
+      "must_not_infer": [],
+      "name": "workflow.step.value",
+      "related_capabilities": [
+        "workflow.local_expressions"
+      ],
+      "related_model_nodes": [
+        "workflow.step_forms.value",
+        "workflow.step.result",
+        "workflow.step.publish"
+      ],
+      "related_negative_rules": [],
+      "scope": "workflow.step",
       "status": "supported"
     },
     {
@@ -377,42 +595,6 @@ Use this page when you need to know whether a surface is supported, restricted, 
       ],
       "related_negative_rules": [],
       "scope": "workflow",
-      "status": "supported"
-    },
-    {
-      "must_not_infer": [],
-      "name": "workflow.state_needs",
-      "related_capabilities": [],
-      "related_model_nodes": [],
-      "related_negative_rules": [],
-      "scope": "workflow",
-      "status": "supported"
-    },
-    {
-      "must_not_infer": [],
-      "name": "workflow.state_bindings",
-      "related_capabilities": [],
-      "related_model_nodes": [],
-      "related_negative_rules": [],
-      "scope": "workflow",
-      "status": "supported"
-    },
-    {
-      "must_not_infer": [],
-      "name": "workflow.step.state_set",
-      "related_capabilities": [],
-      "related_model_nodes": [],
-      "related_negative_rules": [],
-      "scope": "workflow.step",
-      "status": "supported"
-    },
-    {
-      "must_not_infer": [],
-      "name": "workflow.step.state_delete",
-      "related_capabilities": [],
-      "related_model_nodes": [],
-      "related_negative_rules": [],
-      "scope": "workflow.step",
       "status": "supported"
     },
     {
@@ -465,7 +647,10 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "status": "deprecated"
     },
     {
-      "must_not_infer": [],
+      "must_not_infer": [
+        "one shared boolean condition surface means if and gate do the same semantic job",
+        "if is the catch-all control mechanism for applicability, admission, and local branching"
+      ],
       "name": "workflow.step.condition",
       "related_capabilities": [
         "workflow.step.register",
@@ -473,12 +658,15 @@ Use this page when you need to know whether a surface is supported, restricted, 
       ],
       "related_model_nodes": [
         "workflow.step.if",
+        "workflow.step.gate",
         "workflow.step.register",
         "workflow.step_forms.operation_call",
+        "workflow.step_forms.gate_checkpoint",
         "workflow.step_forms.value"
       ],
       "related_negative_rules": [
-        "workflow_step.if_conflicts_with_register"
+        "workflow_step.if_conflicts_with_register",
+        "workflow_step.gate_conflicts_with_register"
       ],
       "scope": "workflow.step",
       "status": "supported"
@@ -500,22 +688,37 @@ Use this page when you need to know whether a surface is supported, restricted, 
       ],
       "related_negative_rules": [
         "workflow_step.register_requires_uses",
-        "workflow_step.if_conflicts_with_register"
+        "workflow_step.if_conflicts_with_register",
+        "workflow_step.gate_conflicts_with_register"
       ],
       "scope": "workflow.step",
       "status": "supported"
     },
     {
-      "must_not_infer": [],
+      "must_not_infer": [
+        "step outputs are ambient global context instead of explicit reads from named or registered steps"
+      ],
       "name": "workflow.step.outputs",
-      "related_capabilities": [],
-      "related_model_nodes": [],
+      "related_capabilities": [
+        "workflow.step.register",
+        "workflow.step.value"
+      ],
+      "related_model_nodes": [
+        "workflow.step.name",
+        "workflow.step.register",
+        "workflow.step.value",
+        "workflow.step_forms.operation_call",
+        "workflow.step_forms.run_invocation"
+      ],
       "related_negative_rules": [],
       "scope": "workflow.step",
       "status": "supported"
     },
     {
-      "must_not_infer": [],
+      "must_not_infer": [
+        "branching support means if should carry workflow applicability or admission decisions",
+        "workflow branching is best modeled by stretching if across every conditional concern"
+      ],
       "name": "workflow.branching",
       "related_capabilities": [
         "workflow.step.condition",
@@ -540,7 +743,7 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "name": "inputs",
       "surfaces": [
         "guard_expression",
-        "state_key_reference",
+        "state_key_expression",
         "step_condition",
         "embedded_value_expression"
       ]
@@ -558,6 +761,14 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "surfaces": [
         "step_condition",
         "embedded_value_expression"
+      ]
+    },
+    {
+      "name": "item",
+      "surfaces": [
+        "step_condition",
+        "embedded_value_expression",
+        "include_binding_expression"
       ]
     },
     {
@@ -602,12 +813,15 @@ Use this page when you need to know whether a surface is supported, restricted, 
         "is_boolean",
         "in",
         "field",
+        "lookup",
         "only",
         "flatten",
         "first",
         "last",
         "length",
-        "unique"
+        "unique",
+        "catch",
+        "not_found"
       ],
       "name": "guard_expression",
       "roots": [
@@ -641,17 +855,21 @@ Use this page when you need to know whether a surface is supported, restricted, 
         "is_boolean",
         "in",
         "field",
+        "lookup",
         "only",
         "flatten",
         "first",
         "last",
         "length",
-        "unique"
+        "unique",
+        "catch",
+        "not_found"
       ],
       "name": "step_condition",
       "roots": [
         "inputs",
         "args",
+        "item",
         "state",
         "step",
         "probe"
@@ -682,29 +900,112 @@ Use this page when you need to know whether a surface is supported, restricted, 
         "is_boolean",
         "in",
         "field",
+        "lookup",
         "only",
         "flatten",
         "first",
         "last",
         "length",
-        "unique"
+        "unique",
+        "catch",
+        "not_found"
       ],
       "name": "embedded_value_expression",
       "roots": [
         "inputs",
         "args",
+        "item",
         "state",
         "step",
         "probe"
       ]
     },
     {
-      "boolean_operators": [],
-      "builtins": [],
-      "filters": [],
-      "name": "state_key_reference",
+      "boolean_operators": [
+        "and",
+        "or",
+        "not",
+        "parentheses"
+      ],
+      "builtins": [
+        "format",
+        "is_missing",
+        "is_present"
+      ],
+      "filters": [
+        "lower",
+        "trim",
+        "slug",
+        "eq",
+        "ne",
+        "not",
+        "is_string",
+        "is_number",
+        "is_integer",
+        "is_boolean",
+        "in",
+        "field",
+        "lookup",
+        "only",
+        "flatten",
+        "first",
+        "last",
+        "length",
+        "unique",
+        "catch",
+        "not_found"
+      ],
+      "name": "include_binding_expression",
       "roots": [
-        "inputs"
+        "inputs",
+        "item",
+        "state",
+        "step",
+        "probe"
+      ]
+    },
+    {
+      "boolean_operators": [
+        "and",
+        "or",
+        "not",
+        "parentheses"
+      ],
+      "builtins": [
+        "format",
+        "is_missing",
+        "is_present"
+      ],
+      "filters": [
+        "lower",
+        "trim",
+        "slug",
+        "eq",
+        "ne",
+        "not",
+        "is_string",
+        "is_number",
+        "is_integer",
+        "is_boolean",
+        "in",
+        "field",
+        "lookup",
+        "only",
+        "flatten",
+        "first",
+        "last",
+        "length",
+        "unique",
+        "catch",
+        "not_found"
+      ],
+      "name": "state_key_expression",
+      "roots": [
+        "inputs",
+        "args",
+        "item",
+        "state",
+        "step"
       ]
     }
   ],
@@ -794,6 +1095,12 @@ Use this page when you need to know whether a surface is supported, restricted, 
     },
     {
       "argument_count": 1,
+      "input_type": "json",
+      "name": "lookup",
+      "output_type": "json"
+    },
+    {
+      "argument_count": 1,
       "authored_form": "only(field=value) / only(field!=value)",
       "input_type": "json",
       "name": "only",
@@ -828,6 +1135,19 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "input_type": "json",
       "name": "unique",
       "output_type": "json"
+    },
+    {
+      "argument_count": 2,
+      "authored_form": "catch([\"issue_not_found\", \"*_not_found\"], false)",
+      "input_type": "json",
+      "name": "catch",
+      "output_type": "json"
+    },
+    {
+      "argument_count": 0,
+      "input_type": "json",
+      "name": "not_found",
+      "output_type": "boolean"
     }
   ],
   "negative_rules": [
@@ -949,6 +1269,28 @@ Use this page when you need to know whether a surface is supported, restricted, 
       "surface": "workflow_step"
     },
     {
+      "name": "workflow_step.gate_conflicts_with_register",
+      "reason": "gate admission should stay separate from step-result publication so blocked steps never need to imply a registered output surface",
+      "related_capabilities": [
+        "workflow.step.condition",
+        "workflow.step.register",
+        "workflow.step.value"
+      ],
+      "related_codes": [
+        "validation.workflow.step.gate_register_conflict",
+        "load.step.gate_register_conflict"
+      ],
+      "related_model_nodes": [
+        "workflow.step.gate",
+        "workflow.step.register",
+        "workflow.step_forms.gate_checkpoint",
+        "workflow.step_forms.operation_call",
+        "workflow.step_forms.value"
+      ],
+      "rule": "The gate and register fields cannot be used together; split the gate into a standalone checkpoint step before the registered step",
+      "surface": "workflow_step"
+    },
+    {
       "name": "embedded_value_expression.step_refs_must_be_backward",
       "reason": "step-result reads are order-sensitive execution-local data flow rather than random access workflow state",
       "related_capabilities": [],
@@ -989,8 +1331,30 @@ Use this page when you need to know whether a surface is supported, restricted, 
         "validation.workflow.state_role.write_before_last_read"
       ],
       "related_model_nodes": [],
-      "rule": "Logical state role writes and deletes are allowed only after the final read of that same role",
+      "rule": "Before binding, logical state role writes and deletes are allowed only after the final read of that same role; bound validation instead compares actual storage in each access context",
       "surface": "workflow.state_needs"
+    },
+    {
+      "name": "workflow_state_storage.write_after_last_read",
+      "reason": "relative paths resolve in each access context; normalized paths, symlinks, and existing hardlinks can alias, while the same role may resolve to different files and be valid",
+      "related_capabilities": [],
+      "related_codes": [
+        "validation.workflow.state_storage.write_before_last_read"
+      ],
+      "related_model_nodes": [],
+      "rule": "After binding, write or delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field",
+      "surface": "workflow.state_bindings"
+    },
+    {
+      "name": "workflow_state_storage.relevant_identity_required",
+      "reason": "validation must precede observations and effects; uncertain context alone does not reject read-only, read-before-write, or known-disjoint access; individual child validation is not a cross-invocation or cross-iteration guarantee, and no new loop mutation ban is added",
+      "related_capabilities": [],
+      "related_codes": [
+        "validation.workflow.state_storage.identity_unresolved"
+      ],
+      "related_model_nodes": [],
+      "rule": "Conservatively reject early only relevant write/later-read pairs whose storage identity cannot be established; this is not a proven ordering violation",
+      "surface": "workflow.state_bindings"
     },
     {
       "name": "format_value.args_must_be_list",

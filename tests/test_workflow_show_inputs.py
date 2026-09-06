@@ -28,7 +28,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
             "required_slot": {"default": 0},
             "optional_slot": {"required": False},
             "required_optional_slot": {},
-            "all_sources": {"required": True, "default": "fallback"},
+            "all_sources": {"default": "fallback"},
         }
         self.bindings = {
             "bound": False, "required_slot": None, "optional_slot?": None,
@@ -45,8 +45,8 @@ class WorkflowShowInputsTest(unittest.TestCase):
             }), encoding="utf-8")
         self.payload = {
             "version": 1, "defaults": {"profile": "selected"},
-            "profiles": {name: {"file": f"{name}.yml"} for name in ("selected", "other")},
-            "workflows": {"sample": {"file": "sample.yml", "with": self.bindings}},
+            "profiles": {name: {"file": f"./{name}.yml"} for name in ("selected", "other")},
+            "workflows": {"sample": {"file": "./sample.yml", "with": self.bindings}},
         }
         self.write_playbook()
 
@@ -64,11 +64,20 @@ class WorkflowShowInputsTest(unittest.TestCase):
             status = main()
         return status, json.loads(stdout.getvalue() or stderr.getvalue())
 
-    def test_plain_and_json_publish_identical_complete_contracts(self):
+    def test_plain_filters_caller_slots_and_json_keeps_complete_contract(self):
         plain_status, plain = self.show()
         json_status, payload = self.show(as_json=True)
         self.assertEqual((plain_status, json_status), (0, 0))
-        self.assertEqual(plain, payload)
+        self.assertEqual(plain, {
+            **{key: value for key, value in payload.items() if key != "launch_profile"},
+            "inputs": {name: payload["inputs"][name] for name in (
+                "required_slot", "optional_slot", "required_optional_slot",
+            )},
+        })
+        self.assertEqual(set(payload["inputs"]), set(self.declarations))
+        entry = inspect_playbook_workflow("sample", playbook_path=self.playbook)
+        self.assertEqual(payload["inputs"], {item.name: item.contract for item in entry.inputs})
+        self.assertTrue(all(item["caller_slot"] != "none" for item in plain["inputs"].values()))
         for removed in ("declared_inputs", "caller_inputs", "optional_caller_inputs"):
             self.assertNotIn(removed, payload)
         self.assertEqual(payload["launch_profile"], {"name": "selected", "source": "default"})
@@ -96,8 +105,9 @@ class WorkflowShowInputsTest(unittest.TestCase):
         self.assertTrue(inputs["required_optional_slot"]["required"])
         self.assertEqual(inputs["required_optional_slot"]["caller_slot"], "optional")
         self.assertEqual(inputs["all_sources"]["sources"], ["workflow_default", "launch_profile", "entry_binding"])
-        self.assertTrue(inputs["all_sources"]["required"])
+        self.assertFalse(inputs["all_sources"]["required"])
         self.assertNotIn("secret-profile-value", json.dumps(payload))
+        self.assertNotIn("secret-profile-value", json.dumps(plain))
         self.assertNotIn("binding", inputs["profile_value"])
 
     def test_profile_selection_matches_activation_and_review_coverage(self):
@@ -111,14 +121,24 @@ class WorkflowShowInputsTest(unittest.TestCase):
                         workflow_name="sample", playbook_path=self.playbook, profile_name=profile_name,
                         input_overrides={"missing": "override", "required_slot": 1, "required_optional_slot": 1, "profile_value": 1},
                     )
-                    self.assertEqual(payload["launch_profile"], {
-                        "name": activated.workflow.launch_profile_name, "source": source,
-                    })
+                    if as_json:
+                        self.assertEqual(payload["launch_profile"], {
+                            "name": activated.workflow.launch_profile_name, "source": source,
+                        })
+                    else:
+                        self.assertNotIn("launch_profile", payload)
                     missing = {name for name, item in payload["inputs"].items() if item["coverage"] == "missing"}
                     findings = {item["evidence"]["input"] for item in activated.review_findings if item["code"] == "review.playbook.input_caller_slot_missing"}
-                    self.assertEqual(missing, findings)
-                    self.assertIn("missing", missing)
-                    self.assertEqual("profile_value" in missing, profile_name == "other")
+                    if as_json:
+                        self.assertEqual(missing, findings)
+                        self.assertIn("missing", missing)
+                        self.assertEqual("profile_value" in missing, profile_name == "other")
+                    else:
+                        self.assertEqual(missing, set())
+                        self.assertEqual(set(payload["inputs"]), {
+                            "required_slot", "optional_slot", "required_optional_slot",
+                        })
+                    self.assertNotIn("secret-profile-value", json.dumps(payload))
 
     def test_no_default_does_not_select_an_available_profile(self):
         del self.payload["defaults"]
@@ -128,8 +148,12 @@ class WorkflowShowInputsTest(unittest.TestCase):
             for as_json in (False, True):
                 status, payload = self.show(as_json=as_json)
                 self.assertEqual(status, 0)
-                self.assertEqual(payload["launch_profile"], {"name": None, "source": None})
-                self.assertEqual(payload["inputs"]["profile_value"]["coverage"], "missing")
+                if as_json:
+                    self.assertEqual(payload["launch_profile"], {"name": None, "source": None})
+                    self.assertEqual(payload["inputs"]["profile_value"]["coverage"], "missing")
+                else:
+                    self.assertNotIn("launch_profile", payload)
+                    self.assertNotIn("profile_value", payload["inputs"])
 
     def test_invalid_selected_profiles_use_activation_diagnostics(self):
         for profile_name in ("unknown", "selected"):
@@ -156,7 +180,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
         (self.root / "other.yml").unlink()
         status, payload = self.show()
         self.assertEqual(status, 0)
-        self.assertEqual(payload["launch_profile"]["name"], "selected")
+        self.assertNotIn("launch_profile", payload)
 
     def test_empty_workflow_contract_has_empty_inputs_mapping(self):
         self.payload["workflows"]["sample"]["with"] = {}
@@ -167,20 +191,45 @@ class WorkflowShowInputsTest(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertEqual(payload["inputs"], {})
 
+    def test_no_caller_slots_keeps_empty_plain_inputs_mapping(self):
+        self.payload["workflows"]["sample"]["with"] = {}
+        self.write_playbook()
+        plain_status, plain = self.show()
+        json_status, payload = self.show(as_json=True)
+        self.assertEqual((plain_status, json_status), (0, 0))
+        self.assertEqual(plain, {
+            **{key: value for key, value in payload.items() if key != "launch_profile"}, "inputs": {},
+        })
+        self.assertEqual(set(payload["inputs"]), set(self.declarations))
+        self.assertTrue(all(item["caller_slot"] == "none" for item in payload["inputs"].values()))
+
+    def test_plain_retains_launch_profile_source_on_caller_slot(self):
+        self.payload["workflows"]["sample"]["with"]["profile_value"] = None
+        self.write_playbook()
+        plain_status, plain = self.show()
+        json_status, payload = self.show(as_json=True)
+        self.assertEqual((plain_status, json_status), (0, 0))
+        self.assertNotIn("launch_profile", plain)
+        self.assertEqual(payload["launch_profile"], {"name": "selected", "source": "default"})
+        self.assertEqual(plain["inputs"]["profile_value"], payload["inputs"]["profile_value"])
+        self.assertEqual(plain["inputs"]["profile_value"]["sources"], ["launch_profile"])
+
     def test_runtime_profile_switch_does_not_supply_launch_coverage(self):
         self.payload["defaults"] = {"profile": "other"}
         self.write_playbook()
         workflow = yaml.safe_load(self.workflow.read_text(encoding="utf-8"))
         workflow["blocks"][1]["steps"] = [{"name": "Switch later", "profile_switch": "selected"}]
         self.workflow.write_text(yaml.safe_dump(workflow), encoding="utf-8")
-        status, payload = self.show()
+        status, payload = self.show(as_json=True)
         self.assertEqual(status, 0)
         self.assertEqual(payload["inputs"]["profile_value"]["coverage"], "missing")
+
+        self.assertEqual(payload["launch_profile"], {"name": "other", "source": "default"})
 
     def test_input_file_override_does_not_supply_authored_coverage(self):
         value_file = self.root / "value.txt"
         value_file.write_text("caller value", encoding="utf-8")
-        status, payload = self.show("--input-file", f"missing={value_file}")
+        status, payload = self.show("--input-file", f"missing={value_file}", as_json=True)
         self.assertEqual(status, 0)
         self.assertEqual(payload["inputs"]["missing"]["coverage"], "missing")
 

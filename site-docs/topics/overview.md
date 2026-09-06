@@ -8,13 +8,15 @@ Use this page first when you need to understand where to look next.
 
 ## Published topics
 
+- `features`
 - `overview`
 - `model`
-- `workflow-authoring`
+- `workflow-rules`
 - `capabilities`
 - `command-line`
 - `operations`
 - `examples`
+- `snippet-coverage`
 - `operation`
 - `describe`
 - `search`
@@ -23,6 +25,7 @@ Use this page first when you need to understand where to look next.
 
 - `runtime` — Runtime compatibility and execution-context operations.
 - `git` — Operations for reading and changing local Git state.
+- `compose` — Operations in the `compose` namespace.
 - `gh` — Operations for reading and changing GitHub state.
 - `shell` — Low-level shell execution surface.
 - `fs` — Operations in the `fs` namespace.
@@ -36,6 +39,7 @@ Use this page first when you need to understand where to look next.
 - `plan`
 - `execute`
 - `explain`
+- `next`
 
 ### Statuses
 
@@ -45,7 +49,7 @@ Use this page first when you need to understand where to look next.
 - `resolution_error`
 - `execution_error`
 
-## Workflow authoring loop
+## Workflow check/review loop
 
 Use both check and review after adding or changing a workflow; neither replaces the other.
 
@@ -54,20 +58,30 @@ Use both check and review after adding or changing a workflow; neither replaces 
 
 ## Recommended next calls
 
-- `ordo-help model --json` — Learn the main DSL surfaces
-- `ordo-help workflow-authoring --json` — Learn preferred workflow authoring patterns, including paired check/review passes
-- `ordo-help capabilities --json` — Learn capability boundaries
-- `ordo-help command-line --json` — Inspect public launch commands, flags, and distinct check/review roles
-- `ordo-help operations --json` — Inspect the public operation catalog
-- `ordo-help examples --json` — Inspect verified repository examples
+- `ordo-help features` — Scan workflow features, named surfaces, and when to use them
+- `ordo-help model` — Learn the main DSL surfaces
+- `ordo-help workflow-rules` — Learn preferred workflow rules, including paired check/review passes
+- `ordo-help capabilities` — Learn capability boundaries
+- `ordo-help command-line` — Inspect public launch commands, flags, and distinct check/review roles
+- `ordo-help operations` — Inspect the public operation catalog
+- `ordo-help examples` — Inspect verified repository examples
+- `ordo-help snippet-coverage` — Inspect which public handles do and do not publish canonical verified snippets
 
 ## Full JSON reference
 
 ```json
 {
+  "conditional_roles": {
+    "avoid": [
+      "Do not use if as a catch-all control mechanism.",
+      "If a condition is really deciding applicability, admission, or routing, move it into guards, gates, or a higher structural choice instead."
+    ],
+    "rule": "Use each conditional surface for its own job: guards handle applicability and early rejection, gates handle whether a path or step may run at all, and if handles local behavioral variation inside an already-valid path."
+  },
   "connector_namespaces": [
     "runtime",
     "git",
+    "compose",
     "gh",
     "shell",
     "fs"
@@ -85,13 +99,17 @@ Use both check and review after adding or changing a workflow; neither replaces 
     "workflow"
   ],
   "execution_concepts": {
+    "check_unknown": "Inspect allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards. allowed false can mean unknown, not blocked; missing_facts is not inferred from unevaluated expressions.",
     "modes": [
       "review",
       "check",
       "plan",
       "execute",
-      "explain"
+      "explain",
+      "next"
     ],
+    "state_boundary": "Nested analysis does not defer state. A reached run/loop after deferral halts with state_deferral_invocation_barrier; profiles cannot resume it. Cross-invocation and cross-iteration guarantees remain deferred.",
+    "state_deferral": "Top-level check defers effectful state writes/deletes after conditions and gates and continues to independent guards, without mutation, simulation, outputs, registers, or reuse. Plan retains ordered non-reusable nodes; run executes admitted mutations once.",
     "statuses": [
       "ok",
       "guard_failed",
@@ -100,14 +118,28 @@ Use both check and review after adding or changing a workflow; neither replaces 
       "execution_error"
     ]
   },
+  "failure_diagnostics": {
+    "external_payload_fields": [
+      "kind",
+      "classification",
+      "tool",
+      "system",
+      "argv_summary",
+      "stderr_excerpt",
+      "suggested_checks"
+    ],
+    "rule": "When runtime has external command or remote-system context, user-facing diagnostics should distinguish that external cause from workflow or engine logic failures."
+  },
   "published_topics": [
+    "features",
     "overview",
     "model",
-    "workflow-authoring",
+    "workflow-rules",
     "capabilities",
     "command-line",
     "operations",
     "examples",
+    "snippet-coverage",
     "operation",
     "describe",
     "search"
@@ -115,31 +147,47 @@ Use both check and review after adding or changing a workflow; neither replaces 
   "purpose": "World map for Ordo discovery and authoring bootstrap",
   "recommended_next_calls": [
     {
-      "command": "ordo-help model --json",
+      "command": "ordo-help features",
+      "purpose": "Scan workflow features, named surfaces, and when to use them"
+    },
+    {
+      "command": "ordo-help model",
       "purpose": "Learn the main DSL surfaces"
     },
     {
-      "command": "ordo-help workflow-authoring --json",
-      "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
+      "command": "ordo-help workflow-rules",
+      "purpose": "Learn preferred workflow rules, including paired check/review passes"
     },
     {
-      "command": "ordo-help capabilities --json",
+      "command": "ordo-help capabilities",
       "purpose": "Learn capability boundaries"
     },
     {
-      "command": "ordo-help command-line --json",
+      "command": "ordo-help command-line",
       "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
     },
     {
-      "command": "ordo-help operations --json",
+      "command": "ordo-help operations",
       "purpose": "Inspect the public operation catalog"
     },
     {
-      "command": "ordo-help examples --json",
+      "command": "ordo-help examples",
       "purpose": "Inspect verified repository examples"
+    },
+    {
+      "command": "ordo-help snippet-coverage",
+      "purpose": "Inspect which public handles do and do not publish canonical verified snippets"
     }
   ],
-  "workflow_authoring_passes": {
+  "snippet_coverage_summary": {
+    "coverage_counts": {
+      "excerpt_verified": 58,
+      "none": 161,
+      "runner_verified": 58
+    },
+    "total_handles": 277
+  },
+  "workflow_check_review_passes": {
     "passes": [
       {
         "command": "ordo-playbook check <workflow>",

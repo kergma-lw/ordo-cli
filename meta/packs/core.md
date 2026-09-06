@@ -5609,18 +5609,20 @@ These actions are navigation surfaces over the public topic model rather than ad
 
 ### Workflow input discovery
 
-`ordo-playbook workflows show <workflow>` inspects without activation and publishes the same complete `inputs` mapping in plain and JSON output, keyed by every declared workflow input. It has no separate `declared_inputs`, `caller_inputs`, or `optional_caller_inputs` fields.
+`ordo-playbook workflows show <workflow>` inspects without activation. Plain output presents the main caller interface: it retains the existing JSON-shaped serialized envelope but filters `inputs` to entries whose `caller_slot` is `required` or `optional`. Entries with `caller_slot: none` are hidden, and no caller slots yields `inputs: {}` rather than omitting the mapping. This is not a new prose or table renderer.
+
+Plain output also omits top-level `launch_profile` entirely. `--json` retains the unchanged full declaration input contract, keyed by every declared workflow input, including declarations without caller slots, and its unchanged top-level `launch_profile`. Apart from plain input filtering and top-level profile omission, the envelope and retained input records are unchanged. Neither output has separate `declared_inputs`, `caller_inputs`, or `optional_caller_inputs` fields. Filtering depends only on caller exposure, not declaration requiredness or source coverage: a caller slot remains visible even when a default or selected profile supplies coverage. Concrete entry bindings without caller slots are visible only in the full `--json` inputs mapping.
 
 - Each input retains `description` and `hint` when provided and publishes normalized boolean `required`.
 - `caller_slot` is `required`, `optional`, or `none`, independently of declaration requiredness.
 - `sources` lists all present `workflow_default`, `launch_profile`, and `entry_binding` sources in that order.
 - `coverage` is `provided` when any source exists, otherwise `caller_slot` when either slot exists, otherwise `missing`. This source-presence rule is shared with the review missing-caller-slot advisory.
 - `default` appears only when declared, including explicit null; `binding` appears only for a concrete static entry binding. Profile values are never exposed.
-- `launch_profile` publishes `name` and `source`: `default` for playbook defaults, `explicit_cli` for explicit `--profile`, or both null without selection. Only the selected profile is loaded, using activation profile diagnostics.
+- Top-level `launch_profile`, in `--json` only, publishes the initial activation `name` and `source`, not the final bound workflow profile: `default` for playbook defaults, `explicit_cli` for explicit `--profile`, or both null without selection. Only the selected profile is loaded, using activation profile diagnostics. Retained input metadata in plain output still includes the `launch_profile` source label where present.
 - Source presence includes null, false, and zero, and is not value validity or execution readiness. Required caller slots still demand explicit caller input even with provided coverage; optional caller slots do not relax required workflow declarations.
 - CLI input overrides and runtime profile switches are not authored launch sources.
 
-Publish these semantics through `features`, `command-line`, and relevant workflow input and playbook entry describe surfaces. Existing excerpt-backed examples teach declarations and bindings; excerpt parity is not verification of CLI activation or discovery output. The current snippet harness cannot validate CLI activation examples, so CLI command guidance must not be labeled executable snippet coverage.
+Publish these semantics through `features`, `command-line`, and relevant workflow input and playbook entry describe surfaces. Existing excerpt-backed examples teach declarations and bindings; their summaries must distinguish plain caller visibility from full `--json` declaration visibility. Excerpt parity is not verification of CLI activation or discovery output. The current snippet harness cannot validate CLI activation or serialized discovery-output examples, so CLI command guidance must not be labeled executable snippet coverage. This display filter does not enhance profile visibility or change `check`, `review`, `plan`, `run`, `explain`, or `next`.
 
 ### Coverage publication
 
@@ -8517,30 +8519,36 @@ If a change breaks any invariant, `meta/` must be updated explicitly in the same
 
 ## Scope
 
-Discovery publishes the implemented complete input contract from `playbook.py` and `cli.py`; this documentation work does not change engine behavior. Plain and JSON show output share one `inputs` mapping and launch-profile identity. Source coverage uses the same rule as review, without publishing profile values or treating source presence as readiness.
+Discovery documents the approved plain-output changes in `cli.py`, without activation or core changes. Plain `workflows show` is the main caller interface: it keeps the JSON-shaped serialized format, filters `inputs` to `caller_slot` values `required` or `optional`, and omits top-level `launch_profile` entirely. It hides `none` and keeps `inputs: {}` when no caller slots exist. `--json` remains exactly unchanged, including the full declaration input contract and top-level `launch_profile` with the initial activation name/source, not the final bound workflow profile. Retained input records, including the `launch_profile` source label, and other envelope fields are unchanged. Source coverage uses the same rule as review, without publishing profile values or treating source presence as readiness.
 
 ## Describe readiness review
 
-Reviewed the text output of these public handles against all nine points in the help-discovery describe readiness checklist:
+Source and rendered text/JSON review against all nine points in the help-discovery describe readiness checklist covers the following handles. All ten describe commands succeeded during integration.
 
-- `workflow.inputs`: positive declaration definition, fragment-input and entry-binding boundaries, neighboring handles, readable terminology, full workflow excerpt, and source-parity caveat are present.
-- `workflow.inputs_contract`: declaration requiredness is distinguished from caller slots and coverage; the full workflow excerpt demonstrates described required and optional inputs without inventing defaults.
-- `playbook.workflows`: catalog definition and workflow-body/pre-run boundaries are explicit; the catalog fragment demonstrates concrete bindings and discovery metadata.
-- `playbook.workflows.with`: concrete bindings and both caller-slot forms have excerpt-backed examples; provided coverage does not waive required caller input. Declaration and CLI-override boundaries remain explicit.
-- `command-line.ordo-playbook`: definition, boundaries, neighboring handles, complete input output semantics, and text/JSON publication are covered. Canonical executable CLI examples remain blocked: the current snippet harness cannot validate CLI activation examples. This surface is not fully ready under the canonical-example checklist points; command strings are usage guidance, not verified execution examples.
+- `workflow.inputs`: positive declaration definition, fragment-input and entry-binding boundaries, neighboring handles, readable terminology, full workflow excerpt, and source-parity caveat are present. Guidance and excerpt summaries distinguish the caller interface from all declarations.
+- `workflow.inputs_contract`: declaration requiredness is distinguished from caller slots and coverage; the full workflow excerpt demonstrates described required and optional inputs without inventing defaults. Filtering depends only on caller exposure, not declaration requiredness or source coverage.
+- `playbook.workflows`: catalog definition and workflow-body/pre-run boundaries are explicit; the catalog fragment demonstrates concrete bindings and discovery metadata. Its excerpt summary identifies full declaration visibility as `--json` only.
+- `playbook.workflows.with`: concrete bindings and both caller-slot forms have excerpt-backed examples; provided coverage does not waive required caller input or hide a caller slot. Declaration and CLI-override boundaries remain explicit. The static-binding excerpt summary says that `caller_slot: none` records appear only in the full `--json` inputs mapping.
+- `command-line.ordo-playbook`: definition, boundaries, neighboring handles, filtered plain envelope, full `--json` contract, and empty mapping semantics are covered. Canonical executable CLI examples remain blocked: the current snippet harness cannot validate CLI activation or serialized discovery-output examples. This surface is not fully ready under the canonical-example checklist points; command strings are usage guidance, not verified execution examples.
 
-The four authored-YAML surfaces retain the supported `excerpt_verified` path. Excerpts demonstrate intended authoring, not validation of CLI output or activation. No snippet-world or executable CLI coverage is claimed. Updated examples and `features` use the same source-presence terminology.
+The four authored-YAML surfaces retain the supported `excerpt_verified` path. Their existing fragments demonstrate intended use and are sufficiently large to imitate; no YAML authoring shape changed. Excerpts demonstrate intended authoring, not validation of CLI output or activation. No snippet-world or executable CLI coverage is claimed. The snippet scaffold insertion contracts cover expression values, step fields/fragments, workflow fragments, routine bundles, and state bundles, not CLI invocations or serialized output.
+
+The rendered surfaces retain positive definitions, boundaries, neighboring mechanisms, self-contained filter semantics, and structured text/JSON parity. Intended-use and larger-fragment examples remain available for the four YAML surfaces; CLI example support remains a known gap. All five relevant snippet summaries in `src/ordo/model/help_snippets.py` were updated at source, without renderer overrides. A separate clarity weakness remains in `workflow.inputs_contract`: its terse text about globally required declared keys does not spell out the per-input default rules as explicitly as JSON metadata. This change does not redefine requiredness. Surrounding features alignment was checked in source, not by a completed aggregate rendering test.
 
 ## Surface impact
 
-- `check`, `plan`, `run`, `explain`, and `next`: no behavior changes in this documentation-only work. Discovery is not activation or execution readiness; required caller input remains required even if another source exists.
-- `review`: shared authored missing-source coverage is documented. Plain `top_findings` contains every available finding in order with compact details, including unavailable review; JSON retains full details.
+- `check`, `plan`, `run`, `explain`, and `next`: no behavior changes from the display filter or this documentation work. Discovery is not activation or execution readiness; required caller input remains required even if another source exists.
+- `review`: no behavior changes. Shared authored missing-source coverage remains documented; hiding a declaration in plain discovery does not suppress review findings. Plain `top_findings` contains every available finding in order with compact details, including unavailable review; JSON retains full details.
 - `features`, `command-line`, relevant input and playbook describes, and searchable help metadata publish the changed discovery contract.
 - `overview`, `model`, `workflow-rules`, `capabilities`, and `operations`: reviewed for impact; no new authoring primitive, runtime mode, validation rule, connector operation, or supported capability is introduced. Existing activation contracts and the paired check/review guidance remain valid.
 
 ## Verification limits
 
-Read-only help rendering is the available check for this work. Help assertions and golden expectations are updated, but tests are not executed: workflow discovery provides no suitable targeted test workflow, and the user explicitly prohibits `verify-all-tests` until a separate instruction. Derived packs must be regenerated with `ordo-playbook run meta-packs-build`.
+Top-level profile omission addition: `.venv/bin/python -m pytest tests/test_workflow_show_inputs.py` passed (12 tests), and `.venv/bin/python -m pytest tests/test_ordo_help_cli.py::OrdoHelpCliTest::test_workflow_show_caller_interface_command_help_contract` passed (1 test). The regression suite checks plain omission with selected and absent profiles, unchanged JSON profile identity, retained caller-slot profile source metadata, and non-impact across all six runtime modes. All five describe handles listed above were rerun in text and JSON after this addition, and excerpt verification passed again. Aggregate golden tests were not rerun. The existing CLI-snippet readiness gap remains open.
+
+The scoped pass updates help assertions and the command-line/features golden expectations. Only focused tests are used; no full suite was run. Derived packs and site docs were regenerated after the top-level profile omission addition, not edited manually. The generated site refresh also retains existing generator/catalog limitations: links to the unsupported features page, a duplicate value-step capability, and the legacy workflow-authoring page preserved by --keep. These are not corrected by this display change.
+
+Focused verification: `tests/test_workflow_show_inputs.py` and the caller-interface command-help test passed together (12 tests, 21 subtests); source-excerpt verification passed (1 test, 6 deselected). The combined run including aggregate discovery parity timed out and is not claimed as passing. Direct plain and `--json` discovery of the external `mobile-prebuild-android` entry confirmed empty plain inputs and unchanged full JSON input metadata. Generated `site-docs` was refreshed with the existing `tools/build_help_site_docs.py --keep` generator through the project virtualenv after explicit user approval of that operational bypass. The full-suite closure requirement and known help/snippet gaps remain open.
 
 <!-- source: verification/meta/packs.md -->
 

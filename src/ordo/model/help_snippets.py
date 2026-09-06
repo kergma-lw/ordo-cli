@@ -143,7 +143,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "playbook_workflows_catalog_entry",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Publish one named workflow entry with launch metadata and concrete input bindings. workflows show merges these bindings with every workflow declaration in the same inputs mapping in plain and --json; source coverage is not readiness. Excerpt verification checks authored source parity, not CLI discovery or activation output.",
+                "summary": "Publish one named workflow entry with launch metadata and concrete input bindings. workflows show --json merges these bindings with every workflow declaration; plain show includes only required or optional caller slots in inputs and hides caller_slot none. Plain show omits top-level launch_profile; --json keeps the initial activation name/source, not the final bound workflow profile. Retained input sources keep the launch_profile label. Source coverage is not readiness. Excerpt verification checks authored source parity, not CLI discovery or activation output.",
                 "yaml": 'workflows:\n  remember-profile:\n    file: ./playbook-workflow-target.yaml\n    description: Read one remembered profile from shared state\n    category: inspect\n    when: Use when you need one state-backed profile lookup before choosing the next workflow.\n    with:\n      active_profile_key: active_profile\n      repo_dir: .\n    working_directory: ${inputs.repo_dir}\n    state_bindings:\n      shared_state: shared_state',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
@@ -187,7 +187,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "documented_required_and_optional_inputs",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "Document required and optional root inputs beside their declarations. workflows show includes both declarations with normalized required and authored coverage in plain and --json, not just entry-bound inputs. The playbook supplies the state key and optional directory separately. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
+                "summary": "Document required and optional root inputs beside their declarations. workflows show --json includes all declarations with normalized required and authored coverage; plain show includes only caller slots. Plain show omits top-level launch_profile; --json keeps the initial activation name/source, not the final bound workflow profile. Retained input sources keep the launch_profile label. The playbook supplies the state key and optional directory separately; concrete bindings without caller slots are hidden from plain inputs. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
                 "source_excerpt": {"path": "examples/playbook-workflow-target.yaml", "start_line": 1, "end_line": 16},
                 "verification": {"kind": "excerpt_verified", "example": "examples.playbook-workflows"},
             }
@@ -200,7 +200,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "documented_input_contract",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "A required input and an explicitly optional input both carry descriptions; neither declares a default, so workflows show must not invent default: null. Caller exposure belongs to playbook.workflows.with and is separate from requiredness and source coverage. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
+                "summary": "A required input and an explicitly optional input both carry descriptions; neither declares a default, so workflows show must not invent default: null. Caller exposure belongs to playbook.workflows.with and is separate from requiredness and source coverage. Plain show displays caller slots; --json retains every declaration. Plain show omits top-level launch_profile; --json keeps the initial activation name/source, not the final bound workflow profile. Retained input sources keep the launch_profile label. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
                 "source_excerpt": {"path": "examples/playbook-workflow-target.yaml", "start_line": 1, "end_line": 16},
                 "verification": {"kind": "excerpt_verified", "example": "examples.playbook-workflows"},
             }
@@ -213,7 +213,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "playbook_workflows_with_entry",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Supply the state key and directory as concrete entry bindings. workflows show reports binding, entry_binding in sources, provided coverage, and caller_slot none for each, without exposing profile values. This describes source presence, not readiness. Excerpt verification checks source parity, not CLI output.",
+                "summary": "Supply the state key and directory as concrete entry bindings. workflows show --json reports binding, entry_binding in sources, provided coverage, and caller_slot none for each, without exposing profile values. Plain show hides these non-caller inputs and retains inputs: {} when no caller slots exist. Plain show omits top-level launch_profile; --json keeps the initial activation name/source, not the final bound workflow profile. Retained input sources keep the launch_profile label. This describes source presence, not readiness. Excerpt verification checks source parity, not CLI output.",
                 "yaml": 'with:\n  active_profile_key: active_profile\n  repo_dir: .',
                 "source_example": "examples.playbook-workflows",
                 "source_excerpt": {
@@ -230,7 +230,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "playbook_required_and_optional_caller_inputs",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Expose the state key with active_profile_key: and the optional directory with repo_dir?:. workflows show distinguishes required and optional caller_slot from workflow requiredness; a required slot still demands caller input even if another source provides coverage. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
+                "summary": "Expose the state key with active_profile_key: and the optional directory with repo_dir?:. Both plain workflows show and --json retain these caller slots and distinguish required and optional caller_slot from workflow requiredness; a required slot still demands caller input even if another source provides coverage. Plain show omits top-level launch_profile; --json keeps the initial activation name/source, not the final bound workflow profile. Retained input sources keep the launch_profile label. Excerpt verification checks source parity, not CLI discovery, activation, or review outcomes.",
                 "source_excerpt": {"path": "examples/playbook-workflows.yaml", "start_line": 19, "end_line": 26},
                 "verification": {"kind": "excerpt_verified", "example": "examples.playbook-workflows"},
             }

@@ -65,18 +65,20 @@ These actions are navigation surfaces over the public topic model rather than ad
 
 ### Workflow input discovery
 
-`ordo-playbook workflows show <workflow>` inspects without activation and publishes the same complete `inputs` mapping in plain and JSON output, keyed by every declared workflow input. It has no separate `declared_inputs`, `caller_inputs`, or `optional_caller_inputs` fields.
+`ordo-playbook workflows show <workflow>` inspects without activation. Plain output presents the main caller interface: it retains the existing JSON-shaped serialized envelope but filters `inputs` to entries whose `caller_slot` is `required` or `optional`. Entries with `caller_slot: none` are hidden, and no caller slots yields `inputs: {}` rather than omitting the mapping. This is not a new prose or table renderer.
+
+Plain output also omits top-level `launch_profile` entirely. `--json` retains the unchanged full declaration input contract, keyed by every declared workflow input, including declarations without caller slots, and its unchanged top-level `launch_profile`. Apart from plain input filtering and top-level profile omission, the envelope and retained input records are unchanged. Neither output has separate `declared_inputs`, `caller_inputs`, or `optional_caller_inputs` fields. Filtering depends only on caller exposure, not declaration requiredness or source coverage: a caller slot remains visible even when a default or selected profile supplies coverage. Concrete entry bindings without caller slots are visible only in the full `--json` inputs mapping.
 
 - Each input retains `description` and `hint` when provided and publishes normalized boolean `required`.
 - `caller_slot` is `required`, `optional`, or `none`, independently of declaration requiredness.
 - `sources` lists all present `workflow_default`, `launch_profile`, and `entry_binding` sources in that order.
 - `coverage` is `provided` when any source exists, otherwise `caller_slot` when either slot exists, otherwise `missing`. This source-presence rule is shared with the review missing-caller-slot advisory.
 - `default` appears only when declared, including explicit null; `binding` appears only for a concrete static entry binding. Profile values are never exposed.
-- `launch_profile` publishes `name` and `source`: `default` for playbook defaults, `explicit_cli` for explicit `--profile`, or both null without selection. Only the selected profile is loaded, using activation profile diagnostics.
+- Top-level `launch_profile`, in `--json` only, publishes the initial activation `name` and `source`, not the final bound workflow profile: `default` for playbook defaults, `explicit_cli` for explicit `--profile`, or both null without selection. Only the selected profile is loaded, using activation profile diagnostics. Retained input metadata in plain output still includes the `launch_profile` source label where present.
 - Source presence includes null, false, and zero, and is not value validity or execution readiness. Required caller slots still demand explicit caller input even with provided coverage; optional caller slots do not relax required workflow declarations.
 - CLI input overrides and runtime profile switches are not authored launch sources.
 
-Publish these semantics through `features`, `command-line`, and relevant workflow input and playbook entry describe surfaces. Existing excerpt-backed examples teach declarations and bindings; excerpt parity is not verification of CLI activation or discovery output. The current snippet harness cannot validate CLI activation examples, so CLI command guidance must not be labeled executable snippet coverage.
+Publish these semantics through `features`, `command-line`, and relevant workflow input and playbook entry describe surfaces. Existing excerpt-backed examples teach declarations and bindings; their summaries must distinguish plain caller visibility from full `--json` declaration visibility. Excerpt parity is not verification of CLI activation or discovery output. The current snippet harness cannot validate CLI activation or serialized discovery-output examples, so CLI command guidance must not be labeled executable snippet coverage. This display filter does not enhance profile visibility or change `check`, `review`, `plan`, `run`, `explain`, or `next`.
 
 ### Coverage publication
 

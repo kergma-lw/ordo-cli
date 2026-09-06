@@ -28,8 +28,8 @@ Use this when a workflow needs this exact operation surface. In practice: observ
 {
   "basename": "string",
   "content": "string",
-  "extension": "string",
   "exists": "boolean",
+  "extension": "string",
   "filename_without_extension": "string",
   "group": "string",
   "kind": "string",
@@ -104,8 +104,8 @@ Use this when a workflow needs this exact operation surface. In practice: observ
     "outputs": {
       "basename": "string",
       "content": "string",
-      "extension": "string",
       "exists": "boolean",
+      "extension": "string",
       "filename_without_extension": "string",
       "group": "string",
       "kind": "string",

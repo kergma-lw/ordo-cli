@@ -69,7 +69,8 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: a
     "context_fields": [
       "host",
       "viewer",
-      "scopes"
+      "scopes",
+      "repository"
     ],
     "prerequisites": [
       "gh binary available",

@@ -56,8 +56,7 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
 
 ```json
 {
-  "pull_number": 42,
-  "repository": "owner/repo"
+  "pull_number": 42
 }
 ```
 
@@ -69,7 +68,8 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
     "context_fields": [
       "host",
       "viewer",
-      "scopes"
+      "scopes",
+      "repository"
     ],
     "prerequisites": [
       "gh binary available",
@@ -84,8 +84,7 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
     "examples": [
       {
         "inputs": {
-          "pull_number": 42,
-          "repository": "owner/repo"
+          "pull_number": 42
         },
         "reference": "gh.pr.diff"
       }

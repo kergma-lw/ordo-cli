@@ -24,7 +24,7 @@
         },
         {
           "name": "workflows show <workflow>",
-          "summary": "show one workflow entry with file metadata, launch_profile, and the complete inputs contract with authored source coverage, identical in plain and --json output"
+          "summary": "show one workflow entry in the existing serialized envelope: plain inputs expose the main caller interface; --json retains the full declaration contract and authored source coverage"
         }
       ],
       "do_not_use_for": [
@@ -175,9 +175,9 @@
       "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
       "use_when": [
         "You need to discover which named workflows the current playbook publishes before choosing one.",
-        "Use workflows show <workflow> for the complete declared inputs mapping in both plain and --json output, without activating the workflow. Each input includes description and hint when provided, normalized required, caller_slot (required/optional/none), sources, and coverage. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields.",
+        "Use workflows show <workflow> for the main caller interface without activating the workflow. Plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. Plain output omits top-level launch_profile entirely. --json retains the unchanged complete declared inputs mapping and top-level launch_profile. Each visible input includes description and hint when provided, normalized required, caller_slot, sources, and coverage. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields; apart from plain inputs filtering and top-level launch_profile omission, the envelope and retained input records are otherwise unchanged.",
         "Input sources list every present workflow_default, launch_profile, and entry_binding in that order. default appears only when declared, including null; binding appears only for a concrete static entry binding. Selected profile values are never exposed. coverage is provided when any source exists, caller_slot when only a slot exists, or missing when neither exists, using the same source-presence rule as review.playbook.input_caller_slot_missing.",
-        "launch_profile reports name and source: default for defaults.profile, explicit_cli for --profile, or both null when no launch profile is selected. Only the selected profile is loaded. Coverage is not value validity or execution readiness: null, false, and zero count as present sources; required caller slots still require explicit caller input even with provided coverage. --input, --input-file, and runtime profile switches do not contribute authored source coverage.",
+        "In --json only, top-level launch_profile reports the initial activation name and source, not the final bound workflow profile: default for defaults.profile, explicit_cli for --profile, or both null when no launch profile is selected. Plain input sources still retain the launch_profile source label where present. Only the selected profile is loaded. Coverage is not value validity or execution readiness: null, false, and zero count as present sources; required caller slots still require explicit caller input even with provided coverage. --input, --input-file, and runtime profile switches do not contribute authored source coverage.",
         "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",
         "You need one-run launch overrides such as --profile, --input, or --input-file without editing the workflow or playbook.",
         "Inspect check's allowed_state, analysis_complete, incomplete_reasons, and unevaluated_relevant_guards: allowed false may mean unknown rather than blocked, and missing_facts is not inferred from unevaluated expressions.",

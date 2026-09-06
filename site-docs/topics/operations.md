@@ -62,6 +62,28 @@ Operations for reading and changing local Git state.
 - [git.worktree](../operations/git/worktree.md) — Read the current Git worktree state.
 - [git.worktrees](../operations/git/worktrees.md) — List Git worktrees.
 
+## compose
+
+Operations in the `compose` namespace.
+
+### Requirements
+
+- docker compose available
+
+### Available context
+
+- `project_directory`
+- `compose_file`
+- `project_name`
+
+### Operations
+
+- [compose.project](../operations/compose/project.md) — Observe one Compose project as an orchestration unit.
+- [compose.remove](../operations/compose/remove.md) — Remove one stopped materialized Compose service instance.
+- [compose.service](../operations/compose/service.md) — Observe one declared Compose service as an orchestration unit.
+- [compose.start](../operations/compose/start.md) — Bring one Compose project or service into operational running state.
+- [compose.stop](../operations/compose/stop.md) — Stop one Compose project or service.
+
 ## gh
 
 Operations for reading and changing GitHub state.
@@ -76,6 +98,7 @@ Operations for reading and changing GitHub state.
 - `host`
 - `viewer`
 - `scopes`
+- `repository`
 
 ### Operations
 
@@ -103,6 +126,10 @@ Operations for reading and changing GitHub state.
 - [gh.project.issue.field_single_select.set](../operations/gh/project-issue-field-single-select-set.md) — Set a single-select field for a GitHub Project issue.
 - [gh.project.items](../operations/gh/project-items.md) — Read normalized items from a GitHub Project.
 - [gh.project.items.details](../operations/gh/project-items-details.md) — Return normalized GitHub Project items with stable content details
+- [gh.repo](../operations/gh/repo.md) — Read normalized GitHub repository identity and fork facts.
+- [gh.repo.actions.permissions](../operations/gh/repo-actions-permissions.md) — Read GitHub Actions permissions for one repository.
+- [gh.repo.actions.permissions.set](../operations/gh/repo-actions-permissions-set.md) — Set the GitHub Actions enabled state for one repository.
+- [gh.repo.sync](../operations/gh/repo-sync.md) — Sync one GitHub fork repository default branch from its parent repository.
 
 ## shell
 
@@ -1352,9 +1379,258 @@ Operations in the `fs` namespace.
     {
       "bootstrap": {
         "context_fields": [
+          "project_directory",
+          "compose_file",
+          "project_name"
+        ],
+        "prerequisites": [
+          "docker compose available"
+        ]
+      },
+      "namespace": "compose",
+      "operations": [
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "compose.project"
+            }
+          ],
+          "failure_modes": [
+            "project_invalid",
+            "orchestrator_unavailable",
+            "observation_failed"
+          ],
+          "inputs": {},
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "project",
+          "outputs": {
+            "declared_services": "array[string]",
+            "project": "string",
+            "service_counts": "object",
+            "services": "object",
+            "state": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe one Compose project as an orchestration unit.",
+          "tags": [
+            "compose",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "remove the materialized runtime instance for one Compose service"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "service": "string"
+              },
+              "reference": "compose.remove"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "service_running",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "runtime_remove_failed",
+            "remove_failed"
+          ],
+          "inputs": {
+            "service": "string"
+          },
+          "invalidates_observations": [
+            "compose.*"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "remove",
+          "outputs": {
+            "changed": "boolean",
+            "state": "string",
+            "target": "string",
+            "target_kind": "string"
+          },
+          "preflight_observations": [
+            {
+              "probe": "compose.service",
+              "with": {
+                "service": "{service}"
+              }
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Remove one stopped materialized Compose service instance.",
+          "tags": [
+            "compose",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "service": "api"
+              },
+              "reference": "compose.service"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "observation_failed"
+          ],
+          "inputs": {
+            "service": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "service",
+          "outputs": {
+            "containers": "object",
+            "declared": "boolean",
+            "healthy": "boolean | null",
+            "published_ports": "array[string]",
+            "service": "string",
+            "state": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe one declared Compose service as an orchestration unit.",
+          "tags": [
+            "compose",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "bring the requested Compose target into operational running state"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "service": "string | null"
+              },
+              "reference": "compose.start"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "image_unavailable",
+            "build_failed",
+            "dependency_failed",
+            "runtime_start_failed",
+            "healthcheck_failed",
+            "start_failed"
+          ],
+          "inputs": {
+            "service": "string | null"
+          },
+          "invalidates_observations": [
+            "compose.*"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "start",
+          "outputs": {
+            "changed": "boolean",
+            "changed_services": "array[string]",
+            "state": "string",
+            "target": "string",
+            "target_kind": "string"
+          },
+          "preflight_observations": [
+            {
+              "probe": "compose.project",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Bring one Compose project or service into operational running state.",
+          "tags": [
+            "compose",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "stop the requested Compose target"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "service": "string | null"
+              },
+              "reference": "compose.stop"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "dependency_stop_blocked",
+            "runtime_stop_failed",
+            "stop_failed"
+          ],
+          "inputs": {
+            "service": "string | null"
+          },
+          "invalidates_observations": [
+            "compose.*"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "stop",
+          "outputs": {
+            "changed": "boolean",
+            "changed_services": "array[string]",
+            "state": "string",
+            "target": "string",
+            "target_kind": "string"
+          },
+          "preflight_observations": [
+            {
+              "probe": "compose.project",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Stop one Compose project or service.",
+          "tags": [
+            "compose",
+            "action"
+          ]
+        }
+      ]
+    },
+    {
+      "bootstrap": {
+        "context_fields": [
           "host",
           "viewer",
-          "scopes"
+          "scopes",
+          "repository"
         ],
         "prerequisites": [
           "gh binary available",
@@ -1695,8 +1971,7 @@ Operations in the `fs` namespace.
           "examples": [
             {
               "inputs": {
-                "pull_number": 42,
-                "repository": "owner/repo"
+                "pull_number": 42
               },
               "reference": "gh.pr"
             }
@@ -1847,8 +2122,7 @@ Operations in the `fs` namespace.
           "examples": [
             {
               "inputs": {
-                "pull_number": 42,
-                "repository": "owner/repo"
+                "pull_number": 42
               },
               "reference": "gh.pr.diff"
             }
@@ -2635,6 +2909,176 @@ Operations in the `fs` namespace.
             "gh",
             "probe"
           ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "gh.repo"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "probe_failed"
+          ],
+          "inputs": {
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "repo",
+          "outputs": {
+            "archived": "boolean",
+            "default_branch": "string | null",
+            "id": "string",
+            "is_fork": "boolean",
+            "parent_repository": "string | null",
+            "repository": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read normalized GitHub repository identity and fork facts.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "gh.repo.actions.permissions"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "probe_failed"
+          ],
+          "inputs": {
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "repo.actions.permissions",
+          "outputs": {
+            "allowed_actions": "string | null",
+            "enabled": "boolean",
+            "repository": "string",
+            "sha_pinning_required": "boolean | null"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read GitHub Actions permissions for one repository.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "set the GitHub Actions enabled state for one repository"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "enabled": false
+              },
+              "reference": "gh.repo.actions.permissions.set"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "set_blocked"
+          ],
+          "inputs": {
+            "enabled": "boolean",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "repo.actions.permissions.set",
+          "outputs": {
+            "changed": "boolean",
+            "enabled": "boolean",
+            "repository": "string"
+          },
+          "preflight_observations": [
+            {
+              "fields": [
+                "enabled"
+              ],
+              "probe": "gh.repo.actions.permissions",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Set the GitHub Actions enabled state for one repository.",
+          "tags": [
+            "gh",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "sync one fork repository default branch from its parent repository"
+          ],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "gh.repo.sync"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "not_a_fork",
+            "archived_repository",
+            "default_branch_unavailable",
+            "sync_blocked"
+          ],
+          "inputs": {
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "repo.sync",
+          "outputs": {
+            "branch": "string",
+            "repository": "string",
+            "synced": "boolean",
+            "upstream_repository": "string"
+          },
+          "preflight_observations": [
+            {
+              "fields": [
+                "is_fork",
+                "default_branch",
+                "parent_repository",
+                "archived"
+              ],
+              "probe": "gh.repo",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Sync one GitHub fork repository default branch from its parent repository.",
+          "tags": [
+            "gh",
+            "action"
+          ]
         }
       ]
     },
@@ -2722,8 +3166,11 @@ Operations in the `fs` namespace.
           "maturity": "stable",
           "name": "file",
           "outputs": {
+            "basename": "string",
             "content": "string",
             "exists": "boolean",
+            "extension": "string",
+            "filename_without_extension": "string",
             "group": "string",
             "kind": "string",
             "line_count": "integer",

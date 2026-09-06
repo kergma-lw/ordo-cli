@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ordo.help_cli import build_command_line_response
 from ordo.runtime.local_expression_engine.core import VALUE_EXPRESSION_FILTERS
 
 
@@ -27,7 +28,29 @@ class OrdoHelpCliTest(unittest.TestCase):
             check=False,
         )
 
-    def test_workflow_show_complete_input_contract_discovery_parity(self) -> None:
+    def test_workflow_show_caller_interface_command_help_contract(self) -> None:
+        command = next(item for item in build_command_line_response()["commands"] if item["name"] == "ordo-playbook")
+        guidance = " ".join(command["use_when"])
+        for term in (
+            "main caller interface", "JSON-shaped serialized envelope",
+            "filters the inputs mapping to caller_slot required or optional",
+            "hides caller_slot none", "inputs: {} when no caller slots exist",
+            "--json retains the unchanged complete declared inputs mapping",
+            "envelope and retained input records are otherwise unchanged",
+            "Plain output omits top-level launch_profile entirely",
+            "unchanged complete declared inputs mapping and top-level launch_profile",
+            "initial activation name and source, not the final bound workflow profile",
+            "Plain input sources still retain the launch_profile source label",
+            "Selected profile values are never exposed",
+            "required caller slots still require explicit caller input",
+        ):
+            with self.subTest(term=term):
+                self.assertIn(term, guidance)
+        show = next(item for item in command["discovery_commands"] if item["name"] == "workflows show <workflow>")
+        self.assertIn("plain inputs expose the main caller interface", show["summary"])
+        self.assertIn("--json retains the full declaration contract", show["summary"])
+
+    def test_workflow_show_input_contract_discovery_parity(self) -> None:
         for args in (("command-line",), ("describe", "command-line.ordo-playbook")):
             for json_args in ((), ("--json",)):
                 with self.subTest(args=args, json_args=json_args):
@@ -40,6 +63,11 @@ class OrdoHelpCliTest(unittest.TestCase):
                         "Selected profile values are never exposed", "source-presence rule",
                         "required caller slots still require explicit caller input",
                         "--input-file", "runtime profile switches", "top_findings", "all available findings",
+                        "main caller interface", "JSON-shaped serialized envelope",
+                        "caller_slot required or optional", "hides caller_slot none", "inputs: {}",
+                        "--json retains the unchanged complete declared inputs mapping",
+                        "Plain output omits top-level launch_profile entirely",
+                        "initial activation name and source, not the final bound workflow profile",
                     ):
                         self.assertIn(term, result.stdout)
                     self.assertNotIn("--json also includes declared workflow inputs", result.stdout)
@@ -48,6 +76,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(features.returncode, 0, features.stderr)
         self.assertIn("workflows show <workflow>", features.stdout)
         self.assertIn("source presence, not execution readiness", features.stdout)
+        self.assertIn("main caller interface", features.stdout)
+        self.assertIn("inputs: {}", features.stdout)
+        self.assertIn("omits top-level launch_profile entirely", features.stdout)
 
         command = self.run_help("describe", "command-line.ordo-playbook", "--json")
         self.assertIn("cannot validate CLI activation examples", command.stdout)
@@ -59,6 +90,21 @@ class OrdoHelpCliTest(unittest.TestCase):
                 self.assertIn("snippet coverage: excerpt_verified", result.stdout)
                 self.assertIn("source parity", result.stdout)
                 self.assertIn("canonical examples:", result.stdout)
+                for term in (
+                    "main caller interface", "JSON-shaped serialized envelope",
+                    "caller_slot required or optional", "hides caller_slot none", "inputs: {}",
+                    "Plain output omits top-level launch_profile entirely",
+                    "initial activation name and source, not the final bound workflow profile",
+                    "--json retains the unchanged full declaration contract" if handle != "workflow.inputs"
+                    else "Use --json for the unchanged full declaration contract",
+                ):
+                    self.assertIn(term, result.stdout)
+                for stale_promise in (
+                    "same inputs mapping in plain and --json",
+                    "authored coverage in plain and --json",
+                    "identically in plain and --json",
+                ):
+                    self.assertNotIn(stale_promise, result.stdout)
 
     def test_root_text_bootstrap_screen(self) -> None:
         result = self.run_help()

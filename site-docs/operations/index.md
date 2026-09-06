@@ -1,8 +1,18 @@
 # Operation reference
 
-Generated operation pages for 53 published operations.
+Generated operation pages for 62 published operations.
 
 - [Operation catalog](../topics/operations.md)
+
+## compose
+
+Operations in the `compose` namespace.
+
+- [compose.project](compose/project.md)
+- [compose.remove](compose/remove.md)
+- [compose.service](compose/service.md)
+- [compose.start](compose/start.md)
+- [compose.stop](compose/stop.md)
 
 ## fs
 
@@ -38,6 +48,10 @@ Operations for reading and changing GitHub state.
 - [gh.project.issue.field_single_select.set](gh/project-issue-field-single-select-set.md)
 - [gh.project.items](gh/project-items.md)
 - [gh.project.items.details](gh/project-items-details.md)
+- [gh.repo](gh/repo.md)
+- [gh.repo.actions.permissions](gh/repo-actions-permissions.md)
+- [gh.repo.actions.permissions.set](gh/repo-actions-permissions-set.md)
+- [gh.repo.sync](gh/repo-sync.md)
 
 ## git
 

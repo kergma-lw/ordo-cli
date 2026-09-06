@@ -926,8 +926,11 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                 when=entry.workflow_when,
                 file=str(entry.workflow_path),
                 working_directory=entry.working_directory,
-                inputs={item.name: item.contract for item in entry.inputs},
-                launch_profile={"name": entry.launch_profile_name, "source": entry.launch_profile_source},
+                inputs={
+                    item.name: item.contract for item in entry.inputs
+                    if args.json or item.contract["caller_slot"] in {"required", "optional"}
+                },
+                launch_profile={"name": entry.launch_profile_name, "source": entry.launch_profile_source} if args.json else None,
             )
     except PlaybookError as exc:
         return _emit_error(exc, as_json=args.json)

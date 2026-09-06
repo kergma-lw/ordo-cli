@@ -1,8 +1,8 @@
-# Authoring model
+# Workflow model
 
-This page outlines the main authoring contracts used in workflows, playbooks, profiles, and runtime state.
+This page outlines the main workflow contracts used in workflows, playbooks, profiles, and runtime state.
 
-Use this page when you need field-level contract details for authoring work.
+Use this page when you need field-level workflow contract details.
 
 ## Full JSON reference
 
@@ -1219,9 +1219,258 @@ Use this page when you need field-level contract details for authoring work.
     {
       "bootstrap": {
         "context_fields": [
+          "project_directory",
+          "compose_file",
+          "project_name"
+        ],
+        "prerequisites": [
+          "docker compose available"
+        ]
+      },
+      "namespace": "compose",
+      "operations": [
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "compose.project"
+            }
+          ],
+          "failure_modes": [
+            "project_invalid",
+            "orchestrator_unavailable",
+            "observation_failed"
+          ],
+          "inputs": {},
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "project",
+          "outputs": {
+            "declared_services": "array[string]",
+            "project": "string",
+            "service_counts": "object",
+            "services": "object",
+            "state": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe one Compose project as an orchestration unit.",
+          "tags": [
+            "compose",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "remove the materialized runtime instance for one Compose service"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "service": "string"
+              },
+              "reference": "compose.remove"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "service_running",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "runtime_remove_failed",
+            "remove_failed"
+          ],
+          "inputs": {
+            "service": "string"
+          },
+          "invalidates_observations": [
+            "compose.*"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "remove",
+          "outputs": {
+            "changed": "boolean",
+            "state": "string",
+            "target": "string",
+            "target_kind": "string"
+          },
+          "preflight_observations": [
+            {
+              "probe": "compose.service",
+              "with": {
+                "service": "{service}"
+              }
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Remove one stopped materialized Compose service instance.",
+          "tags": [
+            "compose",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "service": "api"
+              },
+              "reference": "compose.service"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "observation_failed"
+          ],
+          "inputs": {
+            "service": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "service",
+          "outputs": {
+            "containers": "object",
+            "declared": "boolean",
+            "healthy": "boolean | null",
+            "published_ports": "array[string]",
+            "service": "string",
+            "state": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe one declared Compose service as an orchestration unit.",
+          "tags": [
+            "compose",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "bring the requested Compose target into operational running state"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "service": "string | null"
+              },
+              "reference": "compose.start"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "image_unavailable",
+            "build_failed",
+            "dependency_failed",
+            "runtime_start_failed",
+            "healthcheck_failed",
+            "start_failed"
+          ],
+          "inputs": {
+            "service": "string | null"
+          },
+          "invalidates_observations": [
+            "compose.*"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "start",
+          "outputs": {
+            "changed": "boolean",
+            "changed_services": "array[string]",
+            "state": "string",
+            "target": "string",
+            "target_kind": "string"
+          },
+          "preflight_observations": [
+            {
+              "probe": "compose.project",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Bring one Compose project or service into operational running state.",
+          "tags": [
+            "compose",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "stop the requested Compose target"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "service": "string | null"
+              },
+              "reference": "compose.stop"
+            }
+          ],
+          "failure_modes": [
+            "service_not_declared",
+            "project_invalid",
+            "orchestrator_unavailable",
+            "dependency_stop_blocked",
+            "runtime_stop_failed",
+            "stop_failed"
+          ],
+          "inputs": {
+            "service": "string | null"
+          },
+          "invalidates_observations": [
+            "compose.*"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "stop",
+          "outputs": {
+            "changed": "boolean",
+            "changed_services": "array[string]",
+            "state": "string",
+            "target": "string",
+            "target_kind": "string"
+          },
+          "preflight_observations": [
+            {
+              "probe": "compose.project",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Stop one Compose project or service.",
+          "tags": [
+            "compose",
+            "action"
+          ]
+        }
+      ]
+    },
+    {
+      "bootstrap": {
+        "context_fields": [
           "host",
           "viewer",
-          "scopes"
+          "scopes",
+          "repository"
         ],
         "prerequisites": [
           "gh binary available",
@@ -1562,8 +1811,7 @@ Use this page when you need field-level contract details for authoring work.
           "examples": [
             {
               "inputs": {
-                "pull_number": 42,
-                "repository": "owner/repo"
+                "pull_number": 42
               },
               "reference": "gh.pr"
             }
@@ -1714,8 +1962,7 @@ Use this page when you need field-level contract details for authoring work.
           "examples": [
             {
               "inputs": {
-                "pull_number": 42,
-                "repository": "owner/repo"
+                "pull_number": 42
               },
               "reference": "gh.pr.diff"
             }
@@ -2502,6 +2749,176 @@ Use this page when you need field-level contract details for authoring work.
             "gh",
             "probe"
           ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "gh.repo"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "probe_failed"
+          ],
+          "inputs": {
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "repo",
+          "outputs": {
+            "archived": "boolean",
+            "default_branch": "string | null",
+            "id": "string",
+            "is_fork": "boolean",
+            "parent_repository": "string | null",
+            "repository": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read normalized GitHub repository identity and fork facts.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "gh.repo.actions.permissions"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "probe_failed"
+          ],
+          "inputs": {
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "repo.actions.permissions",
+          "outputs": {
+            "allowed_actions": "string | null",
+            "enabled": "boolean",
+            "repository": "string",
+            "sha_pinning_required": "boolean | null"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Read GitHub Actions permissions for one repository.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "set the GitHub Actions enabled state for one repository"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "enabled": false
+              },
+              "reference": "gh.repo.actions.permissions.set"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "set_blocked"
+          ],
+          "inputs": {
+            "enabled": "boolean",
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "repo.actions.permissions.set",
+          "outputs": {
+            "changed": "boolean",
+            "enabled": "boolean",
+            "repository": "string"
+          },
+          "preflight_observations": [
+            {
+              "fields": [
+                "enabled"
+              ],
+              "probe": "gh.repo.actions.permissions",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Set the GitHub Actions enabled state for one repository.",
+          "tags": [
+            "gh",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "sync one fork repository default branch from its parent repository"
+          ],
+          "examples": [
+            {
+              "inputs": {},
+              "reference": "gh.repo.sync"
+            }
+          ],
+          "failure_modes": [
+            "repository_not_found",
+            "not_a_fork",
+            "archived_repository",
+            "default_branch_unavailable",
+            "sync_blocked"
+          ],
+          "inputs": {
+            "repository": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "repo.sync",
+          "outputs": {
+            "branch": "string",
+            "repository": "string",
+            "synced": "boolean",
+            "upstream_repository": "string"
+          },
+          "preflight_observations": [
+            {
+              "fields": [
+                "is_fork",
+                "default_branch",
+                "parent_repository",
+                "archived"
+              ],
+              "probe": "gh.repo",
+              "with": {}
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Sync one GitHub fork repository default branch from its parent repository.",
+          "tags": [
+            "gh",
+            "action"
+          ]
         }
       ]
     },
@@ -2589,8 +3006,11 @@ Use this page when you need field-level contract details for authoring work.
           "maturity": "stable",
           "name": "file",
           "outputs": {
+            "basename": "string",
             "content": "string",
             "exists": "boolean",
+            "extension": "string",
+            "filename_without_extension": "string",
             "group": "string",
             "kind": "string",
             "line_count": "integer",
@@ -2614,6 +3034,53 @@ Use this page when you need field-level contract details for authoring work.
   ],
   "document_kind": "model",
   "local_expressions": {
+    "builtins": [
+      {
+        "allowed_roots": [
+          "args",
+          "inputs",
+          "probe",
+          "state",
+          "step"
+        ],
+        "name": "format",
+        "summary": "Published local-expression builtin for inline workflow expressions."
+      },
+      {
+        "allowed_roots": [
+          "args",
+          "inputs",
+          "probe",
+          "state",
+          "step"
+        ],
+        "name": "is_missing",
+        "summary": "Published local-expression builtin for inline workflow expressions."
+      },
+      {
+        "allowed_roots": [
+          "args",
+          "inputs",
+          "probe",
+          "state",
+          "step"
+        ],
+        "name": "is_present",
+        "summary": "Published local-expression builtin for inline workflow expressions."
+      }
+    ],
+    "condition_structures": {
+      "equal_authority_if_forms": [
+        "expression_string",
+        "structured_condition"
+      ],
+      "list_semantics": "implicit_all",
+      "structured_operators": [
+        "all",
+        "any",
+        "not"
+      ]
+    },
     "pipeline_filters": [
       {
         "argument_count": 0,
@@ -2689,6 +3156,12 @@ Use this page when you need field-level contract details for authoring work.
       },
       {
         "argument_count": 1,
+        "input_type": "json",
+        "name": "lookup",
+        "output_type": "json"
+      },
+      {
+        "argument_count": 1,
         "authored_form": "only(field=value) / only(field!=value)",
         "input_type": "json",
         "name": "only",
@@ -2723,11 +3196,30 @@ Use this page when you need field-level contract details for authoring work.
         "input_type": "json",
         "name": "unique",
         "output_type": "json"
+      },
+      {
+        "argument_count": 2,
+        "authored_form": "catch([\"issue_not_found\", \"*_not_found\"], false)",
+        "input_type": "json",
+        "name": "catch",
+        "output_type": "json"
+      },
+      {
+        "argument_count": 0,
+        "input_type": "json",
+        "name": "not_found",
+        "output_type": "boolean"
       }
     ]
   },
   "playbook": {
     "activation_semantics": {
+      "connector_context": {
+        "consumer": "connector_bootstrap",
+        "family_entry_type": "object",
+        "profile_refinement": true,
+        "top_level_field": "connectors"
+      },
       "discovery": {
         "missing": "playbook.discovery.missing",
         "path": ".ordo/ordo.yaml",
@@ -2738,6 +3230,7 @@ Use this page when you need field-level contract details for authoring work.
         "item_type": "pre_run_entry",
         "launch_context_boundary": "playbook_owned",
         "optional": [
+          "with",
           "state_bindings"
         ],
         "requires": [
@@ -2757,6 +3250,7 @@ Use this page when you need field-level contract details for authoring work.
       },
       "workflow_entries": {
         "optional": [
+          "with",
           "description",
           "category",
           "when",
@@ -2803,6 +3297,14 @@ Use this page when you need field-level contract details for authoring work.
         "type": "string"
       },
       {
+        "documentation_role": "playbook_owned_pre_run_invocation_inputs",
+        "name": "with",
+        "required": false,
+        "runtime_effect": "supplies_playbook_owned_pre_run_inputs",
+        "type": "object",
+        "value_surface": "static_yaml_values_only"
+      },
+      {
         "documentation_role": "playbook_owned_pre_run_state_bindings",
         "name": "state_bindings",
         "required": false,
@@ -2845,6 +3347,12 @@ Use this page when you need field-level contract details for authoring work.
         "type": "object"
       },
       {
+        "name": "connectors",
+        "required": false,
+        "runtime_effect": "supplies_raw_connector_bootstrap_input",
+        "type": "object"
+      },
+      {
         "name": "workflows",
         "required": true,
         "type": "object"
@@ -2861,6 +3369,23 @@ Use this page when you need field-level contract details for authoring work.
         "name": "file",
         "required": true,
         "type": "string"
+      },
+      {
+        "caller_slot_forms": [
+          {
+            "meaning": "caller_must_supply_input_via_cli_or_activation_override",
+            "shape": "key:"
+          },
+          {
+            "meaning": "caller_may_supply_input_via_cli_or_activation_override",
+            "shape": "key?:"
+          }
+        ],
+        "name": "with",
+        "required": false,
+        "runtime_effect": "supplies_playbook_owned_workflow_entry_inputs_or_declares_required_or_optional_caller_slots",
+        "type": "object",
+        "value_surface": "static_yaml_values_or_blank_required_slots_or_blank_optional_question_suffix_slots"
       },
       {
         "documentation_role": "project_local_workflow_summary",
@@ -2910,6 +3435,11 @@ Use this page when you need field-level contract details for authoring work.
       "checks": {
         "order": "left_to_right",
         "strategy": "deduplicated_union"
+      },
+      "connectors": {
+        "conflict": "validation_error",
+        "conflict_key": "family_field",
+        "strategy": "shallow_merge_by_family"
       },
       "inputs": {
         "conflict": "validation_error",
@@ -2999,6 +3529,12 @@ Use this page when you need field-level contract details for authoring work.
         "type": "string"
       },
       {
+        "name": "connectors",
+        "required": false,
+        "runtime_effect": "supplies_raw_connector_bootstrap_input",
+        "type": "object"
+      },
+      {
         "name": "checks",
         "required": false,
         "runtime_effect": "published_metadata_only",
@@ -3022,6 +3558,11 @@ Use this page when you need field-level contract details for authoring work.
     "workflow_apply_semantics": {
       "checks": {
         "mutates_workflow_contract": false
+      },
+      "connectors": {
+        "consumer": "connector_bootstrap",
+        "mutates_workflow_steps": false,
+        "published_as_explicit_metadata": false
       },
       "inputs": {
         "conflict": "validation_error",
@@ -3115,6 +3656,21 @@ Use this page when you need field-level contract details for authoring work.
         ],
         "shortcuts": [],
         "summary": "Select and transform plain-text roots through literal narrowing, line projection, and terminal text mutation."
+      },
+      {
+        "actions": [],
+        "name": "yaml",
+        "selectors": [
+          ".field",
+          "[\"literal-key\"]",
+          "[n]",
+          ".one(field=value)",
+          ".one(field!=value)",
+          ".many(field=value)",
+          ".many(field!=value)"
+        ],
+        "shortcuts": [],
+        "summary": "Select values from one YAML document through exact structural paths and immediate-child filters."
       }
     ],
     "shared_seam": {
@@ -3130,6 +3686,109 @@ Use this page when you need field-level contract details for authoring work.
       }
     }
   },
+  "routine_contract": {
+    "authoring_guidance": {
+      "avoid_when": "the remaining gap is semantic or a reusable connector model should exist instead",
+      "default_recommendation": "avoid_by_default",
+      "not_a_connector_family": true,
+      "role": "bounded_project_local_opaque_automation",
+      "use_when": "no richer public surface exists and the remaining gap is mechanical or intentionally project-local"
+    },
+    "authoring_status": "exception_path",
+    "discovery": {
+      "path": ".ordo/routines.yaml"
+    },
+    "document_kind": "routine_registry",
+    "implementation_fields": [
+      {
+        "authoring_status": "bounded_execution_only",
+        "name": "argv",
+        "required": true,
+        "type": "array"
+      }
+    ],
+    "routine_entry_fields": [
+      {
+        "authoring_status": "exception_path",
+        "name": "kind",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "name": "summary",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "name": "args",
+        "required": false,
+        "type": "object"
+      },
+      {
+        "name": "implementation",
+        "required": true,
+        "type": "object"
+      },
+      {
+        "name": "failure_modes",
+        "required": true,
+        "type": "array"
+      },
+      {
+        "name": "outputs",
+        "required": false,
+        "type": "object"
+      },
+      {
+        "name": "log_hints",
+        "required": false,
+        "type": "object"
+      }
+    ],
+    "top_level_fields": [
+      {
+        "name": "version",
+        "required": true,
+        "type": "integer"
+      },
+      {
+        "name": "routines",
+        "required": true,
+        "type": "object"
+      }
+    ],
+    "version": 1,
+    "workflow_call_surface": {
+      "automatic_input_env_projection": false,
+      "env_non_scalar_behavior": "execution_error",
+      "env_reference_pattern": "supported_reference_path_only",
+      "env_reference_roots": [
+        "inputs",
+        "step",
+        "state"
+      ],
+      "env_scalar_only": true,
+      "fields": [
+        {
+          "name": "args",
+          "required": false,
+          "role": "declared_business_arguments",
+          "type": "object"
+        },
+        {
+          "name": "env",
+          "required": false,
+          "role": "explicit_forwarded_scalar_context_references",
+          "type": "list[string]"
+        }
+      ],
+      "generated_env_name_examples": {
+        "inputs.profile": "ORDO_INPUTS_PROFILE",
+        "step.collect.outputs.value.path": "ORDO_STEP_COLLECT_OUTPUTS_VALUE_PATH"
+      },
+      "generated_env_name_prefix": "ORDO_"
+    }
+  },
   "state": {
     "document_kind": "state_contract",
     "invalid_path_rules": [
@@ -3138,8 +3797,8 @@ Use this page when you need field-level contract details for authoring work.
         "name": "root_must_be_state"
       },
       {
-        "message": "state path key reference must use dotted inputs form such as 'inputs.task_key'",
-        "name": "key_reference_must_use_dotted_inputs"
+        "message": "state path key expression must be a valid local expression",
+        "name": "key_expression_must_be_valid_local_expression"
       },
       {
         "message": "state path must not contain trailing content",
@@ -3147,13 +3806,36 @@ Use this page when you need field-level contract details for authoring work.
       }
     ],
     "path_forms": {
+      "key_expression_surface": "embedded_value_expression",
       "root": "state",
-      "root_reference": "inputs",
-      "shape": "state.<role>[inputs.<key>][.<field>...]",
+      "shape": "state.<role>[<expression>][.<field>...]",
       "supports_hyphenated_roles": true,
       "supports_nested_fields": true
     },
+    "preflight": {
+      "boundary": "Nested analysis does not defer mutations. A reached run or loop after deferral halts with state_deferral_invocation_barrier; profile switches cannot resume that barrier.",
+      "classification": "effectful",
+      "planning": "Retain ordered nodes with reuse_policy not_reusable and planned_probe_result null; execute admitted mutations once in order, with divergence_status not_applicable for deferred nodes.",
+      "rule": "Check conditions and gates first, then defer eligible top-level mutations without mutation, simulation, outputs, registers, or reusable observations; continue to independent guards.",
+      "top_level_status": "deferred",
+      "verification_scope": "Validate individual workflows and children, not flattened caller-child access streams. Cross-invocation and cross-iteration guarantees remain deferred; this is not a full composed-run or cross-run proof."
+    },
     "runtime_rules": [
+      {
+        "error_code": "validation.workflow.state_role.write_before_last_read",
+        "message": "Before binding, authoring validation requires writes or deletes of a logical state role only after its final read, regardless of key or field. Bound validation instead compares actual storage in each access context. Use step registers for per-run dataflow.",
+        "name": "write_after_last_read"
+      },
+      {
+        "error_code": "validation.workflow.state_storage.write_before_last_read",
+        "message": "After binding, write or delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field. Resolve relative paths in each access context; normalized paths, symlinks, and existing hardlinks can alias. The same role may access different files and be valid.",
+        "name": "bound_storage_write_after_last_read"
+      },
+      {
+        "error_code": "validation.workflow.state_storage.identity_unresolved",
+        "message": "Conservatively reject early only relevant write/later-read pairs whose storage identity cannot be established without execution or observations. This is not a proven ordering violation; uncertain context alone does not reject read-only, read-before-write, or known-disjoint access. Cross-invocation and cross-iteration guarantees remain deferred, without a new loop mutation ban.",
+        "name": "relevant_storage_identity_required"
+      },
       {
         "error_code": "runtime.state.binding_missing",
         "message": "state role must be bound before runtime access",
@@ -3161,8 +3843,8 @@ Use this page when you need field-level contract details for authoring work.
       },
       {
         "error_code": "runtime.state.key_invalid",
-        "message": "state key reference must resolve to a scalar value",
-        "name": "scalar_key_required"
+        "message": "state key expression must resolve to a non-null scalar value",
+        "name": "non_null_scalar_key_required"
       },
       {
         "error_code": "runtime.state.declaration_missing",
@@ -3300,7 +3982,7 @@ Use this page when you need field-level contract details for authoring work.
         "built_in_includes_dir"
       ],
       "state_scope": "global_across_assembled_workflow",
-      "step_scope": "local_to_workflow_or_fragment_expansion_scope",
+      "step_scope": "shared_across_assembled_workflow_after_include_expansion",
       "stops_on_first_match": true,
       "targets": "files_only",
       "validation_boundary": "assembled_workflow_after_include_expansion_and_argument_binding"
@@ -3308,6 +3990,20 @@ Use this page when you need field-level contract details for authoring work.
     "inputs_contract": {
       "access_surface": "inputs.name",
       "declaration_fields": [
+        {
+          "authoring_role": "input_requiredness",
+          "default_when_omitted": true,
+          "name": "required",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "authoring_role": "input_default_value",
+          "name": "default",
+          "required": false,
+          "runtime_effect": "applies_when_input_is_missing",
+          "type": "json"
+        },
         {
           "authoring_role": "input_meaning",
           "name": "description",
@@ -3323,10 +4019,16 @@ Use this page when you need field-level contract details for authoring work.
         }
       ],
       "declaration_shape": "mapping",
-      "declared_keys_required_at_activation": true,
+      "declared_keys_required_at_activation": false,
+      "default_semantics": {
+        "default_makes_input_optional": true,
+        "legacy_empty_object_shorthand_required": true,
+        "legacy_scalar_shorthand_supported": true
+      },
       "empty_string_is_distinct_value": true,
       "null_is_distinct_from_missing": true,
       "rejects_unknown_activation_inputs": true,
+      "requiredness_surface": "per_input_required_field",
       "scope": "global",
       "validated_by": "runtime"
     },
@@ -3350,9 +4052,38 @@ Use this page when you need field-level contract details for authoring work.
         },
         {
           "authoring_role": "caller_scoped_invocation_condition",
+          "list_semantics": "implicit_all",
           "name": "if",
           "required": false,
-          "type": "string"
+          "structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
+          "surface": "expression_or_structured_condition",
+          "type": "condition"
+        },
+        {
+          "authoring_role": "caller_scoped_step_admission_condition",
+          "list_semantics": "implicit_all",
+          "name": "gate",
+          "required": false,
+          "structured_operators": [
+            "all",
+            "any",
+            "not"
+          ],
+          "structured_optional_fields": [
+            {
+              "authoring_role": "gate_failure_diagnostic_context",
+              "evaluation_timing": "only_when_gate_verdict_is_failed",
+              "name": "on_fail",
+              "type": "object",
+              "value_surface": "step_local_read_only_expression_or_literal"
+            }
+          ],
+          "surface": "expression_or_structured_condition",
+          "type": "condition"
         },
         {
           "authoring_role": "fragment_argument_bindings",
@@ -3376,16 +4107,19 @@ Use this page when you need field-level contract details for authoring work.
       "caller_scoped_binding_surface": [
         "inputs",
         "state",
-        "step"
+        "step",
+        "probe"
       ],
       "caller_scoped_condition_surface": [
         "inputs",
         "state",
-        "step"
+        "step",
+        "probe"
       ],
       "directive_field": "run",
       "execution_semantics": "runtime_scoped_fragment_invocation",
       "fan_out_surface": {
+        "caller_step_scope": "not_directly_visible_inside_named_run_target_body",
         "forbidden_nested_surfaces": [
           "for_each",
           "guards"
@@ -3396,17 +4130,33 @@ Use this page when you need field-level contract details for authoring work.
           "inputs",
           "state",
           "step",
-          "item"
+          "item",
+          "probe"
         ],
         "item_binding": "item",
         "outer_if_scope": "whole_invocation_step",
         "outer_register_scope": "aggregate_results"
       },
       "fragment_argument_access_surface": "args.name",
+      "named_target_callee_scope": {
+        "caller_data_transfer": "explicit_run_with_bindings_only",
+        "caller_step_scope": "not_directly_visible_inside_callee_body",
+        "direct_roots": [
+          "inputs",
+          "state",
+          "args",
+          "step",
+          "probe"
+        ],
+        "let_scope": "callee_local_only",
+        "step_scope": "callee_local_only"
+      },
+      "named_target_scope_boundary": "isolated_callee_scope",
       "surface_kind": "step_form"
     },
     "step_form_rules": [
       {
+        "exception": "a standalone gate-only checkpoint step may omit a body form",
         "fields": [
           "uses",
           "run",
@@ -3450,6 +4200,15 @@ Use this page when you need field-level contract details for authoring work.
         "requires": [
           "for_each"
         ]
+      },
+      {
+        "fields": [
+          "gate",
+          "register"
+        ],
+        "kind": "conflict",
+        "message": "A workflow step must not define both gate and register. Split this into a standalone gate checkpoint step followed by a separate step that declares register.",
+        "name": "gate_forbids_register"
       }
     ],
     "step_forms": [
@@ -3457,10 +4216,17 @@ Use this page when you need field-level contract details for authoring work.
         "deprecated_optional_fields": [
           "launcher"
         ],
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "operation_call",
         "optional_fields": [
           "if",
+          "gate",
           "with",
           "register",
           "launcher"
@@ -3476,10 +4242,17 @@ Use this page when you need field-level contract details for authoring work.
       },
       {
         "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "run_invocation",
         "optional_fields": [
           "if",
+          "gate",
           "with",
           "for_each",
           "register"
@@ -3492,10 +4265,17 @@ Use this page when you need field-level contract details for authoring work.
       },
       {
         "for_each_value_surface": "bare_first_quoted_string_literals_embedded_escape_hatch",
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "inline_fan_out_invocation",
         "optional_fields": [
           "if",
+          "gate",
           "register"
         ],
         "required_fields": [
@@ -3505,10 +4285,17 @@ Use this page when you need field-level contract details for authoring work.
         ]
       },
       {
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "profile_switch",
         "optional_fields": [
-          "if"
+          "if",
+          "gate"
         ],
         "required_fields": [
           "name",
@@ -3516,10 +4303,17 @@ Use this page when you need field-level contract details for authoring work.
         ]
       },
       {
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "value",
         "optional_fields": [
           "if",
+          "gate",
           "register"
         ],
         "required_fields": [
@@ -3529,10 +4323,17 @@ Use this page when you need field-level contract details for authoring work.
         "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "result",
         "optional_fields": [
-          "if"
+          "if",
+          "gate"
         ],
         "required_fields": [
           "name",
@@ -3541,10 +4342,17 @@ Use this page when you need field-level contract details for authoring work.
         "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "publish",
         "optional_fields": [
-          "if"
+          "if",
+          "gate"
         ],
         "required_fields": [
           "name",
@@ -3553,10 +4361,17 @@ Use this page when you need field-level contract details for authoring work.
         "value_expression_surface": "bare_first_quoted_string_literals_embedded_escape_hatch"
       },
       {
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "state_set",
         "optional_fields": [
-          "if"
+          "if",
+          "gate"
         ],
         "required_fields": [
           "name",
@@ -3564,19 +4379,56 @@ Use this page when you need field-level contract details for authoring work.
         ]
       },
       {
-        "if_expression_surface": "native_local_expression_preferred_embedded_deprecated",
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
         "name": "state_delete",
         "optional_fields": [
-          "if"
+          "if",
+          "gate"
         ],
         "required_fields": [
           "name",
           "state_delete"
         ]
+      },
+      {
+        "if_expression_surface": "native_local_expression_or_structured_condition_preferred_embedded_deprecated",
+        "if_list_semantics": "implicit_all",
+        "if_structured_operators": [
+          "all",
+          "any",
+          "not"
+        ],
+        "name": "gate_checkpoint",
+        "optional_fields": [
+          "if"
+        ],
+        "required_fields": [
+          "name",
+          "gate"
+        ]
       }
     ],
     "surface_constraints": {
       "authored_surfaces": {
+        "condition_field_forms": {
+          "expression_embedded_string": "deprecated_compatibility",
+          "expression_string": "native_local_expression",
+          "gate_structured_optional_fields": [
+            "on_fail"
+          ],
+          "structured_list": "implicit_all",
+          "structured_object_operators": [
+            "all",
+            "any",
+            "not"
+          ]
+        },
         "expression_first_value_fields": [
           "with",
           "value",
@@ -3607,7 +4459,8 @@ Use this page when you need field-level contract details for authoring work.
         "native_condition_fields": [
           "let",
           "guards",
-          "if"
+          "if",
+          "gate"
         ]
       },
       "guard_expression": {
@@ -3629,12 +4482,15 @@ Use this page when you need field-level contract details for authoring work.
           "is_boolean",
           "in",
           "field",
+          "lookup",
           "only",
           "flatten",
           "first",
           "last",
           "length",
-          "unique"
+          "unique",
+          "catch",
+          "not_found"
         ],
         "allowed_roots": [
           "inputs",
@@ -3676,12 +4532,15 @@ Use this page when you need field-level contract details for authoring work.
           "is_boolean",
           "in",
           "field",
+          "lookup",
           "only",
           "flatten",
           "first",
           "last",
           "length",
-          "unique"
+          "unique",
+          "catch",
+          "not_found"
         ],
         "allowed_roots": [
           "inputs",
@@ -3709,7 +4568,15 @@ Use this page when you need field-level contract details for authoring work.
         "type": "string"
       },
       {
-        "activation_requirement": "all_declared_keys_required",
+        "activation_timing": "before_guard_evaluation",
+        "applicability": "internal_project_bound_workflows_only",
+        "authoring_role": "workflow_owned_execution_profile_binding",
+        "name": "profile",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "activation_requirement": "per_input_required_or_default_semantics",
         "authoring_role": "declares_global_activation_inputs",
         "name": "inputs",
         "required": false,

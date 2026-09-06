@@ -7,8 +7,8 @@ This site is meant to be browsed as product reference rather than as a narrative
 ## Start here
 
 - [Overview](topics/overview.md) — Start with a map of the main Ordo surfaces.
-- [Authoring model](topics/model.md) — Browse the main authoring contracts.
-- [Workflow authoring](topics/workflow-authoring.md) — Browse workflow authoring guidance, from the default check/review loop to fallback cautions.
+- [Workflow model](topics/model.md) — Browse the main workflow contracts.
+- [Workflow rules](topics/workflow-rules.md) — Browse workflow rules, from the default check/review loop to fallback cautions.
 - [Capabilities](topics/capabilities.md) — See which surfaces are supported, restricted, or deprecated.
 - [Command-line reference](topics/command-line.md) — See the public CLI surface and how check, review, plan, and run differ.
 - [Operation catalog](topics/operations.md) — Browse the public connector operations.
@@ -18,36 +18,41 @@ This site is meant to be browsed as product reference rather than as a narrative
 
 These are interactive discovery surfaces in `ordo-help`, so they are listed here as commands rather than static pages.
 
+- `features` — Inspect workflow features, named surfaces, and when to use them
+- `snippet-coverage` — Inspect which public handles do and do not publish canonical verified snippets
 - `operation` — Inspect one public operation by reference
 - `describe` — Resolve a supported public topic
 - `search` — Search topics, contract facts, and operation references
 
 ## Recommended first calls
 
-- `ordo-help overview --json` — Get the Ordo world map
-- `ordo-help model --json` — Learn the main DSL surfaces
-- `ordo-help workflow-authoring --json` — Learn preferred workflow authoring patterns, including paired check/review passes
-- `ordo-help capabilities --json` — Learn capability boundaries
-- `ordo-help command-line --json` — Inspect public launch commands, flags, and distinct check/review roles
-- `ordo-help operations --json` — Inspect the public operation catalog
-- `ordo-help examples --json` — Inspect verified repository examples
+- `ordo-help features` — Scan workflow features, named surfaces, and when to use them
+- `ordo-help overview` — Get the Ordo world map
+- `ordo-help model` — Learn the main DSL surfaces
+- `ordo-help workflow-rules` — Learn preferred workflow rules, including paired check/review passes
+- `ordo-help capabilities` — Learn capability boundaries
+- `ordo-help command-line` — Inspect public launch commands, flags, and distinct check/review roles
+- `ordo-help operations` — Inspect the public operation catalog
+- `ordo-help examples` — Inspect verified repository examples
+- `ordo-help snippet-coverage` — Inspect which public handles do and do not publish canonical verified snippets
 
 ## Operation reference
 
-- [All operations](operations/index.md) — 53 published operations
+- [All operations](operations/index.md) — 62 published operations
 
 ## Full JSON reference
 
 ```json
 {
   "examples": [
-    "ordo-help overview --json",
-    "ordo-help model --json",
-    "ordo-help workflow-authoring --json",
-    "ordo-help capabilities --json",
-    "ordo-help command-line --json",
-    "ordo-help operations --json",
-    "ordo-help examples --json"
+    "ordo-help features",
+    "ordo-help overview",
+    "ordo-help model",
+    "ordo-help workflow-rules",
+    "ordo-help capabilities",
+    "ordo-help command-line",
+    "ordo-help operations",
+    "ordo-help examples"
   ],
   "introspection": {
     "entrypoint": "describe_system",
@@ -73,47 +78,59 @@ These are interactive discovery surfaces in `ordo-help`, so they are listed here
   "purpose": "Self-describing discovery CLI for Ordo",
   "recommended_first_calls": [
     {
-      "command": "ordo-help overview --json",
+      "command": "ordo-help features",
+      "purpose": "Scan workflow features, named surfaces, and when to use them"
+    },
+    {
+      "command": "ordo-help overview",
       "purpose": "Get the Ordo world map"
     },
     {
-      "command": "ordo-help model --json",
+      "command": "ordo-help model",
       "purpose": "Learn the main DSL surfaces"
     },
     {
-      "command": "ordo-help workflow-authoring --json",
-      "purpose": "Learn preferred workflow authoring patterns, including paired check/review passes"
+      "command": "ordo-help workflow-rules",
+      "purpose": "Learn preferred workflow rules, including paired check/review passes"
     },
     {
-      "command": "ordo-help capabilities --json",
+      "command": "ordo-help capabilities",
       "purpose": "Learn capability boundaries"
     },
     {
-      "command": "ordo-help command-line --json",
+      "command": "ordo-help command-line",
       "purpose": "Inspect public launch commands, flags, and distinct check/review roles"
     },
     {
-      "command": "ordo-help operations --json",
+      "command": "ordo-help operations",
       "purpose": "Inspect the public operation catalog"
     },
     {
-      "command": "ordo-help examples --json",
+      "command": "ordo-help examples",
       "purpose": "Inspect verified repository examples"
+    },
+    {
+      "command": "ordo-help snippet-coverage",
+      "purpose": "Inspect which public handles do and do not publish canonical verified snippets"
     }
   ],
   "tool_name": "ordo-help",
   "topics": [
+    {
+      "name": "features",
+      "summary": "Inspect workflow features, named surfaces, and when to use them"
+    },
     {
       "name": "overview",
       "summary": "Start with the Ordo world map"
     },
     {
       "name": "model",
-      "summary": "Inspect the main authoring contracts"
+      "summary": "Inspect the main workflow contracts"
     },
     {
-      "name": "workflow-authoring",
-      "summary": "Inspect preferred workflow authoring patterns, paired check/review passes, routine cautions, early guards, and let usage"
+      "name": "workflow-rules",
+      "summary": "Inspect preferred workflow rules, paired check/review passes, routine cautions, early guards, and let usage"
     },
     {
       "name": "capabilities",
@@ -130,6 +147,10 @@ These are interactive discovery surfaces in `ordo-help`, so they are listed here
     {
       "name": "examples",
       "summary": "Inspect verified repository examples"
+    },
+    {
+      "name": "snippet-coverage",
+      "summary": "Inspect which public handles do and do not publish canonical verified snippets"
     },
     {
       "name": "operation",
