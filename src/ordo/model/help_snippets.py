@@ -2923,16 +2923,14 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "state_set_dynamic_task_memory_key",
                 "kind": "positive",
                 "form": "field_fragment",
-                "summary": "Persist one value under a state path whose key comes from inputs.",
-                "source_example": "examples.set-active-task-from-gitx",
-                "source_excerpt": {
-                    "path": "examples/set-active-task-from-gitx.yaml",
-                    "start_line": 105,
-                    "end_line": 107,
-                },
+                "summary": "Persist a fixed value with the input used only to select the state key.",
+                "yaml": 'state_set:\n  state.task_memory[inputs.task_key].issue_number: 42',
                 "verification": {
-                    "kind": "excerpt_verified",
-                    "example": "examples.set-active-task-from-gitx",
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_field",
+                    "target": "workflow.step.state_set",
+                    "expected_status": "ok",
                 },
             },
             {

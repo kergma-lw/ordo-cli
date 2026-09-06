@@ -35,6 +35,7 @@ from .preflight_steps import classify_preflight_step
 from .profiles import apply_profile_defaults_to_subsequent_steps, apply_profile_to_workflow, apply_runtime_profile_switch, should_ignore_runtime_profile_switch
 from .providers import ConnectorProvider, GuardProbe, get_default_connector_provider
 from .resolution import ResolvedBuiltinStep, ResolvedConditionExpression, ResolvedExpressionProbe, ResolvedGuardBlock, ResolvedOperation, ResolvedRunStep, ResolvedStep, ResolvedStepBlock, resolve_workflow_references
+from .state_paths import StatePathParseError, parse_state_path
 from .value_resolution import ValueResolutionError, resolve_runtime_value
 from .validation import validate_workflow_document, validate_workflow_semantics
 
@@ -873,8 +874,14 @@ def _classify_declared_input_usage(
                         for input_name in _extract_input_names(step.profile_switch):
                             record(input_name, "control_input", site_kind="profile_switch", path=step_path + ("profile_switch",), detail=step.name)
                     if step.state_set is not None:
-                        for input_name in _extract_input_names(step.state_set):
+                        state_set_inputs = _extract_input_names(step.state_set)
+                        for target in step.state_set:
+                            state_set_inputs.update(_extract_input_names_from_state_path(target))
+                        for input_name in state_set_inputs:
                             record(input_name, "control_input", site_kind="state_set", path=step_path + ("state_set",), detail=step.name)
+                    if step.state_delete is not None:
+                        for input_name in _extract_input_names_from_state_path(step.state_delete):
+                            record(input_name, "control_input", site_kind="state_delete", path=step_path + ("state_delete",), detail=step.name)
                     if step.value is not None:
                         for input_name in _extract_input_names(step.value):
                             record(input_name, "contract_input", site_kind="value", path=step_path + ("value",), detail=step.name)
@@ -940,6 +947,15 @@ def _extract_input_names(value: JSONValue | dict[str, object] | None) -> set[str
     return set()
 
 
+def _extract_input_names_from_state_path(value: str) -> set[str]:
+    try:
+        target = parse_state_path(value)
+        expression = parse_local_expression_tree(target.key_expression, allow_boolean_composition=True)
+    except (StatePathParseError, LocalExpressionParseError):
+        return set()
+    return _collect_input_names_from_expression_node(expression.root)
+
+
 def _extract_input_names_from_string(value: str) -> set[str]:
     names = set(_INPUT_REFERENCE_PATTERN.findall(value))
     expression = value[2:-1] if value.startswith("${") and value.endswith("}") and len(value) >= 4 else value
@@ -958,6 +974,9 @@ def _collect_input_names_from_expression_node(node: ValueExpressionNode) -> set[
         if isinstance(current, ReferenceNode):
             if len(current.parts) >= 2 and current.parts[0] == "inputs":
                 names.add(current.parts[1])
+            return
+        if isinstance(current, StateReferenceNode):
+            visit(current.key_expression)
             return
         if isinstance(current, ListNode):
             for item in current.items:

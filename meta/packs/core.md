@@ -8300,6 +8300,35 @@ boundaries. Bundle syntax separates teaching-world bindings from authored text.
 `tests/test_check_state_deferral.py` covers deferral execution behavior; the
 validation-only bundle label does not establish it.
 
+## Dynamic-Key Input Usage
+
+Input-usage analysis is distinct from state execution semantics. `check` records
+`control_input` usage and mutation-site evidence for inputs in parsed `state_set`
+and `state_delete` key expressions,
+including nested state-key expressions. Quoted input-looking text in those keys
+does not count as a reference; ordinary payload mapping keys remain data.
+`review` must not report these inputs as declared but unused. `plan` and
+`explain` retain the input-usage metadata; this classification does not change
+`run` or `next` semantics. State-set value usage and classification precedence
+are part of the coverage boundary.
+
+`tests/test_state_target_input_usage.py` covers the four analysis modes, literal
+and nested keys, value usage, evidence, and absence of state-file creation.
+The dynamic `workflow.step.state_set` snippet uses its input only in the key
+and writes a fixed value. The dynamic `workflow.step.state_delete` snippet also
+demonstrates key-only usage.
+`tests/test_help_snippets.py` separately checks both published snippets through
+review; the snippet runner's label still means authoring validation, not proof
+of classification or persistence.
+
+Discovery verification checks the state feature, both mutation describe surfaces,
+`workflow.inputs_contract`, and `workflow-rules.input_validation_default` for
+consistent boundaries: input usage is neither an activation source nor proof of
+validation. The analysis-tree model excludes meaningfully used inputs from
+unused-declaration debt. Tests and snippet metadata must distinguish authoring
+validation from runtime classification and persistence coverage; the presence
+of a test is not evidence of a passing execution.
+
 ## Fragment Contract Drift
 
 The normative restriction on mutation inside included or runtime-invoked

@@ -1,17 +1,61 @@
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from ordo.model.help_snippet_worlds import describe_help_snippet_worlds
 from ordo.model.help_snippets import describe_help_snippets, validate_help_snippet_registry
 from ordo.model.runtime import RuntimeStatus
-from ordo.runtime import validate_workflow_text
+from ordo.runtime import load_workflow_text, review_workflow, validate_workflow_text
 from ordo.runtime.help_snippet_runner import verify_help_snippet
+
+from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class HelpSnippetRegistryTest(unittest.TestCase):
+    def test_dynamic_state_snippets_use_inputs_only_in_mutation_keys(self) -> None:
+        registry = describe_help_snippets()
+        for mutation, example_name, input_name in (
+            ("state_set", "state_set_dynamic_task_memory_key", "task_key"),
+            ("state_delete", "state_delete_dynamic_task_memory_field", "issue_ref"),
+        ):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
+                handle = f"workflow.step.{mutation}"
+                example = next(item for item in registry[handle]["canonical_examples"] if item["name"] == example_name)
+                verification = example["verification"]
+                verified = verify_help_snippet(
+                    snippet=example["yaml"], world=verification["world"],
+                    insertion_mode=verification["insertion_mode"], target=verification["target"],
+                )
+                self.assertEqual(verified.status, "ok")
+                # The snippet runner validates authoring; review below checks input usage separately.
+                workflow = load_workflow_text(verified.workflow_text)
+                state_path = Path(directory) / "state.json"
+                workflow = replace(
+                    workflow,
+                    declared_inputs={input_name: {"description": "State key to mutate"}},
+                    state_bindings={role: "store" for role in workflow.state_needs},
+                    states={"store": str(state_path)},
+                )
+                result = review_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+                self.assertEqual(result.status, RuntimeStatus.OK, result.diagnostics)
+                usage, = result.analysis_tree.input_usages
+                self.assertEqual(usage["input"], input_name)
+                self.assertEqual(usage["classification"], "control_input")
+                self.assertEqual(usage["evidence"], [{
+                    "site_kind": mutation,
+                    "path": ["blocks", "1", "steps", "0", mutation],
+                    "detail": "demo",
+                }])
+                self.assertFalse(any(
+                    finding["code"] == "review.workflow.input_declared_but_unused"
+                    for finding in result.outputs["findings"]
+                ))
+                self.assertFalse(state_path.exists())
+
     def test_default_snippet_world_is_declared_with_explicit_fixture_buckets(self) -> None:
         worlds = describe_help_snippet_worlds()
 
