@@ -25,9 +25,9 @@ class WorkflowShowInputsTest(unittest.TestCase):
             "shorthand": False,
             "bound": {},
             "profile_value": {},
-            "required_slot": {"default": 0},
+            "required_slot": {"required": False, "default": 0, "description": "Caller slot value", "hint": "Provide a number"},
             "optional_slot": {"required": False},
-            "required_optional_slot": {},
+            "required_optional_slot": {"required": True},
             "all_sources": {"default": "fallback"},
         }
         self.bindings = {
@@ -65,19 +65,33 @@ class WorkflowShowInputsTest(unittest.TestCase):
         return status, json.loads(stdout.getvalue() or stderr.getvalue())
 
     def test_plain_filters_caller_slots_and_json_keeps_complete_contract(self):
-        plain_status, plain = self.show()
-        json_status, payload = self.show(as_json=True)
+        entry = inspect_playbook_workflow("sample", playbook_path=self.playbook)
+        contracts = json.loads(json.dumps({item.name: item.contract for item in entry.inputs}))
+        with patch("ordo.cli.inspect_playbook_workflow", return_value=entry):
+            plain_status, plain = self.show()
+            json_status, payload = self.show(as_json=True)
         self.assertEqual((plain_status, json_status), (0, 0))
         self.assertEqual(plain, {
             **{key: value for key, value in payload.items() if key != "launch_profile"},
-            "inputs": {name: payload["inputs"][name] for name in (
+            "inputs": {name: {
+                **{key: value for key, value in payload["inputs"][name].items() if key not in {"coverage", "sources", "caller_slot"}},
+                "required": payload["inputs"][name]["caller_slot"] == "required",
+            } for name in (
                 "required_slot", "optional_slot", "required_optional_slot",
             )},
         })
         self.assertEqual(set(payload["inputs"]), set(self.declarations))
-        entry = inspect_playbook_workflow("sample", playbook_path=self.playbook)
-        self.assertEqual(payload["inputs"], {item.name: item.contract for item in entry.inputs})
-        self.assertTrue(all(item["caller_slot"] != "none" for item in plain["inputs"].values()))
+        self.assertEqual(payload["inputs"], contracts)
+        self.assertEqual({item.name: item.contract for item in entry.inputs}, contracts)
+        for item in plain["inputs"].values():
+            self.assertNotIn("coverage", item)
+            self.assertNotIn("sources", item)
+            self.assertNotIn("caller_slot", item)
+        self.assertEqual(plain["inputs"]["required_slot"], {
+            "required": True, "default": 0, "description": "Caller slot value", "hint": "Provide a number",
+        })
+        self.assertEqual(plain["inputs"]["required_optional_slot"], {"required": False})
+        self.assertEqual(plain["inputs"]["optional_slot"], {"required": False})
         for removed in ("declared_inputs", "caller_inputs", "optional_caller_inputs"):
             self.assertNotIn(removed, payload)
         self.assertEqual(payload["launch_profile"], {"name": "selected", "source": "default"})
@@ -99,6 +113,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
             "required": True, "caller_slot": "none", "sources": ["launch_profile"], "coverage": "provided",
         })
         self.assertEqual(inputs["required_slot"]["caller_slot"], "required")
+        self.assertFalse(inputs["required_slot"]["required"])
         self.assertEqual(inputs["required_slot"]["coverage"], "provided")
         self.assertEqual(inputs["optional_slot"]["caller_slot"], "optional")
         self.assertEqual(inputs["optional_slot"]["coverage"], "caller_slot")
@@ -127,14 +142,17 @@ class WorkflowShowInputsTest(unittest.TestCase):
                         })
                     else:
                         self.assertNotIn("launch_profile", payload)
-                    missing = {name for name, item in payload["inputs"].items() if item["coverage"] == "missing"}
                     findings = {item["evidence"]["input"] for item in activated.review_findings if item["code"] == "review.playbook.input_caller_slot_missing"}
                     if as_json:
+                        missing = {name for name, item in payload["inputs"].items() if item["coverage"] == "missing"}
                         self.assertEqual(missing, findings)
                         self.assertIn("missing", missing)
                         self.assertEqual("profile_value" in missing, profile_name == "other")
                     else:
-                        self.assertEqual(missing, set())
+                        for item in payload["inputs"].values():
+                            self.assertNotIn("coverage", item)
+                            self.assertNotIn("sources", item)
+                            self.assertNotIn("caller_slot", item)
                         self.assertEqual(set(payload["inputs"]), {
                             "required_slot", "optional_slot", "required_optional_slot",
                         })
@@ -203,7 +221,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
         self.assertEqual(set(payload["inputs"]), set(self.declarations))
         self.assertTrue(all(item["caller_slot"] == "none" for item in payload["inputs"].values()))
 
-    def test_plain_retains_launch_profile_source_on_caller_slot(self):
+    def test_plain_omits_launch_profile_source_and_coverage_on_caller_slot(self):
         self.payload["workflows"]["sample"]["with"]["profile_value"] = None
         self.write_playbook()
         plain_status, plain = self.show()
@@ -211,8 +229,10 @@ class WorkflowShowInputsTest(unittest.TestCase):
         self.assertEqual((plain_status, json_status), (0, 0))
         self.assertNotIn("launch_profile", plain)
         self.assertEqual(payload["launch_profile"], {"name": "selected", "source": "default"})
-        self.assertEqual(plain["inputs"]["profile_value"], payload["inputs"]["profile_value"])
-        self.assertEqual(plain["inputs"]["profile_value"]["sources"], ["launch_profile"])
+        self.assertEqual(plain["inputs"]["profile_value"], {"required": True})
+        self.assertEqual(payload["inputs"]["profile_value"], {
+            "required": True, "caller_slot": "required", "sources": ["launch_profile"], "coverage": "provided",
+        })
 
     def test_runtime_profile_switch_does_not_supply_launch_coverage(self):
         self.payload["defaults"] = {"profile": "other"}

@@ -927,7 +927,11 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                 file=str(entry.workflow_path),
                 working_directory=entry.working_directory,
                 inputs={
-                    item.name: item.contract for item in entry.inputs
+                    item.name: item.contract if args.json else {
+                        **{key: value for key, value in item.contract.items() if key not in {"coverage", "sources", "caller_slot"}},
+                        "required": item.contract["caller_slot"] == "required",
+                    }
+                    for item in entry.inputs
                     if args.json or item.contract["caller_slot"] in {"required", "optional"}
                 },
                 launch_profile={"name": entry.launch_profile_name, "source": entry.launch_profile_source} if args.json else None,

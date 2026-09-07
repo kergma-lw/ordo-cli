@@ -36,16 +36,34 @@ class OrdoHelpCliTest(unittest.TestCase):
             "filters the inputs mapping to caller_slot required or optional",
             "hides caller_slot none", "inputs: {} when no caller slots exist",
             "--json retains the unchanged complete declared inputs mapping",
-            "envelope and retained input records are otherwise unchanged",
+            "removes caller_slot, sources, and coverage from retained inputs",
+            "other record fields are preserved except required",
+            "required, which reports caller-slot obligation",
+            "true for a required slot, false for an optional slot",
+            "not workflow declaration requiredness",
+            "No optional field is added",
+            "original normalized required and caller_slot",
+            "preserves description and hint when provided",
+            "default appears only when declared, including null",
+            "including all input fields",
+            "other envelope fields are unchanged",
             "Plain output omits top-level launch_profile entirely",
             "unchanged complete declared inputs mapping and top-level launch_profile",
             "initial activation name and source, not the final bound workflow profile",
-            "Plain input sources still retain the launch_profile source label",
+            "The launch_profile input source label is also JSON-only",
             "Selected profile values are never exposed",
             "required caller slots still require explicit caller input",
         ):
             with self.subTest(term=term):
                 self.assertIn(term, guidance)
+        for stale_promise in (
+            "retained input records are otherwise unchanged",
+            "Plain input sources still retain",
+            "remaining record fields are unchanged",
+            "normalized required, and caller_slot",
+        ):
+            with self.subTest(stale_promise=stale_promise):
+                self.assertNotIn(stale_promise, guidance)
         show = next(item for item in command["discovery_commands"] if item["name"] == "workflows show <workflow>")
         self.assertIn("plain inputs expose the main caller interface", show["summary"])
         self.assertIn("--json retains the full declaration contract", show["summary"])
@@ -67,6 +85,11 @@ class OrdoHelpCliTest(unittest.TestCase):
                         "caller_slot required or optional", "hides caller_slot none", "inputs: {}",
                         "--json retains the unchanged complete declared inputs mapping",
                         "Plain output omits top-level launch_profile entirely",
+                        "removes caller_slot, sources, and coverage from retained inputs",
+                        "other record fields are preserved except required",
+                        "true for a required slot, false for an optional slot",
+                        "not workflow declaration requiredness", "No optional field is added",
+                        "original normalized required and caller_slot",
                         "initial activation name and source, not the final bound workflow profile",
                     ):
                         self.assertIn(term, result.stdout)
@@ -79,6 +102,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("main caller interface", features.stdout)
         self.assertIn("inputs: {}", features.stdout)
         self.assertIn("omits top-level launch_profile entirely", features.stdout)
+        self.assertIn("removes caller_slot, sources, and coverage from retained inputs", features.stdout)
+        self.assertIn("true for a required slot, false for an optional slot", features.stdout)
+        self.assertIn("not workflow declaration requiredness", features.stdout)
+        self.assertIn("No optional field is added", features.stdout)
 
         command = self.run_help("describe", "command-line.ordo-playbook", "--json")
         self.assertIn("cannot validate CLI activation examples", command.stdout)
@@ -94,6 +121,12 @@ class OrdoHelpCliTest(unittest.TestCase):
                     "main caller interface", "JSON-shaped serialized envelope",
                     "caller_slot required or optional", "hides caller_slot none", "inputs: {}",
                     "Plain output omits top-level launch_profile entirely",
+                    "removes caller_slot, sources, and coverage from retained inputs",
+                    "other record fields are preserved except required",
+                    "true for a required slot, false for an optional slot",
+                    "not workflow declaration requiredness", "No optional field is added",
+                    "original normalized required", "original required and caller_slot",
+                    "Plain show omits top-level launch_profile and input caller_slot/sources/coverage",
                     "initial activation name and source, not the final bound workflow profile",
                     "--json retains the unchanged full declaration contract" if handle != "workflow.inputs"
                     else "Use --json for the unchanged full declaration contract",
@@ -103,6 +136,11 @@ class OrdoHelpCliTest(unittest.TestCase):
                     "same inputs mapping in plain and --json",
                     "authored coverage in plain and --json",
                     "identically in plain and --json",
+                    "Retained input sources",
+                    "retained records are unchanged",
+                    "Retained records include",
+                    "remaining record fields are unchanged",
+                    "normalized required, caller_slot, and default",
                 ):
                     self.assertNotIn(stale_promise, result.stdout)
 
