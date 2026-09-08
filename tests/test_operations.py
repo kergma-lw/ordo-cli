@@ -1982,6 +1982,8 @@ class OperationTest(unittest.TestCase):
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
                 self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
                 self._completed(returncode=0, stdout="origin/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="origin\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/remotes/origin/feature/demo\n", stderr=""),
             ]
 
             result = evaluate_probe(resolved, workflow)
@@ -2017,6 +2019,7 @@ class OperationTest(unittest.TestCase):
         self.assertFalse(result.outputs["configured"])
         self.assertIsNone(result.outputs["branch"])
         self.assertIsNone(result.outputs["upstream_ref"])
+        self.assertEqual(run.call_count, 3)
 
     def test_git_upstream_probe_returns_unconfigured_without_tracking_branch(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.upstream")),), steps=())
@@ -2037,6 +2040,7 @@ class OperationTest(unittest.TestCase):
         self.assertFalse(result.outputs["configured"])
         self.assertEqual(result.outputs["branch"], "feature/demo")
         self.assertIsNone(result.outputs["upstream_ref"])
+        self.assertEqual(run.call_count, 4)
 
     def test_git_upstream_probe_fails_on_invalid_upstream_shape(self) -> None:
         workflow = Workflow(version=0, workflow="demo", guards=(Guard(OperationRef("git.upstream")),), steps=())
@@ -2049,6 +2053,8 @@ class OperationTest(unittest.TestCase):
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
                 self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
                 self._completed(returncode=0, stdout="origin\n", stderr=""),
+                self._completed(returncode=0, stdout="origin\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/remotes/origin/feature/demo\n", stderr=""),
             ]
 
             result = evaluate_probe(resolved, workflow)
@@ -2959,6 +2965,7 @@ class OperationTest(unittest.TestCase):
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
+                self._completed(returncode=0, stdout="origin\n", stderr=""),
                 self._completed(returncode=0, stdout="", stderr=""),
             ]
 
@@ -2967,6 +2974,7 @@ class OperationTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["remote"], "origin")
         self.assertTrue(result.outputs["fetched"])
+        self.assertEqual(run.call_args_list[-2].args[0], ["git", "remote"])
 
     def test_git_sync_fetch_distinguishes_missing_remote(self) -> None:
         workflow = Workflow(
@@ -2981,12 +2989,14 @@ class OperationTest(unittest.TestCase):
         with patch("subprocess.run") as run:
             run.side_effect = [
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
-                self._completed(returncode=1, stdout="", stderr="fatal: 'missing' does not appear to be a git repository\n"),
+                self._completed(returncode=0, stdout="origin\n", stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "remote_not_found")
+        self.assertEqual(run.call_args_list[-1].args[0], ["git", "remote"])
+        self.assertFalse(any(call.args[0][:2] == ["git", "fetch"] for call in run.call_args_list))
 
     def test_git_sync_push_returns_structured_action_result_with_explicit_remote(self) -> None:
         workflow = Workflow(
@@ -3002,6 +3012,7 @@ class OperationTest(unittest.TestCase):
             run.side_effect = [
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
                 self._completed(returncode=0, stdout="", stderr=""),
+                self._completed(returncode=0, stdout="origin\n", stderr=""),
                 self._completed(returncode=0, stdout="", stderr=""),
             ]
 
@@ -3028,15 +3039,19 @@ class OperationTest(unittest.TestCase):
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
                 self._completed(returncode=0, stdout="/tmp/demo-repo\n", stderr=""),
                 self._completed(returncode=0, stdout="refs/heads/feature/demo\n", stderr=""),
-                self._completed(returncode=0, stdout="origin/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="team/origin/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="team/origin\n", stderr=""),
+                self._completed(returncode=0, stdout="refs/remotes/team/origin/feature/demo\n", stderr=""),
+                self._completed(returncode=0, stdout="team\nteam/origin\n", stderr=""),
                 self._completed(returncode=0, stdout="", stderr=""),
             ]
 
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "ok")
-        self.assertEqual(result.outputs["remote"], "origin")
+        self.assertEqual(result.outputs["remote"], "team/origin")
         self.assertEqual(result.outputs["branch"], "feature/demo")
+        self.assertEqual(run.call_args_list[-1].args[0], ["git", "push", "team/origin", "feature/demo"])
 
     def test_git_sync_push_reports_missing_upstream_remote(self) -> None:
         workflow = Workflow(
@@ -3061,6 +3076,7 @@ class OperationTest(unittest.TestCase):
             result = execute_action(resolved, workflow)
 
         self.assertEqual(result.status, "upstream_remote_missing")
+        self.assertFalse(any(call.args[0][:2] in (["git", "remote"], ["git", "push"]) for call in run.call_args_list))
 
     def test_git_branch_create_returns_structured_action_result(self) -> None:
         workflow = Workflow(

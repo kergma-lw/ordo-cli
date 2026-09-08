@@ -18,6 +18,11 @@ Workflow files may orchestrate them, but should not absorb that algorithmic work
 
 ## What an operation is
 
+GitHub repository operands and context defaults share the
+[repository input identity contract](../requirements/connector/gh-repository-identity.md).
+They are literal ASCII `OWNER/REPO` identities, not URLs or authorization allowlists;
+API-response identities and composite content references remain separate contracts.
+
 An operation is a concrete public operation within a connector family.
 
 For connector operations, it is important to distinguish at least two operation kinds:

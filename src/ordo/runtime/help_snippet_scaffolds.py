@@ -52,6 +52,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
         "workflow.step.profile_switch",
         "workflow.step_forms.profile_switch",
         "routine",
+        "connector.fs.file",
         "connector.gh.project.issue",
         "connector.gh.project.issue.add",
         "connector.gh.project.issue.field_iteration.set",
@@ -94,7 +95,7 @@ STEP_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 WORKFLOW_FRAGMENT_CONTRACT = SnippetInsertionContract(
     mode="workflow_fragment",
-    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.stash", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream", "connector.git.worktrees", "connector.shell.command"),
+    supported_targets=("workflow.profile", "workflow.state_needs", "workflow.state_bindings", "connector.fs.file", "connector.gh.project.issue", "connector.gh.project.items", "connector.git.branch", "connector.git.commits", "connector.git.integrate.merge", "connector.git.state", "connector.git.stash", "connector.git.sync.fetch", "connector.git.tags", "connector.git.range", "connector.git.upstream", "connector.git.worktrees", "connector.shell.command", "examples.let-bindings", "examples.set-active-task-from-gitx"),
     workflow_surface="full workflow document scaffold",
     summary="Place one authored workflow fragment into a full workflow host without shrinking it into a step- or value-only form.",
 )
@@ -301,6 +302,8 @@ blocks:
     if target == "workflow.step.state_set":
         return f"""version: 0
 workflow: snippet-state-set
+inputs:
+  task_key: {{}}
 state_needs:
   shared_state: {{}}
   task_memory: {{}}
@@ -474,6 +477,17 @@ blocks:
 - steps:
   {indented}
 """
+    if target == "connector.fs.file":
+        indented = normalized.replace(chr(10), chr(10) + "  ")
+        return f"""version: 0
+workflow: snippet-fs-file
+inputs:
+  file_path:
+    description: Explicit UTF-8 regular file path to inspect.
+blocks:
+- steps:
+  {indented}
+"""
     if target == "connector.gh.project.issue.add":
         indented = normalized.replace(chr(10), chr(10) + "  ")
         return f"""version: 0
@@ -625,6 +639,10 @@ blocks:
 def build_workflow_fragment_scaffold(*, target: str, snippet: str) -> str:
     """Return a standard workflow scaffold for one authored workflow fragment."""
 
+    if target == "connector.fs.file":
+        return f"{snippet}\n"
+    if target in {"examples.let-bindings", "examples.set-active-task-from-gitx"}:
+        return f"{snippet}\n"
     if target == "workflow.profile":
         return f"{snippet}\n"
     if target == "workflow.state_needs":

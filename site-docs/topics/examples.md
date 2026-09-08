@@ -29,7 +29,7 @@ Use this page when you want concrete repository examples to inspect side by side
 
 - Path: `examples/set-active-task-from-gitx.yaml`
 - Verified: `true`
-- Highlights: `multi_step_workflow`, `state_updates`, `shell_fallback`
+- Highlights: `project_policy_gates`, `native_git_sequence`, `state_updates`, `explicit_trusted_hook`, `partial_effects`
 - Related topics: [Capabilities](capabilities.md), [Workflow model](model.md), [Operation catalog](operations.md)
 
 ## launcher-step
@@ -59,14 +59,14 @@ Use this page when you want concrete repository examples to inspect side by side
 - Path: `examples/playbook-workflows.yaml`
 - Verified: `true`
 - Highlights: `playbook_workflow_catalog`, `workflow_entry_guidance`, `entry_state_bindings`
-- Related topics: [Features](features.md), [Workflow model](model.md), [Examples](examples.md)
+- Related topics: [Workflow-authoring feature map](features.md), [Workflow model](model.md), [Examples](examples.md)
 
 ## playbook-connectors
 
 - Path: `examples/playbook-connectors.yaml`
 - Verified: `true`
 - Highlights: `playbook_version_marker`, `playbook_connector_defaults`, `profile_override_boundary`
-- Related topics: [Features](features.md), [Workflow model](model.md), [Examples](examples.md)
+- Related topics: [Workflow-authoring feature map](features.md), [Workflow model](model.md), [Examples](examples.md)
 
 ## playbook-pre-run
 
@@ -95,6 +95,13 @@ Use this page when you want concrete repository examples to inspect side by side
 - Verified: `true`
 - Highlights: `type_predicate_filters`, `membership_filter`, `embedded_value_boolean_flow`
 - Related topics: [Workflow model](model.md), [Examples](examples.md)
+
+## let-bindings
+
+- Path: `examples/let-bindings.yaml`
+- Verified: `true`
+- Highlights: `let_bindings`, `boolean_guard`, `publish_data`
+- Related topics: [Workflow-authoring feature map](features.md), [Workflow model](model.md), [Examples](examples.md)
 
 ## project-items-let
 
@@ -156,7 +163,7 @@ Use this page when you want concrete repository examples to inspect side by side
       "verified": true
     },
     {
-      "definition": "Multi-step task-activation example that combines project updates, state writes, and legacy shell fallback steps in one workflow.",
+      "definition": "Native task-activation sequence that checks project policy, updates status, fetches and fast-forwards the base, selects a task branch, and remembers task state, with an optional explicit trusted-code hook.",
       "name": "set-active-task-from-gitx",
       "path": "examples/set-active-task-from-gitx.yaml",
       "related_topics": [
@@ -165,9 +172,11 @@ Use this page when you want concrete repository examples to inspect side by side
         "operations"
       ],
       "shows": [
-        "multi_step_workflow",
+        "project_policy_gates",
+        "native_git_sequence",
         "state_updates",
-        "shell_fallback"
+        "explicit_trusted_hook",
+        "partial_effects"
       ],
       "verified": true
     },
@@ -310,6 +319,22 @@ Use this page when you want concrete repository examples to inspect side by side
         "type_predicate_filters",
         "membership_filter",
         "embedded_value_boolean_flow"
+      ],
+      "verified": true
+    },
+    {
+      "definition": "Workflow-local named expressions reuse input defaults in a boolean guard and publish a lowercased branch label as data, without running a shell command or creating a Git branch.",
+      "name": "let-bindings",
+      "path": "examples/let-bindings.yaml",
+      "related_topics": [
+        "features",
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "let_bindings",
+        "boolean_guard",
+        "publish_data"
       ],
       "verified": true
     },

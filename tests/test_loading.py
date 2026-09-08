@@ -2,15 +2,42 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import yaml
 
 from ordo.model.json import authored_string_style
 from ordo.model.profile import Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Workflow
 from ordo.runtime import LoadError, load_profile_file, load_profile_text, load_workflow_document_file, load_workflow_file, load_workflow_text, load_yaml_document, validate_workflow_document
+from ordo.runtime.loading import _AuthoredStyleSafeLoader
 
 
 class LoadingTest(unittest.TestCase):
+    def test_authored_style_loader_only_overrides_safe_string_constructor(self) -> None:
+        self.assertTrue(issubclass(_AuthoredStyleSafeLoader, yaml.SafeLoader))
+        constructors = dict(_AuthoredStyleSafeLoader.yaml_constructors)
+        constructors["tag:yaml.org,2002:str"] = yaml.SafeLoader.yaml_constructors["tag:yaml.org,2002:str"]
+        self.assertEqual(constructors, yaml.SafeLoader.yaml_constructors)
+        self.assertEqual(_AuthoredStyleSafeLoader.yaml_multi_constructors, yaml.SafeLoader.yaml_multi_constructors)
+
+    def test_load_yaml_document_rejects_dangerous_python_tags_without_execution(self) -> None:
+        cases = (
+            ("!!python/object/apply:os.system ['never-execute']", "os.system"),
+            ("!!python/object/apply:subprocess.run [['never-execute']]", "subprocess.run"),
+            ("!!python/name:os.system ''", "os.system"),
+            ("!!python/object/new:builtins.complex [1, 2]", "builtins.complex"),
+        )
+        for payload, target in cases:
+            with self.subTest(payload=payload), patch(target, return_value=0) as callable_mock:
+                try:
+                    with self.assertRaises(LoadError) as context:
+                        load_yaml_document(f"value: {payload}\n")
+                    self.assertEqual(context.exception.diagnostics[0].code, "load.yaml.syntax")
+                finally:
+                    callable_mock.assert_not_called()
+
     def test_load_yaml_document_preserves_plain_and_quoted_string_styles(self) -> None:
         payload = load_yaml_document(
             textwrap.dedent(

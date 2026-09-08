@@ -8,6 +8,7 @@ from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutco
 def info():
     return probe(
         name="upstream",
+        summary="Inspect the exact configured upstream remote, including nested names, and its conventional local tracking-tail branch",
         outputs={
             "configured": "boolean",
             "branch": "string | null",
@@ -92,14 +93,63 @@ def run(ctx: OperationContext) -> OperationOutcome:
             raw={"branch": dict(branch_outcome.raw), "upstream": dict(command.raw)},
         )
 
-    remote, remote_branch = _split_upstream_ref(upstream_ref)
-    if remote is None or remote_branch is None:
+    raw = {"branch": dict(branch_outcome.raw), "upstream": dict(command.raw)}
+    try:
+        remote_command = ctx.command(
+            ["git", "config", "--get", f"branch.{branch}.remote"],
+            failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
+        )
+    except MappedOutcomeError:
+        return fail_with_diagnostic(
+            code="probe_failed",
+            summary="Git upstream remote configuration lookup failed",
+            diagnostic_code="probe.git_upstream.remote_lookup_failed",
+            reference=ctx.reference,
+            raw=raw,
+        )
+
+    remote = remote_command.stdout
+    if isinstance(remote, str):
+        remote = remote.removesuffix("\n")
+    if not isinstance(remote, str) or not remote or remote == "." or remote.startswith("-") or any(char.isspace() for char in remote):
+        return fail_with_diagnostic(
+            code="probe_failed",
+            summary="Git upstream configuration returned an unsupported remote name",
+            diagnostic_code="probe.git_upstream.invalid_remote",
+            reference=ctx.reference,
+            raw=raw,
+        )
+
+    try:
+        ref_command = ctx.command(
+            ["git", "rev-parse", "--symbolic-full-name", "@{upstream}"],
+            failures={"os_error": "probe_failed", "nonzero": "probe_failed"},
+        )
+    except MappedOutcomeError:
+        return fail_with_diagnostic(
+            code="probe_failed",
+            summary="Git canonical upstream ref lookup failed",
+            diagnostic_code="probe.git_upstream.ref_lookup_failed",
+            reference=ctx.reference,
+            raw=raw,
+        )
+
+    full_ref = ref_command.stdout
+    if isinstance(full_ref, str):
+        full_ref = full_ref.removesuffix("\n")
+    prefix = f"refs/remotes/{remote}/"
+    remote_branch = full_ref[len(prefix) :] if isinstance(full_ref, str) and full_ref.startswith(prefix) else ""
+    if (
+        not remote_branch
+        or any(char.isspace() for char in remote_branch)
+        or upstream_ref not in (full_ref, f"{remote}/{remote_branch}", f"remotes/{remote}/{remote_branch}")
+    ):
         return fail_with_diagnostic(
             code="probe_failed",
             summary="Git upstream command returned an unsupported upstream ref format",
             diagnostic_code="probe.git_upstream.invalid_ref",
             reference=ctx.reference,
-            raw={"branch": dict(branch_outcome.raw), "upstream": dict(command.raw), "ref": upstream_ref},
+            raw=raw,
         )
 
     return ok(
@@ -112,20 +162,5 @@ def run(ctx: OperationContext) -> OperationOutcome:
             "remote_branch": remote_branch,
             "repository_root": repository_root,
         },
-        raw={"branch": dict(branch_outcome.raw), "upstream": dict(command.raw)},
+        raw=raw,
     )
-
-
-def _split_upstream_ref(upstream_ref: str) -> tuple[str | None, str | None]:
-    prefix = "refs/remotes/"
-    if upstream_ref.startswith(prefix):
-        remainder = upstream_ref[len(prefix) :]
-    else:
-        remainder = upstream_ref
-    if "/" not in remainder:
-        return None, None
-    remote, remote_branch = remainder.split("/", 1)
-    if not remote or not remote_branch:
-        return None, None
-    return remote, remote_branch
-

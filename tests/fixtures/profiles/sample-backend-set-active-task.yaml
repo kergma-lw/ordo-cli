@@ -5,7 +5,7 @@ inputs:
   remote: origin
   base_branch: main
   allow_backlog: false
-  allowed_issue_types_csv: Task,Bug
+  allowed_issue_types: [Task, Bug]
   post_open_command: ""
   repository_kind: backend
 

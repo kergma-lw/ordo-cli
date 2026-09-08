@@ -36,6 +36,33 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: c
 }
 ```
 
+## Authoring contract
+
+Create one new GitHub issue in one repository and return its canonical reference, number, title, and URL for later workflow steps. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
+
+- connector_contexts.gh.repository already names the normal repository target and the workflow must open a new issue there.
+- The workflow must open a new issue and then reuse the returned issue number or URL in later steps.
+- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
+
+### Boundaries
+
+- Editing or commenting on an already existing issue; use the narrower body or comment actions for that follow-up work.
+- Reading current issue metadata before deciding whether creation is necessary; use connector.gh.issue or other probe surfaces first when the issue already exists.
+
+### gh_issue_create_step
+
+Create one new GitHub issue and register its returned reference for later steps.
+
+```yaml
+  - name: create-issue
+    uses: gh.issue.create
+    with:
+      repository: inputs.repository
+      title: inputs.title
+      body: inputs.initial_body
+    register: created_issue
+```
+
 ## Effects
 
 - create GitHub issue

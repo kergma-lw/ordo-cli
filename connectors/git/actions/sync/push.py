@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from connectors.git.actions._shared import map_nonzero, require_local_branch
+from connectors.git.actions.sync._shared import require_configured_remote
 from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutcome, action, fail_with_diagnostic, ok, preflight_observation
 
 
 def info():
     return action(
         name="sync.push",
+        summary="Push to a configured remote name; omitted or null remote uses the upstream-derived name, validated against configured names",
         inputs={"branch": "string", "remote": "string | null"},
         effects=("push a local branch to a remote",),
         outputs={"remote": "string", "branch": "string"},
@@ -38,6 +40,10 @@ def run(ctx: OperationContext) -> OperationOutcome:
         if isinstance(remote, OperationOutcome):
             return remote
 
+    remote = require_configured_remote(ctx, remote, "push_blocked")
+    if isinstance(remote, OperationOutcome):
+        return remote
+
     try:
         command = ctx.command(["git", "push", remote, branch], failures={"os_error": "push_blocked", "nonzero": "push_blocked"})
     except MappedOutcomeError as exc:
@@ -59,16 +65,14 @@ def run(ctx: OperationContext) -> OperationOutcome:
     )
 
 
-def _optional_remote(ctx: OperationContext) -> str | None | OperationOutcome:
+def _optional_remote(ctx: OperationContext) -> object | OperationOutcome:
     try:
         value = ctx.input("remote")
     except MappedOutcomeError as exc:
         if exc.outcome.status == "input_error":
             return None
         return exc.outcome
-    if value is None:
-        return None
-    return str(value)
+    return value
 
 
 def _resolve_upstream_remote(ctx: OperationContext, branch: str) -> str | OperationOutcome:

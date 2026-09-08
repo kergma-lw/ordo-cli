@@ -5,7 +5,8 @@ inputs:
   remote: origin
   base_branch: main
   allow_backlog: false
-  allowed_issue_types_csv: Task,Bug
+  allowed_issue_types: [Task, Bug]
+  # Trusted code hook; do not interpolate ordinary input data into this command.
   post_open_command: npm run openapi && npm run errors:sync
   repository_kind: frontend
 

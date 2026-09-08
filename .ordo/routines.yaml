@@ -1,5 +1,101 @@
 version: 1
 routines:
+  audit.bandit:
+    kind: probe
+    summary: Scan tracked production Python with pinned Bandit and sanitized findings.
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-bandit.sh"
+    outputs:
+      mode: data
+      format: json
+    failure_modes:
+    - findings
+    - scan_incomplete
+    - runtime_unavailable
+  audit.semgrep:
+    kind: probe
+    summary: Scan tracked production Python with pinned Semgrep CE and four local review rules.
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-semgrep.sh"
+    outputs:
+      mode: data
+      format: json
+    failure_modes:
+    - findings
+    - scan_incomplete
+    - runtime_unavailable
+  audit.pip-audit:
+    kind: probe
+    summary: Audit exact installed runtime dependencies through PyPI only with explicit network consent.
+    args:
+      allow_network:
+        type: boolean
+        required: true
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-pip-audit.sh"
+      - "{allow_network}"
+    outputs:
+      mode: data
+      format: json
+    failure_modes:
+    - findings
+    - scan_incomplete
+    - runtime_unavailable
+  audit.shellcheck:
+    kind: probe
+    summary: Check tracked shell files with pinned ShellCheck without executing their contents.
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-shellcheck.sh"
+    outputs:
+      mode: data
+      format: json
+    failure_modes:
+    - findings
+    - scan_incomplete
+    - runtime_unavailable
+  audit.publication-inventory:
+    kind: action
+    summary: Inventory artifact paths and privacy-context candidates without declaring them leaks or approving publication.
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-publication-inventory.sh"
+    failure_modes:
+    - inventory_incomplete
+    - runtime_unavailable
+  audit.gitleaks-metadata:
+    kind: action
+    summary: Audit local reachable commit and annotated tag metadata with pinned Gitleaks and sanitized output.
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-gitleaks-metadata.sh"
+    failure_modes:
+    - secrets_found
+    - scan_incomplete
+    - runtime_unavailable
+  audit.gitleaks-history:
+    kind: action
+    summary: Audit locally reachable commit patches with pinned Gitleaks and sanitized output.
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-gitleaks-history.sh"
+    failure_modes:
+    - secrets_found
+    - scan_incomplete
+    - runtime_unavailable
+  audit.gitleaks-tree:
+    kind: action
+    summary: Audit tracked worktree files with pinned Gitleaks and sanitized output.
+    implementation:
+      argv:
+      - ".ordo/scripts/audit-gitleaks-tree.sh"
+    failure_modes:
+    - secrets_found
+    - scan_incomplete
+    - runtime_unavailable
   meta.build-domain-packs:
     kind: action
     summary: Regenerate derived meta packs from source docs.

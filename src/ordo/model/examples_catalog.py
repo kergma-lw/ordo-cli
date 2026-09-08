@@ -34,8 +34,8 @@ EXAMPLES_CATALOG: JSONObject = {
         {
             "name": "set-active-task-from-gitx",
             "path": "examples/set-active-task-from-gitx.yaml",
-            "definition": "Multi-step task-activation example that combines project updates, state writes, and legacy shell fallback steps in one workflow.",
-            "shows": ["multi_step_workflow", "state_updates", "shell_fallback"],
+            "definition": "Native task-activation sequence that checks project policy, updates status, fetches and fast-forwards the base, selects a task branch, and remembers task state, with an optional explicit trusted-code hook.",
+            "shows": ["project_policy_gates", "native_git_sequence", "state_updates", "explicit_trusted_hook", "partial_effects"],
             "related_topics": ["capabilities", "model", "operations"],
         },
         {
@@ -101,6 +101,13 @@ EXAMPLES_CATALOG: JSONObject = {
             "definition": "Local-expression filter example that demonstrates type predicates, membership tests, and boolean flow over embedded values.",
             "shows": ["type_predicate_filters", "membership_filter", "embedded_value_boolean_flow"],
             "related_topics": ["model", "examples"],
+        },
+        {
+            "name": "let-bindings",
+            "path": "examples/let-bindings.yaml",
+            "definition": "Workflow-local named expressions reuse input defaults in a boolean guard and publish a lowercased branch label as data, without running a shell command or creating a Git branch.",
+            "shows": ["let_bindings", "boolean_guard", "publish_data"],
+            "related_topics": ["features", "model", "examples"],
         },
         {
             "name": "project-items-let",

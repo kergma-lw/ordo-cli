@@ -469,7 +469,7 @@ Use this page when you need field-level workflow contract details.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
+          "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options; after trimming whitespace it must not start with '-'. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
           "tags": [
             "git",
             "probe"
@@ -938,7 +938,7 @@ Use this page when you need field-level workflow contract details.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Action operation 'git.sync.fetch'",
+          "summary": "Fetch from a configured remote name, not a direct URL, path, or option",
           "tags": [
             "git",
             "action"
@@ -996,7 +996,7 @@ Use this page when you need field-level workflow contract details.
           ],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Action operation 'git.sync.push'",
+          "summary": "Push to a configured remote name; omitted or null remote uses the upstream-derived name, validated against configured names",
           "tags": [
             "git",
             "action"
@@ -1131,7 +1131,7 @@ Use this page when you need field-level workflow contract details.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Probe operation 'git.upstream'",
+          "summary": "Inspect the exact configured upstream remote, including nested names, and its conventional local tracking-tail branch",
           "tags": [
             "git",
             "probe"
@@ -3023,7 +3023,7 @@ Use this page when you need field-level workflow contract details.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Observe one filesystem path as one file snapshot with canonical content and file metadata.",
+          "summary": "Read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.",
           "tags": [
             "fs",
             "probe"

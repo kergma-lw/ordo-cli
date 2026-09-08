@@ -36,6 +36,33 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
 }
 ```
 
+## Authoring contract
+
+Probe the comment thread of one GitHub issue as a typed list of recent comments plus total count metadata. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
+
+- connector_contexts.gh.repository already names the normal repository target and workflow logic now needs prior discussion for one issue there.
+- Workflow logic needs to inspect prior discussion, count comments, or publish a compact conversation summary before taking another step.
+- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
+
+### Boundaries
+
+- Reading the issue's main body, labels, or state; use connector.gh.issue for the broader issue snapshot.
+- Posting a new comment; use connector.gh.issue.comment.add for that effectful change.
+
+### gh_issue_comments_step
+
+Inspect the issue comment thread with one explicit limit and register the resulting comment snapshot.
+
+```yaml
+  - name: list-comments
+    uses: gh.issue.comments
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      limit: 20
+    register: comments_snapshot
+```
+
 ## Effects
 
 - None

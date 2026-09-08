@@ -48,6 +48,32 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
 }
 ```
 
+## Authoring contract
+
+Probe one GitHub pull request head for normalized status contexts and check runs, including aggregate pass/pending/fail counts for that head SHA. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
+
+- connector_contexts.gh.repository already names the normal repository target and the workflow needs CI readiness for one PR there by pull number.
+- The workflow needs CI readiness or status context outcomes before recommending merge, rerun, or escalation steps.
+- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
+
+### Boundaries
+
+- Review decisions from humans; use connector.gh.pr.reviews when the workflow cares about approvals or change requests.
+- Branch or headline PR metadata unrelated to execution status; use connector.gh.pr for the broader snapshot.
+
+### gh_pr_checks_step
+
+Inspect status contexts and check runs for the pull request head before merge-readiness decisions.
+
+```yaml
+  - name: load-pr-checks
+    uses: gh.pr.checks
+    with:
+      repository: inputs.repository
+      pull_number: inputs.pull_number
+    register: pr_checks
+```
+
 ## Effects
 
 - None

@@ -1227,11 +1227,15 @@
       "appropriate_when": [
         "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
         "Typed public operations express product intent better than broad execution surfaces.",
-        "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes."
+        "Use fs.file for UTF-8 content and metadata from the same opened regular file; safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK, with no unsafe fallback or atomic snapshot guarantee.",
+        "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
+        "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
+        "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport."
       ],
       "inappropriate_when": [
         "You are treating a missing public capability as permission to improvise local semantics silently.",
-        "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation."
+        "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation.",
+        "Git sync remote inputs are configured identifiers, not ad-hoc URLs, paths, or options. Configured URLs and helpers remain trusted; this is not a protocol sandbox."
       ],
       "inspect_next": [
         {

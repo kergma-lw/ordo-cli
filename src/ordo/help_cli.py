@@ -856,11 +856,15 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "appropriate_when": [
             "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
             "Typed public operations express product intent better than broad execution surfaces.",
+            "Use fs.file for UTF-8 content and metadata from the same opened regular file; safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK, with no unsafe fallback or atomic snapshot guarantee.",
+            "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
             "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
+            "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport.",
         ],
         "inappropriate_when": [
             "You are treating a missing public capability as permission to improvise local semantics silently.",
             "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation.",
+            "Git sync remote inputs are configured identifiers, not ad-hoc URLs, paths, or options. Configured URLs and helpers remain trusted; this is not a protocol sandbox.",
         ],
         "inspect_next": ["operations", "connector.gh", "connector.fs", "command-line.ordo-playbook", "workflow-rules.decision_order", "workflow-rules.structured_surface_bias"],
         "related_rules": ["decision_order", "structured_surface_bias", "routine.*", "local_artifacts_are_context"],
@@ -1672,6 +1676,17 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
     return lookup
 
 
+_GH_REPOSITORY_INPUT_GUIDANCE = (
+    "repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, "
+    "then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. "
+    "Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. "
+    "Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. "
+    "Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. "
+    "Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. "
+    "API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass."
+)
+
+
 def _build_model_node_lookup() -> dict[str, JSONObject]:
     model = build_model_response()
     lookup: dict[str, JSONObject] = {}
@@ -1714,18 +1729,18 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.shell.command", "workflow-rules.shell.command", "routines", "operations"],
         },
         "fs": {
-            "definition": "Published filesystem connector family for probing one filesystem path as a readable file snapshot.",
+            "definition": "Published filesystem connector family for observing UTF-8 content and metadata from the same opened regular file, not an atomic snapshot.",
             "use_when": [
                 "You need one typed filesystem probe instead of a broader shell command just to inspect a file.",
             ],
             "do_not_use_for": [
                 "Writing, mutating, or deleting files; this family currently publishes observation only.",
-                "Repository-local parsing logic when one file snapshot is enough and later workflow logic can inspect its outputs directly.",
+                "Atomic snapshots or workspace confinement; parent symlinks and hardlinks remain allowed. Safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK with no unsafe fallback.",
             ],
             "nearest_surfaces": [
                 {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
-                {"handle": "connector.fs.file", "summary": "Probe one filesystem path as one file snapshot"},
+                {"handle": "connector.fs.file", "summary": "Observe content and metadata from one opened regular file"},
                 {"handle": "connector.shell.command", "summary": "Broader shell surface for cases that are not covered by published filesystem probes"},
             ],
             "inspect_next": ["connector.fs.file", "operations", "connector.shell.command"],
@@ -1835,13 +1850,16 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["workflow-rules.shell.command", "routines", "operations", "connector.shell"],
         },
         ("fs", "file"): {
-            "definition": "Probe one filesystem path as one UTF-8 file snapshot with canonical content and file metadata.",
+            "definition": "Observe UTF-8 content and metadata from the same opened regular file. The initial no-follow stat preserves diagnostics; nonzero O_NOFOLLOW and O_NONBLOCK are required before opening, then fstat verifies a regular file before reading that descriptor.",
             "use_when": [
                 "You need one file's content and metadata inside workflow logic, guards, or later adapters.",
+                "Supply a required path explicitly. Relative and absolute textual Path projections are retained, not resolved to the opened object's identity. Publish basename, size, or line_count rather than full content by default; later adapters can consume the registered content.",
+                "Initial missing paths return path_not_found; initial final symlinks or nonregular entries and opened FIFO/directory objects return not_a_file. Missing secure flags return content_unavailable with probe.fs_file.secure_open_unavailable and no fallback. Open errors including ELOOP return content_unavailable without guessing kind; fstat failure returns probe_failed with probe.fs_file.stat_failed.",
             ],
             "do_not_use_for": [
                 "Directory inspection or generic filesystem traversal; this probe requires one regular file path.",
                 "Binary or non-UTF-8 content when canonical text content cannot be produced reliably.",
+                "Atomic snapshots under concurrent writes, workspace confinement, device-open sandboxing, or same-UID isolation. Parent symlinks and hardlinks remain allowed; POSIX race tests do not establish Windows support.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.fs", "summary": "Parent filesystem connector family"},
@@ -2451,6 +2469,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 "Later logic needs subjects, bodies, authors, and commit times from one bounded revision scope rather than arbitrary git log formatting.",
             ],
             "do_not_use_for": [
+                "Passing Git options through rev: revisions and ranges such as HEAD~10..HEAD are supported, but rev must not start with '-' after trimming whitespace. Option-shaped values fail with probe.git_commits.invalid_rev before git log runs, including during guard and preflight observations in inspection modes.",
                 "Loading patch text, changed files, diff stats, or graph decoration; this probe intentionally stays narrower than a full git log surface.",
                 "Mutating history through creation, amend, or revert actions; use connector.git.commit.create, connector.git.commit.amend, or connector.git.commit.revert for those effectful steps.",
             ],
@@ -2639,14 +2658,17 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.git.range", "connector.git.branch", "connector.git.integrate.cherry_pick"],
         },
         ("git", "sync.fetch"): {
-            "definition": "Fetch refs from one Git remote into the local repository so later probes and decisions can see updated remote-tracking state without publishing any local branch back outward.",
+            "definition": "Fetch refs from one Git remote configured in the local repository so later probes and decisions can see updated remote-tracking state without publishing any local branch back outward.",
             "use_when": [
                 "A workflow first needs fresh remote-tracking refs, tags, or branch comparisons before deciding whether merging, rebasing, or pushing is safe.",
                 "The authored intent is inbound synchronization from one named remote, not publishing a local branch to collaborators.",
+                "Supply a nonempty remote name without whitespace or a leading '-'. During run, the name must exactly match the local git remote inventory; team/origin is valid when configured. Any accepted spelling in that inventory is an identifier, not a direct transport destination.",
+                "During run, malformed or unknown names return remote_not_found with action.git.invalid_remote or action.git.remote_not_found respectively. Local inventory failure returns fetch_blocked with action.git.remote_inventory_failed; none of these validation failures starts transport. Inspection modes do not perform this action-time validation.",
             ],
             "do_not_use_for": [
                 "Publishing local commits to a remote; use connector.git.sync.push when the workflow needs outbound branch publication rather than remote refresh.",
                 "Comparing branch divergence itself; use connector.git.range after fetch when the workflow actually needs ahead/behind facts rather than the refresh action.",
+                "Ad-hoc URLs, paths, or options instead of configured names. Configured Git URLs and helpers remain trusted; this validation is not a protocol sandbox.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.git.sync.push", "summary": "Sibling action for publishing one local branch outward after remote state has been refreshed or confirmed"},
@@ -2656,18 +2678,23 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "examples": [
                 {"reference": "git.sync.fetch", "inputs": {"remote": "origin"}},
+                {"reference": "git.sync.fetch", "inputs": {"remote": "team/origin"}},
             ],
             "inspect_next": ["connector.git.range", "connector.git.sync.push", "connector.git.tags"],
         },
         ("git", "sync.push"): {
-            "definition": "Push one local Git branch to a remote, using either the explicitly supplied remote or the branch's configured upstream remote when available.",
+            "definition": "Push one local Git branch to a configured remote name, supplied explicitly or derived by the current upstream resolver when remote is omitted or null, then validated against configured names.",
             "use_when": [
                 "A workflow is ready to publish one local branch outward after local validation, range checks, or remote refresh have already justified the push decision.",
                 "The authored intent is outbound branch publication itself, not merely refreshing remote-tracking refs or inspecting divergence.",
+                "Supply a nonempty remote name without whitespace or a leading '-'. During run, the name must exactly match the local git remote inventory; team/origin is valid when configured. Any accepted spelling in that inventory is an identifier, not a direct transport destination.",
+                "Omitted or null remote uses git.upstream for the current branch, which must match the requested branch, then applies the same membership validation. The exact branch.<current>.remote name is supported, including nested names such as team/origin. Missing matching upstream context returns upstream_remote_missing; unsupported upstream configuration propagates probe_failed rather than guessing a remote.",
+                "During run, malformed or unknown names return remote_not_found with action.git.invalid_remote or action.git.remote_not_found respectively. Local inventory failure returns push_blocked with action.git.remote_inventory_failed; none of these validation failures starts transport. Inspection modes do not perform this action-time validation. Branch, upstream, and range remain preflight observations; upstream now also reads local Git configuration and the canonical tracking ref, without network access.",
             ],
             "do_not_use_for": [
                 "Refreshing local knowledge of remote refs; use connector.git.sync.fetch for inbound synchronization before or instead of publishing.",
                 "Guessing whether a push would be fast-forward-safe without wanting to publish yet; use connector.git.range or connector.git.upstream for that read-only decision context first.",
+                "Ad-hoc URLs, paths, or options instead of configured names. Configured Git URLs and helpers remain trusted; this validation is not a protocol sandbox.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.git.sync.fetch", "summary": "Sibling action for refreshing remote-tracking refs before a later push decision or rejection recovery"},
@@ -2677,6 +2704,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "examples": [
                 {"reference": "git.sync.push", "inputs": {"branch": "feature/demo", "remote": "origin"}},
+                {"reference": "git.sync.push", "inputs": {"branch": "feature/demo", "remote": "team/origin"}},
                 {"reference": "git.sync.push", "inputs": {"branch": "feature/demo", "remote": None}},
             ],
             "inspect_next": ["connector.git.sync.fetch", "connector.git.upstream", "connector.git.range"],
@@ -2745,14 +2773,21 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.git.upstream", "connector.git.branch", "connector.git.worktree"],
         },
         ("git", "upstream"): {
-            "definition": "Probe the upstream-tracking configuration for the current local branch and report whether one upstream ref is configured, plus the resolved remote and remote branch names when present.",
+            "definition": "Probe the upstream-tracking configuration for the current local branch and return the exact configured remote and the branch tail of its conventional local remote-tracking ref.",
             "use_when": [
                 "A workflow needs to know whether the current branch tracks one upstream before comparing ahead/behind state or deciding whether pushing makes sense.",
                 "Later logic needs remote, remote_branch, or upstream_ref facts for the current branch rather than repository-root or branch-inventory facts.",
+                "remote comes from branch.<current>.remote, so nested configured names such as team/origin are preserved. remote_branch is the local tracking tail under refs/remotes/<exactremote>/, not the source-side branch name from a fetch refspec.",
+                "upstream_ref preserves Git's original abbreviated or full output. A separate canonical git rev-parse --symbolic-full-name lookup checks that spelling against the full tracking ref, avoiding misleading abbreviations.",
+                "Detached HEAD and missing tracking return configured=false with null tracking fields; detached HEAD also has branch=null. Exit 128 from the initial upstream rev-parse retains this unconfigured result, rather than becoming a lookup failure.",
+                "Unsupported remote names, including '.' for a local upstream, return probe_failed with probe.git_upstream.invalid_remote. A failed Git configuration lookup returns probe.git_upstream.remote_lookup_failed. Nonstandard tracking destinations or inconsistent ref spellings return probe.git_upstream.invalid_ref; a failed canonical ref lookup returns probe.git_upstream.ref_lookup_failed. These four diagnostics use probe_failed, never a guessed remote.",
+                "These are local, read-only observations shared by runtime mode paths that evaluate the probe or its preflight observation: check, review, plan, run, explain, and next. Additional Git configuration and canonical-ref reads perform no network access. Reads are non-atomic; repository state can change between them.",
             ],
             "do_not_use_for": [
                 "Reading repository-root, git-dir, or default-branch facts; use connector.git.repo for repository-level context.",
                 "Comparing current branch divergence against its upstream; use connector.git.range when the workflow needs ahead/behind math after choosing base and head endpoints.",
+                "Resolving source-side branch names from custom fetch mappings, local '.' upstreams, or tracking destinations outside refs/remotes/<exactremote>/. Unsupported shapes fail instead of being inferred.",
+                "Validating transport destinations or proving push safety. Fetch/push remote-inventory membership checks remain run-only; configured URLs and helpers remain trusted, not a transport sandbox.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.git.repo", "summary": "Sibling probe for repository-level facts before or alongside upstream-tracking inspection"},
@@ -5291,6 +5326,8 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         overrides = connector_family_overrides.get(connector["namespace"])
         if isinstance(overrides, dict):
             connector_metadata.update(overrides)
+        if connector["namespace"] == "gh":
+            connector_metadata["use_when"] = [*connector_metadata.get("use_when", []), _GH_REPOSITORY_INPUT_GUIDANCE]
         add_node(
             f"connector.{connector['namespace']}",
             contract="connectors",
@@ -5305,6 +5342,8 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             operation_overrides = connector_operation_overrides.get((connector["namespace"], operation["name"]))
             if isinstance(operation_overrides, dict):
                 operation_metadata.update(operation_overrides)
+            if connector["namespace"] == "gh" and "repository" in operation.get("inputs", {}):
+                operation_metadata["use_when"] = [*operation_metadata.get("use_when", []), _GH_REPOSITORY_INPUT_GUIDANCE]
             add_node(
                 f"connector.{connector['namespace']}.{operation['name']}",
                 contract="connectors",
@@ -5388,8 +5427,7 @@ def _build_examples_node_lookup() -> dict[str, JSONObject]:
             "name": handle,
             "summary": str(example.get("definition") or f"Verified example at {example['path']}"),
             "metadata": example,
-            "snippet_coverage": "none",
-            "canonical_examples": [],
+            **_snippet_surface_for_handle(handle),
         }
     return lookup
 
@@ -6933,6 +6971,7 @@ def render_example_node_text(payload: JSONObject) -> str:
         lines.append("")
         lines.append("related topics:")
         lines.extend(f"- {item}" for item in related_topics if isinstance(item, str))
+    _append_text_canonical_examples(lines, payload.get("canonical_examples", []))
     return "\n".join(lines)
 
 

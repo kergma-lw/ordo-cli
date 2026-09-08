@@ -48,7 +48,7 @@
       "verified": true
     },
     {
-      "definition": "Multi-step task-activation example that combines project updates, state writes, and legacy shell fallback steps in one workflow.",
+      "definition": "Native task-activation sequence that checks project policy, updates status, fetches and fast-forwards the base, selects a task branch, and remembers task state, with an optional explicit trusted-code hook.",
       "name": "set-active-task-from-gitx",
       "path": "examples/set-active-task-from-gitx.yaml",
       "related_topics": [
@@ -57,9 +57,11 @@
         "operations"
       ],
       "shows": [
-        "multi_step_workflow",
+        "project_policy_gates",
+        "native_git_sequence",
         "state_updates",
-        "shell_fallback"
+        "explicit_trusted_hook",
+        "partial_effects"
       ],
       "verified": true
     },
@@ -202,6 +204,22 @@
         "type_predicate_filters",
         "membership_filter",
         "embedded_value_boolean_flow"
+      ],
+      "verified": true
+    },
+    {
+      "definition": "Workflow-local named expressions reuse input defaults in a boolean guard and publish a lowercased branch label as data, without running a shell command or creating a Git branch.",
+      "name": "let-bindings",
+      "path": "examples/let-bindings.yaml",
+      "related_topics": [
+        "features",
+        "model",
+        "examples"
+      ],
+      "shows": [
+        "let_bindings",
+        "boolean_guard",
+        "publish_data"
       ],
       "verified": true
     },

@@ -39,6 +39,35 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: s
 }
 ```
 
+## Authoring contract
+
+Set one single-select GitHub Project field on one issue's project item by field name and visible option name. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
+
+- connector_contexts.gh.repository already names the normal repository target and the workflow needs to assign one selectable project value for one issue there.
+- A workflow needs to assign one selectable project value such as Status or Priority after membership and field-option validation succeed.
+- The caller knows the human-facing option label and wants Ordo to resolve the underlying option id automatically.
+- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
+
+### Boundaries
+
+- Writing iteration-backed or numeric project fields; use connector.gh.project.issue.field_iteration.set or connector.gh.project.issue.field_number.set for those different field kinds.
+- Checking whether the requested option exists without mutating anything; use connector.gh.project.field.option when the workflow only needs a yes/no option probe.
+
+### gh_project_issue_field_single_select_set_step
+
+Set one selectable project field such as Status by its visible option name after membership is ensured.
+
+```yaml
+      - name: set-status
+        uses: gh.project.issue.field_single_select.set
+        with:
+          repository: inputs.repository
+          issue_number: inputs.issue_number
+          project_id: inputs.project_id
+          field: "Status"
+          option: "In review"
+```
+
 ## Effects
 
 - set one GitHub project issue single-select field by field name

@@ -2,6 +2,8 @@
 
 ## Role
 
+- Repository inputs follow the shared [GitHub repository input identity](gh-repository-identity.md) contract, including literal grammar, validation ordering, and context-default boundaries.
+
 - `gh.pr` is the canonical public `gh` probe for one pull request snapshot.
 - `gh.pr.comments` is the public `gh` probe for the regular conversation comments attached to one pull request.
 - `gh.pr.reviews` is the public `gh` probe for submitted pull request review events.

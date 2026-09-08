@@ -6,6 +6,7 @@ This site is meant to be browsed as product reference rather than as a narrative
 
 ## Start here
 
+- [Workflow-authoring feature map](topics/features.md) — Inspect workflow features, named surfaces, and when to use them
 - [Overview](topics/overview.md) — Start with a map of the main Ordo surfaces.
 - [Workflow model](topics/model.md) — Browse the main workflow contracts.
 - [Workflow rules](topics/workflow-rules.md) — Browse workflow rules, from the default check/review loop to fallback cautions.
@@ -18,7 +19,6 @@ This site is meant to be browsed as product reference rather than as a narrative
 
 These are interactive discovery surfaces in `ordo-help`, so they are listed here as commands rather than static pages.
 
-- `features` — Inspect workflow features, named surfaces, and when to use them
 - `snippet-coverage` — Inspect which public handles do and do not publish canonical verified snippets
 - `operation` — Inspect one public operation by reference
 - `describe` — Resolve a supported public topic

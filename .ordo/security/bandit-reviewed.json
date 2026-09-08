@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "findings": [
+    {
+      "id": "authored-style-safe-loader",
+      "code": "B506",
+      "path": "src/ordo/runtime/loading.py",
+      "line": 175,
+      "source_sha256": "641c2c27ad463fd38c95b3f8bd7d5757b89cf222b197e1f81e17bc751a6c6305",
+      "reason": "The yaml.load(text, Loader=_AuthoredStyleSafeLoader) call uses a yaml.SafeLoader subclass (line 54), not an unsafe loader. Its only constructor customization is the standard YAML string tag, preserving plain, single-quoted and double-quoted scalar style via AuthoredString without enabling Python object construction. Regression coverage: tests/test_loading.py. The entire source file fingerprint covers the subclass, constructor registration and call; any source change requires renewed review, not automatic fingerprint refresh."
+    }
+  ]
+}

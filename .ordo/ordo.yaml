@@ -65,6 +65,16 @@ workflows:
     description: Run the full repository pytest suite from a clean worktree
     category: verify
     when: Use when you need one canonical clean-worktree entrypoint for the full local test suite.
+  audit-secrets-tree:
+    file: workflows/audit-secrets-tree.yml
+    description: Scan current tracked worktree files with pinned Gitleaks and sanitized output
+    category: verify
+    when: Use for a local secrets audit; excludes Git history, staged-only contents, and untracked files.
+  audit-publication:
+    file: workflows/audit-publication.yml
+    description: Run isolated secret, Python, dependency, shell, and publication-inventory checks through one audit workflow
+    category: verify
+    when: Use scanner=all or select one scanner; dependency lookup requires explicit consent. Success never authorizes publication.
   stories-backlog:
     file: workflows/stories-backlog.yml
     description: Show Story issues that are in Backlog in the project

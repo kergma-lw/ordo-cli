@@ -2,7 +2,7 @@ version: 0
 workflow: gh-repo-sync
 connector_contexts:
   gh:
-    repository: acme/public-mirror
+    repository: acme/public-mirror # Literal ASCII OWNER/REPO default, not a URL or authorization allowlist.
 blocks:
 - steps:
   - name: inspect-repository

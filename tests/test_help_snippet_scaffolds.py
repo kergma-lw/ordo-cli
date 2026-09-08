@@ -49,6 +49,18 @@ class HelpSnippetScaffoldTest(unittest.TestCase):
 
         self.assertEqual(report.status, RuntimeStatus.OK)
 
+    def test_state_set_host_declares_dynamic_snippet_task_key(self) -> None:
+        from ordo.model.help_snippets import describe_help_snippets
+        from ordo.runtime import load_workflow_text
+
+        example = next(
+            item for item in describe_help_snippets()["workflow.step.state_set"]["canonical_examples"]
+            if item["name"] == "state_set_dynamic_task_memory_key"
+        )
+        workflow_text = build_step_field_scaffold(target="workflow.step.state_set", snippet=example["yaml"])
+        self.assertIn("task_key", load_workflow_text(workflow_text).declared_inputs)
+        self.assertEqual(validate_workflow_text(workflow_text).status, RuntimeStatus.OK)
+
     def test_step_fragment_scaffold_validates_for_state_set_target(self) -> None:
         workflow_text = build_step_fragment_scaffold(
             target="workflow.step.state_set",

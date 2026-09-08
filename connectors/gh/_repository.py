@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 
 from connectors.gh._external import command_text, fail_github_command, text_mentions_not_found
+from ordo.model.github_repository import (
+    normalize_github_repository as normalize_repository_value,
+    split_github_repository as split_repository,
+)
 from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail
 
 REPOSITORY_INPUTS: dict[str, str] = {"repository": "string"}
-
-_REPOSITORY_RE = re.compile(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)$")
-
 
 @dataclass(frozen=True, slots=True)
 class RepositoryIdentity:
@@ -37,43 +37,13 @@ def resolve_repository_identity(
     repository = resolve_repository_target(ctx, failure_code=failure_code, diagnostic_prefix=diagnostic_prefix)
     if isinstance(repository, OperationOutcome):
         return repository
-    match = _REPOSITORY_RE.match(repository.repository)
-    if match is None:
-        return fail(
-            code=failure_code,
-            summary="GitHub repository reference must use OWNER/REPO format",
-            diagnostics=(
-                Diagnostic(
-                    code=f"{diagnostic_prefix}.invalid_repository",
-                    level="error",
-                    message="GitHub repository reference must use OWNER/REPO format",
-                    details={"reference": ctx.reference, "repository": repository.repository},
-                ),
-            ),
-        )
+    owner, repo = repository.repository.split("/")
     return RepositoryIdentity(
         repository=repository.repository,
-        owner=match.group("owner"),
-        repo=match.group("repo"),
+        owner=owner,
+        repo=repo,
         diagnostics=repository.diagnostics,
     )
-
-
-def normalize_repository_value(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    repository = value.strip()
-    match = _REPOSITORY_RE.match(repository)
-    if match is None:
-        return None
-    return repository
-
-
-def split_repository(value: str) -> tuple[str, str] | None:
-    match = _REPOSITORY_RE.match(value)
-    if match is None:
-        return None
-    return match.group("owner"), match.group("repo")
 
 
 def resolve_repository_target(
@@ -87,12 +57,12 @@ def resolve_repository_target(
     if explicit_value is not None and explicit_repository is None:
         return fail(
             code=failure_code,
-            summary="GitHub repository reference must use OWNER/REPO format",
+            summary="GitHub repository reference must use safe ASCII OWNER/REPO format",
             diagnostics=(
                 Diagnostic(
                     code=f"{diagnostic_prefix}.invalid_repository",
                     level="error",
-                    message="GitHub repository reference must use OWNER/REPO format",
+                    message="GitHub repository reference must use safe ASCII OWNER/REPO format",
                     details={"reference": ctx.reference, "repository": explicit_value},
                 ),
             ),

@@ -1,8 +1,8 @@
 # git.upstream
 
-Read upstream tracking information for the current branch.
+Read the current branch's exact configured remote, including nested names, and local remote-tracking branch tail, not the source-side branch name.
 
-Use this when a workflow needs Git state or Git side effects. In practice: read upstream tracking information for the current branch.
+Use this when a workflow needs Git state or Git side effects. In practice: read the current branch's exact configured remote, including nested names, and local remote-tracking branch tail, not the source-side branch name.
 
 - Namespace: `git`
 - Kind: `probe`
@@ -96,7 +96,7 @@ Use this when a workflow needs Git state or Git side effects. In practice: read 
     "preflight_observations": [],
     "prerequisites": [],
     "replaced_by": [],
-    "summary": "Probe operation 'git.upstream'",
+    "summary": "Inspect the exact configured upstream remote, including nested names, and its conventional local tracking-tail branch",
     "tags": [
       "git",
       "probe"

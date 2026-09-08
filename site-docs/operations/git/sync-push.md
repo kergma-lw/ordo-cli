@@ -1,8 +1,8 @@
 # git.sync.push
 
-Push a local Git branch to a remote.
+Push a local Git branch using a configured remote name; an omitted or null remote is resolved from upstream and checked before transport.
 
-Use this when a workflow needs Git state or Git side effects. In practice: push a local Git branch to a remote.
+Use this when a workflow needs Git state or Git side effects. In practice: push a local Git branch using a configured remote name; an omitted or null remote is resolved from upstream and checked before transport.
 
 - Namespace: `git`
 - Kind: `action`
@@ -148,7 +148,7 @@ Use this when a workflow needs Git state or Git side effects. In practice: push 
     ],
     "prerequisites": [],
     "replaced_by": [],
-    "summary": "Action operation 'git.sync.push'",
+    "summary": "Push to a configured remote name; omitted or null remote uses the upstream-derived name, validated against configured names",
     "tags": [
       "git",
       "action"

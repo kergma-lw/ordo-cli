@@ -1,7 +1,19 @@
-"""fs.file probe."""
+"""Read content and metadata from the same opened regular file, not atomically.
+
+The initial no-follow stat preserves diagnostics, but is not a security barrier.
+Safe-open flags reject final symlink swaps and avoid blocking on FIFO swaps;
+fstat validates the opened object and supplies all metadata. Open failures,
+including ELOOP (which can also mean a parent loop), are content_unavailable.
+Missing safe-open flags fail diagnostically without an unsafe fallback.
+Parent symlinks and hardlinks remain allowed; this is not workspace confinement
+or protection against parent mutation, device-open effects, or concurrent writes.
+Path projections retain the authored path rather than resolving the opened file.
+"""
 
 from __future__ import annotations
 
+import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from stat import S_IMODE, S_ISREG
@@ -12,7 +24,7 @@ from ordo.plugin_sdk import OperationContext, OperationOutcome, fail_with_diagno
 def info():
     return probe(
         name="file",
-        summary="Observe one filesystem path as one file snapshot with canonical content and file metadata.",
+        summary="Read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.",
         inputs={"path": "string"},
         outputs={
             "path": "string",
@@ -79,8 +91,46 @@ def run(ctx: OperationContext) -> OperationOutcome:
             details={"path": str(path), "kind": _kind_from_mode(stat_result.st_mode)},
         )
 
+    required_flags = ("O_NOFOLLOW", "O_NONBLOCK")
+    unavailable_flags = [
+        name for name in required_flags
+        if type(getattr(os, name, None)) is not int or getattr(os, name) == 0
+    ]
+    if unavailable_flags:
+        return fail_with_diagnostic(
+            code="content_unavailable",
+            summary="Filesystem file probe requires unavailable safe-open flags",
+            diagnostic_code="probe.fs_file.secure_open_unavailable",
+            reference=ctx.reference,
+            details={"path": str(path), "flags": unavailable_flags, "platform": sys.platform},
+        )
+
     try:
-        content = path.read_text(encoding="utf-8")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            try:
+                stat_result = os.fstat(fd)
+            except OSError as exc:
+                return fail_with_diagnostic(
+                    code="probe_failed",
+                    summary="Filesystem file probe could not inspect the path",
+                    diagnostic_code="probe.fs_file.stat_failed",
+                    reference=ctx.reference,
+                    details={"path": str(path), "reason": str(exc)},
+                )
+            if not S_ISREG(stat_result.st_mode):
+                return fail_with_diagnostic(
+                    code="not_a_file",
+                    summary="Filesystem path is not a regular file",
+                    diagnostic_code="probe.fs_file.not_a_file",
+                    reference=ctx.reference,
+                    details={"path": str(path), "kind": _kind_from_mode(stat_result.st_mode)},
+                )
+            # Keep descriptor ownership here even when stream construction fails.
+            with os.fdopen(fd, encoding="utf-8", closefd=False) as stream:
+                content = stream.read()
+        finally:
+            os.close(fd)
     except (UnicodeDecodeError, OSError) as exc:
         return fail_with_diagnostic(
             code="content_unavailable",
@@ -93,7 +143,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
     filename_without_extension, extension = _split_basename(path.name)
 
     return ok(
-        summary="Filesystem file snapshot read successfully",
+        summary="Filesystem file content and metadata read from the same opened file",
         outputs={
             "path": str(path),
             "basename": path.name,

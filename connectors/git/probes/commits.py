@@ -13,6 +13,7 @@ def info():
         name="commits",
         summary=(
             "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. "
+            "rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options; after trimming whitespace it must not start with '-'. "
             "This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting."
         ),
         inputs={"limit": "integer", "rev": "string"},
@@ -68,6 +69,15 @@ def run(ctx: OperationContext) -> OperationOutcome:
         return fail_with_diagnostic(
             code="probe_failed",
             summary="git.commits requires rev to be a non-empty string",
+            diagnostic_code="probe.git_commits.invalid_rev",
+            reference=ctx.reference,
+            raw={"rev": rev_input},
+        )
+
+    if rev.startswith("-"):
+        return fail_with_diagnostic(
+            code="probe_failed",
+            summary="git.commits requires a revision scope, not a Git option; rev must not start with '-' after trimming whitespace",
             diagnostic_code="probe.git_commits.invalid_rev",
             reference=ctx.reference,
             raw={"rev": rev_input},

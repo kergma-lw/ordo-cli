@@ -1,7 +1,7 @@
 version: 0
 workflow: inspect-pr
 inputs:
-  repository: kergma-lw/ordo-cli
+  repository: kergma-lw/ordo-cli # Literal ASCII OWNER/REPO, not a URL; explicit other repositories remain allowed.
   pull_number: 42
 blocks:
 - steps:

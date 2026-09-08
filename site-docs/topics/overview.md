@@ -182,10 +182,10 @@ Use both check and review after adding or changing a workflow; neither replaces 
   "snippet_coverage_summary": {
     "coverage_counts": {
       "excerpt_verified": 58,
-      "none": 161,
-      "runner_verified": 58
+      "none": 157,
+      "runner_verified": 63
     },
-    "total_handles": 277
+    "total_handles": 278
   },
   "workflow_check_review_passes": {
     "passes": [

@@ -10,7 +10,7 @@ blocks:
         uses: git.commits
         with:
           limit: 5
-          rev: "HEAD"
+          rev: "HEAD" # Revision or range (e.g. HEAD~10..HEAD), never a Git option.
         register: recent_commits
       - name: create-commit
         uses: git.commit.create

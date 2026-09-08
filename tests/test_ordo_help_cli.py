@@ -1242,6 +1242,13 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(upstream["canonical_examples"][0]["form"], "step_fragment")
         self.assertEqual(upstream["canonical_examples"][1]["form"], "workflow_fragment")
         self.assertIn("connector.git.repo", [item["handle"] for item in upstream["metadata"]["nearest_surfaces"]])
+        guidance = " ".join(upstream["metadata"]["use_when"] + upstream["metadata"]["do_not_use_for"])
+        for term in ("branch.<current>.remote", "team/origin", "refs/remotes/<exactremote>/", "not the source-side branch name", "original abbreviated or full output", "configured=false", "Exit 128", "non-atomic", "no network access", "run-only"):
+            self.assertIn(term, guidance)
+        for code in ("invalid_remote", "remote_lookup_failed", "invalid_ref", "ref_lookup_failed"):
+            self.assertIn(f"probe.git_upstream.{code}", guidance)
+        for field in ("remote", "remote_branch"):
+            self.assertIn(f"{field}: step.upstream_info.outputs.{field}", upstream["canonical_examples"][1]["yaml"])
 
     def test_describe_connector_git_worktree_staging_group_publishes_teaching_ready_metadata_and_snippets(self) -> None:
         index_add_all = json.loads(self.run_help("describe", "connector.git.index.add_all", "--json").stdout)
@@ -1302,6 +1309,15 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Push one local Git branch", push["metadata"]["definition"])
         self.assertEqual(push["canonical_examples"][0]["form"], "step_fragment")
         self.assertIn("connector.git.sync.fetch", [item["handle"] for item in push["metadata"]["nearest_surfaces"]])
+        for payload, blocked in ((fetch, "fetch_blocked"), (push, "push_blocked")):
+            guidance = " ".join(payload["metadata"]["use_when"] + payload["metadata"]["do_not_use_for"])
+            for term in ("exactly match", "team/origin", "action.git.invalid_remote", "action.git.remote_not_found", "action.git.remote_inventory_failed", blocked, "Inspection modes do not", "not a protocol sandbox"):
+                self.assertIn(term, guidance)
+            self.assertIn("configured", payload["canonical_examples"][0]["yaml"])
+        self.assertIn("omitted or null", push["metadata"]["definition"])
+        self.assertIn("including nested names", " ".join(push["metadata"]["use_when"]))
+        self.assertNotIn("splits at the first slash", json.dumps(push))
+        self.assertNotIn("slash-splitting", json.dumps(fetch))
 
     def test_describe_connector_git_stash_is_teaching_ready(self) -> None:
         stash = json.loads(self.run_help("describe", "connector.git.stash", "--json").stdout)
@@ -1853,19 +1869,21 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("connector.compose", profile_connectors.stdout)
         self.assertIn("compose.directory=./deploy", profile_connectors.stdout)
 
-    def test_text_describe_connector_fs_group_is_teaching_ready(self) -> None:
+    def test_text_describe_connector_fs_group_explains_observation_boundary(self) -> None:
         family = self.run_help("describe", "connector.fs")
         file_probe = self.run_help("describe", "connector.fs.file")
 
         self.assertEqual(family.returncode, 0)
-        self.assertIn("Published filesystem connector family for probing one filesystem path as a readable file snapshot.", family.stdout)
+        self.assertIn("observing UTF-8 content and metadata from the same opened regular file, not an atomic snapshot", family.stdout)
         self.assertIn("use when:", family.stdout)
         self.assertIn("do not use for:", family.stdout)
         self.assertIn("connector.fs.file", family.stdout)
         self.assertIn("connector.shell.command", family.stdout)
 
         self.assertEqual(file_probe.returncode, 0)
-        self.assertIn("Probe one filesystem path as one UTF-8 file snapshot with canonical content and file metadata.", file_probe.stdout)
+        self.assertIn("Observe UTF-8 content and metadata from the same opened regular file.", file_probe.stdout)
+        self.assertIn("probe.fs_file.secure_open_unavailable", file_probe.stdout)
+        self.assertIn("fs_file_observation_workflow", file_probe.stdout)
         self.assertIn("Directory inspection or generic filesystem traversal", file_probe.stdout)
         self.assertIn("workflow.local_expression.adapter.key_value", file_probe.stdout)
         self.assertIn("fs.file(path=/workspace/app.env)", file_probe.stdout)
@@ -2278,6 +2296,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("Probe the upstream-tracking configuration for the current local branch", upstream.stdout)
         self.assertIn("connector.git.repo", upstream.stdout)
         self.assertIn("example_for: workflow_fragment", upstream.stdout)
+        for term in ("branch.<current>.remote", "local tracking tail", "probe.git_upstream.invalid_remote", "probe.git_upstream.remote_lookup_failed", "probe.git_upstream.invalid_ref", "probe.git_upstream.ref_lookup_failed", "non-atomic"):
+            self.assertIn(term, upstream.stdout)
 
     def test_text_describe_connector_git_worktree_staging_group_is_teaching_ready(self) -> None:
         index_add_all = self.run_help("describe", "connector.git.index.add_all")
@@ -2332,6 +2352,16 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(push.returncode, 0)
         self.assertIn("Push one local Git branch", push.stdout)
         self.assertIn("connector.git.sync.fetch", push.stdout)
+
+        for result in (fetch, push):
+            for term in ("exactly match", "team/origin", "remote_not_found", "action.git.invalid_remote", "action.git.remote_inventory_failed", "Inspection modes do not", "not a protocol sandbox"):
+                self.assertIn(term, result.stdout)
+        self.assertIn("fetch_blocked", fetch.stdout)
+        self.assertIn("push_blocked", push.stdout)
+        self.assertIn("omitted or null", push.stdout)
+        self.assertIn("including nested names", push.stdout)
+        self.assertNotIn("slash-splitting", push.stdout)
+        self.assertNotIn("splits at the first slash", push.stdout)
 
     def test_text_describe_connector_git_stash_is_teaching_ready(self) -> None:
         stash = self.run_help("describe", "connector.git.stash")
@@ -2988,8 +3018,36 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(payload["document_kind"], "operation")
         self.assertEqual(payload["operation"]["inputs"], {"limit": "integer", "rev": "string"})
         self.assertIn("does not expose patch text", payload["operation"]["summary"])
+        self.assertIn("rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options", payload["operation"]["summary"])
+        self.assertIn("after trimming whitespace it must not start with '-'", payload["operation"]["summary"])
         self.assertEqual(payload["operation"]["outputs"]["items"][0]["text"], "string")
         self.assertEqual(payload["operation"]["outputs"]["items"][0]["author_name"], "string")
+
+    def test_describe_git_commits_publishes_revision_safety_and_example_guidance(self) -> None:
+        for json_args in ((), ("--json",)):
+            with self.subTest(json_args=json_args):
+                result = self.run_help("describe", "connector.git.commits", *json_args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                if json_args:
+                    payload = json.loads(result.stdout)
+                    boundary = " ".join(payload["metadata"]["do_not_use_for"])
+                    examples = payload["canonical_examples"]
+                    self.assertEqual(payload["snippet_coverage"], "runner_verified")
+                    self.assertEqual([example["form"] for example in examples], ["step_fragment", "workflow_fragment"])
+                    for example in examples:
+                        self.assertIn("# Revision or range (e.g. HEAD~10..HEAD), never a Git option.", example["yaml"])
+                        self.assertEqual(example["verification"]["target"], "connector.git.commits")
+                        self.assertEqual(example["verification"]["kind"], "runner_verified")
+                else:
+                    boundary = result.stdout
+                    self.assertIn("# Revision or range (e.g. HEAD~10..HEAD), never a Git option.", result.stdout)
+                for term in (
+                    "revisions and ranges such as HEAD~10..HEAD are supported",
+                    "rev must not start with '-' after trimming whitespace",
+                    "probe.git_commits.invalid_rev before git log runs",
+                    "including during guard and preflight observations in inspection modes",
+                ):
+                    self.assertIn(term, boundary)
 
     def test_operation_topic_publishes_gh_project_items_examples_and_filter_shape(self) -> None:
         payload = json.loads(self.run_help("operation", "gh.project.items", "--json").stdout)

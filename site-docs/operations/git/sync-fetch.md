@@ -1,8 +1,8 @@
 # git.sync.fetch
 
-Fetch Git refs from a remote.
+Fetch Git refs using an exact configured remote name, not an ad hoc URL, path, or Git option.
 
-Use this when a workflow needs Git state or Git side effects. In practice: fetch Git refs from a remote.
+Use this when a workflow needs Git state or Git side effects. In practice: fetch Git refs using an exact configured remote name, not an ad hoc URL, path, or Git option.
 
 - Namespace: `git`
 - Kind: `action`
@@ -118,7 +118,7 @@ Use this when a workflow needs Git state or Git side effects. In practice: fetch
     "preflight_observations": [],
     "prerequisites": [],
     "replaced_by": [],
-    "summary": "Action operation 'git.sync.fetch'",
+    "summary": "Fetch from a configured remote name, not a direct URL, path, or option",
     "tags": [
       "git",
       "action"

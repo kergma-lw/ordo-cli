@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
+from ordo.model.github_repository import normalize_github_repository
 from ordo.model.json import JSONValue, authored_string_style
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, RuntimeResult, RuntimeStatus
@@ -638,15 +639,7 @@ def _review_gh_context_repository(workflow: Workflow, *, profile: Profile | None
 
 
 def _normalize_github_repository_value(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    repository = value.strip()
-    if repository.count("/") != 1:
-        return None
-    owner, repo = repository.split("/", 1)
-    if not owner or not repo:
-        return None
-    return repository
+    return normalize_github_repository(value)
 
 
 def _iter_cross_repository_override_sites(workflow: Workflow) -> list[tuple[tuple[str, ...], str, str]]:

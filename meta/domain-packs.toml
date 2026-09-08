@@ -8,6 +8,7 @@ sources = [
   "requirements/authoring/core.md",
   "requirements/connector/core.md",
   "requirements/connector/fs-file.md",
+  "requirements/connector/gh-repository-identity.md",
   "requirements/connector/gh-pr.md",
   "requirements/connector/gh-project-items.md",
   "requirements/local-expressions/core.md",

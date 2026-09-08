@@ -37,6 +37,57 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
+    "connector.fs.file": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "fs_file_observation_steps",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "Supply file_path, register the fs.file probe, and publish basename, byte size, line count, and content-derived character count without publishing full content. The length filter counts characters, not lines. Runner verification validates schema/fixture form only, not file access or race safety.",
+                "source_example": "fs-file-inspection",
+                "source_excerpt": {"path": "examples/fs-file-inspection.yaml", "start_line": 8, "end_line": 18},
+                "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "step_fragment", "target": "connector.fs.file", "expected_status": "ok"},
+            },
+            {
+                "name": "fs_file_observation_workflow",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "A complete observer workflow requires file_path with no real-file default and publishes a summary rather than full content. Content and metadata come from one validated descriptor, not an atomic snapshot. Runner verification checks schema/fixture form without opening files; POSIX race tests are separate evidence.",
+                "source_example": "fs-file-inspection",
+                "source_excerpt": {"path": "examples/fs-file-inspection.yaml", "start_line": 1, "end_line": 18},
+                "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "connector.fs.file", "expected_status": "ok"},
+            },
+        ],
+    },
+    "examples.let-bindings": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "guard_and_publish_branch_label",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Use let to name reusable expressions: should_run controls admission, while branch formats the input type and issue number. With the defaults, publish emits branch: task/7; enabled: false blocks publication. Publish returns data, unlike shell.command execution or Git branch creation. Runner verification validates the full workflow shape without execution; targeted example tests cover execution safety.",
+                "source_example": "examples.let-bindings",
+                "source_excerpt": {"path": "examples/let-bindings.yaml", "start_line": 1, "end_line": 16},
+                "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "examples.let-bindings", "expected_status": "ok"},
+            },
+        ],
+    },
+    "examples.set-active-task-from-gitx": {
+        "snippet_coverage": "runner_verified",
+        "canonical_examples": [
+            {
+                "name": "native_task_activation",
+                "kind": "positive",
+                "form": "workflow_fragment",
+                "summary": "Supply required repository and project_id inputs and bind the task_memory state role through the playbook; allowed_issue_types is a list (default [Task, Bug]), not CSV. Guards require boolean allow_backlog, one clean worktree, and an open issue. Add membership, then read project policy: missing type blocks, missing status is allowed, Done/In review block, and Backlog needs permission. Set Status to In progress before Git work. Branch naming and remembered issue values use inputs, not the project type. Fetch the configured remote once (no branch-specific fetch or pull), require its remote-tracking base, then switch and fast-forward an existing local base. A failed base switch stops the sequence. Reuse a target branch or create it from the local base, otherwise the remote-tracking base; separate creation and switching can leave a branch on failure. Write task state only after switching. Earlier membership, status, Git, and individual state writes are not rolled back on later failure. Only nonempty post_open_command runs as explicit trusted code; never interpolate ordinary issue data into it. This retained migration hook is not permission to author new shell.command steps; the workflow-rules prohibition still applies. This illustrative example is not the canonical .ordo workflow; demo profile project IDs make no operational promise. Runner verification validates the complete source shape, including required inputs and state_needs, without Git/GitHub execution, state persistence, or hook execution.",
+                "source_example": "examples.set-active-task-from-gitx",
+                "source_excerpt": {"path": "examples/set-active-task-from-gitx.yaml", "start_line": 1, "end_line": 155},
+                "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "workflow_fragment", "target": "examples.set-active-task-from-gitx", "expected_status": "ok"},
+            },
+        ],
+    },
     "state": {
         "snippet_coverage": "runner_verified",
         "canonical_examples": [
@@ -957,7 +1008,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "gh-repo-sync",
                 "source_excerpt": {
                     "path": "examples/gh-repo-sync.yaml",
-                    "start_line": 6,
+                    "start_line": 8,
                     "end_line": 10
                 },
                 "verification": {
@@ -995,7 +1046,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/gh-repo-sync.yaml",
                     "start_line": 11,
-                    "end_line": 15
+                    "end_line": 13
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1015,7 +1066,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_example": "gh-repo-actions-permissions",
                 "source_excerpt": {
                     "path": "examples/gh-repo-actions-permissions.yaml",
-                    "start_line": 6,
+                    "start_line": 8,
                     "end_line": 10
                 },
                 "verification": {
@@ -1032,7 +1083,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "source_excerpt": {
                     "path": "examples/gh-repo-actions-permissions.yaml",
                     "start_line": 1,
-                    "end_line": 18
+                    "end_line": 19
                 },
                 "verification": {
                     "kind": "excerpt_verified",
@@ -1729,7 +1780,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_upstream_probe_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Inspect the current branch's upstream-tracking configuration after confirming repository context.",
+                "summary": "Inspect the current branch's exact configured remote, including nested names, and local remote-tracking branch tail without network access.",
                 "source_example": "git-repo-upstream-inspection",
                 "source_excerpt": {
                     "path": "examples/git-repo-upstream-inspection.yaml",
@@ -1748,12 +1799,12 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_repo_upstream_flow",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "Inspect repository context and current-branch upstream tracking together so a workflow can separate repository facts from branch-tracking facts cleanly.",
+                "summary": "Publish repository context, the original upstream_ref, the exact configured remote, and remote_branch as the local tracking tail, not a source-side branch name.",
                 "source_example": "git-repo-upstream-inspection",
                 "source_excerpt": {
                     "path": "examples/git-repo-upstream-inspection.yaml",
                     "start_line": 1,
-                    "end_line": 17
+                    "end_line": 20
                 },
                 "verification": {
                     "kind": "runner_verified",
@@ -1978,7 +2029,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_sync_fetch_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Refresh one named remote before the workflow compares branch divergence or decides whether publishing is safe.",
+                "summary": "Refresh one explicit configured remote name (origin or team/origin when configured), validated during run before transport, before comparing branch divergence.",
                 "source_example": "git-sync-roundtrip",
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
@@ -1997,7 +2048,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_sync_roundtrip_flow",
                 "kind": "positive",
                 "form": "workflow_fragment",
-                "summary": "Fetch from one remote, inspect divergence and upstream context, then push one local branch so inbound and outbound Git sync surfaces stay clearly separated.",
+                "summary": "Fetch from one explicit configured remote name, inspect divergence and upstream context, then push one local branch to that same name; explicit naming keeps the roundtrip target clear, while omitted/null push remote also supports nested upstream names.",
                 "source_example": "git-sync-roundtrip",
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
@@ -2021,7 +2072,7 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_sync_push_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Publish one local branch to a remote after earlier workflow steps have already refreshed and checked the relevant synchronization context.",
+                "summary": "Publish one local branch to an explicit configured remote name after refresh and inspection. Omitted/null remote instead resolves the matching current branch's exact upstream remote, including nested names; run validates membership before transport.",
                 "source_example": "git-sync-roundtrip",
                 "source_excerpt": {
                     "path": "examples/git-sync-roundtrip.yaml",
@@ -3186,6 +3237,27 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
         ],
     },
 }
+
+
+for _family, _leaf, _name, _summary in (
+    (
+        "connector.fs", "connector.fs.file", "fs_family_file_observation",
+        "Supply the required file_path with no real-file default. The fs.file probe observes UTF-8 content and metadata; publish returns basename, byte size, line count, and content-derived character count without publishing full content. Relative and absolute paths remain textual projections; parent symlinks and hardlinks are allowed, not workspace confinement or atomic snapshots. This whole source workflow is verified through the existing connector.fs.file workflow host for schema/fixture form only, without file reads or race tests.",
+    ),
+    (
+        "connector.gh", "connector.gh.project.issue", "gh_family_project_membership",
+        "Supply repository as literal ASCII OWNER/REPO, issue_number, and project_id. The gh.project.issue probe reads membership; gh.project.issue.add conditionally attaches the issue, then the number, iteration, and single-select setters mutate project fields. These actions are not read-only probes, and earlier effects are not rolled back if a later action fails. Context is a default rather than an authorization allowlist; an explicit valid other repository remains allowed with a warning. This whole source workflow is verified through the existing connector.gh.project.issue workflow host for schema/fixture form only, without authentication, API requests, or action execution.",
+    ),
+):
+    _example = deepcopy(next(
+        example for example in HELP_SNIPPET_REGISTRY[_leaf]["canonical_examples"]
+        if example["form"] == "workflow_fragment"
+    ))
+    _example.update(name=_name, summary=_summary)
+    HELP_SNIPPET_REGISTRY[_family] = {
+        "snippet_coverage": _example["verification"]["kind"],
+        "canonical_examples": [_example],
+    }
 
 
 STATE_BUNDLE_EXAMPLES = [

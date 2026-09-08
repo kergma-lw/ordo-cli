@@ -36,6 +36,33 @@ Use this when a workflow needs to inspect or change GitHub state. In practice: r
 }
 ```
 
+## Authoring contract
+
+Probe submitted GitHub pull-request reviews as typed review records with verdict, author, timestamp, and optional reviewed commit id. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.
+
+- connector_contexts.gh.repository already names the normal repository target and the workflow needs submitted review records there by pull number.
+- The workflow needs reviewer decisions such as APPROVED or CHANGES_REQUESTED without reconstructing them from comments or timeline events.
+- repository inputs and connector_contexts.gh.repository accept literal OWNER/REPO: strip ASCII spaces only, then full-match [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+. Neither part may be '.' or '..'; the owner must not start with '-'. Repository names '.github', '-demo', and '-' remain syntactically route-safe. Case is preserved; this is not length, account-registry, or existence validation. Controls, non-ASCII whitespace, ?, #, %, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs. Invalid context fails before authentication; explicit input validation precedes repository API requests but may follow existing authentication bootstrap. Existing failure codes remain, with a clear format diagnostic. Context is a default, not an authorization allowlist: a valid explicit other repository remains allowed with an override warning. API-response nameWithOwner and composite content_refs parsing retain separate unchanged trust contracts; this input rule does not validate all API responses or demonstrate SSRF or authentication bypass.
+
+### Boundaries
+
+- Free-form top-level discussion; use connector.gh.pr.comments when the workflow needs ordinary PR conversation.
+- Per-line feedback details; use connector.gh.pr.review_comments for code-anchored remarks.
+
+### gh_pr_reviews_step
+
+Inspect submitted pull-request reviews with one explicit limit before interpreting approval or change-request history.
+
+```yaml
+  - name: load-pr-reviews
+    uses: gh.pr.reviews
+    with:
+      repository: inputs.repository
+      pull_number: inputs.pull_number
+      limit: 20
+    register: pr_reviews
+```
+
 ## Effects
 
 - None

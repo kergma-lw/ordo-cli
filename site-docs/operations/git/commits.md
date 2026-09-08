@@ -138,7 +138,7 @@ Use this when a workflow needs Git state or Git side effects. In practice: read 
     "preflight_observations": [],
     "prerequisites": [],
     "replaced_by": [],
-    "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
+    "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options; after trimming whitespace it must not start with '-'. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
     "tags": [
       "git",
       "probe"

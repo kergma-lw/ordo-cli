@@ -1,9 +1,15 @@
 import unittest
+import io
+import json
+from contextlib import redirect_stdout
+from dataclasses import replace
 from pathlib import Path
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
 from ordo.introspection import describe_examples_catalog
+from ordo.help_cli import main as help_main
+from ordo.model.help_snippets import describe_help_snippets
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.playbook import activate_playbook
 from ordo.runtime import execute_workflow, explain_workflow, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
@@ -85,12 +91,54 @@ class ExampleSurfaceTest(unittest.TestCase):
         self.assertEqual(result.outputs["active_profile"], "read-only-review")
 
     def test_let_bindings_example_executes_end_to_end(self) -> None:
-        workflow = load_workflow_file(Path("examples/let-bindings.yaml"))
+        path = Path("examples/let-bindings.yaml")
+        workflow = load_workflow_file(path)
+        example = describe_help_snippets()["examples.let-bindings"]["canonical_examples"][0]
+        self.assertEqual(example["yaml"], path.read_text(encoding="utf-8").rstrip("\n"))
+        self.assertTrue(validate_workflow_text(example["yaml"]).ok)
+        self.assertTrue(any(item["name"] == "let-bindings" for item in describe_examples_catalog()["examples"]))
+        for flags in ([], ["--json"]):
+            with redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(help_main(["describe", "examples.let-bindings", *flags]), 0)
+            if flags:
+                payload = json.loads(output.getvalue())
+                self.assertEqual(payload["snippet_coverage"], "runner_verified")
+                self.assertEqual(payload["canonical_examples"][0], example)
+            else:
+                self.assertIn("publish-branch", output.getvalue())
+                self.assertIn("enabled: false blocks publication", output.getvalue())
 
-        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        with patch("subprocess.run") as run:
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        run.assert_not_called()
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(result.outputs["executed_steps"], ["print-branch"])
+        self.assertEqual(result.outputs["executed_steps"], ["publish-branch"])
+        self.assertEqual(result.to_contract()["published"], [{"branch": "task/7"}])
+
+    def test_let_bindings_example_keeps_untrusted_type_as_data(self) -> None:
+        workflow = load_workflow_file(Path("examples/let-bindings.yaml"))
+        for task_type in ("Task; touch /tmp/ordo-injection", "$(id) `id` | cat &", "Task'\"\nNEXT"):
+            with self.subTest(task_type=task_type), patch("subprocess.run") as run:
+                result = execute_workflow(
+                    replace(workflow, inputs={**workflow.inputs, "type": task_type}),
+                    connector_provider=STANDARD_CONNECTOR_PROVIDER,
+                )
+                run.assert_not_called()
+                self.assertEqual(result.status, RuntimeStatus.OK)
+                self.assertEqual(result.to_contract()["published"], [{"branch": f"{task_type.lower()}/7"}])
+
+    def test_let_bindings_example_disabled_guard_blocks_without_commands(self) -> None:
+        workflow = load_workflow_file(Path("examples/let-bindings.yaml"))
+        with patch("subprocess.run") as run:
+            result = execute_workflow(
+                replace(workflow, inputs={**workflow.inputs, "enabled": False}),
+                connector_provider=STANDARD_CONNECTOR_PROVIDER,
+            )
+        run.assert_not_called()
+        self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
+        self.assertEqual(result.outputs["executed_steps"], [])
+        self.assertFalse(result.to_contract().get("published"))
 
     def test_local_expression_filters_example_is_published_and_executes_end_to_end(self) -> None:
         catalog = describe_examples_catalog()

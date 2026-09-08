@@ -32,6 +32,8 @@ Notable docs:
 - `docs/pypyr-comparison.md` — honest positioning notes vs pypyr
 - `docs/gitx-open-task-rewrite.md` — example rewrite of a gitx ritual slice
 - `docs/architecture/positioning-and-value.md` — longer internal notes on positioning and value
+- `docs/secrets-audit.md` — audit commands, scanner scopes, result interpretation, and reviewed exceptions
+- `SECURITY.md` — workflow trust boundaries and bug/vulnerability reporting
 
 ## Core ideas
 
@@ -54,3 +56,10 @@ This repository now contains the v0 contract-first runtime foundation:
 - examples, profiles, and golden outputs
 
 There is not yet a stable end-user CLI; the current surface is primarily a Python API.
+
+## License
+
+Except where otherwise noted, Ordo is free software licensed under the GNU General
+Public License, version 3 or (at your option) any later version
+(`GPL-3.0-or-later`). See [LICENSE](LICENSE) for the full terms, including the
+disclaimer of warranty. Third-party materials retain their respective licenses.

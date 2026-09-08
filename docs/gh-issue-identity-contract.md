@@ -29,7 +29,10 @@ This input shape applies to issue-oriented operations such as:
 
 ## Validation
 
-- `repository` must use `OWNER/REPO`
+- `repository` and `connector_contexts.gh.repository` use literal ASCII `OWNER/REPO`, not URLs. Trim ASCII spaces only (`strip(' ')`), then full-match `[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+`. Reject either part `.` or `..`, and owners starting with `-`. Repository names `.github`, `-demo`, and `-` remain syntactically route-safe.
+- Preserve case without length, account-registry, or existence validation. Controls, non-ASCII whitespace, `?`, `#`, `%`, backslashes, and URLs are rejected, not decoded or encoded into arbitrary URLs.
+- Invalid context fails before authentication. Explicit input validation precedes repository API requests but may follow the existing authentication bootstrap. Existing failure codes remain with clear format diagnostics.
+- Context is a default, not an authorization allowlist. Valid explicit other repositories remain allowed with an override warning; normalization, splitting, bootstrap, and review share the pure-model grammar.
 - `issue_number` must be a positive integer
 - diagnostics should distinguish invalid repository input from invalid issue number input
 
@@ -39,6 +42,11 @@ This input shape applies to issue-oriented operations such as:
 - built-in workflows, examples, and help surfaces should prefer the structured input form
 
 ## Outputs
+
+API-response `nameWithOwner` and composite `content_refs` parsing retain separate,
+unchanged trust contracts. Input validation does not establish that arbitrary API
+responses are validated, or demonstrate SSRF or authentication bypass. See the
+[normative repository input contract](../meta/requirements/connector/gh-repository-identity.md).
 
 - existing output fields remain stable during the migration
 - operations that already expose `issue_ref` may keep it as a convenience field

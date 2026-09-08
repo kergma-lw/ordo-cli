@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ORDO_HELP = ROOT / "ordo-help"
 DEFAULT_OUTPUT = ROOT / "site-docs"
 STATIC_TOPICS = (
+    "features",
     "overview",
     "model",
     "workflow-rules",
@@ -26,6 +27,7 @@ STATIC_TOPICS = (
 )
 
 TOPIC_TITLES = {
+    "features": "Workflow-authoring feature map",
     "overview": "Overview",
     "model": "Workflow model",
     "workflow-rules": "Workflow rules",
@@ -36,6 +38,7 @@ TOPIC_TITLES = {
 }
 
 TOPIC_INTROS = {
+    "features": "A compact map of authoring primitives, recommended patterns, and their discovery handles.",
     "overview": "Start here for a map of the main Ordo surfaces.",
     "model": "This page outlines the main workflow contracts used in workflows, playbooks, profiles, and runtime state.",
     "workflow-rules": "Use this page when adding, changing, or reviewing workflows.",
@@ -56,6 +59,7 @@ TOPIC_SUMMARY_REWRITES = {
 }
 
 TOPIC_USE_WHEN = {
+    "features": "Use this page to choose an existing authoring primitive before introducing a fallback or a new workflow shape.",
     "overview": "Use this page first when you need to understand where to look next.",
     "model": "Use this page when you need field-level workflow contract details.",
     "workflow-rules": "Use this page when you are deciding how to structure or review a workflow.",
@@ -92,9 +96,9 @@ KNOWN_OPERATION_SUMMARIES = {
     "git.repo": "Read Git repository metadata.",
     "git.stash": "List Git stash entries.",
     "git.state": "Read the current Git working-state summary.",
-    "git.sync.fetch": "Fetch Git refs from a remote.",
-    "git.sync.push": "Push a local Git branch to a remote.",
-    "git.upstream": "Read upstream tracking information for the current branch.",
+    "git.sync.fetch": "Fetch Git refs using an exact configured remote name, not an ad hoc URL, path, or Git option.",
+    "git.sync.push": "Push a local Git branch using a configured remote name; an omitted or null remote is resolved from upstream and checked before transport.",
+    "git.upstream": "Read the current branch's exact configured remote, including nested names, and local remote-tracking branch tail, not the source-side branch name.",
     "git.worktree": "Read the current Git worktree state.",
     "git.worktrees": "List Git worktrees.",
     "gh.issue": "Read a GitHub issue.",
@@ -458,7 +462,7 @@ def render_operations_topic(page: Path, doc: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_operation(page: Path, doc: dict[str, Any]) -> str:
+def render_operation(page: Path, doc: dict[str, Any], authoring: dict[str, Any] | None = None) -> str:
     reference = doc["reference"]
     op = doc["operation"]
     lines = [
@@ -480,6 +484,15 @@ def render_operation(page: Path, doc: dict[str, Any]) -> str:
             lines.append(f"- `{label}` — `{command}`")
         lines.append("")
     lines += ["## Inputs", "", json_block(op.get("inputs", {})), "", "## Outputs", "", json_block(op.get("outputs", {})), ""]
+    if authoring:
+        metadata = authoring["metadata"]
+        lines += ["## Authoring contract", "", metadata["definition"], ""]
+        lines.extend(bullet_list(metadata.get("use_when", [])))
+        lines += ["", "### Boundaries", ""]
+        lines.extend(bullet_list(metadata.get("do_not_use_for", [])))
+        lines.append("")
+        for example in authoring.get("canonical_examples", []):
+            lines += [f"### {example['name']}", "", example["summary"], "", "```yaml", example["yaml"], "```", ""]
     lines += ["## Effects", ""]
     lines.extend(bullet_list(op.get("effects", [])))
     lines += ["", "## Failure modes", ""]
@@ -643,6 +656,9 @@ def main() -> None:
     root_doc = run_help()
     operations_doc = run_help("operations")
     operation_refs = collect_operation_refs(operations_doc)
+    from ordo.help_cli import _build_model_node_lookup
+
+    authoring_nodes = _build_model_node_lookup()
 
     write(output_dir / "index.md", render_root_index(root_doc, list(STATIC_TOPICS), operation_refs))
 
@@ -658,7 +674,10 @@ def main() -> None:
     for reference in operation_refs:
         page = operation_doc_path(reference)
         doc = run_help("operation", reference)
-        write(output_dir / page, render_operation(page, doc))
+        authoring = None
+        if reference == "fs.file" or (doc["namespace"] == "gh" and "repository" in doc["operation"].get("inputs", {})):
+            authoring = authoring_nodes[f"connector.{reference}"]
+        write(output_dir / page, render_operation(page, doc, authoring))
 
 
 if __name__ == "__main__":

@@ -54,11 +54,11 @@ Operations for reading and changing local Git state.
 - [git.repo](../operations/git/repo.md) — Read Git repository metadata.
 - [git.stash](../operations/git/stash.md) — List Git stash entries.
 - [git.state](../operations/git/state.md) — Read the current Git working-state summary.
-- [git.sync.fetch](../operations/git/sync-fetch.md) — Fetch Git refs from a remote.
-- [git.sync.push](../operations/git/sync-push.md) — Push a local Git branch to a remote.
+- [git.sync.fetch](../operations/git/sync-fetch.md) — Fetch Git refs using an exact configured remote name, not an ad hoc URL, path, or Git option.
+- [git.sync.push](../operations/git/sync-push.md) — Push a local Git branch using a configured remote name; an omitted or null remote is resolved from upstream and checked before transport.
 - [git.tag](../operations/git/tag.md) — Read one Git tag. The `oid` output is the object id resolved for the tag ref itself; for annotated tags this is the tag object's oid rather than the peeled target commit oid.
 - [git.tags](../operations/git/tags.md) — Inspect Git tags sorted by descending version refname. Each returned `oid` is the peeled target object id; for annotated tags this means the referenced object oid rather than the tag object oid. The `latest` output is the first matching item in that version-sorted order, not the newest tag by creation date.
-- [git.upstream](../operations/git/upstream.md) — Read upstream tracking information for the current branch.
+- [git.upstream](../operations/git/upstream.md) — Read the current branch's exact configured remote, including nested names, and local remote-tracking branch tail, not the source-side branch name.
 - [git.worktree](../operations/git/worktree.md) — Read the current Git worktree state.
 - [git.worktrees](../operations/git/worktrees.md) — List Git worktrees.
 
@@ -162,7 +162,7 @@ Operations in the `fs` namespace.
 
 ### Operations
 
-- [fs.file](../operations/fs/file.md) — Observe one filesystem path as one file snapshot with canonical content and file metadata.
+- [fs.file](../operations/fs/file.md) — Read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.
 
 ## Full JSON reference
 
@@ -629,7 +629,7 @@ Operations in the `fs` namespace.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
+          "summary": "Return a bounded readable list of commit texts from one revision scope with only minimal metadata. rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options; after trimming whitespace it must not start with '-'. This probe is intentionally narrow: it does not expose patch text, changed files, diff stats, graph decoration, or arbitrary git log formatting.",
           "tags": [
             "git",
             "probe"
@@ -1098,7 +1098,7 @@ Operations in the `fs` namespace.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Action operation 'git.sync.fetch'",
+          "summary": "Fetch from a configured remote name, not a direct URL, path, or option",
           "tags": [
             "git",
             "action"
@@ -1156,7 +1156,7 @@ Operations in the `fs` namespace.
           ],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Action operation 'git.sync.push'",
+          "summary": "Push to a configured remote name; omitted or null remote uses the upstream-derived name, validated against configured names",
           "tags": [
             "git",
             "action"
@@ -1291,7 +1291,7 @@ Operations in the `fs` namespace.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Probe operation 'git.upstream'",
+          "summary": "Inspect the exact configured upstream remote, including nested names, and its conventional local tracking-tail branch",
           "tags": [
             "git",
             "probe"
@@ -3183,7 +3183,7 @@ Operations in the `fs` namespace.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Observe one filesystem path as one file snapshot with canonical content and file metadata.",
+          "summary": "Read canonical content and metadata from the same opened regular file, without atomic snapshot guarantees.",
           "tags": [
             "fs",
             "probe"

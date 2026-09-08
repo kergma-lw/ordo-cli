@@ -1,22 +1,23 @@
 version: 0
 workflow: set-active-task
 inputs:
-  repository: kergma-lw/checklist-backend
-  project_id: PVT_BACKEND_PROJECT_ID
+  repository: {}
+  project_id: {}
   issue_number: 16
-  task_key: checklist-backend-16
+  task_key: sample-task-16
   issue_title: Keep issue workflow in sync
   issue_type: Task
   remote: origin
   base_branch: main
   allow_backlog: false
-  allowed_issue_types_csv: Task,Bug
+  allowed_issue_types: {default: [Task, Bug]}
   post_open_command: ""
   repository_kind: backend
 state_needs:
   task_memory: {}
 blocks:
 - guards:
+  - inputs.allow_backlog | is_boolean
   - git.worktrees.count == 1
   - git.state.worktree_clean
   - gh.issue(repository=inputs.repository, issue_number=inputs.issue_number).state
@@ -28,52 +29,26 @@ blocks:
       repository: inputs.repository
       issue_number: inputs.issue_number
       project_id: inputs.project_id
-  - name: validate-project-policy
-    uses: shell.command
+  # Observe after adding; policy must not use a pre-add membership snapshot.
+  - name: load-project-policy
+    uses: gh.project.issue
     with:
-      command:
-        format: "python3 - <<'PY'\nimport json\nimport subprocess\nimport sys\n\n\
-          repository = \"{}\"\nproject_id = \"{}\"\nallow_backlog = \"{}\".lower()\
-          \ == \"true\"\nallowed_types = [item.strip() for item in \"{}\".split(\"\
-          ,\") if item.strip()]\nissue_number = int(\"{}\")\n\nowner, repo = repository.split(\"\
-          /\", 1)\n\nquery = (\n    \"query($owner:String!,$repo:String!,$number:Int!){\"\
-          \n    \"repository(owner:$owner,name:$repo){\"\n    \"issue(number:$number){\"\
-          \n    \"projectItems(first:50){nodes{\"\n    \"id project{... on ProjectV2{id}}\"\
-          \n    \"fieldValues(first:50){nodes{\"\n    \"... on ProjectV2ItemFieldSingleSelectValue{name\
-          \ field{... on ProjectV2FieldCommon{name}}}\"\n    \"}}}}}}}\"\n)\npayload\
-          \ = json.loads(\n    subprocess.check_output(\n        [\n            \"\
-          gh\",\n            \"api\",\n            \"graphql\",\n            \"-f\"\
-          ,\n            f\"query={query}\",\n            \"-f\",\n            f\"\
-          owner={owner}\",\n            \"-f\",\n            f\"repo={repo}\",\n \
-          \           \"-F\",\n            f\"number={int(issue_number)}\",\n    \
-          \    ],\n        text=True,\n    )\n)\n\nissue = ((((payload.get(\"data\"\
-          ) or dict()).get(\"repository\") or dict()).get(\"issue\")) or dict())\n\
-          nodes = (((issue.get(\"projectItems\") or dict()).get(\"nodes\")) or [])\n\
-          item = next(\n    (\n        node\n        for node in nodes\n        if\
-          \ isinstance(node, dict)\n        and isinstance(node.get(\"project\"),\
-          \ dict)\n        and node[\"project\"].get(\"id\") == project_id\n    ),\n\
-          \    None,\n)\nif item is None:\n    sys.stderr.write(f\"Issue {repository}#{issue_number}\
-          \ is not in project {project_id}.\\n\")\n    sys.exit(1)\n\ndef single_select(field_name:\
-          \ str):\n     for field_value in ((item.get(\"fieldValues\") or dict()).get(\"\
-          nodes\") or []):\n        if not isinstance(field_value, dict):\n      \
-          \      continue\n        field = field_value.get(\"field\")\n        if\
-          \ isinstance(field, dict) and field.get(\"name\") == field_name:\n     \
-          \       return field_value.get(\"name\")\n    return None\n\nissue_type\
-          \ = single_select(\"Type\")\nstatus = single_select(\"Status\")\n\nif issue_type\
-          \ not in allowed_types:\n    sys.stderr.write(\n        f\"Issue {repository}#{issue_number}\
-          \ has unsupported project type {issue_type!r}; expected one of {allowed_types!r}.\\\
-          n\"\n    )\n    sys.exit(1)\n\nif status in {\"Done\", \"In review\"}:\n\
-          \    sys.stderr.write(f\"Issue {repository}#{issue_number} has blocking\
-          \ project status {status!r}.\\n\")\n    sys.exit(1)\n\nif status == \"Backlog\"\
-          \ and not allow_backlog:\n    sys.stderr.write(f\"Issue {repository}#{issue_number}\
-          \ is still in Backlog and allow_backlog=false.\\n\")\n    sys.exit(1)\n\
-          PY\n"
-        args:
-        - inputs.repository
-        - inputs.project_id
-        - inputs.allow_backlog
-        - inputs.allowed_issue_types_csv
-        - inputs.issue_number
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+    register: project
+  - name: require-project-membership
+    gate: step.project.outputs.exists
+  - name: require-project-type-string
+    gate: step.project.outputs.type | is_string
+  - name: require-allowed-project-type
+    gate: step.project.outputs.type | in(inputs.allowed_issue_types)
+  - name: block-done
+    gate: step.project.outputs.status != "Done"
+  - name: block-in-review
+    gate: step.project.outputs.status != "In review"
+  - name: require-backlog-permission
+    gate: step.project.outputs.status != "Backlog" or inputs.allow_backlog
   - name: move-issue-to-in-progress
     uses: gh.project.issue.field_single_select.set
     with:
@@ -82,26 +57,81 @@ blocks:
       project_id: inputs.project_id
       field: "Status"
       option: "In progress"
-  - name: create-or-switch-task-branch
-    uses: shell.command
+  - name: compute-branch
+    value:
+      format: "{}/{}-{}"
+      args:
+      - inputs.issue_type | lower
+      - inputs.issue_number
+      - inputs.issue_title | trim | slug
+    register: branch
+  - name: probe-local-base
+    uses: git.ref
     with:
-      command:
-        format: "set -euo pipefail\nremote={}\nbase_branch={}\nbranch_name={}\n\n\
-          git fetch \"$remote\" \"$base_branch\"\nif git show-ref --verify --quiet\
-          \ \"refs/heads/$base_branch\"; then\n  if git switch \"$base_branch\" >/dev/null\
-          \ 2>&1; then\n    git pull --ff-only \"$remote\" \"$base_branch\"\n    base_ref=\"\
-          $base_branch\"\n  else\n    base_ref=\"$remote/$base_branch\"\n  fi\nelse\n\
-          \  base_ref=\"$remote/$base_branch\"\nfi\n\nif git show-ref --verify --quiet\
-          \ \"refs/heads/$branch_name\"; then\n  git switch \"$branch_name\"\nelse\n\
-          \  git switch -c \"$branch_name\" \"$base_ref\"\nfi\n"
-        args:
-        - inputs.remote
-        - inputs.base_branch
-        - format: "{}/{}-{}"
-          args:
-          - inputs.issue_type | lower
-          - inputs.issue_number
-          - inputs.issue_title | trim | slug
+      ref:
+        format: "refs/heads/{}"
+        args: [inputs.base_branch]
+    register: local_base
+  - name: fetch-remote
+    uses: git.sync.fetch
+    with:
+      remote: inputs.remote
+  - name: probe-remote-base
+    uses: git.ref
+    with:
+      ref:
+        format: "refs/remotes/{}/{}"
+        args: [inputs.remote, inputs.base_branch]
+    register: remote_base
+  - name: require-remote-base
+    gate: step.remote_base.outputs.exists
+  - name: switch-base
+    if: step.local_base.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: inputs.base_branch
+  - name: merge-base-ff-only
+    if: step.local_base.outputs.exists
+    uses: git.integrate.merge_ff_only
+    with:
+      ref:
+        format: "refs/remotes/{}/{}"
+        args: [inputs.remote, inputs.base_branch]
+  # Keep this snapshot stable across branch creation.
+  - name: probe-target-branch
+    uses: git.ref
+    with:
+      ref:
+        format: "refs/heads/{}"
+        args: [step.branch.outputs.value]
+    register: target_branch
+  - name: switch-existing-target
+    if: step.target_branch.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: step.branch.outputs.value
+  - name: create-local-target
+    if: not step.target_branch.outputs.exists and step.local_base.outputs.exists
+    uses: git.branch.create
+    with:
+      branch: step.branch.outputs.value
+      start_point:
+        format: "refs/heads/{}"
+        args: [inputs.base_branch]
+  - name: create-remote-target
+    if: not step.target_branch.outputs.exists and not step.local_base.outputs.exists
+    uses: git.branch.create
+    with:
+      branch: step.branch.outputs.value
+      start_point:
+        format: "refs/remotes/{}/{}"
+        args: [inputs.remote, inputs.base_branch]
+  # Creation is not rolled back if switching fails; the new branch can remain.
+  - name: switch-created-target
+    if: not step.target_branch.outputs.exists
+    uses: git.branch.switch
+    with:
+      branch: step.branch.outputs.value
   - name: remember-issue-number
     state_set:
       state.task_memory[inputs.task_key].issue_number: ${inputs.issue_number}
@@ -113,16 +143,13 @@ blocks:
       state.task_memory[inputs.task_key].issue_title: ${inputs.issue_title}
   - name: remember-branch
     state_set:
-      state.task_memory[inputs.task_key].branch:
-        format: "{}/{}-{}"
-        args:
-        - ${inputs.issue_type | lower}
-        - ${inputs.issue_number}
-        - ${inputs.issue_title | trim | slug}
+      state.task_memory[inputs.task_key].branch: ${step.branch.outputs.value}
   - name: remember-repository-kind
     state_set:
       state.task_memory[inputs.task_key].repository_kind: ${inputs.repository_kind}
+  # Trusted code hook: only supply intentional executable code, never interpolate ordinary data.
   - name: run-post-open-command
+    if: inputs.post_open_command != ""
     uses: shell.command
     with:
       command: inputs.post_open_command

@@ -1,10 +1,59 @@
+import os
+import stat
+import subprocess
+import textwrap
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from ordo.runtime.help_snippet_runner import verify_help_snippet
 
 
 class HelpSnippetRunnerTest(unittest.TestCase):
+    def test_routine_bundle_uses_owner_only_executable_permissions(self) -> None:
+        roots = []
+
+        def fake_run(argv, *, cwd, capture_output, text, check):
+            root = Path(cwd)
+            roots.append(root)
+            script = root / ".ordo/scripts/sample.py"
+            self.assertEqual(Path(argv[0]).resolve(), script.resolve())
+            for path in (root, script):
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o700)
+                self.assertEqual(path.stat().st_uid, os.geteuid())
+                self.assertTrue(os.access(path, os.X_OK))
+            self.assertEqual(script.parent.parent.parent, root)
+            self.assertTrue((root / ".ordo/routines.yaml").is_file())
+            return subprocess.CompletedProcess(argv, 0, stdout='{"sample": "ok"}', stderr="")
+
+        try:
+            with patch("ordo.runtime.help_snippet_runner.subprocess.run", side_effect=fake_run) as run:
+                result = verify_help_snippet(
+                    snippet=textwrap.dedent('''\
+                        routine_id: sample
+                        registry_entry:
+                          kind: probe
+                          summary: Return sample data.
+                          implementation:
+                            argv: [".ordo/scripts/sample.py"]
+                          outputs:
+                            mode: data
+                          failure_modes: [helper_failed]
+                        implementation_path: .ordo/scripts/sample.py
+                        implementation_text: |
+                          #!/usr/bin/env python3
+                          print('{"sample": "ok"}')
+                        expected_stdout_json:
+                          sample: ok
+                        '''),
+                    world="default", insertion_mode="routine_bundle", target="routine",
+                )
+            run.assert_called_once()
+            self.assertEqual(result.status, "ok")
+        finally:
+            for root in roots:
+                self.assertFalse(root.exists())
+
     def test_state_bundle_checks_real_bound_identity_without_execution(self) -> None:
         from ordo.model.help_snippets import STATE_BUNDLE_EXAMPLES
 

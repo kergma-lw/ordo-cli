@@ -42,27 +42,24 @@ If you want one example that already uses workflow-local named expressions, insp
 ```yaml
 version: 0
 workflow: let-bindings
-
 inputs:
   enabled: true
   type: Task
   issue_number: 7
-
 let:
   should_run: inputs.enabled
   branch: format("{}/{}", inputs.type | lower, inputs.issue_number)
-
-guards:
+blocks:
+- guards:
   - should_run
-
-steps:
-  - name: print-branch
-    uses: shell.command
-    with:
-      command: ${format("printf {}", branch)}
+- steps:
+  - name: publish-branch
+    publish:
+      branch: branch
 ```
 
 Use `let` when a guard, condition, or value expression would otherwise become too long or too repetitive inline.
+Here `publish` exposes the computed branch as data, not as shell command text; it does not create a Git branch.
 
 ## 3. Load and validate it
 
@@ -270,12 +267,21 @@ Current important limits:
 
 ## 11. Runtime state example
 
-`examples/set-active-task-from-gitx.yaml` now shows one small runtime state use:
+[`examples/set-active-task-from-gitx.yaml`](../examples/set-active-task-from-gitx.yaml)
+shows native project-policy gates and Git operations followed by task-state writes:
 
-- declare a logical `state_needs` role and bind it through the playbook layer;
-- write `state.task_memory[inputs.task_key].branch` with `state_set`;
-- read that value later through `${state.task_memory[inputs.task_key].branch}`;
-- remove it through `state_delete` when the workflow is done.
+- supply `repository` and `project_id`; neither has an operational default;
+- pass `allowed_issue_types` as a list, default `[Task, Bug]`, not a CSV string;
+- bind the required logical `task_memory` role through the playbook layer;
+- after branch selection, write issue number, input issue type/title, branch, and repository kind under `state.task_memory[inputs.task_key]`;
+- optionally run `post_open_command` as explicit trusted code, skipped when empty.
+
+This example does not read back or delete those state values. Project membership
+and status changes precede Git operations and can remain after later failures;
+branch creation and switching are separate and are not rolled back. Demo profile
+project IDs are placeholders, not an operational setup. See the
+[sequence and failure contract](gitx-open-task-rewrite.md); this example is not
+equivalent to the canonical `.ordo` task workflow.
 
 ## Next docs
 

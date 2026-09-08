@@ -143,7 +143,7 @@ def _verify_routine_bundle_snippet(*, snippet: str, world: str, target: str, eff
         routines_payload = {"version": 1, "routines": {routine_id: registry_entry}}
         routines_path.write_text(yaml.safe_dump(routines_payload, sort_keys=False), encoding="utf-8")
         implementation_file.write_text(implementation_text, encoding="utf-8")
-        os.chmod(implementation_file, 0o755)
+        os.chmod(implementation_file, 0o700)
 
         workflow_text = ""
         status = "ok"

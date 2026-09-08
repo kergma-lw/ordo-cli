@@ -141,7 +141,18 @@
 - `extension` must use the final basename suffix after the last dot and must not include the dot.
 - `line_count`, when exposed, is derived from `content`.
 
-## Failure contract
+## Secure observation semantics
+
+- The initial no-follow stat preserves existing missing-path, stat-failure, and nonregular-entry diagnostics; it is not a security barrier.
+- Opening requires nonzero integer `O_NOFOLLOW` and `O_NONBLOCK` capabilities. If either is unavailable, return `content_unavailable` with `probe.fs_file.secure_open_unavailable`; there must be no unsafe fallback.
+- Validate the opened descriptor with `fstat` as a regular file before reading. Content and metadata must come from that same descriptor, not a later pathname lookup.
+- An initial final symlink or other nonregular entry returns `not_a_file`. An opened FIFO or directory also returns `not_a_file`. Open-stage errors including `ELOOP` return `content_unavailable` without guessing entry kind; `ELOOP` can also describe a parent loop.
+- Descriptor-stat failure returns `probe_failed` with `probe.fs_file.stat_failed`.
+- Same-descriptor observation is not an atomic snapshot under concurrent writes. Relative and absolute textual `Path` projections do not identify the resolved opened object.
+- Parent symlinks and hardlinks remain allowed. This is not workspace confinement, device-open sandboxing, protection against parent mutation, or same-UID isolation.
+- POSIX race tests establish only their tested scope; do not claim Windows test coverage or platform guarantees from them.
+
+## Failure statuses
 
 - Missing paths must fail explicitly as `path_not_found`.
 - Non-file paths must fail explicitly as `not_a_file`.
@@ -160,11 +171,48 @@
 - The public contract should be discoverable through `ordo-help operation fs.file`.
 - Discovery material should make clear that `fs.file` is the canonical public filesystem read probe in the MVP.
 
+<!-- source: requirements/connector/gh-repository-identity.md -->
+
+# GitHub repository input identity
+
+## Scope and grammar
+
+The shared repository identity contract applies to fields named
+`repository` in GitHub operation inputs and `connector_contexts.gh.repository`.
+Normalization, splitting, bootstrap, and review must use the same grammar:
+
+- Accept strings only and trim with `strip(' ')`, removing ASCII spaces only.
+- Full-match ASCII `[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+`.
+- Reject either part equal to `.` or `..`, and reject owners starting with `-`.
+- Repository names `.github`, `-demo`, and `-` remain syntactically route-safe.
+- Preserve case; do not impose length, account-registry, or existence validation.
+- Reject controls, non-ASCII whitespace, `?`, `#`, `%`, backslashes, and URLs.
+  This is a literal operand grammar, not decoding or encoding arbitrary URLs.
+
+## Validation and targeting
+
+Invalid context must fail before authentication. Explicit operation input must
+be validated before repository API requests, but may follow the existing auth
+bootstrap. Preserve existing failure codes with a clear format diagnostic.
+
+Connector context is a default target, not an authorization allowlist. A valid
+explicit other repository remains allowed with an override warning. Review
+uses the same normalized identity when comparing an explicit target to context.
+
+## Separate contracts
+
+API-response `nameWithOwner` values and composite `content_refs` parsing have
+separate, unchanged trust contracts. This input rule must not be advertised as
+validation of all arbitrary API-response values, or as evidence of demonstrated
+SSRF or authentication bypass.
+
 <!-- source: requirements/connector/gh-pr.md -->
 
 # GitHub pull request inspection probe requirements
 
 ## Role
+
+- Repository inputs follow the shared [GitHub repository input identity](gh-repository-identity.md) contract, including literal grammar, validation ordering, and context-default boundaries.
 
 - `gh.pr` is the canonical public `gh` probe for one pull request snapshot.
 - `gh.pr.comments` is the public `gh` probe for the regular conversation comments attached to one pull request.
@@ -1528,6 +1576,11 @@ Connector operations are also the semantic home for non-trivial transformation a
 Workflow files may orchestrate them, but should not absorb that algorithmic work into authored workflow structure.
 
 ## What an operation is
+
+GitHub repository operands and context defaults share the
+[repository input identity contract](../requirements/connector/gh-repository-identity.md).
+They are literal ASCII `OWNER/REPO` identities, not URLs or authorization allowlists;
+API-response identities and composite content references remain separate contracts.
 
 An operation is a concrete public operation within a connector family.
 
@@ -5906,6 +5959,11 @@ Shared prerequisites should not be duplicated in every operation contract if the
 ```
 
 ## Modeled semantics
+
+- File snapshot means one opened regular-file descriptor for both content and `fstat` metadata, not atomic consistency under concurrent writes.
+- The initial no-follow stat retains diagnostics. Nonzero integer `O_NOFOLLOW` and `O_NONBLOCK` are required; missing capabilities fail closed as `content_unavailable` / `probe.fs_file.secure_open_unavailable`.
+- `fstat` must verify regular-file kind before reading the same descriptor. Opened FIFO/directory targets are `not_a_file`; open errors including `ELOOP` are `content_unavailable` without an inferred kind; descriptor-stat errors are `probe_failed` / `probe.fs_file.stat_failed`.
+- Relative/absolute textual `Path` projections remain path-derived, not resolved descriptor identities. Parent symlinks and hardlinks remain allowed, without workspace confinement, device-open sandboxing, or same-UID isolation.
 
 - `basename` is the last path segment from the resolved file path.
 - `filename_without_extension` and `extension` are deterministic projections of `basename` using the last dot only.

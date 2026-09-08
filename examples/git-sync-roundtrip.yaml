@@ -1,7 +1,7 @@
 version: 0
 workflow: refresh-and-publish-git-branch
 inputs:
-  remote_name: {}
+  remote_name: {} # Exact configured name, e.g. origin or team/origin, not an ad-hoc destination.
   branch_name: {}
 blocks:
   - guards: []
@@ -9,7 +9,7 @@ blocks:
       - name: fetch-remote-state
         uses: git.sync.fetch
         with:
-          remote: inputs.remote_name
+          remote: inputs.remote_name # Run checks exact configured-name membership before transport.
       - name: inspect-upstream
         uses: git.upstream
         register: upstream_info
@@ -23,7 +23,7 @@ blocks:
         uses: git.sync.push
         with:
           branch: inputs.branch_name
-          remote: inputs.remote_name
+          remote: inputs.remote_name # Keep the configured fetch/push target explicit; omitted/null also resolves nested upstream remote names.
       - name: publish-summary
         publish:
           upstream_ref: step.upstream_info.outputs.upstream_ref

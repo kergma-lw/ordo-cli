@@ -16,6 +16,7 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         git_branch_create = registry.get_operation("git.branch.create")
         git_sync_fetch = registry.get_operation("git.sync.fetch")
         git_sync_push = registry.get_operation("git.sync.push")
+        git_upstream = registry.get_operation("git.upstream")
         git_commit_create = registry.get_operation("git.commit.create")
         runtime_profile_use = registry.get_operation("runtime.profile.use")
 
@@ -47,6 +48,8 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         self.assertEqual(issue.maturity, "stable")
         self.assertEqual(shell_command.tags, ("shell", "action"))
         self.assertIn("does not expose patch text", git_commits.summary)
+        self.assertIn("rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options", git_commits.summary)
+        self.assertIn("after trimming whitespace it must not start with '-'", git_commits.summary)
         self.assertEqual(git_commits.examples[0]["reference"], "git.commits")
         self.assertEqual(git_commits.tags, ("git", "probe"))
         self.assertIn("annotated tags", git_tag.summary)
@@ -61,6 +64,11 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         self.assertEqual(git_branch_create.invalidates_observations, ("git.branches", "git.ref.*"))
         self.assertEqual(git_sync_fetch.invalidates_observations, ("git.ref.*", "git.tag", "git.tags", "git.branches", "git.repo", "git.range", "git.commits"))
         self.assertEqual(git_sync_push.invalidates_observations, ())
+        self.assertIn("configured remote name", git_sync_fetch.summary)
+        self.assertIn("configured remote name", git_sync_push.summary)
+        self.assertIn("omitted or null", git_sync_push.summary)
+        self.assertIn("validated against configured names", git_sync_push.summary)
+        self.assertIn("including nested names", git_upstream.summary)
         self.assertEqual(
             [item.to_contract() for item in git_sync_push.preflight_observations],
             [
@@ -80,16 +88,22 @@ class OperationMetadataRichnessTest(unittest.TestCase):
         gh_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "gh")
         issue = next(operation for operation in gh_connector["operations"] if operation["name"] == "issue")
         git_connector = next(connector for connector in contract["connectors"] if connector["namespace"] == "git")
+        git_commits = next(operation for operation in git_connector["operations"] if operation["name"] == "commits")
         git_tag = next(operation for operation in git_connector["operations"] if operation["name"] == "tag")
         git_tags = next(operation for operation in git_connector["operations"] if operation["name"] == "tags")
         git_push = next(operation for operation in git_connector["operations"] if operation["name"] == "sync.push")
+        git_upstream = next(operation for operation in git_connector["operations"] if operation["name"] == "upstream")
         self.assertEqual(issue["summary"], "Probe operation 'gh.issue'")
         self.assertEqual(issue["tags"], ["gh", "probe"])
         self.assertEqual(issue["examples"][0]["reference"], "gh.issue")
         self.assertEqual(issue["maturity"], "stable")
+        self.assertIn("rev accepts revisions and ranges such as HEAD~10..HEAD, not Git options", git_commits["summary"])
+        self.assertIn("after trimming whitespace it must not start with '-'", git_commits["summary"])
+        self.assertEqual(git_commits["examples"][1]["inputs"], {"limit": 3, "rev": "HEAD~10..HEAD"})
         self.assertEqual(git_tag["examples"][0]["inputs"], {"name": "v1.2.3"})
         self.assertEqual(git_tags["inputs"]["match_kind"], "'glob' | 'regex' | null")
         self.assertEqual(git_push["preflight_observations"][0], {"probe": "git.branch", "with": {}})
+        self.assertIn("local tracking-tail branch", git_upstream["summary"])
 
 
 if __name__ == "__main__":

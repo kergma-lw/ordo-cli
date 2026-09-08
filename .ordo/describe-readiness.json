@@ -241,6 +241,9 @@
     "examples.set-active-task-from-gitx": {
       "describe_readiness": "ready"
     },
+    "examples.let-bindings": {
+      "describe_readiness": "ready"
+    },
     "examples.text-adapter": {
       "describe_readiness": "ready"
     },

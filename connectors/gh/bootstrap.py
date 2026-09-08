@@ -45,12 +45,12 @@ def run(ctx):
         if repository is None:
             return bootstrap_fail(
                 code="repository_invalid",
-                summary="GitHub connector context field 'repository' must use OWNER/REPO format",
+                summary="GitHub connector context field 'repository' must use safe ASCII OWNER/REPO format",
                 diagnostics=(
                     Diagnostic(
                         code="bootstrap.gh_repository_invalid",
                         level="error",
-                        message="GitHub connector context field 'repository' must use OWNER/REPO format",
+                        message="GitHub connector context field 'repository' must use safe ASCII OWNER/REPO format",
                     ),
                 ),
                 raw={"connector_input": dict(raw_input)},

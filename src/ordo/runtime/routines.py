@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
+import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
+from typing import BinaryIO
 
 from ordo.model.diagnostic import Diagnostic
 from ordo.model.json import JSONValue
@@ -71,69 +76,73 @@ def execute_routine_step(resolved_step, workflow: Workflow) -> OperationResult:
         env = _materialize_routine_env(resolved_step.declared_with or {}, workflow)
     except ValueResolutionError as exc:
         return OperationResult(status="execution_error", summary=exc.message, diagnostics=(exc.to_diagnostic(),))
-    stdout_path, stderr_path = _routine_log_paths(routine_id)
-    try:
-        completed = _run_with_log_capture(argv, stdout_path=stdout_path, stderr_path=stderr_path, env=env)
-    except OSError as exc:
-        diagnostic = Diagnostic(
-            code="runtime.routine.start_failed",
-            level="error",
-            message="Routine could not be started",
-            details={"routine_id": routine_id, "registry": str(registry.path), "argv": argv, "os_error": str(exc)},
-        )
-        return OperationResult(
-            status="execution_error",
-            summary=f"Routine '{routine_id}' could not be started",
-            diagnostics=(diagnostic,),
-            outputs={
-                "routine_id": routine_id,
-                "log_path": str(stdout_path),
-                "stdout_log_path": str(stdout_path),
-                "stderr_log_path": str(stderr_path),
-                "stdout_tail": "",
-                "stderr_tail": "",
-            },
-            raw={"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)},
-        )
-    stdout_tail = _read_log_tail(stdout_path)
-    stderr_tail = _read_log_tail(stderr_path, line_count=_STDERR_LOG_TAIL_LINE_COUNT)
-    output_mode = entry.outputs.get("mode") if isinstance(entry.outputs, dict) else None
-    if entry.kind == "probe" and output_mode == "data" and completed.returncode == 0:
-        return _probe_data_result(
-            routine_id=routine_id,
-            stdout_path=stdout_path,
-            stderr_path=stderr_path,
-            stdout_tail=stdout_tail,
-            stderr_tail=stderr_tail,
-        )
-    outputs = {
-        "routine_id": routine_id,
-        "exit_code": completed.returncode,
-        "log_path": str(stdout_path),
-        "stdout_log_path": str(stdout_path),
-        "stderr_log_path": str(stderr_path),
-        "stdout_tail": stdout_tail,
-        "stderr_tail": stderr_tail,
-    }
-    raw = {"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)}
-    if completed.returncode == 0:
-        summary = f"Routine '{routine_id}' completed successfully"
-        if entry.kind == "probe":
-            summary = f"Routine probe '{routine_id}' completed successfully"
-        return OperationResult(status="ok", summary=summary, outputs=outputs, raw=raw)
-    return OperationResult(status="routine_failed", summary=f"Routine '{routine_id}' failed", outputs=outputs, raw=raw)
+    with _routine_logs(routine_id) as (stdout_handle, stderr_handle):
+        stdout_path = Path(stdout_handle.name)
+        stderr_path = Path(stderr_handle.name)
+        try:
+            completed = _run_with_log_capture(argv, stdout_handle=stdout_handle, stderr_handle=stderr_handle, env=env)
+        except OSError as exc:
+            diagnostic = Diagnostic(
+                code="runtime.routine.start_failed",
+                level="error",
+                message="Routine could not be started",
+                details={"routine_id": routine_id, "registry": str(registry.path), "argv": argv, "os_error": str(exc)},
+            )
+            return OperationResult(
+                status="execution_error",
+                summary=f"Routine '{routine_id}' could not be started",
+                diagnostics=(diagnostic,),
+                outputs={
+                    "routine_id": routine_id,
+                    "log_path": str(stdout_path),
+                    "stdout_log_path": str(stdout_path),
+                    "stderr_log_path": str(stderr_path),
+                    "stdout_tail": "",
+                    "stderr_tail": "",
+                },
+                raw={"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)},
+            )
+        stdout_tail = _read_log_tail(stdout_handle)
+        stderr_tail = _read_log_tail(stderr_handle, line_count=_STDERR_LOG_TAIL_LINE_COUNT)
+        output_mode = entry.outputs.get("mode") if isinstance(entry.outputs, dict) else None
+        if entry.kind == "probe" and output_mode == "data" and completed.returncode == 0:
+            return _probe_data_result(
+                routine_id=routine_id,
+                stdout_handle=stdout_handle,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                stdout_tail=stdout_tail,
+                stderr_tail=stderr_tail,
+            )
+        outputs = {
+            "routine_id": routine_id,
+            "exit_code": completed.returncode,
+            "log_path": str(stdout_path),
+            "stdout_log_path": str(stdout_path),
+            "stderr_log_path": str(stderr_path),
+            "stdout_tail": stdout_tail,
+            "stderr_tail": stderr_tail,
+        }
+        raw = {"stdout_path": str(stdout_path), "stderr_path": str(stderr_path)}
+        if completed.returncode == 0:
+            summary = f"Routine '{routine_id}' completed successfully"
+            if entry.kind == "probe":
+                summary = f"Routine probe '{routine_id}' completed successfully"
+            return OperationResult(status="ok", summary=summary, outputs=outputs, raw=raw)
+        return OperationResult(status="routine_failed", summary=f"Routine '{routine_id}' failed", outputs=outputs, raw=raw)
 
 
 def _probe_data_result(
     *,
     routine_id: str,
+    stdout_handle: BinaryIO,
     stdout_path: Path,
     stderr_path: Path,
     stdout_tail: str,
     stderr_tail: str,
 ) -> OperationResult:
     try:
-        payload = json.loads(stdout_path.read_text(encoding="utf-8"))
+        payload = json.loads(_read_log_text(stdout_handle))
     except (OSError, json.JSONDecodeError) as exc:
         diagnostic = Diagnostic(
             code="runtime.routine.probe_output_invalid",
@@ -233,28 +242,37 @@ def _coerce_routine_env_scalar(value: JSONValue, *, reference: str) -> str:
 
 
 def _run_with_log_capture(
-    argv: list[str], *, stdout_path: Path, stderr_path: Path, env: dict[str, str] | None = None
+    argv: list[str], *, stdout_handle: BinaryIO, stderr_handle: BinaryIO, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
-    stdout_path.parent.mkdir(parents=True, exist_ok=True)
-    stderr_path.parent.mkdir(parents=True, exist_ok=True)
-    with stdout_path.open("w", encoding="utf-8") as stdout_handle, stderr_path.open("w", encoding="utf-8") as stderr_handle:
-        return subprocess.run(argv, check=False, text=True, stdout=stdout_handle, stderr=stderr_handle, env=env)
+    return subprocess.run(argv, check=False, text=True, stdout=stdout_handle, stderr=stderr_handle, env=env)
 
 
-def _routine_log_paths(routine_id: str) -> tuple[Path, Path]:
+@contextmanager
+def _routine_logs(routine_id: str) -> Iterator[tuple[BinaryIO, BinaryIO]]:
     prefix = routine_id.replace("/", "_").replace(".", "-")
-    log_dir = Path(tempfile.gettempdir()) / "ordo"
-    stdout_handle = tempfile.NamedTemporaryFile(prefix=f"{prefix}-", suffix=".stdout.log", dir=log_dir if log_dir.exists() else None, delete=False)
-    stderr_handle = tempfile.NamedTemporaryFile(prefix=f"{prefix}-", suffix=".stderr.log", dir=log_dir if log_dir.exists() else None, delete=False)
-    stdout_path = Path(stdout_handle.name)
-    stderr_path = Path(stderr_handle.name)
-    stdout_handle.close()
-    stderr_handle.close()
-    return stdout_path, stderr_path
+    log_dir = Path(tempfile.mkdtemp(prefix="ordo-", dir=tempfile.gettempdir()))
+    with ExitStack() as stack:
+        try:
+            stdout_handle = stack.enter_context(tempfile.NamedTemporaryFile(
+                mode="w+b", prefix=f"{prefix}-", suffix=".stdout.log", dir=log_dir, delete=False,
+            ))
+            stderr_handle = stack.enter_context(tempfile.NamedTemporaryFile(
+                mode="w+b", prefix=f"{prefix}-", suffix=".stderr.log", dir=log_dir, delete=False,
+            ))
+        except BaseException:
+            stack.close()
+            shutil.rmtree(log_dir)
+            raise
+        # Published paths are metadata only; retain descriptors until all reads finish.
+        yield stdout_handle, stderr_handle
 
 
-def _read_log_tail(path: Path, *, line_count: int = _STDOUT_LOG_TAIL_LINE_COUNT) -> str:
-    if not path.exists():
-        return ""
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+def _read_log_text(handle: BinaryIO, *, errors: str = "strict") -> str:
+    handle.seek(0)
+    with io.TextIOWrapper(io.BytesIO(handle.read()), encoding="utf-8", errors=errors, newline=None) as text:
+        return text.read()
+
+
+def _read_log_tail(handle: BinaryIO, *, line_count: int = _STDOUT_LOG_TAIL_LINE_COUNT) -> str:
+    lines = _read_log_text(handle, errors="replace").splitlines()
     return "\n".join(lines[-line_count:])

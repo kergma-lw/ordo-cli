@@ -989,9 +989,11 @@
             "operations"
           ],
           "shows": [
-            "multi_step_workflow",
+            "project_policy_gates",
+            "native_git_sequence",
             "state_updates",
-            "shell_fallback"
+            "explicit_trusted_hook",
+            "partial_effects"
           ],
           "verified": true
         },
@@ -1080,6 +1082,21 @@
             "type_predicate_filters",
             "membership_filter",
             "embedded_value_boolean_flow"
+          ],
+          "verified": true
+        },
+        {
+          "name": "let-bindings",
+          "path": "examples/let-bindings.yaml",
+          "related_topics": [
+            "features",
+            "model",
+            "examples"
+          ],
+          "shows": [
+            "let_bindings",
+            "boolean_guard",
+            "publish_data"
           ],
           "verified": true
         },

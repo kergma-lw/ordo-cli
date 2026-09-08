@@ -1,0 +1,91 @@
+version: 0
+workflow: audit-publication
+inputs:
+  scanner:
+    default: all
+    description: Run all configured checks or one named scanner; a single selection is not a full publication audit.
+  allow_dependency_lookup:
+    default: false
+    description: Permit sending installed runtime dependency names and versions to the PyPI vulnerability service; no source files are uploaded.
+blocks:
+- guards:
+  - inputs.scanner | in(["all", "gitleaks-tree", "gitleaks-history", "gitleaks-metadata", "bandit", "semgrep", "pip-audit", "shellcheck", "inventory"])
+  - inputs.allow_dependency_lookup | is_boolean
+  - git.repo.exists
+- steps:
+  - name: Audit tracked worktree files with Gitleaks
+    if: inputs.scanner == "all" or inputs.scanner == "gitleaks-tree"
+    uses: routine.audit.gitleaks-tree
+    register: tree_audit
+  - name: Publish tracked-tree scanner report
+    if: inputs.scanner == "all" or inputs.scanner == "gitleaks-tree"
+    publish:
+      gitleaks_tree: step.tree_audit.outputs.stdout_tail | json
+  - name: Audit locally reachable commit patches with Gitleaks
+    if: inputs.scanner == "all" or inputs.scanner == "gitleaks-history"
+    uses: routine.audit.gitleaks-history
+    register: history_audit
+  - name: Publish historical scanner report
+    if: inputs.scanner == "all" or inputs.scanner == "gitleaks-history"
+    publish:
+      gitleaks_history: step.history_audit.outputs.stdout_tail | json
+  - name: Audit locally reachable commit and annotated tag metadata with Gitleaks
+    if: inputs.scanner == "all" or inputs.scanner == "gitleaks-metadata"
+    uses: routine.audit.gitleaks-metadata
+    register: metadata_audit
+  - name: Publish metadata scanner report
+    if: inputs.scanner == "all" or inputs.scanner == "gitleaks-metadata"
+    publish:
+      gitleaks_metadata: step.metadata_audit.outputs.stdout_tail | json
+  - name: Audit production Python with Bandit
+    if: inputs.scanner == "all" or inputs.scanner == "bandit"
+    uses: routine.audit.bandit
+    register: bandit_audit
+  - name: Publish Bandit report
+    if: inputs.scanner == "all" or inputs.scanner == "bandit"
+    publish:
+      bandit: step.bandit_audit.outputs.data
+  - name: Audit production Python with local Semgrep rules
+    if: inputs.scanner == "all" or inputs.scanner == "semgrep"
+    uses: routine.audit.semgrep
+    register: semgrep_audit
+  - name: Publish Semgrep report
+    if: inputs.scanner == "all" or inputs.scanner == "semgrep"
+    publish:
+      semgrep: step.semgrep_audit.outputs.data
+  - name: Require permission for dependency vulnerability lookup
+    if: inputs.scanner == "all" or inputs.scanner == "pip-audit"
+    gate: inputs.allow_dependency_lookup
+  - name: Audit installed runtime dependency vulnerabilities
+    if: inputs.scanner == "all" or inputs.scanner == "pip-audit"
+    uses: routine.audit.pip-audit
+    with:
+      args:
+        allow_network: true
+    register: dependency_audit
+  - name: Publish dependency audit report
+    if: inputs.scanner == "all" or inputs.scanner == "pip-audit"
+    publish:
+      pip_audit: step.dependency_audit.outputs.data
+  - name: Audit tracked shell files with ShellCheck
+    if: inputs.scanner == "all" or inputs.scanner == "shellcheck"
+    uses: routine.audit.shellcheck
+    register: shellcheck_audit
+  - name: Publish ShellCheck report
+    if: inputs.scanner == "all" or inputs.scanner == "shellcheck"
+    publish:
+      shellcheck: step.shellcheck_audit.outputs.data
+  - name: Inventory publication privacy and artifact review targets
+    if: inputs.scanner == "all" or inputs.scanner == "inventory"
+    uses: routine.audit.publication-inventory
+    register: publication_inventory
+  - name: Publish manual-review inventory
+    if: inputs.scanner == "all" or inputs.scanner == "inventory"
+    publish:
+      inventory: step.publication_inventory.outputs.stdout_tail | json
+  - name: Publish scoped audit and outstanding manual review
+    publish:
+      summary: "Requested audit checks completed; manual publication review remains required."
+      publication_status: "manual-review-needed"
+      audit_scope: inputs.scanner
+      recommendation: "Not publication clearance. Only scanner=all attempts the full configured sequence; review findings, tool policies, independent snapshots, and exclusions before a separate publication decision."

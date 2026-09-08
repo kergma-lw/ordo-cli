@@ -1,0 +1,32 @@
+# Locally authored review cues. No vendor rules or remote configuration.
+rules:
+  - id: ordo-shell-execution
+    message: Review shell execution and the trust boundary of its inputs.
+    languages: [python]
+    severity: WARNING
+    pattern-either:
+      - pattern: subprocess.$CALL(..., shell=True, ...)
+      - pattern: os.system(...)
+  - id: ordo-dynamic-execution
+    message: Review dynamic Python execution and the trust boundary of its inputs.
+    languages: [python]
+    severity: WARNING
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+  - id: ordo-pickle-deserialization
+    message: Review whether pickle deserialization inputs are trusted.
+    languages: [python]
+    severity: WARNING
+    pattern-either:
+      - pattern: pickle.load(...)
+      - pattern: pickle.loads(...)
+  - id: ordo-shell-text
+    message: Review shell command text and the trust boundary of its inputs.
+    languages: [python]
+    severity: WARNING
+    pattern-either:
+      - pattern: subprocess.$CALL(["bash", "-lc", $CODE], ...)
+      - pattern: subprocess.$CALL(["sh", "-c", $CODE], ...)
+      - pattern: subprocess.$CALL(["bash", "-c", $CODE], ...)
+      - pattern: subprocess.$CALL(["sh", "-lc", $CODE], ...)
