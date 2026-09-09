@@ -925,12 +925,31 @@ blocks:
         result = review_workflow(workflow, profile=profile, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
-        messages = [item["message"] for item in result.outputs["findings"]]
-        self.assertTrue(any("active_profile_key" in message for message in messages))
-        self.assertFalse(any("repo_kind" in message for message in messages))
-        self.assertFalse(any("repo_dir" in message for message in messages))
-        self.assertFalse(any("repository" in message for message in messages))
-        self.assertFalse(any("project_id" in message for message in messages))
+        findings = result.outputs["findings"]
+        validation_inputs = {
+            item["evidence"]["input"]
+            for item in findings
+            if item["code"] == "review.workflow.input_validation_missing"
+        }
+        self.assertIn("active_profile_key", validation_inputs)
+        ambient_inputs = {"repo_kind", "repo_dir", "repository", "project_id"}
+        usage_inputs = {
+            item["evidence"]["input"]
+            for item in findings
+            if item["code"] in {
+                "review.workflow.input_validation_missing",
+                "review.workflow.optional_input_presence_guard_missing",
+                "review.workflow.input_declared_but_unused",
+            }
+        }
+        self.assertTrue(ambient_inputs.isdisjoint(usage_inputs))
+        # Profile context is exempt from usage advice, not input documentation.
+        undocumented_inputs = {
+            item["evidence"]["input"]
+            for item in findings
+            if item["code"] == "review.workflow.input_description_missing"
+        }
+        self.assertEqual(undocumented_inputs, set(workflow.declared_inputs))
 
     def test_review_classifies_profile_provided_consumed_inputs_as_trusted(self) -> None:
         workflow = Workflow(

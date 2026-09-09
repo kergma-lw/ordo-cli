@@ -1357,8 +1357,8 @@ class OrdoHelpCliTest(unittest.TestCase):
         handles = {item["handle"]: item for item in payload["handles"]}
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 56)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 58)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 58)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 63)
         self.assertEqual(handles["profile.checks"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.launchers"]["snippet_coverage"], "excerpt_verified")
         self.assertEqual(handles["profile.connectors"]["snippet_coverage"], "excerpt_verified")

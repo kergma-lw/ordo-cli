@@ -1,0 +1,70 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Python 3.12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install 'pytest>=8,<9' 'PyYAML>=6,<7' 'shellcheck-py==0.11.0.1'
+          # Match the scanner integration contract, not the runner's system ShellCheck.
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Run tests
+        run: .venv/bin/python -m pytest --junitxml=test-results/pytest.xml
+
+      - name: Summarize test results
+        if: always()
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          report = Path("test-results/pytest.xml")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Test results\n\n")
+              if not report.is_file():
+                  summary.write("No test report was produced. Check the setup and test logs.\n")
+              else:
+                  suites = list(ET.parse(report).getroot().iter("testsuite"))
+                  counts = {
+                      key: sum(int(suite.get(key, "0")) for suite in suites)
+                      for key in ("tests", "failures", "errors", "skipped")
+                  }
+                  passed = counts["tests"] - counts["failures"] - counts["errors"] - counts["skipped"]
+                  summary.write("| Total | Passed | Failed | Errors | Skipped |\n")
+                  summary.write("| ---: | ---: | ---: | ---: | ---: |\n")
+                  summary.write(
+                      f"| {counts['tests']} | {passed} | {counts['failures']} "
+                      f"| {counts['errors']} | {counts['skipped']} |\n\n"
+                  )
+                  summary.write("Optional scanner integration tests may be skipped when their tools are not installed.\n")
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/pytest.xml
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,5 +1,7 @@
 # Ordo
 
+[![Tests](https://github.com/kergma-lw/ordo-cli/actions/workflows/tests.yml/badge.svg)](https://github.com/kergma-lw/ordo-cli/actions/workflows/tests.yml)
+
 Local declarative workflow runtime built around public connector contracts.
 
 ## Goal
