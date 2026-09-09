@@ -1564,13 +1564,37 @@ blocks:
             ),
         )
 
-        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        # Keep the real step dispatcher and probe; intercept bootstrap and API commands.
+        with patch("ordo.plugin_sdk.subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"nameWithOwner":"kergma-lw/ordo-cli","issue":{"id":"I_test_471","number":471,"title":"Deterministic issue","state":"OPEN"}}}}',
+                ),
+            ]
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.status, RuntimeStatus.OK, result.diagnostics)
+        self.assertEqual(run.call_count, 2, run.call_args_list)
+        self.assertEqual(run.call_args_list[0].args[0], ["gh", "auth", "status"])
+        argv = run.call_args_list[1].args[0]
+        self.assertEqual(argv[:4], ["gh", "api", "graphql", "-f"])
+        self.assertIn("issue(number:$number)", argv[4])
+        self.assertEqual(argv[5:], ["-f", "owner=kergma-lw", "-f", "repo=ordo-cli", "-F", "number=471"])
+        self.assertEqual(len(result.operation_results), 1)
+        detail = result.operation_results[0].raw["step_detail"]
+        self.assertEqual(detail["reference"], "gh.issue")
+        self.assertEqual(detail["resolved_inputs"], {"repository": "kergma-lw/ordo-cli", "issue_number": 471})
         self.assertEqual(result.failed_step, None)
         self.assertEqual(result.outputs["executed_steps"], ["load-issue"])
         self.assertEqual(result.outputs["execution_tree"], None)
-        self.assertIn("issue", workflow.step_results)
+        outputs = workflow.step_results["issue"]["outputs"]
+        self.assertEqual(outputs["id"], "I_test_471")
+        self.assertEqual(outputs["number"], 471)
+        self.assertEqual(outputs["title"], "Deterministic issue")
+        self.assertEqual(outputs["state"], "OPEN")
+        self.assertEqual(outputs["repository"], {"nameWithOwner": "kergma-lw/ordo-cli"})
 
     def test_execute_probe_step_no_longer_fails_as_action_not_implemented(self) -> None:
         workflow = Workflow(
@@ -1588,9 +1612,37 @@ blocks:
             ),
         )
 
-        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        # Keep the real step dispatcher and probe; intercept bootstrap and API commands.
+        with patch("ordo.plugin_sdk.subprocess.run") as run:
+            run.side_effect = [
+                self._completed(returncode=0, stdout=""),
+                self._completed(
+                    returncode=0,
+                    stdout='{"data":{"repository":{"nameWithOwner":"kergma-lw/ordo-cli","issue":{"id":"I_test_471","number":471,"title":"Deterministic issue","state":"OPEN"}}}}',
+                ),
+            ]
+            result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
-        self.assertFalse(any(diagnostic.code == "operation.not_implemented" and diagnostic.details.get("kind") == "action" for diagnostic in result.diagnostics))
+        self.assertEqual(result.status, RuntimeStatus.OK, result.diagnostics)
+        self.assertEqual(run.call_count, 2, run.call_args_list)
+        self.assertEqual(run.call_args_list[0].args[0], ["gh", "auth", "status"])
+        argv = run.call_args_list[1].args[0]
+        self.assertEqual(argv[:4], ["gh", "api", "graphql", "-f"])
+        self.assertIn("issue(number:$number)", argv[4])
+        self.assertEqual(argv[5:], ["-f", "owner=kergma-lw", "-f", "repo=ordo-cli", "-F", "number=471"])
+        self.assertEqual(len(result.operation_results), 1)
+        operation_result = result.operation_results[0]
+        self.assertEqual(operation_result.raw["step_detail"]["reference"], "gh.issue")
+        self.assertEqual(operation_result.raw["step_detail"]["resolved_inputs"], {"repository": "kergma-lw/ordo-cli", "issue_number": 471})
+        self.assertEqual(operation_result.outputs["id"], "I_test_471")
+        self.assertEqual(operation_result.outputs["number"], 471)
+        self.assertEqual(result.failed_step, None)
+        self.assertEqual(result.outputs["executed_steps"], ["load-issue"])
+        self.assertEqual(result.outputs["execution_tree"], None)
+        self.assertFalse(
+            any(diagnostic.code == "operation.not_implemented" and diagnostic.details.get("kind") == "action" for diagnostic in result.diagnostics),
+            result.diagnostics,
+        )
 
     def test_execute_keeps_probe_revalidation_bookkeeping_with_execution_tree(self) -> None:
         workflow = Workflow(

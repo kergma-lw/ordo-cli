@@ -28,6 +28,8 @@ jobs:
           .venv/bin/python -m pip install 'pytest>=8,<9' 'PyYAML>=6,<7' 'shellcheck-py==0.11.0.1'
           # Match the scanner integration contract, not the runner's system ShellCheck.
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          # Project routine tests invoke the checked-in ordo-help launcher.
+          echo "$GITHUB_WORKSPACE" >> "$GITHUB_PATH"
 
       - name: Run tests
         run: .venv/bin/python -m pytest --junitxml=test-results/pytest.xml
