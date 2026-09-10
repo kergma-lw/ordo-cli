@@ -73,6 +73,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
         self.assertEqual((plain_status, json_status), (0, 0))
         self.assertEqual(plain, {
             **{key: value for key, value in payload.items() if key != "launch_profile"},
+            "warnings": plain["warnings"],
             "inputs": {name: {
                 **{key: value for key, value in payload["inputs"][name].items() if key not in {"coverage", "sources", "caller_slot"}},
                 "required": payload["inputs"][name]["caller_slot"] == "required",
@@ -124,6 +125,14 @@ class WorkflowShowInputsTest(unittest.TestCase):
         self.assertNotIn("secret-profile-value", json.dumps(payload))
         self.assertNotIn("secret-profile-value", json.dumps(plain))
         self.assertNotIn("binding", inputs["profile_value"])
+        self.assertNotIn("warnings", payload)
+        self.assertEqual([warning["input"] for warning in plain["warnings"]], ["missing"])
+        warning = plain["warnings"][0]
+        self.assertEqual(warning["code"], "discovery.workflow.input_source_missing")
+        for detail in ("no workflow default", "not supplied by launch profile 'selected'",
+                       "no concrete playbook binding", "no caller slot declared"):
+            self.assertIn(detail, warning["message"])
+        self.assertIn("Declare a caller slot", warning["hint"])
 
     def test_profile_selection_matches_activation_and_review_coverage(self):
         for profile_name, source in ((None, "default"), ("selected", "explicit_cli"), ("other", "explicit_cli")):
@@ -149,6 +158,10 @@ class WorkflowShowInputsTest(unittest.TestCase):
                         self.assertIn("missing", missing)
                         self.assertEqual("profile_value" in missing, profile_name == "other")
                     else:
+                        self.assertEqual(
+                            {warning["input"] for warning in payload["warnings"]},
+                            {"missing", "profile_value"} if profile_name == "other" else {"missing"},
+                        )
                         for item in payload["inputs"].values():
                             self.assertNotIn("coverage", item)
                             self.assertNotIn("sources", item)
@@ -172,6 +185,9 @@ class WorkflowShowInputsTest(unittest.TestCase):
                 else:
                     self.assertNotIn("launch_profile", payload)
                     self.assertNotIn("profile_value", payload["inputs"])
+                    self.assertEqual({warning["input"] for warning in payload["warnings"]}, {"missing", "profile_value"})
+                    for warning in payload["warnings"]:
+                        self.assertIn("no launch profile selected", warning["message"])
 
     def test_invalid_selected_profiles_use_activation_diagnostics(self):
         for profile_name in ("unknown", "selected"):
@@ -208,6 +224,7 @@ class WorkflowShowInputsTest(unittest.TestCase):
             status, payload = self.show(as_json=as_json)
             self.assertEqual(status, 0)
             self.assertEqual(payload["inputs"], {})
+            self.assertNotIn("warnings", payload)
 
     def test_no_caller_slots_keeps_empty_plain_inputs_mapping(self):
         self.payload["workflows"]["sample"]["with"] = {}
@@ -217,7 +234,9 @@ class WorkflowShowInputsTest(unittest.TestCase):
         self.assertEqual((plain_status, json_status), (0, 0))
         self.assertEqual(plain, {
             **{key: value for key, value in payload.items() if key != "launch_profile"}, "inputs": {},
+            "warnings": plain["warnings"],
         })
+        self.assertEqual({warning["input"] for warning in plain["warnings"]}, {"missing", "bound", "required_optional_slot"})
         self.assertEqual(set(payload["inputs"]), set(self.declarations))
         self.assertTrue(all(item["caller_slot"] == "none" for item in payload["inputs"].values()))
 
@@ -233,6 +252,13 @@ class WorkflowShowInputsTest(unittest.TestCase):
         self.assertEqual(payload["inputs"]["profile_value"], {
             "required": True, "caller_slot": "required", "sources": ["launch_profile"], "coverage": "provided",
         })
+
+    def test_no_warning_when_required_inputs_have_sources_or_slots(self):
+        self.payload["workflows"]["sample"]["with"]["missing"] = None
+        self.write_playbook()
+        status, payload = self.show()
+        self.assertEqual(status, 0)
+        self.assertNotIn("warnings", payload)
 
     def test_runtime_profile_switch_does_not_supply_launch_coverage(self):
         self.payload["defaults"] = {"profile": "other"}

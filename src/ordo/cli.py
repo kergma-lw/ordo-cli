@@ -936,6 +936,30 @@ def _run_workflow_discovery_args(args, argv: list[str], *, parser: argparse.Argu
                 },
                 launch_profile={"name": entry.launch_profile_name, "source": entry.launch_profile_source} if args.json else None,
             )
+            if not args.json:
+                profile_gap = (
+                    f"not supplied by launch profile '{entry.launch_profile_name}'"
+                    if entry.launch_profile_name is not None else "no launch profile selected"
+                )
+                warnings = [
+                    {
+                        "code": "discovery.workflow.input_source_missing",
+                        "input": item.name,
+                        "message": (
+                            f"Required input '{item.name}' has no declared source: "
+                            f"no workflow default; {profile_gap}; "
+                            "no concrete playbook binding; no caller slot declared."
+                        ),
+                        "hint": (
+                            "Declare a caller slot in the playbook entry, or provide a value "
+                            "through a workflow default, launch profile, or concrete playbook binding."
+                        ),
+                    }
+                    for item in entry.inputs
+                    if item.contract.get("required") is True and item.contract["coverage"] == "missing"
+                ]
+                if warnings:
+                    payload["warnings"] = warnings
     except PlaybookError as exc:
         return _emit_error(exc, as_json=args.json)
 

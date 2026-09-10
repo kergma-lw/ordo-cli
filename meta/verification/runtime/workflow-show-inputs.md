@@ -2,9 +2,38 @@
 
 ## Scope
 
-Discovery documents the approved plain-output changes in `cli.py`, without activation or core changes. Plain `workflows show` is the main caller interface: it keeps the JSON-shaped serialized format, filters `inputs` to `caller_slot` values `required` or `optional`, omits top-level `launch_profile` entirely, and removes `caller_slot`, `sources`, and `coverage` from retained inputs. It hides `none` and keeps `inputs: {}` when no caller slots exist. Other record fields, including declared default, description, and hint, are preserved except `required`, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No `optional` field is added; other envelope fields are unchanged. `--json` remains exactly unchanged, including every declaration, all input fields with original `required` and `caller_slot`, and top-level `launch_profile` with the initial activation name/source, not the final bound workflow profile. Caller-slot metadata, input sources (including the `launch_profile` label), and coverage are JSON-only. Source coverage uses the same rule as review, without publishing profile values or treating source presence as readiness.
+Discovery documents the approved plain-output changes in `cli.py`, without activation or core changes. Plain `workflows show` is the main caller interface: it keeps the JSON-shaped serialized format, filters `inputs` to `caller_slot` values `required` or `optional`, omits top-level `launch_profile` entirely, and removes `caller_slot`, `sources`, and `coverage` from retained inputs. It hides `none` and keeps `inputs: {}` when no caller slots exist. Other record fields, including declared default, description, and hint, are preserved except `required`, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No `optional` field is added; other envelope fields are unchanged except conditional plain `warnings`. `--json` remains exactly unchanged, including every declaration, all input fields with original `required` and `caller_slot`, and top-level `launch_profile` with the initial activation name/source, not the final bound workflow profile. Caller-slot metadata, input sources (including the `launch_profile` label), and coverage fields are JSON-only. Source coverage uses the same rule as review, without publishing profile values or treating source presence as readiness.
 
-## Describe readiness review
+## Required missing-source warnings: current documentation pass
+
+Plain `warnings` is present only when a required workflow declaration has `coverage: missing`, evaluated before caller filtering. Each record carries `code: discovery.workflow.input_source_missing`, `input`, `message`, and `hint`. The message explains all four absent sources: no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot. The hint directs the author to expose a caller slot or supply a source. Such declarations stay hidden from plain `inputs`; optional missing declarations do not warn. Either caller-slot form or any present source suppresses the warning. With no qualifying declarations, omit `warnings` entirely. JSON remains unchanged. No readiness or state analysis is introduced.
+
+### Describe readiness checks
+
+The five handles below were run successfully through the public `ordo-help describe <handle>` and `ordo-help describe <handle> --json` commands for this warning addition. Commands used the project virtual environment and `PYTHONPATH=/home/ww/projects/ordo/src` because the installed entrypoint otherwise failed to import `ordo`. A prefix `--json` attempt rendered text; the suffix forms above were rerun and confirmed to emit JSON.
+
+| Handle | Checklist review for the warning addition |
+| --- | --- |
+| `workflow.inputs` | Positive declaration definition, fragment/binding boundaries, neighboring handles, understandable source explanations, full workflow excerpt, and self-contained warning/filter semantics are present in text and JSON. |
+| `workflow.inputs_contract` | Distinguishes declaration requiredness from displayed caller obligation; required-only warnings and optional exclusions are explicit. The larger excerpt demonstrates both declaration kinds. Existing terse activation/default wording remains a clarity gap. |
+| `playbook.workflows` | Positive catalog definition and workflow/pre-run boundaries remain clear; the catalog excerpt demonstrates concrete bindings as a source that suppresses warnings. The output contract is explained locally. |
+| `playbook.workflows.with` | Static bindings and both slot forms remain excerpt-backed. Guidance explicitly separates required-only discovery warnings from review's broader advisory, including optional declarations. |
+| `command-line.ordo-playbook` | Definition, boundaries, neighboring handles, filtering, warning fields and conditions, empty-mapping semantics, JSON invariance, and no readiness/state analysis are explicit. Canonical CLI examples remain unsupported, so the canonical-example checklist points are not fully satisfied. |
+
+All nine points in `meta/requirements/runtime/help-discovery.md` were reviewed: positive definition, negative boundaries, neighboring mechanisms, terminology, intended-use examples, larger fragments, self-contained meaning, text/JSON comprehension, and alignment with features and authoring guidance. The four YAML surfaces retain `excerpt_verified` metadata and their existing authored shapes; all five relevant snippet summaries were updated. These examples teach sources and caller slots, not serialized warning output. No new snippet-world or executable CLI support is claimed. CLI warning/output examples remain an explicit unsupported shape, accepted as an existing gap for this limited pass.
+
+### Discovery and runtime impact
+
+- `features`: updated source guidance publishes the required-only warning predicate, fields, remedies, omission behavior, JSON invariance, and analysis boundary. The public aggregate render timed out after 120 seconds without output; no successful aggregate verification is claimed.
+- `command-line` and the five describes: shared source metadata publishes the same contract. Both text and JSON describe renders succeeded.
+- `search discovery.workflow.input_source_missing`: succeeded and returned all five affected handles.
+- `overview`, `model`, `capabilities`, and `operations`: source review establishes no new workflow model, primitive, execution concept, connector operation, or capability. No edits needed.
+- Authoring guidance: current public dispatch uses `workflow-rules`; `workflow-authoring` is not a current command. Existing validation and paired check/review guidance remains valid. No new authored YAML shape or fallback path is introduced.
+- `check`, `review`, `plan`, `run`, `explain`, and `next`: unchanged. Review keeps its broader advisory and existing source-presence rules; discovery does not inspect state or determine readiness.
+
+Integration added the plain-output warnings and regression assertions for missing required sources, optional exclusions, selected and absent profiles, caller slots, empty contracts, and unchanged JSON. A live `ordo-playbook workflows show task-to-ready` rendered the expected `issue_number` warning. Derived meta packs were regenerated. Full-suite verification was attempted through `ordo-playbook run verify-all-tests`: the first attempt exceeded the 600-second timeout and the second was interrupted by the user before completion. No passing test result is claimed. The records below describe earlier display-filter work and do not verify the warning addition.
+
+## Earlier display-filter describe readiness review
 
 Source and rendered review against all nine points in the help-discovery describe readiness checklist covers the following five handles. All ten text/JSON commands succeeded after caller_slot omission and caller-obligation required; the remaining readiness gaps are identified below.
 
@@ -25,7 +54,7 @@ The source guides retain positive definitions, boundaries, neighboring mechanism
 - `features`, `command-line`, relevant input and playbook describes, and searchable help metadata publish the changed discovery contract.
 - `overview`, `model`, `workflow-rules`, `capabilities`, and `operations`: reviewed for impact; no new authoring primitive, runtime mode, validation rule, connector operation, or supported capability is introduced. Existing activation contracts and the paired check/review guidance remain valid.
 
-## Verification limits
+## Earlier display-filter verification limits
 
 Current caller-slot display integration: command-line/features golden expectations and aggregate discovery assertions were updated to require caller_slot/sources/coverage removal, caller-obligation required, preserved default/description/hint, no optional field, and unchanged full JSON fields. The workflow-show and focused command-help tests passed together (13 tests, 39 subtests), including cases where declaration and caller requiredness disagree. Aggregate, golden, and full tests were not run in this pass. No producer or activation behavior was changed.
 
