@@ -597,8 +597,8 @@ class OperationTest(unittest.TestCase):
             run.side_effect = [
                 self._completed(returncode=0, stdout="authenticated\n", stderr=""),
                 self._completed(returncode=0, stdout='{"number":42,"head":{"sha":"abc123"}}', stderr=""),
-                self._completed(returncode=0, stdout='{"state":"pending","statuses":[{"context":"lint","state":"success","target_url":"https://example.test/lint"},{"context":"deploy","state":"pending","target_url":"https://example.test/deploy"}]}', stderr=""),
-                self._completed(returncode=0, stdout='{"total_count":2,"check_runs":[{"name":"unit","status":"completed","conclusion":"success","html_url":"https://example.test/unit"},{"name":"release","status":"completed","conclusion":"skipped","html_url":"https://example.test/release"}]}', stderr=""),
+                self._completed(returncode=0, stdout='[{"sha":"abc123","state":"pending","total_count":2,"statuses":[{"id":1,"context":"lint","state":"success","target_url":"https://example.test/lint"},{"id":2,"context":"deploy","state":"pending","target_url":"https://example.test/deploy"}]}]', stderr=""),
+                self._completed(returncode=0, stdout='[{"total_count":2,"check_runs":[{"id":3,"head_sha":"abc123","name":"unit","status":"completed","conclusion":"success","html_url":"https://example.test/unit"},{"id":4,"head_sha":"abc123","name":"release","status":"completed","conclusion":"skipped","html_url":"https://example.test/release"}]}]', stderr=""),
             ]
 
             result = evaluate_probe(resolved, workflow)

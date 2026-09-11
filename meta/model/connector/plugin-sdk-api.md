@@ -79,6 +79,16 @@ The minimal context should expose at least:
 
 The first spike should prefer plain, explicit names over abstraction-heavy helper layering.
 
+## Approved operation dependency call
+
+`ctx.call(name, *, inputs=None)` is a connector-author API, not a workflow expression or a new action-composition surface. A nonempty `inputs` mapping is supported only for same-family probe dependencies. Both fully qualified references such as `gh.pr.list` and family-local dotted names such as `pr.list` resolve within the caller's family. Cross-family dependencies are rejected.
+
+Values in the mapping are already resolved by the caller. They are passed as values, without reevaluating workflow expressions or templates. Missing `inputs` and `inputs=None` retain the legacy no-input dependency behavior. A probe cannot invoke an action as a hidden mutation; this extension does not enable action-to-action composition.
+
+For example, `gh.pr.create` delegates its mandatory complete open observation to `gh.pr.list` with resolved repository, head, source owner, base, and `state: open`. The connector consumes the probe outcome explicitly; a failed observation cannot become permission to mutate. This API is published through `connector.authoring` and the feature/discovery surfaces with a verified connector-author example.
+
+The canonical `sdk_same_family_probe_inputs` example is a `python_fragment` with a `python` source field, verified by `sdk_probe_fragment` insertion in the `gh-sdk-probe-call` world. Its bounded runner executes the real family adapter and SDK context with fixture family/bootstrap/probe bodies; it does not replace `ctx.call`. This establishes dependency dispatch, isolated resolved inputs, literal expression-looking values, and failure propagation, not live GitHub API behavior or sandbox isolation. See [snippet worlds](../help/snippet-worlds.md) for the bounded verification contract.
+
 ## Command helper
 
 The concrete command helper should support this shape or a shape very close to it:
@@ -202,6 +212,6 @@ The first implementation spike should answer these by code rather than by furthe
 
 - whether one `OperationContext` is enough or probe/action split pays for itself;
 - whether one `PublishedOperation` type is enough or probe/action split pays for itself;
-- whether operation-to-operation dependency should use operation names or richer refs locally;
+- operation dependency names and resolved-input probe calls are settled by the approved dependency contract above;
 - whether `bootstrap()` should return one shared object or named capability views;
 - whether convenience helpers are useful enough to keep after the first migrated operations.

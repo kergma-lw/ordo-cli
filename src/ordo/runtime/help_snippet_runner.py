@@ -14,7 +14,7 @@ import tempfile
 import yaml
 
 from ordo.model.help_snippet_worlds import describe_help_snippet_worlds
-from ordo.model.runtime import RuntimeStatus
+from ordo.model.runtime import OperationResult, RuntimeResult, RuntimeStatus
 from ordo.routines import load_routine_registry
 
 from . import load_workflow_file, load_workflow_text, validate_workflow_semantics, validate_workflow_text
@@ -32,6 +32,11 @@ class HelpSnippetRunnerResult:
     workflow_text: str
     effective_world: dict[str, object]
     status: str
+    verification_path: str = "validation_only"
+    runtime_result: RuntimeResult | None = None
+    calls: tuple[dict[str, object], ...] = ()
+    python_text: str | None = None
+    operation_result: OperationResult | None = None
 
 
 def verify_help_snippet(
@@ -50,6 +55,33 @@ def verify_help_snippet(
     effective_world = deepcopy(worlds[world])
     if overrides:
         effective_world = _deep_merge(effective_world, overrides)
+
+    if world == "gh-sdk-probe-call" or insertion_mode == "sdk_probe_fragment":
+        from .help_sdk_snippet_runner import execute_sdk_probe_fragment
+
+        return execute_sdk_probe_fragment(
+            snippet=snippet, world=world, insertion_mode=insertion_mode,
+            target=target, effective_world=effective_world,
+        )
+
+    if world == "gh-pr-create-new-only":
+        return _execute_gh_pr_create_snippet(
+            snippet=snippet, world=world, insertion_mode=insertion_mode,
+            target=target, effective_world=effective_world,
+        )
+
+    if world in {"gh-pr-list-no-pr", "gh-pr-list-exactly-one-open", "gh-pr-list-ambiguous-multiple-open",
+                 "gh-pr-list-only-closed-history", "gh-pr-list-unknown-metadata"}:
+        return _execute_gh_pr_list_snippet(
+            snippet=snippet, world=world, insertion_mode=insertion_mode,
+            target=target, effective_world=effective_world,
+        )
+
+    if world in {"gh-pr-merge-head", "gh-pr-merge-test-merge", "gh-pr-merge-head-context"}:
+        return _execute_gh_pr_merge_snippet(
+            snippet=snippet, world=world, insertion_mode=insertion_mode,
+            target=target, effective_world=effective_world,
+        )
 
     if insertion_mode == "routine_bundle":
         return _verify_routine_bundle_snippet(snippet=snippet, world=world, target=target, effective_world=effective_world)
@@ -103,6 +135,246 @@ def verify_help_snippet(
         workflow_text=workflow_text,
         effective_world=effective_world,
         status=status,
+    )
+
+
+def _execute_gh_pr_create_snippet(
+    *, snippet: str, world: str, insertion_mode: str, target: str,
+    effective_world: dict[str, object],
+) -> HelpSnippetRunnerResult:
+    """Execute exact create YAML only; fixture dispatch never runs SDK or HTTP."""
+    from ordo.connectors.registry import get_public_connector_registry
+    from ordo.model.help_snippets import _gh_pr_create_workflow
+    from .executing import execute_workflow
+    from .providers import ConnectorProvider
+    from .resolution import ResolvedOperation
+    from .value_resolution import resolve_runtime_value
+
+    if insertion_mode != "workflow_fragment" or target != "connector.gh.pr.create" or snippet != _gh_pr_create_workflow():
+        raise ValueError("Fixture execution accepts only the exact published gh PR create workflow")
+    workflow = load_workflow_text(snippet, source=f"snippet-execution:{world}")
+    inputs = effective_world["inputs"]
+    if not isinstance(inputs, dict) or set(inputs) - set(workflow.declared_inputs):
+        raise ValueError("Create fixture inputs must be declared workflow inputs")
+    workflow = replace(workflow, inputs={**workflow.inputs, **inputs}, explicit_input_keys=tuple(inputs))
+    registry = get_public_connector_registry()
+    for reference, fields in {
+        "gh.pr.list": {"items", "count", "complete"},
+        "gh.pr.create": {"repository", "pull_number", "pull_ref", "url", "created", "head_ref", "base_ref"},
+        "gh.pr": {"state"},
+    }.items():
+        contract = registry.get_operation(reference)
+        if contract is None or not fields.issubset(contract.outputs):
+            raise ValueError(f"Create snippet execution requires the published output contract for {reference}")
+    calls: list[dict[str, object]] = []
+    submitted = False
+
+    def invoke(resolved, current_workflow, *, phase):
+        nonlocal submitted
+        if len(calls) >= 20:
+            raise ValueError("Create snippet exceeded its 20-call fixture budget")
+        if not isinstance(resolved, ResolvedOperation):
+            raise ValueError("Create fixture requires a materialized operation")
+        reference = resolved.reference
+        if reference == "gh.pr.create":
+            if phase != "execute" or submitted:
+                raise ValueError("Create fixture permits one execution-time submission")
+            fixture = effective_world["actions"][reference]
+        elif reference in {"gh.pr.list", "gh.pr"}:
+            if reference == "gh.pr" and not submitted:
+                raise ValueError("Final PR observation requires a create submission")
+            fixtures = effective_world["probes"][reference]
+            if len(fixtures) != 1:
+                raise ValueError("Create execution requires one fixture per observation")
+            fixture = fixtures[0]
+        else:
+            raise ValueError(f"No fixture execution allowed for {reference}")
+        if resolved.resolved_inputs is None:
+            resolved = replace(resolved, resolved_inputs=resolve_runtime_value(resolved.declared_with, current_workflow))
+        if json.dumps(resolved.resolved_inputs, sort_keys=True) != json.dumps(fixture["with_"], sort_keys=True):
+            raise ValueError(f"Resolved fixture inputs differ for {reference}: {resolved.resolved_inputs!r}")
+        calls.append({"reference": reference, "phase": phase, "inputs": deepcopy(resolved.resolved_inputs)})
+        if reference == "gh.pr.create":
+            submitted = True
+        return OperationResult(status=fixture.get("status", "ok"), outputs=deepcopy(fixture["outputs"]))
+
+    provider = ConnectorProvider(
+        registry=registry,
+        guard_probe=lambda resolved, workflow: invoke(resolved, workflow, phase="probe"),
+        step_executor=lambda resolved, workflow: invoke(resolved, workflow, phase="execute"),
+    )
+    result = execute_workflow(workflow, connector_provider=provider)
+    return HelpSnippetRunnerResult(
+        world_name=world, insertion_mode=insertion_mode, target=target,
+        workflow_text=snippet, effective_world=effective_world, status=result.status.value,
+        verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
+    )
+
+
+def _execute_gh_pr_list_snippet(
+    *, snippet: str, world: str, insertion_mode: str, target: str,
+    effective_world: dict[str, object],
+) -> HelpSnippetRunnerResult:
+    """Bounded observer execution; exact text and strict fixtures, never live dispatch."""
+    from ordo.connectors.registry import get_public_connector_registry
+    from ordo.model.help_snippets import _gh_pr_list_workflow
+    from .executing import execute_workflow
+    from .providers import ConnectorProvider
+    from .resolution import ResolvedOperation
+    from .value_resolution import resolve_runtime_value
+
+    if insertion_mode != "workflow_fragment" or target != "connector.gh.pr.list" or snippet != _gh_pr_list_workflow():
+        raise ValueError("Fixture execution accepts only the exact published gh PR list workflow")
+    workflow = load_workflow_text(snippet, source=f"snippet-execution:{world}")
+    inputs = effective_world["inputs"]
+    if not isinstance(inputs, dict) or set(inputs) - set(workflow.declared_inputs):
+        raise ValueError("PR list fixture inputs must be declared workflow inputs")
+    workflow = replace(workflow, inputs={**workflow.inputs, **inputs}, explicit_input_keys=tuple(inputs))
+    registry = get_public_connector_registry()
+    contract = registry.get_operation("gh.pr.list")
+    fields = {"repository", "head", "head_owner", "base", "state", "items", "count", "complete"}
+    if contract is None or not fields.issubset(contract.outputs):
+        raise ValueError("PR list snippet execution requires the published output contract for gh.pr.list")
+    item_fields = {"number", "url", "state", "draft", "merged", "merged_at", "head_repository", "head_repository_key",
+                   "head_owner", "head_ref", "head_sha", "base_repository", "base_ref", "base_sha", "pull_ref"}
+    item_schema = contract.outputs["items"]
+    if not isinstance(item_schema, list) or len(item_schema) != 1 or not isinstance(item_schema[0], dict) or not item_fields.issubset(item_schema[0]):
+        raise ValueError("PR list snippet execution requires the published item identity contract")
+    calls: list[dict[str, object]] = []
+
+    def invoke(resolved, current_workflow, *, phase):
+        if len(calls) >= 20:
+            raise ValueError("PR list snippet exceeded its 20-call fixture budget")
+        if not isinstance(resolved, ResolvedOperation) or resolved.reference != "gh.pr.list":
+            raise ValueError("Only gh.pr.list fixture execution is allowed")
+        if resolved.resolved_inputs is None:
+            resolved = replace(resolved, resolved_inputs=resolve_runtime_value(resolved.declared_with, current_workflow))
+        fixtures = effective_world["probes"].get(resolved.reference, [])
+        if len(fixtures) != 1:
+            raise ValueError("PR list execution requires exactly one complete observation fixture")
+        fixture = fixtures[0]
+        if json.dumps(resolved.resolved_inputs, sort_keys=True) != json.dumps(fixture["with_"], sort_keys=True):
+            raise ValueError(f"Resolved fixture inputs differ for gh.pr.list: {resolved.resolved_inputs!r}")
+        calls.append({"reference": resolved.reference, "phase": phase, "inputs": deepcopy(resolved.resolved_inputs)})
+        return OperationResult(status=fixture.get("status", "ok"), outputs=deepcopy(fixture["outputs"]))
+
+    provider = ConnectorProvider(
+        registry=registry,
+        guard_probe=lambda resolved, workflow: invoke(resolved, workflow, phase="probe"),
+        step_executor=lambda resolved, workflow: invoke(resolved, workflow, phase="execute"),
+    )
+    result = execute_workflow(workflow, connector_provider=provider)
+    return HelpSnippetRunnerResult(
+        world_name=world, insertion_mode=insertion_mode, target=target,
+        workflow_text=snippet, effective_world=effective_world, status=result.status.value,
+        verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
+    )
+
+
+def _execute_gh_pr_merge_snippet(
+    *, snippet: str, world: str, insertion_mode: str, target: str,
+    effective_world: dict[str, object],
+) -> HelpSnippetRunnerResult:
+    """Execute only the published merge family, with no live-provider fallback.
+
+    Canonical-text admission bounds the language (no run, routine, state, profile,
+    shell, or arbitrary expression probes). Fixture overrides change data only.
+    PR fixtures represent before/after submission, rather than fragile call counts:
+    check/preflight may re-observe the same handle before execution reaches it.
+    """
+    from ordo.connectors.registry import get_public_connector_registry
+    from ordo.model.help_snippets import _gh_pr_merge_workflow
+    from .executing import execute_workflow
+    from .help_snippet_scaffolds import GH_PR_MERGE_TARGETS
+    from .providers import ConnectorProvider
+    from .resolution import ResolvedOperation
+    from .value_resolution import resolve_runtime_value
+
+    context_repository = world == "gh-pr-merge-head-context"
+    expected = _gh_pr_merge_workflow(
+        test_merge=world == "gh-pr-merge-test-merge", context_repository=context_repository,
+    )
+    if insertion_mode != "workflow_fragment" or target not in GH_PR_MERGE_TARGETS or snippet != expected:
+        raise ValueError("Fixture execution accepts only the exact published gh PR merge workflow")
+    workflow = load_workflow_text(snippet, source=f"snippet-execution:{world}")
+    inputs = effective_world["inputs"]
+    if not isinstance(inputs, dict) or set(inputs) - set(workflow.declared_inputs):
+        raise ValueError("Merge fixture inputs must be declared workflow inputs")
+    workflow = replace(workflow, inputs={**workflow.inputs, **inputs}, explicit_input_keys=tuple(inputs))
+    if context_repository:
+        # Runtime context is supplied by composition (normally a profile), not
+        # loaded from an invented workflow YAML field.
+        contexts = effective_world.get("connector_contexts")
+        if contexts != {"gh": {"repository": "acme/mobile-app"}}:
+            raise ValueError("Merge context world requires its published literal gh repository")
+        workflow = replace(workflow, connector_contexts=deepcopy(contexts))
+    calls: list[dict[str, object]] = []
+    submitted = False
+
+    def invoke(resolved, _workflow, *, phase):
+        nonlocal submitted
+        if len(calls) >= 32:
+            raise ValueError("Merge snippet exceeded its 32-call fixture budget")
+        if not isinstance(resolved, ResolvedOperation):
+            raise ValueError("Merge fixture requires a materialized operation")
+        reference = resolved.reference
+        if reference == "gh.pr.merge":
+            if phase != "execute" or submitted:
+                raise ValueError("Merge fixture permits exactly one execution-time submission")
+            fixture = effective_world["actions"][reference]
+        elif reference in {"gh.pr", "gh.pr.checks", "gh.pr.merge.request"}:
+            # Preflight passes authored probe bindings to the provider; ordinary
+            # execution already materializes them. Resolve the former through
+            # the real value resolver before applying the same strict match.
+            if resolved.resolved_inputs is None:
+                resolved = replace(resolved, resolved_inputs=resolve_runtime_value(resolved.declared_with, _workflow))
+            fixtures = effective_world["probes"][reference]
+            fixture = fixtures[1 if reference == "gh.pr" and submitted else 0]
+        else:
+            raise ValueError(f"No fixture execution allowed for {reference}")
+        # JSON comparison is type-strict (True must not match integer 1).
+        if json.dumps(resolved.resolved_inputs, sort_keys=True) != json.dumps(fixture["with_"], sort_keys=True):
+            raise ValueError(f"Resolved fixture inputs differ for {reference}: {resolved.resolved_inputs!r}")
+        if context_repository and reference in {"gh.pr.merge", "gh.pr.merge.request"}:
+            # Family bootstrap consumes literal context, not runtime expressions.
+            # This injected provider checks that boundary without pretending to
+            # execute bootstrap/authentication or the actual handler fallback.
+            from connectors.gh._repository import normalize_repository_value
+
+            repository = normalize_repository_value(_workflow.connector_contexts["gh"]["repository"])
+            if repository is None or fixture["outputs"].get("repository") != repository:
+                raise ValueError(f"Fixture output repository differs from gh context for {reference}")
+        calls.append({"reference": reference, "phase": phase, "inputs": deepcopy(resolved.resolved_inputs)})
+        if reference == "gh.pr.merge":
+            submitted = True
+        return OperationResult(status=fixture.get("status", "ok"), outputs=deepcopy(fixture["outputs"]))
+
+    registry = get_public_connector_registry()
+    # Fixtures cannot manufacture a public output that the connector has not
+    # published yet (notably the independently implemented stack observation).
+    required_outputs = {
+        "gh.pr": {"head_sha", "base_sha", "stack_state", "merged", "merge_commit_sha", "test_merge_state",
+                  "test_merge_sha", "test_merge_head_sha", "test_merge_base_sha"},
+        "gh.pr.checks": {"head_sha", "base_sha", "expected_head_sha", "target", "commit_sha", "complete",
+                         "statuses_complete", "check_runs_complete", "overall_state", "checks",
+                         "test_merge_state", "test_merge_sha", "test_merge_head_sha", "test_merge_base_sha"},
+        "gh.pr.merge": {"request_id", "state"},
+        "gh.pr.merge.request": {"request_id", "state", "message"},
+    }
+    for reference, fields in required_outputs.items():
+        contract = registry.get_operation(reference)
+        if contract is None or not fields.issubset(contract.outputs):
+            raise ValueError(f"Merge snippet execution requires the published output contract for {reference}: {sorted(fields)}")
+    provider = ConnectorProvider(
+        registry=registry,
+        guard_probe=lambda resolved, workflow: invoke(resolved, workflow, phase="probe"),
+        step_executor=lambda resolved, workflow: invoke(resolved, workflow, phase="execute"),
+    )
+    result = execute_workflow(workflow, connector_provider=provider)
+    return HelpSnippetRunnerResult(
+        world_name=world, insertion_mode=insertion_mode, target=target,
+        workflow_text=snippet, effective_world=effective_world, status=result.status.value,
+        verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
     )
 
 

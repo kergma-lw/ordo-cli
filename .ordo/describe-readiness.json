@@ -19,6 +19,9 @@
     "command-line.ordo-playbook.flag.profile": {
       "describe_readiness": "ready"
     },
+    "connector.authoring": {
+      "describe_readiness": "ready"
+    },
     "connector.compose": {
       "describe_readiness": "ready"
     },
@@ -76,7 +79,19 @@
     "connector.gh.pr.comments": {
       "describe_readiness": "ready"
     },
+    "connector.gh.pr.create": {
+      "describe_readiness": "ready"
+    },
     "connector.gh.pr.diff": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.list": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.merge": {
+      "describe_readiness": "ready"
+    },
+    "connector.gh.pr.merge.request": {
       "describe_readiness": "ready"
     },
     "connector.gh.pr.review_comments": {

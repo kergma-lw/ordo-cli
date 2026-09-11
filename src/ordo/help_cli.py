@@ -853,10 +853,14 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     {
         "name": "connectors",
         "summary": "Published operation catalog for external probes and actions, grouped by stable namespaces.",
-        "keywords": ["connectors", "operations", "namespace", "probe", "action", "public surface"],
+        "keywords": ["connectors", "operations", "namespace", "probe", "action", "public surface", "async merge", "expected_head_sha", "test_merge", "standalone", "request_id"],
         "appropriate_when": [
             "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
             "Typed public operations express product intent better than broad execution surfaces.",
+            "Use gh.pr.list with head, head_owner, base and explicit state: all to distinguish no matches, one open PR, multiple open PRs, and closed history; unknown facts block dependent decisions. gh.pr.create is a separate action with its own mandatory open check. One existing open PR including draft is non-OK already_exists, not successful reuse; uncertain submission leaves created=null. No atomic uniqueness or exactly-once guarantee is provided.",
+            "Connector authors use ctx.call(name, inputs=...) for same-family probe dependencies with already-resolved values, never reevaluated expressions. Full and local dotted names work; omitted inputs/None preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring.",
+            "For GitHub async merge, inspect gh.pr identity and stack_state, accept gh.pr.checks evidence, submit gh.pr.merge with expected_head_sha from the accepted CI head, then save request_id for gh.pr.merge.request. Acceptance is not completion.",
+            "For gh.pr.merge and gh.pr.merge.request, repository is optional: a valid explicit OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error.",
             "Use fs.file for UTF-8 content and metadata from the same opened regular file; safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK, with no unsafe fallback or atomic snapshot guarantee.",
             "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
             "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
@@ -865,9 +869,10 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "inappropriate_when": [
             "You are treating a missing public capability as permission to improvise local semantics silently.",
             "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation.",
+            "Do not replace accepted CI head evidence with a freshly fetched head. Checks on test-merge candidate M bind expected head H, not M. First-version merge rejects stacked and unknown scope; no atomic base or stack guarantee, polling, queue administration, or admin bypass is provided.",
             "Git sync remote inputs are configured identifiers, not ad-hoc URLs, paths, or options. Configured URLs and helpers remain trusted; this is not a protocol sandbox.",
         ],
-        "inspect_next": ["operations", "connector.gh", "connector.fs", "command-line.ordo-playbook", "workflow-rules.decision_order", "workflow-rules.structured_surface_bias"],
+        "inspect_next": ["operations", "connector.authoring", "connector.gh", "connector.gh.pr.list", "connector.gh.pr.create", "connector.gh.pr", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request", "connector.fs", "command-line.ordo-playbook", "workflow-rules.decision_order", "workflow-rules.structured_surface_bias"],
         "related_rules": ["decision_order", "structured_surface_bias", "routine.*", "local_artifacts_are_context"],
         "related_examples": ["examples.minimal", "examples.inspect-pr"],
         "published_names_kind": "connectors",
@@ -907,6 +912,67 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "published_names_kind": "adapters",
     },
 )
+
+
+GH_PR_LIST_GUIDANCE = (
+    "GitHub candidate discovery: gh.pr.list observes a full filtered REST pull-request collection, not the search index. "
+    "repository is optional with the standard connector_contexts.gh.repository default and explicit OWNER/REPO override. "
+    "state is required: open|closed|all. Prefer state: all for find/create-oriented inspection, optionally narrowed by head/head_owner/base. "
+    "head_owner is the head repository owner (user or organization), not PR author, and requires head; owner plus branch is not exact repository identity. "
+    "Compare returned head_repository for exact fork matching. Internal pagination has no public page/cursor/limit; incomplete traversal fails. "
+    "head with head_owner composes server owner:branch; bare head is matched exactly locally across all state/base pages because GitHub does not guarantee bare-head filtering. Missing head_ref for local filtering fails. The 100-page ceiling applies before local filtering. GitHub.com only, matching bootstrap authentication. "
+    "Full traversal is not an atomic snapshot or a total remote count guarantee. "
+    "Empty success means no matches within the supplied filters; one result is a candidate, not automatically the correct PR. "
+    "Workflow rules classify none, one open, multiple open, and closed history; unknown facts block dependent decisions. "
+    "Closed/merged history may require additional workflow rules. Listing does not authorize creation, reopening, or merge. "
+    "gh.pr reads detailed facts by pull_number; gh.pr.create is a separate action with its own mandatory open check. Inspect connector.gh.pr.list for canonical filtered classification fragments."
+)
+
+
+GH_PR_CREATE_GUIDANCE = (
+    "GitHub creation: gh.pr.create requires head, base, title, and an explicit boolean draft; body defaults to empty. "
+    "repository is optional: valid explicit OWNER/REPO overrides connector_contexts.gh.repository; omitted or null uses context, malformed explicit input fails without fallback. "
+    "head_repository is a full source OWNER/REPO, default target repository; explicit cross-repository intent requires it, with no fork guessing. "
+    "head_owner is an optional consistency assertion, otherwise derived from the exact source repository. Same-organization head_repo API argument is derived repository NAME. Reject same-branch/same-repository requests. "
+    "The action uses ctx.call('gh.pr.list', inputs=...) with resolved repository/head/head_owner/base and state: open; require complete traversal and exact case-insensitive head_repository_key identity. "
+    "One exact open match including draft returns non-OK already_exists with pull_number, url, created=false and no POST; multiple matches return ambiguous; unknown identity and list failure return precheck_failed. "
+    "No existing match permits one POST. Only validated HTTP 201 means created=true; malformed 201, timeout, or server failure returns creation_unknown with created=null. "
+    "HTTP 422 is generic create_refused, not universal duplicate evidence; preserve API errors. No POST retry or automatic readback reconciliation. "
+    "This is not find-or-reuse or closed-history policy: workflow-owned gh.pr.list state: all classification precedes create's separate open check. "
+    "Concurrent duplicates can race the check: no atomic uniqueness or exactly-once guarantee. No CI waiting, merge, push, fork, branch cleanup, or extra issue/project operations. Inspect connector.gh.pr.create."
+)
+
+SDK_CALL_GUIDANCE = (
+    "Connector-author SDK: ctx.call(name, *, inputs=None) supports nonempty already-resolved inputs only for same-family probe dependencies. "
+    "Full references (gh.pr.list) and local dotted names (pr.list) work; values are not reevaluated as expressions or templates. "
+    "Omitted inputs or None preserve legacy no-input behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. "
+    "Inspect connector.authoring for dependency boundaries and verified examples."
+)
+
+
+GH_PR_MERGE_GUIDANCE = (
+    "GitHub async merge: gh.pr observes head/base/test-merge identity and stack_state "
+    "(standalone/stacked/unknown) plus stack; gh.pr.checks observes CI evidence. "
+    "gh.pr.merge requires expected_head_sha from the accepted CI head, never a freshly fetched replacement. "
+    "For gh.pr.merge and gh.pr.merge.request, repository is optional: a valid explicit OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error. "
+    "For checks on candidate M with verified base B and head H, submit expected_head_sha=H, not M. "
+    "The first version rejects stacked PRs and unknown scope before submission; there is no atomic base or stack guarantee. "
+    "Save the action result request_id UUID for gh.pr.merge.request: accepted submission is not completion. "
+    "Observe pending/merged/failed/enqueued once; unavailable is not failed and enqueued is not merged. "
+    "Only an exact matching existing request is reusable. No polling, queue administration, or admin bypass is provided. "
+    "GitHub automatic issue closing and branch configuration effects are outside this action. "
+    "Inspect connector.gh.pr.merge and connector.gh.pr.merge.request for the verified canonical workflow example."
+)
+
+
+def build_capabilities_response() -> JSONObject:
+    return {**describe_capabilities(), "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
+            "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE, "connector_authoring_guidance": SDK_CALL_GUIDANCE}
+
+
+def build_operations_response() -> JSONObject:
+    return {**describe_operations(), "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
+            "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE, "connector_authoring_guidance": SDK_CALL_GUIDANCE}
 
 
 def build_root_response() -> JSONObject:
@@ -954,6 +1020,10 @@ def build_overview_response() -> JSONObject:
     return {
         "document_kind": "overview",
         "purpose": "World map for Ordo discovery and authoring bootstrap",
+        "gh_pr_list_guidance": GH_PR_LIST_GUIDANCE,
+        "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE,
+        "connector_authoring_guidance": SDK_CALL_GUIDANCE,
+        "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
         "document_kinds": sorted(set(document_kinds)),
         "conditional_roles": {
             "rule": "Use each conditional surface for its own job: guards handle applicability and early rejection, gates handle whether a path or step may run at all, and if handles local behavioral variation inside an already-valid path.",
@@ -1006,6 +1076,9 @@ def build_model_response() -> JSONObject:
 
     return {
         "document_kind": "model",
+        "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE,
+        "connector_authoring_guidance": SDK_CALL_GUIDANCE,
+        "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
         "workflow": describe_workflow_contract(),
         "profile": describe_profile_contract(),
         "routine_contract": describe_routine_contract(),
@@ -1240,6 +1313,10 @@ def build_workflow_rules_response() -> JSONObject:
         "audience": ["workflow_authors", "agents"],
         "disclaimer": "This guidance complements the validation contract. It does not replace the formal runtime model.",
         "heuristic": [
+            GH_PR_CREATE_GUIDANCE,
+            SDK_CALL_GUIDANCE,
+            GH_PR_LIST_GUIDANCE,
+            GH_PR_MERGE_GUIDANCE,
             "declare applicability early",
             "when adding or changing inputs, validate them before continuing",
             "validate both the request shape and the observed target context",
@@ -1784,17 +1861,27 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 "The workflow needs one published GitHub probe or action whose outputs and failure modes stay stable across repositories.",
                 "Repository-targeted GitHub probes and actions should normally inherit connector_contexts.gh.repository instead of repeating the same repository argument on every step, and review warns when an explicit repository overrides that default.",
                 "You want separate public surfaces for repository sync, issue snapshots, pull-request review surfaces, and GitHub Project membership instead of one coarse GitHub command wrapper.",
+                "The published operations list includes read-only probes and effectful actions. gh.pr and gh.pr.checks observe facts; gh.pr.merge submits a mutation, while gh.pr.merge.request observes its saved UUID. The project-membership example also includes actions and is not a read-only recipe.",
+                GH_PR_LIST_GUIDANCE,
+                GH_PR_MERGE_GUIDANCE,
+                GH_PR_CREATE_GUIDANCE,
             ],
             "do_not_use_for": [
                 "Repository-local helper scripts or opaque gh invocations when an existing published GitHub operation already expresses the intent more directly.",
                 "Non-GitHub repository state such as local branches, commits, or worktrees; use the git connector family for repository-local facts.",
+                "Async merge is not polling, queue administration, admin bypass, or an atomic base/stack transaction. GitHub automatic issue closing and branch configuration effects remain outside the action.",
             ],
             "nearest_surfaces": [
-                {"handle": "connectors", "summary": "Top-level published connector namespace catalog"},
+                {"handle": "connector.authoring", "summary": "Connector-author SDK and explicit same-family probe dependency contract"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
                 {"handle": "connector.gh.repo", "summary": "Repository identity and fork probe for repo-level GitHub workflows"},
                 {"handle": "connector.gh.repo.actions.permissions", "summary": "Repository Actions permissions probe for workflows that need to inspect or guard hosted Actions policy"},
                 {"handle": "connector.gh.pr", "summary": "Pull-request metadata probe that anchors the PR inspection subgroup"},
+                {"handle": "connector.gh.pr.list", "summary": "Full filtered candidate collection before detailed by-number inspection; workflow owns selection"},
+                {"handle": "connector.gh.pr.create", "summary": "Create one PR with a mandatory exact open-duplicate check"},
+                {"handle": "connector.gh.pr.checks", "summary": "Observe head or verified test-merge CI evidence before accepting a head"},
+                {"handle": "connector.gh.pr.merge", "summary": "Submit a standalone PR merge bound to the accepted CI head"},
+                {"handle": "connector.gh.pr.merge.request", "summary": "Observe a saved async merge request UUID once"},
                 {"handle": "connector.gh.issue", "summary": "Issue snapshot probe for issue maintenance and routing workflows"},
                 {"handle": "connector.gh.project", "summary": "Project identity probe that anchors the GitHub Project field and membership subgroup"},
                 {"handle": "connector.gh.project.items", "summary": "Project membership probe when the workflow needs GitHub Project item collections"},
@@ -1806,7 +1893,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"reference": "gh.issue", "inputs": {"issue_number": 17}},
                 {"reference": "gh.project", "inputs": {"project_id": "PVT_kwDOExample"}},
             ],
-            "inspect_next": ["connector.gh.repo", "connector.gh.repo.actions.permissions", "connector.gh.pr", "connector.gh.issue", "connector.gh.project", "connector.gh.project.items", "operations"],
+            "inspect_next": ["connector.gh.repo", "connector.gh.repo.actions.permissions", "connector.gh.pr", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request", "connector.gh.issue", "connector.gh.project", "connector.gh.project.items", "operations"],
         }
     }
 
@@ -2866,26 +2953,89 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.git.worktree", "connector.git.index.add_all", "connector.git.branch"],
         },
         ("gh", "pr"): {
-            "definition": "Probe one GitHub pull request as a typed metadata snapshot for title, body, refs, review state, mergeability, and change totals without loading comments, reviews, checks, or diff content. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override; review warns when it differs from the current gh context repository.",
+            "definition": "Probe one GitHub pull request as a typed metadata snapshot with head/base identity, a verified test-merge candidate, and stack scope. Prefer connector_contexts.gh.repository as the normal repository target; review warns when an explicit repository overrides it.",
             "use_when": [
                 "connector_contexts.gh.repository already names the normal repository target and workflow logic now needs one PR snapshot there by pull number.",
                 "Workflow logic needs the pull request's current headline facts before deciding which narrower PR surfaces to inspect next.",
                 "A later step needs branch refs, draft/state flags, review decision, or change totals from one normalized PR snapshot.",
+                "head_sha and base_sha identify head H and base B with their repositories. test_merge_state=verified means candidate M has the observed parents B then H; test_merge_sha, test_merge_head_sha, and test_merge_base_sha retain that identity. merge_commit_sha is the completed merge result only when merged=true.",
+                "stack_state is standalone, stacked, or unknown; stack carries the observed stack data. The first-version gh.pr.merge action rejects stacked PRs and unknown scope before submission.",
             ],
             "do_not_use_for": [
+                "Discovering candidates before a pull number is known; use gh.pr.list with explicit state filters, then apply workflow-owned identity and history rules.",
                 "Conversation history, submitted reviews, line comments, checks, or lifecycle events; use the dedicated PR sibling surfaces for those narrower views.",
                 "Mutating or merging the pull request; this published surface is observation only.",
+                "A test-merge candidate is not a completed merge or proof of the CI worker checkout. Missing identity stays unavailable, not invented. A snapshot gives no atomic base or stack guarantee; never replace the accepted CI head with this probe's freshly fetched head when authoring expected_head_sha.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh", "summary": "Parent GitHub connector family for issue, pull-request, and project operations"},
+                {"handle": "connector.gh.pr.list", "summary": "Discover filtered PR candidates; one item does not automatically identify the correct PR"},
+                {"handle": "connector.gh.pr.create", "summary": "Create a PR before detailed by-number inspection; existing open identity refuses creation"},
                 {"handle": "connector.gh.pr.diff", "summary": "Sibling probe for changed files and patch content rather than PR headline metadata"},
                 {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for submitted review decisions rather than the PR snapshot"},
-                {"handle": "connector.gh.pr.checks", "summary": "Sibling probe for CI and status surfaces on the PR head SHA"},
+                {"handle": "connector.gh.pr.checks", "summary": "Observe CI attached to head H or verified candidate M"},
+                {"handle": "connector.gh.pr.merge", "summary": "Submit a merge with expected_head_sha from accepted CI evidence"},
+                {"handle": "connector.gh.pr.merge.request", "summary": "Observe completion using the saved request UUID"},
             ],
             "examples": [
                 {"reference": "gh.pr", "inputs": {"pull_number": 42}},
             ],
-            "inspect_next": ["connector.gh.pr.diff", "connector.gh.pr.comments", "connector.gh.pr.reviews", "connector.gh.pr.checks"],
+            "inspect_next": ["connector.gh.pr.diff", "connector.gh.pr.comments", "connector.gh.pr.reviews", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request"],
+        },
+        ("gh", "pr.list"): {
+            "definition": "Probe one full filtered GitHub pull-request collection through REST list PRs, with minimal lifecycle and head/base identity facts for workflow-owned candidate classification.",
+            "use_when": [
+                GH_PR_LIST_GUIDANCE,
+                "The repository argument is optional: a valid explicit ASCII OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error.",
+                "Supply required state explicitly as open, closed, or all. head is an optional branch filter, head_owner an optional user/org qualifier requiring head, and base an optional base branch filter. Narrowing head/base is workflow policy, not an operation requirement.",
+                "Items expose number, url, state, draft, merged, merged_at, head_repository, head_repository_key, head_owner, head_ref, head_sha, base_repository, base_ref, base_sha, and pull_ref. Preserve these identities for exact fork matching before detailed gh.pr inspection.",
+                "GitHub repository identity is case-insensitive. Raw head_repository preserves API case; nullable head_repository_key is the lowercase identity. Gate on a known nonnull key, then match with only(head_repository_key=inputs.head_repository | lower). Raw case-sensitive comparison could falsely report no PR when API/input case differs; unknown keys block dependent decisions.",
+                "The list API supplies merged_at: a known merge timestamp derives merged=true, explicitly present null merged_at derives false, and missing or indeterminate evidence derives null. Never turn unknown into false or infer merged merely from closed state.",
+                "An item with state: open and nonnull merged_at is contradictory and fails the observation.",
+                "With head and head_owner, compose the server head filter as owner:branch. Without head_owner, send only state/base server filters and apply exact head matching locally across all pages; GitHub docs do not guarantee bare-head filtering. Missing head_ref when local filtering is required fails rather than silently discarding the item.",
+                "Success requires full filtered traversal; transport, normalization, or pagination failure cannot publish partial success. A protective cap of 100 pages of 100 items applies to the traversed collection before local filtering and fails if more pages remain, even with few matches; it is not a public result limit.",
+                "A subprocess timeout (subprocess.TimeoutExpired) returns pull_list_unavailable with no partial outputs.",
+                "GitHub.com only, matching the bootstrap authentication host. Pagination accepts validated repository-name and numeric /repositories/id/pulls paths, validates repository IDs and pagination parameters, and constructs requests locally; never follow response URLs directly.",
+            ],
+            "do_not_use_for": [
+                "A generic correct-PR selector, creation authorization, reopening, or merge decisions. gh.pr.create performs a separate mandatory open-duplicate check after workflow-owned history policy.",
+                "Detailed facts for a known pull_number; use gh.pr. List facts are minimal and unavailable facts must remain unknown.",
+                "PR author filtering: head_owner means head repository owner. One owner can own multiple repositories with the same branch; owner plus branch is not an exact repository guarantee.",
+                "Public page, cursor, or limit controls, partial-success truncation, search-index completeness, atomic concurrency completeness, or a total remote count guarantee.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh", "summary": "Parent GitHub family and repository context rules"},
+                {"handle": "connector.gh.pr", "summary": "Detailed pull-request snapshot by number after workflow-owned candidate classification"},
+                {"handle": "connector.gh.pr.create", "summary": "Create after workflow-owned history policy, with a separate mandatory exact open-duplicate check"},
+                {"handle": "workflow-rules", "summary": "Own identity, ambiguity, closed history, and unknown-fact decisions in workflow logic"},
+            ],
+            "examples": [
+                {"reference": "gh.pr.list", "inputs": {"state": "all", "head": "feature/topic", "head_owner": "acme", "base": "main"}},
+                {"reference": "gh.pr.list", "inputs": {"state": "all"}},
+            ],
+            "inspect_next": ["connector.gh.pr", "connector.gh", "workflow-rules"],
+        },
+        ("gh", "pr.create"): {
+            "definition": "Create one GitHub pull request after a mandatory complete exact-identity open-duplicate precheck.",
+            "use_when": [
+                GH_PR_CREATE_GUIDANCE,
+                "Workflow policy has authorized creation, including any closed-history decision. Register the action result and distinguish runtime status, diagnostic code, pull_number/url identity, and tri-state created; already_exists is non-OK rather than reuse.",
+                "Outputs are repository, pull_number, pull_ref, url, created, head_repository, head_ref, head_sha, base_repository, base_ref, base_sha, draft, state, http_status, message, and errors. Unknown identity/response facts stay null. Failure statuses are input_error, precheck_failed, ambiguous, already_exists, api_failed, create_refused, and creation_unknown; validated creation is ok.",
+                "check, review, plan, explain, and next retain action non-execution; run executes the admitted action. The internal probe does not make creation read-only or authorize POST in analysis modes.",
+            ],
+            "do_not_use_for": [
+                "Find-or-reuse, reopening, or closed-history policy; use a separate gh.pr.list state: all observation and workflow rules.",
+                "Atomic uniqueness, exactly-once effects, automatic retry or readback reconciliation after unknown creation results.",
+                "Waiting for CI, merging, pushing, forking, branch cleanup, or extra issue/project mutations.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr.list", "summary": "Full candidate observation and workflow-owned closed-history classification"},
+                {"handle": "connector.gh.pr", "summary": "Detailed by-number inspection after creation"},
+                {"handle": "connector.gh.pr.merge", "summary": "Separate SHA-bound merge action after CI acceptance"},
+                {"handle": "connector.authoring", "summary": "SDK same-family probe dependency calls with resolved inputs"},
+            ],
+            "examples": [{"reference": "gh.pr.create", "inputs": {"head": "feature/topic", "base": "main", "title": "Add topic", "draft": False}}],
+            "inspect_next": ["connector.gh.pr.list", "connector.gh.pr", "connector.gh.pr.merge", "connector.authoring"],
         },
         ("gh", "pr.comments"): {
             "definition": "Probe the regular conversation thread on one GitHub pull request as top-level discussion comments plus total count metadata. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
@@ -2968,24 +3118,73 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "inspect_next": ["connector.gh.pr.review_comments", "connector.gh.pr.timeline", "connector.gh.pr"],
         },
         ("gh", "pr.checks"): {
-            "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, including aggregate pass/pending/fail counts for that head SHA. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
+            "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, or select a verified test-merge candidate. Paginated API-attached evidence preserves status fidelity and commit identity for workflow-owned CI acceptance policy.",
             "use_when": [
                 "connector_contexts.gh.repository already names the normal repository target and the workflow needs CI readiness for one PR there by pull number.",
                 "The workflow needs CI readiness or status context outcomes before recommending merge, rerun, or escalation steps.",
+                "target defaults to head; target=test_merge requires verified candidate M with base B and head H. commit_sha identifies the checked API commit; head_sha remains H. Optional expected_head_sha binds the observation to H and rejects a mismatch without silently switching targets.",
+                "Inspect complete, statuses_complete, check_runs_complete, sha_evidence, and each check's name/context, app identity, SHA source, status, conclusion, and timestamps. Pending, failed, skipped, neutral, unknown, and empty evidence are not interchangeable with success; workflow policy must choose required checks and trusted producers explicitly.",
+                "Preserve the head from accepted CI evidence for gh.pr.merge.expected_head_sha. Checks on candidate M authorize expected H, not M; never substitute a freshly fetched head after CI acceptance.",
             ],
             "do_not_use_for": [
                 "Review decisions from humans; use connector.gh.pr.reviews when the workflow cares about approvals or change requests.",
                 "Branch or headline PR metadata unrelated to execution status; use connector.gh.pr for the broader snapshot.",
+                "API-attached SHA evidence does not prove the CI worker checkout, branch-protection satisfaction, or an atomic base/stack snapshot. Pagination can drift; incomplete or unavailable evidence must not be treated as passing CI. No polling or merge submission occurs here.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.pr", "summary": "Parent PR snapshot that supplies the head SHA and mergeability context"},
                 {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for human review decisions rather than machine status results"},
                 {"handle": "connector.gh.pr.timeline", "summary": "Sibling probe for lifecycle events that can explain why checks changed over time"},
+                {"handle": "connector.gh.pr.merge", "summary": "Submit using the head identity retained from accepted CI evidence"},
+                {"handle": "connector.gh.pr.merge.request", "summary": "Observe the saved merge request, not CI status"},
             ],
             "examples": [
                 {"reference": "gh.pr.checks", "inputs": {"pull_number": 42}},
             ],
-            "inspect_next": ["connector.gh.pr.reviews", "connector.gh.pr.timeline", "connector.gh.pr"],
+            "inspect_next": ["connector.gh.pr.reviews", "connector.gh.pr.timeline", "connector.gh.pr", "connector.gh.pr.merge", "connector.gh.pr.merge.request"],
+        },
+        ("gh", "pr.merge"): {
+            "definition": "Submit one direct asynchronous GitHub merge request for a standalone PR, bound to the head accepted by CI policy.",
+            "use_when": [
+                "Supply pull_number, merge_method (merge/squash/rebase), and expected_head_sha as a full 40-digit hexadecimal SHA from the accepted CI head. The repository argument is optional: a valid explicit literal ASCII OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error. Repository context is a default, not an authorization allowlist. Explicit-repository examples supply repository as workflow policy, not as an operation requirement. The context example omits repository on merge and request; its comments show profile YAML supplying the context, not a workflow YAML context declaration.",
+                "For accepted checks on verified test-merge candidate M with base B and head H, submit expected_head_sha=H, not M. Preserve that accepted head; a freshly fetched replacement defeats the CI-to-merge binding.",
+                "The action rejects stacked PRs and unknown scope before submission; gh.pr exposes stack_state (standalone/stacked/unknown) plus stack for authoring guards and diagnostics.",
+                "Register the action result and save its request_id UUID with repository and pull_number for gh.pr.merge.request. submission=accepted is not completion; pending and enqueued are not merged. Already merged is distinct from already enqueued.",
+                "An existing request is reusable only when request_compatibility=exact: merge_method, direct_merge action, and expected_head_sha all match. Different or unknown parameters are not permission to reuse or blindly retry an uncertain submission.",
+                "Before submission, unsupported_stack rejects stacked PRs, merge_scope_unknown rejects unavailable or malformed scope, and head_mismatch reports an observed head different from expected_head_sha. An already-merged PR can be reported without a new submission or stack/head admission.",
+                "Distinguish merge_refused (HTTP 400 refusal) from merge_api_failed (scope-read failure or submission HTTP 403/404/422). HTTP 409 denotes an existing request, not a head-mismatch reason. merge_result_unknown preserves an uncertain submission outcome; do not blindly retry.",
+            ],
+            "do_not_use_for": [
+                "No atomic base or stack guarantee is provided: the head guard does not freeze base B or prevent a later stack change. Stacked and unknown scope are rejected in this first version.",
+                "No polling, merge queue administration, admin bypass, auto-merge configuration, or branch deletion is implemented. Spontaneous GitHub automatic issue closing and repository branch configuration effects are outside the action.",
+                "GitHub evaluates repository rules for the authenticated actor. The action requests no bypass and changes no rules, but cannot remove that actor's server-configured bypass privileges.",
+                "Submission success does not establish merge completion. Async failure carries a message, not a structured reason code; do not infer a strict head-mismatch classification from it.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr", "summary": "Observe PR identity and stack scope"},
+                {"handle": "connector.gh.pr.checks", "summary": "Observe CI evidence whose accepted head must be retained"},
+                {"handle": "connector.gh.pr.merge.request", "summary": "Observe the saved request UUID once after submission"},
+            ],
+            "inspect_next": ["connector.gh.pr.checks", "connector.gh.pr", "connector.gh.pr.merge.request"],
+        },
+        ("gh", "pr.merge.request"): {
+            "definition": "Observe one saved asynchronous GitHub merge request UUID once and report its pending, merged, failed, or enqueued state.",
+            "use_when": [
+                "Supply pull_number and request_id from the stored gh.pr.merge action result; the UUID identifies the submitted request rather than a newly fetched PR head. The repository argument is optional: a valid explicit literal ASCII OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error. The resolved repository input/context and pull_number must match the saved request's target. Explicit-repository examples supply repository as workflow policy, not as an operation requirement. The context example omits repository on merge and request; its comments show profile YAML supplying the context, not a workflow YAML context declaration.",
+                "pending means unfinished; merged reports merge_sha; enqueued means queued, not merged. A successfully observed failed state is a successful probe observation of an unsuccessful merge, with GitHub's message preserved.",
+                "Requests are retained for 24 hours. request_unavailable, including an expired or missing UUID (404), is unavailable evidence, not proof that the merge failed. Preserve uncertainty rather than blindly resubmitting.",
+                "Use the request state and availability together; merged=false alone cannot distinguish pending, failed, enqueued, or unavailable evidence and is not proof of an unmerged PR. Confirm current PR completion with gh.pr when the workflow needs that fact.",
+            ],
+            "do_not_use_for": [
+                "No polling, queue administration, admin bypass, or new submission occurs. Use gh.pr.merge only after CI acceptance and standalone scope admission; it rejects stacked and unknown scope and reuses only an exact matching existing request.",
+                "The asynchronous failure message is not a structured reason code and cannot reliably establish a strict head-mismatch classification. This observation provides no atomic base or stack guarantee.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr.merge", "summary": "Submit with expected_head_sha from the accepted CI head and retain request_id"},
+                {"handle": "connector.gh.pr", "summary": "Observe current PR facts rather than the saved request lifecycle"},
+                {"handle": "connector.gh.pr.checks", "summary": "Inspect CI attached to head H or candidate M; candidate checks bind expected H, not M"},
+            ],
+            "inspect_next": ["connector.gh.pr.merge", "connector.gh.pr", "connector.gh.pr.checks"],
         },
         ("gh", "pr.timeline"): {
             "definition": "Probe one GitHub pull request timeline as normalized lifecycle events such as ready-for-review, review requests, and base-ref changes. Prefer connector_contexts.gh.repository as the normal repository target and use an explicit repository argument only as a one-off override.",
@@ -4622,6 +4821,22 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "canonical_examples": snippet_surface["canonical_examples"],
         }
 
+    add_node(
+        "connector.authoring", contract="connector", node_category="sdk",
+        summary="Connector-author SDK dependency calls with already-resolved probe inputs",
+        metadata={
+            "definition": "Connector-author SDK surface for explicit same-family operation dependencies through ctx.call(name, *, inputs=None).",
+            "use_when": [SDK_CALL_GUIDANCE, "A connector probe or action needs a published same-family read-only observation with concrete values, such as gh.pr.create's gh.pr.list precheck."],
+            "do_not_use_for": ["Cross-family calls, probe-to-action hidden mutation, or new action composition.", "Workflow expressions, template reevaluation, workflow orchestration, or runtime mode selection inside a handler."],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.pr.create", "summary": "Action consumer of an explicit resolved-input probe dependency"},
+                {"handle": "connector.gh.pr.list", "summary": "Read-only dependency with full traversal semantics"},
+                {"handle": "workflow.step.uses", "summary": "Workflow-level invocation rather than Python SDK dependency reuse"},
+            ],
+            "inspect_next": ["connector.gh.pr.create", "connector.gh.pr.list", "workflow.step.uses"],
+        },
+    )
+
     for field in model["workflow"]["top_level_fields"]:
         add_node(f"workflow.{field['name']}", contract="workflow", node_category="field", summary="Published workflow field metadata", metadata=field)
     add_node(
@@ -6109,6 +6324,10 @@ def render_overview_text(payload: JSONObject) -> str:
         [
             "",
             "Execution concepts:",
+            f"- GitHub merge: {payload['gh_pr_merge_guidance']}",
+            f"- GitHub candidate discovery: {payload['gh_pr_list_guidance']}",
+            f"- GitHub creation: {payload['gh_pr_create_guidance']}",
+            f"- Connector authoring: {payload['connector_authoring_guidance']}",
             f"- modes: {', '.join(payload['execution_concepts']['modes'])}",
             f"- statuses: {', '.join(payload['execution_concepts']['statuses'])}",
             f"- state deferral: {payload['execution_concepts']['state_deferral']}",
@@ -6147,7 +6366,7 @@ def render_capabilities_text(payload: JSONObject) -> str:
     """Return the text capabilities surface."""
 
     capabilities = payload["capabilities"]
-    lines = ["capabilities", "Supported and unsupported runtime surfaces.", "", "Capability states:"]
+    lines = ["capabilities", "Supported and unsupported runtime surfaces.", "", GH_PR_MERGE_GUIDANCE, GH_PR_CREATE_GUIDANCE, SDK_CALL_GUIDANCE, "", "Capability states:"]
     for capability in capabilities:
         summary = f"- {capability['name']}: {capability['status']}"
         related = capability.get("related_capabilities") or []
@@ -6166,6 +6385,9 @@ def render_model_text(payload: JSONObject) -> str:
     lines = [
         "model",
         "Main authoring contracts exposed by Ordo.",
+        payload["gh_pr_merge_guidance"],
+        payload["gh_pr_create_guidance"],
+        payload["connector_authoring_guidance"],
         "",
         "Contracts:",
         f"- workflow: {payload['workflow']['document_kind']}",
@@ -6298,7 +6520,7 @@ def render_command_line_text(payload: JSONObject) -> str:
 def render_operations_text(payload: JSONObject) -> str:
     """Return the text operations surface."""
 
-    lines = ["operations", "Public connector namespaces and operations.", ""]
+    lines = ["operations", "Public connector namespaces and operations.", "", GH_PR_MERGE_GUIDANCE, GH_PR_CREATE_GUIDANCE, SDK_CALL_GUIDANCE, ""]
     for connector in payload["connectors"]:
         operation_names = ", ".join(operation["name"] for operation in connector["operations"])
         lines.append(f"- {connector['namespace']}: {operation_names}")
@@ -6350,10 +6572,11 @@ def _append_text_canonical_examples(lines: list[str], examples: list[JSONObject]
         lines.append(f"- {example['name']}: {example['summary']}")
         if isinstance(example.get("form"), str):
             lines.append(f"  example_for: {example['form']}")
-        yaml_text = example.get("yaml")
-        if isinstance(yaml_text, str) and yaml_text:
-            lines.append("  yaml:")
-            for snippet_line in yaml_text.splitlines():
+        language = "python" if example.get("form") == "python_fragment" else "yaml"
+        source_text = example.get(language)
+        if isinstance(source_text, str) and source_text:
+            lines.append(f"  {language}:")
+            for snippet_line in source_text.splitlines():
                 lines.append(f"    {snippet_line}")
 
 
@@ -7082,11 +7305,11 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
     if topic == "workflow-rules":
         return build_workflow_rules_response(), render_workflow_rules_text
     if topic == "capabilities":
-        return describe_capabilities(), render_capabilities_text
+        return build_capabilities_response(), render_capabilities_text
     if topic == "command-line":
         return build_command_line_response(), render_command_line_text
     if topic == "operations":
-        return describe_operations(), render_operations_text
+        return build_operations_response(), render_operations_text
     if topic == "examples":
         return describe_examples_catalog(), render_examples_text
     if topic == "snippet-coverage":
@@ -7172,7 +7395,7 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "overview":
         return _emit_payload(build_overview_response(), as_json=as_json, renderer=render_overview_text)
     if parsed.command == "capabilities":
-        return _emit_payload(describe_capabilities(), as_json=as_json, renderer=render_capabilities_text)
+        return _emit_payload(build_capabilities_response(), as_json=as_json, renderer=render_capabilities_text)
     if parsed.command == "model":
         return _emit_payload(build_model_response(), as_json=as_json, renderer=render_model_text)
     if parsed.command == "features":
@@ -7182,7 +7405,7 @@ def main(argv: list[str] | None = None) -> int:
     if parsed.command == "command-line":
         return _emit_payload(build_command_line_response(), as_json=as_json, renderer=render_command_line_text)
     if parsed.command == "operations":
-        return _emit_payload(describe_operations(), as_json=as_json, renderer=render_operations_text)
+        return _emit_payload(build_operations_response(), as_json=as_json, renderer=render_operations_text)
     if parsed.command == "examples":
         return _emit_payload(describe_examples_catalog(), as_json=as_json, renderer=render_examples_text)
     if parsed.command == "snippet-coverage":

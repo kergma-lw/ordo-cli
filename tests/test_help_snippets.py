@@ -89,7 +89,7 @@ class HelpSnippetRegistryTest(unittest.TestCase):
                 if verification["kind"] != "runner_verified":
                     continue
                 result = verify_help_snippet(
-                    snippet=example["yaml"],
+                    snippet=example["python"] if example["form"] == "python_fragment" else example["yaml"],
                     world=verification["world"],
                     insertion_mode=verification["insertion_mode"],
                     target=verification["target"],

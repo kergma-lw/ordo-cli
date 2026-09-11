@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from copy import deepcopy
 from dataclasses import dataclass
 from importlib import import_module
 from pkgutil import iter_modules, walk_packages
@@ -202,29 +203,33 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
     family_package = package_name.rsplit(".", 1)[0]
     namespace = family_package.rsplit(".", 1)[-1]
 
-    def handler(resolved: "ResolvedOperation | ResolvedExpressionProbe", workflow: Workflow) -> OperationResult:
+    def handler(resolved: "ResolvedOperation | ResolvedExpressionProbe", workflow: Workflow, *, dependency_inputs: dict[str, object] | None = None) -> OperationResult:
         def caller(name: str, inputs: dict[str, object] | None):
             from ordo.plugin_sdk import _outcome_from_runtime_result
             from ordo.runtime.resolution import ResolvedOperation
 
-            full_name = name if "." in name else f"{namespace}.{name}"
-            if inputs not in (None, {}):
-                raise MappedOutcomeError(
-                    OperationOutcome(
-                        status="execution_error",
-                        summary=f"Explicit operation dependency '{full_name}' does not yet support local input overrides",
-                    )
-                )
-
             family_module = import_module(family_package)
             connector = family_module.get_connector()
-            short_name = full_name.rsplit(".", 1)[-1]
+            short_name = name.removeprefix(f"{namespace}.")
+            full_name = f"{namespace}.{short_name}"
             operation = next((candidate for candidate in connector.operations if candidate.name == short_name), None)
             if operation is None:
                 raise MappedOutcomeError(
                     OperationOutcome(
                         status="execution_error",
-                        summary=f"Explicit operation dependency '{full_name}' could not be resolved",
+                        summary=f"Explicit operation dependency '{name}' could not be resolved in family '{namespace}'; cross-family calls are not supported",
+                    )
+                )
+
+            if operation.kind == "action" and (published.kind == "probe" or inputs not in (None, {})):
+                raise MappedOutcomeError(
+                    OperationOutcome(
+                        status="execution_error",
+                        summary=(
+                            f"Probe '{namespace}.{published.name}' cannot call action dependency '{full_name}'"
+                            if published.kind == "probe"
+                            else f"Explicit inputs for operation dependency '{full_name}' are supported only for probes"
+                        ),
                     )
                 )
 
@@ -247,7 +252,12 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
                 operation=operation,
                 source=getattr(resolved, "source", "public"),
                 declared_with={},
+                resolved_inputs=deepcopy(inputs) if inputs else None,
             )
+            if inputs:
+                return _outcome_from_runtime_result(
+                    dependency_handler(dependency_resolved, workflow, dependency_inputs=dependency_resolved.resolved_inputs)
+                )
             return _outcome_from_runtime_result(dependency_handler(dependency_resolved, workflow))
 
         raw_connector_input = workflow.connector_contexts.get(namespace)
@@ -270,6 +280,7 @@ def _adapt_published_handler(*, published: "PublishedOperation", package_name: s
             workflow=workflow,
             bootstrap=_bootstrap_from_runtime_result(bootstrap_result),
             caller=caller,
+            dependency_inputs=dependency_inputs,
         )
         try:
             return _attach_bootstrap_metadata(

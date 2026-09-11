@@ -127,14 +127,27 @@ class OperationContext:
         workflow: "Workflow",
         bootstrap: BootstrapOutcome,
         caller: Callable[[str, JSONObject | None], OperationOutcome],
+        dependency_inputs: JSONObject | None = None,
     ) -> None:
         self._resolved = resolved
         self._workflow = workflow
         self._bootstrap = bootstrap
         self._caller = caller
+        self._dependency_inputs = dependency_inputs
 
     def input(self, name: str) -> JSONValue:
         from connectors._shared import require_expression_input, require_input
+
+        if self._dependency_inputs is not None:
+            if name in self._dependency_inputs:
+                return self._dependency_inputs[name]
+            raise MappedOutcomeError(fail_with_diagnostic(
+                code="input_error",
+                summary=f"Required input '{name}' is missing",
+                diagnostic_code="operation.input_missing",
+                reference=self.reference,
+                details={"input": name},
+            ))
 
         if hasattr(self._resolved, "arguments"):
             value = require_expression_input(self._workflow, self._resolved, name)  # type: ignore[arg-type]
@@ -161,6 +174,14 @@ class OperationContext:
         return self._resolved.reference
 
     def call(self, name: str, *, inputs: JSONObject | None = None) -> OperationOutcome:
+        """Call a registered same-family dependency by local or qualified name.
+
+        Nonempty inputs are isolated, already-resolved JSON values for probe
+        dependencies; missing keys do not fall back to workflow declarations.
+        None and empty inputs retain legacy lookup. Probes cannot call actions;
+        action-to-action calls retain only their legacy no-input behavior.
+        Dependency outcomes, including failures, are returned to the caller.
+        """
         return self._caller(name, inputs)
 
     def command(self, argv: Sequence[str], *, failures: Mapping[str, str] | None = None, cwd: str | None = None) -> CommandResult:

@@ -21,6 +21,20 @@ class IntrospectionGoldenOutputTest(unittest.TestCase):
         self.assertIn("operations", actual["sections"])
         self.assertIn("capabilities", actual["sections"])
 
+        actual_gh = next(
+            connector for connector in actual["sections"]["operations"]["connectors"]
+            if connector["namespace"] == "gh"
+        )
+        expected_gh = next(
+            connector for connector in expected["sections"]["operations"]["connectors"]
+            if connector["namespace"] == "gh"
+        )
+        actual_operations = {operation["name"]: operation for operation in actual_gh["operations"]}
+        expected_operations = {operation["name"]: operation for operation in expected_gh["operations"]}
+        for name in ("pr", "pr.checks", "pr.create", "pr.list", "pr.merge", "pr.merge.request"):
+            with self.subTest(operation=name):
+                self.assertEqual(actual_operations[name], expected_operations[name])
+
 
 if __name__ == "__main__":
     unittest.main()

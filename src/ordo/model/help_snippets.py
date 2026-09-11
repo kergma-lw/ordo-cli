@@ -9,6 +9,7 @@ from .json import JSONObject
 
 
 SUPPORTED_SNIPPET_FORMS = {
+    "python_fragment",
     "value",
     "field_fragment",
     "step_fragment",
@@ -24,6 +25,7 @@ SUPPORTED_SNIPPET_VERIFICATION_KINDS = {
 }
 
 SUPPORTED_SNIPPET_INSERTION_MODES = {
+    "sdk_probe_fragment",
     "expression_value",
     "step_field",
     "step_fragment",
@@ -3332,6 +3334,341 @@ for _state_handle in ("state", "workflow.state_bindings", "workflow.step.state_s
     HELP_SNIPPET_REGISTRY[_state_handle]["canonical_examples"].extend(deepcopy(STATE_BUNDLE_EXAMPLES))
 
 
+def _gh_pr_list_workflow() -> str:
+    """One observer document, executed verbatim in every list fixture world."""
+    return '''version: 0
+workflow: classify-branch-pull-requests
+# repository is explicit here; gh.pr.list also supports standard gh bootstrap.
+inputs:
+  repository:
+    description: Target OWNER/REPO repository.
+  head:
+    description: Source branch name, without an owner prefix.
+  head_owner:
+    description: Source owner login (not a repository identity).
+  head_repository:
+    description: Exact source OWNER/REPO; one owner may have multiple forks.
+  base:
+    description: Target branch name.
+blocks:
+  - steps:
+      - name: list-candidates
+        uses: gh.pr.list
+        with:
+          repository: inputs.repository
+          head: inputs.head
+          head_owner: inputs.head_owner
+          base: inputs.base
+          state: 'all'
+        register: candidates
+      - name: require-complete-known-identity
+        gate:
+          all:
+            - step.candidates.outputs.complete | eq(true)
+            - step.candidates.outputs.items | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(head_repository=null) | length | eq(0)
+            - step.candidates.outputs.items | only(head_repository="") | length | eq(0)
+            - step.candidates.outputs.items | only(head_repository_key!=null) | only(head_repository_key!="") | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(head_owner=null) | length | eq(0)
+            - step.candidates.outputs.items | only(head_owner="") | length | eq(0)
+            - step.candidates.outputs.items | only(head_ref=null) | length | eq(0)
+            - step.candidates.outputs.items | only(head_ref="") | length | eq(0)
+            - step.candidates.outputs.items | only(base_repository=null) | length | eq(0)
+            - step.candidates.outputs.items | only(base_ref=null) | length | eq(0)
+      - name: select-exact-source-repository
+        value: step.candidates.outputs.items | only(head_repository_key=inputs.head_repository | lower)
+        register: exact
+      - name: publish-observation
+        publish:
+          count: step.exact.outputs.value | length
+          open: step.exact.outputs.value | only(state="open") | length
+          closed: step.exact.outputs.value | only(state="closed") | length
+          merged: step.exact.outputs.value | only(merged=true) | length
+          merged_unknown: step.exact.outputs.value | only(merged=null) | length
+      - name: classify-no-pr
+        if: step.exact.outputs.value | length | eq(0)
+        publish:
+          classification: 'no_pr'
+      - name: classify-one-open
+        if: step.exact.outputs.value | only(state="open") | length | eq(1)
+        publish:
+          classification: 'exactly_one_open'
+      - name: classify-ambiguous-open
+        if:
+          all:
+            - step.exact.outputs.value | only(state="open") | length | ne(0)
+            - step.exact.outputs.value | only(state="open") | length | ne(1)
+        publish:
+          classification: 'ambiguous_multiple_open'
+      - name: classify-closed-history
+        if:
+          all:
+            - step.exact.outputs.value | length | ne(0)
+            - step.exact.outputs.value | only(state="open") | length | eq(0)
+        publish:
+          classification: 'only_closed_history'
+'''
+
+
+HELP_SNIPPET_REGISTRY["connector.gh.pr.list"] = {
+    "snippet_coverage": "runner_verified",
+    "canonical_examples": [{
+        "name": f"gh_pr_list_{case}",
+        "kind": "negative" if case == "unknown_metadata" else "positive",
+        "form": "workflow_fragment",
+        "summary": "List all matching candidates with head, head_owner, base and state: all; repository is optional through standard gh bootstrap but supplied explicitly here. Reject unknown source identity and head_repository_key before exact repository filtering: compare the probe's lowercase key with inputs.head_repository | lower, retaining raw head_repository and case-sensitive branch names. Owner plus branch is not exact fork identity. Conditional workflow steps publish no PR, one open, ambiguous open, or closed history; nullable merged facts remain unknown. This observer selects no PR number and performs no automatic action. A workflow selecting a number must first gate on exactly one matching open PR. A complete full API traversal is not an atomic snapshot, and an empty list never authorizes creation after concurrent changes. Fixture execution proves this exact YAML's decisions, not live API traversal or bootstrap.",
+        "yaml": _gh_pr_list_workflow(),
+        "verification": {"kind": "runner_verified", "world": f"gh-pr-list-{case.replace('_', '-')}",
+                         "insertion_mode": "workflow_fragment", "target": "connector.gh.pr.list",
+                         "expected_status": "execution_error" if case == "unknown_metadata" else "ok"},
+    } for case in ("no_pr", "exactly_one_open", "ambiguous_multiple_open", "only_closed_history", "unknown_metadata")],
+}
+
+
+def _sdk_probe_call_fragment() -> str:
+    """Published Python handler body, admitted verbatim by the SDK verifier."""
+    return """def run(ctx):
+    return ctx.call('gh.pr.list', inputs=ctx.input('filters'))
+"""
+
+
+HELP_SNIPPET_REGISTRY["connector.authoring"] = {
+    "snippet_coverage": "runner_verified",
+    "canonical_examples": [{
+        "name": "sdk_same_family_probe_inputs", "kind": "positive", "form": "python_fragment",
+        "summary": "Python handler fragment for an action published in the gh family, not workflow YAML. The caller's filters input is a nonempty JSON object containing repository, head, head_owner, base, and state (for example state: all). Pass that already-resolved object to the registered gh.pr.list probe and return its OperationOutcome, including failures. Nonempty dependency inputs are isolated: missing keys do not inherit workflow bindings and expression-looking strings stay literal. The bounded verifier compiles only this exact published source, runs the real family adapter and SDK context, and replaces bootstrap and the probe body with strict fixtures. This proves SDK dispatch and input binding, not GitHub API behavior or the actual PR-list handler. Empty-input legacy lookup, local dotted aliases, cross-family rejection, and probe-to-action restrictions have separate SDK tests.",
+        "python": _sdk_probe_call_fragment(),
+        "verification": {"kind": "runner_verified", "world": "gh-sdk-probe-call",
+                         "insertion_mode": "sdk_probe_fragment", "target": "connector.authoring",
+                         "expected_status": "ok"},
+    }],
+}
+
+
+def _gh_pr_create_workflow() -> str:
+    """Exact create-only teaching policy; no implicit adoption of existing PRs."""
+    return '''version: 0
+workflow: create-new-branch-pull-request
+# Explicit repository is an example choice; the action also supports gh bootstrap.
+inputs:
+  repository: {}
+  head: {}
+  head_owner: {}
+  head_repository: {}
+  head_repository_name:
+    description: Source repository name without owner, used to check owner consistency.
+  base: {}
+  title: {}
+  body: {}
+  draft:
+    default: true
+  authorize_create:
+    default: false
+blocks:
+  - steps:
+      - name: require-authorization-and-source-identity
+        gate:
+          all:
+            - inputs.authorize_create | eq(true)
+            - inputs.draft | is_boolean
+            - inputs.head_repository | lower | eq(format("{}/{}", inputs.head_owner, inputs.head_repository_name) | lower)
+      - name: list-candidates
+        uses: gh.pr.list
+        with:
+          repository: inputs.repository
+          head: inputs.head
+          head_owner: inputs.head_owner
+          base: inputs.base
+          state: 'all'
+        register: candidates
+      - name: require-complete-known-identity
+        gate:
+          all:
+            - step.candidates.outputs.complete | eq(true)
+            - step.candidates.outputs.items | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(head_repository!=null) | only(head_repository!="") | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(head_repository_key!=null) | only(head_repository_key!="") | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(head_owner!=null) | only(head_owner!="") | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(head_ref!=null) | only(head_ref!="") | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(base_repository!=null) | only(base_repository!="") | length | eq(step.candidates.outputs.count)
+            - step.candidates.outputs.items | only(base_ref!=null) | only(base_ref!="") | length | eq(step.candidates.outputs.count)
+      - name: select-exact-source-repository
+        value: step.candidates.outputs.items | only(head_repository_key=inputs.head_repository | lower)
+        register: exact
+      # EXAMPLE workflow policy: refuse all existing PRs, including closed history.
+      # The action independently rechecks open PRs; this list is not atomic authorization.
+      - name: require-no-existing-pr
+        gate: step.exact.outputs.value | length | eq(0)
+      - name: create-pr
+        uses: gh.pr.create
+        with:
+          repository: inputs.repository
+          head: inputs.head
+          head_owner: inputs.head_owner
+          head_repository: inputs.head_repository
+          base: inputs.base
+          title: inputs.title
+          body: inputs.body
+          draft: inputs.draft
+        register: creation
+      - name: require-created-identity
+        gate:
+          all:
+            - step.creation.outputs.created | eq(true)
+            - step.creation.outputs.pull_number | is_integer
+            - step.creation.outputs.pull_number | ne(0)
+            - step.creation.outputs.repository | lower | eq(inputs.repository | lower)
+      - name: observe-created-number
+        uses: gh.pr
+        with:
+          repository: step.creation.outputs.repository
+          pull_number: step.creation.outputs.pull_number
+        register: final_pr
+      - name: publish-created-pr
+        publish:
+          pull_number: step.creation.outputs.pull_number
+          pull_ref: step.creation.outputs.pull_ref
+          url: step.creation.outputs.url
+          created: step.creation.outputs.created
+          state: step.final_pr.outputs.state
+'''
+
+
+HELP_SNIPPET_REGISTRY["connector.gh.pr.create"] = {
+    "snippet_coverage": "runner_verified",
+    "canonical_examples": [{
+        "name": "gh_pr_create_new_only", "kind": "positive", "form": "workflow_fragment",
+        "summary": "Explicit authorization defaults false and draft defaults true. Check source owner/repository consistency, list all history, require complete known identities, and compare canonical lowercase repository keys. This example refuses every existing exact-source PR, including closed history; that is workflow policy, not an intrinsic action restriction or automatic adoption. Pass the known optional head_repository for the fork. Repository is explicit here but optional through standard gh bootstrap. Save the create result, require confirmed creation and a nonzero integer number, then observe that actual number once. Fixtures prove this exact workflow and strict input handoff, not the action's internal open-only recheck, SDK dependency reuse, POST behavior, or race atomicity. Action failures stop without retry or publication.",
+        "yaml": _gh_pr_create_workflow(),
+        "verification": {"kind": "runner_verified", "world": "gh-pr-create-new-only",
+                         "insertion_mode": "workflow_fragment", "target": "connector.gh.pr.create",
+                         "expected_status": "ok"},
+    }],
+}
+
+
+def _gh_pr_merge_workflow(*, test_merge: bool, context_repository: bool = False) -> str:
+    """The displayed document is also the fixture executor's complete input."""
+
+    target = "test_merge" if test_merge else "head"
+    context = "# Requires runtime connector_contexts.gh.repository = acme/mobile-app.\n# Supply via profile YAML: connectors: {gh: {repository: acme/mobile-app}}\n" if context_repository else ""
+    repository_guard = """      - name: require-matching-repository
+        gate: inputs.repository | eq("acme/mobile-app")
+""" if context_repository else ""
+    merge_repository = "" if context_repository else "          repository: inputs.repository\n"
+    candidate_guards = """            - step.h.outputs.test_merge_state | eq("verified")
+            - step.h.outputs.test_merge_head_sha | eq(step.h.outputs.head_sha)
+            - step.h.outputs.test_merge_base_sha | eq(step.h.outputs.base_sha)
+            - step.ci.outputs.test_merge_state | eq("verified")
+            - step.ci.outputs.test_merge_sha | eq(step.h.outputs.test_merge_sha)
+            - step.ci.outputs.test_merge_head_sha | eq(step.h.outputs.head_sha)
+            - step.ci.outputs.test_merge_base_sha | eq(step.h.outputs.base_sha)
+            - step.ci.outputs.base_sha | eq(step.h.outputs.base_sha)
+            - step.ci.outputs.commit_sha | eq(step.h.outputs.test_merge_sha)
+""" if test_merge else """            - step.ci.outputs.commit_sha | eq(step.h.outputs.head_sha)
+"""
+    return f"""version: 0
+workflow: gh-pr-merge-{target.replace('_', '-')}{'-context' if context_repository else ''}
+{context}inputs:
+  repository:
+    description: Explicit OWNER/REPO repository.
+  pull_number:
+    description: Pull request number.
+  authorize_merge:
+    default: false
+    description: Explicit workflow authorization to submit a direct merge.
+blocks:
+  - steps:
+      - name: require-merge-authorization
+        gate: inputs.authorize_merge | eq(true)
+{repository_guard}      - name: save-head
+        uses: gh.pr
+        with:
+          repository: inputs.repository
+          pull_number: inputs.pull_number
+        register: h
+      - name: require-standalone-head
+        gate:
+          all:
+            - step.h.outputs.stack_state | eq("standalone")
+            - step.h.outputs.head_sha | is_string
+      - name: inspect-pinned-checks
+        uses: gh.pr.checks
+        with:
+          repository: inputs.repository
+          pull_number: inputs.pull_number
+          target: '{target}'
+          expected_head_sha: step.h.outputs.head_sha
+        register: ci
+      - name: require-pinned-trusted-ci
+        gate:
+          all:
+            - step.ci.outputs.complete | eq(true)
+            - step.ci.outputs.statuses_complete | eq(true)
+            - step.ci.outputs.check_runs_complete | eq(true)
+            - step.ci.outputs.head_sha | eq(step.h.outputs.head_sha)
+            - step.ci.outputs.expected_head_sha | eq(step.h.outputs.head_sha)
+            - step.ci.outputs.target | eq("{target}")
+{candidate_guards}            - step.ci.outputs.overall_state | eq("success")
+            - step.ci.outputs.checks | only(name="unit") | only(app_id=15368) | length | eq(1)
+            - step.ci.outputs.checks | only(name="unit") | only(app_id=15368) | only(kind="check_run") | only(status="completed") | only(conclusion="success") | only(sha=step.ci.outputs.commit_sha) | length | eq(1)
+      - name: submit-merge
+        uses: gh.pr.merge
+        with:
+{merge_repository}          pull_number: inputs.pull_number
+          merge_method: 'squash'
+          expected_head_sha: step.h.outputs.head_sha
+        register: submission
+      - name: publish-submission
+        publish:
+          request_id: step.submission.outputs.request_id
+          submission_state: step.submission.outputs.state
+      - name: observe-saved-request-once
+        if: step.submission.outputs.request_id | is_string
+        uses: gh.pr.merge.request
+        with:
+{merge_repository}          pull_number: inputs.pull_number
+          request_id: step.submission.outputs.request_id
+        register: request
+      - name: publish-request-observation
+        if: step.submission.outputs.request_id | is_string
+        publish:
+          request_id: step.submission.outputs.request_id
+          request_state: step.request.outputs.state
+          request_message: step.request.outputs.message
+      - name: confirm-pr
+        uses: gh.pr
+        with:
+          repository: inputs.repository
+          pull_number: inputs.pull_number
+        register: final_pr
+      - name: publish-confirmation
+        publish:
+          merged: step.final_pr.outputs.merged
+          merge_commit_sha: step.final_pr.outputs.merge_commit_sha
+"""
+
+
+for _merge_handle in ("connector.gh.pr", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request"):
+    _merge_entry = HELP_SNIPPET_REGISTRY.setdefault(_merge_handle, {"canonical_examples": []})
+    _merge_entry["snippet_coverage"] = "runner_verified"
+    for _test_merge, _context_repository in ((False, False), (True, False), (False, True)):
+        _merge_world = "gh-pr-merge-test-merge" if _test_merge else "gh-pr-merge-head"
+        if _context_repository:
+            _merge_world += "-context"
+        _merge_entry["canonical_examples"].append({
+            "name": "gh_pr_async_merge_head_context" if _context_repository else "gh_pr_async_merge_test_merge" if _test_merge else "gh_pr_async_merge_head",
+            "kind": "positive", "form": "workflow_fragment",
+            "summary": "Execute this exact workflow with bounded, injected connector fixtures. Authorization defaults to false; standalone PRs require complete, SHA-pinned successful CI and one explicit unit check from app 15368. Save H for both checks and submission; the test_merge variant additionally binds candidate M to H and base B. API attachment is not proof of a worker checkout. Save the returned UUID, observe it once when present, and publish pending/failed/enqueued honestly. Only a final gh.pr observation confirms merged. Fixtures verify workflow execution and handoff, not live GitHub behavior or atomic CI freshness.",
+            "yaml": _gh_pr_merge_workflow(test_merge=_test_merge, context_repository=_context_repository),
+            "verification": {"kind": "runner_verified", "world": _merge_world,
+                             "insertion_mode": "workflow_fragment", "target": _merge_handle,
+                             "expected_status": "ok"},
+        })
+        if _context_repository:
+            _merge_entry["canonical_examples"][-1]["summary"] += " With connector_contexts.gh.repository available as a literal bootstrap value, merge and request omit repository; explicit repository overrides remain supported. PR reads and checks use an explicit input guarded to match that context. Fixtures check authored omission and context/output consistency, not real handler fallback or authentication."
+
+
 def _load_excerpt_text(*, path: str, start_line: int, end_line: int) -> str:
     lines = (_REPO_ROOT / path).read_text(encoding="utf-8").splitlines()
     excerpt = lines[start_line - 1 : end_line]
@@ -3376,6 +3713,13 @@ def validate_help_snippet_registry(registry: dict[str, JSONObject]) -> None:
             kind = verification.get("kind")
             if kind not in SUPPORTED_SNIPPET_VERIFICATION_KINDS:
                 raise ValueError(f"Unsupported verification kind for {handle}:{example.get('name')}: {kind!r}")
+            if form == "python_fragment":
+                if (not isinstance(example.get("python"), str) or not example["python"].strip()
+                        or "yaml" in example or kind != "runner_verified"
+                        or verification.get("insertion_mode") != "sdk_probe_fragment"):
+                    raise ValueError("Python snippets require Python source and sdk_probe_fragment runner verification")
+            elif verification.get("insertion_mode") == "sdk_probe_fragment":
+                raise ValueError("sdk_probe_fragment requires python_fragment form")
             if kind == "runner_verified":
                 if not isinstance(verification.get("world"), str):
                     raise ValueError(f"runner_verified snippet must declare world for {handle}:{example.get('name')}")

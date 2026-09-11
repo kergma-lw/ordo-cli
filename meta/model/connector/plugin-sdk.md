@@ -66,6 +66,10 @@ The context should not require small operations to know workflow internals, guar
 
 When operation-to-operation reuse is allowed, the SDK should prefer an explicit local dependency surface over hidden runtime magic.
 
+The approved surface is `ctx.call(name, *, inputs=None)`. Nonempty inputs are supported for same-family probe dependencies only; full references and family-local dotted names both work. Values are already resolved and must not be reevaluated as workflow expressions. Omitted inputs and `None` preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action-composition capability is introduced. See [the concrete call contract](plugin-sdk-api.md) and the [PR creation consumer](gh-pr-create.md).
+
+Publish this as a connector-author feature through `connector.authoring`, with discoverable boundaries and a verified example. It does not expose workflow orchestration or runtime mode selection to handlers.
+
 ## Command helper expectations
 
 Command-backed operations are expected to be common.

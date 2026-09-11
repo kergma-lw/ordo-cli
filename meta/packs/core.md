@@ -215,12 +215,15 @@ SSRF or authentication bypass.
 - Repository inputs follow the shared [GitHub repository input identity](gh-repository-identity.md) contract, including literal grammar, validation ordering, and context-default boundaries.
 
 - `gh.pr` is the canonical public `gh` probe for one pull request snapshot.
+- The neighboring `gh.pr.list` probe discovers a full filtered candidate collection under its [separate list contract](gh-pr-list.md); it does not share the by-number inputs below or select the correct PR.
+- The neighboring [gh.pr.create action](gh-pr-create.md) creates a PR after its own mandatory exact open-duplicate check; creation and workflow-owned closed-history policy are separate from by-number inspection.
 - `gh.pr.comments` is the public `gh` probe for the regular conversation comments attached to one pull request.
 - `gh.pr.reviews` is the public `gh` probe for submitted pull request review events.
 - `gh.pr.review_comments` is the public `gh` probe for line-level review comments attached to one pull request diff.
-- `gh.pr.checks` is the public `gh` probe for normalized continuous-integration state on one pull request head.
+- `gh.pr.checks` is the public `gh` probe for normalized continuous-integration evidence attached to one pull request head or verified synthetic test merge.
 - `gh.pr.timeline` is the public `gh` probe for normalized pull request lifecycle events.
 - `gh.pr.diff` is the public `gh` probe for normalized pull-request change-content observation.
+- The separate `gh.pr.merge` action and `gh.pr.merge.request` observation probe follow the [asynchronous merge requirements](gh-pr-merge.md). The read-only boundary here applies to inspection probes, not every operation with a `gh.pr` prefix.
 
 ## Probe split rule
 
@@ -241,7 +244,7 @@ SSRF or authentication bypass.
 - `gh.pr.comments` must answer which regular conversation comments exist on one requested pull request.
 - `gh.pr.reviews` must answer which submitted review events exist on one requested pull request.
 - `gh.pr.review_comments` must answer which line-level review comments exist on one requested pull request.
-- `gh.pr.checks` must answer which normalized check outcomes currently apply to one requested pull request head.
+- `gh.pr.checks` must answer which normalized check outcomes are API-attached to the selected commit, with explicit identity evidence and retrieval completeness.
 - `gh.pr.timeline` must answer which normalized lifecycle events belong to one requested pull request.
 - `gh.pr.diff` must answer which reviewable file and patch changes belong to one requested pull request.
 
@@ -254,6 +257,7 @@ SSRF or authentication bypass.
 - `pull_number` must be a positive integer.
 - `limit` is optional for comment-, review-, timeline-, and diff-list probes.
 - When present, `limit` must be a positive bounded integer.
+- `gh.pr.checks` accepts `target: head|test_merge` (default `head`) and optional `expected_head_sha`, a full 40-character hexadecimal SHA. A pin must match the observed PR head before retrieving checks; it always pins head H, including when checks target synthetic merge M.
 
 ## Output contract
 
@@ -271,6 +275,18 @@ SSRF or authentication bypass.
   - `base_ref`
   - `head_ref`
   - `head_sha`
+  - `head_repository`
+  - `base_repository`
+  - `base_sha`
+  - `merged`
+  - `merged_at`
+  - `merge_commit_sha`
+  - `test_merge_sha`
+  - `test_merge_head_sha`
+  - `test_merge_base_sha`
+  - `test_merge_state`
+  - `stack_state`
+  - `stack`
   - `mergeable`
   - `mergeable_state`
   - `review_decision`
@@ -315,6 +331,8 @@ SSRF or authentication bypass.
   - `status`
   - `conclusion`
   - `url` or `context` when available
+- Checks must additionally expose `base_sha`, `head_repository`, `base_repository`, `target`, `expected_head_sha`, `commit_sha`, `test_merge_sha`, `test_merge_head_sha`, `test_merge_base_sha`, `test_merge_state`, `sha_evidence`, `complete`, `statuses_complete`, `check_runs_complete`, `neutral_count`, and `unknown_count`.
+- Check items must retain `state`, `sha`, `sha_source`, `id`, timestamps (`created_at`, `updated_at`, `started_at`, `completed_at`), `app_id`, `app_slug`, `app_identity`, and `creator` where available. Missing identity facts must remain unavailable rather than be invented.
 - `gh.pr.timeline` events must expose stable lifecycle facts such as:
   - `event_type`
   - `actor`
@@ -328,6 +346,12 @@ SSRF or authentication bypass.
 - `gh.pr.reviews` must expose review-event state separately from line-comment payloads.
 - `gh.pr.diff` must expose normalized change-content facts rather than rendered review UI or arbitrary raw transport payloads.
 - `gh.pr.checks` must normalize legacy commit statuses and check runs into one stable result shape without exposing transport-specific stitching as workflow burden.
+- `gh.pr` must separate resulting `merge_commit_sha` for an explicitly merged PR from the synthetic test merge of an open, explicitly unmerged PR. Synthetic M is verified only against the same snapshot's ordered commit parents `[B, H]`; a missing or mismatched candidate cannot fall back to head checks.
+- `stack_state` is `standalone`, `stacked`, or `unknown`. Only an absent API `stack` property on a validated PR envelope establishes `standalone`; an explicitly null property is `unknown`. A valid stack object establishes `stacked`; malformed or indeterminate facts remain `unknown`. Bind the response number and base repository identity to the requested PR before trusting classification. A valid ordinary envelope requires positive integer number, supported state, boolean merged/draft facts, and head/base branches with nonempty refs and full SHAs. Fork head repositories need not equal the base repository.
+- Public `stack` contains the raw normalized valid stack object only for `stacked`, otherwise null. Thus public `stack: null` does not distinguish absent API data from invalid/null API data; consumers must use `stack_state`. A valid stack requires `base.ref` and full `base.sha`, with nonnegative integer `size`, `position`, `id`, and `number` if present. Failed observations never establish standalone status.
+- Check pagination must follow all pages of latest statuses and check runs and expose completeness separately for each source. Missing/inconsistent totals, duplicate identities, duplicate status contexts, and pagination drift must not yield complete success. Cross-page reads are not atomic.
+- `overall_state: success` requires a complete, nonempty collection consisting entirely of explicit successful, SHA-attached results. Skipped, neutral, unknown, absent, pending, failed, or incomplete evidence must not be promoted to success. Mixed successful/skipped/neutral outcomes are `mixed`, not success.
+- API-attached commit evidence (`sha_evidence: api_attached_commit`) does not prove which commit a CI worker actually checked out. Workflows own trusted producer selection, required CI selection, freshness, authorization, and any additional checkout attestation requirements.
 - `gh.pr.timeline` must publish normalized event families rather than a free-form passthrough of every raw GitHub timeline object.
 
 ## Failure contract
@@ -335,6 +359,7 @@ SSRF or authentication bypass.
 - Missing pull requests must fail explicitly as `pull_not_found`.
 - Invalid limits must fail explicitly as `limit_invalid` on probes that accept `limit`.
 - Check retrieval failures that are specific to `gh.pr.checks` should remain distinct as `checks_unavailable`.
+- Invalid check targets/pins, pin mismatch, attached-SHA mismatch, and unavailable or mismatched test-merge identity must fail closed as `checks_unavailable` with a specific diagnostic reason. A directly observed pin mismatch can use `head_mismatch`; an unstructured asynchronous merge failure message cannot establish that reason.
 - Any remaining implementation-local breakdown must normalize to `probe_failed`.
 
 ## Boundary contract
@@ -349,6 +374,161 @@ SSRF or authentication bypass.
 
 - The public contract should be discoverable through `ordo-help operation gh.pr` and the sibling `gh.pr.*` operations.
 - Discovery material should make clear that this family is the canonical public PR inspection surface.
+- Runtime-mode, discovery, and snippet verification obligations for merge-related observation changes are specified in [asynchronous merge requirements](gh-pr-merge.md). These are approved source semantics, not permission to rewrite the contract around implementation drift.
+
+<!-- source: requirements/connector/gh-pr-list.md -->
+
+# GitHub pull request list probe requirements
+
+## Role and boundaries
+
+- `gh.pr.list` is a read-only probe for one logical filtered collection of pull requests in a repository, backed by the REST list-pull-requests endpoint, not the search index.
+- Use `gh.pr` for a detailed snapshot by `pull_number`; listing does not select the correct PR, authorize creation, reopen a PR, or decide whether to merge. The separate [gh.pr.create action](gh-pr-create.md) performs its own mandatory open-duplicate check after workflow-owned history policy.
+
+## Inputs
+
+- `repository` is optional and follows the shared [repository identity contract](gh-repository-identity.md). A valid explicit ASCII `OWNER/REPO` overrides bootstrapped `connector_contexts.gh.repository`; omitted or null uses context. Malformed explicit input fails without fallback; no resolved repository is an error.
+- `state` is required and explicit: `open`, `closed`, or `all`. There is no implicit open-only default.
+- `head` optionally filters by head branch; `base` optionally filters by base branch.
+- `head_owner` optionally qualifies `head` with a user or organization owning the head repository. It is not the PR author and requires `head`.
+- With both fields, send the composed server filter `owner:branch`. GitHub does not document a bare-head guarantee: without `head_owner`, traverse using only server `state`/`base` filters and apply exact `head` branch matching locally across all pages. A missing `head_ref` when local matching is required fails the observation rather than silently discarding the item.
+- Owner plus branch is not an exact repository guarantee: one owner may own multiple repositories with the same branch. Exact fork matching requires returned head repository identity.
+- There are no public `page`, `cursor`, or `limit` inputs.
+
+## Retrieval and success
+
+- Internal pagination must traverse the full filtered collection before reporting success. Transport, normalization, or incomplete-traversal failures must fail the probe rather than return partial success.
+- A subprocess timeout (`subprocess.TimeoutExpired`) normalizes to `pull_list_unavailable`, with no partial outputs.
+- Use a protective ceiling of 100 pages of 100 items on the traversed collection before local head filtering. Reaching the ceiling with further pages remaining is failure, even if few local matches exist, not truncating success.
+- This probe targets GitHub.com only, matching the authentication bootstrap host. Pagination may advertise repository-name paths or numeric `/repositories/id/pulls` paths; validate numeric repository identity and pagination parameters, then construct requests locally. Never follow response URLs directly.
+- Completeness means full traversal of the supplied filters, not an atomic snapshot under concurrent remote changes. No total remote count guarantee is made.
+- An empty successful collection means no matches within the provided filters. A single successful item means one candidate within those filters, not automatically the correct PR.
+
+## Minimal item facts
+
+- Each item exposes `number`, `url`, `state`, `draft`, nullable `merged`, `merged_at`, `head_repository`, `head_repository_key`, `head_owner`, `head_ref`, `head_sha`, `base_repository`, `base_ref`, `base_sha`, and `pull_ref`.
+- `head_repository` preserves API case; nullable `head_repository_key` is the lowercase repository identity for case-insensitive GitHub repository matching. Unknown identity remains null. Require a known key, then compare it to the lowercased expected repository; a raw case-sensitive comparison must not turn an existing candidate into a false no-match result.
+- Preserve repository, branch, and commit identity for exact fork-aware matching. Unavailable facts remain unavailable rather than invented.
+- The list API supplies `merged_at`, not the detailed-read merged flag. Derive `merged: true` from a known merge timestamp and `merged: false` from an explicitly present null `merged_at`; a missing property or indeterminate merge evidence yields null. Never convert unknown to false or infer merged solely from `state: closed`.
+- An item with `state: open` and nonnull `merged_at` is contradictory and fails the observation.
+
+## Workflow and discovery obligations
+
+- Prefer `state: all` for find/create-oriented inspection so closed history remains visible; optional head/base narrowing is workflow policy.
+- Workflows classify none, one open, multiple open, and closed history using observed identity and lifecycle facts. Closed/merged history may require explicit workflow rules; missing facts block decisions that depend on them.
+- Even no matches do not automatically authorize creation. Listing carries no generic selection or mutation policy.
+- Publish this distinction in `connector.gh`, `connector.gh.pr`, `connector.gh.pr.list`, the feature map, shared overview, and relevant workflow rules. Input-field discovery, operation catalog, and search must expose the probe.
+- Canonical verified list fragments must demonstrate filtered `state: all` inspection and workflow-owned classification; creation uses its separate action contract. Text and JSON describe output must satisfy the describe checklist.
+- Canonical exact-fork classification gates on a known nonnull `head_repository_key`, then uses `only(head_repository_key=inputs.head_repository | lower)` so differing API/input case still matches the same repository.
+
+<!-- source: requirements/connector/gh-pr-create.md -->
+
+# GitHub pull request creation requirements
+
+## Role and inputs
+
+- `gh.pr.create` is an action creating one pull request after a mandatory open-duplicate observation. It is not find-or-reuse and does not authorize creation from closed history.
+- Optional `repository` follows the shared repository identity contract: valid explicit ASCII `OWNER/REPO` overrides bootstrapped `connector_contexts.gh.repository`; omitted or null uses context. Malformed explicit values fail without fallback; unresolved repository fails.
+- `head`, `base`, and `title` are required. `body` is optional and defaults to empty text. `draft` is a required boolean, including explicit `false`.
+- Optional `head_repository` is the full source `OWNER/REPO`, defaulting to the target repository. Optional `head_owner` asserts consistency with the resolved source owner; absent owner is derived from that exact repository.
+- Explicit cross-repository creation requires `head_repository`; an owner alone cannot request fork guessing. Same-organization cross-repository requests derive the API's `head_repo` argument from the source repository NAME, not its full identity.
+- Reject the same head and base branch in the same repository. Repository identity comparison is case-insensitive; branch identity is exact.
+
+## Mandatory observation before mutation
+
+- Call the published `gh.pr.list` probe through `ctx.call`, supplying already-resolved target repository, head, source owner, base, and explicit `state: open`.
+- Require successful full traversal (`complete: true`), then match exact head repository identity using its case-insensitive key alongside target/base/head identity. Owner plus branch alone is insufficient.
+- One exact open match, including a draft, returns non-OK `already_exists`, the existing number and URL, and `created: false`; no POST occurs. This is refusal, not successful reuse.
+- Multiple exact matches are ambiguous and fail. Unknown or contradictory identity, incomplete traversal, and list failures fail the precheck. No failure or ambiguity may be interpreted as an empty successful list.
+- The precheck does not inspect closed history or implement reopening policy. A user workflow may first use [gh.pr.list](gh-pr-list.md) with `state: all`, classify closed history under workflow policy, and then invoke create with its separate mandatory open check.
+
+## Single submission and uncertainty
+
+- With no exact open match and a trustworthy complete observation, submit exactly one POST.
+- Only a validated HTTP 201 response establishes `created: true`. A malformed 201, timeout, or server failure after submission leaves `created: null`: the creation result is unknown, not known false.
+- HTTP 422 is generic `create_refused`, not universal duplicate evidence. Preserve upstream structured errors and useful diagnostics.
+- Do not retry POST or perform readback reconciliation automatically. A future retry/reconciliation contract requires separate agreement.
+- Full traversal and the subsequent POST are not atomic. A concurrent creator can race the check; this action promises neither atomic uniqueness nor exactly-once effects.
+- The action does not wait for CI, merge, push, fork, clean up branches, or perform additional issue/project mutations.
+
+## Publication and verification
+
+- Publish the input, output, refusal, ambiguity, and unknown-result contract in operation discovery, `connector.gh.pr.create`, GitHub neighbors, features, overview, model, capabilities, operations, search, and authoring guidance.
+- Verify explicit and context repository examples, exact fork identity, draft duplicates, incomplete/unknown observations, validated and malformed 201, 422 errors, and uncertain submissions. Canonical describe examples must be verified source, with definition, applicability, exclusions, and nearest neighbors visible in text and JSON.
+- `check`, `review`, `plan`, `explain`, and `next` retain action non-execution and must expose the action contract without invoking its POST or fabricating create outputs. `run` invokes the admitted action once; its internal probe remains read-only. The [SDK dependency contract](../../model/connector/plugin-sdk-api.md) does not add action composition or allow probe-to-action hidden mutation.
+
+<!-- source: requirements/connector/gh-pr-merge.md -->
+
+# GitHub asynchronous pull request merge requirements
+
+## Scope and ownership
+
+- PR creation belongs to the separate [gh.pr.create action](gh-pr-create.md), whose exact open-duplicate refusal and uncertain POST result differ from merge-request reuse.
+
+- `gh.pr.merge` is a mutation action submitting a direct asynchronous merge for one standalone PR. `gh.pr.merge.request` is a read-only probe observing one saved request once.
+- These are the agreed target semantics. Existing implementation differences are drift to resolve, not justification for weakening the contract.
+- Workflow policy owns authorization, required CI selection, trusted producer selection, freshness, and the decision to submit. Observation helpers expose evidence; the action does not synthesize approval from `mergeable`, review summaries, or a green aggregate.
+- No stack support: before PUT the action must validate PR identity and observe stack scope. A valid stack object means `stacked` and fails as `unsupported_stack`; null or malformed stack data means `unknown` and fails as `merge_scope_unknown`. Only an absent API stack property on a validated ordinary PR envelope means `standalone`. A failed pre-read API call fails as `merge_api_failed`. All these failures prevent PUT.
+
+## Submission contract
+
+- Resolve the optional `repository` from a valid explicit `OWNER/REPO` override or, when omitted or null, from the bootstrapped `connector_contexts.gh.repository`. A malformed explicit value must fail without falling back to context; no resolved repository is an error. Context is a default, not an authorization allowlist. Require explicit positive integer `pull_number`, `merge_method: merge|squash|rebase`, and full 40-character hexadecimal `expected_head_sha`. Do not substitute a default method or a freshly observed head as the expected SHA.
+- After validating inputs, stack admission, and the observed head, send one `PUT repos/{repository}/pulls/{pull_number}/merge-async` with `sha=expected_head_sha`, the explicit `merge_method`, and `merge_action=direct_merge`. A pre-read head differing from expected H is `head_mismatch` with `submission=not_submitted`; never replace H with that newer head. The server-side SHA guard remains required for changes after pre-read. Preserve HTTP status and response body even if the CLI exits nonzero.
+- Do not wait, poll, automatically retry, request a merge queue, use admin bypass, or fall back to a synchronous merge. Observing an already-enqueued response does not authorize queue submission or establish merge completion.
+- Repository rules are evaluated by GitHub for the authenticated actor. The connector does not request a bypass or alter rules; it cannot revoke server-configured bypass privileges already granted to that actor. Workflows and repository administrators must not mistake this action for an independent enforcement layer over GitHub permissions.
+- A pending accepted request must provide a valid UUID and demonstrably matching method, direct action, and expected head. Save its `request_id`, repository, and PR number for later observation. Acceptance is not completion.
+- An existing request (HTTP 409) is reusable only when those exact parameters match, with hexadecimal SHA case normalized. Different known parameters mean `existing_request_conflict`; absent or unrecognized parameters mean `existing_request_unknown`. HTTP 409 is not evidence of head mismatch.
+- An already-merged response may have no UUID. Preserve a null `request_id`; do not invent one. Require an explicit merged state and valid resulting SHA to establish `merged: true`. A validated pre-read PR that is closed and explicitly merged with a valid `merge_commit_sha` may return `already_merged` before stack/head admission because no PUT is needed.
+- Distinguish local admission/input failure, API failure, explicit merge refusal, and unknown mutation outcome. Any failed API pre-read is `merge_api_failed` with `submission=not_submitted`; malformed/mismatched PR identity in a 200 response is `merge_scope_unknown`. PUT 400 is `merge_refused` with `submission=refused`; PUT 403/404/422 is `merge_api_failed` with `submission=api_failed`. Ambiguous PUT results, malformed acceptance, and server/transport failures are `merge_result_unknown`, not proof that nothing happened; never blindly retry.
+- Publish repository and PR identity, `request_id`, `state`, `merged`, `merge_sha`, `merge_method`, `merge_action`, `expected_head_sha`, `http_status`, `message`, plus action-specific `submission`, `request_compatibility`, `stack_scope`, and `observed_head_sha`. `submission` includes `not_submitted` and `api_failed` as well as accepted/existing/already-completed/refused/unknown states. `stack_scope` reports the action-time classification, and `observed_head_sha` reports the pre-read head once available for comparison.
+- Shared `merged` is nullable: true for validated merged evidence, false for validated pending/failed/enqueued evidence, and null for unavailable/error or malformed evidence. `merge_sha` is populated only from validated merged evidence. Reported request parameters remain null when unavailable; the local `head_mismatch` diagnostic explicitly includes the caller's expected H alongside the observed H without claiming those are accepted request parameters.
+
+## Request observation contract
+
+- Resolve optional repository by the same explicit-override/bootstrap-context contract as the merge action, and require explicit PR number and the saved UUID `request_id`; perform one GET of the corresponding `merge-async/{request_id}` resource. The resolved repository and PR number must identify the saved request's target.
+- Expose `pending`, `merged`, `enqueued`, and `failed` distinctly. Successfully observing `failed` is a successful probe outcome with a failed remote request state, not an API failure.
+- Async failed-request responses have no machine-readable failure code. Preserve `message` verbatim; do not infer or invent `head_mismatch` from prose.
+- Requests are retained for 24 hours. A 404, expired/inaccessible request, transport/API error, malformed response, or unrecognized state is `request_unavailable`, not evidence that the merge failed. Retain the requested handle and available HTTP/message diagnostics.
+
+## CI identity and race boundaries
+
+- Capture initial `gh.pr` head H, then obtain `gh.pr.checks` with `expected_head_sha=H`. Submit that same H only after workflow-owned CI/authorization/freshness admission passes. Never replace H with a newer head after evaluating old CI.
+- For test-merge checks, verify synthetic M against the snapshot's ordered parents `[B, H]`, select `target=test_merge`, and still submit `expected_head_sha=H`, not M. API attachment to H or M does not prove the actual CI checkout.
+- The endpoint supplies a head guard only: there is no atomic base-SHA guard. Base movement after verification can invalidate the workflow's assumptions despite unchanged H.
+- Stack rejection is based on a pre-read, not an atomic server-side standalone constraint. Membership can change between observation and PUT; do not promise this race is eliminated or claim stack support because GitHub itself can merge preceding stack PRs.
+- Direct merge may cause GitHub's automatic linked-issue closure and repository-configured branch deletion. The connector does not suppress these GitHub side effects or imply it explicitly issued separate issue/branch mutations.
+
+## Runtime and discovery parity
+
+| Mode | Required source semantics |
+| --- | --- |
+| `check` | Validate operation kind, inputs, references, and gate structure; never submit a merge or interpret static validity as CI authorization. |
+| `review` | Expose mutation effects, preflight PR/stack facts, saved-head provenance, and unresolved policy/race constraints without submitting. |
+| `plan` | Preserve ordered snapshot → pinned checks → late admission → action → explicit observation data flow; acceptance remains asynchronous. |
+| `run` | Enforce the workflow gate and action's own stack admission, attempt at most one PUT, publish actual outcome and invalidate affected observations. |
+| `explain` | Explain head versus test-merge/result SHA, policy ownership, refusal versus unknown outcome, retention, and stack/base race limits without mutation. |
+| `next` | Respect blocked admission and unknown/pending outcomes; suggest explicit observation or policy reevaluation where appropriate, never silently retry or treat acceptance as merged. |
+
+- Action preflight fields are `state`, `draft`, `head_sha`, and `stack_state`. A review-time preflight is not a substitute for the action's own pre-PUT stack/head checks.
+- Published invalidation handles are `gh.pr.*`, `gh.issue`, and `gh.project.issue`; saved request evidence remains distinct from a fresh observation. Verify that runtime prefix invalidation covers both the root `gh.pr` and its descendant probes. Saved registered snapshots must not be mistaken for refreshed observations.
+- Review affected `ordo-help features`, `overview`, `model`, `workflow-authoring`, `capabilities`, `command-line`, `operations`, `describe`, and `search` surfaces. Publish action/probe separation, required inputs, output nullability, failure meanings, unsupported stack/queue/bypass behavior, and asynchronous lifecycle consistently.
+- Affected describe surfaces must satisfy the describe readiness checklist. Relevant verified snippets must cover the safe saved-H flow and request observation. If snippet-world support cannot represent the necessary gate/evidence shape, record that parity blocker rather than publishing a decorative example as verified.
+
+## Verification criteria
+
+Use mocked GitHub responses for connector scenarios and the bounded fixture executor for canonical workflow scenarios; verification must not merge a live PR. These are acceptance criteria, not a claim that every scenario belongs to the snippet executor:
+
+1. Invalid/missing identity, method, SHA, or UUID fails before transport. Uppercase hexadecimal pins compare equivalently.
+2. Absent stack on a validated envelope is standalone; explicit null is unknown. Stacked, malformed, indeterminate, mismatched-identity, and failed stack reads demonstrate no PUT with the appropriate unsupported/scope/API failure. A newer action-time stack read overrides an earlier standalone preflight for admission. Race coverage/documentation does not claim atomic exclusion.
+3. Each explicit method sends exactly one direct async PUT with H. No polling, queue request, bypass, synchronous fallback, or hidden retry occurs.
+4. Accepted pending request preserves its UUID and exact parameters. Existing exact requests are reusable; mismatched or missing parameters yield conflict/unknown. A 409 never becomes fabricated head mismatch.
+5. Already merged preserves resulting SHA and null UUID where absent. Already enqueued remains not merged. Missing result SHA cannot establish merged success.
+6. PUT 400 refusal and PUT 403/404/422 API failure preserve distinct outcomes and HTTP/message evidence. Pre-read API failure is not submitted. Malformed PUT responses, server/transport failures, and ambiguous acceptance preserve unknown mutation status and do not retry. Unavailable evidence has `merged=null`, not fabricated false.
+7. Saved action outputs feed the request probe. Pending, merged, enqueued, and failed are successfully observed once; failed preserves the unstructured message. Expiration/404, permissions, transport failures, and malformed observations are unavailable, not failed merge proof.
+8. Initial H with green checks followed by H2 blocks pinned check retrieval, yields action pre-read `head_mismatch` without PUT, or remains protected by the server's H guard if movement occurs after pre-read. Delayed failure prose never invents a structured reason. The action never upgrades H to H2. Canonical workflow fixtures verify mismatched-SHA, untrusted, missing-required, and incomplete CI admission. Timestamp-age freshness remains workflow-owned and is not implemented by the canonical snippets; a future freshness-gate example requires explicit supported policy/fixture inputs and verification.
+9. Test merge M with exact parents `[B, H]` selects M checks while submission pins H. Wrong/reordered parents, missing M, or wrong attached SHA fail closed; actual checkout is never inferred. Base movement after observation remains an explicitly unguarded race.
+10. Multi-page statuses/check runs include failures on later pages. Inconsistent totals, duplicate identities/contexts, missing SHA, no checks, skipped, neutral, unknown, and mixed results never become complete aggregate success.
+11. Exercise all six runtime modes and affected discovery surfaces against the semantics above, including action/probe distinction and saved-handle flow. Canonical snippets `gh_pr_async_merge_head` and `gh_pr_async_merge_test_merge` verify pinned-head/CI gates, UUID handoff, and final PR observation through bounded fixture execution. Do not present their coverage as timestamp-age freshness, connector HTTP execution, atomic race protection, or live GitHub verification. See the [snippet-world model](../../model/help/snippet-worlds.md) for supported shapes and limitations.
 
 <!-- source: requirements/connector/gh-project-items.md -->
 
@@ -6020,8 +6200,11 @@ Shared prerequisites should not be duplicated in every operation contract if the
 ## Mental model
 
 - This family exposes orthogonal read surfaces for one pull request.
+- The neighboring [gh.pr.list](gh-pr-list.md) probe observes a filtered candidate collection before detailed by-number inspection; its inputs and full-traversal semantics are separate from this shared inspection shape.
+- The neighboring [gh.pr.create](gh-pr-create.md) action performs a mandatory exact open-duplicate check and one creation submission; it does not find-or-reuse or apply closed-history policy.
 - It separates metadata, discussion, review, CI, lifecycle, and change-content concerns instead of hiding them inside one opaque digest response.
 - It stays read-only and does not encode merge policy or workflow decisions.
+- This inspection list is distinct from the separate `gh.pr.merge` action and `gh.pr.merge.request` probe modeled in [asynchronous merge](gh-pr-merge.md); the entire `gh.pr.*` namespace is not read-only.
 
 ## Shared input shape
 
@@ -6040,14 +6223,26 @@ Shared prerequisites should not be duplicated in every operation contract if the
   "author": {
     "login": "alice"
   },
-  "state": "OPEN",
+  "state": "open",
   "draft": false,
   "url": "https://github.com/go-vikunja/vikunja/pull/2832",
   "created_at": "2026-07-28T10:00:00Z",
   "updated_at": "2026-07-29T12:00:00Z",
   "base_ref": "main",
   "head_ref": "fix/reminder-scheduling",
-  "head_sha": "abc123...",
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "head_repository": "go-vikunja/vikunja",
+  "base_repository": "go-vikunja/vikunja",
+  "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "merged": false,
+  "merged_at": null,
+  "merge_commit_sha": null,
+  "test_merge_sha": "cccccccccccccccccccccccccccccccccccccccc",
+  "test_merge_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "test_merge_base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "test_merge_state": "verified",
+  "stack_state": "standalone",
+  "stack": null,
   "mergeable": true,
   "mergeable_state": "unstable",
   "review_decision": "CHANGES_REQUESTED",
@@ -6107,22 +6302,44 @@ Shared prerequisites should not be duplicated in every operation contract if the
 
 ## `gh.pr.checks` output shape
 
+Inputs extend the PR identity with optional `target` (`head`, the default, or `test_merge`) and optional full hexadecimal `expected_head_sha`. This pin compares against H, never M.
+
+The following is a compact head-target projection with two explicit successful checks, not a required-check policy decision:
+
 ```json
 {
   "pull_ref": "go-vikunja/vikunja#2832",
-  "head_sha": "abc123...",
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "head_repository": "go-vikunja/vikunja",
+  "base_repository": "go-vikunja/vikunja",
+  "target": "head",
+  "expected_head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "test_merge_sha": null,
+  "test_merge_head_sha": null,
+  "test_merge_base_sha": null,
+  "test_merge_state": "not_requested",
+  "sha_evidence": "api_attached_commit",
+  "complete": true,
+  "statuses_complete": true,
+  "check_runs_complete": true,
   "overall_state": "success",
-  "total_count": 39,
-  "success_count": 29,
+  "total_count": 2,
+  "success_count": 2,
   "failed_count": 0,
   "pending_count": 0,
-  "skipped_count": 1,
+  "skipped_count": 0,
+  "neutral_count": 0,
+  "unknown_count": 0,
   "checks": [
     {
       "name": "Test / api-build",
       "kind": "check_run",
       "status": "completed",
       "conclusion": "success",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sha_source": "check_run.head_sha",
       "url": "https://github.com/..."
     },
     {
@@ -6131,6 +6348,8 @@ Shared prerequisites should not be duplicated in every operation contract if the
       "status": "completed",
       "conclusion": "success",
       "context": "lint",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sha_source": "combined_status.sha",
       "url": "https://github.com/..."
     }
   ]
@@ -6187,9 +6406,26 @@ Shared prerequisites should not be duplicated in every operation contract if the
 - `gh.pr.comments` owns only ordinary conversation comments visible on the PR thread.
 - `gh.pr.reviews` owns submitted review decisions and review summary text.
 - `gh.pr.review_comments` owns line-level diff discussion, including replies.
-- `gh.pr.checks` owns normalized observation of the PR head CI surface across check runs and commit statuses.
+- `gh.pr.checks` owns normalized observation of API-attached head or verified test-merge checks across check runs and commit statuses.
 - `gh.pr.timeline` owns normalized lifecycle transitions such as draft conversion, review-request changes, force-pushes, base changes, labels, merge, close, and reopen events.
 - `gh.pr.diff` owns normalized observation of reviewable PR change content, including file-level summaries and bounded patch-bearing payloads.
+
+### Commit and stack identity
+
+- H is the PR head, B the base from the same PR snapshot, and M the synthetic test merge. `test_merge_state: verified` requires the candidate commit SHA to match M and its ordered parents to equal `[B, H]`. Other observation states are `unavailable`, `identity_mismatch`, and `merged`; checks targeting head use `not_requested` for test-merge evidence.
+- `merge_commit_sha` is populated as a resulting SHA only when `merged` is explicitly true. It is not a synthetic-M alias. The asynchronous request's resulting `merge_sha` is likewise distinct from M and need not equal H.
+- `stack_state` is `standalone`, `stacked`, or `unknown`. Only an absent API `stack` property on a validated ordinary PR envelope means `standalone`; explicit API null means `unknown`. A valid stack object means `stacked`; malformed stack/envelope data remains unknown. Response number and base repository identity must match the requested PR; fork head repositories are allowed. The ordinary envelope validates number, state, boolean merged/draft facts, and nonempty head/base refs with full SHAs.
+- Public `stack` retains the valid stack object for `stacked` and is null otherwise. The standalone/null output example represents an absent API property, not an API property explicitly set to null. Public null alone is insufficient for admission. Valid stack evidence requires `base.ref` and full `base.sha`; optional `size`, `position`, `id`, and `number` must be nonnegative integers. Merge admission rejects stacked and unknown classifications before PUT.
+- Stack classification and synthetic-parent verification describe pre-read observations. Neither promises atomicity with a later mutation; SHA pinning guards H, not B or stack membership.
+
+### Checks evidence and aggregation
+
+- `commit_sha` is H for `head`, M for `test_merge`. `head_sha` remains H in both cases. `expected_head_sha` preserves the optional caller pin. A mismatched pin fails before check retrieval; test-merge unavailability never silently selects head.
+- Individual items additionally retain `state`, `id`, `created_at`, `updated_at`, `started_at`, `completed_at`, `app_id`, `app_slug`, `app_identity`, and `creator`. These support workflow-owned producer selection and freshness. Missing app identity is `unavailable`, not a guessed trusted producer.
+- `sha_evidence: api_attached_commit` and item `sha_source` identify GitHub attachment evidence, not actual worker checkout. A workflow needing checkout proof must obtain separate evidence.
+- Both source collections are paginated. `complete` is true only when `statuses_complete` and `check_runs_complete` are true, with consistent totals and identities. Pagination is not an atomic snapshot; duplicate identities or status contexts signal incompleteness rather than being silently deduplicated.
+- Aggregate precedence is `incomplete`, `no_checks`, then any `failed`, `pending`, or `unknown`; an entirely successful nonempty set is `success`, an entirely skipped set is `skipped`, an entirely neutral set is `neutral`, and remaining successful/skipped/neutral mixtures are `mixed`. Counts cover every returned item and sum to `total_count`. Missing attached SHA cannot count as success.
+- Successful retrieval and successful CI are different facts. Even a complete success summary does not establish authorization or prove that the workflow's required checks exist, came from trusted producers, or are fresh.
 
 ## Failure model
 
@@ -6208,6 +6444,213 @@ Shared prerequisites should not be duplicated in every operation contract if the
   - merge recommendation synthesis;
   - one-shot narrative PR digest generation.
 - Patch-bearing outputs, when exposed, should use connector-owned canonical structure and bounded payload shape rather than UI-shaped or transport-shaped rendering.
+
+<!-- source: model/connector/gh-pr-list.md -->
+
+# GitHub pull request list probe model
+
+## Public reference and kind
+
+- `gh.pr.list`: `probe`.
+- Neighbor `gh.pr` reads one detailed pull request by number. List results supply candidates and identity facts, not a selected PR or a creation/reopening/merge decision.
+
+## Input shape
+
+| Field | Type | Obligation and meaning |
+| --- | --- | --- |
+| `repository` | string | Optional standard GitHub context/default or explicit `OWNER/REPO` override. |
+| `state` | string | Required explicit `open`, `closed`, or `all`. |
+| `head` | string | Optional head branch filter. |
+| `head_owner` | string | Optional head repository owner (user or organization), requires `head`; not PR author. |
+| `base` | string | Optional base branch filter. |
+
+Omitted or null repository uses bootstrapped `connector_contexts.gh.repository`. Invalid explicit repository fails without fallback; unresolved repository fails. Owner plus branch can match multiple repositories belonging to that owner; compare `head_repository_key` to the lowercased expected repository for exact fork identity. No public pagination or limit fields exist.
+
+## Collection and item shape
+
+The successful envelope exposes the resolved `repository`, applied `head`, `head_owner`, `base`, and `state` filters, `items`, `count` (the number of returned items), and `complete: true`. Count is not an independently established remote total. One logical list contains minimal normalized items:
+
+| Field | Meaning |
+| --- | --- |
+| `number`, `url`, `pull_ref` | Pull request number, URL, and stable pull reference. |
+| `state`, `draft` | Observed lifecycle state and draft fact. |
+| `merged`, `merged_at` | Nullable merge fact and observed merge timestamp. |
+| `head_repository`, `head_owner`, `head_ref`, `head_sha` | Head repository, owner, branch, and commit identity. |
+| `head_repository_key` | Nullable lowercase repository identity for case-insensitive matching; raw `head_repository` preserves API case. |
+| `base_repository`, `base_ref`, `base_sha` | Base repository, branch, and commit identity. |
+
+The REST list API exposes `merged_at`; it does not provide the detailed-read merged flag. A known timestamp implies true, an explicitly present null `merged_at` implies false, and a missing property or indeterminate evidence implies null. Closed alone does not imply merged. Unknown identity and lifecycle facts must not be invented.
+
+## Retrieval semantics
+
+- REST pull-request listing, not search-index lookup.
+- GitHub.com only, explicitly matching the bootstrap authentication host.
+- With `head` and `head_owner`, compose the server head filter as `owner:branch`. Without `head_owner`, GitHub does not guarantee bare-head filtering: send only server `state`/`base` filters and match the exact head branch locally over every page. Missing `head_ref` during required local filtering fails rather than discarding the item.
+- Internal pagination collects the entire filtered traversal before successful publication; no partial-success collection.
+- A subprocess timeout (`subprocess.TimeoutExpired`) returns `pull_list_unavailable` without partial outputs.
+- Protective bound: 100 pages with 100 items per page, measured over the traversed collection before local filtering. Remaining pages at the bound cause failure regardless of local match count.
+- Validate pagination links, including numeric `/repositories/id/pulls` repository IDs; construct subsequent requests locally instead of following response URLs.
+- Contradictory `state: open` with nonnull `merged_at` fails the observation.
+- Full traversal is not an atomic concurrency guarantee and does not promise a total remote count.
+- Empty success establishes no matches only for the supplied filters; one result establishes one candidate only for those filters.
+
+## Authoring interpretation
+
+For find/create-oriented inspection, recommend explicit `state: all`, optionally narrowed by head/head_owner/base. Workflow logic checks exact repository identity and classifies none, one open, multiple open, and closed history. The canonical fragment gates on a known nonnull `head_repository_key`, then filters with `only(head_repository_key=inputs.head_repository | lower)`. GitHub repository identity is case-insensitive: comparing raw API case to input case could falsely report no PR. Unknown keys remain unavailable and block dependent decisions. Closed/merged history needs workflow rules; unknown facts block dependent decisions. The probe supplies neither creation authorization nor a generic selector.
+
+The separate [gh.pr.create action](gh-pr-create.md) performs a mandatory open-duplicate check; workflow-owned closed-history policy remains separate.
+
+See [requirements](../../requirements/connector/gh-pr-list.md) for failure, discovery, and verified-example obligations.
+
+<!-- source: model/connector/gh-pr-create.md -->
+
+# GitHub pull request creation model
+
+## Public surface
+
+`gh.pr.create` is an effectful action. Its [requirements](../../requirements/connector/gh-pr-create.md) define creation and uncertainty; [listing](gh-pr-list.md) supplies complete observations, [PR inspection](gh-pr.md) supplies by-number detail, and [merge](gh-pr-merge.md) is a separate lifecycle action.
+
+| Input | Obligation and meaning |
+| --- | --- |
+| `repository` | Optional target `OWNER/REPO`; explicit valid override or bootstrapped context on omission/null. Invalid explicit input does not fall back. |
+| `head`, `base`, `title` | Required branch names and title. |
+| `body` | Optional text, default empty. |
+| `draft` | Required boolean; false is an explicit choice. |
+| `head_repository` | Optional full source `OWNER/REPO`, default target repository; required for cross-repository intent. |
+| `head_owner` | Optional consistency assertion against the resolved source owner, never a fork-discovery instruction. |
+
+Derive source owner from the exact source repository when omitted. Reject inconsistent owners and same-branch/same-repository requests. Compare repository keys case-insensitively and branch names exactly. Cross-repository API heads carry the source owner qualifier; same-organization cross-repository API `head_repo` carries the source repository NAME.
+
+## Dependency and submission sequence
+
+1. Resolve and validate inputs and target/source identity.
+2. Invoke `ctx.call('gh.pr.list', inputs={...})` with resolved `repository`, `head`, `head_owner`, `base`, and `state: open`. This uses the published probe's unchanged signature and full traversal contract.
+3. Require complete successful observation and known, consistent candidate identity. Match exact source repository key in addition to target, base, and head.
+4. Refuse one exact open match, including draft, as `already_exists`; fail ambiguous matches or an untrustworthy precheck without mutation.
+5. With no exact match, issue one POST and validate its response.
+
+## Outcome meaning
+
+| Situation | Outcome meaning | `created` | Number/URL |
+| --- | --- | --- | --- |
+| Validated HTTP 201 | Successful creation | `true` | Validated new PR identity |
+| One existing exact open PR, including draft | Non-OK `already_exists`; no POST | `false` | Observed existing identity |
+| Ambiguous matches | Non-OK ambiguity; no POST | `false` | No selected PR |
+| Failed/incomplete/unknown precheck | Non-OK `precheck_failed`; no POST | `false` | No selected PR |
+| HTTP 422 | Non-OK `create_refused`; retain API errors | `false` | No inferred duplicate identity |
+| Malformed 201, timeout, server failure | Non-OK unknown creation result | `null` | No invented successful identity |
+
+The published failure statuses are `input_error`, `precheck_failed`, `ambiguous`, `already_exists`, `api_failed`, `create_refused`, and `creation_unknown`; successful creation is `ok`. Keep runtime status and operation-specific diagnostic meaning distinct.
+
+Published outputs are `repository`, `pull_number`, `pull_ref`, `url`, `created`, `head_repository`, `head_ref`, `head_sha`, `base_repository`, `base_ref`, `base_sha`, `draft`, `state`, `http_status`, `message`, and `errors`. Identity and response facts remain nullable when unavailable; the number in a list item becomes `pull_number` in the action result. The source owner is derived for the dependency/request, not a separate published output. API errors retain structured array/object/string forms when present.
+
+`created: false` on `already_exists` means this invocation did not create a PR, not that no PR exists. `creation_unknown` with `created: null` requires explicit follow-up policy rather than automatic retry.
+
+There is no automatic readback reconciliation, POST retry, atomic uniqueness, or exactly-once guarantee. Concurrent creation may race between the full open observation and submission. Workflow-owned `state: all` history classification is a separate earlier observation; create neither repeats closed-history policy nor becomes find-or-reuse. CI waiting, merge, push, fork, branch cleanup, and extra issue/project operations remain separate surfaces.
+
+<!-- source: model/connector/gh-pr-merge.md -->
+
+# GitHub asynchronous pull request merge model
+
+## Public operations
+
+PR creation is modeled separately in [gh.pr.create](gh-pr-create.md); its `already_exists` refusal is not merge-request reuse.
+
+| Reference | Kind | Inputs |
+| --- | --- | --- |
+| `gh.pr.merge` | action | Optional `repository`; required positive integer `pull_number`, `merge_method` (`merge`, `squash`, `rebase`), full hexadecimal `expected_head_sha` |
+| `gh.pr.merge.request` | probe | Optional `repository`; required positive integer `pull_number`, saved UUID `request_id` |
+
+Both operations resolve repository from a valid explicit `OWNER/REPO` override or, when omitted or null, from the bootstrapped `connector_contexts.gh.repository`. Malformed explicit values fail without context fallback, and no resolved repository is an error. Context supplies a default rather than an authorization allowlist. Request observation must resolve to the saved request's repository and PR number. Canonical examples may require an explicit repository as workflow policy; that does not make the operation argument required.
+
+The [requirements](../../requirements/connector/gh-pr-merge.md) define the agreed standalone-only contract and verification obligations. [PR observation](gh-pr.md) supplies metadata, stack classification, and pinned CI evidence. Workflow policy authorizes the action; connector normalization does not decide policy.
+
+## Submission and observation state
+
+The action validates inputs and PR identity, observes stack admission and head identity, and performs at most one asynchronous PUT. Only an absent API `stack` property on a validated ordinary PR envelope means `standalone`. Explicit null or malformed stack data means `unknown` and produces `merge_scope_unknown`; a valid stack object means `stacked` and produces `unsupported_stack`. Neither failure submits a merge. A failed API pre-read produces `merge_api_failed` with `submission=not_submitted`.
+
+For an otherwise admitted PR, pre-read head H2 differing from the caller's expected H produces `head_mismatch`, preserving both expected and observed heads, with no PUT. If H changes after that comparison, the submitted `sha=H` remains the server-side guard. A validated pre-read of a closed, explicitly merged PR with a full resulting `merge_commit_sha` returns `already_merged` without stack/head admission or PUT.
+
+The request body contains `sha=H`, the explicit method, and `merge_action=direct_merge`. The request probe performs one GET using the saved UUID. Neither operation waits or polls.
+
+Shared output fields:
+
+| Field | Meaning |
+| --- | --- |
+| `repository`, `pull_number` | Resolved target identity from repository input/context and explicit PR number |
+| `request_id` | GitHub `details.uuid`, when valid; the request probe preserves its requested UUID |
+| `state` | Remote status: pending, merged, enqueued, failed, or unknown/unrecognized evidence |
+| `merged` | Nullable: true for validated merged evidence, false for validated pending/failed/enqueued evidence, null for unavailable/error or malformed evidence |
+| `merge_sha` | Resulting SHA only from validated merged evidence (`details.sha`, or the already-merged PR pre-read); otherwise null, never substituted with H or synthetic M |
+| `merge_method`, `merge_action`, `expected_head_sha` | Parameters reported in response details; unavailable values remain null. Local pre-read `head_mismatch` additionally reports the requested expected H as diagnostic evidence, not as an accepted request parameter |
+| `http_status`, `message` | Preserved HTTP status and GitHub message, including failure responses |
+
+Action-only fields:
+
+- `submission`: `not_submitted`, `accepted`, `existing`, `already_merged`, `already_enqueued`, `refused`, `api_failed`, or `unknown`.
+- `request_compatibility`: `exact`, `different`, or `unknown`, comparing reported method, action, and expected head to the requested values. SHA comparison is case-insensitive.
+- `stack_scope`: action-time `standalone`, `stacked`, or `unknown`. An early already-merged return need not classify the stack and retains unknown scope.
+- `observed_head_sha`: pre-read head when available for the head comparison; null on earlier exits. It must not replace the saved expected H.
+
+| Evidence | Interpretation |
+| --- | --- |
+| 202, pending, valid UUID, exact parameters | Accepted; save the handle; not merged |
+| 409, pending, valid UUID, exact parameters | Compatible existing request; save the handle; not a head mismatch |
+| 409, different known parameters | `existing_request_conflict`; retain reported evidence |
+| 409, missing/unrecognized parameters | `existing_request_unknown`; do not assume compatibility |
+| 200, merged, valid resulting SHA | Already merged; `request_id` may be null |
+| 200, enqueued | Already enqueued, not merged; no queue submission or bypass is implied |
+| Failed API pre-read | `merge_api_failed`, `submission=not_submitted`; no PUT |
+| 200 pre-read with invalid/mismatched identity or unknown scope | `merge_scope_unknown`, `submission=not_submitted`; no PUT |
+| Stacked pre-read | `unsupported_stack`, `submission=not_submitted`; no PUT |
+| Admitted pre-read with H2 instead of expected H | `head_mismatch`, `submission=not_submitted`; no PUT |
+| PUT 400 | `merge_refused`, `submission=refused`, with HTTP/message evidence |
+| PUT 403/404/422 | `merge_api_failed`, `submission=api_failed`, with HTTP/message evidence |
+| Ambiguous/malformed submission or transport/server failure | `merge_result_unknown`; no automatic retry |
+
+Input/admission rejection occurs before PUT and must remain distinguishable from GitHub refusal and unknown mutation outcome. Stack rejection must diagnose unsupported membership or unknown facts explicitly; it is not an async-request failure.
+
+A request probe with a valid 200 response can successfully observe `state=failed`. That is remote failure evidence, whereas `request_unavailable` means the GET could not establish a supported request state. Messages are unstructured and cannot manufacture `head_mismatch`. The 24-hour retention window means 404/unavailability cannot prove that the merge failed.
+
+## Canonical executable examples
+
+The authored YAML source is the registered canonical snippet in `src/ordo/model/help_snippets.py`; reference these IDs rather than maintain a second YAML copy here:
+
+| Snippet ID | Fixture world | CI target |
+| --- | --- | --- |
+| `gh_pr_async_merge_head` | `gh-pr-merge-head` | Head H |
+| `gh_pr_async_merge_test_merge` | `gh-pr-merge-test-merge` | Synthetic M verified against H and B |
+
+Both appear on `connector.gh.pr`, `connector.gh.pr.checks`, `connector.gh.pr.merge`, and `connector.gh.pr.merge.request`. They use the bounded `fixture_execution` path described in the [snippet-world model](../help/snippet-worlds.md). Their verification executes the exact displayed workflow with injected operation fixtures, never live GitHub.
+
+### Authored admission and handoff
+
+1. Require boolean `authorize_merge=true`; the authored default is false. This is explicit workflow authorization, not an inferred consequence of green CI.
+2. Register initial `gh.pr` as `h`; gate on `stack_state=standalone` and a string head. Read `gh.pr.checks` with `expected_head_sha=step.h.outputs.head_sha`, registering `ci`.
+3. Gate on complete source pagination, matching head/pin/target/commit evidence, `overall_state=success`, and exactly one required `unit` check from app ID 15368. That check must be a completed successful check run attached to the selected commit. This is the example's explicit required-check policy, not a connector-wide CI policy.
+4. The test-merge variant additionally requires verified initial and checks candidates with matching M, H, and B. Submit with the initial H in both variants; never use M or a fresh head as the expected SHA.
+5. Register the action as `submission`, publish its UUID and state, and observe `step.submission.outputs.request_id` once when present. A null UUID skips the request observation safely. Pending/failed/enqueued request states remain visible, not success-by-acceptance.
+6. Read a final `gh.pr` as `final_pr` and publish confirmation from that snapshot's explicit merged fact and resulting `merge_commit_sha`. This example deliberately uses a final PR observation for confirmation; it does not redefine the request probe's valid merged evidence.
+
+`register` is execution-local. Reusing a request in a later invocation still requires workflow-owned persistence of repository, PR number, and UUID; these examples demonstrate same-run handoff, not persistent storage or polling.
+
+### Verified scope and limits
+
+- Fixture scenarios exercise authorization default/type rejection, non-standalone admission, mismatched head/pin/commit evidence, missing or duplicate required checks, wrong name/app/SHA, pending/failed/skipped/unknown CI, and incomplete pagination. The test-merge variant also rejects mismatched candidate/head/base evidence.
+- Request scenarios exercise UUID handoff, null-handle skipping, pending/failed/enqueued/merged state publication, and confirmation based on final PR evidence rather than request acceptance.
+- Connector tests, not the snippet executor, establish raw stack/envelope validation, action-time stack/head rejection, server request construction, HTTP outcome classification, parent verification, and pagination retrieval. The fixtures supply normalized operation outcomes; they do not execute connector HTTP handlers.
+- The canonical inputs are repository, PR number, and authorization. There is no timestamp-age/freshness input or gate. SHA mismatch rejection is not proof that an old successful check on unchanged H is fresh. Workflows retain responsibility for freshness and checkout attestation; a future timestamp-age example requires an explicit policy and fixture-path extension before claiming verified coverage.
+- A move to H2 before action pre-read yields local `head_mismatch` without PUT; movement afterward remains guarded by server `sha=H`. These connector race boundaries are not simulated atomicity guarantees of the fixture world, and delayed failure messages do not supply a structured reason.
+
+## Effects and limits
+
+- Submission is asynchronous and head-guarded, without waiting, retry, queue enrollment, admin bypass, or stack support.
+- GitHub applies repository rules according to the authenticated actor's permissions. No bypass is requested, but the connector cannot remove bypass privileges configured on GitHub for that actor.
+- Stack pre-read is not atomic with PUT. GitHub could change membership after the read; the connector cannot promise atomic standalone-only enforcement with this endpoint.
+- There is no base-SHA guard. A verified synthetic M proves a particular observed B/H pairing, not the eventual merge tree after base movement.
+- CI API attachment is not proof of worker checkout. Resulting merge SHA is distinct from the observed synthetic SHA.
+- GitHub may automatically close linked issues or delete branches according to repository configuration. These effects are not suppressed by direct merge. Published invalidation handles are `gh.pr.*`, `gh.issue`, and `gh.project.issue`. Runtime prefix invalidation includes the root `gh.pr` as well as its descendants; a registered earlier snapshot remains historical evidence, not a refreshed observation.
+- `check`, `review`, `plan`, `explain`, and `next` must preserve this action/probe distinction without issuing PUT. `run` enforces admission and publishes actual outcomes. Full per-mode/discovery acceptance criteria are in the requirements; examples must not suggest static validation, preflight, or acceptance establishes completion.
 
 <!-- source: model/connector/gh-project-items.md -->
 
@@ -6624,6 +7067,10 @@ The context should not require small operations to know workflow internals, guar
 
 When operation-to-operation reuse is allowed, the SDK should prefer an explicit local dependency surface over hidden runtime magic.
 
+The approved surface is `ctx.call(name, *, inputs=None)`. Nonempty inputs are supported for same-family probe dependencies only; full references and family-local dotted names both work. Values are already resolved and must not be reevaluated as workflow expressions. Omitted inputs and `None` preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action-composition capability is introduced. See [the concrete call contract](plugin-sdk-api.md) and the [PR creation consumer](gh-pr-create.md).
+
+Publish this as a connector-author feature through `connector.authoring`, with discoverable boundaries and a verified example. It does not expose workflow orchestration or runtime mode selection to handlers.
+
 ## Command helper expectations
 
 Command-backed operations are expected to be common.
@@ -6780,6 +7227,16 @@ The minimal context should expose at least:
 
 The first spike should prefer plain, explicit names over abstraction-heavy helper layering.
 
+## Approved operation dependency call
+
+`ctx.call(name, *, inputs=None)` is a connector-author API, not a workflow expression or a new action-composition surface. A nonempty `inputs` mapping is supported only for same-family probe dependencies. Both fully qualified references such as `gh.pr.list` and family-local dotted names such as `pr.list` resolve within the caller's family. Cross-family dependencies are rejected.
+
+Values in the mapping are already resolved by the caller. They are passed as values, without reevaluating workflow expressions or templates. Missing `inputs` and `inputs=None` retain the legacy no-input dependency behavior. A probe cannot invoke an action as a hidden mutation; this extension does not enable action-to-action composition.
+
+For example, `gh.pr.create` delegates its mandatory complete open observation to `gh.pr.list` with resolved repository, head, source owner, base, and `state: open`. The connector consumes the probe outcome explicitly; a failed observation cannot become permission to mutate. This API is published through `connector.authoring` and the feature/discovery surfaces with a verified connector-author example.
+
+The canonical `sdk_same_family_probe_inputs` example is a `python_fragment` with a `python` source field, verified by `sdk_probe_fragment` insertion in the `gh-sdk-probe-call` world. Its bounded runner executes the real family adapter and SDK context with fixture family/bootstrap/probe bodies; it does not replace `ctx.call`. This establishes dependency dispatch, isolated resolved inputs, literal expression-looking values, and failure propagation, not live GitHub API behavior or sandbox isolation. See [snippet worlds](../help/snippet-worlds.md) for the bounded verification contract.
+
 ## Command helper
 
 The concrete command helper should support this shape or a shape very close to it:
@@ -6903,7 +7360,7 @@ The first implementation spike should answer these by code rather than by furthe
 
 - whether one `OperationContext` is enough or probe/action split pays for itself;
 - whether one `PublishedOperation` type is enough or probe/action split pays for itself;
-- whether operation-to-operation dependency should use operation names or richer refs locally;
+- operation dependency names and resolved-input probe calls are settled by the approved dependency contract above;
 - whether `bootstrap()` should return one shared object or named capability views;
 - whether convenience helpers are useful enough to keep after the first migrated operations.
 

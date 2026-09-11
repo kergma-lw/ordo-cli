@@ -52,6 +52,8 @@ def fetch_pull_request(
                 "gh",
                 "api",
                 f"repos/{identity.owner}/{identity.repo}/pulls/{identity.pull_number}",
+                "-H", "Accept: application/vnd.github+json",
+                "-H", "X-GitHub-Api-Version: 2026-03-10",
             ],
             failures={"os_error": "probe_failed"},
         )
