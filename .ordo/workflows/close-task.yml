@@ -1,43 +1,132 @@
 version: 0
 workflow: close-task
 inputs:
-  repository: {}
-  project_id: {}
-  close_comment: ""
-  ship: false
+  repository:
+    description: GitHub OWNER/REPO.
+  project_id:
+    description: GitHub project ID.
+  close_comment:
+    default: "Completed through the merged pull request."
+    description: English completion comment.
 state_needs:
   common_state: {}
 let:
-  stored_issue_number: state.common_state[inputs.repository].issue_number
-  stored_branch: state.common_state[inputs.repository].branch
-  issue: gh.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number)
-  project_issue: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number,
-    project_id=inputs.project_id)
+  issue_number: state.common_state[inputs.repository].issue_number
+  branch: state.common_state[inputs.repository].branch
+  pull_number: state.common_state[inputs.repository].pull_number
+  pr: gh.pr(repository=inputs.repository, pull_number=state.common_state[inputs.repository].pull_number)
+  project: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number, project_id=inputs.project_id)
 blocks:
 - guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.project_id | is_string
+  - inputs.project_id | trim | ne("")
+  - inputs.close_comment | is_string
+  - inputs.close_comment | trim | ne("")
+  - issue_number | is_integer
+  - pull_number | is_integer
+  - branch | is_string
+  - branch | trim | ne("")
+  - branch != "main"
   - git.repo.exists
-  - inputs.ship == true
-  - git.worktrees.count == 1
-  - git.stash.count == 0
-  - issue.state == "OPEN"
-  - project_issue.exists
-  - project_issue.status == "In review"
-  - stored_branch == git.branch.value
   - git.worktree.clean
-  - git.branch.value != "main"
-- include: includes/git/merge-task-branch-into-main
+  - git.branch.value == branch or git.branch.value == "main"
+  - project.exists
+  - gh.project.field(project_id=inputs.project_id, field="Status").exists
+  - gh.project.field.option(project_id=inputs.project_id, field="Status", option="Done").exists
+  - project.type | in(["Task", "Bug"])
+  - project.status | in(["In review", "Done"])
+  - pr.merged == true
+  - pr.merge_commit_sha | is_string
+  - pr.merge_commit_sha | trim | ne("")
+  - pr.head_repository | lower | eq(inputs.repository | lower)
+  - pr.base_repository | lower | eq(inputs.repository | lower)
+  - pr.head_ref == branch
+  - pr.base_ref == "main"
 - steps:
-  - name: close-issue
+  - name: Snapshot context
+    value:
+      issue_number: issue_number
+      branch: branch
+      url: pr.url
+      merge_commit_sha: pr.merge_commit_sha
+    register: context
+  - name: Comment on completion
+    uses: gh.issue.comment.add
+    with:
+      repository: inputs.repository
+      issue_number: issue_number
+      body: inputs.close_comment
+  - name: Close merged task
     uses: gh.issue.close
     with:
       repository: inputs.repository
-      issue_number: stored_issue_number
-- steps:
-  - name: comment-and-set-status
-    run: includes/github/comment-and-set-status
+      issue_number: issue_number
+  - name: Refresh project membership
+    uses: gh.project.issue
     with:
-      issue_number: stored_issue_number
-      comment: inputs.close_comment
-      status: "Done"
-  - name: Forget stored task
+      repository: inputs.repository
+      issue_number: issue_number
+      project_id: inputs.project_id
+    register: membership
+  - name: Require project membership
+    gate: step.membership.outputs.exists
+  - name: Mark Done
+    uses: gh.project.issue.field_single_select.set
+    with:
+      repository: inputs.repository
+      issue_number: issue_number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "Done"
+  - name: Fetch merged main
+    uses: git.sync.fetch
+    with:
+      remote: "origin"
+  - name: Verify the fetched main contains the remote merge
+    uses: git.range
+    with:
+      base: step.context.outputs.value.merge_commit_sha
+      head: "refs/remotes/origin/main"
+    register: merged_range
+  - name: Require the merged commit on fetched main
+    gate: step.merged_range.outputs.behind_count == 0
+  - name: Inspect local main
+    uses: git.ref
+    with:
+      ref: "refs/heads/main"
+    register: local_main
+  - name: Create missing local main
+    if: step.local_main.outputs.exists == false
+    uses: git.branch.create
+    with:
+      branch: "main"
+      start_point: "refs/remotes/origin/main"
+  - name: Switch to main
+    uses: git.branch.switch
+    with:
+      branch: "main"
+  - name: Fast-forward local main
+    uses: git.integrate.merge_ff_only
+    with:
+      ref: "refs/remotes/origin/main"
+  - name: Inspect remaining task branch
+    uses: git.ref
+    with:
+      ref:
+        format: "refs/heads/{}"
+        args:
+          - step.context.outputs.value.branch
+    register: local_branch
+  - name: Delete merged local branch
+    if: step.local_branch.outputs.exists
+    uses: git.branch.delete
+    with:
+      branch: step.context.outputs.value.branch
+  - name: Clear completed context
     state_delete: state.common_state[inputs.repository]
+  - name: Publish completion
+    publish:
+      summary: "Task closed; local main synchronized"
+      url: step.context.outputs.value.url

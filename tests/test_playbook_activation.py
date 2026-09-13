@@ -3152,102 +3152,39 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertNotIn('"best_candidate"', output)
 
     def test_cli_graph_text_output_shows_graph_sections(self) -> None:
-        entry = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
-            workflow_name="inspect-issue",
-            workflow_description="Inspect issue context",
-            workflow_category="inspect",
-            workflow_when=None,
-            working_directory=None,
-        )
-        activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
-            workflow_name="inspect-issue",
-            workflow=object(),
-            profile=None,
-            working_directory=None,
-            available_profiles=None,
-            profile_working_directories=None,
-            diagnostics=(),
-        )
-        runtime_result = RuntimeResult(
-            mode=Mode.EXPLAIN,
-            status=RuntimeStatus.OK,
-            diagnostics=(),
-            plan=ExecutionPlan(),
-            outputs={
-                "can_execute": True,
-                "allowed_state": "allowed",
-                "analysis_complete": True,
-                "explanation": {"allowed": True, "category": "ok", "blockers": []},
-                "guard_coverage": [],
-                "relevant_guard_count": 0,
-                "evaluated_relevant_guard_count": 0,
-            },
-        )
+        from ordo.runtime.graphing import build_static_graph
+        graph = build_static_graph([])
         stdout = io.StringIO()
         stderr = io.StringIO()
         with patch("sys.argv", ["ordo-playbook", "graph"]):
-            with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
-                with patch("ordo.cli.activate_playbook", return_value=activated):
-                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
-                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-                            exit_code = cli_main()
+            with patch("ordo.playbook.build_playbook_static_graph", return_value=graph):
+                with patch("ordo.cli._build_next_payload", side_effect=AssertionError("graph entered next")):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
 
         self.assertEqual(exit_code, 0)
         output = stdout.getvalue()
-        self.assertIn("Graph:", output)
-        self.assertIn("active state:", output)
-        self.assertTrue("cluster " in output or "outside active clusters:" in output)
+        self.assertIn("No state-linked workflows.", output)
+        self.assertIn("+ writes, − deletes, ? conditional", output)
+        self.assertNotIn("ordered access sites", output)
 
     def test_cli_graph_json_includes_graph_payload(self) -> None:
-        entry = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
-            workflow_name="inspect-issue",
-            workflow_description="Inspect issue context",
-            workflow_category="inspect",
-            workflow_when=None,
-            working_directory=None,
-        )
-        activated = SimpleNamespace(
-            playbook_path=Path("/tmp/.ordo/ordo.yaml"),
-            workflow_name="inspect-issue",
-            workflow=object(),
-            profile=None,
-            working_directory=None,
-            available_profiles=None,
-            profile_working_directories=None,
-            diagnostics=(),
-        )
-        runtime_result = RuntimeResult(
-            mode=Mode.EXPLAIN,
-            status=RuntimeStatus.OK,
-            diagnostics=(),
-            plan=ExecutionPlan(),
-            outputs={
-                "can_execute": True,
-                "allowed_state": "allowed",
-                "analysis_complete": True,
-                "explanation": {"allowed": True, "category": "ok", "blockers": []},
-                "guard_coverage": [],
-                "relevant_guard_count": 0,
-                "evaluated_relevant_guard_count": 0,
-            },
-        )
+        from ordo.runtime.graphing import build_static_graph
+        graph = build_static_graph([])
         stdout = io.StringIO()
         stderr = io.StringIO()
         with patch("sys.argv", ["ordo-playbook", "graph", "--json"]):
-            with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
-                with patch("ordo.cli.activate_playbook", return_value=activated):
-                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
-                        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-                            exit_code = cli_main()
+            with patch("ordo.playbook.build_playbook_static_graph", return_value=graph):
+                with patch("ordo.cli._build_next_payload", side_effect=AssertionError("graph entered next")):
+                    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        exit_code = cli_main()
 
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout.getvalue())
-        self.assertIn("graph", payload)
-        self.assertIn("workflows", payload["graph"])
-        self.assertIn("score_breakdown", payload["graph"]["workflows"][0])
+        self.assertEqual(payload["schema"], "ordo.static-process-graph")
+        self.assertEqual(payload["schema_version"], 1)
+        self.assertIn("workflows", payload)
+        self.assertNotIn("best_candidate", payload)
 
     def test_cli_graph_command_does_not_accept_workflow_name(self) -> None:
         stdout = io.StringIO()
@@ -3397,6 +3334,17 @@ class PlaybookActivationTest(unittest.TestCase):
         help_text = stdout.getvalue()
         self.assertIn("usage: ordo-playbook [options] graph", help_text)
         self.assertIn("ordo-playbook graph", help_text)
+        self.assertIn("schema_version=1", help_text)
+        self.assertIn("next ranking remains unchanged", help_text)
+        self.assertIn("minimal workflow tree", help_text)
+        self.assertIn("separate unresolved placement section", help_text)
+        self.assertIn("not execution prerequisites", help_text)
+        self.assertIn("not runtime permission", help_text)
+        self.assertIn("statistics remain in JSON rather than default text", help_text)
+        self.assertIn("+field writes, −field deletes, ? conditional", help_text)
+        self.assertIn("do not imply first creation or readiness", help_text)
+        self.assertIn("source placement takes precedence", help_text)
+        self.assertIn("authored playbook entry order", help_text)
 
     def test_cli_run_help_mentions_progress_steps_flag(self) -> None:
         stdout = io.StringIO()

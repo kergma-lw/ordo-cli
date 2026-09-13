@@ -1,57 +1,37 @@
 version: 0
 workflow: set-active-task
 inputs:
-  issue_number: {}
-  repository: {}
-  project_id: {}
+  issue_number:
+    description: Issue to start or resume.
+  repository:
+    description: GitHub OWNER/REPO.
+  project_id:
+    description: GitHub project ID.
 state_needs:
   common_state: {}
 let:
+  active_issue: state.common_state[inputs.repository].issue_number | catch(["runtime.value.state_missing"], null)
   issue: gh.issue(repository=inputs.repository, issue_number=inputs.issue_number)
   project_issue: gh.project.issue(repository=inputs.repository, issue_number=inputs.issue_number,
     project_id=inputs.project_id)
 blocks:
 - guards:
   - inputs.issue_number | is_integer
+  - inputs.repository | is_string
+  - inputs.project_id | is_string
+  - active_issue == null or active_issue == inputs.issue_number
 - guards:
   - inputs.repository != ""
   - inputs.project_id != ""
-- steps:
-  - name: load-issue
-    uses: gh.issue
-    with:
-      repository: inputs.repository
-      issue_number: inputs.issue_number
-    register: issue
-  - name: probe-project-membership
-    uses: gh.project.issue
-    with:
-      repository: inputs.repository
-      issue_number: inputs.issue_number
-      project_id: inputs.project_id
-    register: project_probe
-  - name: add-issue-to-project
-    if: step.project_probe.outputs.exists | not
-    uses: gh.project.issue.add
-    with:
-      repository: inputs.repository
-      issue_number: inputs.issue_number
-      project_id: inputs.project_id
-  - name: load-project-fields
-    uses: gh.project.issue
-    with:
-      repository: inputs.repository
-      issue_number: inputs.issue_number
-      project_id: inputs.project_id
-    register: project
-- guards:
+  - gh.project.field(project_id=inputs.project_id, field="Status").exists
+  - gh.project.field.option(project_id=inputs.project_id, field="Status", option="In progress").exists
   - git.repo.exists
-  - git.worktree.clean == true
+  - git.worktree.clean
   - issue.state == "OPEN"
   - project_issue.exists
   - project_issue.status != "Done"
-  - project_issue.type == "Story" or project_issue.type == "Task" or project_issue.type
-    == "Bug"
+  - project_issue.type == "Story" or project_issue.type == "Task" or project_issue.type == "Bug"
+  - project_issue.type == "Story" or project_issue.status == "Ready" or project_issue.status == "In progress"
 - steps:
   - name: Load branch issue
     uses: gh.issue
@@ -73,7 +53,16 @@ blocks:
       - step.branch_project.outputs.type | lower
       - inputs.issue_number
       - step.branch_issue.outputs.title | slug
+    register: proposed_branch
+  - name: Preserve the active branch on resume
+    value: state.common_state[inputs.repository].branch | catch(["runtime.value.state_missing"], step.proposed_branch.outputs.value)
     register: branch
+  - name: Require a work branch
+    gate:
+      all:
+        - step.branch.outputs.value | is_string
+        - step.branch.outputs.value | trim | ne("")
+        - step.branch.outputs.value != "main"
   - name: Probe local main ref
     uses: git.ref
     with:
@@ -88,6 +77,8 @@ blocks:
     with:
       ref: "refs/remotes/origin/main"
     register: remote_main
+  - name: Require main before branch preparation
+    gate: step.remote_main.outputs.exists
   - name: Switch main
     if: step.local_main.outputs.exists
     uses: git.branch.switch
@@ -134,3 +125,16 @@ blocks:
   - name: Remember branch
     state_set:
       state.common_state[inputs.repository].branch: ${step.branch.outputs.value}
+  - name: Start task
+    if: step.branch_project.outputs.type != "Story" and step.branch_project.outputs.status == "Ready"
+    uses: gh.project.issue.field_single_select.set
+    with:
+      repository: inputs.repository
+      issue_number: inputs.issue_number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "In progress"
+  - name: Publish active task
+    publish:
+      summary: "Work branch prepared"
+      branch: step.branch.outputs.value

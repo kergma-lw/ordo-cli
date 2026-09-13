@@ -4,4 +4,5 @@
 __pycache__/
 *.py[cod]
 .ordo/repo.json
+.ordo.json
 *.swp

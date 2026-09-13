@@ -279,6 +279,112 @@ def inspect_playbook_workflow(
     )
 
 
+def build_playbook_static_graph(
+    *, playbook_path: str | Path | None = None, profile_name: str | None = None,
+    input_overrides: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Load authored topology without activation, state reads, or probe evaluation."""
+    from dataclasses import replace
+    from ordo.runtime.graphing import build_static_graph, static_binding
+
+    # Catalog iteration preserves authored entry order for graph display ties.
+    # Category stays discovery metadata; do not group or sort these entries.
+    entries = list_playbook_workflows(playbook_path=playbook_path)
+    path = Path(playbook_path) if playbook_path else discover_playbook_path()
+    payload = _load_playbook_document(path)
+    boundaries, workflows, state_families = [], [], {}
+    profile = None
+    static_profile_name = None
+    static_profile_source = None
+    profile_unavailable = False
+    try:
+        static_profile_name, static_profile_source, profile, _ = _load_launch_profile(payload, path=path, profile_name=profile_name)
+    except PlaybookError as exc:
+        profile_unavailable = True
+        boundaries.append({"reason": "profile_unavailable", "impact": "context", "diagnostics": [d.to_contract() for d in exc.diagnostics]})
+    profiles = {}
+    catalog_complete = True
+    for name in payload.get("profiles", {}):
+        try:
+            _, _, declared, _ = _load_launch_profile(payload, path=path, profile_name=name)
+            if declared is not None:
+                profiles[name] = declared
+        except PlaybookError as exc:
+            catalog_complete = False
+            boundaries.append({"reason": "profile_unavailable", "profile": name, "impact": "context",
+                               "diagnostics": [d.to_contract() for d in exc.diagnostics]})
+    for entry in entries:
+        try:
+            raw = _load_workflow_payload(entry.workflow_path, launch_dir=Path.cwd())
+            try:
+                raw = _compile_workflow_payload(raw, workflow_name=entry.workflow_name,
+                    workflow_entry=payload["workflows"][entry.workflow_name], playbook_payload=payload,
+                    playbook_dir=path.parent, playbook_path=path)
+            except PlaybookError as exc:
+                boundaries.append({"workflow": entry.workflow_name, "reason": "state_binding_unresolved", "impact": "context",
+                                   "diagnostics": [d.to_contract() for d in exc.diagnostics]})
+            workflow = load_workflow_payload(raw, source=str(entry.workflow_path.absolute()), launch_dir=Path.cwd())
+        except (PlaybookError, LoadError) as exc:
+            boundaries.append({"workflow": entry.workflow_name, "reason": "workflow_unavailable",
+                               "diagnostics": [d.to_contract() for d in exc.diagnostics]})
+            continue
+        inputs = {name: declaration["default"] for name, declaration in workflow.declared_inputs.items()
+                  if isinstance(declaration, dict) and "default" in declaration}
+        protected = set(inputs) | set(entry.with_) | set(input_overrides or {}).intersection(workflow.declared_inputs)
+        if profile is not None:
+            for key, value in profile.inputs.items():
+                inputs.setdefault(key, value)
+        inputs.update(entry.with_)
+        inputs.update({key: value for key, value in (input_overrides or {}).items() if key in workflow.declared_inputs})
+        workflow = replace(workflow, inputs=inputs, launch_profile_name=static_profile_name,
+                           launch_profile_source=static_profile_source,
+                           protected_input_keys=tuple(sorted(protected)),
+                           explicit_input_keys=tuple(sorted(set(input_overrides or {}).intersection(workflow.declared_inputs))))
+        defaults = payload.get("defaults", {})
+        directory = defaults.get("working_directory") if isinstance(defaults, dict) else None
+        if profile is not None and profile.working_directory is not None:
+            directory = profile.working_directory
+        directory = entry.working_directory or directory
+        if directory is None:
+            base = str(path.parent.absolute())
+        else:
+            directory_context = replace(workflow, inputs={**(profile.inputs if profile else {}), **inputs})
+            value = static_binding(directory, directory_context) if directory.startswith("${") else directory
+            base = str((path.parent / value).absolute()) if isinstance(value, str) else None
+            if base is None:
+                boundaries.append({"workflow": entry.workflow_name, "reason": "working_directory_unresolved", "impact": "context"})
+        if profile_unavailable and entry.working_directory is None:
+            base = None
+        families = {}
+        for name, state in payload.get("states", {}).items():
+            if isinstance(state, dict) and isinstance(state.get("path"), str) and state["path"]:
+                profile_instance = (not Path(state["path"]).is_absolute() and entry.working_directory is None
+                                    and (profile_unavailable or (profile is not None and profile.working_directory is not None)))
+                families[name] = {"id": f"playbook:{os.path.abspath(path)}#states.{name}", "name": name,
+                                  "declaration": state["path"],
+                                  "instance_kind": "profile_instance" if profile_instance else "fixed"}
+        state_families[entry.workflow_name] = families
+        # Match activation's location binding: root state paths become absolute
+        # once at launch. Later profile cwd changes must not retarget those files.
+        if base is not None:
+            workflow = replace(workflow, states={name: str((Path(base) / raw).absolute())
+                                                 for name, raw in workflow.states.items()})
+        if payload.get("pre_run"):
+            # Pre-run is launch-owned context, not a business action to execute here.
+            try:
+                workflow = _prepend_pre_run_workflows(workflow, playbook_payload=payload,
+                    playbook_dir=path.parent, playbook_path=path)
+            except PlaybookError as exc:
+                boundaries.append({"workflow": entry.workflow_name, "reason": "pre_run_unresolved", "phase": "bootstrap",
+                                   "diagnostics": [d.to_contract() for d in exc.diagnostics]})
+        execution_base = str(Path.cwd()) if directory is None and not profile_unavailable else base
+        workflows.append((entry.workflow_name, workflow, execution_base))
+    return build_static_graph(workflows, playbook_path=str(path), boundaries=boundaries,
+                              profiles=profiles, profile_base_dir=str(path.parent.absolute()),
+                              catalog_complete=catalog_complete, state_families=state_families,
+                              workflow_categories={entry.workflow_name: entry.workflow_category for entry in entries})
+
+
 def _input_authoring_contract(
     name: str,
     declaration: object,

@@ -103,12 +103,34 @@ Examples:
 
 GRAPH_MODE_HELP = """usage: ordo-playbook [options] graph
 
-Show the inferred workflow topology for the current playbook context.
+Show static possible-process topology without reading state or evaluating probes.
 
-Default output is intended to be concise:
-  - active state paths
-  - structural state clusters
-  - workflows grouped by shared topology
+Default output is a minimal workflow tree:
+  - logical context headings and workflow names
+  - trailing state effects: +field writes, −field deletes, ? conditional; −context deletes the whole context
+  - unique-source and join consumers retain their existing source-aware placement
+  - pure alternatives are standalone rows, with all source options retained in JSON
+  - a separate unresolved placement section when needed
+Branches show data relationships, not execution prerequisites.
+Display ties within a category follow authored playbook entry order; source placement takes precedence.
+Free alternatives use compatible category-order positions without splitting anchored source/reader blocks.
+Category does not create graph links or execution precedence, or introduce cross-category grouping.
+
+JSON: schema=ordo.static-process-graph, schema_version=1. This replaces the old
+next-shaped graph output. Proven address identity is not executable-cycle or
+reachability proof. Activity is not requested; next ranking remains unchanged.
+The additive summary drives compact text. Detailed relations, ordered sites,
+conditions and possible_loop_components remain intact in --json.
+Placement uses all read dependencies, including fallbacks; source availability
+stays symbolic. Placement is data dependence, not runtime permission.
+Writes do not imply first creation or readiness. Effects are deduplicated in first-seen order.
+Full expressions, joins, source identities, technical C/S identifiers and
+statistics remain in JSON rather than default text.
+Known profile switches preserve static bindings. Bootstrap dependencies remain
+in JSON but do not alone determine business contours or reader placement.
+Unknown profile context does not erase fixed-address links; key domains stay symbolic.
+Structural family links may require matching selector parameters and state instances;
+their evidence is separate from concrete address identity and runtime storage validation.
 
 Examples:
   ordo-playbook graph
@@ -200,7 +222,7 @@ def main() -> int:
             "  explain  explain why the workflow can or cannot be run right now\n"
             "  run      run the workflow and do the real work\n"
             "  next     suggest which workflow should run next\n"
-            "  graph    show inferred workflow topology"
+            "  graph    show static possible-process topology without state reads or probes"
         ),
     )
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")
@@ -393,16 +415,19 @@ def _run_next_mode(args, *, input_overrides: dict[str, object]) -> int:
 
 
 def _run_graph_mode(args, *, input_overrides: dict[str, object]) -> int:
-    payload = _build_next_payload(args, input_overrides=input_overrides, include_graph=True)
-    if isinstance(payload, int):
-        return payload
-    payload = dict(payload)
-    payload["mode"] = "graph"
+    from ordo.playbook import build_playbook_static_graph
+    from ordo.runtime.graphing import render_static_graph
+
+    try:
+        payload = build_playbook_static_graph(playbook_path=args.playbook_file,
+            profile_name=args.profile, input_overrides=input_overrides)
+    except PlaybookError as exc:
+        return _emit_error(exc, as_json=args.json, requested_mode="graph", requested_workflow=None)
     if args.json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
         sys.stdout.write("\n")
     else:
-        print(_render_graph_text(payload))
+        print(render_static_graph(payload))
     return 0
 
 

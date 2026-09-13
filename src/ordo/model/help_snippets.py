@@ -9,6 +9,7 @@ from .json import JSONObject
 
 
 SUPPORTED_SNIPPET_FORMS = {
+    "graph_bundle",
     "python_fragment",
     "value",
     "field_fragment",
@@ -25,6 +26,7 @@ SUPPORTED_SNIPPET_VERIFICATION_KINDS = {
 }
 
 SUPPORTED_SNIPPET_INSERTION_MODES = {
+    "graph_bundle",
     "sdk_probe_fragment",
     "expression_value",
     "step_field",
@@ -3328,6 +3330,395 @@ workflow_text: |
         },
     },
 ]
+
+GRAPH_BUNDLE_EXAMPLE = {
+    "name": "static_graph_bridge_and_reset",
+    "kind": "positive", "form": "graph_bundle",
+    "summary": "Verify detailed links and the exact compact tree with state-effect suffixes. Tied readers retain supplied workflow-list order, not alphabetical order; source-aware placement still takes precedence. The same stable ordering implements playbook-order ties within a category, without category-driven links or execution precedence. This bundle verifies the builder/renderer; playbook category parsing is covered separately by engine tests.",
+    "yaml": '''workflows:
+  - |
+    version: 0
+    workflow: open
+    state_needs:
+      shared_state: {}
+    blocks:
+      - steps:
+          - name: remember
+            state_set:
+              state.shared_state["repo"].issue: 1
+  - |
+    version: 0
+    workflow: bridge
+    inputs:
+      enabled: {default: true}
+    state_needs:
+      shared_state: {}
+    blocks:
+      - steps:
+          - name: read-issue
+            value: state.shared_state["repo"].issue
+            register: issue
+          - name: remember-branch
+            if: inputs.enabled
+            state_set:
+              state.shared_state["repo"].branch: "work"
+          - name: remember-token
+            if: inputs.enabled
+            state_set:
+              state.shared_state["repo"].token: "saved"
+  - |
+    version: 0
+    workflow: reset
+    state_needs:
+      shared_state: {}
+    blocks:
+      - steps:
+          - name: read-branch
+            value: state.shared_state["repo"].branch
+          - name: forget
+            state_delete: state.shared_state["repo"]
+  - |
+    version: 0
+    workflow: z-observer
+    state_needs:
+      shared_state: {}
+    blocks:
+      - steps:
+          - name: use-issue
+            value: state.shared_state["repo"].issue
+  - |
+    version: 0
+    workflow: observer
+    state_needs:
+      shared_state: {}
+    blocks:
+      - steps:
+          - name: use-issue
+            value: state.shared_state["repo"].issue
+  - |
+    version: 0
+    workflow: joined-user
+    state_needs:
+      shared_state: {}
+    blocks:
+      - steps:
+          - name: use-issue
+            value: state.shared_state["repo"].issue
+          - name: optional-branch
+            value: state.shared_state["repo"].branch | catch(["runtime.value.state_missing"], null)
+expected_links:
+  - [open, bridge, handoff, proven]
+  - [bridge, reset, handoff, proven]
+  - [reset, bridge, invalidation, proven]
+  - [open, observer, handoff, proven]
+  - [reset, observer, invalidation, proven]
+  - [open, joined-user, handoff, proven]
+  - [bridge, joined-user, handoff, proven]
+  - [reset, joined-user, invalidation, proven]
+  - [open, z-observer, handoff, proven]
+  - [reset, z-observer, invalidation, proven]
+expected_loops:
+  - [bridge, reset]
+expected_text: |
+  + writes, − deletes, ? conditional; branches show data use, not execution order.
+  Ties within a category follow playbook order.
+
+  Context · shared_state["repo"]
+
+  open (+issue)
+  ├── z-observer
+  └── observer
+  bridge (+branch?, +token?)
+  └── joined-user
+  reset (−context)
+
+  Details: --json.''',
+    "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
+                     "target": "state", "expected_status": "ok"},
+}
+HELP_SNIPPET_REGISTRY["state"]["canonical_examples"].append(deepcopy(GRAPH_BUNDLE_EXAMPLE))
+HELP_SNIPPET_REGISTRY["command-line.ordo-playbook"] = {
+    "snippet_coverage": "runner_verified", "canonical_examples": [deepcopy(GRAPH_BUNDLE_EXAMPLE)]}
+HELP_SNIPPET_REGISTRY["command-line.ordo-playbook"]["canonical_examples"][0]["verification"]["target"] = "command-line.ordo-playbook"
+
+GRAPH_PROFILE_EXAMPLE = {
+    "name": "static_profiles_and_bootstrap_provenance", "kind": "positive", "form": "graph_bundle",
+    "summary": "Load a real static playbook bundle without state contents. A literal profile switch preserves the protected selector default; bootstrap reads retain detailed links but do not attach the bootstrap-only workflow to the business tree. No probes or effects execute.",
+    "yaml": '''playbook_text: |
+  version: 1
+  defaults: {profile: fixed}
+  profiles:
+    fixed: {file: ./fixed.yaml}
+  states:
+    env: {path: ./env.json}
+  pre_run:
+    - file: ./bootstrap.yaml
+      state_bindings: {env: env}
+  workflows:
+    remember:
+      file: ./remember.yaml
+      state_bindings: {env: env}
+    inspect:
+      file: ./inspect.yaml
+      state_bindings: {env: env}
+    bootstrap-only:
+      file: ./empty.yaml
+files:
+  fixed.yaml: |
+    name: fixed
+    inputs: {repository: repo}
+  bootstrap.yaml: |
+    version: 0
+    workflow: bootstrap
+    inputs:
+      selector: {default: selected}
+    state_needs: {env: {}}
+    let:
+      chosen: state.env[inputs.selector]
+    blocks:
+      - steps:
+          - name: switch
+            profile_switch: ${chosen}
+  remember.yaml: |
+    version: 0
+    workflow: remember
+    inputs:
+      selector: {default: selected}
+    state_needs: {env: {}}
+    blocks:
+      - steps:
+          - name: fixed-profile
+            profile_switch: "fixed"
+          - name: remember
+            state_set:
+              state.env[inputs.selector]: "fixed"
+              state.env["issue"]: 1
+  inspect.yaml: |
+    version: 0
+    workflow: inspect
+    state_needs: {env: {}}
+    blocks:
+      - steps:
+          - name: read
+            value: state.env["issue"]
+  empty.yaml: |
+    version: 0
+    workflow: bootstrap-only
+    blocks: []
+expected_links:
+  - [remember, inspect, handoff, proven]
+  - [remember, bootstrap-only, handoff, proven]
+expected_loops: []
+expected_text: |
+  + writes, − deletes, ? conditional; branches show data use, not execution order.
+  Ties within a category follow playbook order.
+
+  Contour 1 · env["selected"]; env["issue"]
+
+  remember (+env["selected"], +env["issue"])
+  └── inspect
+
+  Bootstrap dependencies: --json.
+
+  Details: --json.''',
+    "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
+                     "target": "state", "expected_status": "ok"},
+}
+for _graph_handle in ("state", "command-line.ordo-playbook"):
+    _graph_example = deepcopy(GRAPH_PROFILE_EXAMPLE)
+    _graph_example["verification"]["target"] = _graph_handle
+    HELP_SNIPPET_REGISTRY[_graph_handle]["canonical_examples"].append(_graph_example)
+
+GRAPH_PARAMETER_EXAMPLE = {
+    "name": "state_family_parameter_correspondence", "kind": "positive", "form": "graph_bundle",
+    "summary": "Verify a profile-indexed state family without selecting or reading state. The concrete handoff remains possible, while the separate structural link carries shared-origin correspondence and a selector equality requirement. The default tree displays the producer/reader family, not a concrete address or execution guarantee.",
+    "yaml": '''playbook_text: |
+  version: 1
+  defaults: {profile: alpha}
+  profiles:
+    alpha: {file: ./alpha.yaml}
+    beta: {file: ./beta.yaml}
+  states:
+    data: {path: ./state.json}
+    env: {path: ./env.json}
+  pre_run:
+    - file: ./bootstrap.yaml
+      state_bindings: {env: env}
+  workflows:
+    producer:
+      file: ./producer.yaml
+      state_bindings: {data: data}
+    reader:
+      file: ./reader.yaml
+      state_bindings: {data: data}
+files:
+  alpha.yaml: |
+    name: alpha
+    inputs: {repository: org/alpha}
+    working_directory: /structural/alpha
+  beta.yaml: |
+    name: beta
+    inputs: {repository: org/beta}
+    working_directory: /structural/beta
+  bootstrap.yaml: |
+    version: 0
+    workflow: bootstrap
+    state_needs: {env: {}}
+    blocks:
+      - steps:
+          - name: choose-profile
+            profile_switch: state.env["selected"]
+  producer.yaml: |
+    version: 0
+    workflow: producer
+    inputs: {repository: {}}
+    state_needs: {data: {}}
+    blocks:
+      - steps:
+          - name: remember
+            state_set:
+              state.data[inputs.repository].issue: 1
+              state.data[inputs.repository].branch: "work"
+  reader.yaml: |
+    version: 0
+    workflow: reader
+    inputs: {repository: {}}
+    state_needs: {data: {}}
+    blocks:
+      - steps:
+          - name: use-context
+            value:
+              issue: state.data[inputs.repository].issue
+              branch: state.data[inputs.repository].branch
+expected_links:
+  - [producer, reader, handoff, possible]
+expected_loops: []
+expected_structural_links:
+  - from: producer
+    to: reader
+    kind: handoff
+    correspondence: shared_origin_parameter
+    requires: [selector_equal]
+expected_text: |
+  + writes, − deletes, ? conditional; branches show data use, not execution order.
+  Ties within a category follow playbook order.
+
+  Context · data[parameter]
+
+  producer (+issue, +branch)
+  └── reader
+
+  Bootstrap dependencies: --json.
+
+  Parametric links require matching selectors, state instances and read shapes.
+
+  Details: --json.''',
+    "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
+                     "target": "state", "expected_status": "ok"},
+}
+for _parameter_handle in ("state", "command-line.ordo-playbook"):
+    _parameter_example = deepcopy(GRAPH_PARAMETER_EXAMPLE)
+    _parameter_example["verification"]["target"] = _parameter_handle
+    HELP_SNIPPET_REGISTRY[_parameter_handle]["canonical_examples"].append(_parameter_example)
+
+GRAPH_ALTERNATIVES_EXAMPLE = {
+    "name": "alternatives_do_not_select_a_parent", "kind": "positive", "form": "graph_bundle",
+    "summary": "Verify alternatives as a standalone row, retaining both source links. Category order places ready before the intact producer/review block; the unique review dependency is not detached. No source is chosen as a prerequisite and no category edge is created.",
+    "yaml": '''playbook_text: |
+  version: 1
+  states:
+    memory: {path: ./memory.json}
+  workflows:
+    producer:
+      file: ./producer.yaml
+      category: context
+      state_bindings: {memory: memory}
+    alternate:
+      file: ./alternate.yaml
+      category: context
+      state_bindings: {memory: memory}
+    ready:
+      file: ./ready.yaml
+      category: lifecycle
+      state_bindings: {memory: memory}
+    review:
+      file: ./review.yaml
+      category: lifecycle
+      state_bindings: {memory: memory}
+    done:
+      file: ./done.yaml
+      category: lifecycle
+      state_bindings: {memory: memory}
+files:
+  producer.yaml: |
+    version: 0
+    workflow: producer
+    state_needs: {memory: {}}
+    blocks:
+      - steps:
+          - name: write
+            state_set:
+              state.memory["repo"].choice: true
+              state.memory["repo"].story: true
+  alternate.yaml: |
+    version: 0
+    workflow: alternate
+    state_needs: {memory: {}}
+    blocks:
+      - steps:
+          - name: write
+            state_set:
+              state.memory["repo"].choice: true
+  ready.yaml: |
+    version: 0
+    workflow: ready
+    state_needs: {memory: {}}
+    blocks:
+      - steps:
+          - name: read
+            value: state.memory["repo"].choice
+  review.yaml: |
+    version: 0
+    workflow: review
+    state_needs: {memory: {}}
+    blocks:
+      - steps:
+          - name: read
+            value: state.memory["repo"].story
+  done.yaml: |
+    version: 0
+    workflow: done
+    state_needs: {memory: {}}
+    blocks:
+      - steps:
+          - name: delete
+            state_delete: state.memory["repo"].story
+expected_links:
+  - [producer, ready, handoff, proven]
+  - [producer, review, handoff, proven]
+  - [alternate, ready, handoff, proven]
+  - [done, review, invalidation, proven]
+expected_loops: []
+expected_text: |
+  + writes, − deletes, ? conditional; branches show data use, not execution order.
+  Ties within a category follow playbook order.
+
+  Context · memory["repo"]
+
+  ready
+  producer (+choice, +story)
+  └── review
+  alternate (+choice)
+  done (−story)
+
+  Details: --json.''',
+    "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
+                     "target": "state", "expected_status": "ok"},
+}
+for _alternatives_handle in ("state", "command-line.ordo-playbook"):
+    _alternatives_example = deepcopy(GRAPH_ALTERNATIVES_EXAMPLE)
+    _alternatives_example["verification"]["target"] = _alternatives_handle
+    HELP_SNIPPET_REGISTRY[_alternatives_handle]["canonical_examples"].append(_alternatives_example)
 
 for _state_handle in ("state", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete"):
     HELP_SNIPPET_REGISTRY[_state_handle]["snippet_coverage"] = "runner_verified"

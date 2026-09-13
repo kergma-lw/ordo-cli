@@ -112,7 +112,8 @@
     {
       "appropriate_when": [
         "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
-        "Selection among project modes belongs to launch context rather than to workflow-authored branching."
+        "Selection among project modes belongs to launch context rather than to workflow-authored branching.",
+        "Static graph resolves declared fixed profiles and known literal/input/let switches without activation. Declared workflow defaults and protected bindings survive; explicit CLI profile authority applies to pre_run. Unknown selections remain symbolic rather than reading remembered state."
       ],
       "inappropriate_when": [
         "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
@@ -232,7 +233,8 @@
         "One intentionally project-local workflow subtree must bind itself to one fixed execution profile through workflow.profile.",
         "Document every root input with a non-blank description and expose inputs without a default, selected launch-profile value, or entry binding through playbook with caller slots: x: for required inputs, x?: for optional inputs. Review reports input_authoring warnings; CLI overrides do not suppress them or change activation errors.",
         "Plain workflows show omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json keeps all fields unchanged, including original normalized required, caller_slot, the launch_profile source label and initial activation name and source, not the final bound workflow profile.",
-        "Inspect the main caller interface with ordo-playbook workflows show <workflow>: plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. --json retains the unchanged full declaration contract with normalized required, caller_slot, sources, and coverage. Coverage reports source presence, not execution readiness; required caller slots still require caller input. Launch-profile values are not exposed, and CLI input overrides or runtime profile switches do not count as authored sources."
+        "Inspect the main caller interface with ordo-playbook workflows show <workflow>: plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. --json retains the unchanged full declaration contract with normalized required, caller_slot, sources, and coverage. Coverage reports source presence, not execution readiness; required caller slots still require caller input. Launch-profile values are not exposed, and CLI input overrides or runtime profile switches do not count as authored sources.",
+        "Plain workflows show adds top-level warnings only for required workflow inputs with coverage missing, including declarations hidden from inputs. Each warning has code discovery.workflow.input_source_missing, input, message, and hint: no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot; expose a caller slot or supply a source. Optional missing declarations do not warn, and warnings is omitted when none qualify. --json is unchanged. This uses authored source presence without readiness or state analysis; check, review, plan, run, explain, and next are unchanged."
       ],
       "inappropriate_when": [
         "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
@@ -395,6 +397,12 @@
       "appropriate_when": [
         "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
         "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
+        "Use ordo-playbook graph for static possible-process contours across ordered state accesses, including bridge fields, symbolic calls and repeats. Graph v1 is independent of next ranking and exists without state contents or available probes. Inspect command-line.ordo-playbook and state for evidence boundaries.",
+        "Default graph is a workflow tree with compact state-effect parentheses: + writes, − deletes, ? conditional. Writes do not mean first creation. Whole-context deletion is −context; partial deletions name fields. Effects retain first-seen order and deduplicate conservatively without inferring unconditional coverage across guards. Consumers retain source-aware placement; detailed JSON and next stay unchanged.",
+        "Graph display ties within a category retain authored playbook entry order. Pure alternatives are standalone rows, never children of an arbitrarily selected source. Unique dependencies retain their anchors; joins keep their existing layout. Category order positions free rows around intact anchored blocks when compatible, without creating graph links or execution precedence.",
+        "Graph access phase separates bootstrap from body. Detailed bootstrap dependencies remain in JSON, while business contours and reader placement use body accesses. Profile-context uncertainty does not hide proven fixed-address links. Bounded constant lookup and item/key domains retain up to 32 authored alternatives without iteration unroll.",
+        "Structural graph indices may be parameters of the same declaration-owned state family. Compatible field paths can link without a concrete key/file, under explicit selector and instance correspondence requirements. Fixed disjoint keys/stores and unrelated declarations do not merge. Physical address proof and runtime storage validation remain separate.",
+        "Source-aware placement still accounts for all reads, including conditional and fallback reads, without treating every source as a mandatory runtime requirement. Joins, alternatives, conditional source evidence and stable C/S identifiers remain in unchanged JSON. Readers may perform external effects; a tree branch grants no runtime permission and does not infer a business lifecycle name.",
         "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
         "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context: aliases count as one file, while the same role may access different files and be valid.",
         "Bound validation reports state_storage.write_before_last_read for proven violations, or state_storage.identity_unresolved for conservative early rejection of relevant uncertain write/later-read pairs, not a proven violation. Both codes have the validation.workflow. prefix.",
@@ -457,7 +465,9 @@
         "states",
         "state_set",
         "state_delete",
-        "bound locations"
+        "bound locations",
+        "graph",
+        "possible processes"
       ],
       "name": "state",
       "published_names": {

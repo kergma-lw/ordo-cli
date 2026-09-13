@@ -58,7 +58,7 @@
 ## Result contract expectations
 
 - `next` must return machine-readable output.
-- `next` may additionally expose a diagnostic graph surface that shows which state-backed context and workflow cluster shaped the recommendation.
+- `next` retains its current recommendation and ranking evidence. The standalone `graph` command has a separate static possible-process purpose and versioned contract; see `graph.md`.
 - The output should include at least:
   - one best candidate workflow when runtime can justify one;
   - nearby alternatives when they are materially competitive;
@@ -71,7 +71,7 @@
   - why it ranked above nearby alternatives;
   - what blocker or missing input would change the recommendation.
 - The human-readable text surface should include a compact explanation tag near each surfaced workflow so the recommendation does not look like an unexplained score dump.
-- If a graph surface is requested, it should show active state paths plus workflow reads, writes, deletes, and inferred cluster membership in a way that makes ranking decisions inspectable.
+- Standalone `graph` must not call next activation, explanation, or ranking. Changing graph output must not change next eligibility, ranking, behavior, or result shape.
 
 ## Safety and honesty
 

@@ -5,11 +5,57 @@ states:
   common_state:
     path: .ordo.json
 workflows:
+  create-task:
+    file: workflows/create-task.yml
+    description: Create a task in Backlog
+    category: task-lifecycle
+    with:
+      title:
+      body:
+  task-to-ready:
+    file: workflows/task-to-ready.yml
+    description: Move a task or bug to Ready
+    category: task-lifecycle
+    with:
+      issue_number:
   set-active-task:
     file: workflows/set-active-task.yml
-    description: Prepare local work on one task or story issue
-    category: context
-    when: Use before starting local work on the current task or story.
+    description: Start or resume work on an issue
+    category: task-lifecycle
+    with:
+      issue_number:
+    state_bindings:
+      common_state: common_state
+  task-to-review:
+    file: workflows/task-to-review.yml
+    description: Open the local diff and move a task to In review
+    category: task-lifecycle
+    state_bindings:
+      common_state: common_state
+  merge-task:
+    file: workflows/merge-task.yml
+    description: Find or create a PR, check CI, and request merge
+    category: task-lifecycle
+    when: Set ship=true to authorize submission; repeat to observe a saved request.
+    with:
+      ship?:
+      merge_method?:
+    state_bindings:
+      common_state: common_state
+  close-task:
+    file: workflows/close-task.yml
+    description: Close a remotely merged task and clean up locally
+    category: task-lifecycle
+    with:
+      close_comment?:
+    state_bindings:
+      common_state: common_state
+  cancel-task:
+    file: workflows/cancel-task.yml
+    description: Cancel the active task with an English reason
+    category: task-lifecycle
+    with:
+      reason:
     state_bindings:
       common_state: common_state
   current-task-context:
@@ -83,11 +129,6 @@ workflows:
     file: workflows/stories-in-progress.yml
     description: Show Story issues that are In progress in the project
     category: inspect
-  create-task:
-    file: workflows/create-task.yml
-    description: Create a new Task issue in this repository context
-    category: create
-    when: Use when you need a new task.
   create-story:
     file: workflows/create-story.yml
     description: Create a new Story issue with a Tasks section
@@ -105,31 +146,6 @@ workflows:
     file: workflows/story-tasks-ready.yml
     description: Show Ready tasks referenced from a story Tasks section
     category: story
-  task-to-ready:
-    file: workflows/task-to-ready.yml
-    description: Validate one task or bug and set its project status to Ready
-    category: lifecycle
-    when: Use when a task or bug is ready to move into Ready.
-  task-to-in-progress:
-    file: workflows/task-to-in-progress.yml
-    description: Set one task or bug project status to In progress
-    category: lifecycle
-    when: Use when you are starting implementation on a Ready task.
-  task-to-review:
-    file: workflows/task-to-review.yml
-    description: Prepare the active task for review and set its project status to
-      In review
-    category: lifecycle
-    when: Use when implementation is complete and the active task is ready for review.
-    state_bindings:
-      common_state: common_state
-  close-task:
-    file: workflows/close-task.yml
-    description: Close the active reviewed task and clear remembered task context
-    category: lifecycle
-    when: Use when the active reviewed task is ready to land and close.
-    state_bindings:
-      common_state: common_state
   force-close-issue:
     file: workflows/force-close-issue.yml
     description: Close one issue directly, bypassing normal lifecycle checks

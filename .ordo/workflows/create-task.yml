@@ -1,10 +1,14 @@
 version: 0
 workflow: create-task
 inputs:
-  repository: {}
-  project_id: {}
-  title: {}
+  repository:
+    description: GitHub OWNER/REPO.
+  project_id:
+    description: GitHub project ID.
+  title:
+    description: English task title.
   body:
+    description: English task scope and verification.
     hint: Use plain task body text only; do not include a '## Tasks' section
 let:
   project: gh.project(project_id=inputs.project_id)
@@ -16,13 +20,21 @@ let:
     option="Task")
 blocks:
 - guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.project_id | is_string
+  - inputs.project_id | trim | ne("")
+  - inputs.title | is_string
+  - inputs.title | trim | ne("")
+  - inputs.body | is_string
+  - inputs.body | trim | ne("")
   - git.repo.exists
   - project.exists
   - status_field.exists
   - backlog_status_option.exists
   - type_field.exists
   - task_type_option.exists
-  - 'is_missing(markdown["Tasks"] with{root: inputs.body})'
+  - 'is_missing(inputs.body | markdown["Tasks"])'
 - steps:
   - name: Create issue
     uses: gh.issue.create
@@ -37,6 +49,15 @@ blocks:
       repository: inputs.repository
       issue_number: step.created_issue.outputs.number
       project_id: inputs.project_id
+  - name: Confirm project membership
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: step.created_issue.outputs.number
+      project_id: inputs.project_id
+    register: membership
+  - name: Require project membership
+    gate: step.membership.outputs.exists
   - name: Set task status
     uses: gh.project.issue.field_single_select.set
     with:

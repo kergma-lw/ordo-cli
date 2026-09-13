@@ -1,8 +1,10 @@
 version: 0
 workflow: task-to-review
 inputs:
-  repository: {}
-  project_id: {}
+  repository:
+    description: GitHub OWNER/REPO.
+  project_id:
+    description: GitHub project ID.
 state_needs:
   common_state: {}
 let:
@@ -13,14 +15,23 @@ let:
     project_id=inputs.project_id)
 blocks:
 - guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.project_id | is_string
+  - inputs.project_id | trim | ne("")
   - git.repo.exists
+  - stored_issue_number | is_integer
+  - stored_branch | is_string
   - issue.state == "OPEN"
   - project_issue.exists
+  - gh.project.field(project_id=inputs.project_id, field="Status").exists
+  - gh.project.field.option(project_id=inputs.project_id, field="Status", option="In review").exists
   - project_issue.type == "Task" or project_issue.type == "Bug"
   - project_issue.status == "In progress"
   - stored_branch == git.branch.value
   - git.branch.value != "main"
   - git.worktree.clean
+  - git.range(base="refs/heads/main", head="HEAD").ahead_count | ne(0)
 - steps:
   - name: Render and open review diff
     uses: routine.review.render-open-diff

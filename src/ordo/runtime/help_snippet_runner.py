@@ -37,6 +37,7 @@ class HelpSnippetRunnerResult:
     calls: tuple[dict[str, object], ...] = ()
     python_text: str | None = None
     operation_result: OperationResult | None = None
+    graph_result: dict[str, object] | None = None
 
 
 def verify_help_snippet(
@@ -85,6 +86,64 @@ def verify_help_snippet(
 
     if insertion_mode == "routine_bundle":
         return _verify_routine_bundle_snippet(snippet=snippet, world=world, target=target, effective_world=effective_world)
+
+    if insertion_mode == "graph_bundle":
+        from .graphing import build_static_graph, render_static_graph
+
+        if target not in {"state", "command-line.ordo-playbook"}:
+            raise ValueError(f"Unsupported graph bundle target: {target}")
+        payload = load_yaml_document(snippet, source=f"graph-bundle:{target}:{world}")
+        project_bundle = isinstance(payload, dict) and "playbook_text" in payload
+        required = ({"playbook_text", "files"} if project_bundle else {"workflows"}) | {"expected_links", "expected_loops"}
+        if not isinstance(payload, dict) or not required <= set(payload) or set(payload) - required - {"expected_text", "expected_structural_links"}:
+            raise ValueError("Graph bundle requires workflows or playbook_text/files, expected_links and expected_loops; expected_text is optional")
+        workflows = []
+        for text in payload.get("workflows", []):
+            workflow = load_workflow_text(text)
+            # Named world locations define identity; their contents are intentionally
+            # absent. This path verifies graph output, never runtime readiness.
+            workflow = replace(workflow,
+                state_bindings={role: "shared_state" for role in workflow.state_needs},
+                states={"shared_state": "/snippet-world/absent-state.json"})
+            workflows.append((workflow.workflow, workflow, "/snippet-world"))
+        if project_bundle:
+            from ordo.playbook import build_playbook_static_graph
+            if not isinstance(payload["playbook_text"], str) or not isinstance(payload["files"], dict):
+                raise ValueError("Graph playbook bundle requires text and a file-text mapping")
+            with tempfile.TemporaryDirectory(prefix="ordo-help-graph-") as directory:
+                root = Path(directory)
+                for name, text in payload["files"].items():
+                    if not isinstance(name, str) or Path(name).is_absolute() or ".." in Path(name).parts or not isinstance(text, str):
+                        raise ValueError("Graph bundle files must be relative authored text files")
+                    destination = root / name
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_text(text, encoding="utf-8")
+                playbook = root / "ordo.yaml"
+                playbook.write_text(payload["playbook_text"], encoding="utf-8")
+                graph = build_playbook_static_graph(playbook_path=playbook)
+        else:
+            graph = build_static_graph(workflows)
+        links = sorted({(link["from_workflow"], link["to_workflow"], link["kind"], link["address_identity"])
+                        for link in graph["links"]})
+        if links != sorted(tuple(link) for link in payload["expected_links"]):
+            raise ValueError(f"Graph bundle link mismatch: {links!r}")
+        if graph["possible_loop_components"] != payload["expected_loops"]:
+            raise ValueError("Graph bundle loop mismatch")
+        if "expected_structural_links" in payload:
+            actual = sorted({(link["from_workflow"], link["to_workflow"], link["kind"],
+                              link["selector_correspondence"], tuple(sorted({r["predicate"] for r in link["requirements"]})))
+                             for link in graph["structural_links"]})
+            expected = sorted((item["from"], item["to"], item["kind"], item["correspondence"],
+                               tuple(sorted(item["requires"]))) for item in payload["expected_structural_links"])
+            if actual != expected:
+                raise ValueError(f"Graph bundle structural link mismatch: {actual!r}")
+        if "expected_text" in payload:
+            expected_text = payload["expected_text"]
+            if not isinstance(expected_text, str) or render_static_graph(graph) != expected_text.rstrip("\n"):
+                raise ValueError("Graph bundle compact text mismatch")
+        return HelpSnippetRunnerResult(world_name=world, insertion_mode=insertion_mode, target=target,
+            workflow_text=snippet, effective_world=effective_world, status="ok",
+            verification_path="static_graph", graph_result=graph)
 
     if insertion_mode == "state_bundle":
         if target not in {"state", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete"}:

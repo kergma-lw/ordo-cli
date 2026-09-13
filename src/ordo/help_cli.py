@@ -688,6 +688,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
         "appropriate_when": [
             "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
             "Selection among project modes belongs to launch context rather than to workflow-authored branching.",
+            "Static graph resolves declared fixed profiles and known literal/input/let switches without activation. Declared workflow defaults and protected bindings survive; explicit CLI profile authority applies to pre_run. Unknown selections remain symbolic rather than reading remembered state.",
         ],
         "inappropriate_when": [
             "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
@@ -724,10 +725,16 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     {
         "name": "state",
         "summary": "Declared runtime state surface for bound locations, state-keyed storage, and explicit state mutation steps.",
-        "keywords": ["state", "state_needs", "state_bindings", "states", "state_set", "state_delete", "bound locations"],
+        "keywords": ["state", "state_needs", "state_bindings", "states", "state_set", "state_delete", "bound locations", "graph", "possible processes"],
         "appropriate_when": [
             "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
             "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
+            "Use ordo-playbook graph for static possible-process contours across ordered state accesses, including bridge fields, symbolic calls and repeats. Graph v1 is independent of next ranking and exists without state contents or available probes. Inspect command-line.ordo-playbook and state for evidence boundaries.",
+            "Default graph is a workflow tree with compact state-effect parentheses: + writes, − deletes, ? conditional. Writes do not mean first creation. Whole-context deletion is −context; partial deletions name fields. Effects retain first-seen order and deduplicate conservatively without inferring unconditional coverage across guards. Consumers retain source-aware placement; detailed JSON and next stay unchanged.",
+            "Graph display ties within a category retain authored playbook entry order. Pure alternatives are standalone rows, never children of an arbitrarily selected source. Unique dependencies retain their anchors; joins keep their existing layout. Category order positions free rows around intact anchored blocks when compatible, without creating graph links or execution precedence.",
+            "Graph access phase separates bootstrap from body. Detailed bootstrap dependencies remain in JSON, while business contours and reader placement use body accesses. Profile-context uncertainty does not hide proven fixed-address links. Bounded constant lookup and item/key domains retain up to 32 authored alternatives without iteration unroll.",
+            "Structural graph indices may be parameters of the same declaration-owned state family. Compatible field paths can link without a concrete key/file, under explicit selector and instance correspondence requirements. Fixed disjoint keys/stores and unrelated declarations do not merge. Physical address proof and runtime storage validation remain separate.",
+            "Source-aware placement still accounts for all reads, including conditional and fallback reads, without treating every source as a mandatory runtime requirement. Joins, alternatives, conditional source evidence and stable C/S identifiers remain in unchanged JSON. Readers may perform external effects; a tree branch grants no runtime permission and does not infer a business lifecycle name.",
             "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
             "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context: aliases count as one file, while the same role may access different files and be valid.",
             "Bound validation reports state_storage.write_before_last_read for proven violations, or state_storage.identity_unresolved for conservative early rejection of relevant uncertain write/later-read pairs, not a proven violation. Both codes have the validation.workflow. prefix.",
@@ -965,9 +972,91 @@ GH_PR_MERGE_GUIDANCE = (
 )
 
 
+GRAPH_GUIDANCE = (
+    "ordo-playbook graph builds static possible processes from ordered persistent-state access occurrences, "
+    "independently of next activation and ranking. JSON uses schema ordo.static-process-graph, schema_version 1, "
+    "replacing the old next-shaped graph output. It publishes workflows, accesses, order_edges, links, components, "
+    "possible_loop_components, boundaries, and activity.status=not_requested. Store identity is a normalized "
+    "declared path, not an inode or filesystem-alias proof; keys resolve only from safe static literals/input/let bindings. "
+    "Same-named dynamic inputs across workflows are not proven equal. Handoffs and invalidations are possible execution "
+    "even when address identity is proven; parent replacement, subtree deletion and possible empty-parent prune are explicit. "
+    "Conditions remain symbolic, known calls compose, repeats retain one symbolic body, and unresolved or recursive calls "
+    "have explicit boundaries. Used let bindings expand at use sites; registered values do not reread storage. "
+    "Missing state, inputs or probes never remove loaded structure. No state contents, probes or effects are evaluated. "
+    "Components and potential loops do not prove reachability or executable cycles, infer business stages, or group by file/category/field. "
+    "Use next for current recommendations; check, review, plan, run, explain, next and actual-file write-before-last-read validation are unchanged."
+)
+
+
+GRAPH_PRESENTATION = (
+    "Default graph retains its workflow tree and adds trailing state-effect parentheses to mutating workflows. "
+    "The single legend is: + writes, − deletes, ? conditional; branches show data use, not execution order. "
+    "+ means a write, not guaranteed first creation. Whole-context deletion is −context; partial deletion names the field. "
+    "Effects retain first-seen field order and deduplicate by context, operation and field. Existing local if, iteration, "
+    "short-circuit or conditional-gate controls mark ?; duplicate effects under different conditions also keep ?. "
+    "No unconditional coverage is inferred across guards. Ordinary guard/gate admission alone is not a readiness claim "
+    "and does not mark every effect conditional. Context qualifiers distinguish ambiguous targets. "
+    "Read-only-state users have no effect parentheses; business placement separates bootstrap evidence from body dependencies. "
+    "Expressions, joins, source identities and full evidence stay in --json; summary is additive and retains bootstrap provenance. "
+    "Grouped writes are not atomic. Ties within a category follow playbook order. Dependency anchors take precedence; "
+    "anchored blocks retain their order, without category-driven graph links or execution precedence. "
+    "The graph bundle verifies exact default tree text."
+)
+
+
+GRAPH_SOURCE_PLACEMENT = (
+    "Business placement uses existing body read sites and body handoff links. JSON retains per-field joins, alternatives, "
+    "conditional source availability, unknown coverage and incomplete-reader evidence without choosing a newest writer. "
+    "Catch/fallback reads remain accounted for without becoming mandatory runtime requirements. Pure alternatives have after=null "
+    "and render as standalone rows, retaining every candidate in JSON; they are not unresolved. Unique-source readers stay nested. "
+    "Joins and join_with_alternatives retain their existing layout anchors, not execution prerequisites. Standalone alternatives "
+    "use category/authored order around intact anchored blocks when compatible; conflicting category bounds preserve anchors "
+    "and fall back to authored root-row order. Optional workflow category is display metadata only. "
+    "Unresolved consumers are listed separately. Consumers may perform external effects. Logical store bindings "
+    "and keys identify contexts; ambiguous stores retain short path qualifiers, while unknown key expressions stay in JSON. "
+    "Graph v1 retains its detailed fields and adds profile/bootstrap provenance. Known bindings refine address evidence; next remains unchanged."
+)
+
+
+GRAPH_CONTEXT_GUIDANCE = (
+    "Static graph loads declared profile metadata without activation, probes or state reads. Known literal/input/let switches "
+    "and workflow.profile bindings merge profile inputs using runtime protection rules; workflow defaults and explicit CLI/entry values survive. "
+    "Explicit CLI profile authority is retained through playbook pre_run. Supported unbound calls propagate profile context; "
+    "bound caller/callee scopes retain runtime isolation. Working directories follow profile context, while root playbook state "
+    "locations retain their launch-time binding. Unknown selections preserve fixed inputs and bounded candidate keys instead of "
+    "clearing all context. Constant maps, lookup and symbolic item/key domains retain up to 32 alternatives without unrolling bodies; "
+    "no arbitrary expression evaluator or external issue-body inference is added. Accesses publish phase (bootstrap/body), profile "
+    "and working_directory; boundaries distinguish context uncertainty from unknown structure. Detailed links and components retain "
+    "bootstrap evidence; business_components and summary reader placement use body links. summary.bootstrap retains launch accesses "
+    "and bootstrap-only workflows, with a compact JSON pointer in text. Profile uncertainty does not suppress proven fixed-address "
+    "relations. key_candidates are possible address domains, not equal runtime values; summary may aggregate the same finite domain "
+    "while keeping identity unresolved. Check, review, plan, run, explain and next are unchanged."
+)
+
+
+GRAPH_PARAMETER_GUIDANCE = (
+    "Structural graph indices can be symbolic parameters of one logical state family. Families are owned by a playbook "
+    "state declaration, not matching role names across unrelated stores. Profile-backed locations are family instances; "
+    "different concrete profile files do not by themselves prevent a conditional template link. Fixed disjoint indices "
+    "and fixed disjoint stores do not match. Access addresses retain concrete store/key proof and add family and selector "
+    "origin metadata. structural_links separately publish relation_category, selector_correspondence and requirements "
+    "such as selector_equal, same_family_instance and read_shape_available. Shared mutable selection origins establish "
+    "parameter correspondence, never equality of values across invocations; independent input scopes require equality too. "
+    "Used let aliases and forwarded call arguments preserve known origins, while nested store overrides retain their own "
+    "declaration scope. structural_components and structural_loop_components retain conditional family topology; summary "
+    "can place consumers with parametric coverage and render state[parameter], without relabeling possible concrete "
+    "identity as proven. Parent replacement/deletion and read-shape conditions remain explicit. Bootstrap stays separate. "
+    "A single text note states the matching-selector/instance/read-shape requirement. Concrete links, next, execution "
+    "and actual-file storage validation retain their existing semantics."
+)
+
+
 def build_capabilities_response() -> JSONObject:
     return {**describe_capabilities(), "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
-            "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE, "connector_authoring_guidance": SDK_CALL_GUIDANCE}
+            "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE, "connector_authoring_guidance": SDK_CALL_GUIDANCE,
+            "graph_guidance": GRAPH_GUIDANCE, "graph_presentation": GRAPH_PRESENTATION,
+            "graph_source_placement": GRAPH_SOURCE_PLACEMENT, "graph_context": GRAPH_CONTEXT_GUIDANCE,
+            "graph_parameters": GRAPH_PARAMETER_GUIDANCE}
 
 
 def build_operations_response() -> JSONObject:
@@ -1019,6 +1108,11 @@ def build_overview_response() -> JSONObject:
 
     return {
         "document_kind": "overview",
+        "graph_parameters": GRAPH_PARAMETER_GUIDANCE,
+        "graph_context": GRAPH_CONTEXT_GUIDANCE,
+        "graph_guidance": GRAPH_GUIDANCE,
+        "graph_presentation": GRAPH_PRESENTATION,
+        "graph_source_placement": GRAPH_SOURCE_PLACEMENT,
         "purpose": "World map for Ordo discovery and authoring bootstrap",
         "gh_pr_list_guidance": GH_PR_LIST_GUIDANCE,
         "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE,
@@ -1076,6 +1170,11 @@ def build_model_response() -> JSONObject:
 
     return {
         "document_kind": "model",
+        "graph_parameters": GRAPH_PARAMETER_GUIDANCE,
+        "graph_context": GRAPH_CONTEXT_GUIDANCE,
+        "graph_guidance": GRAPH_GUIDANCE,
+        "graph_presentation": GRAPH_PRESENTATION,
+        "graph_source_placement": GRAPH_SOURCE_PLACEMENT,
         "gh_pr_create_guidance": GH_PR_CREATE_GUIDANCE,
         "connector_authoring_guidance": SDK_CALL_GUIDANCE,
         "gh_pr_merge_guidance": GH_PR_MERGE_GUIDANCE,
@@ -1411,6 +1510,11 @@ def build_command_line_response() -> JSONObject:
                 "definition": "Public launch command for discovering playbook workflows, asking which workflow fits next, inspecting inferred workflow topology, and running one named workflow in a selected runtime mode.",
                 "purpose": "Browse playbook workflows, ask which workflow should run next, inspect inferred workflow topology, or launch one named workflow into one runtime mode",
                 "use_when": [
+                    GRAPH_GUIDANCE,
+                    GRAPH_PRESENTATION,
+                    GRAPH_SOURCE_PLACEMENT,
+                    GRAPH_CONTEXT_GUIDANCE,
+                    GRAPH_PARAMETER_GUIDANCE,
                     "You need to discover which named workflows the current playbook publishes before choosing one.",
                     "Use workflows show <workflow> for the main caller interface without activating the workflow. Plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. Plain output omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json retains the unchanged complete declared inputs mapping and top-level launch_profile, including all input fields with original normalized required and caller_slot. Each visible input preserves description and hint when provided. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields; other envelope fields are unchanged except conditional plain warnings.",
                     "Plain workflows show adds top-level warnings only for required workflow declarations with coverage missing, evaluated before filtering inputs. Each warning contains code discovery.workflow.input_source_missing, the input name, a message explaining no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot, plus a hint to expose a caller slot or supply a source. Missing declarations stay hidden from inputs. Optional missing declarations do not warn; either caller-slot form or any present source suppresses the warning. Omit warnings entirely when none qualify. --json gains no warnings and remains unchanged. No readiness or state analysis is performed; check, review, plan, run, explain, and next remain unchanged.",
@@ -1454,7 +1558,7 @@ def build_command_line_response() -> JSONObject:
                     {"name": "explain <workflow>", "summary": "explain why the workflow can or cannot be run right now"},
                     {"name": "run <workflow>", "summary": "run the workflow and do the real work"},
                     {"name": "next", "summary": "suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options"},
-                    {"name": "graph", "summary": "show the inferred workflow topology for the current playbook context"},
+                    {"name": "graph", "summary": "show static possible-process topology without state reads or probes; versioned graph v1 JSON, independent of next ranking"},
                 ],
                 "next_priority": [
                     "prefer workflows tied to the active state-backed work context over unrelated utility workflows",
@@ -3307,6 +3411,11 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
         "state": {
             "definition": "Declared persistent storage for passing named values between workflow runs through bound logical roles.",
             "use_when": [
+                GRAPH_GUIDANCE,
+                GRAPH_PRESENTATION,
+                GRAPH_SOURCE_PLACEMENT,
+                GRAPH_CONTEXT_GUIDANCE,
+                GRAPH_PARAMETER_GUIDANCE,
                 "A later run needs a remembered value. Declare state_needs and bind each role to a named playbook state location before access.",
                 "Read through state.<role>[<key>], then use state_set or state_delete only after the final read of the same actual file, regardless of role, state name, profile, key, or field.",
                 "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context; normalized paths, symlinks, and existing hardlinks can alias. The same role may access distinct files and be valid.",
@@ -4410,6 +4519,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "definition": "Workflow-entry field for the lightweight catalog group label that helps cluster related published workflows in discovery output.",
             "use_when": [
                 "Several published workflows belong to the same operator-facing family such as inspect, lifecycle, or collaboration, and the catalog should show that grouping explicitly.",
+                "For graph display ties within a category, preserve authored playbook entry order. Dependency placement takes precedence. Category never creates graph links or execution precedence. Standalone alternatives use compatible authored-order positions around intact source/reader blocks; conflicting category bounds never split those blocks.",
             ],
             "do_not_use_for": [
                 "Encoding workflow applicability, permissions, or step behavior; category is discovery metadata only and has no runtime effect.",
@@ -5774,8 +5884,7 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
             "name": f"command-line.{command_name}",
             "summary": "Published command-line command metadata",
             "metadata": command,
-            "snippet_coverage": "none",
-            "canonical_examples": [],
+            **_snippet_surface_for_handle(f"command-line.{command_name}"),
         }
         for flag in command.get("flags", []):
             normalized = flag["name"].lstrip("-").replace("-", "_")
@@ -6324,6 +6433,11 @@ def render_overview_text(payload: JSONObject) -> str:
         [
             "",
             "Execution concepts:",
+            f"- Static graph: {payload['graph_guidance']}",
+            f"- Compact graph: {payload['graph_presentation']}",
+            f"- Context user placement: {payload['graph_source_placement']}",
+            f"- Static profile context: {payload['graph_context']}",
+            f"- Parametric state families: {payload['graph_parameters']}",
             f"- GitHub merge: {payload['gh_pr_merge_guidance']}",
             f"- GitHub candidate discovery: {payload['gh_pr_list_guidance']}",
             f"- GitHub creation: {payload['gh_pr_create_guidance']}",
@@ -6366,7 +6480,7 @@ def render_capabilities_text(payload: JSONObject) -> str:
     """Return the text capabilities surface."""
 
     capabilities = payload["capabilities"]
-    lines = ["capabilities", "Supported and unsupported runtime surfaces.", "", GH_PR_MERGE_GUIDANCE, GH_PR_CREATE_GUIDANCE, SDK_CALL_GUIDANCE, "", "Capability states:"]
+    lines = ["capabilities", "Supported and unsupported runtime surfaces.", "", GRAPH_GUIDANCE, GRAPH_PRESENTATION, GRAPH_SOURCE_PLACEMENT, GRAPH_CONTEXT_GUIDANCE, GRAPH_PARAMETER_GUIDANCE, GH_PR_MERGE_GUIDANCE, GH_PR_CREATE_GUIDANCE, SDK_CALL_GUIDANCE, "", "Capability states:"]
     for capability in capabilities:
         summary = f"- {capability['name']}: {capability['status']}"
         related = capability.get("related_capabilities") or []
@@ -6387,6 +6501,11 @@ def render_model_text(payload: JSONObject) -> str:
         "Main authoring contracts exposed by Ordo.",
         payload["gh_pr_merge_guidance"],
         payload["gh_pr_create_guidance"],
+        payload["graph_guidance"],
+        payload["graph_presentation"],
+        payload["graph_source_placement"],
+        payload["graph_context"],
+        payload["graph_parameters"],
         payload["connector_authoring_guidance"],
         "",
         "Contracts:",

@@ -129,6 +129,11 @@ SDK_PROBE_FRAGMENT_CONTRACT = SnippetInsertionContract(
 
 
 INSERTION_CONTRACTS: dict[str, SnippetInsertionContract] = {
+    "graph_bundle": SnippetInsertionContract(
+        mode="graph_bundle", supported_targets=("state", "command-line.ordo-playbook"),
+        workflow_surface="workflow documents or a playbook_text/files bundle with absent state and exact graph expectations",
+        summary="Build actual static graph v1 output, including profile/bootstrap playbooks, and assert concrete links, optional structural links with equality requirements, possible-loop components, and exact compact text without state reads or probes.",
+    ),
     SDK_PROBE_FRAGMENT_CONTRACT.mode: SDK_PROBE_FRAGMENT_CONTRACT,
     STATE_BUNDLE_CONTRACT.mode: STATE_BUNDLE_CONTRACT,
     EXPRESSION_VALUE_CONTRACT.mode: EXPRESSION_VALUE_CONTRACT,

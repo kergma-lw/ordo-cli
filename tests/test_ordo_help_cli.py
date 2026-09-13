@@ -2007,6 +2007,9 @@ class OrdoHelpCliTest(unittest.TestCase):
 
         self.assertEqual(workflow_category.returncode, 0)
         self.assertIn("Workflow-entry field for the lightweight catalog group label", workflow_category.stdout)
+        self.assertIn("preserve authored playbook entry order", workflow_category.stdout)
+        self.assertIn("Dependency placement takes precedence", workflow_category.stdout)
+        self.assertIn("never creates graph links or execution precedence", workflow_category.stdout)
 
         self.assertEqual(workflow_when.returncode, 0)
         self.assertIn("Workflow-entry field for the operator-facing selection hint", workflow_when.stdout)

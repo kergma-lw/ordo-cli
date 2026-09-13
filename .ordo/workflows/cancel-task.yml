@@ -1,0 +1,107 @@
+version: 0
+workflow: cancel-task
+inputs:
+  repository:
+    description: GitHub OWNER/REPO.
+  project_id:
+    description: GitHub project ID.
+  reason:
+    description: English cancellation reason, posted as an issue comment.
+state_needs:
+  common_state: {}
+let:
+  issue_number: state.common_state[inputs.repository].issue_number
+  branch: state.common_state[inputs.repository].branch
+  request_id: state.common_state[inputs.repository].merge_request_id | catch(["runtime.value.state_missing"], null)
+  pull_number: state.common_state[inputs.repository].pull_number | catch(["runtime.value.state_missing"], null)
+  merge_attempted: state.common_state[inputs.repository].merge_attempted | catch(["runtime.value.state_missing"], false)
+  project: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number, project_id=inputs.project_id)
+blocks:
+- guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.project_id | is_string
+  - inputs.project_id | trim | ne("")
+  - inputs.reason | is_string
+  - inputs.reason | trim | ne("")
+  - issue_number | is_integer
+  - branch | is_string
+  - branch | trim | ne("")
+  - branch != "main"
+  - merge_attempted | is_boolean
+  - pull_number == null or pull_number | is_integer
+  - request_id == null or request_id | is_string
+  - merge_attempted == false or request_id != null
+  - request_id == null or pull_number | is_integer
+  - project.exists
+  - gh.project.field(project_id=inputs.project_id, field="Status").exists
+  - gh.project.field.option(project_id=inputs.project_id, field="Status", option="Done").exists
+  - project.type | in(["Task", "Bug"])
+  - project.status | in(["Backlog", "Ready", "In progress", "In review", "Done"])
+- steps:
+  - name: Snapshot context
+    value:
+      issue_number: issue_number
+      branch: branch
+      pull_number: pull_number
+      request_id: request_id
+    register: context
+  - name: Observe outstanding merge
+    if: step.context.outputs.value.request_id != null
+    uses: gh.pr.merge.request
+    with:
+      repository: inputs.repository
+      pull_number: step.context.outputs.value.pull_number
+      request_id: step.context.outputs.value.request_id
+    register: request
+  - name: Require a definitively failed request
+    if: step.context.outputs.value.request_id != null
+    gate: step.request.outputs.state == "failed"
+  - name: Inspect PR
+    if: step.context.outputs.value.pull_number != null
+    uses: gh.pr
+    with:
+      repository: inputs.repository
+      pull_number: step.context.outputs.value.pull_number
+    register: pr
+  - name: Require unmerged PR
+    if: step.context.outputs.value.pull_number != null
+    gate:
+      all:
+        - step.pr.outputs.number == step.context.outputs.value.pull_number
+        - step.pr.outputs.head_repository | lower | eq(inputs.repository | lower)
+        - step.pr.outputs.base_repository | lower | eq(inputs.repository | lower)
+        - step.pr.outputs.head_ref == step.context.outputs.value.branch
+        - step.pr.outputs.base_ref == "main"
+        - step.pr.outputs.merged == false
+  - name: Record cancellation reason
+    uses: gh.issue.comment.add
+    with:
+      repository: inputs.repository
+      issue_number: issue_number
+      body: inputs.reason
+  - name: Close cancelled issue
+    uses: gh.issue.close
+    with:
+      repository: inputs.repository
+      issue_number: issue_number
+  - name: Refresh project membership
+    uses: gh.project.issue
+    with:
+      repository: inputs.repository
+      issue_number: issue_number
+      project_id: inputs.project_id
+    register: membership
+  - name: Require project membership
+    gate: step.membership.outputs.exists
+  - name: Mark Done
+    uses: gh.project.issue.field_single_select.set
+    with:
+      repository: inputs.repository
+      issue_number: issue_number
+      project_id: inputs.project_id
+      field: "Status"
+      option: "Done"
+  - name: Publish cancellation
+    publish:
+      summary: "Task cancelled; active context retained for local recovery"
