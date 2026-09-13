@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+branch=$(git symbolic-ref --quiet HEAD) || exit 0
+if [ "$branch" = refs/heads/main ]; then
+    printf '%s\n' 'Commit blocked: create or switch to a feature branch before committing.' >&2
+    exit 1
+fi
