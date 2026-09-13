@@ -15,12 +15,28 @@ ordo-playbook --profile backend graph
 ordo-playbook graph --json
 ```
 
+Shared context: writers → readers, not execution order. A free reader root is
+marked `(data use; alternative sources)`: it uses data without mutating the context.
+This shows shared data, not a mandatory sequence. Guards and `check` determine
+applicability; alternative ends are not sequential steps.
+
 Read `+field` as a write, `−field` as a deletion, and `?` as a conditional change.
-`−context` removes the selected context. `↔` marks another role of the same
+`−context` removes the selected context. `↔ state/kind` marks another role of the same
 workflow, not a separate execution. Branches show data use, not required execution
 order. Playbook order helps arrange workflows when relationships leave a choice.
 `parameter` stands for a key that has not been selected; the relationship applies
 to a matching context instance.
+
+Writers and deletions can also appear on branches. A workflow using several
+sources sits under the deepest source when those sources already form a chain.
+`also reads from: name` keeps its other source visible. For distinct data from incomparable
+sources, the operation appears under each source. The first source in display
+order holds the full occurrence; other sightings are `↔ (reference)` leaves,
+without repeating the operation's subtree or execution. Alternative writers of
+the same data stay together rather than spreading across branches.
+`reads from: name?` marks known conditional
+or fallback data use; it is separate from the conditional write in `+field?`.
+Fallback reads still count as data use.
 
 Graph does not read saved state, run probes, or recommend what to do next. A missing
 edge does not prove independence in external systems. Use `--json` for detailed
@@ -48,11 +64,16 @@ and remains the command for current recommendations.
 
 Plain `graph` is a minimal workflow tree:
 
-- A generic `Context` or numbered `Contour` heading identifies logical store
-  bindings and keys. No business lifecycle name is guessed from workflow names.
-- Writing roles appear in existing summary order. Read-only-state consumers
-  with a unique source or a join appear once beneath their existing placement
-  anchor. Pure alternatives appear once as standalone rows with no selected parent.
+- A single contour has no heading. Multiple contours use short `Contour 1`,
+  `Contour 2` headings without address lists. Detailed identities stay in JSON.
+- Writing roles, deleting roles and pure readers use the same source-parent rules.
+  A unique source anchors its users; an established source chain anchors a join at
+  its deepest source. Incomparable joins and alternatives use a common ancestor
+  outside their source candidates when available, otherwise remain roots.
+  Root alternatives are marked `(data use; alternative sources)`.
+  Unambiguous joins using distinct data pieces have one full occurrence on the
+  first source branch and reference-only leaves on the other source branches.
+  This display choice does not make a source a preferred prerequisite.
   Such consumers may still perform external effects.
 - Bootstrap dependencies stay in detailed JSON and a separate `summary.bootstrap`
   section; an optional `Bootstrap dependencies: --json.` line points to them.
@@ -65,34 +86,30 @@ Plain `graph` is a minimal workflow tree:
   `−field` for partial deletion and `−context` for whole-context deletion. `+`
   means a write, not guaranteed first creation. Read-only-state consumers have no
   effect parentheses.
-- Joins and joins-with-alternatives use that existing visual anchor without claiming the
-  parent is a mandatory prerequisite. This includes catch/fallback cases.
-- Consumers with unresolved placement have a separate `Unresolved placement`
-  section, rather than disappearing or attaching arbitrarily to a producer.
-- Apart from the short effect suffixes, expressions, write/delete details, joins, source identities,
-  technical C/S identifiers, activity and statistics are omitted from default
-  text. Use `--json` for all of that evidence.
+- Compact `read sources:` and `also reads from:` references preserve joins without requiring
+  every source to execute. This includes catch/fallback cases.
+- Unknown sources and incomplete structure remain short notes beside established
+  placement. Unknown optionality does not remove any known source or parent.
+- Expressions, detailed evidence, technical C/S identifiers, activity and
+  statistics stay in `--json`.
 
-The opening effect legend is `+ writes, − deletes, ? conditional; branches show
-data use, not execution order.` The tree is not a state machine, a new workflow order or permission
+The opening line is `Shared context: writers → readers, not execution order.`
+The next legend is `+ write, − delete, ? conditional.` Only repeated roles add
+`↔ another role of the same workflow.` The tree is not a state machine, a new workflow order or permission
 to run anything. Existing dependency components can contain overlapping processes.
+If reference leaves exist, a short `↔ (reference) the same operation, shown again.`
+legend distinguishes them from state/kind role markers. Leaves show no effects
+or descendants. `[conditional use]` preserves a known conditional/fallback relation.
 
-The compact view also states: `Ties within a category follow playbook order.`
 When existing dependency placement leaves main workflows or readers at the same
 source anchor tied, their authored playbook entry order is retained, not
 alphabetical order. Distinct source anchors take precedence: category order does
 not move a reader away from its source or reorder its parent placement.
 
-Anchored source/reader blocks retain their order. Free alternative rows use
-compatible same-category authored-order bounds around those whole blocks. For
-example, a free earlier lifecycle row can precede the producer block containing
-a later lifecycle reader, without detaching that reader. If category bounds
-conflict inside an indivisible anchored block, preserve the anchor and fall back
-to authored root-row order; free same-category rows retain their mutual order.
-There is no global category grouping. Category is still discovery metadata: it
-does not create links, merge contours, establish applicability or assert execution
-precedence. Workflow nodes may carry an additive `category` field for this display
-tie-break. Sorted component membership is not display order.
+Free roots and siblings retain authored workflow order. Within one workflow,
+existing role occurrence order breaks ties; deletions follow other children of
+their section. Categories remain discovery metadata and do not override this
+ordering or create data links. Sorted component membership is not display order.
 
 Effects keep first-seen field order and deduplicate by context, operation and
 field. `?` comes from existing local if, iteration, short-circuit or conditional-
@@ -112,7 +129,7 @@ the exact mutation sequence. Full ordered occurrences stay unchanged in JSON.
 ordered change/removal groups and users) plus `without_state_access`. Summary
 items retain source site IDs; conditions remain available in full. Unknown address
 identities are not merged merely because expressions look alike. Plain output
-suppresses pairwise invalidation fans and cycle claims, but every original detailed
+suppresses pairwise invalidation fans and executable-cycle claims, but every original detailed
 relation and `possible_loop_components` value remains intact in `--json`.
 
 ### Mutation roles and terminal placement
@@ -124,31 +141,35 @@ unknown families retain a workflow-local unresolved binding identity. A workflow
 mutating N states, of which M have both writes and deletes, has N + M roles.
 Fields, keys and established parameter selectors constrain affected data without
 creating more roles. Contours remain unchanged, rather than becoming per-address
-sections. Pure readers appear once. `↔ state/kind` marks repeated appearances of
+sections. Every role and pure reader has one full occurrence. `↔ state/kind` marks repeated appearances of
 the same workflow, never repeated executions.
 
 The finite placement algorithm operates within each existing contour:
 
-1. Project ordered mutation groups onto state/kind roles. Keep writing roles in
-   their existing workflow and first-occurrence order. Map existing reader anchors
-   to writing roles through source group/site IDs, retaining single-source, join,
-   alternatives and unresolved classifications. Insert free alternatives using the
-   existing category/authored-order rules around intact blocks.
-2. For each delete site, compare body reads and writes with the existing concrete
-   and structural address predicates. Only proven concrete overlap or conditional
-   family correspondence can justify an anchor. Partial deletes use matching
-   fields/subtrees, including possible empty-parent pruning; unrelated sibling
-   fields cannot supply an anchor.
-3. Identify matching creator blocks and local users whose entire read footprint is
-   affected. This includes mutating users through their relevant state role reads.
-   Cross-context readers stay at their original anchors and remain in termination
-   evidence, without dragging a deletion to an unrelated state's block.
-4. Insert the deletion after the last identified block, after its readers. Several
-   candidates retain their full bounded candidate-block list; no scoring, recursive
-   expansion or mandatory path is invented. Tied deletions retain authored order.
-   With only unresolved local readers, use the end of that related unresolved group.
-   Without a trusted visible related section, retain an authored-position fallback,
-   explicitly marked unresolved when alias evidence is uncertain (otherwise isolated).
+1. Project ordered mutation groups onto state/kind roles. Map all known body
+   handoffs to write roles through source-site IDs. Every role uses its workflow's
+   actual shared read footprint; this does not invent role-specific executions.
+   Preserve per-read alternatives and all conditional/fallback accesses.
+2. Compute handoff-only SCCs. Invalidation is not parent precedence, and internal
+   SCC edges cannot choose parents. Establish unique-source anchors first, then
+   resolve chain joins and common ancestors in a bounded fixed-point pass. Check
+   ancestry before nesting so every display vertex has exactly one acyclic slot.
+3. A delete with no known read sources may use trusted creator-overlap evidence.
+   Existing address predicates constrain this to affected fields/subtrees. Keep
+   cross-context users as evidence without using unrelated sections as terminal
+   anchors. No new handoff or execution edge is added for this visual placement.
+4. Order free roots and children by authored workflow order. Nested deletions
+   follow other children; root deletions follow their related creator/local-user
+   sections. Preserve isolated/unresolved authored-position fallback where no
+   trusted section exists. No mandatory path or reader-before-delete rule is inferred.
+5. Add source-local reference rows for incomparable joins whose distinct reads
+   have unambiguous sources. Pick the first cycle-safe source in established
+   forest display order for the full occurrence, without modifying source-parent
+   evidence. Attach one reference leaf per other source vertex; repeated sites and
+   fields do not multiply sightings. Alternatives, incomplete source sets and
+   internal SCC placements keep their existing conservative presentation. A
+   reference never owns children. Canonical ancestry and rendering visited checks
+   keep traversal finite. Conditional/fallback use is not a requiredness filter.
 
 This is visual termination, not a requirement to run all readers before deletion.
 Cycles, alternatives, selector/instance requirements and conditional rewrites stay
@@ -157,7 +178,15 @@ authored order in detailed JSON, regardless of role display order.
 
 `contour.role_view` is additive: roles retain original `workflow`, state identity,
 mutation `sites`, projected `groups` and relevant `read_sites`; rows reference
-those roles. Deletion `termination` retains overlap evidence, creator roles,
+those roles. Additive `forest` nodes identify the actual compact parents and
+children, sources, per-source read IDs, conditional-source annotations, unknown
+reads and incomplete structure. Legacy rows and per-user placements remain
+compatibility evidence; they do not choose the new forest parents.
+`forest.display_rows` adds the final full/reference occurrence layout, with a
+target `node`, display `parent`, `reference` flag, source-use `conditional` flag
+and `basis`. Node identities and established parents remain unchanged; display
+parent choices never become source-chain evidence.
+Deletion `termination` retains overlap evidence, creator roles,
 affected reads, cross-context users, cycles and rewrites. Original workflow nodes,
 accesses, conditions, groups, links and order edges are unchanged. This layer does
 not change check, review, plan, run, explain, next, validation or bootstrap handling.
@@ -177,29 +206,27 @@ handoff links map each reader address to its source candidates; no new analyzer
 or condition solver is involved. A source can cover more fields than the reader
 uses, and unrelated later writes do not move the reader away from its source.
 
-- **Single source:** one unambiguous change group covers all read addresses by
-  concrete or conditional structural handoffs. The tree uses that group's workflow
-  as parent, while JSON distinguishes address-only from parametric coverage.
+- **Single source:** known handoffs identify one source write role. The tree uses
+  that role as parent, while JSON distinguishes concrete from structural evidence.
 - **Join:** different sources cover different reads. Per-field source references
   preserve the combined dependencies without inventing workflow execution order.
-- **Alternatives:** multiple candidates can supply a read. JSON retains all
-  candidates and `kind: alternatives`, with `after: null`. The workflow is a
-  standalone row, not unresolved and not a child of the last candidate.
+- **Alternatives:** multiple candidate roles can supply a read. The forest selects
+  none of those candidates as parent, even when the writers form a chain. It uses
+  an established common ancestor outside the candidate set or a standalone row.
   Joins with alternatives preserve each
   read's candidate set instead of enumerating speculative execution paths.
-- **Unresolved:** absent compatible producers, unrelated/unknown logical families
-  or incomplete reader analysis prevent structural coverage. JSON
-  retains source references and their coverage evidence; the tree lists the
-  consumer in `Unresolved placement`. No known producer does not mean the workflow
+- **Unknown sources:** absent compatible producers, unrelated/unknown logical
+  families or incomplete reader analysis retain explicit notes. Known anchors
+  remain usable. No known producer does not mean the workflow
   cannot use previously persisted state.
 
-A join or join-with-alternatives user retains its last displayed source anchor solely for
-layout. The tree projects source groups to their writing role without changing JSON
-placement. Unresolved users are separate even when they have some known sources.
-Pure alternatives have no source anchor; the renderer also handles older cached
-summaries that still carry a last-source `after` without nesting that row.
-Every user appears once. Cyclic producer dependencies are not topologically sorted
-or recursively expanded.
+A join uses its deepest source only when all sources form an established ancestor
+chain. Otherwise it uses an established common ancestor outside the candidate set
+or stays at root with all references. No last-source tie-break is used. Every role
+and pure reader has one canonical identity. The display-reference pass can show
+unambiguous distinct-data joins under each source without copying their subtrees.
+Internal handoff cycles remain unnested with explicit
+data-use-cycle notes; downstream unique users can still nest below cyclic writers.
 
 In JSON, conditional source groups remain marked as conditional, and all source/reader
 conditions and containing expressions remain in summary evidence or detailed

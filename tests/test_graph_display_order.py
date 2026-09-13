@@ -35,8 +35,8 @@ def test_same_category_producer_tie_uses_authored_not_alphabetical_order(tmp_pat
     contour = payload["summary"]["contours"][0]
     assert [change["workflow"] for change in contour["changes"]] == ["z-producer", "a-producer"]
     assert contour["users"][0]["placement"]["kind"] == "join"
-    assert "z-producer (+x)\na-producer (+y)\n└── z-reader" in render_static_graph(payload)
-    # The early reader entry still follows its source anchor. No producer-to-
+    assert "z-producer (+x)\n└── z-reader [also reads from: a-producer]\na-producer (+y)\n└── z-reader ↔ (reference)" in render_static_graph(payload)
+    # The first source holds the full occurrence, the other a leaf. No producer-to-
     # producer relation is invented by their shared category or authored order.
     assert {(link["from_workflow"], link["to_workflow"], link["kind"]) for link in payload["links"]} == {
         ("z-producer", "z-reader", "handoff"), ("a-producer", "z-reader", "handoff")}
@@ -59,7 +59,7 @@ def test_tied_readers_follow_entry_order_without_cross_category_grouping(tmp_pat
     assert after == before
 
 
-def test_distinct_source_anchors_take_precedence_over_same_category_entry_order(tmp_path):
+def test_source_groups_in_one_role_use_authored_reader_order(tmp_path):
     path = _write_playbook(tmp_path, [("z-later-reader", "flow", ["y"], []),
         ("a-earlier-reader", "flow", ["x"], []), ("producer", "flow", [], ["x", "y"])])
     source = tmp_path / "producer.yaml"
@@ -71,7 +71,7 @@ def test_distinct_source_anchors_take_precedence_over_same_category_entry_order(
     users = payload["summary"]["contours"][0]["users"]
     assert [user["workflow"] for user in users] == ["z-later-reader", "a-earlier-reader"]
     assert [user["placement"]["after"] for user in users] == ["S2", "S1"]
-    assert "producer (+x, +y?)\n├── a-earlier-reader\n└── z-later-reader" in render_static_graph(payload)
+    assert "producer (+x, +y?)\n├── z-later-reader\n└── a-earlier-reader" in render_static_graph(payload)
 
 
 def test_category_does_not_create_links_or_merge_independent_contours(tmp_path):
@@ -81,10 +81,12 @@ def test_category_does_not_create_links_or_merge_independent_contours(tmp_path):
     assert len(payload["summary"]["contours"]) == 2
     text = render_static_graph(payload)
     assert text.index("z-work (+x)") < text.index("a-work (+y)")
-    assert "Ties within a category follow playbook order." in text
+    assert "Contour 1\n\nz-work (+x)\n\nContour 2\n\na-work (+y)" in text
+    assert " · " not in text
+    assert "Ties within a category" not in text
 
 
-def test_alternatives_use_category_order_before_an_anchored_successor_block(tmp_path):
+def test_alternatives_keep_root_author_order_and_mutating_successor_nests(tmp_path):
     path = _write_playbook(tmp_path, [
         ("producer", "context", [], ["choice", "story"]),
         ("alternate", "context", [], ["choice"]),
@@ -95,14 +97,14 @@ def test_alternatives_use_category_order_before_an_anchored_successor_block(tmp_
     payload = build_playbook_static_graph(playbook_path=path)
     before = deepcopy(payload)
     text = render_static_graph(payload)
-    assert "ready\nproducer (+choice, +story)\n└── review\nalternate (+choice)\ndone (+done)" in text
+    assert "producer (+choice, +story)\n├── review\n└── done (+done)\nalternate (+choice)\nready (data use; alternative sources) [read sources: producer, alternate]" in text
     users = {u["workflow"]: u for c in payload["summary"]["contours"] for u in c["users"]}
     assert users["ready"]["placement"]["kind"] == "alternatives"
     assert users["ready"]["placement"]["after"] is None
     assert len(users["ready"]["dependencies"][0]["sources"]) == 2
     assert users["review"]["placement"]["kind"] == "single_source"
     assert users["review"]["placement"]["after"] == "S1"
-    assert text.splitlines().count("ready") == 1
+    assert sum(line.startswith("ready (data use; alternative sources)") for line in text.splitlines()) == 1
     assert payload == before
 
 
@@ -124,7 +126,7 @@ def test_alternatives_declared_first_do_not_wait_for_all_producers(tmp_path):
     path = _write_playbook(tmp_path, [("reader", "flow", ["x"], []),
         ("producer-one", "flow", [], ["x"]), ("producer-two", "flow", [], ["x"])])
     payload = build_playbook_static_graph(playbook_path=path)
-    assert "reader\nproducer-one (+x)\nproducer-two (+x)" in render_static_graph(payload)
+    assert "reader (data use; alternative sources) [read sources: producer-one, producer-two]\nproducer-one (+x)\nproducer-two (+x)" in render_static_graph(payload)
     assert payload["summary"]["contours"][0]["users"][0]["placement"]["kind"] == "alternatives"
 
 

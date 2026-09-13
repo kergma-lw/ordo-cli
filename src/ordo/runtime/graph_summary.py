@@ -323,24 +323,88 @@ def _standalone_alternatives(blocks, users, workflow_nodes):
 def render_graph_summary(payload: dict[str, object]) -> str:
     summary = payload.get("summary")
     if (not summary or summary.get("placement_version") != 1
-            or any("role_view" not in c for c in summary["contours"])):
+            or any("display_rows" not in c.get("role_view", {}).get("forest", {}) for c in summary["contours"])):
         summary = summarize_static_graph(payload)
-    lines = ["+ writes, − deletes, ? conditional; branches show data use, not execution order.",
-             "Ties within a category follow playbook order."]
+    lines = ["Shared context: writers → readers, not execution order.",
+             "+ write, − delete, ? conditional."]
     if any(role["shared_workflow"] for contour in summary["contours"]
            for role in contour["role_view"]["roles"]):
-        lines.append("↔ marks roles of the same workflow, not multiple executions.")
-    if any(role["kind"] == "delete" for contour in summary["contours"]
-           for role in contour["role_view"]["roles"]):
-        lines.append("Deletion roles end related data-use sections visually, not as mandatory last steps.")
+        lines.append("↔ another role of the same workflow.")
+    if any(row["reference"] for contour in summary["contours"]
+           for row in contour["role_view"]["forest"]["display_rows"]):
+        lines.append("↔ (reference) the same operation, shown again.")
     for index, contour in enumerate(summary["contours"], 1):
         if lines:
             lines.append("")
         contexts = _context_labels(summary, contour)
-        title = "Context" if len(summary["contours"]) == len(contexts) == 1 else f"Contour {index}"
-        lines.extend([title + " · " + "; ".join(contexts.values()), ""])
+        if len(summary["contours"]) > 1:
+            lines.extend([f"Contour {index}", ""])
         view = contour["role_view"]
         roles = {role["id"]: role for role in view["roles"]}
+        if "forest" in view:
+            nodes = {node["id"]: node for node in view["forest"]["nodes"]}
+
+            def label(ref, row):
+                node = nodes[ref]
+                role = roles.get(node.get("role"))
+                placement = node["placement"]
+                text = node["workflow"]
+                if row["reference"]:
+                    text += (f" ↔ {role['state']['name']}/{role['kind']}" if role and role["shared_workflow"]
+                             else " ↔") + " (reference)"
+                    if row["parent"] in placement["conditional_sources"]:
+                        text += " [conditional use]"
+                    return text
+                if role:
+                    text += _mutation_suffix(role, contexts)
+                    if role["shared_workflow"]:
+                        text += f" ↔ {role['state']['name']}/{role['kind']}"
+                    if role.get("placement", {}).get("kind") == "unresolved" and not placement["sources"]:
+                        text += " [placement unresolved]"
+                elif placement["kind"] == "alternatives" and placement["parent"] is None:
+                    text += " (data use; alternative sources)"
+                notes = []
+                sources = placement["sources"]
+                parent = row["parent"]
+                def source_label(source):
+                    result = nodes[source]["workflow"]
+                    source_role = roles[source]
+                    if source_role["shared_workflow"]:
+                        result += f"/{source_role['state']['name']}/write"
+                    return result + ("?" if source in placement["conditional_sources"] else "")
+                extras = [source for source in sources if source != parent]
+                if extras:
+                    notes.append(("also reads from: " if parent in sources else "read sources: ")
+                                 + ", ".join(source_label(source) for source in extras))
+                if parent in placement["conditional_sources"]:
+                    notes.append("reads from: " + source_label(parent))
+                if placement["kind"] == "cycle":
+                    notes.append("data-use cycle")
+                if placement["unknown_reads"] or placement["incomplete"]:
+                    notes.append("other sources unknown" if sources else "sources unknown")
+                return text + (" [" + "; ".join(notes) + "]" if notes else "")
+
+            # References are leaves, even when their target has descendants.
+            # Only the canonical occurrence owns the target's subtree.
+            display_children = {None: [], **{ref: [] for ref in nodes}}
+            for row in view["forest"]["display_rows"]:
+                display_children[row["parent"]].append(row)
+            stack = [(row, "", "") for row in reversed(display_children[None])]
+            visited = set()
+            while stack:
+                row, prefix, branch = stack.pop()
+                ref = row["node"]
+                if ref in visited and not row["reference"]:
+                    row = {**row, "reference": True}
+                lines.append(prefix + branch + label(ref, row))
+                if row["reference"]:
+                    continue
+                visited.add(ref)
+                child_prefix = prefix + ("    " if branch == "└── " else "│   " if branch else "")
+                children = display_children[ref]
+                stack.extend((child, child_prefix, "└── " if i == len(children) - 1 else "├── ")
+                             for i, child in reversed(list(enumerate(children))))
+            continue
         for row in view["rows"]:
             if "unresolved_readers" in row:
                 lines.append("Unresolved placement")
@@ -348,7 +412,7 @@ def render_graph_summary(payload: dict[str, object]) -> str:
                 continue
             role = roles.get(row.get("role"))
             if role is None:
-                lines.append(row["workflow"])
+                lines.append(row["workflow"] + " (data use; alternative sources)")
             else:
                 indicator = f" ↔ {role['state']['name']}/{role['kind']}" if role["shared_workflow"] else ""
                 if role.get("placement", {}).get("kind") == "unresolved":

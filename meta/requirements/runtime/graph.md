@@ -156,8 +156,8 @@ Do not reanalyze workflows or derive roles from names. Source group references
 are contour-local JSON identifiers, never execution-step numbers. A source
 may write additional irrelevant fields without losing coverage of a reader.
 
-Place a user once below a unique, unambiguous group covering all its read
-requirements. Keep proven exact-address coverage distinct from parametric
+Place every role and pure reader using its workflow's known body read sources.
+Keep proven exact-address coverage distinct from parametric
 structural coverage. Partial parent/subtree links require explicit read-shape
 conditions and never become concrete address proof. Preserve
 joins across different sources and alternatives within each read's candidate
@@ -168,16 +168,38 @@ must remain explicit and symbolic; guards/gates are not inferred satisfied.
 Reads protected by catch/fallback and conditional reads remain dependencies in
 this conservative view; do not assert that all such reads or sources are mandatory
 runtime prerequisites. Incomplete readers and missing/uncertain source coverage
-retain unresolved placement. State-only users may still have external effects.
+retain explicit uncertainty without erasing established anchors. State-only users
+may still have external effects. Unknown optionality never affects parent choice.
 
-For joins and joins-with-alternatives, placement after the last displayed reference
-remains layout only, not a new workflow order. Pure `alternatives` must have
-`after: null` and appear as a standalone row, retaining every source option and
-its evidence. Do not choose the last alternative as parent or relabel the row as
-unresolved. Unique justified sources remain nested. With no source, show unresolved placement
-near context definitions. Use source references instead of duplicating a user.
-Do not expand or topologically order cycles. Source placement is data dependence,
-not actual value availability, runtime permission or mandatory execution.
+Unique sources justify nesting. Distinct read sources in an established ancestor
+chain use the deepest source, with explicit compact references to other sources.
+Incomparable joins and per-read alternatives select no candidate arbitrarily:
+use an established common ancestor outside the candidate set or stay at root.
+Compute handoff-only SCCs before nesting; invalidation must not flatten a valid
+handoff chain. Internal SCC edges cannot choose a parent. An ancestry check and
+bounded fixed-point pass ensure a finite acyclic forest with every vertex once.
+Use references instead of duplicating readers or inventing executions. Source
+placement is data use, not value availability, runtime permission or mandatory
+execution. Legacy user placement fields remain compatibility evidence; the
+additive `role_view.forest` publishes the new parent decisions.
+
+For incomparable joins using distinct data pieces with unambiguous source sets,
+add source-local display sightings. One canonical full occurrence uses the first
+cycle-safe source in established forest display order. This is deterministic
+layout, not a selected prerequisite or a new chain edge. Each other source vertex
+gets one reference-only leaf targeting the same workflow/role node. Deduplicate
+source vertices across fields/sites, never recursively duplicate descendants.
+Unknown/incomplete source sets and alternatives within any read (including mixed
+joins-with-alternatives) must not expand into a source fan. Conditional/fallback
+reads do not disqualify an otherwise unambiguous join. Internal SCC placements
+remain conservative; downstream unambiguous joins can still have reference leaves.
+
+`forest.display_rows` is additive occurrence metadata with `node`, `parent`,
+`reference`, `conditional`, and `basis`. Existing nodes, established parents,
+source identities, links and role counts stay unchanged. Every node has exactly
+one full row. Check canonical ancestry before attachment, use visited tracking
+when rendering, and cut references without traversing their targets. Reference
+count is bounded by distinct qualifying source vertices, not by paths or fields.
 
 Add summary `placement_version`, group IDs and per-user dependency/placement
 evidence. Preserve all detailed graph JSON fields, including handoffs and
@@ -185,45 +207,49 @@ invalidation relations; next and the underlying analyzer remain unchanged.
 
 ### Display tie-breaking
 
-When existing dependency placement leaves display order ambiguous and workflows
-share a category, retain their authored playbook entry order. This applies to
+When source placement leaves display order ambiguous, retain authored playbook
+entry order. This applies to
 tied main/producer workflows and readers at the same source anchor. Do not apply
 an alphabetical fallback that overrides that order. Distinct dependency/source
 anchors take precedence over category/order; ties do not move parent placement.
 
-Preserve existing deterministic cross-category behavior without introducing
-global category grouping or a new sort. Category and authored order are display
-metadata only: they never add graph links, merge dependency contours, change
-applicability or assert execution precedence. The existing stable entry-order
-traversal already provides this tie-break; make it explicit and regression-tested.
-An additive workflow-node `category` field may support placement of free alternative
-rows. Use compatible same-category authored-order bounds around intact anchored
-blocks; never split or reorder a source/reader block to satisfy category order.
-If those bounds conflict, preserve anchors and use authored root-row fallback,
-retaining mutual order of free same-category rows. Compact text may state
-`Ties within a category follow playbook order.` without duplicating disclaimers.
+Category metadata creates no links, contours or precedence, and does not override
+author order in the forest. Keep existing first-occurrence role order as a final
+tie-break; terminal roles follow related users. Explain ordering in help/model,
+not in the default opening legend.
 
-Default human text is a minimal workflow tree, headed by a generic `Context` or
-numbered `Contour` and logical store bindings/keys. Main workflows retain existing
-summary order. Unique-source and join consumers retain their existing branches;
-pure alternatives are standalone rows. This is a
+Default human text starts with `Shared context: writers → readers, not execution order.`
+and the legend `+ write, − delete, ? conditional.` Add
+`↔ another role of the same workflow.` only when repeated roles are present.
+When reference leaves exist, add `↔ (reference) the same operation, shown again.`
+Use `workflow ↔ (reference)` for a leaf, or `workflow ↔ state/kind (reference)`
+when its existing workflow has multiple roles. Leaves omit effects and descendants;
+known conditional source use may retain `[conditional use]`. These sightings
+never assert multiple executions or alternative prerequisites.
+Omit detailed ordering and visual-deletion explanations from default text; retain their
+explanations in help/model. A single contour has no heading; multiple contours
+use `Contour 1`, `Contour 2`, etc., without address lists. JSON identities remain intact.
+Writing and deleting roles may now be nested. Unique-source and chain-join users
+have justified parents; root alternatives are marked `(data use; alternative sources)`.
+The graph shows shared data, with these annotated readers distinguished from
+mutations. Guards and `check` determine applicability; alternative ends are not
+sequential steps. This is a
 visual data relationship, not a claim that the parent is a mandatory prerequisite;
 in particular, fallback reads do not become mandatory execution requirements.
 
-Unresolved consumers use a separate `Unresolved placement` section even when
-some candidate sources exist. Never silently omit them or attach them arbitrarily.
-Default workflow lines may carry the compact effect suffix described below. Do
-not otherwise print expressions, joins/source evidence, verbose read/write/delete
-descriptions, technical C/S identifiers, activity or statistics in default text.
-Keep that evidence unchanged in `--json`. Do not infer
+Unknown sources remain compact notes beside the known placement. Never omit a
+vertex or attach it arbitrarily. Workflow lines may carry effect suffixes and
+compact `read sources:`, `also reads from:`, conditional `reads from:` and data-use-cycle notes.
+Do not print expressions, verbose evidence, technical C/S identifiers, activity
+or statistics in default text. Keep that evidence unchanged in `--json`. Do not infer
 business lifecycle headings such as Task context from workflow names.
 
 Mutating workflow lines have trailing parentheses listing first-seen effects:
 `+field` means write, never guaranteed first creation; `−field` means partial
-delete; `−context` means whole-context deletion. Use one opening legend:
-`+ writes, − deletes, ? conditional; branches show data use, not execution order.`
+delete; `−context` means whole-context deletion. The effect legend is
+`+ write, − delete, ? conditional.` after the shared-context opening line.
 An optional `Details: --json.` footer must not repeat the legend. Read-only-state
-users have no effect parentheses. Existing tree and source placement are unchanged.
+users have no effect parentheses.
 
 Append `?` from existing if, iteration, short-circuit or conditional-gate controls.
 Deduplicate by context, operation and field in stable first-seen order, retaining
@@ -233,6 +259,12 @@ branches. Ordinary guard/gate applicability alone does not mark every effect
 conditional, and absence of `?` is not readiness or execution proof. Qualify
 effects when multiple contexts or the reserved root label would be ambiguous.
 This inventory does not alter or replace ordered JSON occurrences or IDs.
+
+A source reference such as `reads from: merge-task?` marks known conditional/fallback
+data use independently of mutation-effect question marks. Existing read branch
+conditions and a direct state pipeline catching `runtime.value.state_missing`
+may supply this annotation. Unrecognized expressions must not gain a speculative
+question mark. Annotation must not filter dependencies or influence placement.
 
 Name stores through their logical playbook binding and preserve the key. Avoid
 absolute path verbosity when a short name is unambiguous. If one logical name
@@ -263,14 +295,16 @@ predicates independently of its concrete link expectations.
   Keys and fields constrain affected data, not the number of logical states. N mutated
   states with M mixed states yield N + M roles. Unknown families remain unresolved
   workflow-local bindings; matching names do not establish alias identity.
-- Preserve existing contours, writer order and source-site reader anchors. Pure readers
-  appear once. Repeated roles explicitly share one workflow identity, not executions.
+- Preserve existing contours and source-site evidence. Apply source parents to all roles.
+  Every role and pure reader has one full occurrence, with optional reference leaves.
+  Repeated roles and references explicitly share one workflow identity, not executions.
 - Place delete roles at the end of related creator/local-user blocks using the existing
   concrete and structural overlap predicates for actually affected data, including subtree
   and parent-prune evidence. Use the last of the bounded candidate blocks, retaining all
   candidates and uncertainty. Partial deletion must not anchor on unrelated sibling fields.
-- Cross-context users retain their existing anchors and evidence. Mutating users retain
-  relevant role reads. No scoring, path expansion, mandatory reader-before-delete ordering,
+- Cross-context users retain their evidence and source-based parents. Mutating roles retain
+  state-local reads plus explicit shared-workflow read attribution in the forest.
+  No scoring, path expansion, mandatory reader-before-delete ordering,
   execution edges or per-address contour replacement is permitted.
 - Missing trusted visible sections use authored-position fallback, explicitly unresolved
   for uncertain alias evidence and otherwise isolated. Preserve alternatives, conditions,

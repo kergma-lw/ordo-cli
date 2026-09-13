@@ -3165,7 +3165,7 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         output = stdout.getvalue()
         self.assertIn("No state-linked workflows.", output)
-        self.assertIn("+ writes, − deletes, ? conditional", output)
+        self.assertIn("+ write, − delete, ? conditional", output)
         self.assertNotIn("ordered access sites", output)
 
     def test_cli_graph_json_includes_graph_payload(self) -> None:

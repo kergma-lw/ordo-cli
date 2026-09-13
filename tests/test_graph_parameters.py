@@ -36,7 +36,8 @@ def test_default_profile_family_links_without_selecting_or_reading_state(tmp_pat
     assert links[0]["selector_correspondence"] == "independent_parameters"
     assert links[0]["concrete_address_identity"] == "possible"
     assert links[0]["requirements"][0]["predicate"] == "selector_equal"
-    assert "data[parameter]" in render_static_graph(payload)
+    assert "producer (+issue, +branch)\n└── reader" in render_static_graph(payload)
+    assert payload["summary"]["contours"][0]["contexts"][0]["parameter_family"]
     assert "producer (+issue, +branch)\n└── reader" in render_static_graph(payload)
     assert not (tmp_path / "env.json").exists()
 
@@ -183,7 +184,7 @@ def test_shape_bridges_and_parent_deletes_keep_structural_requirements(tmp_path)
     invalidation = next(s for s in payload["structural_links"] if s["kind"] == "invalidation")
     assert invalidation["execution"] == "possible"
     assert ["bridge", "reset"] in payload["structural_loop_components"]
-    assert "→" not in render_static_graph(payload)
+    assert all("→" not in line for line in render_static_graph(payload).splitlines()[1:])
 
 
 def test_shared_family_does_not_hide_a_second_unsourced_selector(tmp_path):

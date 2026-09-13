@@ -112,11 +112,25 @@ Reading the output:
   +field  writes a field; it need not be the first write
   −field  deletes a field; −context removes the selected context
   ?       conditional change
-  ↔       another role of the same workflow, not a separate execution
+  ↔       the same workflow: another role or a reference, not another execution
 
-Branches show data use, not required execution order. Playbook order helps arrange
+Shared context: writers → readers, not execution order. Free reader roots carry
+(data use; alternative sources): they use data without mutating the context.
+This shows shared data, not a mandatory sequence. Guards and check determine
+applicability; alternative ends are not sequential steps.
+One contour needs no heading; multiple contours use short numbered headings.
+Playbook order helps arrange
 workflows when their relationships leave a choice. A parameter stands for a key
 that has not been selected; the relationship applies to a matching context instance.
+
+Writers and deletions can also be branches. When sources already form a chain,
+the deepest source is the parent; "also reads from: name" keeps other sources visible.
+Distinct data from incomparable sources is shown under each source. The first
+source in display order holds the full occurrence; ↔ (reference) leaves show the
+same operation elsewhere without repeating its subtree. Alternative writers of
+the same data stay together, rather than spreading across branches.
+"reads from: name?" marks known conditional or fallback data use, separately from
+the conditional write in +field?. Fallback reads still count as data use.
 
 Graph does not read saved state, run probes, or recommend what to do next.
 A missing edge does not prove independence in external systems.

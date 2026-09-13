@@ -732,7 +732,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
             "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
             "Use ordo-playbook graph to see how workflows connect through persistent state, where shared data is written, and where it is removed. No active task is required.",
-            "Read +field as writes, −field as deletes, ? as a conditional change, and ↔ as another role of the same workflow, not a separate execution. Branches show data use, not required execution order; playbook order helps arrange workflows when relationships leave a choice.",
+            "Shared context: writers → readers, not execution order. Free alternative reader roots are marked (data use; alternative sources). Read +field as writes, −field as deletes, and ? as a conditional change. Distinct data sources can show the same operation on several branches: ↔ (reference) leaves never repeat its subtree or execution. Alternative writers of the same data are not expanded. also reads from keeps extra sources visible; reads from: name? marks conditional/fallback data use separately from +field?. Guards and check determine applicability; alternative ends are not sequential steps.",
             "parameter stands for a key that has not been selected; relationships apply to a matching context instance. Graph does not read saved state or run probes. A missing edge does not prove independence in external systems. Use graph --json for dependencies, conditions, and unresolved relationships.",
             "After exploring graph, use workflows show <workflow> for inputs, check or explain <workflow> for readiness, and next for a recommendation in the current environment. See docs/static-graph.md for the technical reference.",
             "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
@@ -985,8 +985,17 @@ GRAPH_PRESENTATION = (
 
 
 GRAPH_SOURCE_PLACEMENT = (
-    "Branches show data use, not required execution order. Playbook order helps arrange workflows when their "
-    "relationships leave a choice. A missing graph edge does not prove independence in external systems."
+    "Shared context: writers → readers, not execution order. A free reader root is marked "
+    "(data use; alternative sources) because it uses data without mutating the context. "
+    "This shows shared data, not a mandatory sequence: guards and check determine applicability, "
+    "and alternative ends are not sequential steps. Playbook order helps arrange workflows when their "
+    "relationships leave a choice. Writers and deletions can also be branches. When sources already form "
+    "a chain, the deepest source is the parent; also reads from keeps other sources visible. Distinct data from "
+    "incomparable sources is shown under each source: the first source in display order holds the full "
+    "occurrence, and ↔ (reference) leaves show the same operation without repeating its subtree. "
+    "Alternative writers of the same data stay together. reads from: name? marks known conditional or fallback "
+    "data use, separately from +field?. Fallback reads still count as data use. "
+    "A missing graph edge does not prove independence in external systems."
 )
 
 
@@ -998,7 +1007,7 @@ GRAPH_CONTEXT_GUIDANCE = (
 
 
 GRAPH_ROLE_GUIDANCE = (
-    "↔ marks another role of the same workflow, not a separate execution. A deletion appears near the "
+    "↔ marks the same workflow: state/kind identifies another role; (reference) is a leaf sighting, not another execution. A deletion appears near the "
     "related data's users; this does not require running every reader before deleting the data."
 )
 

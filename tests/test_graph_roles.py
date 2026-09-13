@@ -55,8 +55,8 @@ def test_n_states_m_mixed_roles_not_keys_or_fields(tmp_path, mixed):
     assert len(payload["workflows"]) == len(payload["summary"]["contours"]) == 1
     text = render_static_graph(payload)
     assert sum(line.startswith("operation (") for line in text.splitlines()) == 3 + mixed
-    assert text.count("Contour 1 ·") == 1
-    assert "not multiple executions" in text
+    assert "Contour 1" not in text
+    assert "↔ another role of the same workflow." in text
     assert payload == before
 
 
@@ -69,14 +69,14 @@ def test_partial_delete_terminal_keeps_writer_order_and_cross_context_anchor(tmp
         "close": [use('state.a["repo"].task.branch'), delete('state.a["repo"].task')],
     })
     text = render_static_graph(payload)
-    assert 'creator (+task.branch)\n└── task-reader\nclose (−task)\nother (+story)\n└── cross-reader' in text
+    assert 'creator (+task.branch)\n├── task-reader\n├── cross-reader [also reads from: other]\n└── close (−task)\nother (+story)\n└── cross-reader ↔ (reference)' in text
     terminal = next(r for r in roles(payload) if r["kind"] == "delete")
     assert terminal["termination"]["cross_context_users"] == ["cross-reader"]
     assert len(terminal["termination"]["creator_roles"]) == 1
     assert len(payload["summary"]["contours"]) == 1
 
 
-def test_mixed_operation_writer_anchor_unchanged_and_reader_not_duplicated(tmp_path):
+def test_mixed_operation_roles_nested_and_reader_not_duplicated(tmp_path):
     payload = project(tmp_path, {
         "creator": [put('state.a["repo"].x')],
         "reader": [use('state.a["repo"].x')],
@@ -85,9 +85,9 @@ def test_mixed_operation_writer_anchor_unchanged_and_reader_not_duplicated(tmp_p
         "join": [use('state.a["repo"].x'), use('state.b["repo"].z')],
     })
     text = render_static_graph(payload)
-    assert text.index('close (−a["repo"])') < text.index('close (+b["repo"].z)')
-    assert 'close (+b["repo"].z) ↔ b/write\n└── join' in text
-    assert sum(line.endswith("── join") for line in text.splitlines()) == 1
+    assert text.index('close (+b["repo"].z)') < text.index('close (−a["repo"])')
+    assert 'close (+b["repo"].z) ↔ b/write\n│   └── join [also reads from: creator]' in text
+    assert sum("── join " in line for line in text.splitlines()) == 1
     assert len([node for node in payload["workflows"] if node["workflow"] == "close"]) == 1
     close_roles = [r for r in roles(payload) if r["workflow"] == "close"]
     assert [len(r["read_sites"]) for r in close_roles] == [1, 0]
@@ -105,7 +105,7 @@ def test_alternative_sources_remain_symbolic_and_deletion_uses_both(tmp_path):
     assert contour["users"][0]["placement"]["after"] is None
     terminal = next(r for r in roles(payload) if r["kind"] == "delete")
     assert len(terminal["termination"]["creator_roles"]) == 2
-    assert 'reader\nfirst (+x)\nsecond (+x)\nclose (−x)' in render_static_graph(payload)
+    assert 'reader (data use; alternative sources) [read sources: first, second]\nfirst (+x)\nsecond (+x)\nclose (−x) [read sources: first, second]' in render_static_graph(payload)
 
 
 def test_conditional_delete_rewrite_preserves_order_conditions_and_cycles(tmp_path):
@@ -168,7 +168,7 @@ def test_parametric_deletion_retains_selector_requirements(tmp_path):
                for m in terminal["termination"]["evidence"])
     assert all(any(r["predicate"] == "selector_equal" for r in m["structural"]["requirements"])
                for m in terminal["termination"]["evidence"])
-    assert 'creator (+x)\n└── reader\nforget (−x)' in render_static_graph(payload)
+    assert 'creator (+x)\n├── reader\n└── forget (−x)' in render_static_graph(payload)
 
 
 def test_declared_aliases_share_one_state_role(tmp_path):
@@ -195,6 +195,11 @@ def test_role_derivation_is_additive_deterministic_and_renders_old_summaries(tmp
     assert build_role_view(payload, contour, _standalone_alternatives) == contour["role_view"]
     assert payload == before
     expected_text = render_static_graph(payload)
+    for item in payload["summary"]["contours"]:
+        del item["role_view"]["forest"]
+    old_roles = deepcopy(payload)
+    assert render_static_graph(payload) == expected_text
+    assert payload == old_roles
     for item in payload["summary"]["contours"]:
         del item["role_view"]
     legacy = deepcopy(payload)

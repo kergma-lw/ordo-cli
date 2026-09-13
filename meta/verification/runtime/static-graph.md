@@ -268,8 +268,8 @@ Inspection confirmed that catalog loading iterates the authored playbook mapping
 graph nodes preserve that order, and summary construction uses it rather than
 alphabetically sorted component membership. Main-workflow ties and readers tied
 at one source anchor already followed authored order, including same-category
-ties. The order is now explicit in summary traversal and documented by the short
-output note `Ties within a category follow playbook order.`
+ties. The order is explicit in summary traversal and documented in help/model.
+The original short output note was removed in the approved lifecycle-wording follow-up.
 
 The existing source-anchor loop still takes precedence over reader entry order
 when anchors differ. Cross-category order is unchanged; no category grouping,
@@ -592,3 +592,186 @@ GRAPH_MODE_HELP and the top-level graph description string. Existing uncommitted
 role implementation and the newly added graph model document are preserved.
 Check/review/plan/run/explain/next and graph rendering/loading/placement are untouched.
 Canonical packs are regenerated with `ordo-playbook run meta-packs-build`.
+
+## Approved finite-graph lifecycle wording
+
+Default text now starts with `Roots outline context lifecycles; branches show data use.`
+and `+ writes, − deletes, ? conditional.` The repeated-role legend appears only
+when needed. Ordering and visual-deletion explanations remain in help/model.
+Single-contour headings are omitted; multiple contours retain short numbered
+headings without address lists. Free pure-alternative readers are marked
+`(data use; alternative sources)`; unresolved readers keep their existing section.
+
+The renderer edits only opening text, headings and the free-reader suffix.
+Role construction, anchors, authored order, source inference and detailed JSON
+are unchanged. Explicit runtime parity review finds no impact on `check`, `review`,
+`plan`, `run`, `explain` or `next`: none consume this text to determine behavior.
+Discovery review covers features, overview, model, capabilities, command-line,
+graph mode help, search and the affected `state` and `command-line.ordo-playbook`
+describes. Workflow rules and operations require no semantic change.
+
+Both affected describes were executed and reviewed against all nine readiness
+criteria: positive definitions; subordinate boundaries; neighboring mechanisms;
+reader-friendly terms; intended-use examples; larger verified fragments;
+self-contained meaning; readable text with JSON evidence; and alignment with
+features and workflow rules. Existing graph bundles verify exact output and links,
+including alternatives and repeated roles. No new snippet-shape gap was introduced.
+
+Bounded verification: graph, profile, order, role, affected graph-snippet and
+overview/command-line golden tests passed (94 tests and 6 snippet subtests).
+The features golden passed separately (1 test, 179.18 seconds). Broader initial
+help/snippet selections timed out; these are not claimed as completed suites.
+Public graph was executed in both Ordo and check-list.life. Ordo matches the
+  approved sample; check-list.life marks `story-to-ready` as a data user with
+  alternative sources in its existing position. No check-list.life file was edited.
+
+## All-role bounded data-use placement
+
+This revision supersedes the earlier writer-order and last-source placement
+heuristics. The header and role legend above remain unchanged. Every role uses
+its workflow's actual body read/source evidence. Unique sources nest writers,
+deletions and pure readers; established source chains select the deepest source
+with extra references. Incomparable joins and per-read alternatives use an
+established common ancestor outside the candidate set or stay at root. Handoff
+SCCs prevent cyclic parents without conflating invalidation with precedence.
+Terminal deletions follow related siblings/sections, including nested sections.
+
+Fallback reads participate in placement exactly like other known data use.
+Narrow annotation of existing branch conditions or a direct state missing-value
+catch is independent of parent choice. `uses: name?` does not modify `+field?`.
+Unknown optionality gets no speculative question mark and never erases a source.
+Unknown source identities and incomplete structure retain explicit notes.
+
+Approved targeted verification used the local `.venv` with
+`PYTHONPATH=/home/ww/projects/ordo/src`:
+
+- Graph role placement, roles, display order, static graph, parameters, profiles,
+  help, plus actual-file and role write-order tests: **251 passed, 79 subtests
+  passed** in 5.70 seconds.
+- After adding root-terminal tie and additive-only regressions and tightening
+  annotation identity/old-summary rendering, the seven graph test modules passed
+  again: **124 passed** in 2.93 seconds.
+- Selected public help subprocess checks for overview/features/command-line JSON
+  goldens and the command describe teaching surface: **4 passed, 147 deselected**
+  in 182.55 seconds. No full test suite was run.
+
+Regressions cover reversed author-order chains, chained terminal joins, independent
+joins, alternative writers even within a chain, common ancestors, handoff cycles
+with downstream anchors, mixed cross-state roles, conditional/fallback annotation,
+complex expressions of unknown optionality, unknown reads, terminal ordering,
+acyclic complete forest traversal and unchanged detailed/legacy evidence. Existing
+N + M role-count, alias, selector, profile, bootstrap and physical-storage proofs
+remain checked. The graph-bundle examples verify actual links, loop evidence and
+exact rendered text; no new snippet harness or execution semantics were needed.
+
+Both affected public describes (`state` and `command-line.ordo-playbook`) were
+executed and reviewed against all nine readiness criteria:
+
+1. Positive definitions still introduce persistent storage and the public command.
+2. Boundaries explain static inspection without substituting for the definitions.
+3. Neighboring check/explain/next commands and registered intra-run values remain distinct.
+4. Branches, source references, fallback marks and repeated roles use practical terms.
+5. Canonical examples demonstrate actual write/use/delete relationships.
+6. Full verified graph bundles cover writer nesting, joins, fallback and terminal roles.
+7. Each describe explains the graph meaning directly, including its non-sequential nature.
+8. Text is readable; JSON retains source YAML and detailed evidence.
+9. Features, overview, model, capabilities, command-line and search share the same
+   guidance. Search for `Fallback reads still count` resolves both affected handles.
+
+The existing unrelated CLI-activation snippet limitation is not claimed resolved;
+the changed graph shapes are supported and verified. Workflow-authoring/rules and
+operations need no changes because authored syntax and operations did not change.
+
+Runtime-mode review establishes non-impact on all six modes: check applicability,
+review findings, plan reuse, run ordering/effects, explain observations and next
+classification/ranking do not consume the display forest. Only graph role
+projection/rendering and discovery text changed. Extraction, concrete/structural
+access linking, detailed loops, physical-file validation and workflow identities
+remain unchanged; a regression compares the entire payload with forest derivation
+disabled and proves that only the additive forest differs.
+
+Actual default static graphs were inspected in both repositories. Ordo nests
+merge-task under set-active-task, and cancel-task plus terminal close-task beneath
+merge-task. Extra set-active-task references remain explicit; cancel's fallback
+merge use is marked separately. In check-list.life, both close-task roles nest
+under set-active-task/common_state/write; alternative profile readers retain all
+source references instead of choosing the last writer. No external repository or
+project workflow files were edited. Canonical regeneration uses
+`ordo-playbook run meta-packs-build`; no commits, pushes or remote mutations occur.
+
+## Bounded multi-source display references
+
+The final display pass now gives unambiguous incomparable joins one full
+occurrence on the first source branch in established display order, plus one
+reference leaf per other distinct source vertex. It uses the existing per-read
+source sets and does not infer requiredness. Conditional/fallback reads remain
+eligible; alternative writers of the same data, mixed alternatives, incomplete
+source sets and internal SCC placements retain conservative presentation.
+
+`forest.display_rows` is additive and leaves workflow/role nodes, established
+parents, accesses, source matching and detailed links unchanged. Its canonical
+parent is a layout choice, never new evidence for source-chain inference. Only
+the full occurrence owns descendants; reference leaves cannot duplicate a subtree.
+Canonical ancestry checks and visited-aware iterative rendering keep traversal
+finite. One reference per source vertex bounds the display without path expansion.
+
+Targeted tests used `.venv/bin/python` with
+`PYTHONPATH=/home/ww/projects/ordo/src`:
+
+- Eight graph modules, including `test_graph_display_references.py`: **136 passed**
+  in 3.01 seconds. Coverage includes distinct sources, repeated read-site dedup,
+  one full subtree, alternatives and mixed alternatives, fallback references,
+  multiple mutation roles, source-layout author ties, cyclic source relations,
+  incomplete sources, old summaries and additive-only JSON changes.
+- Selected overview/features/command-line JSON goldens and command describe
+  teaching readiness: **4 passed, 147 deselected** in 189.66 seconds.
+- After adding explicit state-snippet parity and reference-help assertions:
+  `tests/test_graph_help.py`: **3 passed** in 0.47 seconds. Both public handles
+  publish the same runner-verified exact reference example with source YAML in JSON.
+
+Executed `ordo-help describe state` and
+`ordo-help describe command-line.ordo-playbook`. All nine readiness criteria were
+reviewed: positive definitions; subordinate boundaries; distinctions from runtime
+commands and intra-run values; practical terminology; intended-use examples;
+full authored graph bundles rather than isolated syntax; self-contained meaning;
+readable text with JSON evidence; and alignment with features and related help.
+The new verified example shows the same inspect operation on both source branches,
+including a conditional reference leaf. Search for `reference) leaves` returns
+both affected handles. No new snippet-shape or describe-readiness gap remains.
+
+Discovery review covers the shared overview/model/capabilities/command-line
+guidance, features, graph mode help, search and both describes. Workflow-authoring,
+workflow rules and operations need no semantic changes because no authored shape
+or operation changed. Runtime review establishes no impact on check applicability,
+review diagnostics, plan reuse, run effects/order, explain observations or next
+ranking. None consume display occurrence rows. Extraction, state matching and
+validation are unchanged; additive-only comparison tests preserve the prior payload.
+
+Actual default graphs were run in Ordo and check-list.life. Ordo's existing
+set-active-task → merge-task → close-task nesting is unchanged. In check-list.life,
+story-get-next-task-for-work has its full occurrence under
+set-active-task/common_state/write and a reference leaf under set-active-story.
+story-to-ready, global-status and current-task-context retain alternative source
+rows, rather than expanding the active-profile candidates into a fan. Existing
+role markers, terminal ordering, bootstrap and parametric notes remain visible.
+
+No full suite, commits, pushes, remote mutations or project workflow edits were
+performed. Canonical regeneration is `ordo-playbook run meta-packs-build`.
+
+## Shared-context wording only
+
+The current opening is `Shared context: writers → readers, not execution order.`
+with `+ write, − delete, ? conditional.` Relationship text uses `reads from:`,
+`also reads from:` and `read sources:`. This supersedes the earlier lifecycle
+opening wording above. Role/reference legends, layout, source parents, analysis,
+DSL identifiers and JSON machine fields are unchanged. No runtime mode consumes
+these display strings, so check/review/plan/run/explain/next remain unaffected.
+
+The eight targeted graph modules initially passed 135 checks with two stale text
+assertions. After updating those assertions, both affected modules passed all
+67 tests; the other graph modules needed no further changes. Targeted CLI graph
+checks passed 2 tests (106 deselected); selected public help/golden checks passed
+4 tests (147 deselected). Verified snippet expectations retain their exact layouts.
+Both affected describes were executed and reviewed against the existing nine-item
+readiness checklist; only presentation wording changed, with no new gap.
+Canonical meta-pack regeneration uses `ordo-playbook run meta-packs-build`.

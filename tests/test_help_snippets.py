@@ -16,6 +16,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class HelpSnippetRegistryTest(unittest.TestCase):
+    def test_graph_snippets_match_exact_output_and_detailed_evidence(self) -> None:
+        for handle, entry in describe_help_snippets().items():
+            for example in entry["canonical_examples"]:
+                if example["form"] != "graph_bundle":
+                    continue
+                verification = example["verification"]
+                with self.subTest(handle=handle, example=example["name"]):
+                    result = verify_help_snippet(
+                        snippet=example["yaml"], world=verification["world"],
+                        insertion_mode="graph_bundle", target=verification["target"],
+                    )
+                    self.assertEqual(result.status, verification["expected_status"])
+
     def test_dynamic_state_snippets_use_inputs_only_in_mutation_keys(self) -> None:
         registry = describe_help_snippets()
         for mutation, example_name, input_name in (

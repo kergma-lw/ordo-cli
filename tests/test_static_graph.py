@@ -137,13 +137,16 @@ def test_project_graph_does_not_read_state_or_activate(monkeypatch):
     text = render_static_graph(payload)
     for name in ("task-to-review", "current-task-context"):
         assert _summary_user(payload, name)["placement"]["kind"] == "single_source"
-        assert text.index(name) < text.index("\nmerge-task (")
+        assert "── " + name in text
+    assert "├── merge-task (" in text
+    assert "│   └── close-task (−context) [also reads from: set-active-task]" in text
     cancel = _summary_user(payload, "cancel-task")
     assert cancel["placement"]["kind"] == "join"
     assert len(cancel["dependencies"]) == 5
     assert len(cancel["placement"]["conditional_sources"]) == 2
-    assert text.index("\nmerge-task (") < text.index("└── cancel-task") < text.index("\nclose-task (")
-    assert "set-active-task (+issue_number, +branch)\n├── task-to-review\n└── current-task-context" in text
+    assert text.index("├── merge-task (") < text.index("│   ├── cancel-task") < text.index("│   └── close-task (")
+    assert "set-active-task (+issue_number, +branch)\n├── task-to-review [reads from: set-active-task?]" in text
+    assert "│   ├── cancel-task [also reads from: set-active-task; reads from: merge-task?]" in text
     assert "merge-task (+pull_number?, +merge_attempted?, +merge_request_id?)" in text
     assert "close-task (−context)" in text
 
@@ -203,16 +206,14 @@ blocks:
 def test_graph_guidance_is_published_in_model_and_capabilities():
     from ordo.help_cli import build_capabilities_response, build_model_response
     for payload in (build_capabilities_response(), build_model_response()):
-        assert "schema_version 1" in payload["graph_guidance"]
-        assert "independently of next" in payload["graph_guidance"]
-        assert "summary is additive" in payload["graph_presentation"]
-        assert "Grouped writes are not atomic" in payload["graph_presentation"]
-        assert "existing body read sites" in payload["graph_source_placement"]
-        assert "may perform external effects" in payload["graph_source_placement"]
-        assert "bootstrap/body" in payload["graph_context"]
-        assert "up to 32 alternatives" in payload["graph_context"]
-        assert "selector_equal" in payload["graph_parameters"]
-        assert "without relabeling possible concrete identity as proven" in payload["graph_parameters"]
+        assert "connect through persistent state" in payload["graph_guidance"]
+        assert "−context removes the selected context" in payload["graph_presentation"]
+        assert "Shared context: writers → readers, not execution order." in payload["graph_source_placement"]
+        assert "(data use; alternative sources)" in payload["graph_source_placement"]
+        assert "guards and check determine applicability" in payload["graph_source_placement"]
+        assert "alternative ends are not sequential steps" in payload["graph_source_placement"]
+        assert "does not read saved state" in payload["graph_context"]
+        assert "meta/model/runtime/graph-v1.md" in payload["graph_parameters"]
 
 
 def test_profile_switch_does_not_prove_later_context_across_blocks():
@@ -278,8 +279,8 @@ def test_compact_summary_common_reads_users_and_single_termination():
                     workflow("merge", read("issue"), read("branch")),
                     workflow("reset", read("branch"), Step(name="delete", state_delete="state.s['repo']")))
     text = render_static_graph(payload)
-    assert "writer (+issue, +branch)\n├── review\n└── merge\nreset (−context)" in text
-    assert text.splitlines().count("reset (−context)") == 1
+    assert "writer (+issue, +branch)\n├── review\n├── merge\n└── reset (−context)" in text
+    assert text.splitlines().count("└── reset (−context)") == 1
     assert "Reads:" not in text and "writes:" not in text
     assert payload["summary"]["contours"][0]["changes"][0]["groups"][0]["fields"] == [["issue"], ["branch"]]
     assert "->" not in text
@@ -335,8 +336,8 @@ def test_summary_independent_contours_and_overlapping_context_usage():
     assert len(contours) == 2
     assert len(contours[0]["contexts"]) == 2
     assert contours[0]["changes"][1]["reads"] == ["C1"]
-    assert 'Contour 1 · store["first"]; store["second"]' in render_static_graph(payload)
-    assert 'bridge (+store["second"].b)\n└── reader' in render_static_graph(payload)
+    assert "Contour 1\n" in render_static_graph(payload)
+    assert '└── bridge (+store["second"].b)\n    └── reader' in render_static_graph(payload)
     assert payload["summary"]["without_state_access"] == ["unused"]
 
 
@@ -392,7 +393,7 @@ def test_summary_overlapping_processes_keep_shared_workflow_once():
                              replace(write("done_two"), if_="inputs.two")))
     assert len(payload["summary"]["contours"]) == 1
     text = render_static_graph(payload)
-    assert text.splitlines().count("shared (+done_one?, +done_two?)") == 1
+    assert sum(line.startswith("shared (+done_one?, +done_two?)") for line in text.splitlines()) == 1
     groups = payload["summary"]["contours"][0]["changes"][-1]["groups"]
     assert [g["conditions"][-1]["expression"] for g in groups] == ["inputs.one", "inputs.two"]
     assert "inputs.one" not in text and "inputs.two" not in text
@@ -428,7 +429,7 @@ def test_user_placement_join_requires_all_read_addresses():
     assert user["placement"]["sources"] == ["S1", "S2"]
     assert user["placement"]["after"] == "S2"
     assert sum(len(d["reads"]) for d in user["dependencies"]) == 3
-    assert "p1 (+x)\np2 (+y)\n└── consumer" in render_static_graph(payload)
+    assert "p1 (+x)\n└── consumer [also reads from: p2]\np2 (+y)\n└── consumer ↔ (reference)" in render_static_graph(payload)
 
 
 def test_user_placement_alternatives_do_not_choose_latest_conditional_writer():
@@ -455,7 +456,7 @@ def test_user_placement_join_with_alternatives_preserves_per_field_options():
                     workflow("p3", write("y")), workflow("consumer", read("x"), read("y")))
     assert _summary_user(payload)["placement"]["kind"] == "join_with_alternatives"
     assert _summary_user(payload)["placement"]["after"] == "S3"
-    assert "p1 (+x)\np2 (+x)\np3 (+y)\n└── consumer" in render_static_graph(payload)
+    assert "p1 (+x)\np2 (+x)\np3 (+y)\nconsumer (data use; alternative sources) [read sources: p1, p2, p3]" in render_static_graph(payload)
 
 
 def test_user_placement_unique_conditional_source_is_not_permission():
@@ -466,7 +467,7 @@ def test_user_placement_unique_conditional_source_is_not_permission():
     assert user["placement"]["availability"] == "symbolic"
     assert user["placement"]["conditional_sources"] == ["S1"]
     text = render_static_graph(payload)
-    assert "not execution order" in text
+    assert "Shared context: writers → readers, not execution order." in text
     assert "producer (+x?)\n└── consumer" in text
 
 
@@ -476,7 +477,7 @@ def test_user_placement_missing_and_possible_coverage_stays_unresolved():
     user = _summary_user(payload)
     assert user["placement"]["kind"] == "unresolved"
     assert user["placement"]["unresolved_dependencies"] == [1]
-    assert "producer (+x)\nUnresolved placement\n└── consumer" in render_static_graph(payload)
+    assert "producer (+x)\n└── consumer [other sources unknown]" in render_static_graph(payload)
     no_sources = graph(workflow("consumer", read("x")))
     assert _summary_user(no_sources)["placement"]["after"] is None
     partial = graph(workflow("producer", write("parent")), workflow("consumer", read("parent.child")))
@@ -500,7 +501,7 @@ def test_user_placement_catch_reads_and_external_effects_are_not_dropped():
     assert user["placement"]["kind"] == "join"
     assert user["placement"]["conditional_sources"] == ["S2"]
     assert "catch" in user["dependencies"][1]["reads"][0]["expression"]
-    assert "producer (+x)\noptional-source (+y?)\n└── consumer" in render_static_graph(payload)
+    assert "producer (+x)\n└── consumer [also reads from: optional-source?]\noptional-source (+y?)\n└── consumer ↔ (reference) [conditional use]" in render_static_graph(payload)
 
 
 def test_user_placement_cycles_do_not_duplicate_or_topologically_order_users():
@@ -510,7 +511,8 @@ def test_user_placement_cycles_do_not_duplicate_or_topologically_order_users():
     assert payload["possible_loop_components"] == [["p1", "p2"]]
     assert _summary_user(payload)["placement"]["kind"] == "join"
     text = render_static_graph(payload)
-    assert text.count("└── consumer") == 1
+    assert text.splitlines().count("└── consumer [also reads from: p2]") == 1
+    assert text.splitlines().count("└── consumer ↔ (reference)") == 1
     assert "loop" not in text.lower()
     assert "->" not in text
 
@@ -522,7 +524,7 @@ def test_user_placement_incomplete_reader_and_old_summaries_are_honest():
                     workflow("consumer", read("x"), Step(name="unknown", run="unknown")))
     assert _summary_user(payload)["placement"]["kind"] == "unresolved"
     text = render_static_graph(payload)
-    assert "Unresolved placement\n└── consumer" in text
+    assert "└── consumer [other sources unknown]" in text
     assert _summary_user(payload)["placement"]["incomplete_reader"] is True
     old = deepcopy(payload)
     old["summary"].pop("placement_version")
@@ -541,21 +543,21 @@ def test_human_labels_leave_json_ids_and_evidence_unchanged():
     text = render_static_graph(payload)
     assert payload == before
     assert payload["summary"]["contours"][0]["changes"][0]["groups"][0]["id"] == "S1"
-    assert 'store["repo"]' in text
+    assert 'store["repo"]' not in text
     assert "producer (+x)\n└── reader" in text
     assert "Context user" not in text
     assert not re.search(r"\b[CS]\d+\b", text)
     assert "/absent/" not in text
 
 
-def test_human_store_names_disambiguate_actual_paths_across_contours():
+def test_human_contour_headings_omit_address_lists():
     from ordo.runtime.graphing import render_static_graph
     first = replace(workflow("first", write()), states={"store": "/one/state.json"})
     second = replace(workflow("second", write()), states={"store": "/two/state.json"})
     text = render_static_graph(graph(first, second))
-    assert 'store (one/state.json)["repo"]' in text
-    assert 'store (two/state.json)["repo"]' in text
-    assert "/one/state.json" not in text  # The unique suffix suffices.
+    assert "Contour 1\n\nfirst (+a)" in text
+    assert "Contour 2\n\nsecond (+a)" in text
+    assert "state.json" not in text
 
 
 def test_human_source_names_disambiguate_same_fields_at_different_keys():
@@ -563,7 +565,7 @@ def test_human_source_names_disambiguate_same_fields_at_different_keys():
     payload = graph(workflow("producer", write("x", "'one'"), write("x", "'two'")),
                     workflow("reader", read("x", "'one'"), read("x", "'two'")))
     text = render_static_graph(payload)
-    assert 'store["one"]; store["two"]' in text
+    assert "Contour 1" not in text
     assert 'producer (+store["one"].x, +store["two"].x)\n└── reader' in text
     assert text.count("└── reader") == 1
 
@@ -573,7 +575,7 @@ def test_human_alternative_labels_preserve_distinct_write_occurrences():
     payload = graph(workflow("producer", write("x"), read("barrier"), write("x")),
                     workflow("reader", read("x")))
     text = render_static_graph(payload)
-    assert "producer (+x)\nreader" in text
+    assert "producer (+x) [sources unknown]\n└── reader" in text
     assert _summary_user(payload, "reader")["placement"]["sources"] == ["S1", "S2"]
     assert _summary_user(payload, "reader")["placement"]["kind"] == "alternatives"
     assert "Context user" not in text
@@ -600,16 +602,13 @@ def test_default_tree_is_exact_and_keeps_all_evidence_in_json():
                     workflow("second-reader", read("internal_field")),
                     workflow("terminator", Step(name="delete", state_delete="state.s['repo']")))
     before = deepcopy(payload)
-    assert render_static_graph(payload) == '''+ writes, − deletes, ? conditional; branches show data use, not execution order.
-Ties within a category follow playbook order.
-Deletion roles end related data-use sections visually, not as mandatory last steps.
-
-Context · store["repo"]
+    assert render_static_graph(payload) == '''Shared context: writers → readers, not execution order.
++ write, − delete, ? conditional.
 
 producer (+internal_field?)
 ├── first-reader
-└── second-reader
-terminator (−context)
+├── second-reader
+└── terminator (−context)
 
 Details: --json.
 Full list: ordo-playbook workflows list'''
@@ -626,7 +625,7 @@ def test_parametric_tree_placement_keeps_unknown_selector_conditions_in_json():
                     workflow("consumer", read(key="inputs.private_key")))
     text = render_static_graph(payload)
     assert "inputs.private_key" not in text
-    assert "[parameter]" in text
+    assert "Parametric links require matching selectors, state instances and read shapes." in text
     assert "producer (+a)\n└── consumer" in text
     assert "Parametric links require matching selectors" in text
     assert text.count("consumer") == 1
@@ -676,7 +675,7 @@ def test_effect_suffix_handles_conditional_partial_and_whole_deletion():
         Step(name="whole", state_delete="state.s['repo']", if_="not inputs.partial"))
     text = render_static_graph(graph(w))
     assert "cleanup (−parent.child?, −context?)" in text
-    assert text.startswith("+ writes, − deletes, ? conditional; branches show data use, not execution order.\n")
+    assert text.startswith("Shared context: writers → readers, not execution order.\n+ write, − delete, ? conditional.\n")
     assert text.count("? conditional") == 1
 
 

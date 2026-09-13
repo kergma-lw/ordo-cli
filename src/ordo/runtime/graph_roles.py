@@ -164,5 +164,232 @@ def build_role_view(payload, contour, alternative_layout):
             rows.append({"unresolved_readers": unresolved})
         if index == len(base):
             rows.extend({"role": ref, "children": []} for ref in endings.get(index, []))
-    return {"roles": roles, "rows": rows, "reader_anchors": reader_anchors,
+    forest = _source_forest(payload, contour, roles, sites, rows)
+    return {"roles": roles, "rows": rows, "reader_anchors": reader_anchors, "forest": forest,
             "semantics": "Display roles share workflow identity; termination placement is visual, not execution order."}
+
+
+def _source_forest(payload, contour, roles, sites, rows):
+    """Project handoffs onto display roles without changing access/link evidence."""
+    from .graphing import _components
+
+    writers = {site: role["id"] for role in roles if role["kind"] == "write" for site in role["sites"]}
+    nodes = {role["id"]: {"id": role["id"], "role": role["id"], "workflow": role["workflow"]}
+             for role in roles}
+    nodes.update({f"W:{user['workflow']}": {"id": f"W:{user['workflow']}", "workflow": user["workflow"]}
+                  for user in contour["users"]})
+    incoming = {}
+    handoffs = []
+    for link in [*payload["links"], *payload.get("structural_links", [])]:
+        if (link["kind"] != "handoff" or link["from"] not in writers or link["to"] not in sites
+                or link["from_workflow"] == link["to_workflow"]):
+            continue
+        trusted = "relation_category" in link or link.get("address_identity") == "proven"
+        incoming.setdefault(link["to"], []).append((writers[link["from"]], trusted))
+        if trusted:
+            handoffs.append(link)
+    # Invalidation is not handoff precedence. Only handoff SCCs constrain nesting.
+    components = _components(contour["workflows"], handoffs, directed=True)
+    cyclic = {name: set(component) for component in components if len(component) > 1 for name in component}
+    role_by_id = {role["id"]: role for role in roles}
+    for ref, node in nodes.items():
+        reads = [site for site in sites.values() if site["workflow"] == node["workflow"] and site["kind"] == "read"]
+        # These are accesses of the shared workflow, not invented executions of
+        # each state role. Keep the existing state-local read_sites unchanged.
+        sources, unknown, alternatives = set(), [], False
+        source_reads = {}
+        conditional = set()
+        for read in reads:
+            candidates = {source for source, trusted in incoming.get(read["id"], []) if trusted}
+            sources.update(candidates)
+            for source in candidates:
+                source_reads.setdefault(source, []).append(read["id"])
+            alternatives |= len(candidates) > 1
+            if (any(not trusted and source not in candidates for source, trusted in incoming.get(read["id"], []))
+                    or not incoming.get(read["id"])):
+                # Self reads are intra-operation, not missing external parents.
+                if not any(site["workflow"] == node["workflow"] and site["kind"] == "set"
+                           and site["address"] == read["address"] for site in sites.values()):
+                    unknown.append(read["id"])
+            if _conditional_read(read):
+                conditional.update(candidates)
+        role = role_by_id.get(ref)
+        basis = "body_handoffs"
+        if role and role["kind"] == "delete" and not sources:
+            basis = "affected_creators"
+            sources.update(source for source in role["termination"]["creator_roles"]
+                           if nodes[source]["workflow"] != node["workflow"])
+        node["placement"] = {"parent": None, "sources": [r for r in nodes if r in sources],
+                             "conditional_sources": [r for r in nodes if r in conditional],
+                             "source_reads": {r: source_reads[r] for r in nodes if r in source_reads},
+                             "read_sites": [read["id"] for read in reads], "unknown_reads": unknown,
+                             "alternatives": alternatives, "kind": "root", "basis": basis}
+        node["placement"]["incomplete"] = any(
+            b.get("phase", "body") == "body" and b.get("impact", "structure") == "structure"
+            for workflow in payload["workflows"] if workflow["workflow"] == node["workflow"]
+            for b in workflow.get("boundaries", [])) or any(
+                b.get("workflow") == node["workflow"] and b.get("phase", "body") == "body"
+                and b.get("impact", "structure") == "structure" for b in payload.get("boundaries", []))
+
+    def ancestors(ref):
+        result = []
+        while ref is not None:
+            result.append(ref)
+            ref = nodes[ref]["placement"]["parent"]
+        return result
+
+    # Establish unique anchors first, then resolve chains/common ancestors to a
+    # fixed point. No source order can select an arbitrary parent of a join.
+    for _ in range(len(nodes) + 1):
+        changed = False
+        for ref, node in nodes.items():
+            placement = node["placement"]
+            sources = placement["sources"]
+            if not sources:
+                continue
+            loops = [source for source in sources
+                     if nodes[source]["workflow"] in cyclic.get(node["workflow"], set())]
+            candidates = [source for source in sources if source not in loops]
+            parent, kind = None, "cycle" if loops else "join"
+            if candidates and not loops:
+                if len(candidates) == 1:
+                    parent, kind = candidates[0], "single_source"
+                elif not placement["alternatives"]:
+                    deepest = [source for source in candidates
+                               if set(candidates) <= set(ancestors(source))]
+                    if len(deepest) == 1:
+                        parent, kind = deepest[0], "chain"
+                if parent is None:
+                    paths = [ancestors(source) for source in candidates]
+                    common = set(paths[0]).intersection(*paths[1:]) - set(candidates)
+                    parent = next((source for source in paths[0] if source in common), None)
+                    kind = "alternatives" if placement["alternatives"] else "join"
+            if parent is not None and ref in ancestors(parent):
+                parent, kind = None, "cycle"
+            if placement["parent"] != parent:
+                placement["parent"] = parent
+                changed = True
+            placement["kind"] = kind
+        if not changed:
+            break
+    # Preserve the existing affected-section terminal ordering at root level;
+    # within each parent, terminal roles follow its other children.
+    rank = {}
+    for row in rows:
+        refs = ([row["role"]] if "role" in row else
+                [f"W:{row['workflow']}"] if "workflow" in row else
+                [f"W:{name}" for name in row["unresolved_readers"]])
+        refs.extend(f"W:{name}" for name in row.get("children", []))
+        for ref in refs:
+            rank[ref] = len(rank)
+    children = {None: [], **{ref: [] for ref in nodes}}
+    for ref, node in nodes.items():
+        children[node["placement"]["parent"]].append(ref)
+    author_order = {node["workflow"]: i for i, node in enumerate(payload["workflows"])}
+    for parent, refs in children.items():
+        refs.sort(key=lambda ref: (author_order[nodes[ref]["workflow"]], rank.get(ref, len(rank))) if parent is None else
+                  (role_by_id.get(ref, {}).get("kind") == "delete", author_order[nodes[ref]["workflow"]],
+                   rank.get(ref, len(rank))))
+    for ref in reversed(list(children[None])):
+        role = role_by_id.get(ref)
+        if not role or role["kind"] != "delete":
+            continue
+        related = set(role["termination"]["creator_roles"])
+        local_users = set(role["termination"]["related_users"]) - set(role["termination"]["cross_context_users"])
+        related.update(r for r, node in nodes.items() if node["workflow"] in local_users
+                       and role_by_id.get(r, {}).get("kind") != "delete")
+        roots = {ancestors(r)[-1] for r in related} - {ref}
+        positions = [children[None].index(r) for r in roots]
+        if positions:
+            children[None].remove(ref)
+            last = max(children[None].index(r) for r in roots)
+            children[None].insert(last + 1, ref)
+    for ref, node in nodes.items():
+        node["children"] = children[ref]
+    forest = {"nodes": list(nodes.values()), "roots": children[None]}
+    forest["display_rows"] = _display_references(forest, role_by_id, author_order)
+    return forest
+
+
+def _display_references(forest, roles, author_order):
+    """One full occurrence per node, plus bounded source-local reference leaves.
+
+    Display parents are layout choices, never new source-chain evidence. Keep
+    them separate from the established parents used by _source_forest.
+    """
+    nodes = {node["id"]: node for node in forest["nodes"]}
+    layout = []
+    todo = list(reversed(forest["roots"]))
+    while todo:
+        ref = todo.pop()
+        layout.append(ref)
+        todo.extend(reversed(nodes[ref]["children"]))
+    rank = {ref: i for i, ref in enumerate(layout)}
+    parents = {ref: node["placement"]["parent"] for ref, node in nodes.items()}
+    references = []
+    distributed = set()
+
+    def would_cycle(ref, parent):
+        visited = {ref}
+        while parent is not None:
+            if parent in visited:
+                return True
+            visited.add(parent)
+            parent = parents[parent]
+        return False
+
+    for ref in layout:
+        placement = nodes[ref]["placement"]
+        # Only distinct, unambiguous data pieces qualify. Alternative writers
+        # of one read, missing source evidence, and SCCs keep their honest forest.
+        if (placement["kind"] != "join" or placement["alternatives"]
+                or placement["unknown_reads"] or placement["incomplete"]
+                or placement["basis"] != "body_handoffs" or len(placement["sources"]) < 2):
+            continue
+        sources = sorted(set(placement["sources"]), key=rank.__getitem__)
+        parent = next((source for source in sources if not would_cycle(ref, source)), None)
+        if parent is None:
+            continue
+        parents[ref] = parent
+        distributed.add(ref)
+        # One leaf per source vertex, not per field, site, or descendant path.
+        references.extend({"node": ref, "parent": source, "reference": True,
+                           "conditional": source in placement["conditional_sources"],
+                           "basis": "distinct_data_source"} for source in sources if source != parent)
+    rows = [{"node": ref, "parent": parents[ref], "reference": False,
+             "conditional": parents[ref] in nodes[ref]["placement"]["conditional_sources"],
+             "basis": "source_layout" if ref in distributed else "forest"} for ref in layout]
+    rows.extend(references)
+    # Roots keep the established section order. At source branches references
+    # share the authored-order tie-break and precede terminal deletion roles.
+    rows.sort(key=lambda row: (rank[row["node"]],) if row["parent"] is None else
+              (roles.get(row["node"], {}).get("kind") == "delete",
+               author_order[nodes[row["node"]]["workflow"]], rank[row["node"]]))
+    return rows
+
+
+def _conditional_read(read):
+    """Annotation only: known branch conditions or an exact missing-state catch.
+
+    Unrecognized expressions are not called conditional. This predicate never
+    participates in source selection or parent choice.
+    """
+    if any(c["kind"] in {"if", "short_circuit", "iteration"} for c in read["conditions"]):
+        return True
+    from .graphing import _parse
+    from .local_expression_engine.core import (
+        PipelineNode, StateReferenceNode, FilterApplicationNode, ListNode, LiteralNode, render_expression_text,
+    )
+
+    node, expression = _parse(read.get("expression") or "")
+    if not isinstance(node, PipelineNode) or not isinstance(node.source, StateReferenceNode):
+        return False
+    address = read["address"]
+    if node.source.state_role != address["role"] or list(node.source.fields) != address["fields"]:
+        return False
+    if render_expression_text(node.source.key_expression, source=expression) != address["key_expression"]:
+        return False
+    return any(isinstance(stage, FilterApplicationNode) and stage.name == "catch"
+               and len(stage.arguments) == 2 and isinstance(stage.arguments[0], ListNode)
+               and any(isinstance(item, LiteralNode) and item.value == "runtime.value.state_missing"
+                       for item in stage.arguments[0].items) for stage in node.filters)
