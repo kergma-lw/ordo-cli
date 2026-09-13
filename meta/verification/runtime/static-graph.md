@@ -481,3 +481,114 @@ Standalone-alternatives validation:
   story-to-ready before the intact set-active-story/story-to-review block.
 - Ordo's compact tree remains unchanged. No full suite, remote mutations,
   commits, pushes or authored project workflow edits were performed.
+
+## State mutation role projections
+
+The display unit is workflow × existing declaration-owned logical state family ×
+write/delete. Keys and fields do not create extra roles. The additive role view
+preserves contours and original workflow identity. Writer roles and source-site
+reader anchors retain existing placement; deletion roles terminate the bounded
+related creator/local-user block span, not the global workflow list. Cross-context
+readers retain their anchors and evidence. Conditional/unknown address matches,
+alternatives, cycles and delete/rewrite order remain explicit, never mandatory paths.
+
+Targeted verification commands (project .venv, with
+`PYTHONPATH=/home/ww/projects/ordo/src`):
+
+- `python -m pytest tests/test_graph_roles.py tests/test_static_graph.py tests/test_graph_profiles.py tests/test_graph_parameters.py tests/test_graph_display_order.py -q`:
+  **109 passed**. Covers N states/M mixed roles, alias identity, multi-key/field
+  grouping, pure and partial deletes, unknown alias fallback, parametric requirements,
+  alternatives, conditional rewrite/cycles, relevant mutating readers, preserved
+  writer/category ordering, one original workflow identity, unchanged contours,
+  non-mutating deterministic derivation and old-summary rendering.
+- `python -m pytest tests/test_playbook_activation.py -k 'graph or next' -q`:
+  **10 passed, 98 deselected**.
+- `python -m pytest tests/test_ordo_help_cli.py -k 'overview_json_matches_golden or features_json_matches_golden or command_line_json_matches_golden or text_describe_command_line_ordo_playbook_is_teaching_ready or text_describe_state_set_group_is_teaching_ready or text_describe_state_delete_group_is_teaching_ready or text_describe_playbook_workflows_group_is_teaching_ready' -q`:
+  **7 passed, 144 deselected**. Initial 120-second timeout was rerun with a
+  600-second allowance; the selected checks passed in 215.58 seconds.
+
+Exact graph-bundle examples update the deletion legend and related-section
+placement. The new `state_mutation_roles_keep_one_workflow` example is published
+on both `state` and `command-line.ordo-playbook`; it verifies actual static graph
+links and rendered text, including a mutating reader and two roles of one workflow.
+
+Describe checklist review:
+
+- Executed `ordo-help describe state` and
+  `ordo-help describe command-line.ordo-playbook`, including command JSON inspection.
+  Positive definitions, negative boundaries and neighboring mechanisms remain explicit.
+- Family/state terminology, the shared identity marker, visual deletion placement
+  and distinction from execution/next are explained directly in the output.
+- Full real playbook bundles demonstrate intended use and exact output, beyond a
+  value-only fragment. Text explanations and machine-readable evidence remain aligned.
+- Features, overview, model, capabilities, command-line and search expose the same
+  semantics. Search for `Display vertices` resolves both affected describe handles.
+  No authoring syntax or connector operation changed; workflow-authoring/rules and
+  operations retain their existing contracts. The pre-existing inability to verify
+  general CLI activation examples is not claimed solved by graph-bundle verification.
+  The changed graph surface has a supported verified example shape.
+
+Runtime mode review: the new module is called only by static graph summarization;
+its address queries reuse the existing pure concrete/structural predicates and do
+not modify detailed links. Check, review, plan, run, explain and next do not consume
+role projections. Their activation, diagnostics, validation, planning, explanation,
+ranking and execution contracts have no behavioral change. No runtime mode or
+actual-file write-before-last-read implementation was edited.
+
+Actual static observations:
+
+- Ordo: writer/reader tree remains set-active-task with task-to-review and
+  current-task-context, then merge-task with cancel-task, then close-task. The
+  added deletion legend explicitly disclaims mandatory execution order.
+- check-list.life: one contour remains. set-active-task has shared_state/write and
+  common_state/write roles; task-commit/task-to-review keep the latter anchor.
+  close-task/common_state/delete and cancel-task-as-non-actual follow that block.
+  close-story follows the active-story block. close-task/shared_state/write keeps
+  its authored writer position with current-task-context/global-status attached.
+  Bootstrap and parameter notes remain separate.
+
+Canonical pack regeneration uses `ordo-playbook run meta-packs-build`. No full
+suite, project workflow edits, state reads/probes, remote mutations, commits or
+pushes are part of this change.
+## Practical graph help rewrite (help/docs only)
+
+The command description is now “Show how workflows connect through persistent
+state.” Graph help explains when to use it, the +/−/?/↔ symbols, branches, unselected
+parameters, limitations and next commands. Routine help no longer repeats schema
+history, analysis phases, identity algorithms or bounded-domain internals. The
+technical truth remains in the graph requirements, `meta/model/runtime/graph-v1.md`
+and `docs/static-graph.md`.
+
+The CLI describe surface publishes one small `read_a_state_graph` example. Its
+text presentation extracts the exact `expected_text` verified by the existing
+graph-bundle scaffold; JSON retains the full source. A negative test changes that
+expected text and confirms verification rejects it. The five technical graph
+bundles remain registered on `state`. No snippet harness or graph mode was changed.
+
+Validation used the approved .venv and `PYTHONPATH=/home/ww/projects/ordo/src`:
+
+- `python -m pytest tests/test_graph_help.py tests/test_ordo_help_cli.py -k 'graph_mode_help or cli_example_displays or overview_json_matches_golden or features_json_matches_golden or command_line_json_matches_golden or text_describe_command_line_ordo_playbook_is_teaching_ready' -q`:
+  four golden/describe checks and the mode-help test passed. The new example
+  initially failed because its quoted flow-style expressions were literals;
+  its source was corrected to ordinary expression-first block YAML, retaining the
+  intended links and output expectations.
+- `python -m pytest tests/test_graph_help.py -q`: **2 passed** after that correction.
+  Together, all six selected checks pass; no full suite was run.
+- Executed `ordo-playbook graph --help`, both affected describe surfaces
+  (`state`, `command-line.ordo-playbook`), features, overview, model, capabilities,
+  and search. Features exceeded an initial 120-second timeout and succeeded with
+  a longer allowance. Three help goldens reflect the approved practical wording.
+
+Describe checklist: both surfaces keep positive definitions, explicit boundaries,
+neighboring commands and understandable terminology. The CLI example demonstrates
+write/read/delete rather than syntax alone; its full source is available in JSON.
+Meaning is explained directly in text, with practical features guidance and links
+to technical references. Existing CLI-activation verification limitations are not
+claimed solved by this graph-output example. No new snippet-shape blocker remains.
+
+Scope proof: before/after SHA-256 values match for graph_summary.py, graph_roles.py,
+graphing.py, graph_structure.py and playbook.py. The cli.py diff changes only
+GRAPH_MODE_HELP and the top-level graph description string. Existing uncommitted
+role implementation and the newly added graph model document are preserved.
+Check/review/plan/run/explain/next and graph rendering/loading/placement are untouched.
+Canonical packs are regenerated with `ordo-playbook run meta-packs-build`.

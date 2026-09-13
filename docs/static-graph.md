@@ -1,5 +1,41 @@
 # Inspecting static possible processes
 
+## Start here
+
+**Show how workflows connect through persistent state.** Use `graph` to explore
+related workflows, where they write shared data, and where that data is removed.
+No active task is required.
+
+The final line, `Full list: ordo-playbook workflows list`, points to all published
+workflows, including those absent from the state graph.
+
+```console
+ordo-playbook graph
+ordo-playbook --profile backend graph
+ordo-playbook graph --json
+```
+
+Read `+field` as a write, `−field` as a deletion, and `?` as a conditional change.
+`−context` removes the selected context. `↔` marks another role of the same
+workflow, not a separate execution. Branches show data use, not required execution
+order. Playbook order helps arrange workflows when relationships leave a choice.
+`parameter` stands for a key that has not been selected; the relationship applies
+to a matching context instance.
+
+Graph does not read saved state, run probes, or recommend what to do next. A missing
+edge does not prove independence in external systems. Use `--json` for detailed
+dependencies, conditions, and unresolved relationships.
+
+After exploring the graph, use `workflows show <workflow>` for inputs,
+`check <workflow>` to check whether it can run, `explain <workflow>` to understand
+why, or `next` for a recommendation in the current environment.
+
+The sections below are the technical reference. The ordered analysis and placement
+model is documented in [graph v1](../meta/model/runtime/graph-v1.md); the
+[requirements](../meta/requirements/runtime/graph.md) retain the behavior contract.
+
+## Technical reference
+
 Run `ordo-playbook graph` to see state-connected contours without reading stored
 state or running probes. Use `ordo-playbook --json graph` for ordered occurrences,
 symbolic conditions, address evidence and directed links.
@@ -14,7 +50,7 @@ Plain `graph` is a minimal workflow tree:
 
 - A generic `Context` or numbered `Contour` heading identifies logical store
   bindings and keys. No business lifecycle name is guessed from workflow names.
-- Main workflows appear in existing summary order. Read-only-state consumers
+- Writing roles appear in existing summary order. Read-only-state consumers
   with a unique source or a join appear once beneath their existing placement
   anchor. Pure alternatives appear once as standalone rows with no selected parent.
   Such consumers may still perform external effects.
@@ -37,7 +73,7 @@ Plain `graph` is a minimal workflow tree:
   technical C/S identifiers, activity and statistics are omitted from default
   text. Use `--json` for all of that evidence.
 
-The single opening legend is `+ writes, − deletes, ? conditional; branches show
+The opening effect legend is `+ writes, − deletes, ? conditional; branches show
 data use, not execution order.` The tree is not a state machine, a new workflow order or permission
 to run anything. Existing dependency components can contain overlapping processes.
 
@@ -79,6 +115,53 @@ identities are not merged merely because expressions look alike. Plain output
 suppresses pairwise invalidation fans and cycle claims, but every original detailed
 relation and `possible_loop_components` value remains intact in `--json`.
 
+### Mutation roles and terminal placement
+
+The display vertex is **workflow × logical state × mutation kind** (`write` or
+`delete`). Logical state means the existing declaration-owned store family, not
+each root field or key. Aliased bindings of the same declared family share a role;
+unknown families retain a workflow-local unresolved binding identity. A workflow
+mutating N states, of which M have both writes and deletes, has N + M roles.
+Fields, keys and established parameter selectors constrain affected data without
+creating more roles. Contours remain unchanged, rather than becoming per-address
+sections. Pure readers appear once. `↔ state/kind` marks repeated appearances of
+the same workflow, never repeated executions.
+
+The finite placement algorithm operates within each existing contour:
+
+1. Project ordered mutation groups onto state/kind roles. Keep writing roles in
+   their existing workflow and first-occurrence order. Map existing reader anchors
+   to writing roles through source group/site IDs, retaining single-source, join,
+   alternatives and unresolved classifications. Insert free alternatives using the
+   existing category/authored-order rules around intact blocks.
+2. For each delete site, compare body reads and writes with the existing concrete
+   and structural address predicates. Only proven concrete overlap or conditional
+   family correspondence can justify an anchor. Partial deletes use matching
+   fields/subtrees, including possible empty-parent pruning; unrelated sibling
+   fields cannot supply an anchor.
+3. Identify matching creator blocks and local users whose entire read footprint is
+   affected. This includes mutating users through their relevant state role reads.
+   Cross-context readers stay at their original anchors and remain in termination
+   evidence, without dragging a deletion to an unrelated state's block.
+4. Insert the deletion after the last identified block, after its readers. Several
+   candidates retain their full bounded candidate-block list; no scoring, recursive
+   expansion or mandatory path is invented. Tied deletions retain authored order.
+   With only unresolved local readers, use the end of that related unresolved group.
+   Without a trusted visible related section, retain an authored-position fallback,
+   explicitly marked unresolved when alias evidence is uncertain (otherwise isolated).
+
+This is visual termination, not a requirement to run all readers before deletion.
+Cycles, alternatives, selector/instance requirements and conditional rewrites stay
+symbolic. A delete followed by a write in the actual workflow remains in that
+authored order in detailed JSON, regardless of role display order.
+
+`contour.role_view` is additive: roles retain original `workflow`, state identity,
+mutation `sites`, projected `groups` and relevant `read_sites`; rows reference
+those roles. Deletion `termination` retains overlap evidence, creator roles,
+affected reads, cross-context users, cycles and rewrites. Original workflow nodes,
+accesses, conditions, groups, links and order edges are unchanged. This layer does
+not change check, review, plan, run, explain, next, validation or bootstrap handling.
+
 ### Context names and detailed placement
 
 Stores are shown by logical bindings such as `common_state`, with their key.
@@ -111,7 +194,7 @@ uses, and unrelated later writes do not move the reader away from its source.
   cannot use previously persisted state.
 
 A join or join-with-alternatives user retains its last displayed source anchor solely for
-layout. The tree collapses source groups to their workflow without changing JSON
+layout. The tree projects source groups to their writing role without changing JSON
 placement. Unresolved users are separate even when they have some known sources.
 Pure alternatives have no source anchor; the renderer also handles older cached
 summaries that still carry a last-source `after` without nesting that row.

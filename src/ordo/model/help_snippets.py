@@ -3422,6 +3422,7 @@ expected_loops:
 expected_text: |
   + writes, − deletes, ? conditional; branches show data use, not execution order.
   Ties within a category follow playbook order.
+  Deletion roles end related data-use sections visually, not as mandatory last steps.
 
   Context · shared_state["repo"]
 
@@ -3432,7 +3433,8 @@ expected_text: |
   └── joined-user
   reset (−context)
 
-  Details: --json.''',
+  Details: --json.
+  Full list: ordo-playbook workflows list''',
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
@@ -3520,7 +3522,8 @@ expected_text: |
 
   Bootstrap dependencies: --json.
 
-  Details: --json.''',
+  Details: --json.
+  Full list: ordo-playbook workflows list''',
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
@@ -3612,7 +3615,8 @@ expected_text: |
 
   Parametric links require matching selectors, state instances and read shapes.
 
-  Details: --json.''',
+  Details: --json.
+  Full list: ordo-playbook workflows list''',
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
@@ -3702,16 +3706,18 @@ expected_loops: []
 expected_text: |
   + writes, − deletes, ? conditional; branches show data use, not execution order.
   Ties within a category follow playbook order.
+  Deletion roles end related data-use sections visually, not as mandatory last steps.
 
   Context · memory["repo"]
 
   ready
   producer (+choice, +story)
   └── review
-  alternate (+choice)
   done (−story)
+  alternate (+choice)
 
-  Details: --json.''',
+  Details: --json.
+  Full list: ordo-playbook workflows list''',
     "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
                      "target": "state", "expected_status": "ok"},
 }
@@ -3719,6 +3725,142 @@ for _alternatives_handle in ("state", "command-line.ordo-playbook"):
     _alternatives_example = deepcopy(GRAPH_ALTERNATIVES_EXAMPLE)
     _alternatives_example["verification"]["target"] = _alternatives_handle
     HELP_SNIPPET_REGISTRY[_alternatives_handle]["canonical_examples"].append(_alternatives_example)
+
+GRAPH_ROLES_EXAMPLE = {
+    "name": "state_mutation_roles_keep_one_workflow", "kind": "positive", "form": "graph_bundle",
+    "summary": "One mixed workflow has a deletion role beside the affected creator/reader block and a write role at its existing authored position. Both roles reference one workflow. Contours, exact links and writer order are preserved; fields and keys do not create additional logical states.",
+    "yaml": '''playbook_text: |
+  version: 1
+  states:
+    memory: {path: ./memory.json}
+  workflows:
+    creator: {file: ./creator.yaml, state_bindings: {s: memory}}
+    reader: {file: ./reader.yaml, state_bindings: {s: memory}}
+    other: {file: ./other.yaml, state_bindings: {s: memory}}
+    finish: {file: ./finish.yaml, state_bindings: {s: memory}}
+files:
+  creator.yaml: |
+    version: 0
+    workflow: creator
+    state_needs: {s: {}}
+    blocks:
+      - steps:
+          - name: write
+            state_set:
+              state.s["repo"].task: true
+  reader.yaml: |
+    version: 0
+    workflow: reader
+    state_needs: {s: {}}
+    blocks:
+      - steps:
+          - name: read
+            value: state.s["repo"].task
+  other.yaml: |
+    version: 0
+    workflow: other
+    state_needs: {s: {}}
+    blocks:
+      - steps:
+          - name: read
+            value: state.s["repo"].task
+          - name: write
+            state_set:
+              state.s["repo"].story: true
+  finish.yaml: |
+    version: 0
+    workflow: finish
+    state_needs: {s: {}}
+    blocks:
+      - steps:
+          - name: delete
+            state_delete: state.s["repo"].task
+          - name: write
+            state_set:
+              state.s["repo"].done: true
+expected_links:
+  - [creator, reader, handoff, proven]
+  - [creator, other, handoff, proven]
+  - [finish, reader, invalidation, proven]
+  - [finish, other, invalidation, proven]
+expected_loops: []
+expected_text: |
+  + writes, − deletes, ? conditional; branches show data use, not execution order.
+  Ties within a category follow playbook order.
+  ↔ marks roles of the same workflow, not multiple executions.
+  Deletion roles end related data-use sections visually, not as mandatory last steps.
+
+  Context · memory["repo"]
+
+  creator (+task)
+  └── reader
+  other (+story)
+  finish (−task) ↔ memory/delete
+  finish (+done) ↔ memory/write
+
+  Details: --json.
+  Full list: ordo-playbook workflows list''',
+    "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
+                     "target": "state", "expected_status": "ok"},
+}
+for _role_handle in ("state", "command-line.ordo-playbook"):
+    _role_example = deepcopy(GRAPH_ROLES_EXAMPLE)
+    _role_example["verification"]["target"] = _role_handle
+    HELP_SNIPPET_REGISTRY[_role_handle]["canonical_examples"].append(_role_example)
+
+GRAPH_READING_EXAMPLE = {
+    "name": "read_a_state_graph", "kind": "positive", "form": "graph_bundle",
+    "display": "verified_graph_output",
+    "summary": "remember writes item, inspect reads it, and forget removes it. The branch shows data use, not a sequence you must execute. This output is verified against the example workflows; JSON includes their source.",
+    "yaml": '''workflows:
+  - |
+    version: 0
+    workflow: remember
+    state_needs: {shared_state: {}}
+    blocks:
+      - steps:
+          - name: save
+            state_set:
+              state.shared_state["repo"].item: 1
+  - |
+    version: 0
+    workflow: inspect
+    state_needs: {shared_state: {}}
+    blocks:
+      - steps:
+          - name: read
+            value: state.shared_state["repo"].item
+  - |
+    version: 0
+    workflow: forget
+    state_needs: {shared_state: {}}
+    blocks:
+      - steps:
+          - name: remove
+            state_delete: state.shared_state["repo"].item
+expected_links:
+  - [remember, inspect, handoff, proven]
+  - [forget, inspect, invalidation, proven]
+expected_loops: []
+expected_text: |
+  + writes, − deletes, ? conditional; branches show data use, not execution order.
+  Ties within a category follow playbook order.
+  Deletion roles end related data-use sections visually, not as mandatory last steps.
+
+  Context · shared_state["repo"]
+
+  remember (+item)
+  └── inspect
+  forget (−item)
+
+  Details: --json.
+  Full list: ordo-playbook workflows list''',
+    "verification": {"kind": "runner_verified", "world": "default", "insertion_mode": "graph_bundle",
+                     "target": "command-line.ordo-playbook", "expected_status": "ok"},
+}
+# Keep the technical bundles on state. The launch-command teaching surface shows
+# one small example, with its exact verified output instead of the test fixture.
+HELP_SNIPPET_REGISTRY["command-line.ordo-playbook"]["canonical_examples"] = [deepcopy(GRAPH_READING_EXAMPLE)]
 
 for _state_handle in ("state", "workflow.state_bindings", "workflow.step.state_set", "workflow.step.state_delete"):
     HELP_SNIPPET_REGISTRY[_state_handle]["snippet_coverage"] = "runner_verified"

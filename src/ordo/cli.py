@@ -103,39 +103,35 @@ Examples:
 
 GRAPH_MODE_HELP = """usage: ordo-playbook [options] graph
 
-Show static possible-process topology without reading state or evaluating probes.
+Show how workflows connect through persistent state.
 
-Default output is a minimal workflow tree:
-  - logical context headings and workflow names
-  - trailing state effects: +field writes, −field deletes, ? conditional; −context deletes the whole context
-  - unique-source and join consumers retain their existing source-aware placement
-  - pure alternatives are standalone rows, with all source options retained in JSON
-  - a separate unresolved placement section when needed
-Branches show data relationships, not execution prerequisites.
-Display ties within a category follow authored playbook entry order; source placement takes precedence.
-Free alternatives use compatible category-order positions without splitting anchored source/reader blocks.
-Category does not create graph links or execution precedence, or introduce cross-category grouping.
+Use graph to explore related workflows, where they write shared data, and where
+that data is removed. No active task is required.
 
-JSON: schema=ordo.static-process-graph, schema_version=1. This replaces the old
-next-shaped graph output. Proven address identity is not executable-cycle or
-reachability proof. Activity is not requested; next ranking remains unchanged.
-The additive summary drives compact text. Detailed relations, ordered sites,
-conditions and possible_loop_components remain intact in --json.
-Placement uses all read dependencies, including fallbacks; source availability
-stays symbolic. Placement is data dependence, not runtime permission.
-Writes do not imply first creation or readiness. Effects are deduplicated in first-seen order.
-Full expressions, joins, source identities, technical C/S identifiers and
-statistics remain in JSON rather than default text.
-Known profile switches preserve static bindings. Bootstrap dependencies remain
-in JSON but do not alone determine business contours or reader placement.
-Unknown profile context does not erase fixed-address links; key domains stay symbolic.
-Structural family links may require matching selector parameters and state instances;
-their evidence is separate from concrete address identity and runtime storage validation.
+Reading the output:
+  +field  writes a field; it need not be the first write
+  −field  deletes a field; −context removes the selected context
+  ?       conditional change
+  ↔       another role of the same workflow, not a separate execution
+
+Branches show data use, not required execution order. Playbook order helps arrange
+workflows when their relationships leave a choice. A parameter stands for a key
+that has not been selected; the relationship applies to a matching context instance.
+
+Graph does not read saved state, run probes, or recommend what to do next.
+A missing edge does not prove independence in external systems.
+Use --json for detailed dependencies, conditions, and unresolved relationships.
+
+Where to go next:
+  workflows show <workflow>  inspect a workflow's inputs
+  check <workflow>           check whether it can run now
+  explain <workflow>         understand why it can or cannot run
+  next                      get a recommendation for the current environment
 
 Examples:
   ordo-playbook graph
-  ordo-playbook graph --json
   ordo-playbook --profile backend graph
+  ordo-playbook graph --json
 """
 
 NEXT_MODE_HELP = """usage: ordo-playbook [options] next
@@ -222,7 +218,7 @@ def main() -> int:
             "  explain  explain why the workflow can or cannot be run right now\n"
             "  run      run the workflow and do the real work\n"
             "  next     suggest which workflow should run next\n"
-            "  graph    show static possible-process topology without state reads or probes"
+            "  graph    show how workflows connect through persistent state"
         ),
     )
     parser.add_argument("--file", dest="playbook_file", help="explicit playbook file path")

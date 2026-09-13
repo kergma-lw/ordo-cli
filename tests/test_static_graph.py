@@ -302,7 +302,8 @@ def test_compact_summary_preserves_mutation_order_and_conditional_groups():
     assert groups[0]["conditions"] == [{"kind": "if", "expression": enabled}]
     text = render_static_graph(payload)
     assert "inputs.enabled" not in text
-    assert text.splitlines().count("anything (+first?, +second?, +third?, −old, +last)") == 1
+    assert text.splitlines().count("anything (+first?, +second?, +third?, +last) ↔ store/write") == 1
+    assert text.splitlines().count("anything (−old) ↔ store/delete") == 1
     assert [g["fields"] for g in groups] == [[["first"], ["second"]], [["third"]], [["old"]], [["last"]]]
 
 
@@ -601,6 +602,7 @@ def test_default_tree_is_exact_and_keeps_all_evidence_in_json():
     before = deepcopy(payload)
     assert render_static_graph(payload) == '''+ writes, − deletes, ? conditional; branches show data use, not execution order.
 Ties within a category follow playbook order.
+Deletion roles end related data-use sections visually, not as mandatory last steps.
 
 Context · store["repo"]
 
@@ -609,7 +611,8 @@ producer (+internal_field?)
 └── second-reader
 terminator (−context)
 
-Details: --json.'''
+Details: --json.
+Full list: ordo-playbook workflows list'''
     assert payload == before
     group = payload["summary"]["contours"][0]["changes"][0]["groups"][0]
     assert group["fields"] == [["internal_field"]]
@@ -637,7 +640,8 @@ def test_effect_suffix_deduplicates_in_first_seen_order_without_mutating_json():
         Step(name="delete-again", state_delete="state.s['repo'].b")))
     before = deepcopy(payload)
     text = render_static_graph(payload)
-    assert "mutator (+b, +a, −b)" in text
+    assert "mutator (+b, +a) ↔ store/write" in text
+    assert "mutator (−b) ↔ store/delete" in text
     assert text.count("+b") == text.count("−b") == 1
     assert payload == before
     assert len(payload["summary"]["contours"][0]["changes"][0]["groups"]) == 3
@@ -682,7 +686,8 @@ def test_effect_suffix_qualifies_multiple_contexts_and_marks_symbolic_repeat():
         Step(name="repeat", for_each="inputs.items", steps=(write("x", "'two'"),)),
         Step(name="delete", state_delete="state.s['two']")))
     text = render_static_graph(payload)
-    assert 'mutator (+store["one"].x, +store["two"].x?, −store["two"])' in text
+    assert 'mutator (+store["one"].x, +store["two"].x?) ↔ store/write' in text
+    assert 'mutator (−store["two"]) ↔ store/delete' in text
 
 
 def test_effect_suffix_distinguishes_a_field_named_context_from_root_deletion():

@@ -7,6 +7,8 @@ belongs here. Site IDs keep every summary item traceable to the detailed graph.
 from copy import deepcopy
 import json
 
+from .graph_roles import build_role_view
+
 
 def _context_key(site, parameter_families=()):
     address = site["address"]
@@ -205,6 +207,7 @@ def summarize_static_graph(payload: dict[str, object]) -> dict[str, object]:
             group["id"] = f"S{number}"
         contour = {"workflows": list(members), "contexts": contexts, "changes": changes, "users": users}
         _place_context_users(contour, by_workflow, handoffs, incomplete_workflows)
+        contour["role_view"] = build_role_view(payload, contour, _standalone_alternatives)
         contours.append(contour)
     result = {"placement_version": 1, "contours": contours, "without_state_access": inactive}
     if bootstrap or bootstrap_boundaries:
@@ -319,47 +322,44 @@ def _standalone_alternatives(blocks, users, workflow_nodes):
 
 def render_graph_summary(payload: dict[str, object]) -> str:
     summary = payload.get("summary")
-    if not summary or summary.get("placement_version") != 1:
+    if (not summary or summary.get("placement_version") != 1
+            or any("role_view" not in c for c in summary["contours"])):
         summary = summarize_static_graph(payload)
     lines = ["+ writes, − deletes, ? conditional; branches show data use, not execution order.",
              "Ties within a category follow playbook order."]
+    if any(role["shared_workflow"] for contour in summary["contours"]
+           for role in contour["role_view"]["roles"]):
+        lines.append("↔ marks roles of the same workflow, not multiple executions.")
+    if any(role["kind"] == "delete" for contour in summary["contours"]
+           for role in contour["role_view"]["roles"]):
+        lines.append("Deletion roles end related data-use sections visually, not as mandatory last steps.")
     for index, contour in enumerate(summary["contours"], 1):
         if lines:
             lines.append("")
         contexts = _context_labels(summary, contour)
         title = "Context" if len(summary["contours"]) == len(contexts) == 1 else f"Contour {index}"
         lines.extend([title + " · " + "; ".join(contexts.values()), ""])
-        shown = set()
-        blocks = []
-        for change in contour["changes"]:
-            children = []
-            # Collapse mutation groups only for display. The existing after ref
-            # still selects placement; it is not a parent execution prerequisite.
-            # Anchor groups take precedence; users tied at one anchor retain
-            # authored entry order, without alphabetical or category sorting.
-            for group in change["groups"]:
-                for user in contour["users"]:
-                    if (user["placement"]["after"] == group["id"]
-                            and user["placement"]["kind"] not in {"unresolved", "alternatives"}
-                            and user["workflow"] not in shown):
-                        children.append(user["workflow"])
-                        shown.add(user["workflow"])
-            blocks.append((change, children))
-        alternatives = [user for user in contour["users"] if user["placement"]["kind"] == "alternatives"]
-        for row, children in _standalone_alternatives(blocks, alternatives, payload["workflows"]):
-            suffix = _mutation_suffix(row, contexts) if "groups" in row else ""
-            lines.append(row["workflow"] + suffix)
-            lines.extend(_tree_branches(children))
-            shown.add(row["workflow"])
-        unresolved = [user["workflow"] for user in contour["users"] if user["workflow"] not in shown]
-        if unresolved:
-            lines.append("Unresolved placement")
-            lines.extend(_tree_branches(unresolved))
+        view = contour["role_view"]
+        roles = {role["id"]: role for role in view["roles"]}
+        for row in view["rows"]:
+            if "unresolved_readers" in row:
+                lines.append("Unresolved placement")
+                lines.extend(_tree_branches(row["unresolved_readers"]))
+                continue
+            role = roles.get(row.get("role"))
+            if role is None:
+                lines.append(row["workflow"])
+            else:
+                indicator = f" ↔ {role['state']['name']}/{role['kind']}" if role["shared_workflow"] else ""
+                if role.get("placement", {}).get("kind") == "unresolved":
+                    indicator += " [placement unresolved]"
+                lines.append(role["workflow"] + _mutation_suffix(role, contexts) + indicator)
+            lines.extend(_tree_branches(row["children"]))
     if not summary["contours"]:
         lines.extend(["", "No state-linked workflows."])
     if summary.get("bootstrap"):
         lines.extend(["", "Bootstrap dependencies: --json."])
     if any(user["placement"].get("parametric") for contour in summary["contours"] for user in contour["users"]):
         lines.extend(["", "Parametric links require matching selectors, state instances and read shapes."])
-    lines.extend(["", "Details: --json."])
+    lines.extend(["", "Details: --json.", "Full list: ordo-playbook workflows list"])
     return "\n".join(lines)

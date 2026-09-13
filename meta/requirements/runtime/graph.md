@@ -1,5 +1,8 @@
 # Static possible-process graph
 
+The ordered analysis and placement baseline is described in
+`../../model/runtime/graph-v1.md`.
+
 ## Purpose and boundary
 
 `ordo-playbook graph` reconstructs static possible processes from persistent-state
@@ -254,3 +257,24 @@ use `playbook_text` plus relative authored `files` instead of `workflows` to ver
 real static profile/pre_run loading without reading state or executing effects.
 It may also assert `expected_structural_links` with correspondence and requirement
 predicates independently of its concrete link expectations.
+## Mutation-role presentation
+
+- Display vertices are workflow × declaration-owned logical state family × write/delete.
+  Keys and fields constrain affected data, not the number of logical states. N mutated
+  states with M mixed states yield N + M roles. Unknown families remain unresolved
+  workflow-local bindings; matching names do not establish alias identity.
+- Preserve existing contours, writer order and source-site reader anchors. Pure readers
+  appear once. Repeated roles explicitly share one workflow identity, not executions.
+- Place delete roles at the end of related creator/local-user blocks using the existing
+  concrete and structural overlap predicates for actually affected data, including subtree
+  and parent-prune evidence. Use the last of the bounded candidate blocks, retaining all
+  candidates and uncertainty. Partial deletion must not anchor on unrelated sibling fields.
+- Cross-context users retain their existing anchors and evidence. Mutating users retain
+  relevant role reads. No scoring, path expansion, mandatory reader-before-delete ordering,
+  execution edges or per-address contour replacement is permitted.
+- Missing trusted visible sections use authored-position fallback, explicitly unresolved
+  for uncertain alias evidence and otherwise isolated. Preserve alternatives, conditions,
+  cycles, selector/instance requirements and actual delete/rewrite occurrence order.
+- Additive contour.role_view must preserve original workflow nodes, access sites, groups,
+  dependencies, conditions and detailed links. Keep effect parentheses and +/−/? legend;
+  add shared-identity markers only for repeated roles. Bootstrap and runtime modes are unchanged.

@@ -57,6 +57,22 @@
 - `ordo-help` must not imply that `check` alone is sufficient workflow sign-off when a workflow was added or changed.
 - The `overview`, `workflow-rules`, and `command-line` topics must make the paired use of `check` and `review` explicit for workflow authoring work.
 
+## Practical graph help
+
+Graph help must answer practical questions first: when to explore related workflows,
+how to read +/−/?/↔ and branches, what the graph cannot tell the caller, and which
+command to use next (workflows show, check, explain, next). No active task is
+required. Explain parameters as unselected keys applying to matching context
+instances, and do not imply that missing edges prove external-system independence.
+Playbook order helps resolve display choices, not a guarantee of global sorting.
+Keep analysis algorithms, identity rules, schema history and implementation bounds
+in `meta/model/runtime/graph-v1.md` and `docs/static-graph.md`, rather than repeating
+them in routine command help. The CLI describe surface should show one small
+verified write/read/delete example. It may present the exact output already checked
+by the graph-bundle scaffold, with full source available in JSON; it must not label
+an unverified illustration as verified. Larger technical bundles belong on the
+state teaching surface.
+
 ## Describe readiness checklist
 
 Before treating a public `describe` surface as ready, confirm that it satisfies all of the following:
