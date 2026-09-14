@@ -1,0 +1,35 @@
+version: 0
+workflow: global-status
+inputs:
+  repository:
+    description: Repository key used to read the locally stored active task.
+state_needs:
+  common_state: {}
+blocks:
+- guards:
+  - git.repo.exists
+- steps:
+  - name: Inspect branch
+    uses: git.branch
+    register: branch
+  - name: Inspect worktree
+    uses: git.worktree
+    register: worktree
+  - name: Inspect cached upstream
+    uses: git.upstream
+    register: upstream
+  - name: Count cached upstream range
+    if: step.upstream.outputs.configured
+    uses: git.range
+    with:
+      base: step.upstream.outputs.upstream_ref
+      head: "HEAD"
+    register: upstream_range
+  - name: Publish local status
+    publish:
+      branch: step.branch.outputs.value
+      clean: step.worktree.outputs.clean
+      upstream: step.upstream.outputs.upstream_ref
+      ahead: step.upstream_range.outputs.ahead_count | catch(["runtime.value.step_missing"], null)
+      behind: step.upstream_range.outputs.behind_count | catch(["runtime.value.step_missing"], null)
+      task: state.common_state[inputs.repository].issue_number | catch(["runtime.value.state_missing"], null)

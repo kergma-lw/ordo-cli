@@ -55,6 +55,12 @@
 - Do not treat legacy helper scripts or TUI commands as the primary interface.
 - A direct command or temporary legacy bypass is allowed only when the user explicitly asks for it or explicitly approves the bypass.
 
+## End-user workflow verification
+
+- Do not write automated tests for concrete end-user project workflows. Do not duplicate their YAML composition in Python tests with mocked probe or action results.
+- Verify these workflows through `ordo-playbook check`, `review`, and, when safe and authorized, a trial `run`. Do not execute side-effecting workflows merely to validate them.
+- Automated tests for engine semantics, connectors, and reusable primitives remain in scope; this rule does not weaken their testing requirements.
+
 ## Engine change discipline
 
 - Treat engine changes as contract changes, not isolated code edits.

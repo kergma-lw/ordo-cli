@@ -5,6 +5,12 @@ states:
   common_state:
     path: .ordo.json
 workflows:
+  global-status:
+    file: workflows/global-status.yml
+    description: Show local branch, worktree, cached upstream counts, task, and hook status
+    category: inspect
+    state_bindings:
+      common_state: common_state
   create-task:
     file: workflows/create-task.yml
     description: Create a task in Backlog

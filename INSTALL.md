@@ -23,3 +23,23 @@ this setting.
 
 These hooks prevent accidental operations, not deliberate bypasses. Both can be
 bypassed with `--no-verify`; they do not replace server-side branch protection.
+
+## Local status
+
+Run `GIT_OPTIONAL_LOCKS=0 ordo-playbook run global-status` from the repository root to publish one
+record containing `branch`, `clean`, `upstream`, `ahead`, `behind`, and `task`.
+A dirty worktree is valid. The task is the repository-keyed stored
+`issue_number` from `.ordo.json`, or `null` when absent.
+
+This is local-only: it does not fetch or use the network or execute hooks.
+`GIT_OPTIONAL_LOCKS=0` prevents the existing `git.worktree` probe's Git status
+command from optionally refreshing index metadata. The current Git binding does
+not let this workflow enforce that environment setting itself; use it for all
+status invocations that must avoid Git state mutations.
+Ahead and behind counts compare HEAD with the locally cached upstream
+ref, so they do not establish the current remote state. An absent, detached, or
+unresolved upstream is unavailable and yields `null` for upstream and both
+counts. Local-branch upstreams (`remote = .`) are unsupported by the current Git
+probe and cause a probe failure rather than an invented status.
+
+Git hook configuration and executability are not inspected by this workflow.
