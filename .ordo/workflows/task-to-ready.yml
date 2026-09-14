@@ -28,7 +28,7 @@ blocks:
   - gh.project.field(project_id=inputs.project_id, field="Status").exists
   - gh.project.field.option(project_id=inputs.project_id, field="Status", option="Ready").exists
   - 'is_present(issue_body | markdown["Scope"])'
-  - 'is_present(issue_body | markdown["Verification"])'
+  - 'is_present(issue_body | markdown["Verification"]) or is_present(issue_body | markdown["Tests"])'
 - steps:
   - name: Set task status to Ready
     uses: gh.project.issue.field_single_select.set

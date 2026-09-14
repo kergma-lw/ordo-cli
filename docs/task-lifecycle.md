@@ -15,6 +15,9 @@ Use `ordo-playbook workflows show <name>` to inspect caller inputs. Repository a
 project defaults come from the project profile. Story workflows and shared Story
 includes retain their separate roles.
 
+`task-to-ready` requires a `Scope` section and either a `Verification` or `Tests`
+section in the issue body. Both verification section names are accepted.
+
 ## Review and submission
 
 Prepare commits explicitly before `task-to-review`. The approved
