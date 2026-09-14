@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import json
 import os
 import re
@@ -60,11 +59,36 @@ def main() -> int:
         sys.stderr.write(diff_result.stderr)
         return diff_result.returncode
 
-    body = (
-        "<!doctype html><html><body><h1>Branch diff vs main</h1><pre>"
-        + html.escape(diff_result.stdout)
-        + "</pre></body></html>"
-    )
+    try:
+        render_result = subprocess.run(
+            [
+                "npx",
+                "--yes",
+                "diff2html-cli@5.2.15",
+                "-i",
+                "stdin",
+                "-o",
+                "stdout",
+                "--style",
+                "side",
+            ],
+            input=diff_result.stdout,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        print("failed to launch diff2html renderer", file=sys.stderr)
+        return 1
+    if render_result.returncode != 0:
+        print(f"diff2html renderer failed with exit code {render_result.returncode}",
+              file=sys.stderr)
+        return 1
+    if not render_result.stdout.strip():
+        print("diff2html renderer returned empty HTML", file=sys.stderr)
+        return 1
+
+    body = render_result.stdout
     try:
         output_path = render_report(body)
     except OSError:
