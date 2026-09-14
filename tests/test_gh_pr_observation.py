@@ -18,11 +18,19 @@ CANDIDATE = "c" * 40
 OTHER = "d" * 40
 PULL = {
     "number": 42, "state": "open", "draft": False, "merged": False, "merged_at": None,
-    "merge_commit_sha": None,
     "head": {"ref": "feature", "sha": HEAD, "repo": {"full_name": "fork/repo"}},
     "base": {"ref": "main", "sha": BASE,
              "repo": {"full_name": "owner/repo", "owner": {"login": "owner"}, "name": "repo"}},
 }
+
+
+def commit_evidence(pull=PULL, *, candidate=None, merged_sha=None):
+    return {"data": {"repository": {"nameWithOwner": "owner/repo", "pullRequest": {
+        "number": pull["number"], "state": "MERGED" if pull["merged"] else pull["state"].upper(),
+        "merged": pull["merged"], "headRefOid": pull["head"]["sha"], "baseRefOid": pull["base"]["sha"],
+        "potentialMergeCommit": None if candidate is None else {"oid": candidate},
+        "mergeCommit": None if merged_sha is None else {"oid": merged_sha},
+    }}}}
 
 
 def status_page(items=(), *, sha=HEAD, total=None):
@@ -50,7 +58,7 @@ class GitHubPullObservationTest(unittest.TestCase):
         resolved = ResolvedOperation(reference, "gh", operation, "public")
         completed = [subprocess.CompletedProcess([], 0, "authenticated\n", "")]
         for response in responses:
-            completed.append(response if isinstance(response, subprocess.CompletedProcess) else
+            completed.append(response if isinstance(response, (subprocess.CompletedProcess, BaseException)) else
                              subprocess.CompletedProcess([], 0, json.dumps(response), ""))
         with patch("subprocess.run", side_effect=completed) as command:
             result = evaluate_probe(resolved, workflow)
@@ -78,9 +86,9 @@ class GitHubPullObservationTest(unittest.TestCase):
             self.assertIn(field, checks.outputs)
 
     def test_metadata_distinguishes_merge_result_and_verified_candidate(self):
-        pull = {**PULL, "merge_commit_sha": CANDIDATE}
+        pull = copy.deepcopy(PULL)
         commit = {"sha": CANDIDATE, "parents": [{"sha": BASE}, {"sha": HEAD}]}
-        result, calls = self.observe("gh.pr", [pull, commit])
+        result, calls = self.observe("gh.pr", [pull, commit_evidence(candidate=CANDIDATE), commit])
         self.assertEqual(result.status, "ok")
         outputs = result.outputs
         self.assertEqual(outputs["head_repository"], "fork/repo")
@@ -96,8 +104,8 @@ class GitHubPullObservationTest(unittest.TestCase):
         self.assertIn(f"repos/owner/repo/commits/{CANDIDATE}", calls[-1])
 
     def test_merged_metadata_never_relabels_result_as_candidate(self):
-        pull = {**PULL, "state": "closed", "merged": True, "merged_at": "2026-09-11T12:00:00Z", "merge_commit_sha": OTHER}
-        result, _ = self.observe("gh.pr", [pull])
+        pull = {**PULL, "state": "closed", "merged": True, "merged_at": "2026-09-11T12:00:00Z"}
+        result, _ = self.observe("gh.pr", [pull, commit_evidence(pull, merged_sha=OTHER)])
         self.assertEqual(result.status, "ok")
         self.assertTrue(result.outputs["merged"])
         self.assertEqual(result.outputs["merged_at"], pull["merged_at"])
@@ -118,13 +126,13 @@ class GitHubPullObservationTest(unittest.TestCase):
 
     def test_valid_stack_is_preserved_with_valid_pr_identity(self):
         stack = {"base": {"ref": "main", "sha": BASE}, "size": 3, "position": 1}
-        result, _ = self.observe("gh.pr", [{**PULL, "stack": stack}])
+        result, _ = self.observe("gh.pr", [{**PULL, "stack": stack}, commit_evidence()])
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["stack_state"], "stacked")
         self.assertEqual(result.outputs["stack"], stack)
 
     def test_absent_stack_is_standalone_only_for_a_valid_envelope(self):
-        result, _ = self.observe("gh.pr", [PULL])
+        result, _ = self.observe("gh.pr", [PULL, commit_evidence()])
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["stack_state"], "standalone")
         self.assertIsNone(result.outputs["stack"])
@@ -140,7 +148,7 @@ class GitHubPullObservationTest(unittest.TestCase):
         for stack in (None, {}, [], "unknown", {"base": {"ref": "main", "sha": "abc123"}},
                       {"base": {"ref": "main", "sha": BASE}, "size": "3"}):
             with self.subTest(stack=stack):
-                result, _ = self.observe("gh.pr", [{**PULL, "stack": stack}])
+                result, _ = self.observe("gh.pr", [{**PULL, "stack": stack}, commit_evidence()])
                 self.assertEqual(result.status, "ok")
                 self.assertEqual(result.outputs["stack_state"], "unknown")
                 self.assertIsNone(result.outputs["stack"])
@@ -159,14 +167,17 @@ class GitHubPullObservationTest(unittest.TestCase):
         wrong_owner["base"]["repo"]["owner"]["login"] = "other"
         for payload in ({**PULL, "number": 99}, {**PULL, "number": "42"}, wrong_repo, wrong_owner):
             for reference in ("gh.pr", "gh.pr.checks"):
-                result, _ = self.observe(reference, [{**payload, "merge_commit_sha": CANDIDATE}])
+                result, _ = self.observe(reference, [payload])
                 self.assertEqual(result.status, "probe_failed")
                 self.assertEqual(result.diagnostics[0].code, "probe.gh_pr.identity_mismatch")
 
     def test_merged_metadata_is_boolean_or_null(self):
         for merged in (True, False, None, 0, 1, "false", "true", [], {}):
             with self.subTest(merged=merged):
-                result, _ = self.observe("gh.pr", [{**PULL, "merged": merged}])
+                responses = [{**PULL, "merged": merged}]
+                if merged is False:
+                    responses.append(commit_evidence())
+                result, _ = self.observe("gh.pr", responses)
                 self.assertEqual(result.status, "ok")
                 if type(merged) is bool:
                     self.assertIs(result.outputs["merged"], merged)
@@ -174,8 +185,8 @@ class GitHubPullObservationTest(unittest.TestCase):
                     self.assertIsNone(result.outputs["merged"])
                     self.assertEqual(result.outputs["stack_state"], "unknown")
 
-    def test_checks_bind_expected_head_and_default_to_head_even_with_candidate(self):
-        result, calls = self.checks(pull={**PULL, "merge_commit_sha": CANDIDATE},
+    def test_checks_bind_expected_head_and_default_to_head_without_graphql(self):
+        result, calls = self.checks(pull=PULL,
                                     runs=[run_page([check_run()])], expected_head_sha=HEAD.upper())
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["overall_state"], "success")
@@ -185,6 +196,7 @@ class GitHubPullObservationTest(unittest.TestCase):
         self.assertEqual(result.outputs["expected_head_sha"], HEAD)
         self.assertIsNone(result.outputs["test_merge_sha"])
         self.assertEqual(result.outputs["test_merge_state"], "not_requested")
+        self.assertFalse(any("graphql" in call for call in calls))
         for call in calls[-2:]:
             self.assertTrue(any(f"/commits/{HEAD}/" in part for part in call))
             self.assertIn("--paginate", call)
@@ -204,9 +216,9 @@ class GitHubPullObservationTest(unittest.TestCase):
                 self.assertEqual(result.status, "checks_unavailable")
 
     def test_test_merge_checks_are_attached_to_verified_candidate(self):
-        pull = {**PULL, "merge_commit_sha": CANDIDATE}
+        pull = copy.deepcopy(PULL)
         commit = {"sha": CANDIDATE, "parents": [{"sha": BASE}, {"sha": HEAD}]}
-        result, calls = self.observe("gh.pr.checks", [pull, commit, [status_page(sha=CANDIDATE)],
+        result, calls = self.observe("gh.pr.checks", [pull, commit_evidence(candidate=CANDIDATE), commit, [status_page(sha=CANDIDATE)],
                                                      [run_page([check_run(sha=CANDIDATE)])]],
                                      target="test_merge", expected_head_sha=HEAD)
         self.assertEqual(result.status, "ok")
@@ -222,28 +234,30 @@ class GitHubPullObservationTest(unittest.TestCase):
             ({**PULL, "base": {**PULL["base"], "sha": OTHER}}, [BASE, HEAD], CANDIDATE),
             (PULL, [BASE, OTHER], CANDIDATE),
             (PULL, [HEAD, BASE], CANDIDATE),
+            (PULL, [BASE, HEAD, OTHER], CANDIDATE),
+            (PULL, [BASE], CANDIDATE),
             (PULL, [BASE, HEAD], OTHER),
         ]
         for pull, parents, returned_sha in cases:
             with self.subTest(pull=pull, parents=parents, returned_sha=returned_sha):
-                payload = {**pull, "merge_commit_sha": CANDIDATE}
+                payload = copy.deepcopy(pull)
                 commit = {"sha": returned_sha, "parents": [{"sha": sha} for sha in parents]}
                 for reference in ("gh.pr", "gh.pr.checks"):
                     inputs = {"target": "test_merge", "expected_head_sha": HEAD} if reference.endswith("checks") else {}
-                    result, _ = self.observe(reference, [payload, commit], **inputs)
+                    result, _ = self.observe(reference, [payload, commit_evidence(pull, candidate=CANDIDATE), commit], **inputs)
                     self.assertEqual(result.status, "checks_unavailable" if inputs else "ok")
                     self.assertEqual(result.outputs["test_merge_state"], "identity_mismatch")
                     for field in ("test_merge_sha", "test_merge_head_sha", "test_merge_base_sha"):
                         self.assertIsNone(result.outputs[field])
 
     def test_missing_candidate_never_falls_back_to_head(self):
-        result, _ = self.observe("gh.pr.checks", [PULL], target="test_merge")
+        result, _ = self.observe("gh.pr.checks", [PULL, commit_evidence()], target="test_merge")
         self.assertEqual(result.status, "checks_unavailable")
         self.assertIsNone(result.outputs["commit_sha"])
         self.assertIsNone(result.outputs["test_merge_sha"])
 
     def test_merged_result_cannot_be_selected_as_test_merge_target(self):
-        pull = {**PULL, "merged": True, "state": "closed", "merge_commit_sha": OTHER}
+        pull = {**PULL, "merged": True, "state": "closed"}
         result, _ = self.observe("gh.pr.checks", [pull], target="test_merge")
         self.assertEqual(result.status, "checks_unavailable")
         self.assertEqual(result.outputs["test_merge_state"], "merged")
@@ -380,22 +394,22 @@ class GitHubPullObservationTest(unittest.TestCase):
             ([PULL, failure], "gh.pr.checks", {}),
             ([PULL, [status_page()], failure], "gh.pr.checks", {}),
             ([failure], "gh.pr", {}),
-            ([{**PULL, "merge_commit_sha": CANDIDATE}, failure], "gh.pr.checks", {"target": "test_merge"}),
+            ([PULL, failure], "gh.pr.checks", {"target": "test_merge"}),
         ):
             result, _ = self.observe(reference, responses, **inputs)
             self.assertNotEqual(result.status, "ok")
 
     def test_optional_candidate_api_failure_preserves_metadata_and_raw_but_blocks_candidate_checks(self):
         failure = subprocess.CompletedProcess([], 1, "", "api rate limit exceeded")
-        payload = {**PULL, "merge_commit_sha": CANDIDATE}
+        payload = copy.deepcopy(PULL)
         for reference, inputs in (("gh.pr", {}), ("gh.pr.checks", {"target": "test_merge"})):
             result, _ = self.observe(reference, [payload, failure], **inputs)
             self.assertEqual(result.status, "ok" if reference == "gh.pr" else "checks_unavailable")
             self.assertEqual(result.outputs["head_sha"], HEAD)
             self.assertEqual(result.outputs["test_merge_state"], "unavailable")
             self.assertEqual(result.outputs["test_merge_reason"], "api_unavailable")
-            self.assertEqual(result.raw["test_merge"]["returncode"], 1)
-            self.assertEqual(result.raw["test_merge"]["stderr"], failure.stderr)
+            self.assertEqual(result.raw["test_merge"]["graphql"]["returncode"], 1)
+            self.assertEqual(result.raw["test_merge"]["graphql"]["stderr"], failure.stderr)
             for field in ("test_merge_sha", "test_merge_head_sha", "test_merge_base_sha"):
                 self.assertIsNone(result.outputs[field])
             if reference == "gh.pr":
@@ -407,14 +421,14 @@ class GitHubPullObservationTest(unittest.TestCase):
     def test_invalid_candidate_sha_is_unavailable_without_path_interpolation(self):
         for sha in ("abc123", "../status", "main?per_page=1", "g" * 40, 123, ""):
             for reference, inputs in (("gh.pr", {}), ("gh.pr.checks", {"target": "test_merge"})):
-                result, _ = self.observe(reference, [{**PULL, "merge_commit_sha": sha}], **inputs)
+                result, _ = self.observe(reference, [PULL, commit_evidence(candidate=sha)], **inputs)
                 self.assertEqual(result.status, "ok" if reference == "gh.pr" else "checks_unavailable")
                 self.assertEqual(result.outputs["test_merge_state"], "unavailable")
                 self.assertEqual(result.outputs["test_merge_reason"], "invalid_candidate_sha")
                 self.assertIsNone(result.outputs["test_merge_sha"])
 
     def test_candidate_requires_full_parent_identity_but_legacy_metadata_remains_usable(self):
-        payload = {**PULL, "head": {"sha": "abc123"}, "merge_commit_sha": CANDIDATE}
+        payload = {**PULL, "head": {"sha": "abc123"}}
         result, _ = self.observe("gh.pr", [payload])
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["head_sha"], "abc123")
@@ -422,9 +436,11 @@ class GitHubPullObservationTest(unittest.TestCase):
         self.assertIsNone(result.outputs["test_merge_sha"])
 
     def test_candidate_full_hex_sha_is_canonicalized_before_api_path(self):
-        payload = {**PULL, "merge_commit_sha": CANDIDATE.upper()}
+        payload = copy.deepcopy(PULL)
+        payload["head"]["sha"] = HEAD.upper()
+        payload["base"]["sha"] = BASE.upper()
         commit = {"sha": CANDIDATE.upper(), "parents": [{"sha": BASE.upper()}, {"sha": HEAD.upper()}]}
-        result, calls = self.observe("gh.pr", [payload, commit])
+        result, calls = self.observe("gh.pr", [payload, commit_evidence(candidate=CANDIDATE.upper()), commit])
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.outputs["test_merge_sha"], CANDIDATE)
         self.assertIsNone(result.outputs["test_merge_reason"])
@@ -436,14 +452,126 @@ class GitHubPullObservationTest(unittest.TestCase):
             result, _ = self.observe("gh.pr.checks", [PULL, invalid])
             self.assertEqual(result.status, "checks_unavailable")
 
+    def test_graphql_snapshot_mismatch_never_fetches_commit_or_checks(self):
+        for field, value in (("number", 43), ("state", "CLOSED"), ("state", "MERGED"),
+                             ("merged", True), ("headRefOid", OTHER), ("baseRefOid", OTHER),
+                             ("repository", "other/repo")):
+            evidence = commit_evidence(candidate=CANDIDATE)
+            repository = evidence["data"]["repository"]
+            if field == "repository":
+                repository["nameWithOwner"] = value
+            else:
+                repository["pullRequest"][field] = value
+            for reference in ("gh.pr", "gh.pr.checks"):
+                with self.subTest(field=field, value=value, reference=reference):
+                    inputs = {"target": "test_merge"} if reference.endswith("checks") else {}
+                    result, calls = self.observe(reference, [PULL, evidence], **inputs)
+                    self.assertEqual(result.status, "checks_unavailable" if inputs else "ok")
+                    self.assertEqual(result.outputs["test_merge_state"], "identity_mismatch")
+                    self.assertEqual(result.outputs["test_merge_reason"], "graphql_snapshot_mismatch")
+                    self.assertIsNone(result.outputs["test_merge_sha"])
+                    self.assertEqual(calls[-1][2], "graphql")
+
+    def test_graphql_malformed_envelopes_and_partial_errors_are_unavailable(self):
+        cases = [None, [], {}, {"data": None}, {"data": []}, {"data": {}},
+                 {"data": {"repository": None}}, {"data": {"repository": []}}]
+        for field, values in {"nameWithOwner": (None, 42), "pullRequest": (None, [], {})}.items():
+            for value in values:
+                evidence = commit_evidence(candidate=CANDIDATE)
+                evidence["data"]["repository"][field] = value
+                cases.append(evidence)
+        for errors in (None, {}, "error", [{"message": "partial"}]):
+            cases.append({**commit_evidence(candidate=CANDIDATE), "errors": errors})
+        for field, values in {
+            "number": (None, True, "42"), "state": (None, [], "open"),
+            "merged": (None, 1, "false"), "headRefOid": (None, "short", "g" * 40),
+            "baseRefOid": (None, "short"), "potentialMergeCommit": ([], {}, {"oid": None}),
+            "mergeCommit": ([], {}, {"oid": "short"}),
+        }.items():
+            for value in values:
+                evidence = commit_evidence(candidate=CANDIDATE)
+                evidence["data"]["repository"]["pullRequest"][field] = value
+                cases.append(evidence)
+            evidence = commit_evidence(candidate=CANDIDATE)
+            del evidence["data"]["repository"]["pullRequest"][field]
+            cases.append(evidence)
+        for evidence in cases:
+            with self.subTest(evidence=evidence):
+                result, calls = self.observe("gh.pr.checks", [PULL, evidence], target="test_merge")
+                self.assertEqual(result.status, "checks_unavailable")
+                self.assertEqual(result.outputs["test_merge_state"], "unavailable")
+                self.assertIsNone(result.outputs["commit_sha"])
+                self.assertEqual(calls[-1][2], "graphql")
+
+    def test_early_test_merge_head_pin_mismatch_never_reads_graphql(self):
+        result, calls = self.observe("gh.pr.checks", [PULL], target="test_merge", expected_head_sha=OTHER)
+        self.assertEqual(result.status, "checks_unavailable")
+        self.assertEqual(result.diagnostics[0].code, "probe.gh_pr_checks.head_mismatch")
+        self.assertFalse(any("graphql" in call for call in calls))
+
+    def test_graphql_query_binds_requested_pr_and_accepts_empty_errors(self):
+        evidence = commit_evidence(candidate=CANDIDATE)
+        evidence["errors"] = []
+        evidence["data"]["repository"]["nameWithOwner"] = "OWNER/REPO"
+        commit = {"sha": CANDIDATE, "parents": [{"sha": BASE}, {"sha": HEAD}]}
+        result, calls = self.observe("gh.pr", [PULL, evidence, commit])
+        self.assertEqual(result.outputs["test_merge_state"], "verified")
+        graphql = calls[-2]
+        for argument in ("owner=owner", "repo=repo", "number=42"):
+            self.assertIn(argument, graphql)
+        query = next(argument for argument in graphql if argument.startswith("query="))
+        for field in ("nameWithOwner", "headRefOid", "baseRefOid", "potentialMergeCommit", "mergeCommit"):
+            self.assertIn(field, query)
+
     def test_invalid_optional_candidate_commit_response_preserves_metadata(self):
-        for commit in ([], {}, {"sha": CANDIDATE, "parents": [None]}):
+        for commit in (None, [], {}, {"sha": CANDIDATE, "parents": [None]},
+                       {"sha": CANDIDATE, "parents": None},
+                       {"sha": "short", "parents": [{"sha": BASE}, {"sha": HEAD}]},
+                       {"sha": CANDIDATE, "parents": [{"sha": BASE}, {"sha": "short"}]}):
             for reference, inputs in (("gh.pr", {}), ("gh.pr.checks", {"target": "test_merge"})):
-                result, _ = self.observe(reference, [{**PULL, "merge_commit_sha": CANDIDATE}, commit], **inputs)
+                result, _ = self.observe(reference, [PULL, commit_evidence(candidate=CANDIDATE), commit], **inputs)
                 self.assertEqual(result.status, "ok" if reference == "gh.pr" else "checks_unavailable")
                 self.assertEqual(result.outputs["head_sha"], HEAD)
                 self.assertEqual(result.outputs["test_merge_state"], "unavailable")
                 self.assertEqual(result.outputs["test_merge_reason"], "invalid_commit_response")
+
+    def test_immutable_commit_failure_retains_both_reads_and_never_fetches_checks(self):
+        failure = subprocess.CompletedProcess([], 1, "", "commit unavailable")
+        result, calls = self.observe("gh.pr.checks", [PULL, commit_evidence(candidate=CANDIDATE), failure],
+                                     target="test_merge")
+        self.assertEqual(result.status, "checks_unavailable")
+        self.assertEqual(result.outputs["test_merge_reason"], "api_unavailable")
+        self.assertEqual(result.raw["test_merge"]["graphql"]["returncode"], 0)
+        self.assertEqual(result.raw["test_merge"]["commit"]["returncode"], 1)
+        self.assertIn(f"repos/owner/repo/commits/{CANDIDATE}", calls[-1])
+        self.assertIsNone(result.outputs["commit_sha"])
+
+    def test_graphql_transport_and_json_failures_never_fetch_checks(self):
+        failures = (subprocess.TimeoutExpired("gh", 30), OSError("offline"),
+                    UnicodeError("invalid output"), subprocess.CompletedProcess([], 0, "{broken", ""),
+                    subprocess.CompletedProcess([], 1, json.dumps(commit_evidence(candidate=CANDIDATE)), "failed"))
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                result, calls = self.observe("gh.pr.checks", [PULL, failure], target="test_merge")
+                self.assertEqual(result.status, "checks_unavailable")
+                self.assertEqual(result.outputs["test_merge_state"], "unavailable")
+                self.assertIsNone(result.outputs["commit_sha"])
+                self.assertEqual(calls[-1][2], "graphql")
+
+    def test_merged_metadata_evidence_failure_preserves_merge_fact_without_inventing_sha(self):
+        pull = {**PULL, "state": "closed", "merged": True}
+        mismatch = commit_evidence(pull, merged_sha=OTHER)
+        mismatch["data"]["repository"]["pullRequest"]["headRefOid"] = OTHER
+        for evidence in (commit_evidence(pull), mismatch,
+                         {**commit_evidence(pull, merged_sha=OTHER), "errors": [{"message": "partial"}]},
+                         subprocess.CompletedProcess([], 1, "", "unavailable")):
+            result, calls = self.observe("gh.pr", [pull, evidence])
+            self.assertEqual(result.status, "ok")
+            self.assertTrue(result.outputs["merged"])
+            self.assertIsNone(result.outputs["merge_commit_sha"])
+            self.assertIsNone(result.outputs["test_merge_sha"])
+            self.assertEqual(result.outputs["test_merge_state"], "merged")
+            self.assertEqual(calls[-1][2], "graphql")
 
 
 if __name__ == "__main__":

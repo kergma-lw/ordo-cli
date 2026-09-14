@@ -6,10 +6,11 @@ import builtins
 import json
 
 from connectors.gh._merge_api import full_sha
+from connectors.gh._pr_commit_evidence import observe_pr_commit, run_gh_command
 from connectors.gh._pr_stack import normalize_pr_stack, valid_pr_identity
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh.probes.pr._shared import fetch_pull_request, normalize_author
-from ordo.plugin_sdk import Diagnostic, MappedOutcomeError, OperationContext, OperationOutcome, fail, ok, probe
+from ordo.plugin_sdk import Diagnostic, OperationContext, OperationOutcome, fail, ok, probe
 
 
 OBSERVATION_OUTPUTS = {
@@ -82,12 +83,18 @@ def run(ctx: OperationContext) -> OperationOutcome:
         return invalid_identity
     candidate = observe_test_merge(ctx, identity=identity, payload=payload)
     candidate_outputs, candidate_raw = candidate
+    merge_commit_sha = None
+    if payload.get("merged") is True:
+        evidence = observe_pr_commit(ctx, identity=identity, payload=payload)
+        merge_commit_sha = evidence.sha
+        raw = {**raw, "merge_commit": {"state": evidence.state, "reason": evidence.reason, "graphql": evidence.raw}}
     stack_state = "unknown"
     if valid_pr_identity(payload, repository=identity.repository, pull_number=identity.pull_number):
         stack_state = normalize_pr_stack(payload)
     return ok(
         summary="GitHub pull request retrieved successfully",
         outputs={**_to_public_outputs(identity.repository, payload), **candidate_outputs,
+                 "merge_commit_sha": merge_commit_sha,
                  "stack_state": stack_state, "stack": payload.get("stack") if stack_state == "stacked" else None},
         raw={**raw, "test_merge": candidate_raw},
     )
@@ -120,7 +127,7 @@ def _to_public_outputs(repository: str, payload: dict[str, object]) -> dict[str,
 
 
 def observation_metadata(payload: dict[str, object]) -> dict[str, object]:
-    """Missing API fields stay null; an unmerged merge_commit_sha is not a result."""
+    """REST metadata alone never supplies a completed merge commit SHA."""
     head = payload.get("head") if isinstance(payload.get("head"), dict) else {}
     base = payload.get("base") if isinstance(payload.get("base"), dict) else {}
     head_repo = head.get("repo") if isinstance(head.get("repo"), dict) else {}
@@ -131,7 +138,7 @@ def observation_metadata(payload: dict[str, object]) -> dict[str, object]:
         "base_sha": base.get("sha"),
         "merged": payload.get("merged") if type(payload.get("merged")) is bool else None,
         "merged_at": payload.get("merged_at"),
-        "merge_commit_sha": payload.get("merge_commit_sha") if payload.get("merged") is True else None,
+        "merge_commit_sha": None,
     }
 
 
@@ -168,8 +175,8 @@ def validate_observation_identity(ctx: OperationContext, *, identity, payload: d
 def observe_test_merge(ctx: OperationContext, *, identity, payload: dict[str, object]):
     """Verify the synthetic commit against this PR snapshot, never against a fallback SHA.
 
-    GitHub overloads merge_commit_sha: only an explicitly unmerged, open PR can
-    supply a test candidate. Parent order is base then head. This is API commit
+    Only an explicitly unmerged, open PR can supply a GraphQL test candidate.
+    Parent order is base then head. This is API commit
     identity evidence, not evidence of what a CI worker actually checked out.
     Optional lookup failures retain their command raw and an unavailable reason;
     callers decide whether candidate availability is required for their probe.
@@ -187,27 +194,20 @@ def observe_test_merge(ctx: OperationContext, *, identity, payload: dict[str, ob
         return outputs, {}
     if payload.get("merged") is not False or payload.get("state") != "open":
         return outputs, {}
-    sha = payload.get("merge_commit_sha")
     head = payload.get("head") if isinstance(payload.get("head"), dict) else {}
     base = payload.get("base") if isinstance(payload.get("base"), dict) else {}
-    if sha is None:
-        outputs["test_merge_reason"] = "candidate_missing"
-        return outputs, {}
-    if not full_sha(sha):
-        outputs["test_merge_reason"] = "invalid_candidate_sha"
-        return outputs, {}
-    if not all(full_sha(value) for value in (head.get("sha"), base.get("sha"))):
-        outputs["test_merge_reason"] = "head_or_base_sha_unavailable"
-        return outputs, {}
-    sha = sha.lower()
-    try:
-        command = ctx.command(
-            ["gh", "api", f"repos/{identity.owner}/{identity.repo}/commits/{sha}"],
-            failures={"os_error": "probe_failed"},
-        )
-    except MappedOutcomeError as exc:
+    evidence = observe_pr_commit(ctx, identity=identity, payload=payload)
+    if evidence.sha is None:
+        outputs.update(test_merge_state=evidence.state, test_merge_reason=evidence.reason)
+        return outputs, {"graphql": evidence.raw}
+    sha = evidence.sha
+    command, commit_raw = run_gh_command(
+        ctx, ["gh", "api", f"repos/{identity.owner}/{identity.repo}/commits/{sha}"],
+    )
+    raw = {"graphql": evidence.raw, "commit": commit_raw}
+    if command is None:
         outputs["test_merge_reason"] = "api_unavailable"
-        return outputs, exc.outcome.raw
+        return outputs, raw
     try:
         commit = json.loads(command.stdout)
         # The child module ``pr.list`` occupies this package's ``list`` name.
@@ -218,11 +218,11 @@ def observe_test_merge(ctx: OperationContext, *, identity, payload: dict[str, ob
             raise ValueError("Expected parent SHA objects")
     except (ValueError, TypeError):
         outputs["test_merge_reason"] = "invalid_commit_response"
-        return outputs, command.raw
+        return outputs, raw
     if commit["sha"].lower() != sha or [parent["sha"].lower() for parent in parents] != [base["sha"].lower(), head["sha"].lower()]:
         outputs["test_merge_state"] = "identity_mismatch"
         outputs["test_merge_reason"] = "candidate_or_parents_mismatch"
-        return outputs, command.raw
+        return outputs, raw
     outputs.update(test_merge_sha=sha, test_merge_head_sha=head["sha"].lower(),
                    test_merge_base_sha=base["sha"].lower(), test_merge_state="verified", test_merge_reason=None)
-    return outputs, command.raw
+    return outputs, raw
