@@ -285,7 +285,8 @@ def test_context_workflow_is_admitted_by_non_execution_modes(mode, monkeypatch):
 
     def inspect(workflow, *, connector_provider):
         assert workflow.connector_contexts == {"gh": {"repository": "acme/mobile-app"}}
-        evaluate = getattr(runtime, f"{'explain' if mode == 'next' else mode}_workflow")
+        evaluate = (runtime.assess_workflow_readiness if mode in ("explain", "next")
+                    else getattr(runtime, f"{mode}_workflow"))
         result = evaluate(workflow, connector_provider=connector_provider)
         assert result.status.value == "ok", result.to_contract()
         if mode == "next":

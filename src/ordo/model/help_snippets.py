@@ -4207,8 +4207,14 @@ for _merge_handle in ("connector.gh.pr", "connector.gh.pr.checks", "connector.gh
             _merge_entry["canonical_examples"][-1]["summary"] += " With connector_contexts.gh.repository available as a literal bootstrap value, merge and request omit repository; explicit repository overrides remain supported. PR reads and checks use an explicit input guarded to match that context. Fixtures check authored omission and context/output consistency, not real handler fallback or authentication."
 
 
-def _load_excerpt_text(*, path: str, start_line: int, end_line: int) -> str:
-    lines = (_REPO_ROOT / path).read_text(encoding="utf-8").splitlines()
+def _load_excerpt_text(
+    *, path: str, start_line: int, end_line: int, source_lines: dict[str, list[str]] | None = None
+) -> str:
+    if source_lines is None:
+        source_lines = {}
+    if path not in source_lines:
+        source_lines[path] = (_REPO_ROOT / path).read_text(encoding="utf-8").splitlines()
+    lines = source_lines[path]
     excerpt = lines[start_line - 1 : end_line]
     return "\n".join(excerpt)
 
@@ -4217,6 +4223,8 @@ def describe_help_snippets() -> dict[str, JSONObject]:
     """Return published help-snippet metadata with rendered excerpt bodies."""
 
     payload: dict[str, JSONObject] = deepcopy(HELP_SNIPPET_REGISTRY)
+    # Reuse each source's first read only for this catalog construction.
+    source_lines: dict[str, list[str]] = {}
     for entry in payload.values():
         for example in entry.get("canonical_examples", []):
             if not isinstance(example, dict):
@@ -4227,6 +4235,7 @@ def describe_help_snippets() -> dict[str, JSONObject]:
                     path=str(excerpt["path"]),
                     start_line=int(excerpt["start_line"]),
                     end_line=int(excerpt["end_line"]),
+                    source_lines=source_lines,
                 )
     validate_help_snippet_registry(payload)
     return payload

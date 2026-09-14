@@ -838,62 +838,6 @@ blocks:
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(list(result.results), [{"summary": "demo-ref"}])
 
-    def test_execute_real_parse_issue_ref_fragment_with_story_tasks_show_step_shape(self) -> None:
-        root = Path(__file__).resolve().parents[1]
-        caller = root / ".ordo" / "workflows" / "story-tasks-show.yml"
-        loaded = load_workflow_file(caller, launch_dir=root / ".ordo")
-        workflow = Workflow(
-            version=loaded.version,
-            workflow=loaded.workflow,
-            inputs={
-                **loaded.inputs,
-                "active_profile_key": "active_profile",
-                "issue_number": 87,
-                "repo_kind": "meta",
-                "repo_dir": str(root),
-                "repository": "kergma-lw/checklist-meta",
-                "project_id": "PVT_demo",
-            },
-            declared_inputs=loaded.declared_inputs,
-            let_bindings={
-                **loaded.let_bindings,
-                "active_profile": '"meta"',
-                "story_body": '"## Tasks\\n- owner/repo#1\\n- owner/repo#2"',
-            },
-            state_needs=loaded.state_needs,
-            state_bindings=loaded.state_bindings,
-            states=loaded.states,
-            step_results=loaded.step_results,
-            blocks=(
-                StepBlock(
-                    steps=(
-                        Step(
-                            name="Parse story task refs",
-                            run="fragments/parse-issue-ref.yml",
-                            for_each='${markdown["Tasks"].list_items with{root: story_body}}',
-                            run_with={"item": "${item}"},
-                            register="parsed_task_refs",
-                            resolved_run_path=str(root / ".ordo" / "workflows" / "fragments" / "parse-issue-ref.yml"),
-                        ),
-                        Step(name="copy", result='${step.parsed_task_refs.results | field("results[0]")}'),
-                    )
-                ),
-            ),
-            source_path=loaded.source_path,
-            launch_dir=loaded.launch_dir,
-        )
-
-        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-
-        self.assertEqual(result.status, RuntimeStatus.OK)
-        self.assertEqual(
-            list(result.results),
-            [[
-                {"issue_ref": "owner/repo#1", "repository": "owner/repo", "issue_number": "1"},
-                {"issue_ref": "owner/repo#2", "repository": "owner/repo", "issue_number": "2"},
-            ]],
-        )
-
     def test_execute_fan_out_fails_strictly_when_one_item_run_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

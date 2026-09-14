@@ -124,7 +124,9 @@ def test_other_runtime_modes_admit_workflow(mode, monkeypatch):
     from ordo.runtime.nexting import build_next_candidate
 
     def inspect(workflow, *, connector_provider):
-        result = getattr(runtime, f"{'explain' if mode == 'next' else mode}_workflow")(
+        evaluate = (runtime.assess_workflow_readiness if mode in ("explain", "next")
+                    else getattr(runtime, f"{mode}_workflow"))
+        result = evaluate(
             workflow, connector_provider=connector_provider)
         assert result.status.value == "ok", result.to_contract()
         if mode == "next":

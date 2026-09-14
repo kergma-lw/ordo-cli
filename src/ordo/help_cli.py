@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import sys
+from copy import deepcopy
 
 import yaml
 
@@ -1159,19 +1160,53 @@ def build_model_response() -> JSONObject:
     }
 
 
-def _snippet_surface_for_handle(handle: str) -> JSONObject:
-    snippets = describe_help_snippets().get(handle)
-    if not isinstance(snippets, dict):
+class _HelpResponseContext:
+    """Own snippet and lookup reuse for one response, never across requests."""
+
+    def __init__(self) -> None:
+        self.snippets: dict[str, JSONObject] | None = None
+        self.lookups: dict[str, dict[str, JSONObject]] = {}
+
+    def snippet_surface(self, handle: str) -> JSONObject:
+        # Load at the first existing snippet access, preserving earlier failures.
+        if self.snippets is None:
+            self.snippets = describe_help_snippets()
+        return _snippet_surface_for_handle(handle, snippets=self.snippets)
+
+    def lookup(self, topic: str) -> dict[str, JSONObject]:
+        if topic not in self.lookups:
+            if topic == "workflow-rules":
+                lookup = _build_workflow_rules_node_lookup()
+            else:
+                builder = {
+                    "examples": _build_examples_node_lookup,
+                    "model": _build_model_node_lookup,
+                    "command-line": _build_command_line_node_lookup,
+                    "capabilities": _build_capability_lookup,
+                }[topic]
+                lookup = builder(context=self)
+            # Publish only completed tables; builder exceptions still propagate.
+            self.lookups[topic] = lookup
+        return self.lookups[topic]
+
+
+def _snippet_surface_for_handle(handle: str, *, snippets: dict[str, JSONObject] | None = None) -> JSONObject:
+    if snippets is None:
+        snippets = describe_help_snippets()
+    entry = snippets.get(handle)
+    if not isinstance(entry, dict):
         return {"snippet_coverage": "none", "canonical_examples": []}
     return {
-        "snippet_coverage": str(snippets.get("snippet_coverage", "none")),
-        "canonical_examples": list(snippets.get("canonical_examples", [])),
+        "snippet_coverage": str(entry.get("snippet_coverage", "none")),
+        # Nodes may share a catalog entry, but must not share mutable examples.
+        "canonical_examples": deepcopy(list(entry.get("canonical_examples", []))),
     }
 
 
 def build_features_response() -> JSONObject:
     """Return the compact feature map for workflow discovery."""
 
+    context = _HelpResponseContext()
     model = build_model_response()
     workflow_rules = build_workflow_rules_response()
     examples = describe_examples_catalog()
@@ -1187,9 +1222,9 @@ def build_features_response() -> JSONObject:
                 "keywords": list(spec["keywords"]),
                 "appropriate_when": list(spec["appropriate_when"]),
                 "inappropriate_when": list(spec["inappropriate_when"]),
-                "inspect_next": [_build_public_handle_reference(str(handle)) for handle in spec["inspect_next"]],
-                "related_rules": [_build_workflow_rule_reference(str(name), rule_lookup=rule_lookup) for name in spec["related_rules"]],
-                "related_examples": [_build_example_reference(str(name), examples=examples) for name in spec["related_examples"]],
+                "inspect_next": [_build_public_handle_reference(str(handle), context=context) for handle in spec["inspect_next"]],
+                "related_rules": [_build_workflow_rule_reference(str(name), rule_lookup=rule_lookup, context=context) for name in spec["related_rules"]],
+                "related_examples": [_build_example_reference(str(name), examples=examples, context=context) for name in spec["related_examples"]],
             }
         )
 
@@ -1627,7 +1662,9 @@ def build_operation_response(reference: str) -> JSONObject | None:
     }
 
 
-def _build_capability_lookup() -> dict[str, JSONObject]:
+def _build_capability_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     payload = describe_capabilities()
     lookup: dict[str, JSONObject] = {}
 
@@ -1806,7 +1843,7 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
         }
     }
     for capability in payload["capabilities"]:
-        snippet_surface = _snippet_surface_for_handle(str(capability["name"]))
+        snippet_surface = context.snippet_surface(str(capability["name"]))
         effective_capability = dict(capability)
         overrides = capability_overrides.get(str(capability["name"]))
         if isinstance(overrides, dict):
@@ -1819,7 +1856,7 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
             "canonical_examples": snippet_surface["canonical_examples"],
         }
     for rule in payload["negative_rules"]:
-        snippet_surface = _snippet_surface_for_handle(str(rule["name"]))
+        snippet_surface = context.snippet_surface(str(rule["name"]))
         lookup[rule["name"]] = {
             "document_kind": "capability_node",
             "node_kind": "negative_rule",
@@ -1841,7 +1878,9 @@ _GH_REPOSITORY_INPUT_GUIDANCE = (
 )
 
 
-def _build_model_node_lookup() -> dict[str, JSONObject]:
+def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     model = build_model_response()
     lookup: dict[str, JSONObject] = {}
 
@@ -4887,7 +4926,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     }
 
     def add_node(name: str, *, contract: str, node_category: str, summary: str, metadata: JSONObject) -> None:
-        snippet_surface = _snippet_surface_for_handle(name)
+        snippet_surface = context.snippet_surface(name)
         effective_metadata = dict(metadata)
         overrides = model_node_overrides.get(name)
         if isinstance(overrides, dict):
@@ -5717,7 +5756,9 @@ def _build_workflow_rules_node_lookup() -> dict[str, JSONObject]:
     return lookup
 
 
-def _build_examples_node_lookup() -> dict[str, JSONObject]:
+def _build_examples_node_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     payload = describe_examples_catalog()
     lookup: dict[str, JSONObject] = {}
     for example in payload["examples"]:
@@ -5730,12 +5771,14 @@ def _build_examples_node_lookup() -> dict[str, JSONObject]:
             "name": handle,
             "summary": str(example.get("definition") or f"Verified example at {example['path']}"),
             "metadata": example,
-            **_snippet_surface_for_handle(handle),
+            **context.snippet_surface(handle),
         }
     return lookup
 
 
-def _build_command_line_node_lookup() -> dict[str, JSONObject]:
+def _build_command_line_node_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     payload = build_command_line_response()
     lookup: dict[str, JSONObject] = {}
 
@@ -5856,7 +5899,7 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
             "name": f"command-line.{command_name}",
             "summary": "Published command-line command metadata",
             "metadata": command,
-            **_snippet_surface_for_handle(f"command-line.{command_name}"),
+            **context.snippet_surface(f"command-line.{command_name}"),
         }
         for flag in command.get("flags", []):
             normalized = flag["name"].lstrip("-").replace("-", "_")
@@ -5913,7 +5956,9 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
     return lookup
 
 
-def _build_public_handle_reference(handle: str) -> JSONObject:
+def _build_public_handle_reference(handle: str, *, context: _HelpResponseContext | None = None) -> JSONObject:
+    if context is None:
+        context = _HelpResponseContext()
     topic = next((item for item in PUBLIC_TOPICS if item["name"] == handle), None)
     if topic is not None:
         return {
@@ -5923,12 +5968,14 @@ def _build_public_handle_reference(handle: str) -> JSONObject:
             "command": f"ordo-help {handle} --json",
         }
 
+    # All builders must succeed before resolving even an earlier match. Reuse
+    # their tables, but do not turn this tuple into a short-circuiting generator.
     for lookup, topic_name in (
-        (_build_workflow_rules_node_lookup(), "workflow-rules"),
-        (_build_examples_node_lookup(), "examples"),
-        (_build_model_node_lookup(), "model"),
-        (_build_command_line_node_lookup(), "command-line"),
-        (_build_capability_lookup(), "capabilities"),
+        (context.lookup("workflow-rules"), "workflow-rules"),
+        (context.lookup("examples"), "examples"),
+        (context.lookup("model"), "model"),
+        (context.lookup("command-line"), "command-line"),
+        (context.lookup("capabilities"), "capabilities"),
     ):
         node = lookup.get(handle)
         if node is None:
@@ -5944,9 +5991,13 @@ def _build_public_handle_reference(handle: str) -> JSONObject:
     return {"handle": handle, "kind": "unknown", "summary": "Unresolved public handle", "command": f"ordo-help describe {handle} --json"}
 
 
-def _build_workflow_rule_reference(rule_name: str, *, rule_lookup: dict[str, JSONObject]) -> JSONObject:
+def _build_workflow_rule_reference(
+    rule_name: str, *, rule_lookup: dict[str, JSONObject], context: _HelpResponseContext | None = None
+) -> JSONObject:
+    if context is None:
+        context = _HelpResponseContext()
     handle = f"workflow-rules.{rule_name}"
-    node = _build_workflow_rules_node_lookup().get(handle)
+    node = context.lookup("workflow-rules").get(handle)
     rule = rule_lookup.get(rule_name)
     summary = str(rule["rule"]) if isinstance(rule, dict) and isinstance(rule.get("rule"), str) else str(node["summary"]) if node is not None else rule_name
     return {
@@ -5957,9 +6008,13 @@ def _build_workflow_rule_reference(rule_name: str, *, rule_lookup: dict[str, JSO
     }
 
 
-def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject:
+def _build_example_reference(
+    handle: str, *, examples: JSONObject, context: _HelpResponseContext | None = None
+) -> JSONObject:
+    if context is None:
+        context = _HelpResponseContext()
     if handle.startswith("workflow-rules.example."):
-        node = _build_workflow_rules_node_lookup().get(handle)
+        node = context.lookup("workflow-rules").get(handle)
         if node is not None:
             return {
                 "name": str(node["metadata"]["name"]),
@@ -5968,7 +6023,7 @@ def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject
                 "command": f"ordo-help describe {handle} --json",
             }
 
-    node = _build_examples_node_lookup().get(handle)
+    node = context.lookup("examples").get(handle)
     if node is not None:
         return {
             "name": str(node["metadata"]["name"]),
@@ -5993,13 +6048,14 @@ def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject
 def build_snippet_coverage_response() -> JSONObject:
     """Return snippet-coverage metadata for public describable handles."""
 
+    context = _HelpResponseContext()
     handles: list[JSONObject] = []
     lookup_groups = (
-        ("capabilities", _build_capability_lookup()),
-        ("model", _build_model_node_lookup()),
-        ("command-line", _build_command_line_node_lookup()),
-        ("workflow-rules", _build_workflow_rules_node_lookup()),
-        ("examples", _build_examples_node_lookup()),
+        ("capabilities", context.lookup("capabilities")),
+        ("model", context.lookup("model")),
+        ("command-line", context.lookup("command-line")),
+        ("workflow-rules", context.lookup("workflow-rules")),
+        ("examples", context.lookup("examples")),
     )
     seen_handles: set[str] = set()
     for topic_name, lookup in lookup_groups:
@@ -6037,6 +6093,7 @@ def build_snippet_coverage_response() -> JSONObject:
 def build_search_response(query: str) -> JSONObject:
     """Return search results across public topics and operation references."""
 
+    context = _HelpResponseContext()
     lowered_query = query.strip().lower()
     operation_results = []
     for connector in describe_operations()["connectors"]:
@@ -6103,7 +6160,7 @@ def build_search_response(query: str) -> JSONObject:
                 }
             )
 
-    for node_name, node in _build_model_node_lookup().items():
+    for node_name, node in context.lookup("model").items():
         searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
         if _query_matches(lowered_query, searchable):
             fact_results.append(
@@ -6116,7 +6173,7 @@ def build_search_response(query: str) -> JSONObject:
                 }
             )
 
-    for node_name, node in _build_command_line_node_lookup().items():
+    for node_name, node in context.lookup("command-line").items():
         searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
         if _query_matches(lowered_query, searchable):
             fact_results.append(
@@ -6275,18 +6332,22 @@ def _resolve_example_topic_alias(topic: str) -> str | None:
     return None
 
 
-def _resolve_describe_topic_alias(topic: str) -> str:
+def _resolve_describe_topic_alias(topic: str, *, context: _HelpResponseContext | None = None) -> str:
+    if context is None:
+        context = _HelpResponseContext()
     example_alias = _resolve_example_topic_alias(topic)
     if example_alias is not None:
         return example_alias
     if topic.startswith("operation."):
         candidate = f"connector.{topic.removeprefix('operation.')}"
-        if candidate in _build_model_node_lookup():
+        if candidate in context.lookup("model"):
             return candidate
     return topic
 
 
-def _build_unknown_topic_suggestions(topic: str) -> list[JSONObject]:
+def _build_unknown_topic_suggestions(topic: str, *, context: _HelpResponseContext | None = None) -> list[JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     suggestions: list[JSONObject] = []
     example_alias = _resolve_example_topic_alias(topic)
     if example_alias is not None:
@@ -6309,7 +6370,7 @@ def _build_unknown_topic_suggestions(topic: str) -> list[JSONObject]:
                 "reason": "Operation references are described with the dedicated operation command.",
             }
         )
-        if connector_topic in _build_model_node_lookup():
+        if connector_topic in context.lookup("model"):
             suggestions.append(
                 {
                     "kind": "connector_topic",
@@ -7370,7 +7431,7 @@ def _emit_unknown_operation(reference: str, *, as_json: bool) -> int:
     return 1
 
 
-def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
+def _emit_unknown_topic(topic: str, *, as_json: bool, context: _HelpResponseContext | None = None) -> int:
     """Emit a focused unknown-topic error."""
 
     payload = {
@@ -7380,7 +7441,7 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
         "message": f"Unsupported public topic or node '{topic}'",
         "supported_topics": list(DESCRIBABLE_TOPICS),
         "supported_node_kinds": ["capability", "negative_rule", "model_node", "workflow_rules_node", "example_node", "command_line_node"],
-        "suggestions": _build_unknown_topic_suggestions(topic),
+        "suggestions": _build_unknown_topic_suggestions(topic, context=context),
     }
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -7393,9 +7454,11 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
     return 1
 
 
-def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
+def _resolve_public_topic(topic: str, *, context: _HelpResponseContext | None = None) -> tuple[JSONObject, object] | None:
     """Resolve one describable public topic to its payload and renderer."""
 
+    if context is None:
+        context = _HelpResponseContext()
     if topic == "overview":
         return build_overview_response(), render_overview_text
     if topic == "model":
@@ -7414,19 +7477,19 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
         return describe_examples_catalog(), render_examples_text
     if topic == "snippet-coverage":
         return build_snippet_coverage_response(), render_snippet_coverage_text
-    capability_node = _build_capability_lookup().get(topic)
+    capability_node = context.lookup("capabilities").get(topic)
     if capability_node is not None:
         return capability_node, render_capability_node_text
-    model_node = _build_model_node_lookup().get(topic)
+    model_node = context.lookup("model").get(topic)
     if model_node is not None:
         return model_node, render_model_node_text
-    command_line_node = _build_command_line_node_lookup().get(topic)
+    command_line_node = context.lookup("command-line").get(topic)
     if command_line_node is not None:
         return command_line_node, render_command_line_node_text
-    workflow_rules_node = _build_workflow_rules_node_lookup().get(topic)
+    workflow_rules_node = context.lookup("workflow-rules").get(topic)
     if workflow_rules_node is not None:
         return workflow_rules_node, render_workflow_rules_node_text
-    example_node = _build_examples_node_lookup().get(topic)
+    example_node = context.lookup("examples").get(topic)
     if example_node is not None:
         return example_node, render_example_node_text
     return None
@@ -7516,10 +7579,11 @@ def main(argv: list[str] | None = None) -> int:
             return _emit_unknown_operation(parsed.reference, as_json=as_json)
         return _emit_payload(payload, as_json=as_json, renderer=render_operation_text)
     if parsed.command == "describe":
-        resolved_topic = _resolve_describe_topic_alias(parsed.topic)
-        resolved = _resolve_public_topic(resolved_topic)
+        context = _HelpResponseContext()
+        resolved_topic = _resolve_describe_topic_alias(parsed.topic, context=context)
+        resolved = _resolve_public_topic(resolved_topic, context=context)
         if resolved is None:
-            return _emit_unknown_topic(parsed.topic, as_json=as_json)
+            return _emit_unknown_topic(parsed.topic, as_json=as_json, context=context)
         payload, renderer = resolved
         return _emit_payload(payload, as_json=as_json, renderer=renderer)
     if parsed.command == "search":
