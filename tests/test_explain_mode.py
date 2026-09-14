@@ -6,7 +6,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, explain_workflow, load_workflow_text
+from ordo.runtime import execute_workflow, explain_execution_result, explain_runtime_result, assess_workflow_readiness, load_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -25,7 +25,7 @@ class ExplainModeTest(unittest.TestCase):
                 return OperationResult(status="ok", outputs={"value": "main"})
             return OperationResult(status="ok")
 
-        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.GUARD_FAILED)
         self.assertEqual(result.outputs["reason_category"], "guard")
@@ -40,7 +40,7 @@ class ExplainModeTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue.missing")),),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.RESOLUTION_ERROR)
         self.assertEqual(result.outputs["explanation"]["category"], "resolution")
@@ -62,7 +62,7 @@ class ExplainModeTest(unittest.TestCase):
                 ),
             )
 
-            result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+            result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
             self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
             self.assertEqual(result.diagnostics[0].code, "validation.workflow.inputs.undeclared_reference")
@@ -76,7 +76,7 @@ class ExplainModeTest(unittest.TestCase):
             steps=(Step(name="remember", value="ok"),),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.VALIDATION_ERROR)
         self.assertEqual(result.outputs["reason_category"], "workflow_profile")
@@ -95,7 +95,7 @@ class ExplainModeTest(unittest.TestCase):
         )
         profiles = {"frontend": Profile(name="frontend", inputs={"repo_kind": "frontend"})}
 
-        result = explain_workflow(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, available_profiles=profiles, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["active_profile"], "frontend")
@@ -108,7 +108,7 @@ class ExplainModeTest(unittest.TestCase):
             steps=(Step(name="inspect", operation=OperationRef("gh.issue")),),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
 
@@ -144,7 +144,7 @@ class ExplainModeTest(unittest.TestCase):
             }
             return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
 
-        explained = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        explained = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertIsNotNone(explained.analysis_tree)
         self.assertEqual(explained.outputs["explanation"]["preflight_support_steps"][0]["name"], explained.analysis_tree.preflight_step_items[4]["name"])
@@ -161,7 +161,7 @@ class ExplainModeTest(unittest.TestCase):
             ),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["explanation"]["category"], "preflight_step")
@@ -189,7 +189,7 @@ class ExplainModeTest(unittest.TestCase):
                 return OperationResult(status="ok", outputs={"exists": True})
             return OperationResult(status="ok", outputs={"clean": True})
 
-        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["explanation"]["preflight_halts"][0]["reason"], "effectful_step_encountered")
         self.assertEqual(result.outputs["preflight_step_items"][1]["condition_status"], "true")
@@ -239,7 +239,7 @@ blocks:
                 )
             return OperationResult(status="ok")
 
-        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["reason_category"], "preflight_step")
@@ -284,7 +284,7 @@ blocks:
             }
             return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
 
-        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         support_step = result.outputs["explanation"]["preflight_support_steps"][0]
         self.assertEqual(support_step["name"], "push")
@@ -352,7 +352,7 @@ blocks:
                 return OperationResult(status="ok", outputs={"body": "# Title\n\n## Tasks\n- one"})
             return OperationResult(status="ok", outputs={})
 
-        result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.status, RuntimeStatus.OK)
         self.assertEqual(result.outputs["explanation"]["category"], "gate")
@@ -580,7 +580,7 @@ blocks:
             }
             return OperationResult(status="ok", outputs=outputs[resolved_guard.reference])
 
-        explain_result = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        explain_result = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(explain_result.outputs["step_items"][4]["preflight_support"]["strength"], "strong")
         self.assertEqual(explain_result.outputs["explanation"]["preflight_support_steps"][0]["preflight_support"]["strength"], "strong")
@@ -604,7 +604,7 @@ blocks:
             ),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["explanation"]["category"], "preflight_step")
         self.assertEqual(result.outputs["next_actions"][0]["action"], "repair_read_only_observation")
@@ -645,7 +645,7 @@ blocks:
             ),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["explanation"]["category"], "ok")
         self.assertEqual(result.outputs["explanation"]["preflight_support_steps"][0]["name"], "set-status")
@@ -684,7 +684,7 @@ blocks:
                 ),
             )
 
-            result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+            result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
             self.assertEqual(result.outputs["explanation"]["category"], "ok")
             expanded = [item for item in result.outputs["block_items"] if item.get("expanded_from_run") == "profile-guard.yml"]
@@ -812,7 +812,7 @@ blocks:
             ),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["explanation"]["category"], "ok")
         self.assertEqual(result.outputs["explanation"]["fan_out_items"][0]["fan_out"]["source_status"], "runtime_only")
@@ -832,7 +832,7 @@ blocks:
             ),
         )
 
-        result = explain_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        result = assess_workflow_readiness(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(result.outputs["explanation"]["fan_out_items"][0]["body_kind"], "inline_repeated_steps")
 

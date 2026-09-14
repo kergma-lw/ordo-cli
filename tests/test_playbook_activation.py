@@ -14,7 +14,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.profile import Profile
 from ordo.model.runtime import ExecutionPlan, Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Workflow
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, plan_workflow
 from ordo.playbook import PlaybookError, WorkflowCatalogInput, activate_playbook, activated_working_directory, discover_playbook_path, inspect_playbook_workflow
 from ordo.runtime.profiles import apply_profile_defaults_to_subsequent_steps
 
@@ -2290,7 +2290,7 @@ class PlaybookActivationTest(unittest.TestCase):
                 profile_working_directories=activated.profile_working_directories,
                 connector_provider=STANDARD_CONNECTOR_PROVIDER,
             )
-            explain_result = explain_workflow(
+            explain_result = assess_workflow_readiness(
                 activated.workflow,
                 profile=activated.profile,
                 available_profiles=activated.available_profiles,
@@ -2986,7 +2986,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with patch("sys.argv", ["ordo-playbook", "next", "--json"]):
             with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)) as list_mock:
                 with patch("ordo.cli.activate_playbook", return_value=activated) as activate_mock:
-                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                    with patch("ordo.cli.assess_workflow_readiness", return_value=runtime_result) as assess_mock:
                         stdout = io.StringIO()
                         stderr = io.StringIO()
                         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
@@ -2998,6 +2998,9 @@ class PlaybookActivationTest(unittest.TestCase):
         self.assertEqual(payload["scope"], "playbook")
         self.assertEqual(payload["best_candidate"]["workflow"], "inspect-issue")
         list_mock.assert_called_once()
+        assess_mock.assert_called_once_with(
+            activated.workflow, profile=None, available_profiles=None, profile_working_directories=None,
+        )
         activate_mock.assert_called_once_with(
             workflow_name="inspect-issue",
             profile_name=None,
@@ -3091,7 +3094,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with patch("sys.argv", ["ordo-playbook", "next"]):
             with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
                 with patch("ordo.cli.activate_playbook", return_value=activated):
-                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                    with patch("ordo.cli.assess_workflow_readiness", return_value=runtime_result):
                         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                             exit_code = cli_main()
 
@@ -3137,7 +3140,7 @@ class PlaybookActivationTest(unittest.TestCase):
         with patch("sys.argv", ["ordo-playbook", "next"]):
             with patch("ordo.cli.list_playbook_workflows", return_value=(entry,)):
                 with patch("ordo.cli.activate_playbook", return_value=activated):
-                    with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                    with patch("ordo.cli.assess_workflow_readiness", return_value=runtime_result):
                         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                             exit_code = cli_main()
 
@@ -3262,7 +3265,7 @@ class PlaybookActivationTest(unittest.TestCase):
             with patch("ordo.cli.list_playbook_workflows", return_value=(list_entry_mobile, list_entry_story)):
                 with patch("ordo.cli.inspect_playbook_workflow", side_effect=inspect_side_effect):
                     with patch("ordo.cli.activate_playbook", side_effect=activate_side_effect):
-                        with patch("ordo.cli.explain_workflow", return_value=runtime_result):
+                        with patch("ordo.cli.assess_workflow_readiness", return_value=runtime_result):
                             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                                 exit_code = cli_main()
 
@@ -3334,17 +3337,25 @@ class PlaybookActivationTest(unittest.TestCase):
         help_text = stdout.getvalue()
         self.assertIn("usage: ordo-playbook [options] graph", help_text)
         self.assertIn("ordo-playbook graph", help_text)
-        self.assertIn("schema_version=1", help_text)
-        self.assertIn("next ranking remains unchanged", help_text)
-        self.assertIn("minimal workflow tree", help_text)
-        self.assertIn("separate unresolved placement section", help_text)
-        self.assertIn("not execution prerequisites", help_text)
-        self.assertIn("not runtime permission", help_text)
-        self.assertIn("statistics remain in JSON rather than default text", help_text)
-        self.assertIn("+field writes, −field deletes, ? conditional", help_text)
-        self.assertIn("do not imply first creation or readiness", help_text)
-        self.assertIn("source placement takes precedence", help_text)
-        self.assertIn("authored playbook entry order", help_text)
+        self.assertIn("Show how workflows connect through persistent state.", help_text)
+        self.assertIn("No active task is required.", help_text)
+        self.assertIn("Shared context: writers → readers, not execution order.", help_text)
+        self.assertIn("(data use; alternative sources)", help_text)
+        self.assertIn("Guards and check determine", help_text)
+        self.assertIn("alternative ends are not sequential steps", help_text)
+        self.assertIn("+field  writes a field; it need not be the first write", help_text)
+        self.assertIn("−context removes the selected context", help_text)
+        self.assertIn("?       conditional change", help_text)
+        self.assertIn("not another execution", help_text)
+        self.assertIn("the deepest source is the parent", help_text)
+        self.assertIn("Fallback reads still count as data use.", help_text)
+        self.assertIn("Graph does not read saved state, run probes, or recommend what to do next.", help_text)
+        self.assertIn("A missing edge does not prove independence in external systems.", help_text)
+        self.assertIn("Use --json for detailed dependencies, conditions, and unresolved relationships.", help_text)
+        self.assertIn("workflows show <workflow>", help_text)
+        self.assertIn("check <workflow>", help_text)
+        self.assertIn("explain <workflow>", help_text)
+        self.assertIn("get a recommendation for the current environment", help_text)
 
     def test_cli_run_help_mentions_progress_steps_flag(self) -> None:
         stdout = io.StringIO()

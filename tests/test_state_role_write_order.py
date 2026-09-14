@@ -9,7 +9,7 @@ from ordo.model.runtime import RuntimeStatus
 from ordo.runtime import (
     check_workflow,
     execute_workflow,
-    explain_workflow,
+    assess_workflow_readiness,
     load_workflow_text,
     plan_workflow,
     review_workflow,
@@ -163,7 +163,7 @@ class StateRoleWriteOrderTest(unittest.TestCase):
                     value: state.memory["key"].value
             ''', guards="  - guards:\n      - git.worktree.clean\n"))
             workflow = replace(workflow, state_bindings={"memory": "store"}, states={"store": str(state_path)})
-            for mode in (check_workflow, review_workflow, plan_workflow, explain_workflow, execute_workflow):
+            for mode in (check_workflow, review_workflow, plan_workflow, assess_workflow_readiness, execute_workflow):
                 with self.subTest(mode=mode.__name__):
                     probe = Mock(side_effect=AssertionError("unexpected observation"))
                     executor = Mock(side_effect=AssertionError("unexpected step"))
@@ -177,7 +177,7 @@ class StateRoleWriteOrderTest(unittest.TestCase):
                     executor.assert_not_called()
                     subprocess_run.assert_not_called()
                     self.assertEqual(state_path.read_text(encoding="utf-8"), '{"key": {"value": "original"}}')
-                    if mode is explain_workflow:
+                    if mode is assess_workflow_readiness:
                         with patch("ordo.runtime.resolution.get_default_connector_provider", return_value=STANDARD_CONNECTOR_PROVIDER), patch("subprocess.run", side_effect=AssertionError("unexpected external call")):
                             candidate = build_next_candidate(workflow="ordering", description=None, workflow_category=None, when=None, working_directory=None, runtime_result=result, runtime_workflow=workflow)
                         self.assertFalse(candidate.allowed)

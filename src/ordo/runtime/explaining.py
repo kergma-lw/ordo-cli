@@ -13,7 +13,7 @@ from .planning import plan_workflow
 from .providers import ConnectorProvider, GuardProbe, StepExecutor
 
 
-def explain_workflow(
+def assess_workflow_readiness(
     workflow: Workflow,
     *,
     profile: Profile | None = None,

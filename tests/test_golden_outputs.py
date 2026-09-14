@@ -6,7 +6,7 @@ from pathlib import Path
 from ordo.model.profile import Profile
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, load_workflow_file, plan_workflow, resolve_workflow_references, validate_workflow_text
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, load_workflow_file, plan_workflow, resolve_workflow_references, validate_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -89,9 +89,9 @@ class GoldenOutputTest(unittest.TestCase):
             "plan_inspect_issue.json": plan_workflow(inspect, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             "plan_preflight_halt.json": plan_workflow(preflight_halt, guard_probe=_preflight_halt_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             "execute_inspect_issue.json": execute_workflow(inspect, guard_probe=_ok_probe, step_executor=_ok_executor, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
-            "explain_blocked_main_branch.json": explain_workflow(blocked, guard_probe=_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
-            "explain_guard_expression_blocked.json": explain_workflow(expr_blocked, guard_probe=_expr_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
-            "explain_preflight_halt.json": explain_workflow(preflight_halt, guard_probe=_preflight_halt_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
+            "explain_blocked_main_branch.json": assess_workflow_readiness(blocked, guard_probe=_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
+            "explain_guard_expression_blocked.json": assess_workflow_readiness(expr_blocked, guard_probe=_expr_blocked_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
+            "explain_preflight_halt.json": assess_workflow_readiness(preflight_halt, guard_probe=_preflight_halt_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
         }
 
         for filename, actual in cases.items():
@@ -122,7 +122,7 @@ class RuntimeInvariantTest(unittest.TestCase):
             check_workflow(workflow, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             plan_workflow(workflow, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
             execute_workflow(workflow, guard_probe=_ok_probe, step_executor=_ok_executor, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
-            explain_workflow(workflow, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
+            assess_workflow_readiness(workflow, guard_probe=_ok_probe, connector_provider=STANDARD_CONNECTOR_PROVIDER).to_contract(),
         ]
         for output in outputs:
             json.dumps(output)

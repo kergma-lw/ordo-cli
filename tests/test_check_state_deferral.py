@@ -6,7 +6,7 @@ import pytest
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.profile import Profile
 from ordo.cli import _summarize_check_payload
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, review_workflow, load_workflow_file, load_workflow_text, plan_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, review_workflow, load_workflow_file, load_workflow_text, plan_workflow
 from ordo.runtime.nexting import build_next_candidate
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 from tests.test_state_role_write_order import workflow_text
@@ -141,7 +141,7 @@ def test_profile_switch_cannot_resume_after_deferred_loop(make_workflow, separat
     assert result.outputs["active_profile"] is None
 
 
-@pytest.mark.parametrize("mode", [check_workflow, plan_workflow, review_workflow, explain_workflow])
+@pytest.mark.parametrize("mode", [check_workflow, plan_workflow, review_workflow, assess_workflow_readiness])
 def test_read_write_then_unrelated_guard_is_read_only_in_analysis(make_workflow, tmp_path, mode):
     path = tmp_path / "state.json"
     path.write_text('{"key": 3}')
@@ -153,7 +153,7 @@ def test_read_write_then_unrelated_guard_is_read_only_in_analysis(make_workflow,
     assert verdict["analysis_complete"] is True
     assert result.analysis_tree.checked_guards == ("true",)
     assert path.read_text() == '{"key": 3}'
-    if mode is explain_workflow:
+    if mode is assess_workflow_readiness:
         with patch("ordo.runtime.resolution.get_default_connector_provider", return_value=STANDARD_CONNECTOR_PROVIDER):
             candidate = build_next_candidate(workflow="ordering", description=None, workflow_category=None, when=None, working_directory=None, runtime_result=result, runtime_workflow=workflow)
         assert candidate.allowed

@@ -5,7 +5,7 @@ import pytest
 
 from ordo.model.profile import Profile
 from ordo.model.runtime import RuntimeStatus
-from ordo.runtime import execute_workflow, explain_workflow, load_workflow_file, load_workflow_text, validate_workflow_semantics, validate_workflow_text
+from ordo.runtime import execute_workflow, assess_workflow_readiness, load_workflow_file, load_workflow_text, validate_workflow_semantics, validate_workflow_text
 from ordo.runtime.nexting import build_next_candidate
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 from tests.test_state_role_write_order import workflow_text
@@ -111,7 +111,7 @@ def test_unknown_switch_is_relevant_validation_error_before_observations(tmp_pat
     assert result.diagnostics[0].details["context_path"] == ["blocks", "1", "steps", "1"]
     assert not result.operation_results
     probe.assert_not_called()
-    if mode is explain_workflow:
+    if mode is assess_workflow_readiness:
         with patch("ordo.runtime.resolution.get_default_connector_provider", return_value=STANDARD_CONNECTOR_PROVIDER), patch(
             "ordo.runtime.checking.check_workflow", side_effect=AssertionError("next must not recheck")
         ):

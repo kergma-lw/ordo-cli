@@ -126,7 +126,6 @@
 
 ### Task and Bug lifecycle
 
-- See `docs/task-lifecycle.md` for submission, uncertainty, and cleanup contracts.
 - Use the ordered `task-lifecycle` workflows: `create-task`, `task-to-ready`,
   `set-active-task`, `task-to-review`, `merge-task`, `close-task`, `cancel-task`.
 - `task-to-ready` takes an explicit issue number. `set-active-task` prepares or

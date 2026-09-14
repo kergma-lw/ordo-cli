@@ -5,7 +5,7 @@ import pytest
 
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow, review_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, plan_workflow, review_workflow
 from ordo.runtime.checking import _canonicalize_probe_descriptor, _observation_covers
 from ordo.runtime.nexting import build_next_candidate
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -76,7 +76,7 @@ def test_ordinary_literals_do_not_gain_expression_equivalence(workflow, literal)
     )
 
 
-@pytest.mark.parametrize("mode", [check_workflow, review_workflow, plan_workflow, explain_workflow])
+@pytest.mark.parametrize("mode", [check_workflow, review_workflow, plan_workflow, assess_workflow_readiness])
 @pytest.mark.parametrize("state_present", [False, True])
 @pytest.mark.parametrize("direct_probe_argument", [False, True])
 def test_analysis_distinguishes_intent_from_observation(workflow, tmp_path, mode, state_present, direct_probe_argument):
@@ -113,7 +113,7 @@ def test_analysis_distinguishes_intent_from_observation(workflow, tmp_path, mode
         codes = {item["code"] for item in result.outputs["findings"]}
         assert "review.workflow.missing_recommended_probe_coverage" not in codes
         assert ("review.workflow.recommended_probe_result_not_available" in codes) is (not (state_present and direct_probe_argument))
-    if mode is explain_workflow:
+    if mode is assess_workflow_readiness:
         with patch("ordo.runtime.resolution.get_default_connector_provider", return_value=STANDARD_CONNECTOR_PROVIDER):
             candidate = build_next_candidate(
                 workflow=workflow.workflow, description=None, workflow_category=None,

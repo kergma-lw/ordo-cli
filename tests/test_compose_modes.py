@@ -2,7 +2,7 @@ import unittest
 
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import check_workflow, explain_workflow, review_workflow
+from ordo.runtime import check_workflow, assess_workflow_readiness, review_workflow
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -38,7 +38,7 @@ class ComposeModesTest(unittest.TestCase):
 
         checked = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
         reviewed = review_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-        explained = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        explained = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(checked.status, RuntimeStatus.OK)
         self.assertEqual(checked.outputs["preflight_step_items"][0]["preflight_support"]["strength"], "strong")
@@ -77,7 +77,7 @@ class ComposeModesTest(unittest.TestCase):
             return OperationResult(status="ok", outputs={})
 
         checked = check_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
-        explained = explain_workflow(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+        explained = assess_workflow_readiness(workflow, guard_probe=probe, connector_provider=STANDARD_CONNECTOR_PROVIDER)
 
         self.assertEqual(checked.status, RuntimeStatus.OK)
         self.assertEqual(checked.outputs["preflight_step_items"][0]["preflight_support"]["strength"], "strong")
