@@ -179,7 +179,7 @@ blocks:
         - step.pr.outputs.value.base_ref == "main"
         - step.pr.outputs.value.number == step.selected.outputs.value
         - step.pr.outputs.value.merged | is_boolean
-        - step.pr.outputs.value.merged == true or step.pr.outputs.value.state == "OPEN"
+        - step.pr.outputs.value.merged == true or step.pr.outputs.value.state == "open"
   - name: Remember validated PR
     if: step.context.outputs.value.pull_number == null
     state_set:
@@ -268,7 +268,7 @@ blocks:
     if: is_present(step.submit_path.outputs.value) and step.submit_path.outputs.value
     gate:
       all:
-        - step.current_pr.outputs.state == "OPEN"
+        - step.current_pr.outputs.state == "open"
         - step.current_pr.outputs.merged == false
         - step.current_pr.outputs.draft == false
         - step.current_pr.outputs.stack_state == "standalone"
