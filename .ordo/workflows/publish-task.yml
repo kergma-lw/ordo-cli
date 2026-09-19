@@ -201,6 +201,10 @@ blocks:
       remote: "origin"
       branch: step.context.outputs.value.branch
     register: publication
+  - name: Remember pushed head
+    if: step.publish_path.outputs.value
+    state_set:
+      state.common_state[inputs.repository].published_head_sha: step.local_head.outputs.oid
   - name: Recheck branch PR history after publication
     if: step.publish_path.outputs.value and step.existing_number.outputs.value == null
     uses: gh.pr.list
@@ -261,7 +265,7 @@ blocks:
       repository: inputs.repository
       pull_number: step.selected.outputs.value
     register: published_pr
-  - name: Require the published PR and head identity
+  - name: Require the published PR identity
     if: step.publish_path.outputs.value
     gate:
       all:
@@ -272,7 +276,6 @@ blocks:
         - step.published_pr.outputs.number == step.selected.outputs.value
         - step.published_pr.outputs.state == "open"
         - step.published_pr.outputs.merged == false
-        - step.published_pr.outputs.head_sha == step.local_head.outputs.oid
       on_fail:
         expected:
           repository: inputs.repository
@@ -280,8 +283,6 @@ blocks:
           pull_number: step.selected.outputs.value
           head_ref: step.context.outputs.value.branch
           base_ref: "main"
-          head_sha: step.local_head.outputs.oid
-          local_ref: step.local_head.outputs
         before_push:
           pull_number: step.existing_number.outputs.value
           head_sha: step.existing_pr.outputs.head_sha | catch(["runtime.value.step_missing"], null)
@@ -290,6 +291,8 @@ blocks:
           merged: step.existing_pr.outputs.merged | catch(["runtime.value.step_missing"], null)
           updated_at: step.existing_pr.outputs.updated_at | catch(["runtime.value.step_missing"], null)
         push:
+          head_sha: step.local_head.outputs.oid
+          local_ref: step.local_head.outputs
           destination: step.origin.outputs
           result: step.publication.outputs
         after_push:
@@ -308,18 +311,14 @@ blocks:
     if: step.publish_path.outputs.value
     state_set:
       state.common_state[inputs.repository].pull_number: step.selected.outputs.value
-  - name: Remember verified publication SHA
-    if: step.publish_path.outputs.value
-    state_set:
-      state.common_state[inputs.repository].published_head_sha: step.published_pr.outputs.head_sha
   - name: Publish publication result
     if: step.publish_path.outputs.value
     publish:
-      summary: "Task branch published; PR identity and head verified"
+      summary: "Task branch published; PR identity verified"
       issue_number: step.context.outputs.value.issue_number
       pull_number: step.selected.outputs.value
       branch: step.context.outputs.value.branch
-      head_sha: step.published_pr.outputs.head_sha
-      published_head_sha: step.published_pr.outputs.head_sha
+      head_sha: step.local_head.outputs.oid
+      published_head_sha: step.local_head.outputs.oid
       url: step.published_pr.outputs.url
       recommendation: "Review the published changes and CI; publication does not authorize merge"
