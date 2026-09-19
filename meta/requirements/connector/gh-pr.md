@@ -123,6 +123,7 @@
   - `url` or `context` when available
 - Checks must additionally expose `base_sha`, `head_repository`, `base_repository`, `target`, `expected_head_sha`, `commit_sha`, `test_merge_sha`, `test_merge_head_sha`, `test_merge_base_sha`, `test_merge_state`, `sha_evidence`, `complete`, `statuses_complete`, `check_runs_complete`, `neutral_count`, and `unknown_count`.
 - Check items must retain `state`, `sha`, `sha_source`, `id`, timestamps (`created_at`, `updated_at`, `started_at`, `completed_at`), `app_id`, `app_slug`, `app_identity`, and `creator` where available. Missing identity facts must remain unavailable rather than be invented.
+- Check-run items additionally expose nullable `check_suite_id` from the API check suite identity; legacy commit statuses expose null. This is the selector bridge to [gh.actions.run](gh-actions-run.md), not proof that the suite has an associated Actions run or that any worker tested a particular SHA.
 - `gh.pr.timeline` events must expose stable lifecycle facts such as:
   - `event_type`
   - `actor`

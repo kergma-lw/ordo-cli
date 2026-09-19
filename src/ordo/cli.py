@@ -7,7 +7,7 @@ import json
 import re
 import sys
 
-from ordo import check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, explain_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
+from ordo import assess_workflow_readiness, check_workflow, clear_default_connector_provider, configure_standard_runtime, execute_workflow, get_default_connector_provider, plan_workflow, review_workflow, set_default_connector_provider
 from ordo.external_failures import describe_external_failure_context
 from ordo.model.runtime import RuntimeResult, RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook, activated_working_directory, inspect_playbook_workflow, list_playbook_workflows
@@ -403,7 +403,7 @@ def _run_mode(mode: str, workflow, profile, available_profiles=None, profile_wor
             profile_working_directories=profile_working_directories,
             step_reporter=_stderr_step_progress_reporter() if progress_steps else None,
         )
-    explained = explain_workflow(
+    explained = assess_workflow_readiness(
         workflow,
         profile=profile,
         available_profiles=available_profiles,
@@ -493,7 +493,7 @@ def _build_next_payload(args, *, input_overrides: dict[str, object], include_gra
             )
             continue
         with activated_working_directory(activated):
-            result = explain_workflow(
+            result = assess_workflow_readiness(
                 activated.workflow,
                 profile=activated.profile,
                 available_profiles=getattr(activated, "available_profiles", None),
@@ -559,7 +559,7 @@ def _build_relaxed_next_candidate(entry, *, order_index: int, args, candidate_in
     except PlaybookError:
         return None
     with activated_working_directory(activated):
-        result = explain_workflow(
+        result = assess_workflow_readiness(
             activated.workflow,
             profile=activated.profile,
             available_profiles=getattr(activated, "available_profiles", None),

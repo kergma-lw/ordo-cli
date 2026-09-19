@@ -50,7 +50,7 @@ def info():
                 "name": "string", "kind": "string", "status": "string",
                 "conclusion": "string", "state": "string", "context": "string",
                 "url": "string", "sha": "string", "sha_source": "string",
-                "id": "integer", "created_at": "string", "updated_at": "string",
+                "id": "integer", "check_suite_id": "integer", "created_at": "string", "updated_at": "string",
                 "started_at": "string", "completed_at": "string",
                 "app_id": "integer", "app_slug": "string",
                 "app_identity": "string", "creator": "object",
@@ -188,6 +188,13 @@ def _fetch_pages(ctx, *, identity, commit_sha, kind):
             if page.get("sha") is not None and not isinstance(page["sha"], str):
                 raise ValueError("Expected a string response SHA")
             for item in page[kind]:
+                if kind == "check_runs" and item.get("check_suite") is not None:
+                    suite = item["check_suite"]
+                    if not isinstance(suite, dict):
+                        raise ValueError("Expected a check_suite object or null")
+                    suite_id = suite.get("id")
+                    if suite_id is not None and (type(suite_id) is not int or suite_id <= 0):
+                        raise ValueError("Expected a positive integer check_suite.id or null")
                 for field in ("status", "state", "conclusion", "head_sha"):
                     if item.get(field) is not None and not isinstance(item[field], str):
                         raise ValueError(f"Expected a string {field}")
@@ -219,7 +226,7 @@ def _normalize_statuses(payload):
         "conclusion": None if status.get("state") == "pending" else status.get("state"),
         "context": status.get("context"), "url": status.get("target_url"),
         "sha": payload.get("sha"), "sha_source": "combined_status.sha",
-        "id": status.get("id"), "created_at": status.get("created_at"),
+        "id": status.get("id"), "check_suite_id": None, "created_at": status.get("created_at"),
         "updated_at": status.get("updated_at"), "started_at": None, "completed_at": None,
         "app_id": None, "app_slug": None, "app_identity": "unavailable",
         "creator": status.get("creator") if isinstance(status.get("creator"), dict) else None,
@@ -235,7 +242,8 @@ def _normalize_check_runs(payload):
             "status": run.get("status"), "conclusion": run.get("conclusion"),
             "context": None, "url": run.get("html_url") or run.get("details_url"),
             "sha": run.get("head_sha"), "sha_source": "check_run.head_sha",
-            "id": run.get("id"), "created_at": run.get("created_at"),
+            "id": run.get("id"), "check_suite_id": (run.get("check_suite") or {}).get("id"),
+            "created_at": run.get("created_at"),
             "updated_at": run.get("updated_at"), "started_at": run.get("started_at"),
             "completed_at": run.get("completed_at"), "app_id": app.get("id"),
             "app_slug": app.get("slug"), "creator": None,

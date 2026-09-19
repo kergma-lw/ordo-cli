@@ -1,6 +1,7 @@
 """Focused async merge contract tests. All GitHub commands are mocked."""
 
 import json
+import copy
 import subprocess
 from unittest.mock import patch
 
@@ -43,7 +44,7 @@ def context(module, inputs, *, bootstrap_repository="default/repo"):
 
 
 def invoke(module=merge, *, status=202, payload=None, inputs=None, stdout=None, stderr="", error=None,
-           pr=PR, pre_status=200, pre_error=None, bootstrap_repository="default/repo"):
+           pr=PR, pre_status=200, pre_error=None, bootstrap_repository="default/repo", evidence=None):
     if inputs is None:
         inputs = INPUTS if module is merge else {"repository": "owner/repo", "pull_number": 42, "request_id": UUID}
     if payload is None:
@@ -53,6 +54,13 @@ def invoke(module=merge, *, status=202, payload=None, inputs=None, stdout=None, 
 
     def command(argv, **kwargs):
         assert kwargs.get("shell") is None
+        if argv[2] == "graphql":
+            assert evidence is not None, "Unexpected GraphQL read"
+            if isinstance(evidence, BaseException):
+                raise evidence
+            if isinstance(evidence, subprocess.CompletedProcess):
+                return evidence
+            return subprocess.CompletedProcess(argv, 0, json.dumps(evidence), "")
         if module is merge and argv[2] == "repos/owner/repo/pulls/42":
             if pre_error:
                 raise pre_error
@@ -384,15 +392,79 @@ def test_optional_stack_absence_requires_other_pr_facts():
 
 
 def test_repeated_already_merged_is_read_only_even_with_unknown_stack_and_stale_head():
-    pr = {**PR, "state": "closed", "merged": True, "merge_commit_sha": "b" * 40,
-          "stack": None, "head": {"sha": "c" * 40}}
+    pr = {**PR, "state": "closed", "merged": True,
+          "stack": None, "head": {"ref": "feature", "sha": "c" * 40}}
     for _ in range(2):
-        result, run = invoke(pr=pr)
+        result, run = invoke(pr=pr, evidence=merged_evidence(pr))
         assert result.status == "ok"
         assert result.outputs["submission"] == "already_merged"
         assert result.outputs["merged"] is True
         assert result.outputs["request_id"] is None
-        assert_read_only(run)
+        assert result.outputs["merge_sha"] == "b" * 40
+        assert run.call_count == 2
+        assert run.call_args.args[0][2] == "graphql"
+        assert all("PUT" not in call.args[0] for call in run.call_args_list)
+
+
+def merged_evidence(pr):
+    return {"data": {"repository": {"nameWithOwner": "OWNER/REPO", "pullRequest": {
+        "number": 42, "state": "MERGED", "merged": True,
+        "headRefOid": pr["head"]["sha"].upper(), "baseRefOid": pr["base"]["sha"].upper(),
+        "potentialMergeCommit": None, "mergeCommit": {"oid": "B" * 40},
+    }}}}
+
+
+@pytest.mark.parametrize("failure, expected_status", (
+    ("errors", "merge_api_failed"),
+    ("timeout", "merge_api_failed"),
+    ("nonzero", "merge_api_failed"),
+    ("errors_null", "merge_scope_unknown"),
+    ("null", "merge_scope_unknown"),
+    ("sha", "merge_scope_unknown"),
+    ("head", "merge_scope_unknown"),
+    ("base", "merge_scope_unknown"),
+    ("repo", "merge_scope_unknown"),
+    ("number", "merge_scope_unknown"),
+    ("state", "merge_scope_unknown"),
+    ("merged", "merge_scope_unknown"),
+    ("json", "merge_scope_unknown"),
+))
+def test_already_merged_requires_bound_commit_evidence_without_put(failure, expected_status):
+    pr = {**PR, "state": "closed", "merged": True, "stack": None}
+    evidence = copy.deepcopy(merged_evidence(pr))
+    repository = evidence["data"]["repository"]
+    pull = repository["pullRequest"]
+    if failure == "errors":
+        evidence["errors"] = [{"message": "partial data"}]
+    elif failure == "errors_null":
+        evidence["errors"] = None
+    elif failure == "null":
+        pull["mergeCommit"] = None
+    elif failure == "sha":
+        pull["mergeCommit"] = {"oid": "short"}
+    elif failure in ("head", "base"):
+        pull[failure + "RefOid"] = "d" * 40
+    elif failure == "repo":
+        repository["nameWithOwner"] = "other/repo"
+    elif failure == "number":
+        pull["number"] = 43
+    elif failure == "state":
+        pull["state"] = "CLOSED"
+    elif failure == "merged":
+        pull["merged"] = False
+    elif failure == "timeout":
+        evidence = subprocess.TimeoutExpired("gh", 30)
+    elif failure == "nonzero":
+        evidence = subprocess.CompletedProcess([], 1, json.dumps(evidence), "offline")
+    elif failure == "json":
+        evidence = subprocess.CompletedProcess([], 0, "{broken", "")
+    result, run = invoke(pr=pr, evidence=evidence)
+    assert result.status == expected_status
+    assert result.outputs["submission"] == "not_submitted"
+    assert result.outputs["merged"] is not True
+    assert result.outputs["merge_sha"] is None
+    assert run.call_count == 2
+    assert all("PUT" not in call.args[0] for call in run.call_args_list)
 
 
 @pytest.mark.parametrize("status", (403, 404, 422, 500))

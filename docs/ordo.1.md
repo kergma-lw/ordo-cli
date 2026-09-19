@@ -14,7 +14,7 @@ from pathlib import Path
 from ordo import (
     check_workflow,
     execute_workflow,
-    explain_workflow,
+    assess_workflow_readiness,
     load_profile_file,
     load_workflow_file,
     plan_workflow,
@@ -26,8 +26,13 @@ profile = load_profile_file(Path("profiles/backend-default.yaml"))
 check_result = check_workflow(workflow, profile=profile)
 plan_result = plan_workflow(workflow, profile=profile)
 execute_result = execute_workflow(workflow, profile=profile)
-explain_result = explain_workflow(workflow, profile=profile)
+explain_result = assess_workflow_readiness(workflow, profile=profile)
 ```
+
+`assess_workflow_readiness` is the canonical Python API, exported by both `ordo`
+and `ordo.runtime`. The old Python name `explain_workflow` has been removed;
+there is no compatibility alias. The CLI mode `explain` and result mode
+`Mode.EXPLAIN` are unchanged.
 
 ## DESCRIPTION
 

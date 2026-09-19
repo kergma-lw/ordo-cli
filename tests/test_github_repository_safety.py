@@ -12,7 +12,7 @@ from ordo.connectors.registry import get_public_connector_registry
 from ordo.model.github_repository import normalize_github_repository
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow, review_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, plan_workflow, review_workflow
 from ordo.runtime.resolution import ResolvedOperation
 from ordo.runtime.reviewing import _normalize_github_repository_value
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -121,7 +121,7 @@ def guarded_workflow():
     )
 
 
-@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, explain_workflow, execute_workflow),
+@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, assess_workflow_readiness, execute_workflow),
                          ids=("check", "review", "plan", "explain", "run"))
 def test_invalid_repository_blocks_runtime_modes(mode, auth_only):
     result = mode(guarded_workflow(), connector_provider=STANDARD_CONNECTOR_PROVIDER)

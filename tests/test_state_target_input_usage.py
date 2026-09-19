@@ -2,14 +2,14 @@ import pytest
 
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Step, Workflow
-from ordo.runtime import check_workflow, explain_workflow, plan_workflow, review_workflow
+from ordo.runtime import check_workflow, assess_workflow_readiness, plan_workflow, review_workflow
 from ordo.runtime.checking import _collect_input_names_from_expression_node
 from ordo.runtime.local_expression_engine.core import parse_local_expression_tree
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
-@pytest.mark.parametrize("mode", [check_workflow, review_workflow, plan_workflow, explain_workflow])
+@pytest.mark.parametrize("mode", [check_workflow, review_workflow, plan_workflow, assess_workflow_readiness])
 @pytest.mark.parametrize("mutation", ["state_set", "state_delete"])
 @pytest.mark.parametrize(
     "target,used",

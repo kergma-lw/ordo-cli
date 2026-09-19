@@ -1235,6 +1235,7 @@
       "appropriate_when": [
         "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
         "Typed public operations express product intent better than broad execution surfaces.",
+        "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to the direct GraphQL Actions association; null association is found=false. Jobs are complete read-only observations, not tested-SHA attestation or merge policy. gh.actions is a namespace segment, not an executable operation.",
         "Use gh.pr.list with head, head_owner, base and explicit state: all to distinguish no matches, one open PR, multiple open PRs, and closed history; unknown facts block dependent decisions. gh.pr.create is a separate action with its own mandatory open check. One existing open PR including draft is non-OK already_exists, not successful reuse; uncertain submission leaves created=null. No atomic uniqueness or exactly-once guarantee is provided.",
         "Connector authors use ctx.call(name, inputs=...) for same-family probe dependencies with already-resolved values, never reevaluated expressions. Full and local dotted names work; omitted inputs/None preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring.",
         "For GitHub async merge, inspect gh.pr identity and stack_state, accept gh.pr.checks evidence, submit gh.pr.merge with expected_head_sha from the accepted CI head, then save request_id for gh.pr.merge.request. Acceptance is not completion.",
@@ -1242,7 +1243,8 @@
         "Use fs.file for UTF-8 content and metadata from the same opened regular file; safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK, with no unsafe fallback or atomic snapshot guarantee.",
         "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
         "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
-        "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport."
+        "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport.",
+        "Use git.remote with a configured remote name to observe effective fetch_urls, push_urls, and mirror locally. Git applies URL rewrites; literal observed URLs are preserved without normalization or redaction. Missing remote is exists=false with empty URL lists and mirror=null; an existing remote without a mirror setting is mirror=false. The caller chooses acceptable destinations. Use git.repo for repository facts, git.upstream for branch tracking, and git.sync.push for publication."
       ],
       "inappropriate_when": [
         "You are treating a missing public capability as permission to improvise local semantics silently.",
@@ -1265,10 +1267,52 @@
           "topic": "model"
         },
         {
+          "command": "ordo-help describe connector.git.remote --json",
+          "handle": "connector.git.remote",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.remote",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.git.repo --json",
+          "handle": "connector.git.repo",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.repo",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.git.upstream --json",
+          "handle": "connector.git.upstream",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.upstream",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.git.sync.push --json",
+          "handle": "connector.git.sync.push",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.sync.push",
+          "topic": "model"
+        },
+        {
           "command": "ordo-help describe connector.gh --json",
           "handle": "connector.gh",
           "kind": "connector_family",
           "summary": "Published connector family metadata for the gh namespace",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.actions.run --json",
+          "handle": "connector.gh.actions.run",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.actions.run",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.actions.run.jobs --json",
+          "handle": "connector.gh.actions.run.jobs",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.actions.run.jobs",
           "topic": "model"
         },
         {
@@ -1353,7 +1397,11 @@
         "expected_head_sha",
         "test_merge",
         "standalone",
-        "request_id"
+        "request_id",
+        "Actions",
+        "run_attempt",
+        "check_suite_id",
+        "check_run_id"
       ],
       "name": "connectors",
       "published_names": {

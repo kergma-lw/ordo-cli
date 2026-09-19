@@ -4,7 +4,7 @@ from ordo.connectors import get_public_connector_registry
 from ordo.model.profile import Profile
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import compose_profiles, explain_workflow, validate_workflow_text
+from ordo.runtime import compose_profiles, assess_workflow_readiness, validate_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -63,7 +63,7 @@ class AuthoringVerificationTest(unittest.TestCase):
             ),
         )
 
-        explanation = explain_workflow(
+        explanation = assess_workflow_readiness(
             repaired,
             guard_probe=lambda _resolved, _workflow: OperationResult(status="ok", summary="clean", outputs={"clean": True, "dirty_paths": []}),
             connector_provider=STANDARD_CONNECTOR_PROVIDER,

@@ -8,7 +8,7 @@ from connectors.fs.probes import file as probe
 from ordo.cli import main as cli_main
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, Workflow
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow, review_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, plan_workflow, review_workflow
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
 
@@ -37,7 +37,7 @@ def file_workflow(tmp_path, monkeypatch):
         run.assert_not_called()
 
 
-@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, explain_workflow, execute_workflow), ids=("check", "review", "plan", "explain", "run"))
+@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, assess_workflow_readiness, execute_workflow), ids=("check", "review", "plan", "explain", "run"))
 def test_unavailable_secure_open_blocks_runtime_modes(mode, file_workflow):
     result = mode(file_workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
     verdict = result.outputs["check_snapshot"] if mode is review_workflow else result.outputs
@@ -49,9 +49,9 @@ def test_unavailable_secure_open_blocks_runtime_modes(mode, file_workflow):
     else:
         assert result.status == RuntimeStatus.GUARD_FAILED
         assert result.outputs["can_execute"] is False
-    if mode in (plan_workflow, explain_workflow):
+    if mode in (plan_workflow, assess_workflow_readiness):
         assert result.outputs["execution_allowed"] is False
-    if mode is explain_workflow:
+    if mode is assess_workflow_readiness:
         assert result.outputs["explanation"]["allowed"] is False
     if mode is execute_workflow:
         assert result.outputs["executed_steps"] == []

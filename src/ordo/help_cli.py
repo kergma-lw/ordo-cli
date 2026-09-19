@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import sys
+from copy import deepcopy
 
 import yaml
 
@@ -860,10 +861,11 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
     {
         "name": "connectors",
         "summary": "Published operation catalog for external probes and actions, grouped by stable namespaces.",
-        "keywords": ["connectors", "operations", "namespace", "probe", "action", "public surface", "async merge", "expected_head_sha", "test_merge", "standalone", "request_id"],
+        "keywords": ["connectors", "operations", "namespace", "probe", "action", "public surface", "async merge", "expected_head_sha", "test_merge", "standalone", "request_id", "Actions", "run_attempt", "check_suite_id", "check_run_id"],
         "appropriate_when": [
             "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
             "Typed public operations express product intent better than broad execution surfaces.",
+            "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to the direct GraphQL Actions association; null association is found=false. Jobs are complete read-only observations, not tested-SHA attestation or merge policy. gh.actions is a namespace segment, not an executable operation.",
             "Use gh.pr.list with head, head_owner, base and explicit state: all to distinguish no matches, one open PR, multiple open PRs, and closed history; unknown facts block dependent decisions. gh.pr.create is a separate action with its own mandatory open check. One existing open PR including draft is non-OK already_exists, not successful reuse; uncertain submission leaves created=null. No atomic uniqueness or exactly-once guarantee is provided.",
             "Connector authors use ctx.call(name, inputs=...) for same-family probe dependencies with already-resolved values, never reevaluated expressions. Full and local dotted names work; omitted inputs/None preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring.",
             "For GitHub async merge, inspect gh.pr identity and stack_state, accept gh.pr.checks evidence, submit gh.pr.merge with expected_head_sha from the accepted CI head, then save request_id for gh.pr.merge.request. Acceptance is not completion.",
@@ -872,6 +874,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
             "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
             "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport.",
+            "Use git.remote with a configured remote name to observe effective fetch_urls, push_urls, and mirror locally. Git applies URL rewrites; literal observed URLs are preserved without normalization or redaction. Missing remote is exists=false with empty URL lists and mirror=null; an existing remote without a mirror setting is mirror=false. The caller chooses acceptable destinations. Use git.repo for repository facts, git.upstream for branch tracking, and git.sync.push for publication.",
         ],
         "inappropriate_when": [
             "You are treating a missing public capability as permission to improvise local semantics silently.",
@@ -879,7 +882,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "Do not replace accepted CI head evidence with a freshly fetched head. Checks on test-merge candidate M bind expected head H, not M. First-version merge rejects stacked and unknown scope; no atomic base or stack guarantee, polling, queue administration, or admin bypass is provided.",
             "Git sync remote inputs are configured identifiers, not ad-hoc URLs, paths, or options. Configured URLs and helpers remain trusted; this is not a protocol sandbox.",
         ],
-        "inspect_next": ["operations", "connector.authoring", "connector.gh", "connector.gh.pr.list", "connector.gh.pr.create", "connector.gh.pr", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request", "connector.fs", "command-line.ordo-playbook", "workflow-rules.decision_order", "workflow-rules.structured_surface_bias"],
+        "inspect_next": ["operations", "connector.authoring", "connector.git.remote", "connector.git.repo", "connector.git.upstream", "connector.git.sync.push", "connector.gh", "connector.gh.actions.run", "connector.gh.actions.run.jobs", "connector.gh.pr.list", "connector.gh.pr.create", "connector.gh.pr", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request", "connector.fs", "command-line.ordo-playbook", "workflow-rules.decision_order", "workflow-rules.structured_surface_bias"],
         "related_rules": ["decision_order", "structured_surface_bias", "routine.*", "local_artifacts_are_context"],
         "related_examples": ["examples.minimal", "examples.inspect-pr"],
         "published_names_kind": "connectors",
@@ -1159,19 +1162,53 @@ def build_model_response() -> JSONObject:
     }
 
 
-def _snippet_surface_for_handle(handle: str) -> JSONObject:
-    snippets = describe_help_snippets().get(handle)
-    if not isinstance(snippets, dict):
+class _HelpResponseContext:
+    """Own snippet and lookup reuse for one response, never across requests."""
+
+    def __init__(self) -> None:
+        self.snippets: dict[str, JSONObject] | None = None
+        self.lookups: dict[str, dict[str, JSONObject]] = {}
+
+    def snippet_surface(self, handle: str) -> JSONObject:
+        # Load at the first existing snippet access, preserving earlier failures.
+        if self.snippets is None:
+            self.snippets = describe_help_snippets()
+        return _snippet_surface_for_handle(handle, snippets=self.snippets)
+
+    def lookup(self, topic: str) -> dict[str, JSONObject]:
+        if topic not in self.lookups:
+            if topic == "workflow-rules":
+                lookup = _build_workflow_rules_node_lookup()
+            else:
+                builder = {
+                    "examples": _build_examples_node_lookup,
+                    "model": _build_model_node_lookup,
+                    "command-line": _build_command_line_node_lookup,
+                    "capabilities": _build_capability_lookup,
+                }[topic]
+                lookup = builder(context=self)
+            # Publish only completed tables; builder exceptions still propagate.
+            self.lookups[topic] = lookup
+        return self.lookups[topic]
+
+
+def _snippet_surface_for_handle(handle: str, *, snippets: dict[str, JSONObject] | None = None) -> JSONObject:
+    if snippets is None:
+        snippets = describe_help_snippets()
+    entry = snippets.get(handle)
+    if not isinstance(entry, dict):
         return {"snippet_coverage": "none", "canonical_examples": []}
     return {
-        "snippet_coverage": str(snippets.get("snippet_coverage", "none")),
-        "canonical_examples": list(snippets.get("canonical_examples", [])),
+        "snippet_coverage": str(entry.get("snippet_coverage", "none")),
+        # Nodes may share a catalog entry, but must not share mutable examples.
+        "canonical_examples": deepcopy(list(entry.get("canonical_examples", []))),
     }
 
 
 def build_features_response() -> JSONObject:
     """Return the compact feature map for workflow discovery."""
 
+    context = _HelpResponseContext()
     model = build_model_response()
     workflow_rules = build_workflow_rules_response()
     examples = describe_examples_catalog()
@@ -1187,9 +1224,9 @@ def build_features_response() -> JSONObject:
                 "keywords": list(spec["keywords"]),
                 "appropriate_when": list(spec["appropriate_when"]),
                 "inappropriate_when": list(spec["inappropriate_when"]),
-                "inspect_next": [_build_public_handle_reference(str(handle)) for handle in spec["inspect_next"]],
-                "related_rules": [_build_workflow_rule_reference(str(name), rule_lookup=rule_lookup) for name in spec["related_rules"]],
-                "related_examples": [_build_example_reference(str(name), examples=examples) for name in spec["related_examples"]],
+                "inspect_next": [_build_public_handle_reference(str(handle), context=context) for handle in spec["inspect_next"]],
+                "related_rules": [_build_workflow_rule_reference(str(name), rule_lookup=rule_lookup, context=context) for name in spec["related_rules"]],
+                "related_examples": [_build_example_reference(str(name), examples=examples, context=context) for name in spec["related_examples"]],
             }
         )
 
@@ -1627,7 +1664,9 @@ def build_operation_response(reference: str) -> JSONObject | None:
     }
 
 
-def _build_capability_lookup() -> dict[str, JSONObject]:
+def _build_capability_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     payload = describe_capabilities()
     lookup: dict[str, JSONObject] = {}
 
@@ -1806,7 +1845,7 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
         }
     }
     for capability in payload["capabilities"]:
-        snippet_surface = _snippet_surface_for_handle(str(capability["name"]))
+        snippet_surface = context.snippet_surface(str(capability["name"]))
         effective_capability = dict(capability)
         overrides = capability_overrides.get(str(capability["name"]))
         if isinstance(overrides, dict):
@@ -1819,7 +1858,7 @@ def _build_capability_lookup() -> dict[str, JSONObject]:
             "canonical_examples": snippet_surface["canonical_examples"],
         }
     for rule in payload["negative_rules"]:
-        snippet_surface = _snippet_surface_for_handle(str(rule["name"]))
+        snippet_surface = context.snippet_surface(str(rule["name"]))
         lookup[rule["name"]] = {
             "document_kind": "capability_node",
             "node_kind": "negative_rule",
@@ -1841,7 +1880,9 @@ _GH_REPOSITORY_INPUT_GUIDANCE = (
 )
 
 
-def _build_model_node_lookup() -> dict[str, JSONObject]:
+def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     model = build_model_response()
     lookup: dict[str, JSONObject] = {}
 
@@ -1931,12 +1972,14 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
         },
         "gh": {
-            "definition": "Published GitHub connector family for typed repository, issue, pull-request, and project operations backed by GitHub CLI authentication rather than ad hoc shell calls.",
+            "definition": "Published GitHub connector family for typed repository, issue, pull-request, Actions run, and project operations backed by GitHub CLI authentication rather than ad hoc shell calls.",
             "use_when": [
                 "The workflow needs one published GitHub probe or action whose outputs and failure modes stay stable across repositories.",
                 "Repository-targeted GitHub probes and actions should normally inherit connector_contexts.gh.repository instead of repeating the same repository argument on every step, and review warns when an explicit repository overrides that default.",
                 "You want separate public surfaces for repository sync, issue snapshots, pull-request review surfaces, and GitHub Project membership instead of one coarse GitHub command wrapper.",
                 "The published operations list includes read-only probes and effectful actions. gh.pr and gh.pr.checks observe facts; gh.pr.merge submits a mutation, while gh.pr.merge.request observes its saved UUID. The project-membership example also includes actions and is not a read-only recipe.",
+                "Bootstrap requires an available authenticated gh CLI with repository access. gh.actions.run observes one attempt by run_id or check_suite_id (exactly one); omitted/null attempt reads latest then pins it. gh.actions.run.jobs requires explicit attempt, normally the returned run_attempt. Optional/null repository uses connector_contexts.gh.repository; explicit valid OWNER/REPO overrides it, invalid explicit input fails without fallback, and no resolved target is input_error.",
+                "A gh.pr.checks check-run item supplies nullable check_suite_id for direct GraphQL CheckSuite.workflowRun lookup. A validated null association returns found=false. Jobs expose check_run_id only from a validated official API URL, not logs. Complete jobs retrieval and pinned attempts remain non-atomic API observations, not tested-SHA attestation or immutable PR event snapshots. Run failures are actions_run_unavailable; jobs failures, including incomplete pagination, are actions_jobs_unavailable.",
                 GH_PR_LIST_GUIDANCE,
                 GH_PR_MERGE_GUIDANCE,
                 GH_PR_CREATE_GUIDANCE,
@@ -1945,12 +1988,15 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 "Repository-local helper scripts or opaque gh invocations when an existing published GitHub operation already expresses the intent more directly.",
                 "Non-GitHub repository state such as local branches, commits, or worktrees; use the git connector family for repository-local facts.",
                 "Async merge is not polling, queue administration, admin bypass, or an atomic base/stack transaction. GitHub automatic issue closing and branch configuration effects remain outside the action.",
+                "Actions run probes do not trigger, rerun, cancel, poll, download logs, select required jobs, or apply merge policy. gh.actions is a namespace segment, not an executable operation.",
             ],
             "nearest_surfaces": [
                 {"handle": "connector.authoring", "summary": "Connector-author SDK and explicit same-family probe dependency contract"},
                 {"handle": "operations", "summary": "Flat public operation catalog across all connector namespaces"},
                 {"handle": "connector.gh.repo", "summary": "Repository identity and fork probe for repo-level GitHub workflows"},
                 {"handle": "connector.gh.repo.actions.permissions", "summary": "Repository Actions permissions probe for workflows that need to inspect or guard hosted Actions policy"},
+                {"handle": "connector.gh.actions.run", "summary": "Observe one numbered Actions attempt by run or check suite"},
+                {"handle": "connector.gh.actions.run.jobs", "summary": "Observe all jobs for an explicitly pinned attempt"},
                 {"handle": "connector.gh.pr", "summary": "Pull-request metadata probe that anchors the PR inspection subgroup"},
                 {"handle": "connector.gh.pr.list", "summary": "Full filtered candidate collection before detailed by-number inspection; workflow owns selection"},
                 {"handle": "connector.gh.pr.create", "summary": "Create one PR with a mandatory exact open-duplicate check"},
@@ -1968,7 +2014,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 {"reference": "gh.issue", "inputs": {"issue_number": 17}},
                 {"reference": "gh.project", "inputs": {"project_id": "PVT_kwDOExample"}},
             ],
-            "inspect_next": ["connector.gh.repo", "connector.gh.repo.actions.permissions", "connector.gh.pr", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request", "connector.gh.issue", "connector.gh.project", "connector.gh.project.items", "operations"],
+            "inspect_next": ["connector.gh.repo", "connector.gh.repo.actions.permissions", "connector.gh.actions.run", "connector.gh.actions.run.jobs", "connector.gh.pr", "connector.gh.pr.checks", "connector.gh.pr.merge", "connector.gh.pr.merge.request", "connector.gh.issue", "connector.gh.project", "connector.gh.project.items", "operations"],
         }
     }
 
@@ -2936,6 +2982,29 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.git.upstream", "connector.git.branch", "connector.git.worktree"],
         },
+        ("git", "remote"): {
+            "definition": "Observe one configured Git remote's effective fetch and push URLs and mirror setting from local Git configuration without network access.",
+            "use_when": [
+                "Supply required remote: string as a nonempty configured name without whitespace, NUL, or a leading '-'; nested names such as team/origin are supported. Match the local git remote inventory exactly.",
+                "Success returns name: string, exists: boolean, fetch_urls: array of strings, push_urls: array of strings, and mirror: boolean or null. A missing remote succeeds with exists=false, fetch_urls=[], push_urls=[], mirror=null, and the requested name preserved.",
+                "For an existing remote, git remote get-url --all and git remote get-url --push --all supply effective URLs after Git insteadOf and pushInsteadOf rewrites and Git's push-URL fallback. Preserve every literal observed URL in order, including duplicates, without normalization, trimming, or redaction. Only LF delimits records; CR and Unicode line separators remain URL content.",
+                "mirror reports git config --bool --get remote.<name>.mirror: true or false; an absent mirror setting on an existing remote means mirror=false, not null. Git config exit 1 represents the absent setting; other command failures fail the probe.",
+                "All local failures use probe_failed. Diagnostic prefix probe.git_remote has invalid_input, inventory_failed, invalid_inventory, fetch_urls_failed, push_urls_failed, invalid_fetch_urls, invalid_push_urls, mirror_failed, and invalid_mirror. Duplicate or malformed inventory names, empty URL lists or records, and invalid mirror booleans fail rather than produce partial success. Raw command evidence supplements structured outputs.",
+                "These read-only, non-atomic observations use ordinary probe evaluation in check, review, plan, run, explain, and next; no mode-specific policy or new engine semantics. Git availability and repository context remain shared family bootstrap prerequisites.",
+            ],
+            "do_not_use_for": [
+                "URL safety, redaction, normalization, host/protocol allowlists, or remote policy: the caller chooses acceptable destinations from literal observations.",
+                "Network reachability, authentication, remote repository identity, or proof of a later push destination: configuration can change between observation and transport.",
+                "Repository-root facts, current-branch tracking, or publication itself; use connector.git.repo, connector.git.upstream, or connector.git.sync.push respectively.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.git.repo", "summary": "Local repository-root, git-dir, and default-branch facts"},
+                {"handle": "connector.git.upstream", "summary": "Current branch's configured tracking remote and tracking ref"},
+                {"handle": "connector.git.sync.push", "summary": "Publish a branch to a configured remote after the caller's decision"},
+            ],
+            "examples": [{"reference": "git.remote", "inputs": {"remote": "origin"}}],
+            "inspect_next": ["connector.git.repo", "connector.git.upstream", "connector.git.sync.push"],
+        },
         ("git", "upstream"): {
             "definition": "Probe the upstream-tracking configuration for the current local branch and return the exact configured remote and the branch tail of its conventional local remote-tracking ref.",
             "use_when": [
@@ -3192,6 +3261,55 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "inspect_next": ["connector.gh.pr.review_comments", "connector.gh.pr.timeline", "connector.gh.pr"],
         },
+        ("gh", "actions.run"): {
+            "definition": "Observe one GitHub Actions run attempt, selected by a run ID or a check suite's direct Actions association.",
+            "use_when": [
+                "Supply exactly one non-null positive integer run_id or check_suite_id. Optional positive integer attempt selects that numbered attempt; omitted/null attempt reads the latest observed run_attempt, then retrieves the pinned numbered attempt. Booleans are not integer identifiers.",
+                "repository is optional and nullable: explicit valid literal ASCII OWNER/REPO overrides bootstrapped connector_contexts.gh.repository; omitted/null uses context. Malformed explicit values fail without fallback; no resolved target is input_error. Bootstrap requires an available authenticated gh CLI with repository access on github.com. Context is a default, not an authorization allowlist.",
+                "For check_suite_id, resolve the REST suite node then query GraphQL CheckSuite.workflowRun directly, validating repository, node type, suite identity and backreference. No repository-wide run scan is used. A validated null association returns found=false, requested check_suite_id, repository, pull_requests=[], and all other run fields null. Missing nodes/fields or GraphQL errors fail, not normal absence.",
+                "On found=true, outputs include repository, run_id, check_suite_id, run_attempt, workflow_id, workflow_path, event, status, conclusion, head_sha, head_branch, url, created_at, updated_at, run_started_at, and pull_requests with number/head_sha/base_sha. Optional API facts remain null; missing pull_requests becomes []. Present SHAs are full hexadecimal values. Output run_attempt becomes the explicit attempt input to gh.actions.run.jobs.",
+                "Invalid selectors, attempt or repository resolution produce input_error. API/transport failures, malformed responses and repository/run/attempt/suite mismatches produce actions_run_unavailable with reason diagnostics and raw request evidence. HTTP 404 is not found=false; shared bootstrap failures can precede operation execution.",
+            ],
+            "do_not_use_for": [
+                "Run triggering, reruns, cancellation, polling, log retrieval, required-job selection, or merge policy. This is read-only observation.",
+                "A tested-SHA attestation or immutable event snapshot: PR head/base SHAs are API observations, not proof of worker checkout. Latest-then-pinned retrieval is non-atomic and does not promise the newest attempt at return time.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.actions.run.jobs", "summary": "Full jobs traversal using the observed run_id and explicit attempt=run_attempt"},
+                {"handle": "connector.gh.pr.checks", "summary": "PR-attached check runs expose nullable check_suite_id as the selector bridge"},
+                {"handle": "connector.gh.repo.actions.permissions", "summary": "Repository Actions permission settings, not run observations"},
+                {"handle": "connector.gh", "summary": "GitHub bootstrap and family operation boundaries"},
+            ],
+            "inspect_next": ["connector.gh.actions.run.jobs", "connector.gh.pr.checks", "connector.gh"],
+            "examples": [
+                {"reference": "gh.actions.run", "inputs": {"run_id": 123}},
+                {"reference": "gh.actions.run", "inputs": {"check_suite_id": 456, "attempt": 2}},
+            ],
+        },
+        ("gh", "actions.run.jobs"): {
+            "definition": "Observe the complete job collection for one explicitly numbered GitHub Actions run attempt.",
+            "use_when": [
+                "Supply required positive integer run_id and explicit positive integer attempt, normally from gh.actions.run outputs run_id and run_attempt. There is no latest-attempt default or caller limit; booleans are invalid identifiers.",
+                "repository is optional and nullable: explicit valid literal ASCII OWNER/REPO overrides bootstrapped connector_contexts.gh.repository; omitted/null uses context. Malformed explicit values fail without fallback; no resolved target is input_error. Bootstrap requires an available authenticated gh CLI with repository access on github.com. Context is a default, not an authorization allowlist.",
+                "Outputs are repository, run_id, run_attempt, items, count and complete=true. Each item contains positive job_id, nullable check_run_id, and nullable name/status/conclusion/head_sha/url/started_at/completed_at. Present head_sha is a full hexadecimal SHA. Empty retrieval is items=[], count=0, complete=true, not successful CI.",
+                "check_run_id is extracted only from a validated official https://api.github.com/repos/OWNER/REPO/check-runs/ID API check_run_url matching repository, not from logs or display URLs. Missing/null link gives null identity; malformed or mismatched links fail. Correlate this ID with gh.pr.checks check-run item id, whose check_suite_id supplies the suite-to-run bridge.",
+                "Traverse attempt-scoped pages of 100 jobs, up to 100 pages, requiring stable total_count, exact page sizes, valid official API Link relations, unique job IDs and matching run/attempt per job. count equals len(items). Incomplete or inconsistent traversal fails rather than publishing partial success.",
+                "Invalid repository/run_id/attempt is input_error. API/transport, malformed response, identity, invalid link, changing totals, duplicate IDs, missing pages or page-bound failures are actions_jobs_unavailable with reason diagnostics and raw evidence. Shared bootstrap failures can precede operation execution.",
+            ],
+            "do_not_use_for": [
+                "Selecting the latest attempt implicitly, triggering, rerunning, cancelling, polling, downloading logs, choosing required jobs, or enforcing merge policy; this is read-only observation.",
+                "Treating complete as an atomic snapshot, CI success, immutable event-time data, or tested-SHA attestation. Cross-page and cross-probe observations are non-atomic and do not prove worker checkout.",
+            ],
+            "nearest_surfaces": [
+                {"handle": "connector.gh.actions.run", "summary": "Resolve a run or suite association and pin its observed run_attempt before reading jobs"},
+                {"handle": "connector.gh.pr.checks", "summary": "PR-attached status/check evidence, not an Actions job collection"},
+                {"handle": "connector.gh", "summary": "GitHub bootstrap and family operation boundaries"},
+            ],
+            "inspect_next": ["connector.gh.actions.run", "connector.gh.pr.checks", "connector.gh"],
+            "examples": [
+                {"reference": "gh.actions.run.jobs", "inputs": {"run_id": 123, "attempt": 2}},
+            ],
+        },
         ("gh", "pr.checks"): {
             "definition": "Probe one GitHub pull request head for normalized status contexts and check runs, or select a verified test-merge candidate. Paginated API-attached evidence preserves status fidelity and commit identity for workflow-owned CI acceptance policy.",
             "use_when": [
@@ -3200,6 +3318,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
                 "target defaults to head; target=test_merge requires verified candidate M with base B and head H. commit_sha identifies the checked API commit; head_sha remains H. Optional expected_head_sha binds the observation to H and rejects a mismatch without silently switching targets.",
                 "Inspect complete, statuses_complete, check_runs_complete, sha_evidence, and each check's name/context, app identity, SHA source, status, conclusion, and timestamps. Pending, failed, skipped, neutral, unknown, and empty evidence are not interchangeable with success; workflow policy must choose required checks and trusted producers explicitly.",
                 "Preserve the head from accepted CI evidence for gh.pr.merge.expected_head_sha. Checks on candidate M authorize expected H, not M; never substitute a freshly fetched head after CI acceptance.",
+                "Check-run items expose nullable check_suite_id from API check_suite.id; legacy commit statuses use null. Pass a known suite ID to gh.actions.run for direct GraphQL association lookup, then its run_id and run_attempt to gh.actions.run.jobs as run_id and explicit attempt. A validated null Actions association is found=false, not failed CI. Jobs' check_run_id comes from a validated official API URL and can correlate back to check-run item id; this bridge adds no tested-SHA or merge-policy claim.",
             ],
             "do_not_use_for": [
                 "Review decisions from humans; use connector.gh.pr.reviews when the workflow cares about approvals or change requests.",
@@ -3208,6 +3327,8 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             ],
             "nearest_surfaces": [
                 {"handle": "connector.gh.pr", "summary": "Parent PR snapshot that supplies the head SHA and mergeability context"},
+                {"handle": "connector.gh.actions.run", "summary": "Resolve a check-run item's check_suite_id into one Actions attempt"},
+                {"handle": "connector.gh.actions.run.jobs", "summary": "Complete job collection for that explicit run attempt"},
                 {"handle": "connector.gh.pr.reviews", "summary": "Sibling probe for human review decisions rather than machine status results"},
                 {"handle": "connector.gh.pr.timeline", "summary": "Sibling probe for lifecycle events that can explain why checks changed over time"},
                 {"handle": "connector.gh.pr.merge", "summary": "Submit using the head identity retained from accepted CI evidence"},
@@ -3216,7 +3337,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
             "examples": [
                 {"reference": "gh.pr.checks", "inputs": {"pull_number": 42}},
             ],
-            "inspect_next": ["connector.gh.pr.reviews", "connector.gh.pr.timeline", "connector.gh.pr", "connector.gh.pr.merge", "connector.gh.pr.merge.request"],
+            "inspect_next": ["connector.gh.actions.run", "connector.gh.actions.run.jobs", "connector.gh.pr.reviews", "connector.gh.pr.timeline", "connector.gh.pr", "connector.gh.pr.merge", "connector.gh.pr.merge.request"],
         },
         ("gh", "pr.merge"): {
             "definition": "Submit one direct asynchronous GitHub merge request for a standalone PR, bound to the head accepted by CI policy.",
@@ -4887,7 +5008,7 @@ def _build_model_node_lookup() -> dict[str, JSONObject]:
     }
 
     def add_node(name: str, *, contract: str, node_category: str, summary: str, metadata: JSONObject) -> None:
-        snippet_surface = _snippet_surface_for_handle(name)
+        snippet_surface = context.snippet_surface(name)
         effective_metadata = dict(metadata)
         overrides = model_node_overrides.get(name)
         if isinstance(overrides, dict):
@@ -5717,7 +5838,9 @@ def _build_workflow_rules_node_lookup() -> dict[str, JSONObject]:
     return lookup
 
 
-def _build_examples_node_lookup() -> dict[str, JSONObject]:
+def _build_examples_node_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     payload = describe_examples_catalog()
     lookup: dict[str, JSONObject] = {}
     for example in payload["examples"]:
@@ -5730,12 +5853,14 @@ def _build_examples_node_lookup() -> dict[str, JSONObject]:
             "name": handle,
             "summary": str(example.get("definition") or f"Verified example at {example['path']}"),
             "metadata": example,
-            **_snippet_surface_for_handle(handle),
+            **context.snippet_surface(handle),
         }
     return lookup
 
 
-def _build_command_line_node_lookup() -> dict[str, JSONObject]:
+def _build_command_line_node_lookup(*, context: _HelpResponseContext | None = None) -> dict[str, JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     payload = build_command_line_response()
     lookup: dict[str, JSONObject] = {}
 
@@ -5856,7 +5981,7 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
             "name": f"command-line.{command_name}",
             "summary": "Published command-line command metadata",
             "metadata": command,
-            **_snippet_surface_for_handle(f"command-line.{command_name}"),
+            **context.snippet_surface(f"command-line.{command_name}"),
         }
         for flag in command.get("flags", []):
             normalized = flag["name"].lstrip("-").replace("-", "_")
@@ -5913,7 +6038,9 @@ def _build_command_line_node_lookup() -> dict[str, JSONObject]:
     return lookup
 
 
-def _build_public_handle_reference(handle: str) -> JSONObject:
+def _build_public_handle_reference(handle: str, *, context: _HelpResponseContext | None = None) -> JSONObject:
+    if context is None:
+        context = _HelpResponseContext()
     topic = next((item for item in PUBLIC_TOPICS if item["name"] == handle), None)
     if topic is not None:
         return {
@@ -5923,12 +6050,14 @@ def _build_public_handle_reference(handle: str) -> JSONObject:
             "command": f"ordo-help {handle} --json",
         }
 
+    # All builders must succeed before resolving even an earlier match. Reuse
+    # their tables, but do not turn this tuple into a short-circuiting generator.
     for lookup, topic_name in (
-        (_build_workflow_rules_node_lookup(), "workflow-rules"),
-        (_build_examples_node_lookup(), "examples"),
-        (_build_model_node_lookup(), "model"),
-        (_build_command_line_node_lookup(), "command-line"),
-        (_build_capability_lookup(), "capabilities"),
+        (context.lookup("workflow-rules"), "workflow-rules"),
+        (context.lookup("examples"), "examples"),
+        (context.lookup("model"), "model"),
+        (context.lookup("command-line"), "command-line"),
+        (context.lookup("capabilities"), "capabilities"),
     ):
         node = lookup.get(handle)
         if node is None:
@@ -5944,9 +6073,13 @@ def _build_public_handle_reference(handle: str) -> JSONObject:
     return {"handle": handle, "kind": "unknown", "summary": "Unresolved public handle", "command": f"ordo-help describe {handle} --json"}
 
 
-def _build_workflow_rule_reference(rule_name: str, *, rule_lookup: dict[str, JSONObject]) -> JSONObject:
+def _build_workflow_rule_reference(
+    rule_name: str, *, rule_lookup: dict[str, JSONObject], context: _HelpResponseContext | None = None
+) -> JSONObject:
+    if context is None:
+        context = _HelpResponseContext()
     handle = f"workflow-rules.{rule_name}"
-    node = _build_workflow_rules_node_lookup().get(handle)
+    node = context.lookup("workflow-rules").get(handle)
     rule = rule_lookup.get(rule_name)
     summary = str(rule["rule"]) if isinstance(rule, dict) and isinstance(rule.get("rule"), str) else str(node["summary"]) if node is not None else rule_name
     return {
@@ -5957,9 +6090,13 @@ def _build_workflow_rule_reference(rule_name: str, *, rule_lookup: dict[str, JSO
     }
 
 
-def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject:
+def _build_example_reference(
+    handle: str, *, examples: JSONObject, context: _HelpResponseContext | None = None
+) -> JSONObject:
+    if context is None:
+        context = _HelpResponseContext()
     if handle.startswith("workflow-rules.example."):
-        node = _build_workflow_rules_node_lookup().get(handle)
+        node = context.lookup("workflow-rules").get(handle)
         if node is not None:
             return {
                 "name": str(node["metadata"]["name"]),
@@ -5968,7 +6105,7 @@ def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject
                 "command": f"ordo-help describe {handle} --json",
             }
 
-    node = _build_examples_node_lookup().get(handle)
+    node = context.lookup("examples").get(handle)
     if node is not None:
         return {
             "name": str(node["metadata"]["name"]),
@@ -5993,13 +6130,14 @@ def _build_example_reference(handle: str, *, examples: JSONObject) -> JSONObject
 def build_snippet_coverage_response() -> JSONObject:
     """Return snippet-coverage metadata for public describable handles."""
 
+    context = _HelpResponseContext()
     handles: list[JSONObject] = []
     lookup_groups = (
-        ("capabilities", _build_capability_lookup()),
-        ("model", _build_model_node_lookup()),
-        ("command-line", _build_command_line_node_lookup()),
-        ("workflow-rules", _build_workflow_rules_node_lookup()),
-        ("examples", _build_examples_node_lookup()),
+        ("capabilities", context.lookup("capabilities")),
+        ("model", context.lookup("model")),
+        ("command-line", context.lookup("command-line")),
+        ("workflow-rules", context.lookup("workflow-rules")),
+        ("examples", context.lookup("examples")),
     )
     seen_handles: set[str] = set()
     for topic_name, lookup in lookup_groups:
@@ -6037,6 +6175,7 @@ def build_snippet_coverage_response() -> JSONObject:
 def build_search_response(query: str) -> JSONObject:
     """Return search results across public topics and operation references."""
 
+    context = _HelpResponseContext()
     lowered_query = query.strip().lower()
     operation_results = []
     for connector in describe_operations()["connectors"]:
@@ -6103,7 +6242,7 @@ def build_search_response(query: str) -> JSONObject:
                 }
             )
 
-    for node_name, node in _build_model_node_lookup().items():
+    for node_name, node in context.lookup("model").items():
         searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
         if _query_matches(lowered_query, searchable):
             fact_results.append(
@@ -6116,7 +6255,7 @@ def build_search_response(query: str) -> JSONObject:
                 }
             )
 
-    for node_name, node in _build_command_line_node_lookup().items():
+    for node_name, node in context.lookup("command-line").items():
         searchable = f"{node_name} {json.dumps(node['metadata'], sort_keys=True)} {node['summary']}".lower()
         if _query_matches(lowered_query, searchable):
             fact_results.append(
@@ -6275,18 +6414,22 @@ def _resolve_example_topic_alias(topic: str) -> str | None:
     return None
 
 
-def _resolve_describe_topic_alias(topic: str) -> str:
+def _resolve_describe_topic_alias(topic: str, *, context: _HelpResponseContext | None = None) -> str:
+    if context is None:
+        context = _HelpResponseContext()
     example_alias = _resolve_example_topic_alias(topic)
     if example_alias is not None:
         return example_alias
     if topic.startswith("operation."):
         candidate = f"connector.{topic.removeprefix('operation.')}"
-        if candidate in _build_model_node_lookup():
+        if candidate in context.lookup("model"):
             return candidate
     return topic
 
 
-def _build_unknown_topic_suggestions(topic: str) -> list[JSONObject]:
+def _build_unknown_topic_suggestions(topic: str, *, context: _HelpResponseContext | None = None) -> list[JSONObject]:
+    if context is None:
+        context = _HelpResponseContext()
     suggestions: list[JSONObject] = []
     example_alias = _resolve_example_topic_alias(topic)
     if example_alias is not None:
@@ -6309,7 +6452,7 @@ def _build_unknown_topic_suggestions(topic: str) -> list[JSONObject]:
                 "reason": "Operation references are described with the dedicated operation command.",
             }
         )
-        if connector_topic in _build_model_node_lookup():
+        if connector_topic in context.lookup("model"):
             suggestions.append(
                 {
                     "kind": "connector_topic",
@@ -7370,7 +7513,7 @@ def _emit_unknown_operation(reference: str, *, as_json: bool) -> int:
     return 1
 
 
-def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
+def _emit_unknown_topic(topic: str, *, as_json: bool, context: _HelpResponseContext | None = None) -> int:
     """Emit a focused unknown-topic error."""
 
     payload = {
@@ -7380,7 +7523,7 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
         "message": f"Unsupported public topic or node '{topic}'",
         "supported_topics": list(DESCRIBABLE_TOPICS),
         "supported_node_kinds": ["capability", "negative_rule", "model_node", "workflow_rules_node", "example_node", "command_line_node"],
-        "suggestions": _build_unknown_topic_suggestions(topic),
+        "suggestions": _build_unknown_topic_suggestions(topic, context=context),
     }
     if as_json:
         json.dump(payload, sys.stdout, indent=2, sort_keys=True)
@@ -7393,9 +7536,11 @@ def _emit_unknown_topic(topic: str, *, as_json: bool) -> int:
     return 1
 
 
-def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
+def _resolve_public_topic(topic: str, *, context: _HelpResponseContext | None = None) -> tuple[JSONObject, object] | None:
     """Resolve one describable public topic to its payload and renderer."""
 
+    if context is None:
+        context = _HelpResponseContext()
     if topic == "overview":
         return build_overview_response(), render_overview_text
     if topic == "model":
@@ -7414,19 +7559,19 @@ def _resolve_public_topic(topic: str) -> tuple[JSONObject, object] | None:
         return describe_examples_catalog(), render_examples_text
     if topic == "snippet-coverage":
         return build_snippet_coverage_response(), render_snippet_coverage_text
-    capability_node = _build_capability_lookup().get(topic)
+    capability_node = context.lookup("capabilities").get(topic)
     if capability_node is not None:
         return capability_node, render_capability_node_text
-    model_node = _build_model_node_lookup().get(topic)
+    model_node = context.lookup("model").get(topic)
     if model_node is not None:
         return model_node, render_model_node_text
-    command_line_node = _build_command_line_node_lookup().get(topic)
+    command_line_node = context.lookup("command-line").get(topic)
     if command_line_node is not None:
         return command_line_node, render_command_line_node_text
-    workflow_rules_node = _build_workflow_rules_node_lookup().get(topic)
+    workflow_rules_node = context.lookup("workflow-rules").get(topic)
     if workflow_rules_node is not None:
         return workflow_rules_node, render_workflow_rules_node_text
-    example_node = _build_examples_node_lookup().get(topic)
+    example_node = context.lookup("examples").get(topic)
     if example_node is not None:
         return example_node, render_example_node_text
     return None
@@ -7516,10 +7661,11 @@ def main(argv: list[str] | None = None) -> int:
             return _emit_unknown_operation(parsed.reference, as_json=as_json)
         return _emit_payload(payload, as_json=as_json, renderer=render_operation_text)
     if parsed.command == "describe":
-        resolved_topic = _resolve_describe_topic_alias(parsed.topic)
-        resolved = _resolve_public_topic(resolved_topic)
+        context = _HelpResponseContext()
+        resolved_topic = _resolve_describe_topic_alias(parsed.topic, context=context)
+        resolved = _resolve_public_topic(resolved_topic, context=context)
         if resolved is None:
-            return _emit_unknown_topic(parsed.topic, as_json=as_json)
+            return _emit_unknown_topic(parsed.topic, as_json=as_json, context=context)
         payload, renderer = resolved
         return _emit_payload(payload, as_json=as_json, renderer=renderer)
     if parsed.command == "search":

@@ -12,7 +12,7 @@ from ordo.help_cli import main as help_main
 from ordo.model.help_snippets import describe_help_snippets
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.playbook import activate_playbook
-from ordo.runtime import execute_workflow, explain_workflow, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
+from ordo.runtime import execute_workflow, assess_workflow_readiness, load_profile_file, load_workflow_file, plan_workflow, validate_profile_text, validate_workflow_text
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -69,7 +69,7 @@ class ExampleSurfaceTest(unittest.TestCase):
     def test_blocked_example_teaches_blocked_before_execution(self) -> None:
         workflow = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
 
-        result = explain_workflow(
+        result = assess_workflow_readiness(
             workflow,
             guard_probe=lambda resolved, _workflow: OperationResult(status="ok", outputs={"value": "main"})
             if resolved.reference == "git.branch"
@@ -206,8 +206,8 @@ class ExampleSurfaceTest(unittest.TestCase):
                 _completed(returncode=0, stdout='[{"id":10,"body":"Please rename this","path":"src/ordo/help_cli.py","commit_id":"def456","original_commit_id":"abc123","line":12,"original_line":12,"side":"RIGHT","in_reply_to_id":null,"created_at":"2026-07-30T13:00:00Z","updated_at":"2026-07-30T13:00:00Z","html_url":"https://github.com/kergma-lw/ordo-cli/pull/42#discussion_r10","user":{"login":"reviewer"}}]', stderr=""),
                 _completed(returncode=0, stdout="authenticated\n", stderr=""),
                 _completed(returncode=0, stdout='{"number":42,"head":{"sha":"abc123"}}', stderr=""),
-                _completed(returncode=0, stdout='{"state":"success","statuses":[{"context":"lint","state":"success","target_url":"https://example.test/lint"}]}', stderr=""),
-                _completed(returncode=0, stdout='{"total_count":1,"check_runs":[{"name":"unit","status":"completed","conclusion":"success","html_url":"https://example.test/unit"}]}', stderr=""),
+                _completed(returncode=0, stdout='[{"state":"success","sha":"abc123","total_count":1,"statuses":[{"id":101,"context":"lint","state":"success","target_url":"https://example.test/lint"}]}]', stderr=""),
+                _completed(returncode=0, stdout='[{"total_count":1,"check_runs":[{"id":201,"name":"unit","head_sha":"abc123","status":"completed","conclusion":"success","html_url":"https://example.test/unit"}]}]', stderr=""),
                 _completed(returncode=0, stdout="authenticated\n", stderr=""),
                 _completed(returncode=0, stdout='{"number":42,"state":"open"}', stderr=""),
                 _completed(returncode=0, stdout='[{"event":"ready_for_review","created_at":"2026-07-30T10:00:00Z","actor":{"login":"kergma-lw"}}]', stderr=""),

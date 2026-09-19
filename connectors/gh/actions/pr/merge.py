@@ -10,6 +10,7 @@ from __future__ import annotations
 from connectors.gh._merge_api import MERGE_OUTPUTS, full_sha, merge_api, merge_failure, response_outputs, valid_async_payload
 from connectors.gh._pull_identity import PULL_IDENTITY_INPUTS, resolve_pull_identity
 from connectors.gh._pr_stack import normalize_pr_stack, valid_pr_identity
+from connectors.gh._pr_commit_evidence import observe_pr_commit
 from ordo.plugin_sdk import OperationContext, OperationOutcome, action, ok, preflight_observation
 
 
@@ -51,9 +52,15 @@ def run(ctx: OperationContext) -> OperationOutcome:
         return merge_failure(ctx, "merge_scope_unknown", "PR response identity is missing or does not match the requested PR", outputs=preliminary, raw=before.raw)
     # Already-merged is safe to report without interpreting stack membership or
     # comparing the requested head: this path never submits a mutation.
-    if payload.get("merged") is True and payload.get("state") == "closed" and full_sha(payload.get("merge_commit_sha")):
-        preliminary.update(submission="already_merged", state="merged", merged=True, merge_sha=payload["merge_commit_sha"])
-        return ok(summary="Pull request is already merged", outputs=preliminary, raw=before.raw)
+    if payload.get("merged") is True:
+        evidence = observe_pr_commit(ctx, identity=identity, payload=payload)
+        raw = {**before.raw, "merge_commit": {"state": evidence.state, "reason": evidence.reason, "graphql": evidence.raw}}
+        if evidence.sha is None:
+            if evidence.reason == "api_unavailable":
+                return merge_failure(ctx, "merge_api_failed", "Reading completed merge commit evidence failed; no merge was submitted", outputs=preliminary, raw=raw)
+            return merge_failure(ctx, "merge_scope_unknown", "Completed merge commit evidence is unavailable or does not match the PR snapshot; no merge was submitted", outputs=preliminary, raw=raw)
+        preliminary.update(submission="already_merged", state="merged", merged=True, merge_sha=evidence.sha)
+        return ok(summary="Pull request is already merged", outputs=preliminary, raw=raw)
     scope = normalize_pr_stack(payload)
     preliminary["stack_scope"] = scope
     if scope == "stacked":

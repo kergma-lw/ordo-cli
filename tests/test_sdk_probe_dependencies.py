@@ -204,7 +204,7 @@ def test_dependency_reads_across_modes_do_not_execute_actions(family, mode, tmp_
     from ordo.model.connector import ConnectorRegistry
     from ordo.model.runtime import RuntimeStatus
     from ordo.model.workflow import Step
-    from ordo.runtime import check_workflow, review_workflow, plan_workflow, execute_workflow, explain_workflow
+    from ordo.runtime import check_workflow, review_workflow, plan_workflow, execute_workflow, assess_workflow_readiness
     from ordo.runtime.providers import ConnectorProvider
 
     mutation = Mock(return_value=ok())
@@ -228,11 +228,11 @@ def test_dependency_reads_across_modes_do_not_execute_actions(family, mode, tmp_
               patch("ordo.cli.list_playbook_workflows", return_value=(entry,)),
               patch("ordo.cli.inspect_playbook_workflow", return_value=entry),
               patch("ordo.cli.activate_playbook", return_value=activated),
-              patch("ordo.cli.explain_workflow", side_effect=lambda workflow, **kw: explain_workflow(workflow, connector_provider=provider, **kw))):
+              patch("ordo.cli.assess_workflow_readiness", side_effect=lambda workflow, **kw: assess_workflow_readiness(workflow, connector_provider=provider, **kw))):
             assert main() == 0
         assert json.loads(capsys.readouterr().out)["best_candidate"]["allowed"] is True
     else:
-        result = dict(check=check_workflow, review=review_workflow, plan=plan_workflow, run=execute_workflow, explain=explain_workflow)[mode](workflow, connector_provider=provider)
+        result = dict(check=check_workflow, review=review_workflow, plan=plan_workflow, run=execute_workflow, explain=assess_workflow_readiness)[mode](workflow, connector_provider=provider)
         assert result.status == RuntimeStatus.OK
     assert f.lookups and set(f.lookups) == {"pr.list"}
     assert mutation.call_count == (1 if mode == "run" else 0)

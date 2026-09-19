@@ -31,9 +31,26 @@ class IntrospectionGoldenOutputTest(unittest.TestCase):
         )
         actual_operations = {operation["name"]: operation for operation in actual_gh["operations"]}
         expected_operations = {operation["name"]: operation for operation in expected_gh["operations"]}
-        for name in ("pr", "pr.checks", "pr.create", "pr.list", "pr.merge", "pr.merge.request"):
+        for name in (
+            "actions.run", "actions.run.jobs",
+            "pr", "pr.checks", "pr.create", "pr.list", "pr.merge", "pr.merge.request",
+        ):
             with self.subTest(operation=name):
                 self.assertEqual(actual_operations[name], expected_operations[name])
+
+        actual_git = next(
+            connector for connector in actual["sections"]["operations"]["connectors"]
+            if connector["namespace"] == "git"
+        )
+        expected_git = next(
+            connector for connector in expected["sections"]["operations"]["connectors"]
+            if connector["namespace"] == "git"
+        )
+        actual_git_operations = {operation["name"]: operation for operation in actual_git["operations"]}
+        expected_git_operations = {operation["name"]: operation for operation in expected_git["operations"]}
+        for name in ("remote",):
+            with self.subTest(operation=f"git.{name}"):
+                self.assertEqual(actual_git_operations[name], expected_git_operations[name])
 
 
 if __name__ == "__main__":

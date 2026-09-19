@@ -6,7 +6,7 @@ import pytest
 
 from ordo.model.diagnostic import Diagnostic, attribute_state_missing_diagnostics, group_state_missing_diagnostics
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, load_workflow_file, load_workflow_text, plan_workflow, review_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, load_workflow_file, load_workflow_text, plan_workflow, review_workflow
 from ordo.runtime.local_expression_engine import core
 from ordo.runtime.nexting import build_next_candidate
 from ordo.runtime.value_resolution import ValueResolutionError, resolve_runtime_value
@@ -40,7 +40,7 @@ REPEATED = '''  - guards:
 '''
 
 
-@pytest.mark.parametrize("evaluate", [check_workflow, review_workflow, plan_workflow, explain_workflow, execute_workflow])
+@pytest.mark.parametrize("evaluate", [check_workflow, review_workflow, plan_workflow, assess_workflow_readiness, execute_workflow])
 def test_repeated_let_guards_and_value_are_grouped_across_modes(tmp_path, evaluate):
     workflow = make_workflow(tmp_path, REPEATED)
     with patch.object(core, "read_state_document", wraps=core.read_state_document) as reads:
@@ -66,7 +66,7 @@ def test_repeated_let_guards_and_value_are_grouped_across_modes(tmp_path, evalua
 
 
 def test_next_grouping_is_candidate_local(tmp_path):
-    result = explain_workflow(make_workflow(tmp_path, REPEATED), connector_provider=STANDARD_CONNECTOR_PROVIDER)
+    result = assess_workflow_readiness(make_workflow(tmp_path, REPEATED), connector_provider=STANDARD_CONNECTOR_PROVIDER)
     candidates = [build_next_candidate(
         workflow=name, description=None, workflow_category=None, when=None,
         working_directory=None, runtime_result=result,

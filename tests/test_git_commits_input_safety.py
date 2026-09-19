@@ -10,7 +10,7 @@ from ordo.connectors.operations import evaluate_probe
 from ordo.connectors.registry import get_public_connector_registry
 from ordo.model.runtime import RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow, review_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, plan_workflow, review_workflow
 from ordo.runtime.resolution import ResolvedOperation
 from tests.support import STANDARD_CONNECTOR_PROVIDER
 
@@ -69,7 +69,7 @@ def test_invalid_revision_is_rejected_by_real_probe_dispatch(rev, bootstrap_only
 
 
 @pytest.mark.parametrize("layout", ("guard", "preflight"))
-@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, explain_workflow, execute_workflow), ids=("check", "review", "plan", "explain", "run"))
+@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, assess_workflow_readiness, execute_workflow), ids=("check", "review", "plan", "explain", "run"))
 def test_invalid_revision_blocks_runtime_modes(layout, mode, bootstrap_only):
     result = mode(commits_workflow(OPTION_REVISION, layout), connector_provider=STANDARD_CONNECTOR_PROVIDER)
     verdict = result.outputs["check_snapshot"] if mode is review_workflow else result.outputs
@@ -94,12 +94,12 @@ def test_invalid_revision_blocks_runtime_modes(layout, mode, bootstrap_only):
         assert tree.preflight_step_items[1]["name"] == "must-not-run"
         assert tree.preflight_step_items[1]["status"] == "pending"
         assert [item["status"] for item in tree.block_items] == ["preflight_halted", "pending", "blocked"]
-        if mode in (plan_workflow, explain_workflow):
+        if mode in (plan_workflow, assess_workflow_readiness):
             assert result.outputs["execution_allowed"] is False
             frontier = result.outputs["ready_to_run_frontier"]
             assert frontier["allowed_state"] == "unknown"
             assert frontier["prepared_node_ids"] == []
-        if mode is explain_workflow:
+        if mode is assess_workflow_readiness:
             assert result.outputs["explanation"]["allowed"] is False
             assert result.outputs["explanation"]["category"] == "preflight_step"
             assert result.outputs["explanation"]["blockers"] == ["commits"]
@@ -134,7 +134,7 @@ def test_invalid_revision_in_ordinary_run_step(bootstrap_only):
     assert bootstrap_only.called
 
 
-@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, explain_workflow), ids=("check", "review", "plan", "explain"))
+@pytest.mark.parametrize("mode", (check_workflow, review_workflow, plan_workflow, assess_workflow_readiness), ids=("check", "review", "plan", "explain"))
 def test_ordinary_steps_remain_static_outside_run(mode, bootstrap_only):
     result = mode(commits_workflow(OPTION_REVISION, "ordinary"), connector_provider=STANDARD_CONNECTOR_PROVIDER)
 

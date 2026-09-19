@@ -57,6 +57,58 @@ def verify_help_snippet(
     if overrides:
         effective_world = _deep_merge(effective_world, overrides)
 
+    if world in {"git-remote-exists", "git-remote-missing"}:
+        from ordo.model.help_snippets import _git_remote_workflow
+        from .executing import execute_workflow
+
+        if (insertion_mode != "workflow_fragment" or target != "connector.git.remote"
+                or snippet != _git_remote_workflow()):
+            raise ValueError("Fixture execution accepts only the exact published git.remote workflow")
+        workflow = load_workflow_text(snippet, source=f"snippet-execution:{world}")
+        inputs = effective_world["inputs"]
+        if not isinstance(inputs, dict) or set(inputs) != set(workflow.declared_inputs):
+            raise ValueError("Remote fixture inputs must match declared workflow inputs")
+        workflow = replace(workflow, inputs=deepcopy(inputs), explicit_input_keys=tuple(inputs))
+        report = validate_workflow_semantics(workflow)
+        if report.status != RuntimeStatus.OK:
+            raise ValueError("Published git.remote workflow failed semantic validation")
+        if set(effective_world["probes"]) != {"git.remote"}:
+            raise ValueError("Remote execution requires exactly the git.remote fixture")
+        calls = []
+        provider = normalized_fixture_provider(
+            effective_world, references={"git.remote"}, calls=calls, call_budget=12, strict_nulls=True,
+        )
+        result = execute_workflow(workflow, connector_provider=provider)
+        return HelpSnippetRunnerResult(
+            world_name=world, insertion_mode=insertion_mode, target=target,
+            workflow_text=snippet, effective_world=effective_world, status=result.status.value,
+            verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
+        )
+
+    if world in {"gh-actions-direct", "gh-actions-bridge", "gh-actions-null-suite", "gh-actions-no-run"}:
+        from ordo.model.help_snippets import GH_ACTIONS_TARGETS, _gh_actions_workflow
+        from .executing import execute_workflow
+
+        if (insertion_mode != "workflow_fragment" or target not in GH_ACTIONS_TARGETS
+                or snippet != _gh_actions_workflow(bridge=world != "gh-actions-direct")):
+            raise ValueError("Fixture execution accepts only the exact published Actions workflow")
+        workflow = load_workflow_text(snippet, source=f"snippet-execution:{world}")
+        inputs = effective_world["inputs"]
+        if not isinstance(inputs, dict) or set(inputs) != set(workflow.declared_inputs):
+            raise ValueError("Actions fixture inputs must match declared workflow inputs")
+        workflow = replace(workflow, inputs=deepcopy(inputs), explicit_input_keys=tuple(inputs))
+        calls = []
+        provider = normalized_fixture_provider(
+            effective_world, references={"gh.pr.checks", "gh.actions.run", "gh.actions.run.jobs"},
+            calls=calls, call_budget=20,
+        )
+        result = execute_workflow(workflow, connector_provider=provider)
+        return HelpSnippetRunnerResult(
+            world_name=world, insertion_mode=insertion_mode, target=target,
+            workflow_text=snippet, effective_world=effective_world, status=result.status.value,
+            verification_path="fixture_execution", runtime_result=result, calls=tuple(calls),
+        )
+
     if world == "gh-sdk-probe-call" or insertion_mode == "sdk_probe_fragment":
         from .help_sdk_snippet_runner import execute_sdk_probe_fragment
 
@@ -194,6 +246,93 @@ def verify_help_snippet(
         workflow_text=workflow_text,
         effective_world=effective_world,
         status=status,
+    )
+
+
+def _validate_normalized_fields(value, schema, *, path, strict_nulls=False):
+    """Validate fixture types; legacy worlds permit implicit scalar nulls."""
+    if isinstance(schema, str) and " | " in schema:
+        variants = schema.split(" | ")
+        if value is None and "null" in variants:
+            return
+        for variant in variants:
+            if variant == "null":
+                continue
+            try:
+                _validate_normalized_fields(value, variant, path=path, strict_nulls=True)
+                return
+            except ValueError:
+                pass
+        raise ValueError(f"Normalized fixture type differs at {path}")
+    if isinstance(schema, dict):
+        if not isinstance(value, dict) or set(value) != set(schema):
+            raise ValueError(f"Normalized fixture fields differ at {path}")
+        for key, child in schema.items():
+            _validate_normalized_fields(value[key], child, path=f"{path}.{key}", strict_nulls=strict_nulls)
+    elif isinstance(schema, list):
+        if not isinstance(value, list) or len(schema) != 1:
+            raise ValueError(f"Normalized fixture collection differs at {path}")
+        for child in value:
+            _validate_normalized_fields(child, schema[0], path=f"{path}[]", strict_nulls=strict_nulls)
+    elif value is not None or strict_nulls:
+        types = {"string": str, "integer": int, "boolean": bool, "object": dict, "number": (int, float)}
+        expected = types.get(schema)
+        if expected is None or (type(value) not in expected if isinstance(expected, tuple) else type(value) is not expected):
+            raise ValueError(f"Normalized fixture type differs at {path}")
+
+
+def normalized_fixture_provider(world, *, references, calls, call_budget, strict_nulls=False):
+    """Reusable read-only public-operation fixtures; no default/live dispatch.
+
+    This validates normalized fields and exact resolved bindings, not transport
+    acquisition or workflow policy. The caller owns canonical source admission.
+    """
+    from ordo.connectors.registry import get_public_connector_registry
+    from .providers import ConnectorProvider
+    from .resolution import ResolvedOperation
+    from .value_resolution import resolve_runtime_value
+
+    registry = get_public_connector_registry()
+    if world.get("actions") or set(world["probes"]) - references:
+        raise ValueError("Only allowlisted normalized probe fixtures are supported")
+    for reference, fixtures in world["probes"].items():
+        contract = registry.get_operation(reference)
+        if contract is None or contract.kind != "probe" or len(fixtures) != 1:
+            raise ValueError(f"Expected one public probe fixture for {reference}")
+        fixture = fixtures[0]
+        if set(fixture) - {"with_", "outputs", "status"} or not {"with_", "outputs"} <= set(fixture):
+            raise ValueError(f"Unexpected fixture fields for {reference}")
+        if not isinstance(fixture["with_"], dict) or set(fixture["with_"]) - set(contract.inputs):
+            raise ValueError(f"Unexpected fixture inputs for {reference}")
+        for key, value in fixture["with_"].items():
+            _validate_normalized_fields(value, contract.inputs[key], path=f"{reference}.with.{key}", strict_nulls=strict_nulls)
+        status = fixture.get("status", "ok")
+        if status == "ok":
+            _validate_normalized_fields(fixture["outputs"], contract.outputs, path=reference, strict_nulls=strict_nulls)
+        elif status not in contract.failure_modes or fixture["outputs"] != {}:
+            raise ValueError(f"Unsupported failure fixture for {reference}")
+
+    def invoke(resolved, workflow, *, phase):
+        if len(calls) >= call_budget:
+            raise ValueError("Normalized snippet exceeded its fixture call budget")
+        if not isinstance(resolved, ResolvedOperation) or resolved.reference not in references:
+            raise ValueError("Only allowlisted materialized probes can use normalized fixtures")
+        fixtures = world["probes"].get(resolved.reference, [])
+        if len(fixtures) != 1:
+            raise ValueError(f"Missing normalized fixture for {resolved.reference}")
+        fixture = fixtures[0]
+        inputs = resolved.resolved_inputs
+        if inputs is None:
+            inputs = resolve_runtime_value(resolved.declared_with, workflow)
+        if json.dumps(inputs, sort_keys=True) != json.dumps(fixture["with_"], sort_keys=True):
+            raise ValueError(f"Resolved fixture inputs differ for {resolved.reference}: {inputs!r}")
+        calls.append({"reference": resolved.reference, "phase": phase, "inputs": deepcopy(inputs)})
+        return OperationResult(status=fixture.get("status", "ok"), outputs=deepcopy(fixture["outputs"]))
+
+    return ConnectorProvider(
+        registry=registry,
+        guard_probe=lambda resolved, workflow: invoke(resolved, workflow, phase="probe"),
+        step_executor=lambda resolved, workflow: invoke(resolved, workflow, phase="execute"),
     )
 
 

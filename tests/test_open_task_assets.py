@@ -93,14 +93,6 @@ class OpenTaskAssetTest(unittest.TestCase):
 
             self.assertEqual(report.status, RuntimeStatus.OK, name)
 
-    def test_bundled_ordo_workflows_load_with_fragment_assets(self) -> None:
-        for name in ("set-active-task.yml", "close-task.yml"):
-            path = ROOT / ".ordo" / "workflows" / name
-
-            workflow = load_workflow_file(path)
-
-            self.assertTrue(workflow.blocks, name)
-
     def test_native_asset_structure_and_trusted_hook(self):
         document = yaml.safe_load(EXAMPLE.read_text())
         steps = [step for block in document["blocks"] for step in block.get("steps", [])]

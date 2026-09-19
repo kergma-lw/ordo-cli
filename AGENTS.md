@@ -124,34 +124,6 @@
 
 ## GitHub and project operations
 
-### Task and Bug lifecycle
-
-- See `docs/task-lifecycle.md` for submission, uncertainty, and cleanup contracts.
-- Use the ordered `task-lifecycle` workflows: `create-task`, `task-to-ready`,
-  `set-active-task`, `task-to-review`, `merge-task`, `close-task`, `cancel-task`.
-- `task-to-ready` takes an explicit issue number. `set-active-task` prepares or
-  resumes the branch and moves Ready tasks to In progress.
-- Prepare commits explicitly before `task-to-review`. The existing
-  `routine.review.render-open-diff` is an approved exception for local review
-  before PR creation; there is no structured local patch renderer yet.
-- `merge-task` owns PR discovery/creation and merge submission. Only `ship=true`
-  authorizes a new submission. CI must include successful `Python 3.12` evidence
-  from app 15368 on the verified test-merge candidate pinned to head and base.
-- Pending CI and pending/enqueued merge requests require a later observation.
-  Acceptance of an asynchronous request does not establish PR completion.
-- Ignored `.ordo.json` stores repository-keyed issue, branch, PR and request
-  identifiers. `merge_attempted` records local submission intent before the
-  external call; it is not a cached GitHub status. A missing UUID after an attempt
-  requires reconciliation, never blind resubmission or cancellation.
-- `close-task` requires actual remote merge, closes the issue, marks Done,
-  fast-forwards local main, and then deletes the local branch. It never pushes
-  main. Cleanup failure retains context; Git may refuse branch deletion after a
-  squash/rebase merge. Reconcile that branch before retrying finalization.
-- `cancel-task` requires an English reason comment and uses ordinary issue close.
-  Outstanding or uncertain merge requests block cancellation. Cancellation keeps
-  local context and work for recovery.
-- Story workflows and their shared includes remain separate from this lifecycle.
-
 - Prefer the corresponding `ordo-playbook` workflow for GitHub and project operations.
 - GitHub writing rule: issue titles, bodies, comments, labels, and project field values must be in English only.
 - Keep API responses lean: request only the fields needed for the decision.

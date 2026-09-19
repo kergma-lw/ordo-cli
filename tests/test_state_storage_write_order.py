@@ -9,7 +9,7 @@ from ordo.model.profile import Profile
 from ordo.model.runtime import RuntimeStatus
 from ordo.playbook import PlaybookError, activate_playbook
 from ordo.runtime import (
-    check_workflow, execute_workflow, explain_workflow, load_workflow_text,
+    check_workflow, execute_workflow, assess_workflow_readiness, load_workflow_text,
     plan_workflow, review_workflow, validate_workflow_semantics, validate_workflow_text,
 )
 from ordo.runtime.nexting import build_next_candidate
@@ -18,7 +18,7 @@ from tests.test_state_role_write_order import workflow_text
 
 
 CODE = "validation.workflow.state_storage.write_before_last_read"
-MODES = (check_workflow, review_workflow, plan_workflow, explain_workflow, execute_workflow)
+MODES = (check_workflow, review_workflow, plan_workflow, assess_workflow_readiness, execute_workflow)
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -74,7 +74,7 @@ def test_modes_reject_before_observation_or_effects(tmp_path, mode, mutation, bi
         assert diagnostic.details["state"] == "store"
         assert diagnostic.details["read_state"] == bindings["other"]
         assert diagnostic.details["storage_path"] == str(state_path)
-    if mode is explain_workflow:
+    if mode is assess_workflow_readiness:
         with patch("ordo.runtime.resolution.get_default_connector_provider", return_value=STANDARD_CONNECTOR_PROVIDER), patch(
             "ordo.runtime.checking.check_workflow", side_effect=AssertionError("next must not repeat analysis")
         ):

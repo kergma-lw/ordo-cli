@@ -65,8 +65,9 @@ class OrdoHelpCliTest(unittest.TestCase):
             with self.subTest(stale_promise=stale_promise):
                 self.assertNotIn(stale_promise, guidance)
         show = next(item for item in command["discovery_commands"] if item["name"] == "workflows show <workflow>")
-        self.assertIn("plain inputs expose the main caller interface", show["summary"])
-        self.assertIn("--json retains the full declaration contract", show["summary"])
+        self.assertIn("plain inputs expose caller slots", show["summary"])
+        self.assertIn("top-level warnings only for required declarations missing source coverage", show["summary"])
+        self.assertIn("--json retains the unchanged full declaration contract", show["summary"])
 
     def test_workflow_show_input_contract_discovery_parity(self) -> None:
         for args in (("command-line",), ("describe", "command-line.ordo-playbook")):
@@ -125,8 +126,12 @@ class OrdoHelpCliTest(unittest.TestCase):
                     "other record fields are preserved except required",
                     "true for a required slot, false for an optional slot",
                     "not workflow declaration requiredness", "No optional field is added",
-                    "original normalized required", "original required and caller_slot",
-                    "Plain show omits top-level launch_profile and input caller_slot/sources/coverage",
+                    "original normalized required and caller_slot" if handle == "playbook.workflows"
+                    else "original normalized required, caller_slot",
+                    "omits top-level launch_profile and input caller_slot/sources/coverage",
+                    "discovery.workflow.input_source_missing",
+                    "Optional missing declarations do not warn",
+                    "warnings is omitted when none qualify",
                     "initial activation name and source, not the final bound workflow profile",
                     "--json retains the unchanged full declaration contract" if handle != "workflow.inputs"
                     else "Use --json for the unchanged full declaration contract",
@@ -1358,7 +1363,11 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 56)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 70)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 74)
+        self.assertEqual(handles["connector.git.remote"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.gh.actions.run"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.gh.actions.run.jobs"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.authoring"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.pr.create"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.pr.list"]["snippet_coverage"], "runner_verified")
@@ -2079,7 +2088,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         pr_timeline = self.run_help("describe", "connector.gh.pr.timeline")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("Published GitHub connector family for typed repository, issue, pull-request, and project operations", gh_family.stdout)
+        self.assertIn("Published GitHub connector family for typed repository, issue, pull-request, Actions run, and project operations", gh_family.stdout)
         self.assertIn("connector.gh.pr", gh_family.stdout)
         self.assertIn("gh.pr(pull_number=42)", gh_family.stdout)
 
@@ -2142,7 +2151,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         sync = self.run_help("describe", "connector.gh.repo.sync")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("typed repository, issue, pull-request, and project operations", gh_family.stdout)
+        self.assertIn("typed repository, issue, pull-request, Actions run, and project operations", gh_family.stdout)
         self.assertIn("connector.gh.repo", gh_family.stdout)
         self.assertIn("connector_contexts.gh.repository", gh_family.stdout)
         self.assertIn("review warns when an explicit repository overrides that default", gh_family.stdout)

@@ -123,40 +123,69 @@ def test_static_graph_never_evaluates_probe_keys_or_values(monkeypatch):
     assert payload["links"][0]["address_identity"] == "possible"
 
 
-def test_project_graph_does_not_read_state_or_activate(monkeypatch):
+def test_project_graph_does_not_read_state_or_activate(monkeypatch, tmp_path):
     import ordo.playbook as playbook
     import ordo.runtime.state as state
+    from ordo.runtime.graphing import render_static_graph
+
+    for name, steps in {
+        "writer": "      - name: write\n        state_set:\n          state.s['sample'].value: true\n",
+        "reader": "      - name: read\n        value: state.s['sample'].value\n",
+        "eraser": "      - name: delete\n        state_delete: state.s['sample'].value\n",
+    }.items():
+        (tmp_path / f"{name}.yaml").write_text(
+            f"version: 0\nworkflow: {name}\nstate_needs:\n  s: {{}}\n"
+            f"blocks:\n  - steps:\n{steps}", encoding="utf-8",
+        )
+    path = tmp_path / "ordo.yaml"
+    path.write_text('''version: 1
+states:
+  memory:
+    path: state.json
+workflows:
+  writer:
+    file: ./writer.yaml
+    state_bindings:
+      s: memory
+  reader:
+    file: ./reader.yaml
+    state_bindings:
+      s: memory
+  eraser:
+    file: ./eraser.yaml
+    state_bindings:
+      s: memory
+''', encoding="utf-8")
+
     def forbidden(*args, **kwargs):
         raise AssertionError("graph cannot activate or read state")
     monkeypatch.setattr(playbook, "activate_playbook", forbidden)
     monkeypatch.setattr(state, "read_state_document", forbidden)
-    payload = playbook.build_playbook_static_graph(playbook_path=Path(__file__).parents[1] / ".ordo/ordo.yaml")
-    assert any({"set-active-task", "merge-task", "close-task"} <= set(c) for c in payload["components"])
-    assert any(link["from_workflow"] == "set-active-task" and link["address_identity"] == "proven" for link in payload["links"])
-    from ordo.runtime.graphing import render_static_graph
+    payload = playbook.build_playbook_static_graph(playbook_path=path)
+    assert not (tmp_path / "state.json").exists()
+    assert payload["activity"] == {"status": "not_requested"}
+    assert payload["components"] == [["eraser", "reader", "writer"]]
+    assert {
+        (link["from_workflow"], link["to_workflow"], link["kind"], link["address_identity"])
+        for link in payload["links"]
+    } == {
+        ("writer", "reader", "handoff", "proven"),
+        ("eraser", "reader", "invalidation", "proven"),
+    }
+    assert all(link["execution"] == "possible" for link in payload["links"])
     text = render_static_graph(payload)
-    for name in ("task-to-review", "current-task-context"):
-        assert _summary_user(payload, name)["placement"]["kind"] == "single_source"
-        assert "── " + name in text
-    assert "├── merge-task (" in text
-    assert "│   └── close-task (−context) [also reads from: set-active-task]" in text
-    cancel = _summary_user(payload, "cancel-task")
-    assert cancel["placement"]["kind"] == "join"
-    assert len(cancel["dependencies"]) == 5
-    assert len(cancel["placement"]["conditional_sources"]) == 2
-    assert text.index("├── merge-task (") < text.index("│   ├── cancel-task") < text.index("│   └── close-task (")
-    assert "set-active-task (+issue_number, +branch)\n├── task-to-review [reads from: set-active-task?]" in text
-    assert "│   ├── cancel-task [also reads from: set-active-task; reads from: merge-task?]" in text
-    assert "merge-task (+pull_number?, +merge_attempted?, +merge_request_id?)" in text
-    assert "close-task (−context)" in text
+    assert "Shared context: writers → readers, not execution order." in text
+    assert "writer (+value)\n├── reader\n└── eraser (−value)" in text
+    assert _summary_user(payload, "reader")["placement"]["kind"] == "single_source"
 
 
-def test_graph_cli_is_independent_of_next(monkeypatch, capsys):
+def test_graph_cli_is_independent_of_next_and_readiness(monkeypatch, capsys):
     import ordo.cli as cli
     import ordo.playbook as playbook
     def forbidden(*args, **kwargs):
-        raise AssertionError("graph must not call next")
+        raise AssertionError("graph must not call next or assess readiness")
     monkeypatch.setattr(cli, "_build_next_payload", forbidden)
+    monkeypatch.setattr(cli, "assess_workflow_readiness", forbidden)
     monkeypatch.setattr(playbook, "build_playbook_static_graph", lambda **kwargs: graph(workflow("a", read())))
     monkeypatch.setattr("sys.argv", ["ordo-playbook", "--json", "graph"])
     assert cli.main() == 0

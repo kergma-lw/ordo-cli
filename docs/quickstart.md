@@ -159,6 +159,10 @@ Use `plan` when you want to know:
 
 ## 7. Run `explain`
 
+The Python API is `assess_workflow_readiness`, available from `ordo` and
+`ordo.runtime`. The old Python name `explain_workflow` has been removed without a
+compatibility alias. The CLI mode `explain` and result mode `Mode.EXPLAIN` are unchanged.
+
 Blocked example:
 
 `examples/blocked-main-branch.yaml`
@@ -166,7 +170,7 @@ Blocked example:
 ```bash
 PYTHONPATH=src .venv/bin/python - <<'PY'
 from pathlib import Path
-from ordo import explain_workflow, load_workflow_file
+from ordo import assess_workflow_readiness, load_workflow_file
 from ordo.model.runtime import OperationResult
 
 workflow = load_workflow_file(Path("examples/blocked-main-branch.yaml"))
@@ -176,7 +180,7 @@ def probe(resolved_guard, _workflow):
         return OperationResult(status="ok", observations={"value": "main"})
     return OperationResult(status="ok")
 
-result = explain_workflow(
+result = assess_workflow_readiness(
     workflow,
     guard_probe=probe,
 )

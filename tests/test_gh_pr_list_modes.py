@@ -14,7 +14,7 @@ from ordo.model.diagnostic import Diagnostic
 from ordo.model.runtime import OperationResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from ordo.plugin_sdk import OperationContext, bootstrap_ok
-from ordo.runtime import check_workflow, execute_workflow, explain_workflow, plan_workflow, review_workflow
+from ordo.runtime import check_workflow, execute_workflow, assess_workflow_readiness, plan_workflow, review_workflow
 from ordo.runtime.providers import ConnectorProvider
 from ordo.runtime.resolution import ResolvedExpressionProbe
 from ordo.runtime.value_resolution import resolve_runtime_value
@@ -120,7 +120,7 @@ def list_workflow(*, guard=LISTED_ITEMS, gate=None, inputs=None):
 def invoke(mode, workflow, fixture, tmp_path, capsys):
     if mode != "next":
         function = dict(check=check_workflow, review=review_workflow, plan=plan_workflow,
-                        run=execute_workflow, explain=explain_workflow)[mode]
+                        run=execute_workflow, explain=assess_workflow_readiness)[mode]
         return function(workflow, connector_provider=fixture.provider), None
 
     entry = SimpleNamespace(
@@ -133,7 +133,7 @@ def invoke(mode, workflow, fixture, tmp_path, capsys):
     results = []
 
     def explain(actual_workflow, **kwargs):
-        result = explain_workflow(actual_workflow, connector_provider=fixture.provider, **kwargs)
+        result = assess_workflow_readiness(actual_workflow, connector_provider=fixture.provider, **kwargs)
         results.append(result)
         return result
 
@@ -142,7 +142,7 @@ def invoke(mode, workflow, fixture, tmp_path, capsys):
         patch("ordo.cli.list_playbook_workflows", return_value=(entry,)),
         patch("ordo.cli.inspect_playbook_workflow", return_value=entry),
         patch("ordo.cli.activate_playbook", return_value=activated),
-        patch("ordo.cli.explain_workflow", side_effect=explain) as explained,
+        patch("ordo.cli.assess_workflow_readiness", side_effect=explain) as explained,
     ):
         assert cli_main() == 0
     captured = capsys.readouterr()

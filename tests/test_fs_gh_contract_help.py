@@ -53,7 +53,8 @@ def test_family_examples_reuse_whole_source_and_existing_leaf_verification(famil
     registry = describe_help_snippets()
     payload = capture_describe(family, True)
     text = capture_describe(family)
-    example, = payload["canonical_examples"]
+    example, = [item for item in payload["canonical_examples"]
+                if item["verification"]["target"] == leaf]
     original = next(item for item in registry[leaf]["canonical_examples"] if item["form"] == "workflow_fragment")
     assert example["source_excerpt"] == original["source_excerpt"]
     assert example["verification"] == original["verification"]
