@@ -326,6 +326,28 @@ class GitHubPullObservationTest(unittest.TestCase):
             self.assertEqual(result.outputs["overall_state"], category)
             self.assertEqual(result.outputs["checks"][0]["state"], state)
 
+    def test_check_suite_metadata_preserves_aggregation_and_legacy_null(self):
+        registry = get_public_connector_registry()
+        self.assertEqual(registry.get_operation("gh.pr.checks").outputs["checks"][0]["check_suite_id"], "integer")
+        legacy = {"id": 17, "context": "external", "state": "success", "check_suite": {"id": 999}}
+        for suite, expected in ((None, None), ({}, None), ({"id": None}, None), ({"id": 71}, 71)):
+            result, _ = self.checks(statuses=[status_page([legacy])],
+                                    runs=[run_page([{**check_run(), "check_suite": suite}])])
+            self.assertEqual(result.status, "ok")
+            self.assertEqual(result.outputs["overall_state"], "success")
+            self.assertEqual(result.outputs["success_count"], 2)
+            self.assertIsNone(result.outputs["checks"][0]["check_suite_id"])
+            self.assertEqual(result.outputs["checks"][1]["check_suite_id"], expected)
+        result, _ = self.checks(runs=[run_page([check_run()])])
+        self.assertIsNone(result.outputs["checks"][0]["check_suite_id"])
+
+    def test_malformed_nonnull_check_suite_metadata_is_unavailable(self):
+        for suite in (False, 1, "71", [], {"id": True}, {"id": False}, {"id": "71"},
+                      {"id": 0}, {"id": -1}, {"id": []}, {"id": 1.5}):
+            with self.subTest(suite=suite):
+                result, _ = self.checks(runs=[run_page([{**check_run(), "check_suite": suite}])])
+                self.assertEqual(result.status, "checks_unavailable")
+
     def test_missing_run_app_and_sha_are_explicitly_unavailable(self):
         run = check_run()
         del run["app"]

@@ -1363,7 +1363,10 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertIn("runner_verified", payload["coverage_levels"])
         self.assertEqual(payload["summary"]["coverage_counts"].get("harness_verified", 0), 0)
         self.assertEqual(payload["summary"]["coverage_counts"].get("excerpt_verified", 0), 56)
-        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 71)
+        self.assertEqual(payload["summary"]["coverage_counts"].get("runner_verified", 0), 74)
+        self.assertEqual(handles["connector.git.remote"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.gh.actions.run"]["snippet_coverage"], "runner_verified")
+        self.assertEqual(handles["connector.gh.actions.run.jobs"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["workflow.profile"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.authoring"]["snippet_coverage"], "runner_verified")
         self.assertEqual(handles["connector.gh.pr.create"]["snippet_coverage"], "runner_verified")
@@ -2085,7 +2088,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         pr_timeline = self.run_help("describe", "connector.gh.pr.timeline")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("Published GitHub connector family for typed repository, issue, pull-request, and project operations", gh_family.stdout)
+        self.assertIn("Published GitHub connector family for typed repository, issue, pull-request, Actions run, and project operations", gh_family.stdout)
         self.assertIn("connector.gh.pr", gh_family.stdout)
         self.assertIn("gh.pr(pull_number=42)", gh_family.stdout)
 
@@ -2148,7 +2151,7 @@ class OrdoHelpCliTest(unittest.TestCase):
         sync = self.run_help("describe", "connector.gh.repo.sync")
 
         self.assertEqual(gh_family.returncode, 0)
-        self.assertIn("typed repository, issue, pull-request, and project operations", gh_family.stdout)
+        self.assertIn("typed repository, issue, pull-request, Actions run, and project operations", gh_family.stdout)
         self.assertIn("connector.gh.repo", gh_family.stdout)
         self.assertIn("connector_contexts.gh.repository", gh_family.stdout)
         self.assertIn("review warns when an explicit repository overrides that default", gh_family.stdout)

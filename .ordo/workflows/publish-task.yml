@@ -1,0 +1,288 @@
+version: 0
+workflow: publish-task
+inputs:
+  repository:
+    description: GitHub OWNER/REPO receiving the task branch and PR.
+  project_id:
+    description: GitHub project ID.
+state_needs:
+  common_state: {}
+let:
+  issue_number: state.common_state[inputs.repository].issue_number
+  branch: state.common_state[inputs.repository].branch
+  pull_number: state.common_state[inputs.repository].pull_number | catch(["runtime.value.state_missing"], null)
+  request_id: state.common_state[inputs.repository].merge_request_id | catch(["runtime.value.state_missing"], null)
+  merge_attempted: state.common_state[inputs.repository].merge_attempted | catch(["runtime.value.state_missing"], false)
+  issue: gh.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number)
+  project: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number, project_id=inputs.project_id)
+blocks:
+- guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.project_id | is_string
+  - inputs.project_id | trim | ne("")
+  - git.repo.exists
+  - issue_number | is_integer
+  - branch | is_string
+  - branch | trim | ne("")
+  - branch != "main"
+  - git.branch.value == branch
+  - git.worktree.clean
+  - pull_number == null or pull_number | is_integer
+  - request_id == null or request_id | is_string
+  - request_id == null or pull_number | is_integer
+  - merge_attempted | is_boolean
+  - merge_attempted == false or pull_number | is_integer
+  - project.exists
+  - project.type | in(["Task", "Bug"])
+  - project.status | in(["In review", "Done"])
+- steps:
+  - name: Snapshot active context
+    value:
+      issue_number: issue_number
+      branch: branch
+      pull_number: pull_number
+      request_id: request_id
+      merge_attempted: merge_attempted
+      project_status: project.status
+      issue_state: issue.state
+      title: issue.title
+    register: context
+  - name: Find branch PR history
+    if: step.context.outputs.value.pull_number == null
+    uses: gh.pr.list
+    with:
+      repository: inputs.repository
+      head: step.context.outputs.value.branch
+      base: "main"
+      state: "all"
+    register: candidates
+  - name: Require complete known identities
+    if: step.context.outputs.value.pull_number == null
+    gate:
+      all:
+        - step.candidates.outputs.complete == true
+        - step.candidates.outputs.items | length | eq(step.candidates.outputs.count)
+        - step.candidates.outputs.items | only(head_repository_key!=null) | only(head_repository_key!="") | length | eq(step.candidates.outputs.count)
+        - step.candidates.outputs.items | only(base_repository!=null) | only(base_ref="main") | only(head_ref=step.context.outputs.value.branch) | length | eq(step.candidates.outputs.count)
+  - name: Select exact repository
+    if: step.context.outputs.value.pull_number == null
+    value: step.candidates.outputs.items | only(head_repository_key=inputs.repository | lower)
+    register: exact
+  - name: Reject ambiguous or closed unmerged history
+    if: step.context.outputs.value.pull_number == null
+    gate:
+      all:
+        - step.exact.outputs.value | length | in([0, 1])
+        - step.exact.outputs.value | only(merged=null) | length | eq(0)
+        - step.exact.outputs.value | only(state="closed") | only(merged=false) | length | eq(0)
+  - name: Select discovered PR
+    if: step.context.outputs.value.pull_number == null and step.exact.outputs.value | length | eq(1)
+    value: step.exact.outputs.value | first | field("number")
+    register: discovered
+  - name: Select existing PR number
+    value: step.discovered.outputs.value | catch(["runtime.value.step_missing"], step.context.outputs.value.pull_number)
+    register: existing_number
+  - name: Inspect existing PR
+    if: step.existing_number.outputs.value != null
+    uses: gh.pr
+    with:
+      repository: inputs.repository
+      pull_number: step.existing_number.outputs.value
+    register: existing_pr
+  - name: Require exact existing PR identity
+    if: step.existing_number.outputs.value != null
+    gate:
+      all:
+        - step.existing_pr.outputs.head_repository | lower | eq(inputs.repository | lower)
+        - step.existing_pr.outputs.base_repository | lower | eq(inputs.repository | lower)
+        - step.existing_pr.outputs.head_ref == step.context.outputs.value.branch
+        - step.existing_pr.outputs.base_ref == "main"
+        - step.existing_pr.outputs.number == step.existing_number.outputs.value
+        - step.existing_pr.outputs.merged | is_boolean
+        - step.existing_pr.outputs.merged == true or step.existing_pr.outputs.state == "open"
+  - name: Select publication path
+    value: step.existing_pr.outputs.merged | eq(false) | catch(["runtime.value.step_missing"], true)
+    register: publish_path
+  - name: Report merged PR without pushing
+    if: step.publish_path.outputs.value == false
+    publish:
+      summary: "PR already merged; run close-task without publishing more commits"
+      pull_number: step.existing_number.outputs.value
+      url: step.existing_pr.outputs.url
+  - name: Observe saved merge request before publication
+    if: step.publish_path.outputs.value and step.context.outputs.value.request_id != null
+    uses: gh.pr.merge.request
+    with:
+      repository: inputs.repository
+      pull_number: step.existing_number.outputs.value
+      request_id: step.context.outputs.value.request_id
+    register: request
+  - name: Report saved merge request
+    if: step.publish_path.outputs.value and step.context.outputs.value.request_id != null
+    publish:
+      request_state: step.request.outputs.state
+      message: step.request.outputs.message
+      recommendation: "Reconcile the saved merge attempt before publishing; publication never clears merge context"
+  - name: Require no outstanding or unreconciled merge attempt
+    if: step.publish_path.outputs.value
+    gate:
+      all:
+        - step.context.outputs.value.request_id == null
+        - step.context.outputs.value.merge_attempted == false
+  - name: Require an open reviewed task
+    if: step.publish_path.outputs.value
+    gate:
+      all:
+        - step.context.outputs.value.project_status == "In review"
+        - step.context.outputs.value.issue_state == "OPEN"
+  - name: Inspect origin push destination
+    if: step.publish_path.outputs.value
+    uses: git.remote
+    with:
+      remote: "origin"
+    register: origin
+  - name: Require the exact origin push repository
+    if: step.publish_path.outputs.value
+    gate:
+      all:
+        - step.origin.outputs.exists == true
+        - step.origin.outputs.push_urls | length | eq(1)
+        - step.origin.outputs.mirror == false
+        - any:
+            - step.origin.outputs.push_urls | first | lower | eq(format("https://github.com/{}", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("https://github.com/{}.git", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("git@github.com:{}", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("git@github.com:{}.git", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("ssh://git@github.com/{}", inputs.repository | lower))
+            - step.origin.outputs.push_urls | first | lower | eq(format("ssh://git@github.com/{}.git", inputs.repository | lower))
+  - name: Inspect local head to publish
+    if: step.publish_path.outputs.value
+    uses: git.ref
+    with:
+      ref: "HEAD"
+    register: local_head
+  - name: Inspect upstream
+    if: step.publish_path.outputs.value
+    uses: git.upstream
+    register: upstream
+  - name: Inspect matching upstream range
+    if:
+      all:
+        - step.publish_path.outputs.value
+        - step.upstream.outputs.configured
+        - step.upstream.outputs.remote == "origin"
+        - step.upstream.outputs.remote_branch == step.context.outputs.value.branch
+    uses: git.range
+    with:
+      base: "@{upstream}"
+      head: step.context.outputs.value.branch
+    register: tracked_range
+  - name: Require a prepared fast-forward publication
+    if: step.publish_path.outputs.value
+    gate:
+      all:
+        - git.worktree.clean
+        - git.branch.value == step.context.outputs.value.branch
+        - step.local_head.outputs.exists == true
+        - step.local_head.outputs.oid | is_string
+        - step.local_head.outputs.oid | ne("")
+        - any:
+            - step.upstream.outputs.configured == false
+            - step.upstream.outputs.remote != "origin"
+            - step.upstream.outputs.remote_branch != step.context.outputs.value.branch
+            - step.tracked_range.outputs.behind_count == 0
+  - name: Publish task branch
+    # Always publish on the admitted path, including when the PR already exists.
+    # Git rejects non-fast-forward updates; no force option is used.
+    if: step.publish_path.outputs.value
+    uses: git.sync.push
+    with:
+      remote: "origin"
+      branch: step.context.outputs.value.branch
+  - name: Recheck branch PR history after publication
+    if: step.publish_path.outputs.value and step.existing_number.outputs.value == null
+    uses: gh.pr.list
+    with:
+      repository: inputs.repository
+      head: step.context.outputs.value.branch
+      base: "main"
+      state: "all"
+    register: refreshed_candidates
+  - name: Require complete refreshed identities
+    if: step.publish_path.outputs.value and step.existing_number.outputs.value == null
+    gate:
+      all:
+        - step.refreshed_candidates.outputs.complete == true
+        - step.refreshed_candidates.outputs.items | length | eq(step.refreshed_candidates.outputs.count)
+        - step.refreshed_candidates.outputs.items | only(head_repository_key!=null) | only(head_repository_key!="") | length | eq(step.refreshed_candidates.outputs.count)
+        - step.refreshed_candidates.outputs.items | only(base_repository!=null) | only(base_ref="main") | only(head_ref=step.context.outputs.value.branch) | length | eq(step.refreshed_candidates.outputs.count)
+  - name: Select refreshed exact repository
+    if: step.publish_path.outputs.value and step.existing_number.outputs.value == null
+    value: step.refreshed_candidates.outputs.items | only(head_repository_key=inputs.repository | lower)
+    register: refreshed_exact
+  - name: Reject ambiguous or closed refreshed history
+    if: step.publish_path.outputs.value and step.existing_number.outputs.value == null
+    gate:
+      all:
+        - step.refreshed_exact.outputs.value | length | in([0, 1])
+        - step.refreshed_exact.outputs.value | only(merged=false) | only(state="open") | length | eq(step.refreshed_exact.outputs.value | length)
+  - name: Reuse concurrently discovered PR
+    if: step.publish_path.outputs.value and step.existing_number.outputs.value == null and step.refreshed_exact.outputs.value | length | eq(1)
+    value: step.refreshed_exact.outputs.value | first | field("number")
+    register: concurrent
+  - name: Create non-draft PR
+    if: step.publish_path.outputs.value and step.existing_number.outputs.value == null and step.refreshed_exact.outputs.value | length | eq(0)
+    uses: gh.pr.create
+    with:
+      repository: inputs.repository
+      head_repository: inputs.repository
+      head: step.context.outputs.value.branch
+      base: "main"
+      title: step.context.outputs.value.title
+      body:
+        format: "Closes #{}"
+        args:
+          - step.context.outputs.value.issue_number
+      draft: false
+    register: created
+  - name: Select published PR number
+    if: step.publish_path.outputs.value
+    value: step.created.outputs.pull_number | catch(["runtime.value.step_missing"], step.concurrent.outputs.value | catch(["runtime.value.step_missing"], step.existing_number.outputs.value))
+    register: selected
+  - name: Require a published PR number
+    if: step.publish_path.outputs.value
+    gate: step.selected.outputs.value | is_integer
+  - name: Inspect published PR
+    if: step.publish_path.outputs.value
+    uses: gh.pr
+    with:
+      repository: inputs.repository
+      pull_number: step.selected.outputs.value
+    register: published_pr
+  - name: Require the published PR and head identity
+    if: step.publish_path.outputs.value
+    gate:
+      all:
+        - step.published_pr.outputs.head_repository | lower | eq(inputs.repository | lower)
+        - step.published_pr.outputs.base_repository | lower | eq(inputs.repository | lower)
+        - step.published_pr.outputs.head_ref == step.context.outputs.value.branch
+        - step.published_pr.outputs.base_ref == "main"
+        - step.published_pr.outputs.number == step.selected.outputs.value
+        - step.published_pr.outputs.state == "open"
+        - step.published_pr.outputs.merged == false
+        - step.published_pr.outputs.head_sha == step.local_head.outputs.oid
+  - name: Remember validated published PR
+    if: step.publish_path.outputs.value
+    state_set:
+      state.common_state[inputs.repository].pull_number: step.selected.outputs.value
+  - name: Publish publication result
+    if: step.publish_path.outputs.value
+    publish:
+      summary: "Task branch published; PR identity and head verified"
+      issue_number: step.context.outputs.value.issue_number
+      pull_number: step.selected.outputs.value
+      branch: step.context.outputs.value.branch
+      head_sha: step.published_pr.outputs.head_sha
+      url: step.published_pr.outputs.url
+      recommendation: "Review the published changes and CI; publication does not authorize merge"

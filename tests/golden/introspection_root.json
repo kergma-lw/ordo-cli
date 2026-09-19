@@ -1904,6 +1904,47 @@
               "effects": [],
               "examples": [
                 {
+                  "inputs": {
+                    "remote": "string"
+                  },
+                  "reference": "git.remote"
+                }
+              ],
+              "failure_modes": [
+                "probe_failed"
+              ],
+              "inputs": {
+                "remote": "string"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "remote",
+              "outputs": {
+                "exists": "boolean",
+                "fetch_urls": [
+                  "string"
+                ],
+                "mirror": "boolean | null",
+                "name": "string",
+                "push_urls": [
+                  "string"
+                ]
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Inspect a configured remote's effective fetch and push URLs and mirror setting without network access. Git applies URL rewrites; returned URLs are preserved verbatim. An absent remote has exists=false, empty URL lists, and mirror=null.",
+              "tags": [
+                "git",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
                   "inputs": {},
                   "reference": "git.repo"
                 }
@@ -2542,6 +2583,123 @@
               "examples": [
                 {
                   "inputs": {
+                    "attempt": "integer",
+                    "check_suite_id": "integer",
+                    "repository": "string",
+                    "run_id": "integer"
+                  },
+                  "reference": "gh.actions.run"
+                }
+              ],
+              "failure_modes": [
+                "input_error",
+                "actions_run_unavailable"
+              ],
+              "inputs": {
+                "attempt": "integer",
+                "check_suite_id": "integer",
+                "repository": "string",
+                "run_id": "integer"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "actions.run",
+              "outputs": {
+                "check_suite_id": "integer",
+                "conclusion": "string",
+                "created_at": "string",
+                "event": "string",
+                "found": "boolean",
+                "head_branch": "string",
+                "head_sha": "string",
+                "pull_requests": [
+                  {
+                    "base_sha": "string",
+                    "head_sha": "string",
+                    "number": "integer"
+                  }
+                ],
+                "repository": "string",
+                "run_attempt": "integer",
+                "run_id": "integer",
+                "run_started_at": "string",
+                "status": "string",
+                "updated_at": "string",
+                "url": "string",
+                "workflow_id": "integer",
+                "workflow_path": "string"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
+                    "attempt": "integer",
+                    "repository": "string",
+                    "run_id": "integer"
+                  },
+                  "reference": "gh.actions.run.jobs"
+                }
+              ],
+              "failure_modes": [
+                "input_error",
+                "actions_jobs_unavailable"
+              ],
+              "inputs": {
+                "attempt": "integer",
+                "repository": "string",
+                "run_id": "integer"
+              },
+              "invalidates_observations": [],
+              "kind": "probe",
+              "maturity": "stable",
+              "name": "actions.run.jobs",
+              "outputs": {
+                "complete": "boolean",
+                "count": "integer",
+                "items": [
+                  {
+                    "check_run_id": "integer",
+                    "completed_at": "string",
+                    "conclusion": "string",
+                    "head_sha": "string",
+                    "job_id": "integer",
+                    "name": "string",
+                    "started_at": "string",
+                    "status": "string",
+                    "url": "string"
+                  }
+                ],
+                "repository": "string",
+                "run_attempt": "integer",
+                "run_id": "integer"
+              },
+              "preflight_observations": [],
+              "prerequisites": [],
+              "replaced_by": [],
+              "summary": "Observe all jobs for an exact Actions run attempt; fail on incomplete or inconsistent pagination.",
+              "tags": [
+                "gh",
+                "probe"
+              ]
+            },
+            {
+              "deprecated": false,
+              "effects": [],
+              "examples": [
+                {
+                  "inputs": {
                     "issue_number": "integer",
                     "repository": "string"
                   },
@@ -2967,6 +3125,7 @@
                     "app_id": "integer",
                     "app_identity": "string",
                     "app_slug": "string",
+                    "check_suite_id": "integer",
                     "completed_at": "string",
                     "conclusion": "string",
                     "context": "string",

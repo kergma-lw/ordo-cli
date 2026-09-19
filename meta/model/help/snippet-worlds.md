@@ -314,6 +314,121 @@ probe/action restrictions remain covered by separate SDK unit tests. Public
 workflow `check`, `review`, `plan`, `run`, `explain`, and `next` behavior is not
 changed by this help-verification path.
 
+## Actions observation fixture execution
+
+The handles `connector.gh.actions.run`, `connector.gh.actions.run.jobs`,
+`connector.gh.pr.checks`, and `connector.gh` share identical verified source:
+
+| Example | World | Expected execution |
+| --- | --- | --- |
+| `gh_actions_direct` | `gh-actions-direct` | Publish all jobs for the observed numbered attempt |
+| `gh_actions_bridge` | `gh-actions-bridge` | Select a check suite from complete PR checks, observe its run, publish pinned jobs |
+| `gh_actions_null_suite` | `gh-actions-null-suite` | Block before run lookup on a null suite selector |
+| `gh_actions_no_run` | `gh-actions-no-run` | Block before jobs on normal `found=false` |
+
+The direct document and larger bridge document live in
+`src/ordo/model/help_snippets.py`; all three bridge cases execute exactly the same
+YAML. A caller selects check runs by explicit suite ID rather than treating check
+IDs, names, or URLs as run IDs. Multiple checks may belong to one suite. Complete
+checks are required before selection; a null selector or no matching suite gates
+lookup. The suite-to-run result is registered, and its `found` gate precedes jobs.
+Jobs receives that registered `run_id` and `run_attempt` as its required `attempt`.
+The workflow requires `complete` and publishes the entire `items` collection and
+count; an empty complete collection is valid. There is no acceptance or merge
+policy, trusted-job selection, polling, or timestamp freshness claim.
+
+The existing normalized fixture execution approach is extended through a reusable
+read-only provider. Admission requires exact canonical text, the named world,
+`workflow_fragment` insertion mode, and one of these four targets. Scaffolds
+preserve source verbatim. World input keys must match declared workflow inputs.
+Only `gh.pr.checks`, `gh.actions.run`, and `gh.actions.run.jobs` may dispatch;
+each has exactly one normalized fixture, matched against fully resolved input
+maps using type-strict JSON comparison. All successful output fields, including
+nested collection fields, must match the real public registry schema. Scalar
+nulls remain supported by these descriptive schemas; this does not add a new
+runtime nullability validator. Declared failure outcomes may supply empty outputs.
+The provider enforces a 20-call budget and records phase and resolved inputs.
+Neither missing fixtures nor changed source can fall back to live dispatch.
+
+These fixtures establish exact-source execution, registered handoff, gate
+stopping, and publication over normalized results. They **cannot prove HTTP
+source acquisition**: repository bootstrap/authentication, CheckSuite GraphQL
+association and backreference, latest-to-numbered-attempt acquisition, validated
+official check-run URL extraction, HTTP failures, and complete bounded pagination
+belong to connector transport tests. `found=false` here represents an already
+normalized null workflow-run association, not HTTP 404. Fixtures do not prove
+worker checkout, immutable event snapshots, or atomic observations.
+
+`tests/test_gh_actions_modes.py` exercises the exact observer sources through
+`check`, `review`, `plan`, `run`, `explain`, and CLI `next`, with injected fixtures
+and live dispatch forbidden. It covers direct and suite lookup, null and missing
+associations, empty jobs, incomplete collections, and probe failures. The existing
+read-only preflight classification and authored gate semantics apply in every
+mode; this help runner extension changes no public runtime semantics. Static
+graph non-impact is checked through published probe/effect/invalidation metadata
+and actual static graph construction, with no observation or lifecycle YAML.
+
+Describe readiness review covers all four handles against the nine-point
+help-discovery checklist: positive definitions, negative boundaries, neighboring
+surfaces, understandable input/output terminology, executable intended-use
+examples, larger bridge source, self-contained explanations, text/JSON parity,
+and feature/operation routing. `tests/test_gh_actions_help.py` renders and checks
+those surfaces without weakening its expectations. Normalized fixture evidence
+is explicitly distinguished from connector transport evidence in every example.
+
+## Git remote observation fixture execution
+
+`connector.git.remote` publishes `git_remote_exists` and `git_remote_missing` in
+worlds `git-remote-exists` and `git-remote-missing`. Both use the exact standalone
+`inspect-configured-origin` workflow document from `help_snippets.py`, preserved
+verbatim by the `workflow_fragment` scaffold. This is a local observer example,
+not the repository's lifecycle workflow composition.
+
+The required probe input is `remote`; the workflow defaults it to `origin` and
+passes the resolved input explicitly. Normalized outputs are exactly `name`,
+`exists`, `fetch_urls`, `push_urls`, and `mirror`. The existing world uses literal
+example.com HTTPS/SSH URLs and `mirror=false`; the missing world preserves the
+requested name with `exists=false`, empty URL lists, and `mirror=null`.
+
+The authored existence gate precedes publication and dependent URL counts.
+Missing-remote preflight retains the observed facts in analysis and reports a
+failed gate. Direct run re-observes the remote and stops at that gate, retaining
+the operation result while skipping every dependent step. It publishes no result.
+Existing observations
+publish all five facts and counts computed with `length`, without indexing lists.
+Empty-list overrides exercise workflow robustness, not a claim that the Git
+handler returns successful empty URLs for an existing remote. Similarly, fixture
+schema validation is type validation, not validation of every cross-field Git
+invariant. `mirror=true` and unusual literal URL strings do not imply rejection:
+destination acceptance and other remote policies belong to the caller.
+
+Execution admits only the exact canonical source, named world, target, and
+insertion mode. Declared input keys must match, and semantic validation precedes
+the real workflow executor. The shared normalized fixture provider permits only
+`git.remote`, with one fixture and a 12-call budget, recording resolved inputs
+and phase. Input maps match using type-strict JSON comparison; output fields and
+collection element types match the public registry. This path requires explicit
+scalar nullability (`boolean | null` for mirror); the Actions worlds retain their
+existing descriptive-schema scalar-null behavior. Missing fixtures, extra fields,
+actions, unlisted references, and exhausted budgets cannot fall back to live IO.
+
+The example preserves observed URL strings, order, and duplicates without
+normalization, trimming, redaction, or destination admission. Normalized fixture
+data means the operation's output shape, not normalized URL values. No secret
+policy is introduced. Verification does not execute Git, family bootstrap,
+configuration reads, URL rewrites, or network access and cannot establish their
+acquisition correctness, atomic freshness, or push safety.
+
+`tests/test_git_remote_modes.py` exercises the exact source through `check`,
+`review`, `plan`, `run`, `explain`, and CLI `next`, with live execution forbidden.
+It checks existing/missing observations, literal URLs, mirror facts, empty-list
+handling, and `probe_failed`, including read-only preflight classification and
+gate blocking. Published effect/invalidation metadata and actual static graph
+construction establish graph non-impact. This help-verification extension does
+not change public runtime semantics. `tests/test_git_remote_help.py` checks
+describe readiness, text/JSON examples, neighboring surfaces, exact operation
+schema, feature discovery, and search routing without relaxing expectations.
+
 ## Adding a new world-backed snippet
 
 When adding a new world-backed snippet, the author should make four decisions explicitly:

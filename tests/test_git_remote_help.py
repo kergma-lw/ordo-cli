@@ -1,0 +1,103 @@
+"""Git remote observation schema, semantic discovery, and describe readiness."""
+
+import contextlib
+import io
+import json
+from functools import lru_cache
+
+import pytest
+
+from connectors.git.probes.remote import info
+from ordo.help_cli import main
+
+
+@lru_cache(maxsize=None)
+def help_output(*args, as_json=False):
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        assert main([*args, *(["--json"] if as_json else [])]) == 0
+    return json.loads(output.getvalue()) if as_json else output.getvalue()
+
+
+def test_operation_schema_matches_probe_and_keeps_policy_out_of_outputs():
+    operation = help_output("operation", "git.remote", as_json=True)["operation"]
+    declared = info()
+    assert operation["kind"] == declared.kind == "probe"
+    assert operation["inputs"] == declared.inputs == {"remote": "string"}
+    assert operation["outputs"] == declared.outputs == {
+        "name": "string", "exists": "boolean", "fetch_urls": ["string"],
+        "push_urls": ["string"], "mirror": "boolean | null",
+    }
+    assert set(operation["failure_modes"]) == set(declared.failure_modes) == {"probe_failed"}
+    assert operation["effects"] == operation["invalidates_observations"] == []
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+def test_describe_preserves_all_observation_semantics(as_json):
+    result = help_output("describe", "connector.git.remote", as_json=as_json)
+    text = json.dumps(result) if as_json else result
+    for phrase in (
+        "required remote: string", "nonempty", "whitespace", "NUL", "leading '-'",
+        "team/origin", "inventory exactly", "exists=false", "fetch_urls=[]",
+        "push_urls=[]", "mirror=null", "requested name preserved", "mirror=false, not null",
+        "git remote get-url --all", "git remote get-url --push --all",
+        "insteadOf", "pushInsteadOf", "push-URL fallback", "literal observed URL",
+        "in order", "duplicates", "without normalization, trimming, or redaction",
+        "Only LF", "CR and Unicode line separators", "git config --bool --get",
+        "Git config exit 1", "other command failures fail the probe",
+        "probe_failed", "probe.git_remote", "invalid_input", "inventory_failed",
+        "invalid_inventory", "fetch_urls_failed", "push_urls_failed", "invalid_fetch_urls",
+        "invalid_push_urls", "mirror_failed", "invalid_mirror", "partial success",
+        "Raw command evidence", "shared family bootstrap prerequisites", "read-only",
+        "non-atomic", "check, review, plan, run, explain, and next", "without network access",
+        "URL safety", "remote policy", "caller chooses acceptable destinations",
+        "configuration can change", "connector.git.repo", "connector.git.upstream",
+        "connector.git.sync.push",
+    ):
+        assert phrase in text, phrase
+
+
+def test_describe_readiness_with_verified_fragment():
+    handle = "connector.git.remote"
+    payload = help_output("describe", handle, as_json=True)
+    text = help_output("describe", handle)
+    metadata = payload["metadata"]
+    assert metadata["definition"] in text
+    assert metadata["definition"].startswith("Observe")
+    for field in ("use_when", "do_not_use_for", "nearest_surfaces"):
+        assert metadata[field]
+    assert {neighbor["handle"] for neighbor in metadata["nearest_surfaces"]} == {
+        "connector.git.repo", "connector.git.upstream", "connector.git.sync.push",
+    }
+    for neighbor in metadata["nearest_surfaces"]:
+        assert neighbor["handle"] in text
+        assert help_output("describe", neighbor["handle"], as_json=True)
+    assert payload["snippet_coverage"] != "none", "Concurrent verified snippet is required"
+    examples = payload["canonical_examples"]
+    assert any(example["form"] == "workflow_fragment" for example in examples)
+    assert any("git.remote" in example.get("yaml", "") for example in examples)
+    for example in examples:
+        assert example["verification"]
+        assert example["name"] in text and example["summary"] in text
+        assert example.get("yaml")
+        assert all(line.strip() in text for line in example["yaml"].splitlines())
+
+
+@pytest.mark.parametrize("as_json", [False, True])
+def test_features_teaches_real_primitive_and_domain_split(as_json):
+    result = help_output("features", as_json=as_json)
+    text = json.dumps(result) if as_json else result
+    for handle in ("connector.git.remote", "connector.git.repo", "connector.git.upstream", "connector.git.sync.push"):
+        assert handle in text
+    for phrase in ("fetch_urls", "push_urls", "mirror=false", "exists=false", "mirror=null",
+                   "literal observed URLs", "without normalization or redaction",
+                   "caller chooses acceptable destinations"):
+        assert phrase.lower() in text.lower()
+
+
+@pytest.mark.parametrize("query", ["git.remote", "fetch_urls", "push_urls", "invalid_mirror"])
+def test_search_routes_to_remote_semantic_contract(query):
+    assert "connector.git.remote" in help_output("search", query)
+    assert "ordo-help describe connector.git.remote --json" in json.dumps(
+        help_output("search", query, as_json=True)
+    )

@@ -121,9 +121,9 @@
     "coverage_counts": {
       "excerpt_verified": 56,
       "none": 156,
-      "runner_verified": 71
+      "runner_verified": 74
     },
-    "total_handles": 283
+    "total_handles": 286
   },
   "workflow_check_review_passes": {
     "passes": [

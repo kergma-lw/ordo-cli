@@ -4207,6 +4207,148 @@ for _merge_handle in ("connector.gh.pr", "connector.gh.pr.checks", "connector.gh
             _merge_entry["canonical_examples"][-1]["summary"] += " With connector_contexts.gh.repository available as a literal bootstrap value, merge and request omit repository; explicit repository overrides remain supported. PR reads and checks use an explicit input guarded to match that context. Fixtures check authored omission and context/output consistency, not real handler fallback or authentication."
 
 
+def _git_remote_workflow() -> str:
+    """Standalone local observer; destination policy belongs to its caller."""
+    return """version: 0
+workflow: inspect-configured-origin
+inputs:
+  remote:
+    default: 'origin'
+blocks:
+  - steps:
+      - name: observe-remote
+        uses: git.remote
+        with:
+          remote: inputs.remote
+        register: observed
+      - name: require-existing-remote
+        gate: step.observed.outputs.exists | eq(true)
+      - name: publish-remote-facts
+        publish:
+          name: step.observed.outputs.name
+          exists: step.observed.outputs.exists
+          fetch_urls: step.observed.outputs.fetch_urls
+          push_urls: step.observed.outputs.push_urls
+          mirror: step.observed.outputs.mirror
+      - name: count-fetch-urls
+        value: step.observed.outputs.fetch_urls | length
+        register: fetch_count
+      - name: count-push-urls
+        value: step.observed.outputs.push_urls | length
+        register: push_count
+      - name: publish-url-counts
+        publish:
+          fetch_count: step.fetch_count.outputs.value
+          push_count: step.push_count.outputs.value
+"""
+
+
+HELP_SNIPPET_REGISTRY["connector.git.remote"] = {
+    "snippet_coverage": "runner_verified",
+    "canonical_examples": [{
+        "name": "git_remote_" + case, "kind": "positive", "form": "workflow_fragment",
+        "summary": (
+            "Inspect configured origin locally and publish name, existence, literal fetch/push URLs, and mirror. "
+            "The same standalone workflow gates on existence before publication and dependent URL counts; "
+            "missing facts remain available in analysis and operation results while dependent work is blocked. "
+            "length handles empty lists without indexing. Destination acceptance is workflow-owned policy. "
+            "URLs retain order and duplicates without normalization, trimming, or redaction; mirror is an observed fact. "
+            "Exact source executes in the " + case + " fixture world without live IO. Fixtures verify workflow "
+            "handoff, not Git acquisition, repository lifecycle composition, atomic freshness, or push safety."
+        ),
+        "yaml": _git_remote_workflow(),
+        "verification": {"kind": "runner_verified", "world": "git-remote-" + case,
+                         "insertion_mode": "workflow_fragment", "target": "connector.git.remote",
+                         "expected_status": "ok" if case == "exists" else "execution_error"},
+    } for case in ("exists", "missing")],
+}
+
+
+def _gh_actions_workflow(*, bridge: bool) -> str:
+    """Exact public observer source shared across Actions bridge handles."""
+    selection = """  pull_number: {}
+  check_suite_id: {}
+blocks:
+  - steps:
+      - name: inspect-checks
+        uses: gh.pr.checks
+        with:
+          repository: inputs.repository
+          pull_number: inputs.pull_number
+          target: 'head'
+        register: checks
+      - name: require-complete-checks
+        gate: step.checks.outputs.complete | eq(true)
+      - name: require-suite-selector
+        gate: inputs.check_suite_id | is_integer
+      - name: select-suite-checks
+        value: step.checks.outputs.checks | only(kind="check_run") | only(check_suite_id=inputs.check_suite_id)
+        register: selected
+      - name: require-selected-suite
+        gate: step.selected.outputs.value | length | ne(0)
+      - name: observe-run
+        uses: gh.actions.run
+        with:
+          repository: inputs.repository
+          check_suite_id: inputs.check_suite_id
+        register: observed
+""" if bridge else """  run_id: {}
+blocks:
+  - steps:
+      - name: observe-run
+        uses: gh.actions.run
+        with:
+          repository: inputs.repository
+          run_id: inputs.run_id
+        register: observed
+"""
+    return """version: 0
+workflow: inspect-actions
+inputs:
+  repository: {}
+""" + selection + """      - name: require-found-run
+        gate: step.observed.outputs.found | eq(true)
+      - name: observe-pinned-jobs
+        uses: gh.actions.run.jobs
+        with:
+          repository: inputs.repository
+          run_id: step.observed.outputs.run_id
+          attempt: step.observed.outputs.run_attempt
+        register: jobs
+      - name: require-complete-jobs
+        gate: step.jobs.outputs.complete | eq(true)
+      - name: publish-observation
+        publish:
+          run_id: step.observed.outputs.run_id
+          run_attempt: step.observed.outputs.run_attempt
+          items: step.jobs.outputs.items
+          count: step.jobs.outputs.count
+          complete: step.jobs.outputs.complete
+"""
+
+
+GH_ACTIONS_TARGETS = ("connector.gh.actions.run", "connector.gh.actions.run.jobs",
+                      "connector.gh.pr.checks", "connector.gh")
+for _actions_handle in GH_ACTIONS_TARGETS:
+    _entry = HELP_SNIPPET_REGISTRY.setdefault(_actions_handle, {"canonical_examples": []})
+    _entry["snippet_coverage"] = "runner_verified"
+    for _case in ("direct", "bridge", "null-suite", "no-run"):
+        _entry["canonical_examples"].append({
+            "name": "gh_actions_" + _case.replace("-", "_"),
+            "kind": "positive", "form": "workflow_fragment",
+            "summary": {
+                "direct": "Observe a known run, then pass its registered run_id and latest observed run_attempt to pinned jobs. Require complete collection before publishing every job; count=0 is valid.",
+                "bridge": "Read complete PR checks, select check runs by explicit check_suite_id (several checks may share a suite), resolve the suite through gh.actions.run, gate on found, and pass registered run_id/run_attempt to complete jobs. No run ID is guessed from a check ID or URL.",
+                "null-suite": "The same bridge gates before run lookup when the suite selector is null. Nullable check_suite_id is normal; it cannot identify an Actions run.",
+                "no-run": "The same bridge stops at the found gate when the suite has no associated Actions run (found=false). Jobs never receives a guessed run or null attempt.",
+            }[_case] + " Exact YAML executes with normalized fixtures only: this verifies workflow handoff, not HTTP source acquisition, GraphQL association, pagination, worker checkout, atomic snapshots, or merge policy.",
+            "yaml": _gh_actions_workflow(bridge=_case != "direct"),
+            "verification": {"kind": "runner_verified", "world": "gh-actions-" + _case,
+                             "insertion_mode": "workflow_fragment", "target": _actions_handle,
+                             "expected_status": "execution_error" if _case in {"null-suite", "no-run"} else "ok"},
+        })
+
+
 def _load_excerpt_text(
     *, path: str, start_line: int, end_line: int, source_lines: dict[str, list[str]] | None = None
 ) -> str:

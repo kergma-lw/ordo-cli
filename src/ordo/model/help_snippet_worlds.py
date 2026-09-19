@@ -255,6 +255,71 @@ _world = _sdk_probe_world()
 SNIPPET_WORLDS[_world.name] = _world
 
 
+def _actions_world(case: str) -> SnippetWorld:
+    repository = "acme/mobile-app"
+    suite = None if case == "null-suite" else 700
+    run = {"repository": repository, "found": True, "run_id": 900, "check_suite_id": 700,
+           "run_attempt": 3, "workflow_id": 50, "workflow_path": ".github/workflows/ci.yml",
+           "event": "pull_request", "status": "completed", "conclusion": "success",
+           "head_sha": "a" * 40, "head_branch": "feature", "url": f"https://github.com/{repository}/actions/runs/900",
+           "created_at": None, "updated_at": None, "run_started_at": None, "pull_requests": []}
+    if case == "no-run":
+        run = {key: None for key in run}
+        run.update(repository=repository, found=False, check_suite_id=700, pull_requests=[])
+    # Normalized fixture fields are explicit, never generated from the registry:
+    # contract changes must fail verification rather than silently bless new data.
+    check = {"name": "unit", "kind": "check_run", "status": "completed", "conclusion": "success",
+             "state": None, "context": None, "url": None, "sha": "a" * 40,
+             "sha_source": "check_run.head_sha", "id": 801, "check_suite_id": suite,
+             "created_at": None, "updated_at": None, "started_at": None, "completed_at": None,
+             "app_id": 15368, "app_slug": "github-actions", "app_identity": "available", "creator": None}
+    checks = {"pull_ref": f"{repository}#42", "head_sha": "a" * 40, "base_sha": "b" * 40,
+              "head_repository": repository, "base_repository": repository, "target": "head",
+              "expected_head_sha": None, "commit_sha": "a" * 40, "test_merge_sha": None,
+              "test_merge_head_sha": None, "test_merge_base_sha": None, "test_merge_state": "not_requested",
+              "test_merge_reason": "not_requested", "sha_evidence": "api_attached_commit",
+              "complete": True, "statuses_complete": True, "check_runs_complete": True,
+              "overall_state": "success", "total_count": 2, "success_count": 2, "failed_count": 0,
+              "pending_count": 0, "skipped_count": 0, "neutral_count": 0, "unknown_count": 0,
+              "checks": [check, {**check, "id": 802, "name": "lint"}]}
+    jobs = [{"job_id": n, "name": name, "status": "completed", "conclusion": "success",
+             "head_sha": "a" * 40, "check_run_id": check_id, "url": None,
+             "started_at": None, "completed_at": None}
+            for n, name, check_id in ((1001, "unit", 801), (1002, "lint", 802))]
+    direct = case == "direct"
+    return SnippetWorld(
+        name=f"gh-actions-{case}", summary="Normalized fixture-only Actions observation; no HTTP acquisition evidence.",
+        inputs={"repository": repository, **({"run_id": 900} if direct else {"pull_number": 42, "check_suite_id": suite})},
+        state={}, actions={}, probes={
+            **({} if direct else {"gh.pr.checks": [ProbeFixture(
+                with_={"repository": repository, "pull_number": 42, "target": "head"}, outputs=checks)]}),
+            "gh.actions.run": [ProbeFixture(with_={"repository": repository, **({"run_id": 900} if direct else {"check_suite_id": 700})}, outputs=run)],
+            "gh.actions.run.jobs": [ProbeFixture(with_={"repository": repository, "run_id": 900, "attempt": 3},
+                outputs={"repository": repository, "run_id": 900, "run_attempt": 3, "items": jobs, "count": 2, "complete": True})],
+        },
+    )
+
+
+for _case in ("direct", "bridge", "null-suite", "no-run"):
+    _world = _actions_world(_case)
+    SNIPPET_WORLDS[_world.name] = _world
+
+
+for _exists in (True, False):
+    _world = SnippetWorld(
+        name="git-remote-exists" if _exists else "git-remote-missing",
+        summary="Normalized local remote observation fixtures; literal example URLs, no Git or network IO.",
+        inputs={"remote": "origin"}, state={}, actions={},
+        probes={"git.remote": [ProbeFixture(with_={"remote": "origin"}, outputs={
+            "name": "origin", "exists": _exists,
+            "fetch_urls": ["https://example.com/acme/mobile-app.git"] if _exists else [],
+            "push_urls": ["git@example.com:acme/mobile-app.git"] if _exists else [],
+            "mirror": False if _exists else None,
+        })]},
+    )
+    SNIPPET_WORLDS[_world.name] = _world
+
+
 def describe_help_snippet_worlds() -> dict[str, JSONObject]:
     """Return published snippet-world fixture data in machine-readable form."""
 

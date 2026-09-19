@@ -38,14 +38,11 @@ workflows:
     category: task-lifecycle
     state_bindings:
       common_state: common_state
-  merge-task:
-    file: workflows/merge-task.yml
-    description: Find or create a PR, check CI, and request merge
+  publish-task:
+    file: workflows/publish-task.yml
+    description: Push the prepared task branch and find or create its PR
     category: task-lifecycle
-    when: Set ship=true to authorize submission; repeat to observe a saved request.
-    with:
-      ship?:
-      merge_method?:
+    when: Publish committed review changes, including updates to an existing PR, without waiting for CI or requesting merge.
     state_bindings:
       common_state: common_state
   close-task:

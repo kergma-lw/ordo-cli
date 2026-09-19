@@ -171,6 +171,39 @@
 - The public contract should be discoverable through `ordo-help operation fs.file`.
 - Discovery material should make clear that `fs.file` is the canonical public filesystem read probe in the MVP.
 
+<!-- source: requirements/connector/git-remote.md -->
+
+# Git remote observation requirements
+
+`git.remote` is a read-only probe answering which effective fetch URLs, push URLs,
+and mirror setting one named remote has in local Git configuration.
+
+- Accept a required `remote: string` configured identifier, including nested names
+  such as `team/origin`. Reject empty names, whitespace, NUL, and leading `-`.
+- Report `name`, `exists`, `fetch_urls`, `push_urls`, and nullable `mirror`.
+  Exact inventory absence is successful `exists=false`, empty URL arrays, and
+  `mirror=null`, preserving the requested name.
+- For an existing remote, observe all effective URLs through Git's URL resolution,
+  including rewrites and push-URL fallback. Preserve literal observed values and
+  their order and duplicates. Do not normalize, trim, redact, or impose URL safety,
+  host/protocol restrictions, or remote policy. The caller chooses acceptable
+  destinations.
+- An absent mirror setting on an existing remote means `mirror=false`.
+- Perform no network access or mutation. Observations do not establish remote
+  identity, reachability, authentication, or the destination of a later push.
+  Configuration reads are non-atomic and may become stale.
+- Fail local command or malformed-response observations honestly with
+  `probe_failed`; do not substitute absence or partial success for failure.
+- Keep repository context in `git.repo`, current-branch tracking in `git.upstream`,
+  configured destination observation in `git.remote`, and publication in
+  `git.sync.push`. Shared Git prerequisites belong to family bootstrap.
+
+The probe uses ordinary evaluation in `check`, `review`, `plan`, `run`, `explain`,
+and `next`, without engine-mode logic. Features, search, operation metadata, and
+verified describe examples must publish this same observation contract.
+
+See the [model](../../model/connector/git-remote.md) for command and failure details.
+
 <!-- source: requirements/connector/gh-repository-identity.md -->
 
 # GitHub repository input identity
@@ -333,6 +366,7 @@ SSRF or authentication bypass.
   - `url` or `context` when available
 - Checks must additionally expose `base_sha`, `head_repository`, `base_repository`, `target`, `expected_head_sha`, `commit_sha`, `test_merge_sha`, `test_merge_head_sha`, `test_merge_base_sha`, `test_merge_state`, `sha_evidence`, `complete`, `statuses_complete`, `check_runs_complete`, `neutral_count`, and `unknown_count`.
 - Check items must retain `state`, `sha`, `sha_source`, `id`, timestamps (`created_at`, `updated_at`, `started_at`, `completed_at`), `app_id`, `app_slug`, `app_identity`, and `creator` where available. Missing identity facts must remain unavailable rather than be invented.
+- Check-run items additionally expose nullable `check_suite_id` from the API check suite identity; legacy commit statuses expose null. This is the selector bridge to [gh.actions.run](gh-actions-run.md), not proof that the suite has an associated Actions run or that any worker tested a particular SHA.
 - `gh.pr.timeline` events must expose stable lifecycle facts such as:
   - `event_type`
   - `actor`
@@ -375,6 +409,47 @@ SSRF or authentication bypass.
 - The public contract should be discoverable through `ordo-help operation gh.pr` and the sibling `gh.pr.*` operations.
 - Discovery material should make clear that this family is the canonical public PR inspection surface.
 - Runtime-mode, discovery, and snippet verification obligations for merge-related observation changes are specified in [asynchronous merge requirements](gh-pr-merge.md). These are approved source semantics, not permission to rewrite the contract around implementation drift.
+
+<!-- source: requirements/connector/gh-actions-run.md -->
+
+# GitHub Actions run observation requirements
+
+## Role and boundary
+
+- `gh.actions.run` and `gh.actions.run.jobs` are read-only probes for one Actions run attempt and its jobs. `gh.actions` is a namespace segment, not an executable operation.
+- These probes expose GitHub API observations, not a tested-SHA attestation, immutable event snapshot, required-job selection, trusted-producer decision, or merge approval policy. PR head/base SHAs reported by the API do not prove the worker checkout.
+- They do not trigger, rerun, cancel, poll, download logs, or mutate runs. Multiple API reads are non-atomic even when an attempt is pinned and retrieval is complete.
+
+## Inputs and bootstrap
+
+- Both probes follow the shared [repository identity contract](gh-repository-identity.md). `repository` is optional and nullable: an explicit valid literal ASCII `OWNER/REPO` overrides bootstrapped `connector_contexts.gh.repository`; omission or null uses that context. Invalid explicit values fail without fallback; no resolved repository is `input_error`. Context is a default, not an authorization allowlist.
+- The GitHub connector must be bootstrapped with an available, authenticated `gh` CLI and access to the requested repository. These observations target `github.com` and its official API; they do not grant access or configure authentication.
+- `gh.actions.run` requires exactly one non-null positive integer selector: `run_id` or `check_suite_id`. Optional positive integer `attempt` selects an exact attempt. Omitted or null `attempt` reads the latest observed attempt number and then retrieves that numbered attempt; it does not promise the newest attempt at return time.
+- `gh.actions.run.jobs` requires positive integer `run_id` and explicit positive integer `attempt`. Booleans are not integer identifiers. Jobs must never silently choose the latest attempt.
+
+## Association and identity
+
+- The suite selector resolves the suite REST identity, then directly queries GraphQL `CheckSuite.workflowRun`. It must validate node type, suite identity, repository, and the workflow run's suite backreference. It must not scan repository runs or guess an association from names, display URLs, or logs.
+- A validated explicit null `workflowRun` association is normal success with `found: false`. Missing nodes/fields, GraphQL errors, inaccessible objects, and malformed or contradictory identity are failures, not absence.
+- Run responses must match repository, selected run, pinned attempt, and the known suite identity. The suite route also binds the suite node identity.
+- `gh.pr.checks` check-run items expose nullable `check_suite_id` as the bridge into `gh.actions.run`; legacy commit statuses have null suite identity. A suite is not necessarily associated with Actions.
+- Job `check_run_id` comes only from a validated official `https://api.github.com/repos/OWNER/REPO/check-runs/ID` API URL matching the repository. An absent/null link gives null identity; a malformed link fails. This is not log parsing or display-URL inference.
+
+## Outputs
+
+- `gh.actions.run` exposes `repository`, `found`, `run_id`, `check_suite_id`, `run_attempt`, `workflow_id`, `workflow_path`, `event`, `status`, `conclusion`, `head_sha`, `head_branch`, `url`, `created_at`, `updated_at`, `run_started_at`, and `pull_requests` items containing `number`, `head_sha`, and `base_sha`.
+- On a found run, run ID, suite ID, and attempt are positive integers; optional API facts remain null when unavailable. SHA values, when present, must be full hexadecimal commit SHAs. Missing `pull_requests` yields an empty list; this list is an API association observation, not event-time attestation.
+- For `found: false`, retain resolved `repository` and requested `check_suite_id`, set `pull_requests: []`, and set all other run fields to null, including `run_attempt` even if `attempt` was supplied.
+- `gh.actions.run.jobs` exposes `repository`, `run_id`, `run_attempt`, `items`, `count`, and `complete`. Each item contains positive `job_id`, nullable `check_run_id`, and nullable `name`, `status`, `conclusion`, `head_sha`, `url`, `started_at`, and `completed_at`.
+- Jobs success requires complete traversal with consistent totals, valid pagination links, unique job IDs, and matching run/attempt identity for every job. Empty success is `items: []`, `count: 0`, `complete: true`; it is not successful CI. Partial retrieval must fail rather than publish successful incomplete evidence.
+
+## Failures and discovery
+
+- Invalid selectors, attempt, or repository resolution fail as `input_error`.
+- Run request failures, malformed responses, GraphQL errors, or identity mismatch fail as `actions_run_unavailable`; the jobs counterpart is `actions_jobs_unavailable`, including incomplete/inconsistent pagination and traversal limits. HTTP not-found is not `found: false`.
+- Shared connector bootstrap failures remain distinct from operation-local failure modes. Raw transport evidence and reason diagnostics support investigation, not workflow policy inference.
+- Publish both probes through operation metadata, `features`, search, and `describe`, with neighboring checks/family guidance and canonical verified examples. Describe readiness includes inputs, outputs, failures, bootstrap, read-only boundaries, completeness, and non-atomicity.
+- All runtime modes (`check`, `review`, `plan`, `run`, `explain`, `next`) retain their existing probe semantics; these additions require no new scheduling, policy, or execution-mode behavior. Runtime modes that observe probes receive the same contract and failures.
 
 <!-- source: requirements/connector/gh-pr-list.md -->
 
@@ -5961,6 +6036,487 @@ This sequence should let a zero-knowledge caller discover:
 
 `ordo-help` should translate runtime-owned introspection into a caller-friendly public vocabulary, but it should not become an alternate semantic source of truth.
 
+<!-- source: model/help/snippet-worlds.md -->
+
+# Help snippet worlds
+
+## Role
+
+- A snippet world is a named, stable teaching context for help-example publication and verification.
+- Snippet worlds exist for `ordo-help` discovery surfaces rather than for workflow runtime semantics.
+- A snippet world is a help-model concept, not a workflow feature.
+
+## Why snippet worlds exist
+
+- Many help snippets are too small to stand alone as full workflows.
+- Value-only examples are precise, but they are often weak imitation material for authors.
+- Full authoring fragments are more useful for imitation, but they need shared context to remain strictly verifiable.
+- One-off harnesses do not scale well and make examples harder to compare across help surfaces.
+
+Snippet worlds exist to let help surfaces publish examples that are both:
+
+- strict enough to verify; and
+- stable enough to teach from one recognizable context.
+
+## What a snippet world provides
+
+A snippet world may provide a stable set of:
+
+- inputs;
+- runtime state values;
+- read-only probe results;
+- action outcomes;
+- repeated domain entities such as repositories, issues, branches, project items, or task keys.
+
+The point is not to simulate production reality in full detail.
+The point is to provide one explicit and repeatable teaching environment for many snippets.
+
+## Where snippet worlds are used
+
+Snippet worlds are used in help and discovery publication, especially for:
+
+- `ordo-help describe ...` canonical examples;
+- canonical-example verification;
+- snippet coverage reporting;
+- future authoring-fragment examples that need shared surrounding context.
+
+Snippet worlds may support examples for multiple forms, such as:
+
+- expression values;
+- step-field values;
+- step fragments;
+- workflow fragments;
+- Python connector-handler fragments, through a dedicated SDK insertion mode.
+
+## Where snippet worlds are not used
+
+Snippet worlds must not be treated as:
+
+- workflow runtime state semantics;
+- user-authored workflow features;
+- profile semantics;
+- production execution environments;
+- alternate sources of workflow truth.
+
+They support help publication and verification only.
+
+## Use conditions
+
+Use a snippet world when an example:
+
+- needs shared inputs, state, probe outputs, or action outcomes;
+- should remain comparable to many other examples;
+- is too small to stand alone as a complete workflow;
+- should be shown as realistic authoring material without giving up strict verification.
+
+Do not require a snippet world for examples that are already well served by:
+
+- verified repository excerpts;
+- self-contained complete examples;
+- trivial isolated value validation.
+
+## Relationship between world, snippet, and scaffold
+
+The teaching model should keep three concerns separate:
+
+- the snippet world supplies stable context;
+- the snippet supplies authored example content;
+- the scaffold or insertion mode supplies placement.
+
+The world must not silently rewrite the snippet into a different authored form.
+The snippet shown to the user should remain the snippet that is actually verified.
+
+## Teaching goal
+
+Snippet worlds exist so that many examples can belong to one stable teaching world rather than many ad hoc micro-contexts.
+
+This should make examples:
+
+- easier to recognize;
+- easier to compare;
+- easier to maintain;
+- more useful as code to imitate.
+
+## Stability rule
+
+- A snippet world should be intentionally stable and boring.
+- It should reuse the same entities and values across many examples unless a local variation is required.
+- It must not become an opaque “everything passes here” environment.
+
+## Verification rule
+
+- Snippet-world verification may normalize only clearly safe authoring equivalences.
+- It must not depend on semantic guessing.
+- If the verifier cannot establish a safe equivalence, it must leave the example unmatched rather than inventing one.
+
+## Multiplicity rule
+
+- The help model may define more than one snippet world.
+- Different worlds may exist for different teaching needs, connector families, or example shapes.
+- No single snippet world should be assumed to be the only valid future teaching context.
+
+## Bounded connector fixture execution
+
+The GitHub asynchronous merge examples have an explicit execution path in addition
+to ordinary authored-shape validation:
+
+| Canonical snippet | World |
+| --- | --- |
+| `gh_pr_async_merge_head` | `gh-pr-merge-head` |
+| `gh_pr_async_merge_test_merge` | `gh-pr-merge-test-merge` |
+| `gh_pr_async_merge_head_context` | `gh-pr-merge-head-context` |
+
+The canonical YAML lives in `src/ordo/model/help_snippets.py`. These examples use
+`workflow_fragment` form and insertion mode and are published for
+`connector.gh.pr`, `connector.gh.pr.checks`, `connector.gh.pr.merge`, and
+`connector.gh.pr.merge.request`. The workflow text displayed is exactly the text
+admitted and executed; the scaffold does not silently repair literals, rewrite
+gates, or substitute a different workflow.
+
+The context-backed example omits `repository` on merge submission and request
+observation. Its world supplies runtime `connector_contexts.gh.repository`; the
+published comments show the corresponding profile `connectors.gh.repository`
+binding. This is not a new workflow YAML field. Explicit PR/check inputs are
+guarded to match that fixed context. Fixture execution verifies authored omission
+and context/output consistency; separate connector tests establish real handler
+fallback, explicit override, and missing/invalid repository failure behavior.
+
+### Admission and execution boundary
+
+- Execution requires the exact canonical text for the selected world, the supported
+  insertion mode, and a supported target. Even a noncanonical textual variation
+  is rejected rather than falling back to validation or live execution.
+- World overrides vary fixture data only. Inputs must be declared workflow inputs:
+  `repository`, `pull_number`, and `authorize_merge`. The canonical workflow's
+  authorization default is false; the positive teaching fixture explicitly supplies
+  true. An undeclared freshness flag or another arbitrary input is not supported.
+- The runner uses the workflow executor and an injected connector provider. Only
+  `gh.pr`, `gh.pr.checks`, `gh.pr.merge`, and `gh.pr.merge.request` may resolve to
+  fixtures. There is no remote-provider fallback, live GitHub request, shell,
+  routine, reusable workflow, state mutation, or profile execution in this path.
+- Each call's fully resolved input map must match its fixture exactly, including
+  JSON value types; boolean true is not integer 1. Preflight probe bindings are
+  materialized with the runtime value resolver before the same comparison.
+- The action fixture is permitted only during execution and at most once. The
+  runner has a 32-call budget. PR fixtures represent before/after submission,
+  rather than relying on an assumed preflight call count. This lets preflight
+  re-observe the same fixture while preserving one authored request-observation
+  step; it does not introduce polling.
+- Required public connector output fields must exist in the registry before
+  execution. Fixtures cannot stand in for unpublished operation contracts.
+
+### Evidence published by verification
+
+Successful admission to this path reports `verification_path=fixture_execution`,
+the actual `runtime_result`, and recorded operation calls with phase and resolved
+inputs. Execution can then succeed or fail according to the fixture data and
+authored gates; fixture execution is not an automatic successful result.
+
+The ordinary expression/step/workflow scaffold path remains `validation_only`,
+with no runtime result or call trace. `runner_verified` metadata alone therefore
+does not imply connector execution; consumers must respect the concrete
+verification path. Existing state-bundle and routine-bundle verification retain
+their own documented boundaries and are not widened by these merge worlds.
+
+### Supported teaching claims and limitations
+
+These worlds verify explicit authorization, standalone admission, saved-head
+binding, complete and explicitly selected trusted CI, test-merge candidate
+identity gates, SHA/UUID handoff, nullable-handle skipping, honest request-state
+publication, and final PR confirmation. The workflow examples require exactly
+one successful `unit` check run from app ID 15368 and bind it to the selected
+commit; that is example policy, not a universal GitHub merge rule.
+
+The fixtures supply normalized probe/action outcomes. They do not execute the
+connector's pre-read, stack-schema parser, HTTP requests, pagination, or server
+SHA guard. Connector tests provide that evidence. They also do not establish
+actual CI checkout, live permissions, request retention behavior, GitHub side
+effects, persistent cross-invocation UUID storage, or atomic protection against
+head/base/stack changes.
+
+Timestamp-age freshness is not a supported canonical gate or fixture input.
+Pinned-SHA rejection must not be described as timestamp freshness verification.
+A workflow needing an age threshold or checkout attestation must author that
+policy separately. Publishing a verified example of it requires an explicit
+extension of the canonical workflow and bounded verification path; data overrides
+must not pretend an unauthored policy was executed. Other arbitrary connector
+workflows and modified merge YAML likewise require explicit support rather than
+an execution fallback.
+
+## PR candidate-list fixture execution
+
+`connector.gh.pr.list` publishes the same exact `workflow_fragment` document in
+five cases: `gh_pr_list_no_pr`, `gh_pr_list_exactly_one_open`,
+`gh_pr_list_ambiguous_multiple_open`, `gh_pr_list_only_closed_history`, and
+`gh_pr_list_unknown_metadata`. Their worlds are respectively `gh-pr-list-no-pr`,
+`gh-pr-list-exactly-one-open`, `gh-pr-list-ambiguous-multiple-open`,
+`gh-pr-list-only-closed-history`, and `gh-pr-list-unknown-metadata`.
+
+The separate `_execute_gh_pr_list_snippet` path admits only the exact displayed
+YAML and this handle. It uses the real executor with an injected provider,
+permits only `gh.pr.list`, requires its published registry output contract,
+records phase and fully resolved inputs, and enforces a 20-call budget. Every
+resolved input map must match the single observation fixture exactly, including
+JSON types. There is no live dispatch fallback or hidden mutation. The scaffold
+returns the document unchanged; fixture overrides vary data, not authored policy.
+
+The observer supplies explicit repository, head branch, head owner, base branch,
+and `state: all`. The operation also supports optional repository via standard gh
+bootstrap; this example's execution does not prove that fallback. A completeness
+and all-candidate identity gate precedes exact source-repository selection. The
+gate also requires a known `head_repository_key`. Selection compares this
+probe-supplied lowercase canonical repository key with
+`inputs.head_repository | lower` using the supported pipeline RHS of `only`.
+Raw `head_repository` remains available with its API casing; branch names retain
+their exact case. This avoids false absence when caller and API repository casing
+differ. One owner may have multiple repositories with the same branch. Unknown source
+identity blocks publication rather than being discarded to manufacture “no PR.”
+Conditional publication distinguishes absence, one open PR, ambiguous open PRs,
+and closed history. Counts preserve nullable merge facts. The unknown-metadata
+world intentionally fails its gate; ambiguity is published, with no number selected.
+A workflow that selects a PR number must gate on exactly one matching open PR
+before selection. This observer never authorizes creation or any other mutation.
+
+These worlds establish executed workflow decisions over normalized fixture data.
+They do not establish actual GitHub API filtering, pagination, authentication, or
+transport failures. The connector's successful full filtered traversal is not an
+atomic snapshot; no partial success or workflow-owned page cursor is implied.
+Concurrent changes can invalidate an absence observation before a later action.
+Connector tests remain the evidence for actual API traversal and failure behavior.
+This addition changes help-verification admission only: public `check`, `review`,
+`plan`, `run`, `explain`, and `next` semantics are not changed by the fixture path.
+
+## PR create-only fixture execution
+
+`connector.gh.pr.create` publishes `gh_pr_create_new_only` in the
+`gh-pr-create-new-only` world. The exact displayed workflow is admitted by a
+separate, 20-call-budget runner with real registry contracts, strict resolved
+JSON input matching, and fixture-only `gh.pr.list`, `gh.pr.create`, and `gh.pr`
+dispatch. Create is execution-only and allowed at most once. No SDK handler,
+internal dependency reuse, HTTP POST, authentication, or live fallback executes.
+
+Authorization defaults false and draft defaults true. The workflow checks the
+source owner against the explicit source repository name and identity, lists
+`state: all`, requires complete known candidate identities, then compares the
+canonical lowercase repository key. It refuses every existing exact-source PR,
+including closed history and multiple candidates. This is explicitly example
+workflow policy; the action's independent open-only recheck is a different
+contract. An absence observation is not atomic authorization.
+
+The workflow passes the known optional `head_repository` for a fork and supplies
+repository explicitly; this does not make repository required by the action API.
+It registers the create output, requires confirmed creation and a nonzero integer
+returned number, then observes that number through one authored `gh.pr` step.
+Failure or unknown creation blocks final publication, with no workflow retry.
+Injected race/provider outcomes prove workflow stopping, not actual POST counts
+or SDK dependency behavior; separate connector/SDK tests must establish those.
+
+This verification extension does not change public `check`, `review`, `plan`,
+`run`, `explain`, or `next` semantics. The canonical YAML is exercised through
+those existing surfaces with injected fixtures.
+
+## SDK Python handler fixture execution
+
+`connector.authoring` publishes `sdk_same_family_probe_inputs` in world
+`gh-sdk-probe-call`. Its `python_fragment` form stores source in `python`, not
+`yaml`; text help labels it Python. Insertion mode `sdk_probe_fragment` hosts
+the exact `def run(ctx)` fragment as a synthetic gh-family published action.
+It is connector-author Python, not new workflow YAML syntax. Its nonempty
+`filters` input supplies repository, head, head_owner, base, and state.
+
+The separate `help_sdk_snippet_runner.py` path verifies source, world, handle,
+and insertion mode before compiling the exact trusted repository-owned source.
+This is not a general Python sandbox: changed source is rejected, overrides are
+literal JSON fixture data, and no data can supply code or import targets. The
+runner uses real `_adapt_published_handler` wrappers and `OperationContext.call`
+for both the caller and dependency. The public `gh.pr.list` contract and
+publication are retained; only its handler body is replaced with a strict
+fixture reader using real `ctx.input` calls. A closed synthetic import map
+exposes only that family and its fixture bootstrap. No live API, subprocess,
+action dependency, or arbitrary import fallback exists in this path.
+
+Fully resolved dependency inputs are compared as type-strict JSON. Nonempty
+inputs stay literal and isolated; missing state propagates the real SDK
+`operation.input_missing` diagnostic even though the synthetic workflow has
+conflicting fallback bindings. Dependency failure outcomes propagate without
+retry. A four-call budget includes bootstrap and successful fixture-body calls.
+
+Results report `verification_path=sdk_fixture_execution`, exact `python_text`,
+the actual `operation_result`, and calls. `workflow_text` is empty and
+`runtime_result` is absent because no workflow is executed. Ordinary help display
+publishes source only; repository verification is the execution surface.
+
+This resolves the same-family probe-input snippet support gap through real SDK
+dispatch, not a stub `ctx.call`. It does not prove the actual PR-list handler's
+validation, HTTP filtering, pagination, authentication, or provider failures.
+Local dotted aliases, legacy empty-input lookup, cross-family rejection, and
+probe/action restrictions remain covered by separate SDK unit tests. Public
+workflow `check`, `review`, `plan`, `run`, `explain`, and `next` behavior is not
+changed by this help-verification path.
+
+## Actions observation fixture execution
+
+The handles `connector.gh.actions.run`, `connector.gh.actions.run.jobs`,
+`connector.gh.pr.checks`, and `connector.gh` share identical verified source:
+
+| Example | World | Expected execution |
+| --- | --- | --- |
+| `gh_actions_direct` | `gh-actions-direct` | Publish all jobs for the observed numbered attempt |
+| `gh_actions_bridge` | `gh-actions-bridge` | Select a check suite from complete PR checks, observe its run, publish pinned jobs |
+| `gh_actions_null_suite` | `gh-actions-null-suite` | Block before run lookup on a null suite selector |
+| `gh_actions_no_run` | `gh-actions-no-run` | Block before jobs on normal `found=false` |
+
+The direct document and larger bridge document live in
+`src/ordo/model/help_snippets.py`; all three bridge cases execute exactly the same
+YAML. A caller selects check runs by explicit suite ID rather than treating check
+IDs, names, or URLs as run IDs. Multiple checks may belong to one suite. Complete
+checks are required before selection; a null selector or no matching suite gates
+lookup. The suite-to-run result is registered, and its `found` gate precedes jobs.
+Jobs receives that registered `run_id` and `run_attempt` as its required `attempt`.
+The workflow requires `complete` and publishes the entire `items` collection and
+count; an empty complete collection is valid. There is no acceptance or merge
+policy, trusted-job selection, polling, or timestamp freshness claim.
+
+The existing normalized fixture execution approach is extended through a reusable
+read-only provider. Admission requires exact canonical text, the named world,
+`workflow_fragment` insertion mode, and one of these four targets. Scaffolds
+preserve source verbatim. World input keys must match declared workflow inputs.
+Only `gh.pr.checks`, `gh.actions.run`, and `gh.actions.run.jobs` may dispatch;
+each has exactly one normalized fixture, matched against fully resolved input
+maps using type-strict JSON comparison. All successful output fields, including
+nested collection fields, must match the real public registry schema. Scalar
+nulls remain supported by these descriptive schemas; this does not add a new
+runtime nullability validator. Declared failure outcomes may supply empty outputs.
+The provider enforces a 20-call budget and records phase and resolved inputs.
+Neither missing fixtures nor changed source can fall back to live dispatch.
+
+These fixtures establish exact-source execution, registered handoff, gate
+stopping, and publication over normalized results. They **cannot prove HTTP
+source acquisition**: repository bootstrap/authentication, CheckSuite GraphQL
+association and backreference, latest-to-numbered-attempt acquisition, validated
+official check-run URL extraction, HTTP failures, and complete bounded pagination
+belong to connector transport tests. `found=false` here represents an already
+normalized null workflow-run association, not HTTP 404. Fixtures do not prove
+worker checkout, immutable event snapshots, or atomic observations.
+
+`tests/test_gh_actions_modes.py` exercises the exact observer sources through
+`check`, `review`, `plan`, `run`, `explain`, and CLI `next`, with injected fixtures
+and live dispatch forbidden. It covers direct and suite lookup, null and missing
+associations, empty jobs, incomplete collections, and probe failures. The existing
+read-only preflight classification and authored gate semantics apply in every
+mode; this help runner extension changes no public runtime semantics. Static
+graph non-impact is checked through published probe/effect/invalidation metadata
+and actual static graph construction, with no observation or lifecycle YAML.
+
+Describe readiness review covers all four handles against the nine-point
+help-discovery checklist: positive definitions, negative boundaries, neighboring
+surfaces, understandable input/output terminology, executable intended-use
+examples, larger bridge source, self-contained explanations, text/JSON parity,
+and feature/operation routing. `tests/test_gh_actions_help.py` renders and checks
+those surfaces without weakening its expectations. Normalized fixture evidence
+is explicitly distinguished from connector transport evidence in every example.
+
+## Git remote observation fixture execution
+
+`connector.git.remote` publishes `git_remote_exists` and `git_remote_missing` in
+worlds `git-remote-exists` and `git-remote-missing`. Both use the exact standalone
+`inspect-configured-origin` workflow document from `help_snippets.py`, preserved
+verbatim by the `workflow_fragment` scaffold. This is a local observer example,
+not the repository's lifecycle workflow composition.
+
+The required probe input is `remote`; the workflow defaults it to `origin` and
+passes the resolved input explicitly. Normalized outputs are exactly `name`,
+`exists`, `fetch_urls`, `push_urls`, and `mirror`. The existing world uses literal
+example.com HTTPS/SSH URLs and `mirror=false`; the missing world preserves the
+requested name with `exists=false`, empty URL lists, and `mirror=null`.
+
+The authored existence gate precedes publication and dependent URL counts.
+Missing-remote preflight retains the observed facts in analysis and reports a
+failed gate. Direct run re-observes the remote and stops at that gate, retaining
+the operation result while skipping every dependent step. It publishes no result.
+Existing observations
+publish all five facts and counts computed with `length`, without indexing lists.
+Empty-list overrides exercise workflow robustness, not a claim that the Git
+handler returns successful empty URLs for an existing remote. Similarly, fixture
+schema validation is type validation, not validation of every cross-field Git
+invariant. `mirror=true` and unusual literal URL strings do not imply rejection:
+destination acceptance and other remote policies belong to the caller.
+
+Execution admits only the exact canonical source, named world, target, and
+insertion mode. Declared input keys must match, and semantic validation precedes
+the real workflow executor. The shared normalized fixture provider permits only
+`git.remote`, with one fixture and a 12-call budget, recording resolved inputs
+and phase. Input maps match using type-strict JSON comparison; output fields and
+collection element types match the public registry. This path requires explicit
+scalar nullability (`boolean | null` for mirror); the Actions worlds retain their
+existing descriptive-schema scalar-null behavior. Missing fixtures, extra fields,
+actions, unlisted references, and exhausted budgets cannot fall back to live IO.
+
+The example preserves observed URL strings, order, and duplicates without
+normalization, trimming, redaction, or destination admission. Normalized fixture
+data means the operation's output shape, not normalized URL values. No secret
+policy is introduced. Verification does not execute Git, family bootstrap,
+configuration reads, URL rewrites, or network access and cannot establish their
+acquisition correctness, atomic freshness, or push safety.
+
+`tests/test_git_remote_modes.py` exercises the exact source through `check`,
+`review`, `plan`, `run`, `explain`, and CLI `next`, with live execution forbidden.
+It checks existing/missing observations, literal URLs, mirror facts, empty-list
+handling, and `probe_failed`, including read-only preflight classification and
+gate blocking. Published effect/invalidation metadata and actual static graph
+construction establish graph non-impact. This help-verification extension does
+not change public runtime semantics. `tests/test_git_remote_help.py` checks
+describe readiness, text/JSON examples, neighboring surfaces, exact operation
+schema, feature discovery, and search routing without relaxing expectations.
+
+## Adding a new world-backed snippet
+
+When adding a new world-backed snippet, the author should make four decisions explicitly:
+
+1. which snippet world supplies the teaching context;
+2. which snippet form is being published;
+3. which insertion mode or scaffold places the snippet into a verifiable host;
+4. which verification mode proves the snippet stays valid.
+
+The snippet world should answer only the first question.
+It must not answer placement or rendering questions by itself.
+
+### Contribution contract
+
+- Choose an existing snippet world when it already supplies the needed teaching context.
+- Add a new snippet world only when the example honestly needs a different stable teaching context rather than a local override.
+- Declare the snippet form explicitly so readers can tell whether they are looking at a value example, a step-field example, a step fragment, or a workflow fragment.
+- Declare the insertion mode explicitly so placement remains reviewable as a scaffold concern rather than leaking into world data.
+- Keep the published snippet body aligned with the snippet that the verifier actually runs.
+- Do not rely on decorative rendering tricks to make one snippet form look like another.
+- Keep verification in repository tests rather than in normal `ordo-help` runtime calls.
+
+### Verification expectations for contributors
+
+- A new world-backed snippet should fail visibly when its verified shape drifts.
+- A new world-backed snippet should participate in ordinary repository verification.
+- If the supported snippet-world path cannot yet express the required example shape honestly, treat that as a support gap and call it out explicitly instead of inventing an unverifiable workaround.
+
+## Bound state bundles
+
+The `state_bundle` form and insertion mode publish an explicit bundle, not a
+disguised workflow document. Its `workflow_text` is the exact authored workflow;
+`state_bindings` maps logical roles to names in the world's existing `state`
+fixtures. The runner materializes each fixture as one temporary absolute file,
+so two roles bound to one fixture genuinely share storage. It applies those
+bindings and calls bound semantic validation, comparing exact
+`expected_diagnostic_codes` as well as the example's expected status.
+
+This path verifies same-file aliases and distinct fixture files without executing
+mutations, reading state contents, or simulating check outcomes. Outside the
+explicit bounded fixture-execution path above, ordinary expression/step/workflow
+scaffolds still verify unbound authored shape. The state-bundle path does
+not claim profile-switch context, symlink/hardlink fixture, cross-invocation,
+cross-iteration, preflight-continuation, or execution verification. Runtime tests
+remain the evidence for those implemented behaviors. A future example requiring
+one of those unsupported fixture shapes must extend the runner explicitly rather
+than presenting prose as a verified demonstration.
+
 <!-- source: model/connector/contract.md -->
 
 # Connector and operation contract
@@ -6178,6 +6734,74 @@ Shared prerequisites should not be duplicated in every operation contract if the
   - format parsing;
   - MIME/magic classification;
   - file mutation.
+
+<!-- source: model/connector/git-remote.md -->
+
+# Git remote observation model
+
+`git.remote` accepts required `remote: string`. A valid name is nonempty, does not
+start with `-`, and contains neither whitespace nor NUL. Names are matched exactly
+against `git remote`; nested names such as `team/origin` are ordinary identifiers.
+
+## Structured outputs
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | string | Requested configured identifier, preserved |
+| `exists` | boolean | Exact membership in local remote inventory |
+| `fetch_urls` | array of strings | All effective fetch URLs, in observed order |
+| `push_urls` | array of strings | All effective push URLs, in observed order |
+| `mirror` | boolean or null | Git mirror boolean; null only for a missing remote |
+
+Missing inventory membership succeeds with `exists=false`, both arrays `[]`, and
+`mirror=null`. No URL or mirror lookup follows absence.
+
+## Existing remote resolution
+
+1. Read `git remote get-url --all <name>` for fetch URLs.
+2. Read `git remote get-url --push --all <name>` for push URLs.
+3. Read `git config --bool --get remote.<name>.mirror` for mirror configuration.
+   Exit 1 means the setting is absent and yields `false`; successful output must
+   be exactly `true` or `false` after removing one trailing LF.
+
+Git owns effective URL resolution, including `insteadOf`, `pushInsteadOf`, and
+push-URL fallback. The probe preserves literal observed URLs without normalization,
+trimming, or redaction. Only LF separates records; one terminal LF is removed.
+Duplicates, whitespace within URLs, CR, and Unicode line separators are preserved.
+Each existing-remote URL list must be nonempty and contain no empty record.
+
+URL safety and remote policy are caller responsibilities. No protocol or host
+allowlist, URL interpretation, network access, authentication check, or remote
+identity assertion is performed. Reads are non-atomic, and do not bind a later
+push to this configuration snapshot.
+
+## Failures
+
+All local failures return `probe_failed`, with diagnostic prefix
+`probe.git_remote.`:
+
+- `invalid_input`: invalid configured-name operand;
+- `inventory_failed`: inventory command failure;
+- `invalid_inventory`: malformed or duplicate inventory names;
+- `fetch_urls_failed`, `push_urls_failed`: corresponding URL command failure;
+- `invalid_fetch_urls`, `invalid_push_urls`: empty list or empty URL record;
+- `mirror_failed`: mirror command failure other than exit 1;
+- `invalid_mirror`: successful command with a non-boolean spelling.
+
+Raw command evidence is supplementary; consumers use structured outputs, not
+stdout parsing. Git executable and repository prerequisites remain family bootstrap
+concerns. No partial structured success replaces a failed observation.
+
+## Domain and mode boundaries
+
+`git.repo` observes repository context; `git.upstream` observes current-branch
+tracking; `git.remote` observes one configured destination; `git.sync.push`
+publishes a branch. Destination acceptance belongs to the caller.
+
+`check`, `review`, `plan`, `run`, `explain`, and `next` retain ordinary probe
+evaluation semantics. This probe adds no runtime-mode policy or transport action.
+The [requirements](../../requirements/connector/git-remote.md) and public help
+describe the same five-field contract.
 
 <!-- source: model/connector/gh-pr.md -->
 
@@ -6422,6 +7046,7 @@ The following is a compact head-target projection with two explicit successful c
 
 - `commit_sha` is H for `head`, M for `test_merge`. `head_sha` remains H in both cases. `expected_head_sha` preserves the optional caller pin. A mismatched pin fails before check retrieval; test-merge unavailability never silently selects head.
 - Individual items additionally retain `state`, `id`, `created_at`, `updated_at`, `started_at`, `completed_at`, `app_id`, `app_slug`, `app_identity`, and `creator`. These support workflow-owned producer selection and freshness. Missing app identity is `unavailable`, not a guessed trusted producer.
+- `check_suite_id` is nullable: check-run items retain API `check_suite.id` when available; legacy status items use null. Pass a known suite identity to [gh.actions.run](gh-actions-run.md) for direct association lookup. A validated null Actions association is normal absence, not evidence of CI success or worker checkout.
 - `sha_evidence: api_attached_commit` and item `sha_source` identify GitHub attachment evidence, not actual worker checkout. A workflow needing checkout proof must obtain separate evidence.
 - Both source collections are paginated. `complete` is true only when `statuses_complete` and `check_runs_complete` are true, with consistent totals and identities. Pagination is not an atomic snapshot; duplicate identities or status contexts signal incompleteness rather than being silently deduplicated.
 - Aggregate precedence is `incomplete`, `no_checks`, then any `failed`, `pending`, or `unknown`; an entirely successful nonempty set is `success`, an entirely skipped set is `skipped`, an entirely neutral set is `neutral`, and remaining successful/skipped/neutral mixtures are `mixed`. Counts cover every returned item and sum to `total_count`. Missing attached SHA cannot count as success.
@@ -6444,6 +7069,74 @@ The following is a compact head-target projection with two explicit successful c
   - merge recommendation synthesis;
   - one-shot narrative PR digest generation.
 - Patch-bearing outputs, when exposed, should use connector-owned canonical structure and bounded payload shape rather than UI-shaped or transport-shaped rendering.
+
+<!-- source: model/connector/gh-actions-run.md -->
+
+# GitHub Actions run observation model
+
+## Public surfaces
+
+| Reference | Kind | Observation |
+| --- | --- | --- |
+| `gh.actions.run` | probe | One numbered attempt selected by run or check suite |
+| `gh.actions.run.jobs` | probe | All jobs for an explicitly numbered run attempt |
+
+`gh.actions` is only a namespace segment. The [requirements](../../requirements/connector/gh-actions-run.md) define observation boundaries and the [shared repository identity contract](../../requirements/connector/gh-repository-identity.md) defines the repository operand.
+
+## Inputs and bootstrap
+
+Both probes accept optional nullable `repository: string`, resolved from explicit valid `OWNER/REPO` or bootstrapped `connector_contexts.gh.repository`. Explicit invalid input never falls back; a different explicit target can produce a repository-override warning. No resolved target is `input_error`. Bootstrap supplies GitHub CLI availability, authentication, and connector context; repository context grants no authorization. Transport uses `gh api` against `github.com` with official REST API headers and a read-only GraphQL query.
+
+`gh.actions.run` accepts nullable `run_id: integer`, `check_suite_id: integer`, and `attempt: integer`. Exactly one selector must be non-null; every supplied integer must be positive and not boolean. Omitted/null attempt means latest observed, then pinned. `gh.actions.run.jobs` accepts required positive non-boolean `run_id: integer` and `attempt: integer`; it has no latest-attempt default or caller limit.
+
+## Run resolution
+
+1. Resolve repository and validate selectors.
+2. For a suite selector, read `repos/{repository}/check-suites/{check_suite_id}` to bind numeric ID and node ID, then query GraphQL `node(id: ...)` as `CheckSuite` with `repository.nameWithOwner` and `workflowRun { databaseId checkSuite { id } }`. Validate types, repository and backreference. Explicit null association returns normal absence; no repository-wide run scan is used.
+3. If attempt is absent, read `repos/{repository}/actions/runs/{run_id}` and validate identity to retain its `run_attempt` and suite ID.
+4. Read `repos/{repository}/actions/runs/{run_id}/attempts/{attempt}` and validate run, repository, attempt, and known suite identity. The suite route also checks `check_suite_node_id`.
+
+The final numbered-attempt response supplies outputs, not the earlier latest-run response. A rerun can begin between reads without changing which numbered attempt is returned. Pinning is not an atomic snapshot or a freshness guarantee.
+
+## Run output shape
+
+| Fields | Meaning |
+| --- | --- |
+| `repository`, `found` | Resolved repository and whether the suite/run association yielded an observed run |
+| `run_id`, `check_suite_id`, `run_attempt` | Positive identities on a found run; output uses `run_attempt`, not `attempt` |
+| `workflow_id` | Nullable positive workflow ID |
+| `workflow_path`, `event`, `status`, `conclusion` | Nullable API facts; `workflow_path` maps API `path` |
+| `head_sha`, `head_branch` | Nullable API head facts; a present SHA is full hexadecimal |
+| `url` | Nullable API `html_url` |
+| `created_at`, `updated_at`, `run_started_at` | Nullable API timestamp strings |
+| `pull_requests` | List of positive `number` and nullable full `head_sha` / `base_sha` |
+
+Missing optional facts stay null; missing `pull_requests` becomes `[]`. A validated null suite association yields `found: false`, preserves repository and requested suite ID, uses `pull_requests: []`, and leaves all other fields null. HTTP 404, missing GraphQL nodes, omitted association fields, and GraphQL errors do not yield normal absence.
+
+PR SHA values are current API observations, not immutable event snapshots. No output asserts the actually tested SHA, worker checkout, trusted producer, required-job satisfaction, or merge policy.
+
+## Jobs traversal and output shape
+
+Read `repos/{repository}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100&page=N`, beginning at page 1. Validate a nonnegative stable `total_count`, exact page sizes, and official API Link relations consistent with the expected pages. Only the owner and repository path segments are compared case-insensitively as ASCII repository identity; the host, remaining path syntax, and numeric identities remain exact, with no percent-encoded aliases accepted. Requests retain the resolved repository spelling and are constructed locally. Traversal is bounded to 100 pages; exceeding the bound fails. Missing or contradictory next links, duplicate relations/IDs, changed totals, wrong run/attempt identities, malformed payloads, and incomplete pages fail rather than return a partial success.
+
+Success returns `repository: string`, `run_id: integer`, `run_attempt: integer`, `items: [object]`, `count: integer`, and `complete: true`. Count equals the number of observed items, including zero. Each item exposes:
+
+- `job_id`: positive integer;
+- `check_run_id`: nullable positive integer extracted only from a validated official API `check_run_url` with matching repository identity (ASCII case-insensitive owner/repository segments), exact remaining path syntax and host, and no extra URL components or percent-encoded aliases;
+- `name`, `status`, `conclusion`, `head_sha`, `url`, `started_at`, `completed_at`: nullable strings, with a full hexadecimal SHA when present; `url` maps API `html_url`.
+
+The check-run bridge is `gh.pr.checks.checks[].check_suite_id` → `gh.actions.run.check_suite_id`, then found run `run_id` and `run_attempt` → jobs inputs `run_id` and `attempt`. Jobs' `check_run_id` can correlate back to check-run item `id`. Null identities must remain unavailable; legacy statuses have no suite bridge. No logs or display URLs are parsed for identity.
+
+Completeness means this traversal passed its consistency checks, not that job state was frozen across requests. No cross-probe atomicity, polling, rerun, cancellation, logs, tested-SHA attestation, or workflow acceptance policy is modeled.
+
+## Failure and mode model
+
+- `input_error`: repository or selector/attempt validation failure.
+- `actions_run_unavailable`: run transport, GraphQL, response-shape, or identity failure.
+- `actions_jobs_unavailable`: jobs transport, response-shape, identity, or completeness failure.
+- Diagnostics use `probe.gh_actions_run` or `probe.gh_actions_run.jobs` prefixes with `invalid_input`, `request_failed`, or `invalid_response`; shared repository diagnostics add repository-specific reasons. Raw request evidence is retained. Shared bootstrap failures can precede operation execution.
+
+These are ordinary read-only probes in `check`, `review`, `plan`, `run`, `explain`, and `next`, with no new engine-mode semantics. Their public metadata, features, search routes, and verified describe examples teach the same observation contract.
 
 <!-- source: model/connector/gh-pr-list.md -->
 
