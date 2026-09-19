@@ -6,9 +6,6 @@ inputs:
   base_branch:
     default: main
     description: Expected PR target branch.
-  ship:
-    default: false
-    description: Authorize a new merge request; saved requests are only observed.
   merge_method:
     default: squash
     description: GitHub merge method (merge, squash, or rebase).
@@ -27,7 +24,6 @@ blocks:
   - inputs.repository | trim | ne("")
   - inputs.base_branch | is_string
   - inputs.base_branch | trim | ne("")
-  - inputs.ship | is_boolean
   - inputs.merge_method | in(["merge", "squash", "rebase"])
   - issue_number | is_integer
   - issue_number | ne(0)
@@ -105,20 +101,18 @@ blocks:
       request_state: step.request.outputs.state
       message: step.request.outputs.message
       url: step.pr.outputs.url
-  - name: Require authorization and no uncertain earlier submission
+  - name: Require no uncertain earlier submission and a known PR head
     if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
     gate:
       all:
-        - inputs.ship == true
         - step.context.outputs.value.merge_attempted == false
         - step.pr.outputs.head_sha | is_string
         - step.pr.outputs.head_sha | ne("")
       on_fail:
-        ship: inputs.ship
         merge_attempted: step.context.outputs.value.merge_attempted
         request_id: step.context.outputs.value.request_id
         observed_head_sha: step.pr.outputs.head_sha
-        recommendation: "Authorize a new request with ship=true, or reconcile an earlier submission before retrying"
+        recommendation: "Reconcile any earlier submission and obtain a valid PR head before retrying"
   - name: Inspect local branch before a new merge request
     if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
     uses: git.branch
@@ -210,6 +204,49 @@ blocks:
         observed_head_ref: step.final_pr.outputs.head_ref
         observed_base_ref: step.final_pr.outputs.base_ref
         observed_merged: step.final_pr.outputs.merged
+  - name: Select confirmed failed request recovery
+    if: step.pr.outputs.merged == false
+    value: step.request.outputs.state | eq("failed") | catch(["runtime.value.step_missing"], false)
+    register: failed_request
+  - name: Clear confirmed failed request UUID
+    # All submission branches use the initial context snapshot and have already
+    # been skipped for this saved request. Recovery never retries in this run.
+    if:
+      all:
+        - step.pr.outputs.merged == false
+        - step.context.outputs.value.request_id != null
+        - step.failed_request.outputs.value
+        - step.final_pr.outputs.merged == false
+        - step.final_pr.outputs.state == "open"
+    state_delete: state.common_state[inputs.repository].merge_request_id
+  - name: Release publication after confirmed request failure
+    # Delete the UUID first. If interrupted before this write, the outstanding
+    # attempt flag continues blocking publication and another submission.
+    if:
+      all:
+        - step.pr.outputs.merged == false
+        - step.context.outputs.value.request_id != null
+        - step.failed_request.outputs.value
+        - step.final_pr.outputs.merged == false
+        - step.final_pr.outputs.state == "open"
+    state_set:
+      state.common_state[inputs.repository].merge_attempted: false
+  - name: Report restored publication after request failure
+    if:
+      all:
+        - step.pr.outputs.merged == false
+        - step.context.outputs.value.request_id != null
+        - step.failed_request.outputs.value
+        - step.final_pr.outputs.merged == false
+        - step.final_pr.outputs.state == "open"
+    publish:
+      summary: "Merge request definitively failed; publication is unblocked and no new merge was submitted"
+      failed_request_id: step.context.outputs.value.request_id
+      request_state: step.request.outputs.state
+      message: step.request.outputs.message
+      merge_attempted: false
+      recommendation: "Make corrections, commit and run publish-task before a separate merge-task invocation"
+      url: step.final_pr.outputs.url
   - name: Report confirmed merge
     if: step.pr.outputs.merged == false and step.final_pr.outputs.merged == true
     publish:
@@ -218,7 +255,14 @@ blocks:
       merge_commit_sha: step.final_pr.outputs.merge_commit_sha
       url: step.final_pr.outputs.url
   - name: Report unmerged PR without retrying
-    if: step.pr.outputs.merged == false and step.final_pr.outputs.merged == false
+    if:
+      all:
+        - step.pr.outputs.merged == false
+        - step.final_pr.outputs.merged == false
+        - any:
+            - step.context.outputs.value.request_id == null
+            - step.failed_request.outputs.value == false
+            - step.final_pr.outputs.state != "open"
     publish:
       summary: "PR is not merged; observe the saved request before attempting another submission"
       merged: false
