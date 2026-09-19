@@ -200,6 +200,7 @@ blocks:
     with:
       remote: "origin"
       branch: step.context.outputs.value.branch
+    register: publication
   - name: Recheck branch PR history after publication
     if: step.publish_path.outputs.value and step.existing_number.outputs.value == null
     uses: gh.pr.list
@@ -272,6 +273,37 @@ blocks:
         - step.published_pr.outputs.state == "open"
         - step.published_pr.outputs.merged == false
         - step.published_pr.outputs.head_sha == step.local_head.outputs.oid
+      on_fail:
+        expected:
+          repository: inputs.repository
+          issue_number: step.context.outputs.value.issue_number
+          pull_number: step.selected.outputs.value
+          head_ref: step.context.outputs.value.branch
+          base_ref: "main"
+          head_sha: step.local_head.outputs.oid
+          local_ref: step.local_head.outputs
+        before_push:
+          pull_number: step.existing_number.outputs.value
+          head_sha: step.existing_pr.outputs.head_sha | catch(["runtime.value.step_missing"], null)
+          base_sha: step.existing_pr.outputs.base_sha | catch(["runtime.value.step_missing"], null)
+          state: step.existing_pr.outputs.state | catch(["runtime.value.step_missing"], null)
+          merged: step.existing_pr.outputs.merged | catch(["runtime.value.step_missing"], null)
+          updated_at: step.existing_pr.outputs.updated_at | catch(["runtime.value.step_missing"], null)
+        push:
+          destination: step.origin.outputs
+          result: step.publication.outputs
+        after_push:
+          pull_number: step.published_pr.outputs.number
+          url: step.published_pr.outputs.url
+          head_repository: step.published_pr.outputs.head_repository
+          base_repository: step.published_pr.outputs.base_repository
+          head_ref: step.published_pr.outputs.head_ref
+          base_ref: step.published_pr.outputs.base_ref
+          head_sha: step.published_pr.outputs.head_sha
+          base_sha: step.published_pr.outputs.base_sha
+          state: step.published_pr.outputs.state
+          merged: step.published_pr.outputs.merged
+          updated_at: step.published_pr.outputs.updated_at
   - name: Remember validated published PR
     if: step.publish_path.outputs.value
     state_set:
