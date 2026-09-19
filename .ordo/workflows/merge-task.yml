@@ -1,0 +1,227 @@
+version: 0
+workflow: merge-task
+inputs:
+  repository:
+    description: GitHub OWNER/REPO containing the published task PR.
+  base_branch:
+    default: main
+    description: Expected PR target branch.
+  ship:
+    default: false
+    description: Authorize a new merge request; saved requests are only observed.
+  merge_method:
+    default: squash
+    description: GitHub merge method (merge, squash, or rebase).
+state_needs:
+  common_state: {}
+let:
+  issue_number: state.common_state[inputs.repository].issue_number | catch(["runtime.value.state_missing"], null)
+  branch: state.common_state[inputs.repository].branch | catch(["runtime.value.state_missing"], null)
+  pull_number: state.common_state[inputs.repository].pull_number | catch(["runtime.value.state_missing"], null)
+  published_head_sha: state.common_state[inputs.repository].published_head_sha | catch(["runtime.value.state_missing"], null)
+  request_id: state.common_state[inputs.repository].merge_request_id | catch(["runtime.value.state_missing"], null)
+  merge_attempted: state.common_state[inputs.repository].merge_attempted | catch(["runtime.value.state_missing"], false)
+blocks:
+- guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.base_branch | is_string
+  - inputs.base_branch | trim | ne("")
+  - inputs.ship | is_boolean
+  - inputs.merge_method | in(["merge", "squash", "rebase"])
+  - issue_number | is_integer
+  - issue_number | ne(0)
+  - branch | is_string
+  - branch | trim | ne("")
+  - branch != inputs.base_branch
+  - pull_number | is_integer
+  - pull_number | ne(0)
+  - published_head_sha | is_string and published_head_sha | trim | ne("")
+  - request_id == null or request_id | is_string
+  - request_id == null or request_id | trim | ne("")
+  - merge_attempted | is_boolean
+- steps:
+  - name: Snapshot published task context
+    value:
+      issue_number: issue_number
+      branch: branch
+      pull_number: pull_number
+      published_head_sha: published_head_sha
+      request_id: request_id
+      merge_attempted: merge_attempted
+    register: context
+  - name: Inspect published PR
+    uses: gh.pr
+    with:
+      repository: inputs.repository
+      pull_number: step.context.outputs.value.pull_number
+    register: pr
+  - name: Require the published PR identity
+    gate:
+      all:
+        - step.pr.outputs.number == step.context.outputs.value.pull_number
+        - step.pr.outputs.head_repository | lower | eq(inputs.repository | lower)
+        - step.pr.outputs.base_repository | lower | eq(inputs.repository | lower)
+        - step.pr.outputs.head_ref == step.context.outputs.value.branch
+        - step.pr.outputs.base_ref == inputs.base_branch
+        - step.pr.outputs.merged | is_boolean
+        - step.pr.outputs.merged == true or step.pr.outputs.state == "open"
+      on_fail:
+        expected_repository: inputs.repository
+        expected_branch: step.context.outputs.value.branch
+        expected_base: inputs.base_branch
+        expected_pull_number: step.context.outputs.value.pull_number
+        observed_pull_number: step.pr.outputs.number
+        observed_head_repository: step.pr.outputs.head_repository
+        observed_base_repository: step.pr.outputs.base_repository
+        observed_head_ref: step.pr.outputs.head_ref
+        observed_base_ref: step.pr.outputs.base_ref
+        observed_head_sha: step.pr.outputs.head_sha
+        published_head_sha: step.context.outputs.value.published_head_sha
+        observed_state: step.pr.outputs.state
+        observed_merged: step.pr.outputs.merged
+        url: step.pr.outputs.url
+  - name: Report already merged PR
+    if: step.pr.outputs.merged == true
+    publish:
+      summary: "PR already merged; run close-task"
+      merged: true
+      pull_number: step.context.outputs.value.pull_number
+      merge_commit_sha: step.pr.outputs.merge_commit_sha
+      url: step.pr.outputs.url
+  - name: Observe saved merge request
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id != null
+    uses: gh.pr.merge.request
+    with:
+      repository: inputs.repository
+      pull_number: step.context.outputs.value.pull_number
+      request_id: step.context.outputs.value.request_id
+    register: request
+  - name: Report saved request without resubmission
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id != null
+    publish:
+      summary: "Saved merge request observed; no new request submitted"
+      request_id: step.context.outputs.value.request_id
+      request_state: step.request.outputs.state
+      message: step.request.outputs.message
+      url: step.pr.outputs.url
+  - name: Require authorization and no uncertain earlier submission
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    gate:
+      all:
+        - inputs.ship == true
+        - step.context.outputs.value.merge_attempted == false
+        - step.pr.outputs.head_sha | is_string
+        - step.pr.outputs.head_sha | ne("")
+      on_fail:
+        ship: inputs.ship
+        merge_attempted: step.context.outputs.value.merge_attempted
+        request_id: step.context.outputs.value.request_id
+        observed_head_sha: step.pr.outputs.head_sha
+        recommendation: "Authorize a new request with ship=true, or reconcile an earlier submission before retrying"
+  - name: Inspect local branch before a new merge request
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    uses: git.branch
+    register: local_branch
+  - name: Inspect worktree before a new merge request
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    uses: git.worktree
+    register: local_worktree
+  - name: Inspect local HEAD before a new merge request
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    uses: git.ref
+    with:
+      ref: "HEAD"
+    register: local_head
+  - name: Require the published version locally and on GitHub
+    # These checks apply only to a new submission, never to observing a saved
+    # request. The saved publication SHA remains the server-side head constraint.
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    gate:
+      all:
+        - step.local_branch.outputs.value == step.context.outputs.value.branch
+        - step.local_worktree.outputs.clean == true
+        - step.local_head.outputs.exists == true
+        - step.local_head.outputs.oid == step.context.outputs.value.published_head_sha
+        - step.pr.outputs.head_sha == step.context.outputs.value.published_head_sha
+      on_fail:
+        repository: inputs.repository
+        pull_number: step.context.outputs.value.pull_number
+        expected_branch: step.context.outputs.value.branch
+        observed_branch: step.local_branch.outputs.value
+        worktree_clean: step.local_worktree.outputs.clean
+        local_head_exists: step.local_head.outputs.exists
+        local_head_sha: step.local_head.outputs.oid
+        published_head_sha: step.context.outputs.value.published_head_sha
+        observed_pr_head_sha: step.pr.outputs.head_sha
+        url: step.pr.outputs.url
+        recommendation: "Commit changes and run publish-task successfully before submitting merge"
+  - name: Record submission intent
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    state_set:
+      state.common_state[inputs.repository].merge_attempted: true
+  - name: Ask GitHub to merge the published head
+    # GitHub enforces its repository rules. No local CI allowlist, checkout
+    # attestation, mergeable-state heuristic, or administrative bypass is used.
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    uses: gh.pr.merge
+    with:
+      repository: inputs.repository
+      pull_number: step.context.outputs.value.pull_number
+      merge_method: inputs.merge_method
+      expected_head_sha: step.context.outputs.value.published_head_sha
+    register: submission
+  - name: Save returned merge request UUID
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null and step.submission.outputs.request_id != null
+    state_set:
+      state.common_state[inputs.repository].merge_request_id: step.submission.outputs.request_id
+  - name: Report GitHub submission result
+    if: step.pr.outputs.merged == false and step.context.outputs.value.request_id == null
+    publish:
+      summary: "GitHub merge response received; acceptance alone is not completion"
+      request_id: step.submission.outputs.request_id
+      request_state: step.submission.outputs.state
+      submission: step.submission.outputs.submission
+      message: step.submission.outputs.message
+      expected_head_sha: step.context.outputs.value.published_head_sha
+      url: step.pr.outputs.url
+  - name: Observe PR after request handling
+    if: step.pr.outputs.merged == false
+    uses: gh.pr
+    with:
+      repository: inputs.repository
+      pull_number: step.context.outputs.value.pull_number
+    register: final_pr
+  - name: Require final PR identity
+    if: step.pr.outputs.merged == false
+    gate:
+      all:
+        - step.final_pr.outputs.number == step.context.outputs.value.pull_number
+        - step.final_pr.outputs.head_repository | lower | eq(inputs.repository | lower)
+        - step.final_pr.outputs.base_repository | lower | eq(inputs.repository | lower)
+        - step.final_pr.outputs.head_ref == step.context.outputs.value.branch
+        - step.final_pr.outputs.base_ref == inputs.base_branch
+        - step.final_pr.outputs.merged | is_boolean
+      on_fail:
+        expected_pull_number: step.context.outputs.value.pull_number
+        observed_pull_number: step.final_pr.outputs.number
+        observed_head_repository: step.final_pr.outputs.head_repository
+        observed_base_repository: step.final_pr.outputs.base_repository
+        observed_head_ref: step.final_pr.outputs.head_ref
+        observed_base_ref: step.final_pr.outputs.base_ref
+        observed_merged: step.final_pr.outputs.merged
+  - name: Report confirmed merge
+    if: step.pr.outputs.merged == false and step.final_pr.outputs.merged == true
+    publish:
+      summary: "PR merged; run close-task"
+      merged: true
+      merge_commit_sha: step.final_pr.outputs.merge_commit_sha
+      url: step.final_pr.outputs.url
+  - name: Report unmerged PR without retrying
+    if: step.pr.outputs.merged == false and step.final_pr.outputs.merged == false
+    publish:
+      summary: "PR is not merged; observe the saved request before attempting another submission"
+      merged: false
+      state: step.final_pr.outputs.state
+      head_sha: step.final_pr.outputs.head_sha
+      url: step.final_pr.outputs.url

@@ -45,6 +45,17 @@ workflows:
     when: Publish committed review changes, including updates to an existing PR, without waiting for CI or requesting merge.
     state_bindings:
       common_state: common_state
+  merge-task:
+    file: workflows/merge-task.yml
+    description: Ask GitHub to merge the published PR or observe a saved merge request
+    category: task-lifecycle
+    when: Set ship=true to authorize a new request; GitHub enforces merge eligibility. Never pushes or creates a PR.
+    with:
+      ship?:
+      merge_method?:
+      base_branch?:
+    state_bindings:
+      common_state: common_state
   close-task:
     file: workflows/close-task.yml
     description: Close a remotely merged task and clean up locally
