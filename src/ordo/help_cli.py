@@ -874,6 +874,7 @@ AUTHORING_CLUSTER_SPECS: tuple[dict[str, object], ...] = (
             "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
             "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
             "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport.",
+            "Use git.branch.delete for local cleanup: optional strictly boolean force defaults to false (git branch -d); force: true uses -D after the caller has established cleanup eligibility, including squash-merged work. Default-branch protection via origin/HEAD and current/worktree checkout restrictions still apply. Inspect connector.git.branch.delete.",
             "Use git.remote with a configured remote name to observe effective fetch_urls, push_urls, and mirror locally. Git applies URL rewrites; literal observed URLs are preserved without normalization or redaction. Missing remote is exists=false with empty URL lists and mirror=null; an existing remote without a mirror setting is mirror=false. The caller chooses acceptable destinations. Use git.repo for repository facts, git.upstream for branch tracking, and git.sync.push for publication.",
         ],
         "inappropriate_when": [
@@ -2546,10 +2547,13 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             "inspect_next": ["connector.git.branch.switch", "connector.git.branches", "connector.git.branch"],
         },
         ("git", "branch.delete"): {
-            "definition": "Delete one local non-default Git branch after safety checks confirm it is not the checked-out or protected default branch.",
+            "definition": "Delete one local non-default Git branch. Optional strictly boolean force defaults to false: omitted or false uses git branch -d and its merged-branch check; true uses git branch -D to bypass that check.",
             "use_when": [
                 "A workflow is intentionally cleaning up one stale local branch rather than switching branches or resetting repository state broadly.",
-                "The authored intent needs Git's merged-branch and checked-out-branch protections rather than a blunt ref deletion.",
+                "Use the default merged-branch check for ordinary cleanup. Use force: true only after the caller establishes cleanup eligibility, for example after independently verifying a squash-merged PR; this action does not verify remote merge status.",
+                "Both modes preserve default-branch protection discovered through git.repo from origin/HEAD, and reject branches checked out here or in another worktree. If origin/HEAD is absent, no default branch is inferred by name.",
+                "Null, strings, numbers, arrays, and objects are invalid force values and return input_error. Missing branches return branch_not_found; checkout conflicts return branch_checked_out; protected defaults return default_branch_protected; an unmerged branch under -d returns branch_not_merged. The existing delete_blocked command mapping is retained; unclassified command failures are normalized by the shared Git handler to action_failed with action.git.command_failed and raw Git evidence.",
+                "Only run performs deletion and validates the force value at the action boundary. check, review, plan, explain, and next retain their non-mutating analysis behavior; their readiness result does not prove that Git will permit deletion.",
             ],
             "do_not_use_for": [
                 "Switching away from the current branch before deletion; use connector.git.branch.switch first when the current checkout must move.",
@@ -2563,6 +2567,7 @@ def _build_model_node_lookup(*, context: _HelpResponseContext | None = None) -> 
             ],
             "examples": [
                 {"reference": "git.branch.delete", "inputs": {"branch": "stale/demo"}},
+                {"reference": "git.branch.delete", "inputs": {"branch": "squash/demo", "force": True}},
             ],
             "inspect_next": ["connector.git.branches", "connector.git.branch.switch", "connector.git.branch"],
         },

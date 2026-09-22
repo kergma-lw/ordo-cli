@@ -9,10 +9,11 @@ from ordo.plugin_sdk import MappedOutcomeError, OperationContext, OperationOutco
 def info():
     return action(
         name="branch.delete",
-        inputs={"branch": "string"},
+        summary="Delete a local non-default branch; optional boolean force defaults to false (-d), true uses -D.",
+        inputs={"branch": "string", "force": "boolean"},
         effects=("delete a local non-default branch",),
         outputs={"branch": "string"},
-        failure_modes=("branch_not_found", "branch_checked_out", "default_branch_protected", "branch_not_merged", "delete_blocked"),
+        failure_modes=("input_error", "branch_not_found", "branch_checked_out", "default_branch_protected", "branch_not_merged", "delete_blocked"),
         invalidates_observations=BRANCH_INVENTORY_INVALIDATION,
         handler=run,
     )
@@ -20,6 +21,19 @@ def info():
 
 def run(ctx: OperationContext) -> OperationOutcome:
     branch = str(ctx.input("branch"))
+    try:
+        force = ctx.input("force")
+    except MappedOutcomeError as exc:
+        if not any(diagnostic.code == "operation.input_missing" for diagnostic in exc.outcome.diagnostics):
+            return exc.outcome
+        force = False
+    if type(force) is not bool:
+        return fail_with_diagnostic(
+            code="input_error",
+            summary="Input 'force' must be a boolean when provided",
+            diagnostic_code="action.git.branch_delete.invalid_force",
+            reference=ctx.reference,
+        )
     active_branch = current_branch(ctx)
     if isinstance(active_branch, OperationOutcome):
         return active_branch
@@ -51,7 +65,7 @@ def run(ctx: OperationContext) -> OperationOutcome:
         )
 
     try:
-        command = ctx.command(["git", "branch", "-d", branch], failures={"os_error": "delete_blocked", "nonzero": "delete_blocked"})
+        command = ctx.command(["git", "branch", "-D" if force else "-d", branch], failures={"os_error": "delete_blocked", "nonzero": "delete_blocked"})
     except MappedOutcomeError as exc:
         return map_nonzero(
             ctx,

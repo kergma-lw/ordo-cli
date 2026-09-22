@@ -1170,6 +1170,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(delete["snippet_coverage"], "runner_verified")
         self.assertIn("Delete one local non-default Git branch", delete["metadata"]["definition"])
         self.assertEqual(delete["canonical_examples"][0]["form"], "step_fragment")
+        self.assertEqual(delete["canonical_examples"][1]["name"], "git_branch_delete_force_step")
+        self.assertIn("force defaults to false", delete["metadata"]["definition"])
+        self.assertIn("git branch -D", delete["metadata"]["definition"])
 
         self.assertEqual(switch["snippet_coverage"], "runner_verified")
         self.assertIn("Switch the current Git checkout", switch["metadata"]["definition"])
@@ -2243,6 +2246,9 @@ class OrdoHelpCliTest(unittest.TestCase):
         self.assertEqual(delete.returncode, 0)
         self.assertIn("Delete one local non-default Git branch", delete.stdout)
         self.assertIn("connector.git.branch.switch", delete.stdout)
+        self.assertIn("force: true", delete.stdout)
+        self.assertIn("origin/HEAD", delete.stdout)
+        self.assertIn("input_error", delete.stdout)
 
         self.assertEqual(switch.returncode, 0)
         self.assertIn("Switch the current Git checkout", switch.stdout)

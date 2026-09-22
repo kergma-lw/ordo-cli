@@ -124,6 +124,7 @@ blocks:
     uses: git.branch.delete
     with:
       branch: step.context.outputs.value.branch
+      force: true
   - name: Clear completed context
     state_delete: state.common_state[inputs.repository]
   - name: Publish completion

@@ -1,6 +1,6 @@
 # Operation reference
 
-Generated operation pages for 62 published operations.
+Generated operation pages for 69 published operations.
 
 - [Operation catalog](../topics/operations.md)
 
@@ -24,6 +24,8 @@ Operations in the `fs` namespace.
 
 Operations for reading and changing GitHub state.
 
+- [gh.actions.run](gh/actions-run.md)
+- [gh.actions.run.jobs](gh/actions-run-jobs.md)
 - [gh.issue](gh/issue.md)
 - [gh.issue.body.append](gh/issue-body-append.md)
 - [gh.issue.body.replace](gh/issue-body-replace.md)
@@ -34,7 +36,11 @@ Operations for reading and changing GitHub state.
 - [gh.pr](gh/pr.md)
 - [gh.pr.checks](gh/pr-checks.md)
 - [gh.pr.comments](gh/pr-comments.md)
+- [gh.pr.create](gh/pr-create.md)
 - [gh.pr.diff](gh/pr-diff.md)
+- [gh.pr.list](gh/pr-list.md)
+- [gh.pr.merge](gh/pr-merge.md)
+- [gh.pr.merge.request](gh/pr-merge-request.md)
 - [gh.pr.review_comments](gh/pr-review-comments.md)
 - [gh.pr.reviews](gh/pr-reviews.md)
 - [gh.pr.timeline](gh/pr-timeline.md)
@@ -73,6 +79,7 @@ Operations for reading and changing local Git state.
 - [git.integrate.rebase_onto](git/integrate-rebase-onto.md)
 - [git.range](git/range.md)
 - [git.ref](git/ref.md)
+- [git.remote](git/remote.md)
 - [git.repo](git/repo.md)
 - [git.stash](git/stash.md)
 - [git.state](git/state.md)

@@ -18,7 +18,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: delet
 
 ```json
 {
-  "branch": "string"
+  "branch": "string",
+  "force": "boolean"
 }
 ```
 
@@ -36,6 +37,7 @@ Use this when a workflow needs Git state or Git side effects. In practice: delet
 
 ## Failure modes
 
+- `input_error`
 - `branch_not_found`
 - `branch_checked_out`
 - `default_branch_protected`
@@ -57,7 +59,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: delet
 
 ```json
 {
-  "branch": "string"
+  "branch": "string",
+  "force": "boolean"
 }
 ```
 
@@ -84,12 +87,14 @@ Use this when a workflow needs Git state or Git side effects. In practice: delet
     "examples": [
       {
         "inputs": {
-          "branch": "string"
+          "branch": "string",
+          "force": "boolean"
         },
         "reference": "git.branch.delete"
       }
     ],
     "failure_modes": [
+      "input_error",
       "branch_not_found",
       "branch_checked_out",
       "default_branch_protected",
@@ -97,7 +102,8 @@ Use this when a workflow needs Git state or Git side effects. In practice: delet
       "delete_blocked"
     ],
     "inputs": {
-      "branch": "string"
+      "branch": "string",
+      "force": "boolean"
     },
     "invalidates_observations": [
       "git.branches",
@@ -112,7 +118,7 @@ Use this when a workflow needs Git state or Git side effects. In practice: delet
     "preflight_observations": [],
     "prerequisites": [],
     "replaced_by": [],
-    "summary": "Action operation 'git.branch.delete'",
+    "summary": "Delete a local non-default branch; optional boolean force defaults to false (-d), true uses -D.",
     "tags": [
       "git",
       "action"

@@ -38,7 +38,7 @@ These are interactive discovery surfaces in `ordo-help`, so they are listed here
 
 ## Operation reference
 
-- [All operations](operations/index.md) — 62 published operations
+- [All operations](operations/index.md) — 69 published operations
 
 ## Full JSON reference
 
