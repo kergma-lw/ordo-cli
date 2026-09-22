@@ -123,7 +123,8 @@ Use this page to choose an existing authoring primitive before introducing a fal
     {
       "appropriate_when": [
         "Several runs need the same missing-input defaults or execution context without copying them into every workflow entry.",
-        "Selection among project modes belongs to launch context rather than to workflow-authored branching."
+        "Selection among project modes belongs to launch context rather than to workflow-authored branching.",
+        "Static graph resolves declared fixed profiles and known literal/input/let switches without activation. Declared workflow defaults and protected bindings survive; explicit CLI profile authority applies to pre_run. Unknown selections remain symbolic rather than reading remembered state."
       ],
       "inappropriate_when": [
         "The behavior changes workflow semantics and should be made explicit in guards, steps, or playbook workflow-entry inputs.",
@@ -243,7 +244,8 @@ Use this page to choose an existing authoring primitive before introducing a fal
         "One intentionally project-local workflow subtree must bind itself to one fixed execution profile through workflow.profile.",
         "Document every root input with a non-blank description and expose inputs without a default, selected launch-profile value, or entry binding through playbook with caller slots: x: for required inputs, x?: for optional inputs. Review reports input_authoring warnings; CLI overrides do not suppress them or change activation errors.",
         "Plain workflows show omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json keeps all fields unchanged, including original normalized required, caller_slot, the launch_profile source label and initial activation name and source, not the final bound workflow profile.",
-        "Inspect the main caller interface with ordo-playbook workflows show <workflow>: plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. --json retains the unchanged full declaration contract with normalized required, caller_slot, sources, and coverage. Coverage reports source presence, not execution readiness; required caller slots still require caller input. Launch-profile values are not exposed, and CLI input overrides or runtime profile switches do not count as authored sources."
+        "Inspect the main caller interface with ordo-playbook workflows show <workflow>: plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. --json retains the unchanged full declaration contract with normalized required, caller_slot, sources, and coverage. Coverage reports source presence, not execution readiness; required caller slots still require caller input. Launch-profile values are not exposed, and CLI input overrides or runtime profile switches do not count as authored sources.",
+        "Plain workflows show adds top-level warnings only for required workflow inputs with coverage missing, including declarations hidden from inputs. Each warning has code discovery.workflow.input_source_missing, input, message, and hint: no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot; expose a caller slot or supply a source. Optional missing declarations do not warn, and warnings is omitted when none qualify. --json is unchanged. This uses authored source presence without readiness or state analysis; check, review, plan, run, explain, and next are unchanged."
       ],
       "inappropriate_when": [
         "You only need launch-time catalog metadata or reusable fragment expansion rather than a standalone executable workflow.",
@@ -406,6 +408,10 @@ Use this page to choose an existing authoring primitive before introducing a fal
       "appropriate_when": [
         "Workflow data must survive across runs through declared state locations rather than through implicit files or ambient context.",
         "State reads, writes, and deletions should be explicit in the workflow contract and step surface.",
+        "Use ordo-playbook graph to see how workflows connect through persistent state, where shared data is written, and where it is removed. No active task is required.",
+        "Shared context: writers → readers, not execution order. Free alternative reader roots are marked (data use; alternative sources). Read +field as writes, −field as deletes, and ? as a conditional change. Distinct data sources can show the same operation on several branches: ↔ (reference) leaves never repeat its subtree or execution. Alternative writers of the same data are not expanded. also reads from keeps extra sources visible; reads from: name? marks conditional/fallback data use separately from +field?. Guards and check determine applicability; alternative ends are not sequential steps.",
+        "parameter stands for a key that has not been selected; relationships apply to a matching context instance. Graph does not read saved state or run probes. A missing edge does not prove independence in external systems. Use graph --json for dependencies, conditions, and unresolved relationships.",
+        "After exploring graph, use workflows show <workflow> for inputs, check or explain <workflow> for readiness, and next for a recommendation in the current environment. See docs/static-graph.md for the technical reference.",
         "Write or delete only after the final read of the same actual file, regardless of roles or profiles; use value + register for per-run dataflow.",
         "Before binding, authoring validation retains the same-role rule. After binding, relative paths resolve in each access context: aliases count as one file, while the same role may access different files and be valid.",
         "Bound validation reports state_storage.write_before_last_read for proven violations, or state_storage.identity_unresolved for conservative early rejection of relevant uncertain write/later-read pairs, not a proven violation. Both codes have the validation.workflow. prefix.",
@@ -468,7 +474,9 @@ Use this page to choose an existing authoring primitive before introducing a fal
         "states",
         "state_set",
         "state_delete",
-        "bound locations"
+        "bound locations",
+        "graph",
+        "possible processes"
       ],
       "name": "state",
       "published_names": {
@@ -1238,14 +1246,22 @@ Use this page to choose an existing authoring primitive before introducing a fal
       "appropriate_when": [
         "The workflow needs one published external operation instead of a repository-local helper or opaque fallback.",
         "Typed public operations express product intent better than broad execution surfaces.",
+        "Use gh.actions.run with exactly one of run_id or check_suite_id; omitted/null attempt observes latest then pins that numbered attempt. Pass returned run_id and run_attempt as gh.actions.run.jobs inputs run_id and explicit attempt. gh.pr.checks check_suite_id bridges check runs to the direct GraphQL Actions association; null association is found=false. Jobs are complete read-only observations, not tested-SHA attestation or merge policy. gh.actions is a namespace segment, not an executable operation.",
+        "Use gh.pr.list with head, head_owner, base and explicit state: all to distinguish no matches, one open PR, multiple open PRs, and closed history; unknown facts block dependent decisions. gh.pr.create is a separate action with its own mandatory open check. One existing open PR including draft is non-OK already_exists, not successful reuse; uncertain submission leaves created=null. No atomic uniqueness or exactly-once guarantee is provided.",
+        "Connector authors use ctx.call(name, inputs=...) for same-family probe dependencies with already-resolved values, never reevaluated expressions. Full and local dotted names work; omitted inputs/None preserve legacy behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring.",
+        "For GitHub async merge, inspect gh.pr identity and stack_state, accept gh.pr.checks evidence, submit gh.pr.merge with expected_head_sha from the accepted CI head, then save request_id for gh.pr.merge.request. Acceptance is not completion.",
+        "For gh.pr.merge and gh.pr.merge.request, repository is optional: a valid explicit OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error.",
         "Use fs.file for UTF-8 content and metadata from the same opened regular file; safe-open requires nonzero O_NOFOLLOW and O_NONBLOCK, with no unsafe fallback or atomic snapshot guarantee.",
         "GitHub repository inputs and connector_contexts.gh.repository use literal ASCII OWNER/REPO operands, not URLs; the context is a default, not an authorization allowlist.",
         "Users need connector-backed runtime failures to identify the external tool or remote system rather than looking like generic workflow mistakes.",
-        "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport."
+        "Use git.upstream to detect the exact configured remote, including nested names such as team/origin, and its local tracking-tail remote_branch. git.sync.push can use this remote when omitted or null; explicit names keep fetch/push targets clear. Run alone validates exact remote-inventory membership before transport.",
+        "Use git.branch.delete for local cleanup: optional strictly boolean force defaults to false (git branch -d); force: true uses -D after the caller has established cleanup eligibility, including squash-merged work. Default-branch protection via origin/HEAD and current/worktree checkout restrictions still apply. Inspect connector.git.branch.delete.",
+        "Use git.remote with a configured remote name to observe effective fetch_urls, push_urls, and mirror locally. Git applies URL rewrites; literal observed URLs are preserved without normalization or redaction. Missing remote is exists=false with empty URL lists and mirror=null; an existing remote without a mirror setting is mirror=false. The caller chooses acceptable destinations. Use git.repo for repository facts, git.upstream for branch tracking, and git.sync.push for publication."
       ],
       "inappropriate_when": [
         "You are treating a missing public capability as permission to improvise local semantics silently.",
         "The behavior belongs to launch metadata or pure workflow-local transformation instead of an external operation.",
+        "Do not replace accepted CI head evidence with a freshly fetched head. Checks on test-merge candidate M bind expected head H, not M. First-version merge rejects stacked and unknown scope; no atomic base or stack guarantee, polling, queue administration, or admin bypass is provided.",
         "Git sync remote inputs are configured identifiers, not ad-hoc URLs, paths, or options. Configured URLs and helpers remain trusted; this is not a protocol sandbox."
       ],
       "inspect_next": [
@@ -1256,10 +1272,101 @@ Use this page to choose an existing authoring primitive before introducing a fal
           "summary": "Inspect the public connector catalog"
         },
         {
+          "command": "ordo-help describe connector.authoring --json",
+          "handle": "connector.authoring",
+          "kind": "sdk",
+          "summary": "Connector-author SDK dependency calls with already-resolved probe inputs",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.git.remote --json",
+          "handle": "connector.git.remote",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.remote",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.git.repo --json",
+          "handle": "connector.git.repo",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.repo",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.git.upstream --json",
+          "handle": "connector.git.upstream",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.upstream",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.git.sync.push --json",
+          "handle": "connector.git.sync.push",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for git.sync.push",
+          "topic": "model"
+        },
+        {
           "command": "ordo-help describe connector.gh --json",
           "handle": "connector.gh",
           "kind": "connector_family",
           "summary": "Published connector family metadata for the gh namespace",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.actions.run --json",
+          "handle": "connector.gh.actions.run",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.actions.run",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.actions.run.jobs --json",
+          "handle": "connector.gh.actions.run.jobs",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.actions.run.jobs",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.pr.list --json",
+          "handle": "connector.gh.pr.list",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.pr.list",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.pr.create --json",
+          "handle": "connector.gh.pr.create",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.pr.create",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.pr --json",
+          "handle": "connector.gh.pr",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.pr",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.pr.checks --json",
+          "handle": "connector.gh.pr.checks",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.pr.checks",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.pr.merge --json",
+          "handle": "connector.gh.pr.merge",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.pr.merge",
+          "topic": "model"
+        },
+        {
+          "command": "ordo-help describe connector.gh.pr.merge.request --json",
+          "handle": "connector.gh.pr.merge.request",
+          "kind": "connector_operation",
+          "summary": "Published connector operation metadata for gh.pr.merge.request",
           "topic": "model"
         },
         {
@@ -1297,7 +1404,16 @@ Use this page to choose an existing authoring primitive before introducing a fal
         "namespace",
         "probe",
         "action",
-        "public surface"
+        "public surface",
+        "async merge",
+        "expected_head_sha",
+        "test_merge",
+        "standalone",
+        "request_id",
+        "Actions",
+        "run_attempt",
+        "check_suite_id",
+        "check_run_id"
       ],
       "name": "connectors",
       "published_names": {

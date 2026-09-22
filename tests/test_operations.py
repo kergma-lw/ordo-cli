@@ -243,8 +243,9 @@ class OperationTest(unittest.TestCase):
         delete = registry.get_operation("git.branch.delete")
         self.assertEqual(
             delete.failure_modes,
-            ("branch_not_found", "branch_checked_out", "default_branch_protected", "branch_not_merged", "delete_blocked"),
+            ("input_error", "branch_not_found", "branch_checked_out", "default_branch_protected", "branch_not_merged", "delete_blocked"),
         )
+        self.assertEqual(delete.inputs, {"branch": "string", "force": "boolean"})
 
     def test_git_initial_action_surface_replaces_previous_custom_actions(self) -> None:
         registry = get_public_connector_registry()

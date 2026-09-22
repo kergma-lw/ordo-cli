@@ -1439,12 +1439,31 @@ HELP_SNIPPET_REGISTRY: dict[str, JSONObject] = {
                 "name": "git_branch_delete_step",
                 "kind": "positive",
                 "form": "step_fragment",
-                "summary": "Delete one stale local branch after the workflow has already made the intended cleanup decision.",
+                "summary": "Delete one stale local branch with the default force: false behavior (git branch -d), preserving Git's merged-branch check.",
                 "source_example": "git-branch-management",
                 "source_excerpt": {
                     "path": "examples/git-branch-management.yaml",
                     "start_line": 23,
                     "end_line": 26
+                },
+                "verification": {
+                    "kind": "runner_verified",
+                    "world": "default",
+                    "insertion_mode": "step_fragment",
+                    "target": "connector.git.branch.delete",
+                    "expected_status": "ok"
+                }
+            },
+            {
+                "name": "git_branch_delete_force_step",
+                "kind": "positive",
+                "form": "step_fragment",
+                "summary": "After independently verifying squash-merge cleanup eligibility, explicitly select git branch -D with force: true. Default and checked-out branch protections still apply. Runner verification checks the authored shape without deleting a branch; synthetic repository tests verify deletion behavior.",
+                "source_example": "git-branch-management",
+                "source_excerpt": {
+                    "path": "examples/git-branch-management.yaml",
+                    "start_line": 32,
+                    "end_line": 37
                 },
                 "verification": {
                     "kind": "runner_verified",

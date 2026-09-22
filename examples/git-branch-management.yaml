@@ -29,3 +29,9 @@ blocks:
           current_branch: step.current_branch.outputs.value
           inventory_count: step.branches.outputs.count
           summary: "Git branch workflow prepared"
+      # Caller has independently verified that this squash-merged branch is eligible for cleanup.
+      - name: delete-verified-squash-branch
+        uses: git.branch.delete
+        with:
+          branch: "squash/demo"
+          force: true

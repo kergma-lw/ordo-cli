@@ -18,7 +18,7 @@ Browse playbook workflows, ask which workflow should run next, inspect inferred 
 - `explain <workflow>` — explain why the workflow can or cannot be run right now
 - `run <workflow>` — run the workflow and do the real work
 - `next` — suggest which workflow should run next from the current playbook context, preferring state-connected continuation over world-blocked or unrelated options
-- `graph` — show the inferred workflow topology for the current playbook context
+- `graph` — Show how workflows connect through persistent state.
 
 ### Flags
 
@@ -32,7 +32,7 @@ Browse playbook workflows, ask which workflow should run next, inspect inferred 
 ### Discovery commands
 
 - `workflows list` — list declared playbook workflows with project-local descriptions
-- `workflows show <workflow>` — show one workflow entry in the existing serialized envelope: plain inputs expose the main caller interface; --json retains the full declaration contract and authored source coverage
+- `workflows show <workflow>` — show one workflow entry: plain inputs expose caller slots with top-level warnings only for required declarations missing source coverage; --json retains the unchanged full declaration contract
 
 ### Input override precedence
 
@@ -93,7 +93,7 @@ When adding or changing workflows, run both check and review. Neither replaces t
         },
         {
           "name": "workflows show <workflow>",
-          "summary": "show one workflow entry in the existing serialized envelope: plain inputs expose the main caller interface; --json retains the full declaration contract and authored source coverage"
+          "summary": "show one workflow entry: plain inputs expose caller slots with top-level warnings only for required declarations missing source coverage; --json retains the unchanged full declaration contract"
         }
       ],
       "do_not_use_for": [
@@ -203,7 +203,7 @@ When adding or changing workflows, run both check and review. Neither replaces t
         },
         {
           "name": "graph",
-          "summary": "show the inferred workflow topology for the current playbook context"
+          "summary": "Show how workflows connect through persistent state."
         }
       ],
       "name": "ordo-playbook",
@@ -243,8 +243,15 @@ When adding or changing workflows, run both check and review. Neither replaces t
       "run_success_surface": "successful run emits workflow-local results, may also surface global published values, and may synthesize one top-level fallback result when neither results nor published output were produced",
       "usage": "ordo-playbook [--file PATH] [--profile NAME] [--input KEY=VALUE] [--input-file KEY=PATH] [--progress-steps] [--json] <command>",
       "use_when": [
+        "Show how workflows connect through persistent state. Use ordo-playbook graph to explore related workflows, where they write shared data, and where that data is removed. No active task is required.",
+        "Read +field as a write, −field as a deletion, and ? as a conditional change. A write need not be the first write; −context removes the selected context.",
+        "Shared context: writers → readers, not execution order. A free reader root is marked (data use; alternative sources) because it uses data without mutating the context. This shows shared data, not a mandatory sequence: guards and check determine applicability, and alternative ends are not sequential steps. Playbook order helps arrange workflows when their relationships leave a choice. Writers and deletions can also be branches. When sources already form a chain, the deepest source is the parent; also reads from keeps other sources visible. Distinct data from incomparable sources is shown under each source: the first source in display order holds the full occurrence, and ↔ (reference) leaves show the same operation without repeating its subtree. Alternative writers of the same data stay together. reads from: name? marks known conditional or fallback data use, separately from +field?. Fallback reads still count as data use. A missing graph edge does not prove independence in external systems.",
+        "Graph does not read saved state, run probes, or recommend what to do next. Use workflows show <workflow> for inputs, check <workflow> to check whether it can run, explain <workflow> to understand why, and next for a recommendation in the current environment.",
+        "parameter stands for a key that has not been selected; the relationship applies to a matching context instance. Use graph --json for detailed dependencies, conditions, and unresolved relationships. Technical reference: docs/static-graph.md and meta/model/runtime/graph-v1.md.",
+        "↔ marks the same workflow: state/kind identifies another role; (reference) is a leaf sighting, not another execution. A deletion appears near the related data's users; this does not require running every reader before deleting the data.",
         "You need to discover which named workflows the current playbook publishes before choosing one.",
-        "Use workflows show <workflow> for the main caller interface without activating the workflow. Plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. Plain output omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json retains the unchanged complete declared inputs mapping and top-level launch_profile, including all input fields with original normalized required and caller_slot. Each visible input preserves description and hint when provided. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields; other envelope fields are unchanged.",
+        "Use workflows show <workflow> for the main caller interface without activating the workflow. Plain output keeps the JSON-shaped serialized envelope but filters the inputs mapping to caller_slot required or optional, hides caller_slot none, and retains inputs: {} when no caller slots exist. Plain output omits top-level launch_profile entirely and removes caller_slot, sources, and coverage from retained inputs; other record fields are preserved except required, which reports caller-slot obligation: true for a required slot, false for an optional slot, not workflow declaration requiredness. No optional field is added. --json retains the unchanged complete declared inputs mapping and top-level launch_profile, including all input fields with original normalized required and caller_slot. Each visible input preserves description and hint when provided. There are no separate declared_inputs, caller_inputs, or optional_caller_inputs fields; other envelope fields are unchanged except conditional plain warnings.",
+        "Plain workflows show adds top-level warnings only for required workflow declarations with coverage missing, evaluated before filtering inputs. Each warning contains code discovery.workflow.input_source_missing, the input name, a message explaining no workflow default, not supplied by the selected launch profile (or no profile selected), no concrete playbook binding, and no caller slot, plus a hint to expose a caller slot or supply a source. Missing declarations stay hidden from inputs. Optional missing declarations do not warn; either caller-slot form or any present source suppresses the warning. Omit warnings entirely when none qualify. --json gains no warnings and remains unchanged. No readiness or state analysis is performed; check, review, plan, run, explain, and next remain unchanged.",
         "In --json only, input sources list every present workflow_default, launch_profile, and entry_binding in that order, and coverage is provided when any source exists, caller_slot when only a slot exists, or missing when neither exists, using the same source-presence rule as review.playbook.input_caller_slot_missing. In both outputs, default appears only when declared, including null; binding appears only for a concrete static entry binding. Selected profile values are never exposed.",
         "In --json only, top-level launch_profile reports the initial activation name and source, not the final bound workflow profile: default for defaults.profile, explicit_cli for --profile, or both null when no launch profile is selected. The launch_profile input source label is also JSON-only. Only the selected profile is loaded. Coverage is not value validity or execution readiness: null, false, and zero count as present sources; required caller slots still require explicit caller input even with provided coverage. --input, --input-file, and runtime profile switches do not contribute authored source coverage.",
         "You need to ask which workflow should run next, or run one named workflow through check, review, plan, explain, or run.",

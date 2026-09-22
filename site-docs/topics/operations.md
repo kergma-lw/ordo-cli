@@ -51,6 +51,7 @@ Operations for reading and changing local Git state.
 - [git.integrate.rebase_onto](../operations/git/integrate-rebase-onto.md) — Rebase a Git branch range onto a new base.
 - [git.range](../operations/git/range.md) — Compare two Git refs and report ahead/behind counts.
 - [git.ref](../operations/git/ref.md) — Read metadata for a Git ref.
+- [git.remote](../operations/git/remote.md) — Inspect a configured remote's effective fetch and push URLs and mirror setting without network access. Git applies URL rewrites; returned URLs are preserved verbatim. An absent remote has exists=false, empty URL lists, and mirror=null.
 - [git.repo](../operations/git/repo.md) — Read Git repository metadata.
 - [git.stash](../operations/git/stash.md) — List Git stash entries.
 - [git.state](../operations/git/state.md) — Read the current Git working-state summary.
@@ -102,6 +103,8 @@ Operations for reading and changing GitHub state.
 
 ### Operations
 
+- [gh.actions.run](../operations/gh/actions-run.md) — Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.
+- [gh.actions.run.jobs](../operations/gh/actions-run-jobs.md) — Observe all jobs for an exact Actions run attempt; fail on incomplete or inconsistent pagination.
 - [gh.issue](../operations/gh/issue.md) — Read a GitHub issue.
 - [gh.issue.body.append](../operations/gh/issue-body-append.md) — Append text to a GitHub issue body.
 - [gh.issue.body.replace](../operations/gh/issue-body-replace.md) — Replace a GitHub issue body.
@@ -112,7 +115,11 @@ Operations for reading and changing GitHub state.
 - [gh.pr](../operations/gh/pr.md) — Read pull request metadata from GitHub.
 - [gh.pr.checks](../operations/gh/pr-checks.md) — Read normalized status and check-run results from a GitHub pull request head.
 - [gh.pr.comments](../operations/gh/pr-comments.md) — Read regular conversation comments from a GitHub pull request.
+- [gh.pr.create](../operations/gh/pr-create.md) — Create one PR with explicit draft and exact source repository after a complete gh.pr.list open guard; creation_unknown must not be blindly retried.
 - [gh.pr.diff](../operations/gh/pr-diff.md) — Read normalized change content from a GitHub pull request.
+- [gh.pr.list](../operations/gh/pr-list.md) — List GitHub.com REST pull requests by explicit state (open|closed|all) and optional branches; bare head is filtered locally across all pages. Complete traversal is not an atomic snapshot.
+- [gh.pr.merge](../operations/gh/pr-merge.md) — Request a SHA-guarded direct async merge; save request_id for gh.pr.merge.request. Acceptance is not completion.
+- [gh.pr.merge.request](../operations/gh/pr-merge-request.md) — Observe a saved async merge UUID once: pending, merged, enqueued, or failed. Requests expire after 24 hours; 404 is unavailable, not failure proof.
 - [gh.pr.review_comments](../operations/gh/pr-review-comments.md) — Read line-level review comments from a GitHub pull request.
 - [gh.pr.reviews](../operations/gh/pr-reviews.md) — Read submitted reviews from a GitHub pull request.
 - [gh.pr.timeline](../operations/gh/pr-timeline.md) — Read normalized lifecycle events from a GitHub pull request timeline.
@@ -168,6 +175,7 @@ Operations in the `fs` namespace.
 
 ```json
 {
+  "connector_authoring_guidance": "Connector-author SDK: ctx.call(name, *, inputs=None) supports nonempty already-resolved inputs only for same-family probe dependencies. Full references (gh.pr.list) and local dotted names (pr.list) work; values are not reevaluated as expressions or templates. Omitted inputs or None preserve legacy no-input behavior. Cross-family calls and probe-to-action hidden mutation are rejected; no new action composition. Inspect connector.authoring for dependency boundaries and verified examples.",
   "connectors": [
     {
       "bootstrap": {
@@ -312,12 +320,14 @@ Operations in the `fs` namespace.
           "examples": [
             {
               "inputs": {
-                "branch": "string"
+                "branch": "string",
+                "force": "boolean"
               },
               "reference": "git.branch.delete"
             }
           ],
           "failure_modes": [
+            "input_error",
             "branch_not_found",
             "branch_checked_out",
             "default_branch_protected",
@@ -325,7 +335,8 @@ Operations in the `fs` namespace.
             "delete_blocked"
           ],
           "inputs": {
-            "branch": "string"
+            "branch": "string",
+            "force": "boolean"
           },
           "invalidates_observations": [
             "git.branches",
@@ -340,7 +351,7 @@ Operations in the `fs` namespace.
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Action operation 'git.branch.delete'",
+          "summary": "Delete a local non-default branch; optional boolean force defaults to false (-d), true uses -D.",
           "tags": [
             "git",
             "action"
@@ -944,6 +955,47 @@ Operations in the `fs` namespace.
           "prerequisites": [],
           "replaced_by": [],
           "summary": "Probe operation 'git.ref'",
+          "tags": [
+            "git",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "remote": "string"
+              },
+              "reference": "git.remote"
+            }
+          ],
+          "failure_modes": [
+            "probe_failed"
+          ],
+          "inputs": {
+            "remote": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "remote",
+          "outputs": {
+            "exists": "boolean",
+            "fetch_urls": [
+              "string"
+            ],
+            "mirror": "boolean | null",
+            "name": "string",
+            "push_urls": [
+              "string"
+            ]
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Inspect a configured remote's effective fetch and push URLs and mirror setting without network access. Git applies URL rewrites; returned URLs are preserved verbatim. An absent remote has exists=false, empty URL lists, and mirror=null.",
           "tags": [
             "git",
             "probe"
@@ -1645,6 +1697,123 @@ Operations in the `fs` namespace.
           "examples": [
             {
               "inputs": {
+                "attempt": "integer",
+                "check_suite_id": "integer",
+                "repository": "string",
+                "run_id": "integer"
+              },
+              "reference": "gh.actions.run"
+            }
+          ],
+          "failure_modes": [
+            "input_error",
+            "actions_run_unavailable"
+          ],
+          "inputs": {
+            "attempt": "integer",
+            "check_suite_id": "integer",
+            "repository": "string",
+            "run_id": "integer"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "actions.run",
+          "outputs": {
+            "check_suite_id": "integer",
+            "conclusion": "string",
+            "created_at": "string",
+            "event": "string",
+            "found": "boolean",
+            "head_branch": "string",
+            "head_sha": "string",
+            "pull_requests": [
+              {
+                "base_sha": "string",
+                "head_sha": "string",
+                "number": "integer"
+              }
+            ],
+            "repository": "string",
+            "run_attempt": "integer",
+            "run_id": "integer",
+            "run_started_at": "string",
+            "status": "string",
+            "updated_at": "string",
+            "url": "string",
+            "workflow_id": "integer",
+            "workflow_path": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe an exact Actions attempt by run or check suite; omitted attempt pins the latest observed attempt. PR SHAs are API observations, not immutable event snapshots.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "attempt": "integer",
+                "repository": "string",
+                "run_id": "integer"
+              },
+              "reference": "gh.actions.run.jobs"
+            }
+          ],
+          "failure_modes": [
+            "input_error",
+            "actions_jobs_unavailable"
+          ],
+          "inputs": {
+            "attempt": "integer",
+            "repository": "string",
+            "run_id": "integer"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "actions.run.jobs",
+          "outputs": {
+            "complete": "boolean",
+            "count": "integer",
+            "items": [
+              {
+                "check_run_id": "integer",
+                "completed_at": "string",
+                "conclusion": "string",
+                "head_sha": "string",
+                "job_id": "integer",
+                "name": "string",
+                "started_at": "string",
+                "status": "string",
+                "url": "string"
+              }
+            ],
+            "repository": "string",
+            "run_attempt": "integer",
+            "run_id": "integer"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe all jobs for an exact Actions run attempt; fail on incomplete or inconsistent pagination.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
                 "issue_number": "integer",
                 "repository": "string"
               },
@@ -1992,6 +2161,8 @@ Operations in the `fs` namespace.
             "additions": "integer",
             "author": "object",
             "base_ref": "string",
+            "base_repository": "string",
+            "base_sha": "string",
             "body": "string",
             "changed_files": "integer",
             "commits_count": "integer",
@@ -1999,13 +2170,24 @@ Operations in the `fs` namespace.
             "deletions": "integer",
             "draft": "boolean",
             "head_ref": "string",
+            "head_repository": "string",
             "head_sha": "string",
+            "merge_commit_sha": "string",
             "mergeable": "boolean",
             "mergeable_state": "string",
+            "merged": "boolean",
+            "merged_at": "string",
             "number": "integer",
             "repository": "string",
             "review_decision": "string",
+            "stack": "object",
+            "stack_state": "string",
             "state": "string",
+            "test_merge_base_sha": "string",
+            "test_merge_head_sha": "string",
+            "test_merge_reason": "string",
+            "test_merge_sha": "string",
+            "test_merge_state": "string",
             "title": "string",
             "updated_at": "string",
             "url": "string"
@@ -2025,8 +2207,10 @@ Operations in the `fs` namespace.
           "examples": [
             {
               "inputs": {
+                "expected_head_sha": "string",
                 "pull_number": "integer",
-                "repository": "string"
+                "repository": "string",
+                "target": "string"
               },
               "reference": "gh.pr.checks"
             }
@@ -2037,37 +2221,69 @@ Operations in the `fs` namespace.
             "probe_failed"
           ],
           "inputs": {
+            "expected_head_sha": "string",
             "pull_number": "integer",
-            "repository": "string"
+            "repository": "string",
+            "target": "string"
           },
           "invalidates_observations": [],
           "kind": "probe",
           "maturity": "stable",
           "name": "pr.checks",
           "outputs": {
+            "base_repository": "string",
+            "base_sha": "string",
+            "check_runs_complete": "boolean",
             "checks": [
               {
+                "app_id": "integer",
+                "app_identity": "string",
+                "app_slug": "string",
+                "check_suite_id": "integer",
+                "completed_at": "string",
                 "conclusion": "string",
                 "context": "string",
+                "created_at": "string",
+                "creator": "object",
+                "id": "integer",
                 "kind": "string",
                 "name": "string",
+                "sha": "string",
+                "sha_source": "string",
+                "started_at": "string",
+                "state": "string",
                 "status": "string",
+                "updated_at": "string",
                 "url": "string"
               }
             ],
+            "commit_sha": "string",
+            "complete": "boolean",
+            "expected_head_sha": "string",
             "failed_count": "integer",
+            "head_repository": "string",
             "head_sha": "string",
+            "neutral_count": "integer",
             "overall_state": "string",
             "pending_count": "integer",
             "pull_ref": "string",
+            "sha_evidence": "string",
             "skipped_count": "integer",
+            "statuses_complete": "boolean",
             "success_count": "integer",
-            "total_count": "integer"
+            "target": "string",
+            "test_merge_base_sha": "string",
+            "test_merge_head_sha": "string",
+            "test_merge_reason": "string",
+            "test_merge_sha": "string",
+            "test_merge_state": "string",
+            "total_count": "integer",
+            "unknown_count": "integer"
           },
           "preflight_observations": [],
           "prerequisites": [],
           "replaced_by": [],
-          "summary": "Read normalized status and check-run results from a GitHub pull request head.",
+          "summary": "Observe paginated API-attached checks for a PR head or verified test merge; optionally bind expected_head_sha.",
           "tags": [
             "gh",
             "probe"
@@ -2118,6 +2334,93 @@ Operations in the `fs` namespace.
         },
         {
           "deprecated": false,
+          "effects": [
+            "create one GitHub pull request after a non-atomic open duplicate precheck"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "base": "string",
+                "body": "string",
+                "draft": "boolean",
+                "head": "string",
+                "head_owner": "string",
+                "head_repository": "string",
+                "repository": "string",
+                "title": "string"
+              },
+              "reference": "gh.pr.create"
+            }
+          ],
+          "failure_modes": [
+            "input_error",
+            "precheck_failed",
+            "ambiguous",
+            "already_exists",
+            "api_failed",
+            "create_refused",
+            "creation_unknown"
+          ],
+          "inputs": {
+            "base": "string",
+            "body": "string",
+            "draft": "boolean",
+            "head": "string",
+            "head_owner": "string",
+            "head_repository": "string",
+            "repository": "string",
+            "title": "string"
+          },
+          "invalidates_observations": [
+            "gh.*"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "pr.create",
+          "outputs": {
+            "base_ref": "string | null",
+            "base_repository": "string | null",
+            "base_sha": "string | null",
+            "created": "boolean | null",
+            "draft": "boolean | null",
+            "errors": "array | object | string | null",
+            "head_ref": "string | null",
+            "head_repository": "string | null",
+            "head_sha": "string | null",
+            "http_status": "integer | null",
+            "message": "string | null",
+            "pull_number": "integer | null",
+            "pull_ref": "string | null",
+            "repository": "string | null",
+            "state": "string | null",
+            "url": "string | null"
+          },
+          "preflight_observations": [
+            {
+              "fields": [
+                "items",
+                "count",
+                "complete"
+              ],
+              "probe": "gh.pr.list",
+              "with": {
+                "base": "{base}",
+                "head": "{head}",
+                "repository": "{repository}",
+                "state": "open"
+              }
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Create one PR with explicit draft and exact source repository after a complete gh.pr.list open guard; creation_unknown must not be blindly retried.",
+          "tags": [
+            "gh",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
           "effects": [],
           "examples": [
             {
@@ -2152,6 +2455,202 @@ Operations in the `fs` namespace.
           "prerequisites": [],
           "replaced_by": [],
           "summary": "Read normalized change content from a GitHub pull request.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "base": "string",
+                "head": "string",
+                "head_owner": "string",
+                "repository": "string",
+                "state": "string"
+              },
+              "reference": "gh.pr.list"
+            }
+          ],
+          "failure_modes": [
+            "input_error",
+            "pull_list_unavailable"
+          ],
+          "inputs": {
+            "base": "string",
+            "head": "string",
+            "head_owner": "string",
+            "repository": "string",
+            "state": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.list",
+          "outputs": {
+            "base": "string",
+            "complete": "boolean",
+            "count": "integer",
+            "head": "string",
+            "head_owner": "string",
+            "items": [
+              {
+                "base_ref": "string",
+                "base_repository": "string",
+                "base_sha": "string",
+                "draft": "boolean",
+                "head_owner": "string",
+                "head_ref": "string",
+                "head_repository": "string",
+                "head_repository_key": "string",
+                "head_sha": "string",
+                "merged": "boolean",
+                "merged_at": "string",
+                "number": "integer",
+                "pull_ref": "string",
+                "state": "string",
+                "url": "string"
+              }
+            ],
+            "repository": "string",
+            "state": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "List GitHub.com REST pull requests by explicit state (open|closed|all) and optional branches; bare head is filtered locally across all pages. Complete traversal is not an atomic snapshot.",
+          "tags": [
+            "gh",
+            "probe"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [
+            "submit a direct asynchronous GitHub merge after observing a standalone PR; stack/base observation is not atomic"
+          ],
+          "examples": [
+            {
+              "inputs": {
+                "expected_head_sha": "6358cd125586d9def8c3e5943f23506202da81cc",
+                "merge_method": "squash",
+                "pull_number": 42,
+                "repository": "octocat/Hello-World"
+              },
+              "reference": "gh.pr.merge"
+            }
+          ],
+          "failure_modes": [
+            "input_error",
+            "unsupported_stack",
+            "merge_scope_unknown",
+            "head_mismatch",
+            "merge_api_failed",
+            "merge_refused",
+            "existing_request_conflict",
+            "existing_request_unknown",
+            "merge_result_unknown"
+          ],
+          "inputs": {
+            "expected_head_sha": "string",
+            "merge_method": "string",
+            "pull_number": "integer",
+            "repository": "string"
+          },
+          "invalidates_observations": [
+            "gh.pr.*",
+            "gh.issue",
+            "gh.project.issue"
+          ],
+          "kind": "action",
+          "maturity": "stable",
+          "name": "pr.merge",
+          "outputs": {
+            "expected_head_sha": "string",
+            "http_status": "integer",
+            "merge_action": "string",
+            "merge_method": "string",
+            "merge_sha": "string",
+            "merged": "boolean",
+            "message": "string",
+            "observed_head_sha": "string",
+            "pull_number": "integer",
+            "repository": "string",
+            "request_compatibility": "string",
+            "request_id": "string",
+            "stack_scope": "string",
+            "state": "string",
+            "submission": "string"
+          },
+          "preflight_observations": [
+            {
+              "fields": [
+                "state",
+                "draft",
+                "head_sha",
+                "stack_state"
+              ],
+              "probe": "gh.pr",
+              "with": {
+                "pull_number": "{pull_number}",
+                "repository": "{repository}"
+              }
+            }
+          ],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Request a SHA-guarded direct async merge; save request_id for gh.pr.merge.request. Acceptance is not completion.",
+          "tags": [
+            "gh",
+            "action"
+          ]
+        },
+        {
+          "deprecated": false,
+          "effects": [],
+          "examples": [
+            {
+              "inputs": {
+                "pull_number": 42,
+                "repository": "octocat/Hello-World",
+                "request_id": "12345678-1234-1234-1234-123456789abc"
+              },
+              "reference": "gh.pr.merge.request"
+            }
+          ],
+          "failure_modes": [
+            "input_error",
+            "request_unavailable"
+          ],
+          "inputs": {
+            "pull_number": "integer",
+            "repository": "string",
+            "request_id": "string"
+          },
+          "invalidates_observations": [],
+          "kind": "probe",
+          "maturity": "stable",
+          "name": "pr.merge.request",
+          "outputs": {
+            "expected_head_sha": "string",
+            "http_status": "integer",
+            "merge_action": "string",
+            "merge_method": "string",
+            "merge_sha": "string",
+            "merged": "boolean",
+            "message": "string",
+            "pull_number": "integer",
+            "repository": "string",
+            "request_id": "string",
+            "state": "string"
+          },
+          "preflight_observations": [],
+          "prerequisites": [],
+          "replaced_by": [],
+          "summary": "Observe a saved async merge UUID once: pending, merged, enqueued, or failed. Requests expire after 24 hours; 404 is unavailable, not failure proof.",
           "tags": [
             "gh",
             "probe"
@@ -3191,6 +3690,8 @@ Operations in the `fs` namespace.
         }
       ]
     }
-  ]
+  ],
+  "gh_pr_create_guidance": "GitHub creation: gh.pr.create requires head, base, title, and an explicit boolean draft; body defaults to empty. repository is optional: valid explicit OWNER/REPO overrides connector_contexts.gh.repository; omitted or null uses context, malformed explicit input fails without fallback. head_repository is a full source OWNER/REPO, default target repository; explicit cross-repository intent requires it, with no fork guessing. head_owner is an optional consistency assertion, otherwise derived from the exact source repository. Same-organization head_repo API argument is derived repository NAME. Reject same-branch/same-repository requests. The action uses ctx.call('gh.pr.list', inputs=...) with resolved repository/head/head_owner/base and state: open; require complete traversal and exact case-insensitive head_repository_key identity. One exact open match including draft returns non-OK already_exists with pull_number, url, created=false and no POST; multiple matches return ambiguous; unknown identity and list failure return precheck_failed. No existing match permits one POST. Only validated HTTP 201 means created=true; malformed 201, timeout, or server failure returns creation_unknown with created=null. HTTP 422 is generic create_refused, not universal duplicate evidence; preserve API errors. No POST retry or automatic readback reconciliation. This is not find-or-reuse or closed-history policy: workflow-owned gh.pr.list state: all classification precedes create's separate open check. Concurrent duplicates can race the check: no atomic uniqueness or exactly-once guarantee. No CI waiting, merge, push, fork, branch cleanup, or extra issue/project operations. Inspect connector.gh.pr.create.",
+  "gh_pr_merge_guidance": "GitHub async merge: gh.pr observes head/base/test-merge identity and stack_state (standalone/stacked/unknown) plus stack; gh.pr.checks observes CI evidence. gh.pr.merge requires expected_head_sha from the accepted CI head, never a freshly fetched replacement. For gh.pr.merge and gh.pr.merge.request, repository is optional: a valid explicit OWNER/REPO overrides the bootstrapped connector_contexts.gh.repository; omitted or null uses that context. Malformed explicit values fail without fallback, and no resolved repository is an error. For checks on candidate M with verified base B and head H, submit expected_head_sha=H, not M. The first version rejects stacked PRs and unknown scope before submission; there is no atomic base or stack guarantee. Save the action result request_id UUID for gh.pr.merge.request: accepted submission is not completion. Observe pending/merged/failed/enqueued once; unavailable is not failed and enqueued is not merged. Only an exact matching existing request is reusable. No polling, queue administration, or admin bypass is provided. GitHub automatic issue closing and branch configuration effects are outside this action. Inspect connector.gh.pr.merge and connector.gh.pr.merge.request for the verified canonical workflow example."
 }
 ```
