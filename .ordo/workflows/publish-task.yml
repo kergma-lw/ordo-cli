@@ -102,7 +102,7 @@ blocks:
         - step.existing_pr.outputs.merged | is_boolean
         - step.existing_pr.outputs.merged == true or step.existing_pr.outputs.state == "open"
   - name: Select publication path
-    value: step.existing_pr.outputs.merged | eq(false) | catch(["runtime.value.step_missing"], true)
+    value: step.existing_pr.outputs.merged | catch(["runtime.value.step_missing"], false) | eq(false)
     register: publish_path
   - name: Report merged PR without pushing
     if: step.publish_path.outputs.value == false
