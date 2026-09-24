@@ -1,5 +1,93 @@
 # AGENTS
 
+<!-- BEGIN ORDO MANAGED SECTION -->
+## Ordo workflows
+
+Ordo workflows are the canonical operational entrypoints for this repository.
+When a workflow covers the task, use it instead of reproducing its checks manually.
+
+### Command line
+
+- Discover workflow entries → `ordo-playbook workflows list`
+- Inspect one workflow contract → `ordo-playbook workflows show <workflow>`
+- Review, check, plan, or explain without making changes → `ordo-playbook <mode> <workflow>`
+- Execute a workflow → `ordo-playbook run <workflow>`
+- Suggest the next workflow → `ordo-playbook next`
+- Show workflow connections → `ordo-playbook graph`
+- Read the detailed reference → `ordo-help`
+- Pass caller values with repeatable `--input KEY=VALUE`; use `--input-file KEY=PATH` for raw file content.
+
+### Inspect
+
+- Repository status → `ordo-playbook run global-status`
+- View an issue → `ordo-playbook run issue-view --input number=<issue-number>`
+- View issue comments → `ordo-playbook run issue-view-comments --input number=<issue-number> --input limit=<limit>`
+- Inspect a pull request → `ordo-playbook run pr-view --input pull_number=<pull-number>`
+- Digest a pull request → `ordo-playbook run pr-digest --input pr_repository=<owner/repo> --input pull_number=<pull-number>`
+- List backlog stories → `ordo-playbook run stories-backlog`
+- List in-progress stories → `ordo-playbook run stories-in-progress`
+- Find uncovered help handles → `ordo-playbook run uncovered-snippet-handles`
+- Find unready describe handles → `ordo-playbook run not-ready-describe-handles`
+
+### Task lifecycle
+
+- Create a task → `ordo-playbook run create-task --input title=<title> --input body=<body>`
+- Move a task to Ready → `ordo-playbook run task-to-ready --input issue_number=<issue-number>`
+- Start or resume a task → `ordo-playbook run set-active-task --input issue_number=<issue-number>`
+- Move the local task to review → `ordo-playbook run task-to-review`
+- Publish a prepared task → `ordo-playbook run publish-task`
+- Merge a published task → `ordo-playbook run merge-task [--input merge_method=<merge-method>] [--input base_branch=<base-branch>]`
+- Close a merged task → `ordo-playbook run close-task [--input close_comment=<close-comment>]`
+- Cancel a task → `ordo-playbook run cancel-task --input reason=<reason>`
+
+### Context
+
+- Show current task context → `ordo-playbook run current-task-context`
+
+### Collaboration
+
+- Comment on an issue → `ordo-playbook run issue-comment --input number=<issue-number> --input body=<body>`
+
+### Meta
+
+- Rebuild meta packs → `ordo-playbook run meta-packs-build`
+
+### Verify
+
+- Run all tests → `ordo-playbook run verify-all-tests`
+- Audit tracked files for secrets → `ordo-playbook run audit-secrets-tree`
+- Run the publication audit → `ordo-playbook run audit-publication`
+
+### Create
+
+- Create a story → `ordo-playbook run create-story --input title=<title> --input body=<body>`
+
+### Story
+
+- Show story tasks → `ordo-playbook run story-tasks-show --input issue_number=<issue-number>`
+- Add a story task reference → `ordo-playbook run story-task-add --input issue_number=<story-number> --input task_repository=<owner/repo> --input task_issue_number=<task-number>`
+- Show ready story tasks → `ordo-playbook run story-tasks-ready --input issue_number=<story-number>`
+
+### Emergency
+
+- Force-close an issue → `ordo-playbook run force-close-issue --input number=<issue-number> --input confirm_break_glass=FORCE_CLOSE --input close_comment=<close-comment>`
+
+### Field update
+
+- Set task size → `ordo-playbook run set-task-size --input issue_number=<issue-number> --input size=<XS|S|M|L|XL>`
+- Set task estimate → `ordo-playbook run set-task-estimate --input issue_number=<issue-number> --input estimate=<estimate>`
+- Set task iteration → `ordo-playbook run set-task-iteration --input issue_number=<issue-number> --input iteration=<iteration>`
+- Set task priority → `ordo-playbook run set-task-priority --input issue_number=<issue-number> --input priority=<P0|P1|P2|P3>`
+
+If no workflow in this section is an obvious match, say that no known matching workflow is available. Do not invoke discovery merely to search for one, invent a workflow, or silently replace a workflow with a manual command sequence.
+
+If a workflow covers the task, use it as the canonical entrypoint instead of reproducing its checks manually.
+
+Prefer the minimal command sequence that answers the request. Do not run
+unrelated preflight commands or replace a suitable workflow with a guessed
+manual command sequence.
+<!-- END ORDO MANAGED SECTION -->
+
 ## Meta source layout
 
 - `meta/` source docs are organized first by document type, then by domain.

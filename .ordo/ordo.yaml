@@ -82,14 +82,21 @@ workflows:
     file: workflows/issue-view.yml
     description: Show one issue from this repository context without changing state
     category: inspect
+    with:
+      number:
   issue-view-comments:
     file: workflows/issue-view-comments.yml
     description: Show comments for one issue from this repository context without changing state
     category: inspect
+    with:
+      number:
+      limit:
   pr-view:
     file: workflows/pr-view.yml
     description: Show one pull request inspection snapshot without changing state
     category: inspect
+    with:
+      pull_number:
     when: Use when you need one normalized PR summary with comments, reviews, checks,
       and timeline facts.
   pr-digest:
@@ -99,6 +106,9 @@ workflows:
     category: inspect
     when: Use when you need a human-oriented pull request digest rather than a compact
       snapshot.
+    with:
+      pr_repository:
+      pull_number:
   uncovered-snippet-handles:
     file: workflows/uncovered-snippet-handles.yml
     description: Show the public help handles that still lack snippet-backed examples
@@ -114,6 +124,9 @@ workflows:
     description: Add a comment to one issue from this repository context
     category: collaboration
     when: Use when you need to leave a comment on a task, bug, or story issue.
+    with:
+      number:
+      body:
   meta-packs-build:
     file: workflows/meta-packs-build.yml
     description: Regenerate derived meta packs from source docs
@@ -147,39 +160,66 @@ workflows:
     description: Create a new Story issue with a Tasks section
     category: create
     when: Use when you need a new story with a Tasks section.
+    with:
+      title:
+      body:
   story-tasks-show:
     file: workflows/story-tasks-show.yml
     description: Show the raw Tasks section for one story issue
     category: story
+    with:
+      issue_number:
   story-task-add:
     file: workflows/story-task-add.yml
     description: Add one task reference to the Tasks section of a story issue
     category: story
+    with:
+      issue_number:
+      task_repository:
+      task_issue_number:
   story-tasks-ready:
     file: workflows/story-tasks-ready.yml
     description: Show Ready tasks referenced from a story Tasks section
     category: story
+    with:
+      issue_number:
   force-close-issue:
     file: workflows/force-close-issue.yml
     description: Close one issue directly, bypassing normal lifecycle checks
     category: emergency
     when: Use only for exceptional administrative closure such as stale umbrella issues, duplicates, or invalid planning artifacts. Do not use for routine task completion.
+    with:
+      number:
+      confirm_break_glass:
+      close_comment:
   set-task-size:
     file: workflows/set-task-size.yml
     description: Update the project Size field for one open task in this repository
     category: field-update
+    with:
+      issue_number:
+      size:
   set-task-estimate:
     file: workflows/set-task-estimate.yml
     description: Update the project Estimate field for one open task in this repository
     category: field-update
+    with:
+      issue_number:
+      estimate:
   set-task-iteration:
     file: workflows/set-task-iteration.yml
     description: Update the project Iteration field for one open task in this repository
     category: field-update
+    with:
+      issue_number:
+      iteration:
   set-task-priority:
     file: workflows/set-task-priority.yml
     description: Update the project Priority field for one open task in this repository
     category: field-update
+    with:
+      issue_number:
+      priority:
 profiles:
   ordo:
     file: profiles/ordo.yml
