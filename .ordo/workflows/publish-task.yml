@@ -246,7 +246,7 @@ blocks:
       base: "main"
       title: step.context.outputs.value.title
       body:
-        format: "Closes #{}"
+        format: "Refs #{}"
         args:
           - step.context.outputs.value.issue_number
       draft: false
