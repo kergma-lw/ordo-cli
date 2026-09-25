@@ -2159,7 +2159,7 @@ def _evaluate_node(
                     )
                     pending_error = None
                     continue
-                raise pending_error
+                continue
             if isinstance(filter_node, FilterApplicationNode):
                 try:
                     value = _apply_filter(
