@@ -10,7 +10,7 @@ from ordo.model.profile import Override, Profile
 from ordo.model.runtime import Mode, OperationResult, RuntimeResult, RuntimeStatus
 from ordo.model.workflow import Guard, GuardBlock, OperationRef, Step, StepBlock, Workflow
 from connectors._shared import evaluate_argument_value
-from ordo.runtime import check_workflow, load_workflow_text
+from ordo.runtime import check_workflow, load_workflow_file, load_workflow_text
 from ordo.runtime.checking import _build_check_analysis_tree, _project_check_runtime_result
 
 from tests.support import STANDARD_CONNECTOR_PROVIDER
@@ -797,6 +797,120 @@ blocks:
             expanded = [item for item in result.outputs["block_items"] if item.get("expanded_from_run") == "profile-guard.yml"]
             self.assertEqual(len(expanded), 1)
             self.assertEqual(expanded[0]["type"], "guards")
+
+    def test_check_interprets_known_true_run_condition_without_rejecting_authored_condition(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "child.yml"
+            fragment.write_text(
+                "blocks:\n  - guards:\n      - \"true\"\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="root",
+                inputs={"enabled": True},
+                blocks=(
+                    StepBlock(
+                        steps=(
+                            Step(
+                                name="expand-child",
+                                run="child.yml",
+                                resolved_run_path=str(fragment),
+                                if_="${inputs.enabled}",
+                            ),
+                        )
+                    ),
+                    GuardBlock(guards=(Guard(expr="inputs.enabled == true"),)),
+                ),
+            )
+
+            result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertEqual(result.outputs["evaluated_relevant_guard_count"], 1)
+
+    def test_check_interprets_pure_value_run_child_as_read_only_dataflow(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "child.yml"
+            fragment.write_text(
+                "steps:\n  - name: derive\n    value: true\n    register: derived\n",
+                encoding="utf-8",
+            )
+            workflow = Workflow(
+                version=0,
+                workflow="root",
+                blocks=(
+                    StepBlock(steps=(Step(name="expand-child", run="child.yml", resolved_run_path=str(fragment)),)),
+                    GuardBlock(guards=(Guard(expr="true"),)),
+                ),
+            )
+
+            result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "allowed")
+        self.assertTrue(result.outputs["analysis_complete"])
+        self.assertNotIn("effectful_step_encountered", result.outputs["incomplete_reasons"])
+        self.assertEqual(result.outputs["preflight_step_items"][0]["status"], "interpreted")
+
+    def test_check_preserves_specific_nested_halt_instead_of_generic_caller_halt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            fragment = root / "child.yml"
+            parent = root / "root.yml"
+            fragment.write_text(
+                "blocks:\n  - steps:\n      - name: effect\n        uses: shell.command\n        with:\n          command: \"echo side-effect\"\n  - guards:\n      - \"true\"\n",
+                encoding="utf-8",
+            )
+            parent.write_text(
+                "version: 0\nworkflow: root\nblocks:\n  - steps:\n      - name: expand-child\n        run: child.yml\n      - name: after-child\n        value: true\n  - guards:\n      - \"true\"\n",
+                encoding="utf-8",
+            )
+            workflow = load_workflow_file(parent)
+
+            result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.outputs["allowed_state"], "unknown")
+        self.assertEqual(result.outputs["preflight_halts"][0]["reason"], "effectful_step_encountered")
+        self.assertEqual(result.outputs["preflight_halts"][0]["details"]["expanded_from_step"], "expand-child")
+        self.assertEqual(result.outputs["preflight_halts"][0]["details"]["expanded_from_run"], "child.yml")
+
+    def test_check_retains_complete_provenance_for_multi_level_run_expansion(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            child = root / "child.yml"
+            grandchild = root / "grandchild.yml"
+            parent = root / "root.yml"
+            grandchild.write_text(
+                "blocks:\n  - guards:\n      - \"true\"\n",
+                encoding="utf-8",
+            )
+            child.write_text(
+                "steps:\n  - name: expand-grandchild\n    run: grandchild.yml\n",
+                encoding="utf-8",
+            )
+            parent.write_text(
+                "version: 0\nworkflow: root\nblocks:\n  - steps:\n      - name: expand-child\n        run: child.yml\n  - guards:\n      - \"true\"\n",
+                encoding="utf-8",
+            )
+            workflow = load_workflow_file(parent)
+
+            result = check_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        expanded_guard = next(item for item in result.outputs["block_items"] if item.get("type") == "guards" and item.get("expanded_from_run") == "child.yml")
+        self.assertEqual(
+            expanded_guard["expansion_path"],
+            [
+                {"step": "expand-child", "run": "child.yml"},
+                {"step": "expand-grandchild", "run": "grandchild.yml"},
+            ],
+        )
 
     def test_check_rejects_undeclared_root_input_inside_run_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

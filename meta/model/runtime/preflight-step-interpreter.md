@@ -221,6 +221,7 @@ Each interpreted step item should expose at least:
 
 - Nested runs should remain caller-visible in the preflight surface.
 - Nested results should preserve origin boundaries such as caller step and callee workflow.
+- Repeated nested expansion must retain an ordered `expansion_path` from the outer caller to the innermost callee; compatibility fields that name only the immediate caller do not replace that path.
 - Callee-derived knowledge may flow back to the caller only through structured preflight outputs.
 - Nested effectful or unanalyzable regions must stop analysis conservatively rather than silently flattening into success.
 
