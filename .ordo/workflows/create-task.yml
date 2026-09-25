@@ -35,6 +35,8 @@ blocks:
   - type_field.exists
   - task_type_option.exists
   - 'is_missing(inputs.body | markdown["Tasks"])'
+  - 'is_present(inputs.body | markdown["Scope"])'
+  - 'is_present(inputs.body | markdown["Verification"]) or is_present(inputs.body | markdown["Tests"])'
 - steps:
   - name: Create issue
     uses: gh.issue.create
