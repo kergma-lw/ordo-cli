@@ -323,6 +323,7 @@ def check_workflow(
 
     analysis = _build_check_analysis_tree(
         defer_state_writes=not _nested_analysis,
+        interpret_all_step_blocks=_nested_analysis,
         workflow=effective_workflow,
         active_profile=active_profile,
         workflow_profile_declared=workflow_profile_declared,
@@ -504,6 +505,7 @@ def _build_check_analysis_tree(
     connector_provider: ConnectorProvider | None,
     guard_probe: GuardProbe | None,
     defer_state_writes: bool = True,
+    interpret_all_step_blocks: bool = False,
 ) -> _CheckAnalysisTree | RuntimeResult:
     probe = guard_probe or _default_guard_probe(provider=connector_provider)
     diagnostics: list[Diagnostic] = []
@@ -707,6 +709,8 @@ def _build_check_analysis_tree(
             continue
 
         if (
+            (interpret_all_step_blocks and not effective_workflow.playbook_owned_pre_run and declared_block.steps and all(step.value is not None for step in declared_block.steps))
+            or
             _has_later_guard_block(effective_workflow, block_index=block_index)
             or any(step.gate is not None for step in declared_block.steps)
             or state_writes_deferred
@@ -1120,12 +1124,12 @@ def _resolve_guard_block(
     return ResolvedGuardBlock(block_index=block_index, guards=resolution.blocks[0].guards)
 
 
-def _classify_run_step_block_for_check(block: StepBlock, workflow: Workflow, *, block_index: int) -> list[tuple[Step, CheckRunExpansionDecision]] | None:
+def _classify_run_step_block_for_check(block: StepBlock, workflow: Workflow, *, block_index: int, conditions_already_admitted: bool = False) -> list[tuple[Step, CheckRunExpansionDecision]] | None:
     decisions: list[tuple[Step, CheckRunExpansionDecision]] = []
     if not block.steps:
         return None
     for step_index, step in enumerate(block.steps):
-        if step.if_ is not None or (step.run is None and step.steps is None):
+        if (step.if_ is not None and not conditions_already_admitted) or (step.run is None and step.steps is None):
             return None
         if step.for_each is None:
             decision = classify_run_for_check(step, workflow, block_index=block_index, step_index=step_index)
@@ -1435,7 +1439,7 @@ def _interpret_step_block_for_check(
             continue
         invocation_barrier = state_writes_deferred and (isinstance(resolved_step, ResolvedRunStep) or step.for_each is not None)
         if isinstance(resolved_step, ResolvedRunStep) and not invocation_barrier:
-            run_expansions = _classify_run_step_block_for_check(StepBlock(steps=(step,)), effective_workflow, block_index=block_index)
+            run_expansions = _classify_run_step_block_for_check(StepBlock(steps=(step,)), effective_workflow, block_index=block_index, conditions_already_admitted=True)
             if run_expansions is not None:
                 expansion_outcome = _expand_run_step_block_for_check(
                     run_expansions,
@@ -1505,16 +1509,17 @@ def _interpret_step_block_for_check(
                     break
                 if expansion_outcome["halted"]:
                     incomplete_reasons.extend(cast(list[str], expansion_outcome["incomplete_reasons"]))
-                    halt_item = build_preflight_halt(
-                        "preflight_step_not_analyzable",
-                        step=step,
-                        details={
-                            "block_index": block_index,
-                            "step_index": step_index,
-                            "classification": classification,
-                            "reference": resolved_step.reference,
-                        },
-                    ).to_contract()
+                    if halt_item is None:
+                        halt_item = build_preflight_halt(
+                            "preflight_step_not_analyzable",
+                            step=step,
+                            details={
+                                "block_index": block_index,
+                                "step_index": step_index,
+                                "classification": classification,
+                                "reference": resolved_step.reference,
+                            },
+                        ).to_contract()
                     step_items.append(
                         {
                             "block_index": block_index,
@@ -1939,6 +1944,7 @@ def _expand_run_step_block_for_check(
             if not isinstance(item, dict):
                 continue
             nested = dict(item)
+            nested["expansion_path"] = [{"step": step.name, "run": step.run}, *cast(list[dict[str, object]], nested.get("expansion_path", []))]
             nested["expanded_from_step"] = step.name
             nested["expanded_from_run"] = step.run
             if decision.item_index is not None:
@@ -1947,6 +1953,7 @@ def _expand_run_step_block_for_check(
             block_items.append(nested)
         for item in child_preflight_items:
             nested_item = dict(item)
+            nested_item["expansion_path"] = [{"step": step.name, "run": step.run}, *cast(list[dict[str, object]], nested_item.get("expansion_path", []))]
             nested_item["block_index"] = outer_block_index
             nested_item["expanded_from_step"] = step.name
             nested_item["expanded_from_run"] = step.run
@@ -1957,6 +1964,7 @@ def _expand_run_step_block_for_check(
         for halt in child_preflight_halts:
             nested_halt = dict(halt)
             details = dict(nested_halt.get("details", {})) if isinstance(nested_halt.get("details"), dict) else {}
+            details["expansion_path"] = [{"step": step.name, "run": step.run}, *cast(list[dict[str, object]], details.get("expansion_path", []))]
             details["block_index"] = outer_block_index
             details["expanded_from_step"] = step.name
             details["expanded_from_run"] = step.run
