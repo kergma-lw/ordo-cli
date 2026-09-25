@@ -1,0 +1,99 @@
+description: Validate and submit the first asynchronous merge request.
+args:
+  context: any
+  pr: any
+blocks:
+- steps:
+  - name: Inspect local branch before a new merge request
+    uses: git.branch
+    register: local_branch
+  - name: Inspect worktree before a new merge request
+    uses: git.worktree
+    register: local_worktree
+  - name: Inspect local HEAD before a new merge request
+    uses: git.ref
+    with:
+      ref: "HEAD"
+    register: local_head
+  - name: Require the published version locally and on GitHub
+    gate:
+      all:
+        - step.local_branch.outputs.value == args.context.branch
+        - step.local_worktree.outputs.clean == true
+        - step.local_head.outputs.exists == true
+        - step.local_head.outputs.oid == args.context.published_head_sha
+        - args.pr.head_sha == args.context.published_head_sha
+      on_fail:
+        repository: inputs.repository
+        pull_number: args.context.pull_number
+        expected_branch: args.context.branch
+        observed_branch: step.local_branch.outputs.value
+        worktree_clean: step.local_worktree.outputs.clean
+        local_head_exists: step.local_head.outputs.exists
+        local_head_sha: step.local_head.outputs.oid
+        published_head_sha: args.context.published_head_sha
+        observed_pr_head_sha: args.pr.head_sha
+        url: args.pr.url
+        recommendation: "Commit changes and run publish-task successfully before submitting merge"
+  - name: Record submission intent
+    state_set:
+      state.common_state[inputs.repository].merge_attempted: true
+  - name: Ask GitHub to merge the published head
+    uses: gh.pr.merge
+    with:
+      repository: inputs.repository
+      pull_number: args.context.pull_number
+      merge_method: inputs.merge_method
+      expected_head_sha: args.context.published_head_sha
+    register: submission
+  - name: Save returned merge request UUID
+    if: step.submission.outputs.request_id != null
+    state_set:
+      state.common_state[inputs.repository].merge_request_id: step.submission.outputs.request_id
+  - name: Report GitHub submission result
+    publish:
+      summary: "GitHub merge response received; acceptance alone is not completion"
+      request_id: step.submission.outputs.request_id
+      request_state: step.submission.outputs.state
+      submission: step.submission.outputs.submission
+      message: step.submission.outputs.message
+      expected_head_sha: args.context.published_head_sha
+      url: args.pr.url
+  - name: Observe PR after request handling
+    uses: gh.pr
+    with:
+      repository: inputs.repository
+      pull_number: args.context.pull_number
+    register: final_pr
+  - name: Require final PR identity
+    gate:
+      all:
+        - step.final_pr.outputs.number == args.context.pull_number
+        - step.final_pr.outputs.head_repository | lower | eq(inputs.repository | lower)
+        - step.final_pr.outputs.base_repository | lower | eq(inputs.repository | lower)
+        - step.final_pr.outputs.head_ref == args.context.branch
+        - step.final_pr.outputs.base_ref == inputs.base_branch
+        - step.final_pr.outputs.merged | is_boolean
+      on_fail:
+        expected_pull_number: args.context.pull_number
+        observed_pull_number: step.final_pr.outputs.number
+        observed_head_repository: step.final_pr.outputs.head_repository
+        observed_base_repository: step.final_pr.outputs.base_repository
+        observed_head_ref: step.final_pr.outputs.head_ref
+        observed_base_ref: step.final_pr.outputs.base_ref
+        observed_merged: step.final_pr.outputs.merged
+  - name: Report confirmed merge
+    if: step.final_pr.outputs.merged == true
+    publish:
+      summary: "PR merged; run close-task"
+      merged: true
+      merge_commit_sha: step.final_pr.outputs.merge_commit_sha
+      url: step.final_pr.outputs.url
+  - name: Report unmerged PR without retrying
+    if: step.final_pr.outputs.merged == false
+    publish:
+      summary: "PR is not merged; observe the saved request before attempting another submission"
+      merged: false
+      state: step.final_pr.outputs.state
+      head_sha: step.final_pr.outputs.head_sha
+      url: step.final_pr.outputs.url

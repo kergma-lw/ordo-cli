@@ -1,0 +1,95 @@
+description: Observe and reconcile one saved asynchronous merge request.
+args:
+  context: any
+  pr: any
+blocks:
+- steps:
+  - name: Observe saved merge request
+    uses: gh.pr.merge.request
+    with:
+      repository: inputs.repository
+      pull_number: args.context.pull_number
+      request_id: args.context.request_id
+    register: request
+  - name: Report saved request without resubmission
+    publish:
+      summary: "Saved merge request observed; no new request submitted"
+      request_id: args.context.request_id
+      request_state: step.request.outputs.state
+      message: step.request.outputs.message
+      url: args.pr.url
+  - name: Observe PR after request handling
+    uses: gh.pr
+    with:
+      repository: inputs.repository
+      pull_number: args.context.pull_number
+    register: final_pr
+  - name: Require final PR identity
+    gate:
+      all:
+        - step.final_pr.outputs.number == args.context.pull_number
+        - step.final_pr.outputs.head_repository | lower | eq(inputs.repository | lower)
+        - step.final_pr.outputs.base_repository | lower | eq(inputs.repository | lower)
+        - step.final_pr.outputs.head_ref == args.context.branch
+        - step.final_pr.outputs.base_ref == inputs.base_branch
+        - step.final_pr.outputs.merged | is_boolean
+      on_fail:
+        expected_pull_number: args.context.pull_number
+        observed_pull_number: step.final_pr.outputs.number
+        observed_head_repository: step.final_pr.outputs.head_repository
+        observed_base_repository: step.final_pr.outputs.base_repository
+        observed_head_ref: step.final_pr.outputs.head_ref
+        observed_base_ref: step.final_pr.outputs.base_ref
+        observed_merged: step.final_pr.outputs.merged
+  - name: Select confirmed failed request recovery
+    value: step.request.outputs.state | eq("failed")
+    register: failed_request
+  - name: Clear confirmed failed request UUID
+    if:
+      all:
+        - step.failed_request.outputs.value
+        - step.final_pr.outputs.merged == false
+        - step.final_pr.outputs.state == "open"
+    state_delete: state.common_state[inputs.repository].merge_request_id
+  - name: Release publication after confirmed request failure
+    if:
+      all:
+        - step.failed_request.outputs.value
+        - step.final_pr.outputs.merged == false
+        - step.final_pr.outputs.state == "open"
+    state_set:
+      state.common_state[inputs.repository].merge_attempted: false
+  - name: Report restored publication after request failure
+    if:
+      all:
+        - step.failed_request.outputs.value
+        - step.final_pr.outputs.merged == false
+        - step.final_pr.outputs.state == "open"
+    publish:
+      summary: "Merge request definitively failed; publication is unblocked and no new merge was submitted"
+      failed_request_id: args.context.request_id
+      request_state: step.request.outputs.state
+      message: step.request.outputs.message
+      merge_attempted: false
+      recommendation: "Make corrections, commit and run publish-task before a separate merge-task invocation"
+      url: step.final_pr.outputs.url
+  - name: Report confirmed merge
+    if: step.final_pr.outputs.merged == true
+    publish:
+      summary: "PR merged; run close-task"
+      merged: true
+      merge_commit_sha: step.final_pr.outputs.merge_commit_sha
+      url: step.final_pr.outputs.url
+  - name: Report unmerged PR without retrying
+    if:
+      all:
+        - step.final_pr.outputs.merged == false
+        - any:
+            - step.failed_request.outputs.value == false
+            - step.final_pr.outputs.state != "open"
+    publish:
+      summary: "PR is not merged; observe the saved request before attempting another submission"
+      merged: false
+      state: step.final_pr.outputs.state
+      head_sha: step.final_pr.outputs.head_sha
+      url: step.final_pr.outputs.url
