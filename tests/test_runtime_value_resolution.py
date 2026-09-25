@@ -554,6 +554,77 @@ blocks:
 
         self.assertEqual(context.exception.code, "runtime.value.step_missing")
 
+    def test_resolve_runtime_value_catches_missing_registered_step_after_eq(self) -> None:
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps: []\n")
+
+        value = resolve_runtime_value(
+            '${step.request.outputs.state | eq("failed") | catch(["runtime.value.step_missing"], false)}',
+            workflow,
+        )
+
+        self.assertIs(value, False)
+
+    def test_resolve_runtime_value_preserves_existing_registered_step_value_before_catch(self) -> None:
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps: []\n")
+
+        value = resolve_runtime_value(
+            '${step.request.outputs.state | eq("failed") | catch(["runtime.value.step_missing"], step.fallback.outputs.value)}',
+            workflow,
+            step_results={"request": OperationResult(status="ok", summary="observed", outputs={"state": "failed"})},
+        )
+
+        self.assertIs(value, True)
+
+    def test_resolve_runtime_value_does_not_catch_missing_registered_step_field(self) -> None:
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps: []\n")
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value(
+                '${step.request.outputs.state | eq("failed") | catch(["runtime.value.step_missing"], false)}',
+                workflow,
+                step_results={"request": OperationResult(status="ok", summary="observed", outputs={})},
+            )
+
+        self.assertEqual(context.exception.code, "runtime.value.step_field_missing")
+
+    def test_resolve_runtime_value_does_not_catch_unmatched_missing_registered_step(self) -> None:
+        workflow = load_workflow_text("version: 0\nworkflow: demo\nblocks:\n  - guards: []\n  - steps: []\n")
+
+        with self.assertRaises(ValueResolutionError) as context:
+            resolve_runtime_value(
+                '${step.request.outputs.state | catch(["runtime.value.state_missing"], false)}',
+                workflow,
+            )
+
+        self.assertEqual(context.exception.code, "runtime.value.step_missing")
+
+    def test_execute_recovers_skipped_register_with_matching_catch(self) -> None:
+        workflow = load_workflow_text(
+            """
+version: 0
+workflow: skipped-register
+inputs:
+  observe_request: false
+blocks:
+  - guards: []
+  - steps:
+      - name: observe request
+        if: inputs.observe_request
+        uses: shell.command
+        with:
+          command: "printf failed"
+        register: request
+      - name: select failed request
+        value: ${step.request.outputs.state | eq("failed") | catch(["runtime.value.step_missing"], false)}
+        register: failed_request
+"""
+        )
+
+        result = execute_workflow(workflow, connector_provider=STANDARD_CONNECTOR_PROVIDER)
+
+        self.assertEqual(result.status, RuntimeStatus.OK)
+        self.assertEqual(result.operation_results[-1].outputs.get("value"), False)
+
     def test_resolve_runtime_value_supports_boolean_composition_when_enabled(self) -> None:
         workflow = load_workflow_text(
             """
