@@ -220,6 +220,7 @@ manual command sequence.
 ## Commit inspection restraint
 
 - Use `ordo-playbook run task-commit` as the canonical commit entrypoint.
+- Do not perform discretionary Git inspection immediately before invoking `task-commit`.
 - Where a controlling instruction requires pre-commit inspection, perform only that minimum required read-only inspection. Do not add unrelated preflight commands, repeated test runs, or exploratory checks.
 - Inspection is not authorization to change files, broaden scope, repair incidental findings, or alter tests. If it reveals a concern outside the accepted task, report it and wait for an explicit instruction.
 - Do not rerun verification solely because a read-only inspection occurred. Run only the verification required by the accepted task or an explicitly requested final verification.
