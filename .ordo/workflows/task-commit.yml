@@ -1,0 +1,48 @@
+version: 0
+workflow: task-commit
+inputs:
+  repository:
+    description: GitHub OWNER/REPO.
+  project_id:
+    description: GitHub project ID.
+  message:
+    description: Concise commit message for the active task.
+state_needs:
+  common_state: {}
+let:
+  stored_issue_number: state.common_state[inputs.repository].issue_number
+  stored_branch: state.common_state[inputs.repository].branch
+  issue: gh.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number)
+  project_issue: gh.project.issue(repository=inputs.repository, issue_number=state.common_state[inputs.repository].issue_number,
+    project_id=inputs.project_id)
+blocks:
+- guards:
+  - inputs.repository | is_string
+  - inputs.repository | trim | ne("")
+  - inputs.project_id | is_string
+  - inputs.project_id | trim | ne("")
+  - inputs.message | is_string
+  - inputs.message | trim | ne("")
+  - git.repo.exists
+  - stored_issue_number | is_integer
+  - stored_branch | is_string
+  - issue.state == "OPEN"
+  - project_issue.exists
+  - project_issue.type == "Task" or project_issue.type == "Bug"
+  - project_issue.status == "In progress"
+  - stored_branch == git.branch.value
+  - git.branch.value != "main"
+  - git.worktree.clean == false
+- steps:
+  - name: Stage active task worktree
+    uses: git.index.add_all
+  - name: Commit active task worktree
+    uses: git.commit.create
+    with:
+      message: inputs.message
+  - name: Publish committed task
+    publish:
+      summary: "Task worktree committed"
+      issue_number: stored_issue_number
+      branch: stored_branch
+      message: inputs.message

@@ -32,6 +32,15 @@ workflows:
       issue_number:
     state_bindings:
       common_state: common_state
+  task-commit:
+    file: workflows/task-commit.yml
+    description: Stage and commit the active task worktree
+    category: task-lifecycle
+    when: Use after making active-task changes and before moving the task to review.
+    with:
+      message:
+    state_bindings:
+      common_state: common_state
   task-to-review:
     file: workflows/task-to-review.yml
     description: Open the local diff and move a task to In review
