@@ -47,6 +47,15 @@ workflows:
     category: task-lifecycle
     state_bindings:
       common_state: common_state
+  task-reopen-review:
+    file: workflows/task-reopen-review.yml
+    description: Invalidate review and return the active task to In progress
+    category: task-lifecycle
+    when: Use after review feedback or a follow-up change invalidates the reviewed revision.
+    with:
+      reason:
+    state_bindings:
+      common_state: common_state
   publish-task:
     file: workflows/publish-task.yml
     description: Push the prepared task branch and find or create its PR

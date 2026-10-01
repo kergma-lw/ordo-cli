@@ -36,6 +36,7 @@ When a workflow covers the task, use it instead of reproducing its checks manual
 - Start or resume a task → `ordo-playbook run set-active-task --input issue_number=<issue-number>`
 - Commit the active task worktree → `ordo-playbook run task-commit --input message=<message>`
 - Move the local task to review → `ordo-playbook run task-to-review`
+- Reopen a reviewed active task → `ordo-playbook run task-reopen-review --input reason=<english-reason>`
 - Publish a prepared task → `ordo-playbook run publish-task`
 - Merge a published task → `ordo-playbook run merge-task [--input merge_method=<merge-method>] [--input base_branch=<base-branch>]`
 - Close a merged task → `ordo-playbook run close-task [--input close_comment=<close-comment>]`
